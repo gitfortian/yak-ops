@@ -42,11 +42,11 @@
             <artifactId>yak-ops-business-task-catalog</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-workflow-engine</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-schedule-api</artifactId>
             <version>${yak-framework.version}</version>
         </dependency>
