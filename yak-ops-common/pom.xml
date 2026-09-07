@@ -13,11 +13,11 @@
     <description>Yak Ops product-specific shared contracts and value objects</description>
     <dependencies>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-common</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-schedule-api</artifactId>
             <version>${yak-framework.version}</version>
         </dependency>
