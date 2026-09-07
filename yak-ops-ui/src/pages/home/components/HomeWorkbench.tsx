@@ -831,33 +831,7 @@ function RecentIssues({
         )}
       </div>
 
-      <div className="flex min-h-[30px] items-end justify-between border-t border-[#eceef1] pt-2.5">
-        <span className="text-[9px] text-[#a5a9b0]">
-          {(issueCount ?? 0) > issues.length
-            ? isChinese
-              ? `仅展示最近 ${issues.length} 条`
-              : `Showing latest ${issues.length}`
-            : ''}
-        </span>
-
-        <button
-          type="button"
-          onClick={() =>
-            history.push(
-              '/data-quality/overview',
-            )
-          }
-          className="group flex items-center gap-1 border-0 bg-transparent p-0 text-[10px] font-medium text-[#747a84] transition-colors hover:text-[#2e333b]"
-        >
-          {isChinese
-            ? '全部问题'
-            : 'View all'}
-
-          <span className="text-[13px] font-light transition-transform group-hover:translate-x-0.5">
-            →
-          </span>
-        </button>
-      </div>
+      
     </div>
   );
 }
