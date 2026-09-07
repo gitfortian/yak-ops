@@ -5,10 +5,9 @@ import {
   type DashboardSummary,
 } from '@/services/dashboard';
 import { history, useIntl } from '@umijs/max';
-import { Clock3, LayoutDashboard, Monitor } from 'lucide-react';
+import { ChevronRight, Clock3, LayoutDashboard, Monitor } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { HomeEmptyState } from './HomeEmptyState';
 import {
   formatMetric,
   relativeTime,
@@ -24,16 +23,10 @@ interface VisualizationState {
   screenFailed: boolean;
 }
 
-type VisualizationKind = 'dashboard' | 'screen';
-type VisualizationStatus = 'published' | 'draft' | 'changed';
-
-interface VisualizationItem {
+interface RecentVisualization {
   id: string;
-  kind: VisualizationKind;
   name: string;
-  description: string;
   updatedAt?: string;
-  status: VisualizationStatus;
   path: string;
 }
 
@@ -43,21 +36,15 @@ const timestamp = (value?: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const dashboardItem = (value: DashboardSummary): VisualizationItem => {
+const dashboardItem = (value: DashboardSummary): RecentVisualization => {
   const published = Boolean(value.publishedVersionId);
   const hasUnpublishedChanges =
     published && value.currentVersionNo > value.publishedVersionNo;
+
   return {
-    id: value.id,
-    kind: 'dashboard',
+    id: `dashboard-${value.id}`,
     name: value.name,
-    description: value.description || `Dashboard · v${value.currentVersionNo}`,
     updatedAt: value.updateTime || value.publishedTime || value.createTime,
-    status: hasUnpublishedChanges
-      ? 'changed'
-      : published
-        ? 'published'
-        : 'draft',
     path:
       published && !hasUnpublishedChanges
         ? `/dashboard/${value.id}`
@@ -65,27 +52,15 @@ const dashboardItem = (value: DashboardSummary): VisualizationItem => {
   };
 };
 
-const screenItem = (
-  value: DigitalScreenInstance,
-  fallbackDescription: string,
-): VisualizationItem => ({
-  id: value.id,
-  kind: 'screen',
+const screenItem = (value: DigitalScreenInstance): RecentVisualization => ({
+  id: `screen-${value.id}`,
   name: value.name,
-  description: value.description || fallbackDescription,
   updatedAt: value.updatedAt || value.publishedAt || value.createdAt,
-  status: value.status === 'published' ? 'published' : 'draft',
   path:
     value.status === 'published'
       ? `/digital-screen/${value.id}`
       : `/digital-screen/${value.id}/edit`,
 });
-
-const statusClassName = (status: VisualizationStatus) => {
-  if (status === 'published') return 'bg-[#eef8f2] text-[#43815f]';
-  if (status === 'changed') return 'bg-[#fff7e9] text-[#a46d25]';
-  return 'bg-[#f3f4f6] text-[#7d828b]';
-};
 
 function useVisualizationOverview(): VisualizationState {
   const [state, setState] = useState<VisualizationState>({
@@ -144,192 +119,103 @@ function useVisualizationOverview(): VisualizationState {
   return state;
 }
 
-function OverviewMetric({
-  label,
-  value,
-  route,
-}: {
-  label: string;
-  value?: number;
-  route: string;
-}) {
-  const intl = useIntl();
-  return (
-    <button
-      type="button"
-      onClick={() => history.push(route)}
-      className="group min-w-0 border-0 bg-transparent px-4 py-1 text-left first:pl-0 last:pr-0"
-    >
-      <div className="truncate text-[11px] text-[#92969f] transition-colors group-hover:text-[#6d737d]">
-        {label}
-      </div>
-      <strong className="mt-1 block truncate text-[24px] font-semibold tracking-[-0.6px] text-[#30343d]">
-        {formatMetric(value, intl.locale)}
-      </strong>
-    </button>
-  );
-}
-
-function VisualizationPreview({ kind }: { kind: VisualizationKind }) {
-  const Icon = kind === 'dashboard' ? LayoutDashboard : Monitor;
-  return (
-    <div className="relative flex h-[112px] items-center justify-center overflow-hidden bg-[linear-gradient(145deg,#f4f6fb_0%,#edf1f8_100%)]">
-      <div className="absolute inset-3 rounded-[10px] border border-white/90 bg-white/55 shadow-[0_5px_18px_rgba(31,35,41,0.04)]" />
-      <div className="relative z-10 flex flex-col items-center gap-2 text-[#7783ad]">
-        <span className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-white/85 shadow-sm">
-          <Icon size={19} strokeWidth={1.7} />
-        </span>
-        <span className="text-[9px] font-medium tracking-[0.08em] text-[#9aa1b6]">
-          {kind === 'dashboard' ? 'DASHBOARD' : 'DIGITAL SCREEN'}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function VisualizationCard({ item }: { item: VisualizationItem }) {
-  const intl = useIntl();
-  return (
-    <button
-      type="button"
-      onClick={() => history.push(item.path)}
-      className="group overflow-hidden rounded-[14px] border border-[#eceef2] bg-white text-left transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-[#dfe2e8] hover:shadow-[0_10px_28px_rgba(31,35,41,0.075)]"
-    >
-      <VisualizationPreview kind={item.kind} />
-      <div className="px-4 pb-4 pt-3.5">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <strong className="block truncate text-[13px] font-semibold text-[#373b44]">
-              {item.name}
-            </strong>
-            <p className="mt-1 truncate text-[10px] text-[#92969f]">
-              {item.description}
-            </p>
-          </div>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] ${statusClassName(item.status)}`}
-          >
-            {intl.formatMessage({
-              id: `pages.home.visualization.status.${item.status}`,
-            })}
-          </span>
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-[#a0a4ac]">
-          <span>
-            {intl.formatMessage({
-              id: `pages.home.visualization.kind.${item.kind}`,
-            })}
-          </span>
-          <span className="flex min-w-0 items-center gap-1">
-            <Clock3 size={11} strokeWidth={1.8} />
-            <span className="truncate">
-              {relativeTime(item.updatedAt, intl.locale)}
-            </span>
-          </span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export default function HomeVisualizationOverview() {
   const intl = useIntl();
   const state = useVisualizationOverview();
-  const dashboard = state.dashboard;
-  const screens = state.screens;
-  const publishedScreens = screens?.filter((item) => item.status === 'published').length;
-
-  const recentItems = useMemo(() => {
+  const dashboardCount = state.dashboard?.dashboardCount;
+  const screenCount = state.screens?.length;
+  const publishedScreens = state.screens?.filter(
+    (item) => item.status === 'published',
+  ).length;
+  const latest = useMemo(() => {
     const items = [
-      ...(dashboard?.recentDashboards || []).map(dashboardItem),
-      ...(screens || []).map((item) =>
-        screenItem(
-          item,
-          intl.formatMessage(
-            { id: 'pages.home.visualization.screenFallback' },
-            { templateId: item.templateId },
-          ),
-        ),
-      ),
+      ...(state.dashboard?.recentDashboards || []).map(dashboardItem),
+      ...(state.screens || []).map(screenItem),
     ];
-    return items
-      .sort((left, right) => timestamp(right.updatedAt) - timestamp(left.updatedAt))
-      .slice(0, 4);
-  }, [dashboard, intl.locale, screens]);
+    return items.sort(
+      (left, right) => timestamp(right.updatedAt) - timestamp(left.updatedAt),
+    )[0];
+  }, [state.dashboard, state.screens]);
 
-  const loading = state.dashboardLoading || state.screenLoading;
-  const allFailed = state.dashboardFailed && state.screenFailed;
+  const total =
+    dashboardCount == null && screenCount == null
+      ? undefined
+      : (dashboardCount ?? 0) + (screenCount ?? 0);
+  const published =
+    state.dashboard?.publishedDashboardCount == null && publishedScreens == null
+      ? undefined
+      : (state.dashboard?.publishedDashboardCount ?? 0) + (publishedScreens ?? 0);
 
   return (
-    <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-6 pt-5">
+    <section className="flex h-[188px] min-w-0 flex-col rounded-[18px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-4">
       <SectionHeader
+        compact
         title={intl.formatMessage({ id: 'pages.home.visualization.title' })}
-        description=""
+        onMore={() => history.push('/dashboard')}
       />
 
-      <div className="mt-5 grid grid-cols-2 divide-x divide-[#eef0f3] lg:grid-cols-4">
-        <OverviewMetric
-          label={intl.formatMessage({ id: 'pages.home.visualization.metric.dashboard' })}
-          value={state.dashboardFailed ? undefined : dashboard?.dashboardCount}
-          route="/dashboard"
-        />
-        <OverviewMetric
-          label={intl.formatMessage({
-            id: 'pages.home.visualization.metric.publishedDashboard',
-          })}
-          value={state.dashboardFailed ? undefined : dashboard?.publishedDashboardCount}
-          route="/dashboard"
-        />
-        <OverviewMetric
-          label={intl.formatMessage({ id: 'pages.home.visualization.metric.screen' })}
-          value={state.screenFailed ? undefined : screens?.length}
-          route="/digital-screen"
-        />
-        <OverviewMetric
-          label={intl.formatMessage({
-            id: 'pages.home.visualization.metric.publishedScreen',
-          })}
-          value={state.screenFailed ? undefined : publishedScreens}
-          route="/digital-screen"
-        />
-      </div>
-
-      <div className="mt-6 flex items-center justify-between border-t border-[#f0f1f3] pt-4">
-        <strong className="text-[12px] font-semibold text-[#444851]">
-          {intl.formatMessage({ id: 'pages.home.visualization.recentUpdated' })}
-        </strong>
-        <span className="text-[10px] text-[#9ca0a8]">
-          {intl.formatMessage({
-            id:
-              state.dashboardFailed || state.screenFailed
-                ? 'pages.home.visualization.partialUnavailable'
-                : 'pages.home.visualization.sortedByUpdatedAt',
-          })}
-        </span>
-      </div>
-
-      {recentItems.length > 0 ? (
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {recentItems.map((item) => (
-            <VisualizationCard key={`${item.kind}-${item.id}`} item={item} />
-          ))}
+      <div className="mt-3 flex min-h-0 flex-1 flex-col justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#f2f4fb] text-[#7783ad]">
+            <LayoutDashboard size={18} strokeWidth={1.8} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <strong className="text-[25px] font-semibold leading-7 tracking-[-0.6px] text-[#30343d]">
+                {formatMetric(total, intl.locale)}
+              </strong>
+              <span className="text-[10px] text-[#969aa3]">
+                {intl.formatMessage({ id: 'pages.home.visualization.title' })}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-[10px] text-[#8f949d]">
+              <span className="flex items-center gap-1">
+                <LayoutDashboard size={11} strokeWidth={1.8} />
+                {formatMetric(dashboardCount, intl.locale)}
+              </span>
+              <span className="flex items-center gap-1">
+                <Monitor size={11} strokeWidth={1.8} />
+                {formatMetric(screenCount, intl.locale)}
+              </span>
+              <span>
+                {intl.formatMessage({ id: 'pages.home.visualization.status.published' })}{' '}
+                <strong className="font-semibold text-[#555a64]">
+                  {formatMetric(published, intl.locale)}
+                </strong>
+              </span>
+            </div>
+          </div>
         </div>
-      ) : loading || allFailed ? (
-        <div className="flex min-h-[176px] items-center justify-center text-[11px] text-[#a0a4ac]">
-          {intl.formatMessage({
-            id: loading
-              ? 'pages.home.visualization.loading'
-              : 'pages.home.visualization.failed',
-          })}
-        </div>
-      ) : (
-        <HomeEmptyState
-          icon={LayoutDashboard}
-          title={intl.formatMessage({ id: 'pages.home.visualization.empty' })}
-          size="medium"
-          className="min-h-[176px]"
-        />
-      )}
+
+        <button
+          type="button"
+          onClick={() => history.push(latest?.path || '/dashboard')}
+          className="group flex h-9 w-full items-center gap-2 rounded-[9px] border-0 bg-[#f8f9fb] px-3 text-left"
+        >
+          <Clock3 size={13} strokeWidth={1.8} className="shrink-0 text-[#8995ad]" />
+          <span className="min-w-0 flex-1 truncate text-[10px] text-[#747a84]">
+            {latest?.name ||
+              intl.formatMessage({
+                id:
+                  state.dashboardLoading || state.screenLoading
+                    ? 'pages.home.visualization.loading'
+                    : state.dashboardFailed && state.screenFailed
+                      ? 'pages.home.visualization.failed'
+                      : 'pages.home.visualization.empty',
+              })}
+          </span>
+          {latest ? (
+            <span className="shrink-0 text-[9px] text-[#a0a4ac]">
+              {relativeTime(latest.updatedAt, intl.locale)}
+            </span>
+          ) : null}
+          <ChevronRight
+            size={12}
+            strokeWidth={1.8}
+            className="shrink-0 text-[#b5b9c0] transition-transform group-hover:translate-x-0.5"
+          />
+        </button>
+      </div>
     </section>
   );
 }

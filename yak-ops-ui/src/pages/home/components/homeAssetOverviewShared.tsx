@@ -14,6 +14,7 @@ interface SectionHeaderProps {
   title: string;
   description?: string;
   onMore?: () => void;
+  compact?: boolean;
 }
 
 export const formatMetric = (value?: number | null, locale = 'zh-CN') =>
@@ -95,12 +96,20 @@ export function SectionHeader({
   title,
   description,
   onMore,
+  compact = false,
 }: SectionHeaderProps) {
   const intl = useIntl();
+
   return (
     <header className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
+        <h2
+          className={
+            compact
+              ? 'text-[15px] font-semibold leading-5 tracking-[-0.2px] text-[#343842]'
+              : 'text-xl font-semibold tracking-[-0.35px] text-[#252832]'
+          }
+        >
           {title}
         </h2>
         {description ? (
@@ -114,10 +123,12 @@ export function SectionHeader({
         <button
           type="button"
           onClick={onMore}
-          className="mt-0.5 flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[12px] text-[#747982] transition-colors hover:text-[#252832]"
+          className={`flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[#747982] transition-colors hover:text-[#252832] ${
+            compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'
+          }`}
         >
           {intl.formatMessage({ id: 'pages.home.common.viewMore' })}
-          <ChevronRight size={14} strokeWidth={1.8} />
+          <ChevronRight size={compact ? 13 : 14} strokeWidth={1.8} />
         </button>
       ) : null}
     </header>

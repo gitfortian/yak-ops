@@ -46,8 +46,8 @@ export default function DataCenter() {
     : formatDate(fallbackPeriod.end);
 
   return (
-    <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <section className="flex min-w-0 flex-col rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5 lg:h-[400px] lg:overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <h2 className="shrink-0 text-xl font-semibold tracking-[-0.35px] text-[#252832]">
             {intl.formatMessage({ id: 'pages.home.dataCenter.title' })}
@@ -74,14 +74,14 @@ export default function DataCenter() {
         </button>
       </header>
 
-      <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:gap-6">
+      <div className="mt-4 flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:flex-row lg:gap-6 lg:overflow-hidden">
         <LatestTaskCard
           task={overview?.latestTask}
           loading={overviewLoading}
           failed={overviewFailed}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 lg:min-h-0 lg:overflow-hidden">
           <YakTab
             activeKey={activeTab}
             onChange={(key) => setActiveTab(key as HomeDataCenterTabKey)}
@@ -98,32 +98,34 @@ export default function DataCenter() {
             }
           />
 
-          {activeTab === 'overview' && (
-            <OverviewPanel
-              overview={overview}
-              periodKey={periodKey}
-              periodLabel={periodLabel}
-              loading={overviewLoading}
-              failed={overviewFailed}
-            />
-          )}
+          <div className="h-[263px] overflow-auto pr-1">
+            {activeTab === 'overview' && (
+              <OverviewPanel
+                overview={overview}
+                periodKey={periodKey}
+                periodLabel={periodLabel}
+                loading={overviewLoading}
+                failed={overviewFailed}
+              />
+            )}
 
-          {activeTab === 'recent' && (
-            <RecentTasksPanel
-              items={recentTasks}
-              loading={recentLoading}
-              failed={recentFailed}
-            />
-          )}
+            {activeTab === 'recent' && (
+              <RecentTasksPanel
+                items={recentTasks}
+                loading={recentLoading}
+                failed={recentFailed}
+              />
+            )}
 
-          {activeTab === 'schedule' && (
-            <SchedulePanel
-              items={scheduleItems}
-              periodLabel={periodLabel}
-              loading={scheduleLoading}
-              failed={scheduleFailed}
-            />
-          )}
+            {activeTab === 'schedule' && (
+              <SchedulePanel
+                items={scheduleItems}
+                periodLabel={periodLabel}
+                loading={scheduleLoading}
+                failed={scheduleFailed}
+              />
+            )}
+          </div>
         </div>
       </div>
     </section>
