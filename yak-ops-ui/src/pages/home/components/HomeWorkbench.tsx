@@ -465,7 +465,7 @@ function QualityMetric({
 
   return (
     <div className="min-w-0">
-      <div className="truncate text-[10px] leading-4 text-[#9398a1]">
+      <div className="truncate text-[12px] leading-4 text-[#9398a1]">
         {label}
       </div>
 
@@ -516,7 +516,7 @@ function QualityRadar({
     <div className="flex min-w-0 flex-col lg:pr-7">
       <div className="flex items-start justify-between gap-5">
         <div>
-          <div className="text-[11px] font-medium text-[#858b94]">
+          <div className="text-[12px] font-medium text-[#858b94]">
             {isChinese
               ? '综合通过率'
               : 'Overall pass rate'}
@@ -557,7 +557,7 @@ function QualityRadar({
           </div>
         </div>
 
-        <span className="mt-1 shrink-0 rounded-full bg-[#f5f6f8] px-2.5 py-1 text-[9px] font-medium text-[#858b94]">
+        <span className="mt-1 shrink-0 rounded-full bg-[#f5f6f8] px-2.5 py-1 text-[12px] font-medium text-[#858b94]">
           {isChinese ? '近 7 日' : 'Last 7 days'}
         </span>
       </div>
@@ -892,7 +892,7 @@ function DataQualityPanel() {
               '/data-quality/overview',
             )
           }
-          className="group flex shrink-0 items-center gap-1 border-0 bg-transparent p-0 text-[10px] font-medium text-[#7a8089] transition-colors hover:text-[#30353d]"
+          className="group flex shrink-0 items-center gap-1 border-0 bg-transparent p-0 text-[12px] font-medium text-[#7a8089] transition-colors hover:text-[#30353d]"
         >
           {isChinese
             ? '查看质量中心'
@@ -904,7 +904,7 @@ function DataQualityPanel() {
         </button>
       </header>
 
-      <div className="mt-4 border-t border-[#eceef1] pt-4">
+      <div className="mt-4 pt-4">
         <div className="grid min-w-0 grid-cols-1 gap-7 lg:grid-cols-[minmax(300px,0.82fr)_minmax(460px,1.18fr)] lg:gap-0">
           <QualityRadar
             state={state}
