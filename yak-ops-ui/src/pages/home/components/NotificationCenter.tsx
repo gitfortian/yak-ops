@@ -48,7 +48,7 @@ function NotificationRow({
       className="
         group
         flex
-        h-10
+        h-7
         w-full
         items-center
         gap-4
