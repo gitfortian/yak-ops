@@ -8,8 +8,8 @@ import io.yak.ops.business.resource.content.ResourceContentPolicy;
 import io.yak.ops.business.resource.content.ResourceContentReader;
 import io.yak.ops.business.resource.controller.v1.ResourceExceptionHandler;
 import io.yak.ops.business.resource.controller.v1.ResourcesController;
-import io.yak.ops.business.resource.controller.v1.mapper.ResourceRequestMapper;
-import io.yak.ops.business.resource.controller.v1.mapper.ResourceViewMapper;
+import io.yak.ops.business.resource.controller.v1.converter.ResourceRequestConverter;
+import io.yak.ops.business.resource.controller.v1.converter.ResourceViewConverter;
 import io.yak.ops.business.resource.namespace.ResourceNamePolicy;
 import io.yak.ops.business.resource.namespace.ResourceNamespaceManager;
 import io.yak.ops.business.resource.namespace.ResourceNamespaceReader;
@@ -52,8 +52,8 @@ class ResourceRoleConventionTest {
         ResourceDownloadProviderAdapter.class,
         ResourceResolverAdapter.class,
         ResourceChangeDispatcher.class,
-        ResourceRequestMapper.class,
-        ResourceViewMapper.class)) {
+        ResourceRequestConverter.class,
+        ResourceViewConverter.class)) {
       assertThat(role.getAnnotation(Component.class))
           .as("%s must remain an explicit Resource component role", role.getSimpleName())
           .isNotNull();
