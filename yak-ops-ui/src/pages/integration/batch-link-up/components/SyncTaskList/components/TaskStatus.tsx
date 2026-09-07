@@ -1,3 +1,4 @@
+import runningWebp from '@/assets/gif/running.webp';
 import {
   YakButton,
   YakStatusIcon,
@@ -79,45 +80,97 @@ const normalizeStatus = (value?: string) => {
   const normalized = String(value || '')
     .trim()
     .toUpperCase();
+
   return STATUS_ALIASES[normalized] || normalized || 'IDLE';
 };
 
 const TaskStatus = ({ status, errorMessage }: TaskStatusProps) => {
   const intl = useIntl();
+
   const normalized = normalizeStatus(status);
   const meta = STATUS_META[normalized];
+
   const label = meta
     ? intl.formatMessage({ id: meta.messageId })
     : normalized;
+
   const yakStatus: YakStatus = meta?.yakStatus || 'unknown';
 
-  const statusContent = (
-    <span
-      className="inline-flex min-w-[78px] items-center justify-center gap-1.5 whitespace-nowrap text-[12px] font-medium leading-5 text-[#475467]"
-      data-offline-sync-status={normalized}
-    >
-      <YakStatusIcon
-        status={yakStatus}
-        size={17}
-        animated={Boolean(meta?.animated)}
-      />
-      <span>{label}</span>
-    </span>
-  );
+  const isRunning = normalized === 'RUNNING';
 
-  if (!errorMessage || (normalized !== 'FAILED' && normalized !== 'LOST')) {
+const statusContent = isRunning ? (
+  <span
+    className="relative inline-flex h-[100px] min-w-[72px] items-center justify-center"
+    data-offline-sync-status={normalized}
+    title={label}
+  >
+    <span className="relative inline-flex">
+
+      {/* 上层：真正清晰的 Running 插画 */}
+      <img
+        src={runningWebp}
+        alt=""
+        draggable={false}
+        className="
+          relative
+          z-10
+          block
+          h-[88px]
+          w-auto
+          max-w-none
+          select-none
+          rounded-[14px]
+          object-contain
+        "
+        style={{
+          WebkitMaskImage:
+            'radial-gradient(ellipse 88% 94% at 50% 50%, #000 58%, rgba(0,0,0,.96) 70%, rgba(0,0,0,.72) 82%, rgba(0,0,0,.28) 92%, transparent 100%)',
+          maskImage:
+            'radial-gradient(ellipse 88% 94% at 50% 50%, #000 58%, rgba(0,0,0,.96) 70%, rgba(0,0,0,.72) 82%, rgba(0,0,0,.28) 92%, transparent 100%)',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskSize: '100% 100%',
+          maskSize: '100% 100%',
+        }}
+      />
+    </span>
+  </span>
+) : (
+  <span
+    className="inline-flex min-w-[78px] items-center justify-center gap-1.5 whitespace-nowrap text-[12px] font-medium leading-5 text-[#475467]"
+    data-offline-sync-status={normalized}
+  >
+    <YakStatusIcon
+      status={yakStatus}
+      size={17}
+      animated={Boolean(meta?.animated)}
+    />
+
+    <span>{label}</span>
+  </span>
+);
+
+  if (
+    !errorMessage ||
+    (normalized !== 'FAILED' && normalized !== 'LOST')
+  ) {
     return statusContent;
   }
 
   const copyError = async () => {
     try {
       await navigator.clipboard.writeText(errorMessage);
+
       message.success(
-        intl.formatMessage({ id: 'pages.batchLinkUp.status.copyErrorSuccess' }),
+        intl.formatMessage({
+          id: 'pages.batchLinkUp.status.copyErrorSuccess',
+        }),
       );
     } catch {
       message.error(
-        intl.formatMessage({ id: 'pages.batchLinkUp.status.copyErrorFailed' }),
+        intl.formatMessage({
+          id: 'pages.batchLinkUp.status.copyErrorFailed',
+        }),
       );
     }
   };
@@ -128,12 +181,29 @@ const TaskStatus = ({ status, errorMessage }: TaskStatusProps) => {
       trigger="hover"
       content={
         <div className="w-[440px]">
-          <div className="max-h-[240px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-[#101828] p-3 font-mono text-xs leading-5 text-[#fda29b]">
+          <div
+            className="
+              max-h-[240px]
+              overflow-auto
+              whitespace-pre-wrap
+              break-words
+              rounded-md
+              bg-[#101828]
+              p-3
+              font-mono
+              text-xs
+              leading-5
+              text-[#fda29b]
+            "
+          >
             {errorMessage}
           </div>
+
           <div className="mt-2 flex justify-end">
             <YakButton size="small" onClick={copyError}>
-              {intl.formatMessage({ id: 'pages.batchLinkUp.status.copyError' })}
+              {intl.formatMessage({
+                id: 'pages.batchLinkUp.status.copyError',
+              })}
             </YakButton>
           </div>
         </div>
