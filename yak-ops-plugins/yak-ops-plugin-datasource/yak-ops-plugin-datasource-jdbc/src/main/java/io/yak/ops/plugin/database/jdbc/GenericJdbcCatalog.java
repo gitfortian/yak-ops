@@ -341,9 +341,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             oceanBaseOracleMode()
                 ? query + " WHERE ROWNUM <= " + limit
                 : query + " LIMIT " + limit;
-        case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+        case MYSQL, TIDB, GOLDENDB, GBASE8C, GBASE8A, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
             query + " LIMIT " + limit;
-        case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
+        case GBASE8S, YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
         case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
             throw new IllegalStateException("Non-JDBC datasource must not use GenericJdbcCatalog");
       };
@@ -360,9 +360,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           oceanBaseOracleMode()
               ? "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit
               : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
-      case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+      case MYSQL, TIDB, GOLDENDB, GBASE8C, GBASE8A, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
-      case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
+      case GBASE8S, YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
       case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
           throw new IllegalStateException("Non-JDBC datasource must not use GenericJdbcCatalog");
     };
@@ -524,6 +524,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     return connection.dbType() == DataSourceDbType.MYSQL
         || connection.dbType() == DataSourceDbType.TIDB
         || connection.dbType() == DataSourceDbType.GOLDENDB
+        || connection.dbType() == DataSourceDbType.GBASE8A
         || connection.dbType() == DataSourceDbType.DORIS
         || connection.dbType() == DataSourceDbType.STARROCKS
         || connection.dbType() == DataSourceDbType.CLICKHOUSE

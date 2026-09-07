@@ -84,6 +84,16 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       // execution-time guard even for old/stale definitions that still contain auto-create intent.
       context.options().put("schema_save_mode", "ERROR_WHEN_SCHEMA_NOT_EXIST");
     }
+
+    if (context.role() == Role.SINK
+        && isGBase(context.dataSource().getDbType())
+        && "UPSERT".equalsIgnoreCase(text(context.options(), "write_mode", null))) {
+      // Current Link-Up GBase dialects expose bounded INSERT/TRUNCATE and safe auto-create, but no
+      // stable UPSERT/MERGE contract. Reject stale or API-created definitions before Worker submit.
+      throw new IllegalArgumentException(
+          context.dataSource().getDbType().getDisplayName()
+              + " 当前离线 Sink 不支持 Upsert/MERGE，请选择 Append 或 Overwrite");
+    }
   }
 
   private BuildResult buildSource(BuildContext context) {
@@ -247,6 +257,12 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
         dialect = "tidb";
       } else if (dataSource.getDbType() == DataSourceDbType.GOLDENDB) {
         dialect = "goldendb";
+      } else if (dataSource.getDbType() == DataSourceDbType.GBASE8C) {
+        dialect = "gbase8c";
+      } else if (dataSource.getDbType() == DataSourceDbType.GBASE8A) {
+        dialect = "gbase8a";
+      } else if (dataSource.getDbType() == DataSourceDbType.GBASE8S) {
+        dialect = "gbase8s";
       }
     }
 
@@ -472,6 +488,15 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     if (normalized.contains("db2")) {
       return "com.ibm.db2.jcc.DB2Driver";
     }
+    if (normalized.contains("gbase8c")) {
+      return "com.gbase8c.Driver";
+    }
+    if (normalized.contains("gbase8a")) {
+      return "com.gbase.jdbc.Driver";
+    }
+    if (normalized.contains("gbase8s") || normalized.contains("gbasedbt-sqli")) {
+      return "com.gbasedbt.jdbc.Driver";
+    }
     if (normalized.contains("goldendb")
         || normalized.contains("tidb")
         || normalized.contains("mysql")
@@ -538,6 +563,12 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     } catch (NumberFormatException ignored) {
       return fallback;
     }
+  }
+
+  private boolean isGBase(DataSourceDbType dbType) {
+    return dbType == DataSourceDbType.GBASE8C
+        || dbType == DataSourceDbType.GBASE8A
+        || dbType == DataSourceDbType.GBASE8S;
   }
 
   private String normalizeKey(String value) {

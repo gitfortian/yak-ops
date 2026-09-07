@@ -13,6 +13,8 @@ export interface OfflineSyncConnectorProfile {
   guideMultiEnabled?: boolean;
   /** Product-level target DDL policy layered on top of connector-wide capabilities. */
   autoCreateTableEnabled?: boolean;
+  /** Product-level write policy for dialects that do not implement a stable UPSERT/MERGE path. */
+  upsertEnabled?: boolean;
 }
 
 /** Control-plane default execution profiles for datasource types exposed by Yak Ops. */
@@ -29,6 +31,21 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     profileId: 'goldendb-jdbc', dbType: 'GOLDENDB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
     connectorType: 'Jdbc', pluginName: 'JDBC-GOLDENDB', defaultProfile: true,
     autoCreateTableEnabled: false,
+  },
+  {
+    profileId: 'gbase8c-jdbc', dbType: 'GBASE8C', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-GBASE8C', defaultProfile: true,
+    upsertEnabled: false,
+  },
+  {
+    profileId: 'gbase8a-jdbc', dbType: 'GBASE8A', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-GBASE8A', defaultProfile: true,
+    upsertEnabled: false,
+  },
+  {
+    profileId: 'gbase8s-jdbc', dbType: 'GBASE8S', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-GBASE8S', defaultProfile: true,
+    upsertEnabled: false,
   },
   {
     profileId: 'hana-jdbc', dbType: 'HANA', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
@@ -131,6 +148,9 @@ const DB_TYPE_ALIASES: Record<string, string> = {
   TI_DB: 'TIDB',
   GOLDEN_DB: 'GOLDENDB',
   ZTE_GOLDENDB: 'GOLDENDB',
+  GBASE_8C: 'GBASE8C',
+  GBASE_8A: 'GBASE8A',
+  GBASE_8S: 'GBASE8S',
   SAP_HANA: 'HANA',
   SAPHANA: 'HANA',
   OPENGAUSS: 'OPEN_GAUSS',
@@ -170,6 +190,9 @@ export const isGuideMultiEnabledForDataSourceType = (dbType?: string): boolean =
 
 export const isAutoCreateTableEnabledForDataSourceType = (dbType?: string): boolean =>
   defaultOfflineSyncConnectorProfile(dbType)?.autoCreateTableEnabled !== false;
+
+export const isUpsertEnabledForDataSourceType = (dbType?: string): boolean =>
+  defaultOfflineSyncConnectorProfile(dbType)?.upsertEnabled !== false;
 
 /** Compatibility inference used only when a persisted endpoint has no durable connectorId. */
 export const connectorIdForDataSourceType = (

@@ -4,6 +4,7 @@ import {
   defaultOfflineSyncConnectorProfile,
   isAutoCreateTableEnabledForDataSourceType,
   isGuideMultiEnabledForDataSourceType,
+  isUpsertEnabledForDataSourceType,
   OFFLINE_SYNC_CONNECTOR_PROFILES,
 } from './connectorProfiles';
 
@@ -12,6 +13,9 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     'MYSQL',
     'TIDB',
     'GOLDENDB',
+    'GBASE8C',
+    'GBASE8A',
+    'GBASE8S',
     'HANA',
     'ORACLE',
     'POSTGRE_SQL',
@@ -29,6 +33,7 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     'CLICKHOUSE',
     'ELASTICSEARCH7',
     'ELASTICSEARCH8',
+    'MONGODB',
     'KINGBASE',
     'DAMENG',
   ]);
@@ -48,6 +53,26 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
   expect(defaultOfflineSyncConnectorProfile('GOLDEN-DB')).toMatchObject({
     profileId: 'goldendb-jdbc',
     dbType: 'GOLDENDB',
+  });
+  expect(defaultOfflineSyncConnectorProfile('GBASE8C')).toMatchObject({
+    profileId: 'gbase8c-jdbc',
+    dbType: 'GBASE8C',
+    sourceConnectorId: 'jdbc',
+    sinkConnectorId: 'jdbc',
+    pluginName: 'JDBC-GBASE8C',
+    upsertEnabled: false,
+  });
+  expect(defaultOfflineSyncConnectorProfile('GBASE-8A')).toMatchObject({
+    profileId: 'gbase8a-jdbc',
+    dbType: 'GBASE8A',
+    pluginName: 'JDBC-GBASE8A',
+    upsertEnabled: false,
+  });
+  expect(defaultOfflineSyncConnectorProfile('GBASE-8S')).toMatchObject({
+    profileId: 'gbase8s-jdbc',
+    dbType: 'GBASE8S',
+    pluginName: 'JDBC-GBASE8S',
+    upsertEnabled: false,
   });
   expect(defaultOfflineSyncConnectorProfile('HANA')).toMatchObject({
     profileId: 'hana-jdbc',
@@ -72,7 +97,10 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     profileId: 'clickhouse-native',
     sourceConnectorId: 'clickhouse',
   });
-  for (const dbType of ['GOLDENDB', 'HANA', 'YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
+  for (const dbType of [
+    'GOLDENDB', 'GBASE8C', 'GBASE8A', 'GBASE8S', 'HANA', 'YASHAN_DB',
+    'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB',
+  ]) {
     expect(defaultOfflineSyncConnectorProfile(dbType)).toMatchObject({
       dbType,
       sourceConnectorId: 'jdbc',
@@ -105,6 +133,12 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('GOLDENDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('GOLDEN-DB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('ZTE-GOLDENDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE8C')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE-8C')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE8A')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE-8A')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE8S')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GBASE-8S')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('HANA')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('SAP-HANA')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('SAPHANA')).toBe('jdbc');
@@ -122,6 +156,9 @@ test('resolves datasource aliases from one frontend registry', () => {
   expect(connectorIdForDataSourceType('GOLDENDB')).toBe('jdbc');
   expect(connectorIdForDataSourceType('GOLDEN-DB')).toBe('jdbc');
   expect(connectorIdForDataSourceType('ZTE-GOLDENDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('GBASE-8C')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('GBASE-8A')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('GBASE-8S')).toBe('jdbc');
   expect(connectorIdForDataSourceType('HANA')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SAP-HANA')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SAPHANA')).toBe('jdbc');
@@ -145,6 +182,10 @@ test('resolves datasource aliases from one frontend registry', () => {
     profileId: 'goldendb-jdbc',
     dbType: 'GOLDENDB',
   });
+  expect(defaultOfflineSyncConnectorProfile('GBASE-8C')).toMatchObject({
+    profileId: 'gbase8c-jdbc',
+    dbType: 'GBASE8C',
+  });
   expect(defaultOfflineSyncConnectorProfile('SAPHANA')).toMatchObject({
     profileId: 'hana-jdbc',
     dbType: 'HANA',
@@ -155,10 +196,13 @@ test('resolves datasource aliases from one frontend registry', () => {
   });
 });
 
-test('keeps multi-table guide and target DDL policy profile driven', () => {
+test('keeps multi-table guide and target DDL/write policy profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('TIDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('GOLDENDB')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('GBASE8C')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('GBASE8A')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('GBASE8S')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('HANA')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('SAP-HANA')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('YASHAN_DB')).toBe(true);
@@ -171,5 +215,13 @@ test('keeps multi-table guide and target DDL policy profile driven', () => {
   expect(isAutoCreateTableEnabledForDataSourceType('TIDB')).toBe(true);
   expect(isAutoCreateTableEnabledForDataSourceType('GOLDENDB')).toBe(false);
   expect(isAutoCreateTableEnabledForDataSourceType('GOLDEN-DB')).toBe(false);
+  expect(isAutoCreateTableEnabledForDataSourceType('GBASE8C')).toBe(true);
+  expect(isAutoCreateTableEnabledForDataSourceType('GBASE8A')).toBe(true);
+  expect(isAutoCreateTableEnabledForDataSourceType('GBASE8S')).toBe(true);
   expect(isAutoCreateTableEnabledForDataSourceType('HANA')).toBe(true);
+
+  expect(isUpsertEnabledForDataSourceType('MYSQL')).toBe(true);
+  expect(isUpsertEnabledForDataSourceType('GBASE8C')).toBe(false);
+  expect(isUpsertEnabledForDataSourceType('GBASE-8A')).toBe(false);
+  expect(isUpsertEnabledForDataSourceType('GBASE-8S')).toBe(false);
 });

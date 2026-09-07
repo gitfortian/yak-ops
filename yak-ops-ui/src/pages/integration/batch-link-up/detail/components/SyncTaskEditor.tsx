@@ -1,7 +1,10 @@
 import { Alert, Select } from 'antd';
 import type { DataSourceRecord } from '@/services/data-source';
 
-import { isAutoCreateTableEnabledForDataSourceType } from '../../connectorProfiles';
+import {
+  isAutoCreateTableEnabledForDataSourceType,
+  isUpsertEnabledForDataSourceType,
+} from '../../connectorProfiles';
 import {
   resolveEndpointCapability,
   validateEditorCapabilities,
@@ -50,6 +53,8 @@ export default function SyncTaskEditor({
   const mappingColumns = normalizeMappings(editor.mapping?.columns);
   const sinkAutoCreateTableEnabled =
     isAutoCreateTableEnabledForDataSourceType(editor.sink.dbType);
+  const sinkUpsertEnabled =
+    isUpsertEnabledForDataSourceType(editor.sink.dbType);
   const sinkAutoCreateTable =
     sinkAutoCreateTableEnabled && Boolean(sinkConfig.autoCreateTable);
 
@@ -245,6 +250,7 @@ export default function SyncTaskEditor({
             sinkConfig={sinkConfig}
             sinkCapability={sinkCapability}
             autoCreateTableEnabled={sinkAutoCreateTableEnabled}
+            upsertEnabled={sinkUpsertEnabled}
             sourceTables={sourceCatalog.tables}
             sourceLoading={sourceCatalog.loading}
             sourceReady={Boolean(sourceId)}
@@ -263,6 +269,7 @@ export default function SyncTaskEditor({
             sourceCapability={sourceCapability}
             sinkCapability={sinkCapability}
             autoCreateTableEnabled={sinkAutoCreateTableEnabled}
+            upsertEnabled={sinkUpsertEnabled}
             sourceTables={sourceCatalog.tables}
             targetTables={targetCatalog.tables}
             sourceLoading={sourceCatalog.loading}

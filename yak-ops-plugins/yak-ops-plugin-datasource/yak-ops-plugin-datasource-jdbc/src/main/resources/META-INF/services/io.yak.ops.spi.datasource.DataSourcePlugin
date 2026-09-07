@@ -1,6 +1,9 @@
 io.yak.ops.plugin.database.jdbc.mysql.MySqlDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.tidb.TiDbDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.goldendb.GoldenDbDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.gbase.GBase8cDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.gbase.GBase8aDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.gbase.GBase8sDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.hana.HanaDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.postgresql.PostgreSqlDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.oracle.OracleDataSourcePlugin

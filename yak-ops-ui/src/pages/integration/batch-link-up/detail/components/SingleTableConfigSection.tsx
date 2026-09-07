@@ -30,6 +30,7 @@ interface SingleTableConfigSectionProps {
   sourceCapability: EndpointCapabilityState;
   sinkCapability: EndpointCapabilityState;
   autoCreateTableEnabled: boolean;
+  upsertEnabled: boolean;
   sourceTables: string[];
   targetTables: string[];
   sourceLoading: boolean;
@@ -89,6 +90,7 @@ export default function SingleTableConfigSection({
   sourceCapability,
   sinkCapability,
   autoCreateTableEnabled,
+  upsertEnabled,
   sourceTables,
   targetTables,
   sourceLoading,
@@ -119,10 +121,12 @@ export default function SingleTableConfigSection({
     );
   const effectiveAutoCreateTable =
     supportsAutoCreate && Boolean(sinkConfig.autoCreateTable);
-  const supportsUpsert = allowsCapability(
-    sinkCapability,
-    CONNECTOR_CAPABILITY.UPSERT,
-  );
+  const supportsUpsert =
+    upsertEnabled &&
+    allowsCapability(
+      sinkCapability,
+      CONNECTOR_CAPABILITY.UPSERT,
+    );
   const supportsOverwrite = allowsOverwrite(sinkCapability);
   const previewDisabled =
     !sourceDataSourceId ||
@@ -324,7 +328,9 @@ export default function SingleTableConfigSection({
             ) : null}
             {!supportsUpsert && currentWriteMode === 'upsert' ? (
               <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
-                当前 Sink Connector 未声明 UPSERT，请选择其他写入模式。
+                {upsertEnabled
+                  ? '当前 Sink Connector 未声明 UPSERT，请选择其他写入模式。'
+                  : '当前目标数据源不支持 Upsert/MERGE，请选择 Append 或 Overwrite。'}
               </div>
             ) : null}
           </div>
