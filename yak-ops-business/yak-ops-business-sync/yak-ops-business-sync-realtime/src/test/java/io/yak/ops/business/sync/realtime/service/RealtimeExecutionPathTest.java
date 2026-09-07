@@ -26,6 +26,7 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBinding;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBindings;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.DeployResult;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.ValidationResult;
@@ -303,11 +304,10 @@ class RealtimeExecutionPathTest {
     return capabilities;
   }
 
-  private CredentialBinding[] credentials() {
-    return new CredentialBinding[] {
-      new CredentialBinding("source", "source-secret"),
-      new CredentialBinding("sink", "sink-secret")
-    };
+  private CredentialBindings credentials() {
+    return new CredentialBindings(
+        new CredentialBinding("source", "source-secret"),
+        new CredentialBinding("sink", "sink-secret"));
   }
 
   private CdcPipelineSpec spec() {
