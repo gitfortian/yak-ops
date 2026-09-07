@@ -1,10 +1,7 @@
 import DataCenter from './components/DataCenter';
 import { HomeBackground } from './components/HomeBackground';
 import { HomeHeader } from './components/HomeHeader';
-import {
-  HomeWorkbenchMain,
-  HomeWorkbenchSidebar,
-} from './components/HomeWorkbench';
+import { HomeWorkbenchMain } from './components/HomeWorkbench';
 import NotificationCenter from './components/NotificationCenter';
 import { QuickCreatePanel } from './components/QuickCreatePanel';
 import ScheduleCenter from './components/ScheduleCenter';
@@ -34,7 +31,6 @@ export default function HomePage() {
             <aside className="min-w-0 space-y-4">
               <NotificationCenter />
               <ScheduleCenter />
-              <HomeWorkbenchSidebar />
             </aside>
           </div>
         </main>
