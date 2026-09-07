@@ -68,7 +68,7 @@ jobs:
         run: ./scripts/release/prepare-release-version.sh
 
       - name: Package Yak Ops
-        run: ./mvnw -B -ntp clean package -DskipTests
+        run: bash ./mvnw -B -ntp clean package -DskipTests
 
       - name: Upload distribution
         uses: actions/upload-artifact@v6
