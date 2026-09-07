@@ -10,7 +10,12 @@ import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconcileCoordinator;
 import io.yak.ops.business.sync.realtime.reconcile.RealtimeRuntimeIdentityRecovery;
 import io.yak.ops.business.sync.realtime.reconcile.RealtimeRuntimeStateReconciler;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
+import io.yak.ops.business.sync.realtime.repository.RealtimeReconcileDispatchStore;
+import io.yak.ops.business.sync.realtime.repository.RealtimeReconcileDispatchStore.ProjectDeploymentRef;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
+import java.util.function.Supplier;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /** Test-scope source-compatible adapter that executes the real decomposed Reconcile Core. */
@@ -40,9 +45,30 @@ final class RealtimeJobLifecycleCoordinator {
             states,
             orphanGraceSeconds,
             transactionManager);
+    RealtimeReconcileDispatchStore dispatchStore =
+        () ->
+            store.reconcileCandidates().stream()
+                .map(
+                    deployment ->
+                        new ProjectDeploymentRef(1L, deployment.definitionId(), deployment.id()))
+                .toList();
+    ProjectContextScope projectScope =
+        new ProjectContextScope() {
+          @Override
+          public <T> T call(ProjectContext context, Supplier<T> action) {
+            return action.get();
+          }
+        };
     this.coordinator =
         new RealtimeReconcileCoordinator(
-            store, gateway, runtimeResolver, recovery, states, properties);
+            store,
+            dispatchStore,
+            gateway,
+            runtimeResolver,
+            recovery,
+            states,
+            properties,
+            projectScope);
     this.deleteSafety =
         new RealtimeDeleteSafetyChecker(
             store, identityStore, discovery, gateway, runtimeResolver, stateMachine);
