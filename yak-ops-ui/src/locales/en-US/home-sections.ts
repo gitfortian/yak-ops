@@ -8,6 +8,9 @@ export default {
   'pages.home.dataAssets.dashboardEmpty': 'No dashboard preview yet',
 
   'pages.home.quickNavigation.title': 'Quick Navigation',
+  'pages.home.quickNavigation.digitalScreen': 'Digital Screen',
+  'pages.home.quickNavigation.dataCatalog': 'Data Catalog',
+  'pages.home.quickNavigation.dashboard': 'Dashboard',
   'pages.home.quickNavigation.dataSource': 'Data Sources',
   'pages.home.quickNavigation.offlineSync': 'Batch Sync',
   'pages.home.quickNavigation.dataQuality': 'Data Quality',
