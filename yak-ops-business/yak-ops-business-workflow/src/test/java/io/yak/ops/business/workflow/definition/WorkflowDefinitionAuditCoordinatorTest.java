@@ -91,10 +91,9 @@ class WorkflowDefinitionAuditCoordinatorTest {
     assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_UPDATE");
     assertThat(audit.handle.events).hasSize(1);
     Map<String, ?> payload = audit.handle.events.get(0).payload();
-    assertThat(payload)
-        .containsEntry("descriptionChanged", true)
-        .containsEntry("inputChanged", true)
-        .containsEntry("editorMetaChanged", true);
+    assertThat(payload.get("descriptionChanged")).isEqualTo(true);
+    assertThat(payload.get("inputChanged")).isEqualTo(true);
+    assertThat(payload.get("editorMetaChanged")).isEqualTo(true);
     assertThat(payload.toString())
         .doesNotContain("secret-before", "secret-after", "private-before", "private-after");
     assertThat(audit.handle.successSummary).isEqualTo("Workflow updated");
@@ -116,7 +115,7 @@ class WorkflowDefinitionAuditCoordinatorTest {
     assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_PUBLISH");
     assertThat(audit.handle.events).hasSize(2);
     assertThat(audit.handle.events)
-        .extracting(event -> event.payload().get("changeType"))
+        .extracting(event -> String.valueOf(event.payload().get("changeType")))
         .containsExactly("VERSION_PUBLISHED", "RESOURCE_ENABLED");
     assertThat(audit.handle.successSummary).isEqualTo("Workflow published");
   }
@@ -156,10 +155,9 @@ class WorkflowDefinitionAuditCoordinatorTest {
     assertThat(audit.request.resourceType()).isEqualTo("WORKFLOW_EXECUTION");
     assertThat(audit.request.resourceId()).isEqualTo("execution-1");
     assertThat(audit.handle.events).singleElement().satisfies(event -> {
-      assertThat(event.payload())
-          .containsEntry("changeType", "EXECUTION_PAUSED")
-          .containsEntry("executionId", "execution-1")
-          .containsEntry("status", "PAUSED");
+      assertThat(event.payload().get("changeType")).isEqualTo("EXECUTION_PAUSED");
+      assertThat(event.payload().get("executionId")).isEqualTo("execution-1");
+      assertThat(event.payload().get("status")).isEqualTo("PAUSED");
     });
   }
 
