@@ -13,7 +13,7 @@ import SecurityProjectSwitcher from "@/components/security/SecurityProjectSwitch
 import { SecurityProjectProvider, useSecurityProject } from "@/contexts/SecurityProjectContext";
 import { logout } from "@/services/security/account";
 import { history, Link, Outlet, useLocation, useModel } from "@umijs/max";
-import { Badge, Button, Drawer, Dropdown, type MenuProps } from "antd";
+import { Badge, Dropdown, type MenuProps } from "antd";
 import {
   Activity,
   ArrowLeftRight,
@@ -41,8 +41,10 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import MessageList, { MESSAGE_COUNT_CHANGED_EVENT } from "@/pages/system/messages/MessageList";
-import { getUnreadMessageCount } from "@/services/security/messages";
+import {
+  getUnreadMessageCount,
+  MESSAGE_COUNT_CHANGED_EVENT,
+} from "@/services/security/messages";
 import { recordRecentVisit } from "@/utils/recent-visits";
 
 const HEADER_HEIGHT = 48;
@@ -283,7 +285,6 @@ function SiteLayoutContent() {
   const [viewportCompact, setViewportCompact] = useState(false);
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-  const [notificationOpen, setNotificationOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -974,7 +975,7 @@ function SiteLayoutContent() {
             label="通知"
             badge={unreadCount > 0}
             badgeCount={unreadCount}
-            onClick={() => setNotificationOpen(true)}
+            onClick={() => history.push("/system/messages")}
           />
 
           <SecurityProjectSwitcher />
@@ -1009,17 +1010,6 @@ function SiteLayoutContent() {
           </div>
         </div>
       </header>
-
-      <Drawer
-        title="消息中心"
-        placement="right"
-        width={720}
-        open={notificationOpen}
-        onClose={() => setNotificationOpen(false)}
-      >
-        <MessageList compact />
-        <Button block onClick={() => { setNotificationOpen(false); history.push('/system/messages'); }}>查看全部消息</Button>
-      </Drawer>
 
       <main
         className="

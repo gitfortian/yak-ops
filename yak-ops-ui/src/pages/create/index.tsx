@@ -1,7 +1,7 @@
 import YakButton from '@/components/YakButton';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
-import { createDevelopmentNode } from '@/pages/data-development/service';
-import type { DevelopmentNodeType } from '@/pages/data-development/types';
+import { createDevelopmentNode } from '@/services/data-development/legacy';
+import type { DevelopmentNodeType } from '@/services/data-development';
 import {
   API_SUCCESS_CODE,
   extractErrorMessage,

@@ -22,31 +22,28 @@ type MenuCatalogRow = {
   requiredPermissionCode: string | null;
 };
 
-const FINAL_CATALOG_MIGRATION = path.resolve(
+const SECURITY_MIGRATION_ROOT = path.resolve(
   __dirname,
-  '../../../yak-ops-boot/src/main/resources/yak-security/db/migration/V2006__reconcile_menu_permission_catalog.sql',
+  '../../../yak-ops-boot/src/main/resources/yak-security/db/migration',
 );
+const BASE_CATALOG_MIGRATION = path.join(
+  SECURITY_MIGRATION_ROOT,
+  'V2006__reconcile_menu_permission_catalog.sql',
+);
+const CATALOG_EXTENSION_MIGRATIONS = [
+  path.join(
+    SECURITY_MIGRATION_ROOT,
+    'V2007__register_data_service_access_page.sql',
+  ),
+];
 
 const sqlValue = (token: string): string | null =>
   token === 'NULL' ? null : token.slice(1, -1);
 
-const parseFinalYakOpsMenuCatalog = (): MenuCatalogRow[] => {
-  const sql = readFileSync(FINAL_CATALOG_MIGRATION, 'utf8');
-  const sectionStart = sql.indexOf(
-    '-- 3. Upsert the complete set of current visible Yak Ops menus.',
-  );
-  const sectionEnd = sql.indexOf('ON DUPLICATE KEY UPDATE', sectionStart);
-
-  if (sectionStart < 0 || sectionEnd < 0) {
-    throw new Error(
-      'Cannot locate the final Yak Ops menu catalog in V2006__reconcile_menu_permission_catalog.sql',
-    );
-  }
-
-  const section = sql.slice(sectionStart, sectionEnd);
+const parseMenuRows = (sql: string): MenuCatalogRow[] => {
   const rowPattern = /\(\s*'([^']+)'\s*,\s*'[^']*'\s*,\s*(NULL|'[^']*')\s*,\s*(NULL|'[^']*')\s*,\s*'[^']*'\s*,\s*(\d+)\s*,\s*\d+\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(NULL|'[^']*')\s*,\s*'[^']*'\s*,\s*'\$\{appName\}'\s*\)/g;
 
-  const rows = [...section.matchAll(rowPattern)].map((match) => ({
+  return [...sql.matchAll(rowPattern)].map((match) => ({
     menuCode: match[1],
     parentCode: sqlValue(match[2]),
     routePath: sqlValue(match[3]),
@@ -55,9 +52,34 @@ const parseFinalYakOpsMenuCatalog = (): MenuCatalogRow[] => {
     active: match[6] === '1',
     requiredPermissionCode: sqlValue(match[7]),
   }));
+};
 
+const parseFinalYakOpsMenuCatalog = (): MenuCatalogRow[] => {
+  const sql = readFileSync(BASE_CATALOG_MIGRATION, 'utf8');
+  const sectionStart = sql.indexOf(
+    '-- 3. Upsert the complete set of current visible Yak Ops menus.',
+  );
+  const sectionEnd = sql.indexOf('ON DUPLICATE KEY UPDATE', sectionStart);
+
+  if (sectionStart < 0 || sectionEnd < 0) {
+    throw new Error(
+      'Cannot locate the baseline Yak Ops menu catalog in V2006__reconcile_menu_permission_catalog.sql',
+    );
+  }
+
+  let rows = parseMenuRows(sql.slice(sectionStart, sectionEnd));
   if (rows.length === 0) {
-    throw new Error('Parsed zero rows from the final Yak Ops menu catalog');
+    throw new Error('Parsed zero rows from the V2006 Yak Ops menu catalog');
+  }
+
+  for (const migrationPath of CATALOG_EXTENSION_MIGRATIONS) {
+    const extensionRows = parseMenuRows(readFileSync(migrationPath, 'utf8'));
+    for (const extension of extensionRows) {
+      rows = [
+        ...rows.filter((row) => row.menuCode !== extension.menuCode),
+        extension,
+      ];
+    }
   }
 
   return rows;
@@ -123,7 +145,7 @@ describe('Navigation ↔ Yak Security menu catalog contract', () => {
     expect(errors).toEqual([]);
   });
 
-  it('keeps the frontend Yak Ops menu-code set exactly aligned with the final Flyway catalog', () => {
+  it('keeps the frontend Yak Ops menu-code set exactly aligned with the effective Flyway catalog', () => {
     const frontendEntries = [
       ...navigationGroups
         .filter((group) => yakOpsCodeSet.has(group.menuCode))

@@ -21,10 +21,26 @@ class AllDataSourcePluginsTest {
     assertThat(discovered)
         .containsExactlyInAnyOrder(
             DataSourceDbType.MYSQL,
+            DataSourceDbType.TIDB,
+            DataSourceDbType.GOLDENDB,
+            DataSourceDbType.HANA,
             DataSourceDbType.POSTGRE_SQL,
             DataSourceDbType.ORACLE,
             DataSourceDbType.KINGBASE,
             DataSourceDbType.DAMENG,
-            DataSourceDbType.DORIS);
+            DataSourceDbType.DB2,
+            DataSourceDbType.OPEN_GAUSS,
+            DataSourceDbType.SQL_SERVER,
+            DataSourceDbType.OCEANBASE,
+            DataSourceDbType.YASHAN_DB,
+            DataSourceDbType.HIGHGO,
+            DataSourceDbType.IRIS,
+            DataSourceDbType.XUGU,
+            DataSourceDbType.DUCKDB,
+            DataSourceDbType.DORIS,
+            DataSourceDbType.STARROCKS,
+            DataSourceDbType.CLICKHOUSE,
+            DataSourceDbType.ELASTICSEARCH7,
+            DataSourceDbType.ELASTICSEARCH8);
   }
 }

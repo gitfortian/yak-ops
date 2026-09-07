@@ -8,11 +8,86 @@ import org.junit.jupiter.api.Test;
 class DataSourceDbTypeTest {
 
   @Test
-  void shouldSupportPostgresAliases() {
+  void shouldSupportStableDatasourceAliases() {
     assertThat(DataSourceDbType.parse("postgresql"))
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
     assertThat(DataSourceDbType.parse("POSTGRES"))
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
+    assertThat(DataSourceDbType.parse("tidb"))
+        .isEqualTo(DataSourceDbType.TIDB);
+    assertThat(DataSourceDbType.parse("ti-db"))
+        .isEqualTo(DataSourceDbType.TIDB);
+    assertThat(DataSourceDbType.parse("goldendb"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
+    assertThat(DataSourceDbType.parse("golden-db"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
+    assertThat(DataSourceDbType.parse("zte-goldendb"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
+    assertThat(DataSourceDbType.parse("hana"))
+        .isEqualTo(DataSourceDbType.HANA);
+    assertThat(DataSourceDbType.parse("sap-hana"))
+        .isEqualTo(DataSourceDbType.HANA);
+    assertThat(DataSourceDbType.parse("saphana"))
+        .isEqualTo(DataSourceDbType.HANA);
+    assertThat(DataSourceDbType.parse("opengauss"))
+        .isEqualTo(DataSourceDbType.OPEN_GAUSS);
+    assertThat(DataSourceDbType.parse("SQLSERVER"))
+        .isEqualTo(DataSourceDbType.SQL_SERVER);
+    assertThat(DataSourceDbType.parse("mssql"))
+        .isEqualTo(DataSourceDbType.SQL_SERVER);
+    assertThat(DataSourceDbType.parse("yashandb"))
+        .isEqualTo(DataSourceDbType.YASHAN_DB);
+    assertThat(DataSourceDbType.parse("yasdb"))
+        .isEqualTo(DataSourceDbType.YASHAN_DB);
+    assertThat(DataSourceDbType.parse("high-go"))
+        .isEqualTo(DataSourceDbType.HIGHGO);
+    assertThat(DataSourceDbType.parse("hgdb"))
+        .isEqualTo(DataSourceDbType.HIGHGO);
+    assertThat(DataSourceDbType.parse("intersystems-iris"))
+        .isEqualTo(DataSourceDbType.IRIS);
+    assertThat(DataSourceDbType.parse("xugudb"))
+        .isEqualTo(DataSourceDbType.XUGU);
+    assertThat(DataSourceDbType.parse("duck-db"))
+        .isEqualTo(DataSourceDbType.DUCKDB);
+    assertThat(DataSourceDbType.parse("es7"))
+        .isEqualTo(DataSourceDbType.ELASTICSEARCH7);
+    assertThat(DataSourceDbType.parse("elasticsearch-8"))
+        .isEqualTo(DataSourceDbType.ELASTICSEARCH8);
+  }
+
+  @Test
+  void shouldExposeCurrentDatasourceTypesAsFirstClassTypes() {
+    assertThat(DataSourceDbType.values())
+        .contains(
+            DataSourceDbType.TIDB,
+            DataSourceDbType.GOLDENDB,
+            DataSourceDbType.HANA,
+            DataSourceDbType.DB2,
+            DataSourceDbType.OPEN_GAUSS,
+            DataSourceDbType.SQL_SERVER,
+            DataSourceDbType.OCEANBASE,
+            DataSourceDbType.YASHAN_DB,
+            DataSourceDbType.HIGHGO,
+            DataSourceDbType.IRIS,
+            DataSourceDbType.XUGU,
+            DataSourceDbType.DUCKDB,
+            DataSourceDbType.DORIS,
+            DataSourceDbType.STARROCKS,
+            DataSourceDbType.CLICKHOUSE,
+            DataSourceDbType.ELASTICSEARCH7,
+            DataSourceDbType.ELASTICSEARCH8);
+    assertThat(DataSourceDbType.TIDB.getDisplayName()).isEqualTo("TiDB");
+    assertThat(DataSourceDbType.GOLDENDB.getDisplayName()).isEqualTo("GoldenDB");
+    assertThat(DataSourceDbType.HANA.getDisplayName()).isEqualTo("SAP HANA");
+    assertThat(DataSourceDbType.YASHAN_DB.getDisplayName()).isEqualTo("YashanDB");
+    assertThat(DataSourceDbType.HIGHGO.getDisplayName()).isEqualTo("HighGo");
+    assertThat(DataSourceDbType.IRIS.getDisplayName()).isEqualTo("InterSystems IRIS");
+    assertThat(DataSourceDbType.XUGU.getDisplayName()).isEqualTo("XuguDB");
+    assertThat(DataSourceDbType.DUCKDB.getDisplayName()).isEqualTo("DuckDB");
+    assertThat(DataSourceDbType.STARROCKS.getDisplayName()).isEqualTo("StarRocks");
+    assertThat(DataSourceDbType.CLICKHOUSE.getDisplayName()).isEqualTo("ClickHouse");
+    assertThat(DataSourceDbType.ELASTICSEARCH7.getDisplayName()).isEqualTo("Elasticsearch 7");
+    assertThat(DataSourceDbType.ELASTICSEARCH8.getDisplayName()).isEqualTo("Elasticsearch 8");
   }
 
   @Test

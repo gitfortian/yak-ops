@@ -7,6 +7,7 @@ import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionControlAuditCoordinator;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionReactivator;
 import io.yak.ops.business.workflow.execution.WorkflowLauncher;
+import io.yak.ops.business.workflow.runtime.WorkflowInstanceQueryService;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
@@ -34,17 +35,34 @@ public class WorkflowController {
   private final WorkflowLauncher workflowLaunchService;
   private final WorkflowExecutionReactivator workflowReactivationService;
   private final WorkflowExecutionControlAuditCoordinator executionControlAudit;
+  private final WorkflowInstanceQueryService workflowInstanceQueryService;
 
   @Autowired
   public WorkflowController(
       WorkflowRuntime workflowRuntimeService,
       WorkflowLauncher workflowLaunchService,
       WorkflowExecutionReactivator workflowReactivationService,
-      WorkflowExecutionControlAuditCoordinator executionControlAudit) {
+      WorkflowExecutionControlAuditCoordinator executionControlAudit,
+      WorkflowInstanceQueryService workflowInstanceQueryService) {
     this.workflowRuntimeService = workflowRuntimeService;
     this.workflowLaunchService = workflowLaunchService;
     this.workflowReactivationService = workflowReactivationService;
     this.executionControlAudit = executionControlAudit;
+    this.workflowInstanceQueryService = workflowInstanceQueryService;
+  }
+
+  /** Focused compatibility constructor without query enrichment wiring. */
+  public WorkflowController(
+      WorkflowRuntime workflowRuntimeService,
+      WorkflowLauncher workflowLaunchService,
+      WorkflowExecutionReactivator workflowReactivationService,
+      WorkflowExecutionControlAuditCoordinator executionControlAudit) {
+    this(
+        workflowRuntimeService,
+        workflowLaunchService,
+        workflowReactivationService,
+        executionControlAudit,
+        null);
   }
 
   /** Focused compatibility constructor without Audit wiring. */
@@ -52,10 +70,12 @@ public class WorkflowController {
       WorkflowRuntime workflowRuntimeService,
       WorkflowLauncher workflowLaunchService,
       WorkflowExecutionReactivator workflowReactivationService) {
-    this.workflowRuntimeService = workflowRuntimeService;
-    this.workflowLaunchService = workflowLaunchService;
-    this.workflowReactivationService = workflowReactivationService;
-    this.executionControlAudit = null;
+    this(
+        workflowRuntimeService,
+        workflowLaunchService,
+        workflowReactivationService,
+        null,
+        null);
   }
 
   @Operation(summary = "创建工作流运行实例")
@@ -148,7 +168,10 @@ public class WorkflowController {
   @Operation(summary = "查询工作流实例")
   @GetMapping("/instances")
   public Result<List<WorkflowInstanceVO>> instances() {
-    return Result.success(workflowRuntimeService.listInstances());
+    return Result.success(
+        workflowInstanceQueryService == null
+            ? workflowRuntimeService.listInstances()
+            : workflowInstanceQueryService.listInstances());
   }
 
   @Operation(summary = "查询工作流实例详情")

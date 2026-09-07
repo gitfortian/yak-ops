@@ -1,8 +1,13 @@
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  FilterOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
   DatePicker,
   Input,
+  Popover,
   Select,
   Space,
   Tag,
@@ -39,6 +44,11 @@ interface FilterState {
   source?: string;
   timeRange?: [Dayjs, Dayjs];
 }
+
+type AdvancedFilterState = Pick<
+  FilterState,
+  'operationType' | 'resourceType' | 'status' | 'source'
+>;
 
 const EMPTY_OPTIONS: AuditFilterOptions = {
   actors: [],
@@ -96,12 +106,21 @@ const buildQuery = (
     .format('YYYY-MM-DDTHH:mm:ss'),
 });
 
+const getAdvancedFilters = (filters: FilterState): AdvancedFilterState => ({
+  operationType: filters.operationType,
+  resourceType: filters.resourceType,
+  status: filters.status,
+  source: filters.source,
+});
+
 export default function BusinessAuditPanel() {
   const [rows, setRows] = useState<AuditOperationSummary[]>([]);
   const [options, setOptions] = useState<AuditFilterOptions>(EMPTY_OPTIONS);
   const [filters, setFilters] = useState<FilterState>({});
   const [loading, setLoading] = useState(false);
   const [selectedOperationId, setSelectedOperationId] = useState<string>();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [draftAdvanced, setDraftAdvanced] = useState<AdvancedFilterState>({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
   const loadOptions = useCallback(async () => {
@@ -256,6 +275,8 @@ export default function BusinessAuditPanel() {
   const reset = () => {
     const empty: FilterState = {};
     setFilters(empty);
+    setDraftAdvanced({});
+    setAdvancedOpen(false);
     void loadPage(1, pagination.pageSize, empty);
   };
 
@@ -264,9 +285,129 @@ export default function BusinessAuditPanel() {
     void loadPage(pagination.current, pagination.pageSize, filters);
   };
 
+  const applyAdvanced = () => {
+    const nextFilters = { ...filters, ...draftAdvanced };
+    setFilters(nextFilters);
+    setAdvancedOpen(false);
+    void loadPage(1, pagination.pageSize, nextFilters);
+  };
+
+  const resetAdvanced = () => {
+    const nextFilters: FilterState = {
+      ...filters,
+      operationType: undefined,
+      resourceType: undefined,
+      status: undefined,
+      source: undefined,
+    };
+    setFilters(nextFilters);
+    setDraftAdvanced({});
+    setAdvancedOpen(false);
+    void loadPage(1, pagination.pageSize, nextFilters);
+  };
+
+  const advancedCount = [
+    filters.operationType,
+    filters.resourceType,
+    filters.status,
+    filters.source,
+  ].filter(Boolean).length;
+
+  const advancedContent = (
+    <div className="w-[440px] max-w-[calc(100vw-48px)] p-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <div className="mb-1.5 text-xs font-medium text-slate-500">操作类型</div>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={draftAdvanced.operationType}
+            variant="filled"
+            options={selectOptions(options.operationTypes)}
+            placeholder="全部操作类型"
+            className="w-full"
+            onChange={(value) =>
+              setDraftAdvanced((current) => ({
+                ...current,
+                operationType: value,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-xs font-medium text-slate-500">资源类型</div>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={draftAdvanced.resourceType}
+            variant="filled"
+            options={selectOptions(options.resourceTypes)}
+            placeholder="全部资源类型"
+            className="w-full"
+            onChange={(value) =>
+              setDraftAdvanced((current) => ({
+                ...current,
+                resourceType: value,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-xs font-medium text-slate-500">状态</div>
+          <Select
+            allowClear
+            value={draftAdvanced.status}
+            variant="filled"
+            options={selectOptions(
+              options.statuses,
+              (option) => statusMeta(option.value).label,
+            )}
+            placeholder="全部状态"
+            className="w-full"
+            onChange={(value) =>
+              setDraftAdvanced((current) => ({
+                ...current,
+                status: value,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-xs font-medium text-slate-500">来源</div>
+          <Select
+            allowClear
+            value={draftAdvanced.source}
+            variant="filled"
+            options={selectOptions(options.sources)}
+            placeholder="全部来源"
+            className="w-full"
+            onChange={(value) =>
+              setDraftAdvanced((current) => ({
+                ...current,
+                source: value,
+              }))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <YakButton onClick={resetAdvanced}>清空</YakButton>
+        <YakButton type="primary" onClick={applyAdvanced}>
+          应用筛选
+        </YakButton>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
         <Input
           allowClear
           value={filters.keyword}
@@ -276,8 +417,9 @@ export default function BusinessAuditPanel() {
           }
           onPressEnter={search}
           placeholder="操作名 / Operation ID / 资源 / 摘要"
-          className="w-[280px]"
+          className="w-[280px] max-w-full"
         />
+
         <DatePicker.RangePicker
           value={filters.timeRange}
           variant="filled"
@@ -288,8 +430,9 @@ export default function BusinessAuditPanel() {
                 value?.[0] && value?.[1] ? [value[0], value[1]] : undefined,
             }))
           }
-          className="w-[250px]"
+          className="w-[230px]"
         />
+
         <Space.Compact>
           <Select
             allowClear
@@ -318,62 +461,23 @@ export default function BusinessAuditPanel() {
             className="w-[140px]"
           />
         </Space.Compact>
-        <Space.Compact>
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            value={filters.operationType}
-            variant="filled"
-            options={selectOptions(options.operationTypes)}
-            onChange={(value) =>
-              setFilters((current) => ({ ...current, operationType: value }))
-            }
-            placeholder="操作类型"
-            className="w-[170px]"
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            value={filters.resourceType}
-            variant="filled"
-            options={selectOptions(options.resourceTypes)}
-            onChange={(value) =>
-              setFilters((current) => ({ ...current, resourceType: value }))
-            }
-            placeholder="资源类型"
-            className="w-[150px]"
-          />
-        </Space.Compact>
-        <Space.Compact>
-          <Select
-            allowClear
-            value={filters.status}
-            variant="filled"
-            options={selectOptions(
-              options.statuses,
-              (option) => statusMeta(option.value).label,
-            )}
-            onChange={(value) =>
-              setFilters((current) => ({ ...current, status: value }))
-            }
-            placeholder="状态"
-            className="w-[110px]"
-          />
-          <Select
-            allowClear
-            value={filters.source}
-            variant="filled"
-            options={selectOptions(options.sources)}
-            onChange={(value) =>
-              setFilters((current) => ({ ...current, source: value }))
-            }
-            placeholder="来源"
-            className="w-[110px]"
-          />
-        </Space.Compact>
-        <div className="flex items-center gap-2">
+
+        <Popover
+          trigger="click"
+          placement="bottomRight"
+          open={advancedOpen}
+          content={advancedContent}
+          onOpenChange={(open) => {
+            setAdvancedOpen(open);
+            if (open) setDraftAdvanced(getAdvancedFilters(filters));
+          }}
+        >
+          <YakButton icon={<FilterOutlined />}>
+            更多筛选{advancedCount > 0 ? ` (${advancedCount})` : ''}
+          </YakButton>
+        </Popover>
+
+        <div className="flex items-center gap-2 xl:ml-auto">
           <YakButton type="primary" icon={<SearchOutlined />} onClick={search}>
             查询
           </YakButton>
@@ -384,7 +488,7 @@ export default function BusinessAuditPanel() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <SecurityQueryTable<AuditOperationSummary>
           rowKey="operationId"
           columns={columns}
@@ -395,15 +499,20 @@ export default function BusinessAuditPanel() {
         />
       </div>
 
-      <SecurityPagination
-        current={pagination.current}
-        pageSize={pagination.pageSize}
-        total={pagination.total}
-        disabled={loading}
-        onChange={(page, pageSize) => {
-          void loadPage(page, pageSize, filters);
-        }}
-      />
+      {pagination.total > 0 ? (
+        <div className="shrink-0 pt-3">
+          <SecurityPagination
+            current={pagination.current}
+            pageSize={pagination.pageSize}
+            total={pagination.total}
+            disabled={loading}
+            bordered={false}
+            onChange={(page, pageSize) => {
+              void loadPage(page, pageSize, filters);
+            }}
+          />
+        </div>
+      ) : null}
 
       <AuditOperationDetailDrawer
         operationId={selectedOperationId}

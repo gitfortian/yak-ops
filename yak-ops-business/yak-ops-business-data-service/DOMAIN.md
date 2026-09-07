@@ -15,7 +15,9 @@ DataServiceDefinition (Aggregate Root)
 └── AuthMode
 
 Access
-└── DataServiceApiKey
+├── DataServiceApiKey
+├── IpAccessMode
+└── DataServiceIpAccessRule
 
 Documentation
 └── DataServiceDocumentation
@@ -63,7 +65,13 @@ immutable source revision
 - `AuthMode`：NONE/API_KEY。
 - `runtimeGeneration`：单调持久化 Runtime 代际；每次会影响在线行为的 Aggregate 变更都推进代际。
 
-运行调用读取这里的持久化快照，不在每次请求时重新解析上游 Source。
+Access 还拥有与 Definition 生命周期绑定、但独立持久化的策略事实：
+
+- API Key 集合；
+- `IpAccessMode`：NONE/ALLOWLIST/DENYLIST；
+- `DataServiceIpAccessRule`：名单类型、规范化 IP/CIDR、enabled、expiresAt、description。
+
+运行调用读取这里的持久化快照和访问策略，不在每次请求时重新解析上游 Source。
 
 `projectId` 是 Console ownership，不进入 Public Runtime URL。外部调用通过全局唯一 path 找到 Definition 后，自然获得该服务的 Project identity；调用方不能通过 Project Header 选择或覆盖服务归属。
 
@@ -73,11 +81,13 @@ immutable source revision
 
 ```text
 API Key minute-window usage
+IP access policy/rules
 Invocation audit evidence
 Hourly invocation rollup
 ```
 
 - API Key minute-window usage 是集群配额事实，不属于单个 JVM。
+- IP access policy/rules 是所有实例共享的持久化访问事实，不属于某个节点的本地状态。
 - Invocation / hourly rollup 是跨实例可聚合的调用 evidence。
 - 它们不能反向成为 Data Service Definition 或 RuntimePolicy 的 owner。
 
@@ -102,7 +112,7 @@ Local circuit-rejected evidence
 4. `PublishedRuntimeSnapshot.dataSourceId` 必须指向有效已发布 Datasource identity。
 5. `PublishedRuntimeSnapshot.sql` 必须存在，并在 Publication / Execution boundary 验证为单条 SELECT。
 6. `SourceReference` 固定到不可变 Revision；republish 更新引用而不是新建服务身份。
-7. republish 不能重置 `AuthMode`、`RuntimePolicy` 或 Project ownership。
+7. republish 不能重置 `AuthMode`、RuntimePolicy、IP Access Policy 或 Project ownership。
 8. 服务侧 settings 更新不能改 SQL/dataSourceId/source revision/projectId。
 9. enable/disable 只改变服务可调用性。
 10. `runtimeGeneration` 必须是正数，在线行为发生变更时推进；旧代际不能继续复用新请求的 cache identity。
@@ -134,7 +144,7 @@ Source Revision owns:
 name / path / maxRows / timeout / pagination / description / contract
 
 Data Service owns:
-projectId / enabled / auth / API keys / runtime policy / runtimeGeneration
+projectId / enabled / auth / API keys / IP access / runtime policy / runtimeGeneration
 ```
 
 客户端不能用 publish/update 请求覆盖 Source-owned 字段。
@@ -162,7 +172,7 @@ raw secret --SHA-256--> keyHash -> persisted
 prefix ----------------------------> persisted for identification/audit
 ```
 
-硬规则：
+API Key 硬规则：
 
 - raw secret 永不写 PO、日志、Domain `toString()` 或普通响应。
 - API_KEY 模式必须至少有一个 enabled 且未过期的 Key。
@@ -173,18 +183,47 @@ prefix ----------------------------> persisted for identification/audit
 - Console Key lifecycle 必须先通过父 Data Service 的 CurrentProject ownership；不能只凭 keyId 修改另一 Project 的 Key。
 - Public Invocation 的 Key 查找属于已解析 Data Service 的访问执行过程，不依赖 Yak Console Project Header。
 
+IP Access 硬规则：
+
+```text
+IpAccessMode = NONE | ALLOWLIST | DENYLIST
+
+DataServiceIpAccessRule
+  -> apiId
+  -> ALLOWLIST | DENYLIST
+  -> normalized IP/CIDR
+  -> enabled
+  -> expiresAt
+  -> description
+```
+
+- `NONE` 不做来源 IP 拦截。
+- `ALLOWLIST` 只允许命中 enabled 且未过期白名单的来源；没有有效规则时拒绝全部外部来源。
+- `DENYLIST` 拒绝命中 enabled 且未过期黑名单的来源，未命中继续执行。
+- ALLOWLIST 与 DENYLIST 规则可以同时持久化；`IpAccessMode` 只决定当前哪一组规则参与判定，切换模式不破坏另一组规则。
+- 相同 API、相同规则类型、相同规范化网络只能存在一条规则。
+- IP Access 判定先于 API Key hash lookup / rate-limit；被网络策略拒绝的请求不能继续消耗 Key/配额查询。
+- 激活名单后无法可信解析来源 IP 时 fail closed。
+- `X-Forwarded-For` / `X-Real-IP` 不是天然可信业务事实。只有 TCP 直接对端属于显式 Trusted Proxy CIDR 时，才进入代理链解析。
+- XFF 从右向左穿过可信代理，遇到第一个不可信 Hop 即得到客户端地址；更左侧客户端可控值不再参与结果。
+- Console IP Policy lifecycle 必须先通过父 Data Service CurrentProject ownership；ruleId 不能跨 Project 越权。
+
 ## 6. SQL Template / Invocation 不变量
 
 ```text
-HTTP parameters
+HTTP request
+   |
+   +--> trusted client-IP resolution
+   |
+   +--> IP allow/deny admission
+   |
+   +--> API Key authentication + cluster quota
    |
    v
 named parameter validation
    |
    v
 CompiledSql(sql + bindings)
-   |
-   +--> cluster API Key admission
    |
    v
 Node-local Runtime protection
@@ -285,6 +324,8 @@ Console request
 
 External request
   -> global runtime path
+  -> trusted client-IP resolution
+  -> IP policy
   -> NONE/API_KEY
   -> global findByRuntimePath only
   -> resolved Definition(projectId)
@@ -306,7 +347,7 @@ Domain / capability port
 
 允许 `dao/model` 使用 Lombok bean/setter 适配 ORM；Domain 不因此恢复为 `@Data` 贫血 Bean。
 
-管理 Repository 的 `findById/findByPath/findBySource/findAll/save/delete` 必须绑定 CurrentProject。Public path lookup 和平台级 count 是显式窄 global corridor；共享 rate-window / rollup 属于 Runtime/Observability coordination corridor，不得被 Controller 直接访问。
+管理 Repository 的 `findById/findByPath/findBySource/findAll/save/delete` 必须绑定 CurrentProject。Public path lookup 和平台级 count 是显式窄 global corridor；共享 rate-window / IP access policy / rollup 属于 Runtime/Access/Observability coordination corridor，不得被 Controller 直接访问。
 
 ## 12. 修改协议
 

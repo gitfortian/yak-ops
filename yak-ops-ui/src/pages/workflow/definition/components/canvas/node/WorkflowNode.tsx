@@ -1,3 +1,4 @@
+import { useIntl } from '@umijs/max';
 import {
   Ban,
   CheckCircle2,
@@ -13,7 +14,7 @@ import type { NodeProps } from 'reactflow';
 import {
   formatRuntimeDuration,
   isWorkflowNodeActive,
-  runtimeStatusLabel,
+  runtimeStatusMessageId,
 } from '../runtime';
 import type { WorkflowNodeData } from '../types';
 import WorkflowNodeControl from './WorkflowNodeControl';
@@ -26,6 +27,14 @@ interface RuntimeVisual {
   badgeClassName: string;
   icon: ReactNode;
 }
+
+const COMPACT_TASK_TYPES = new Set([
+  'SYNC',
+  'SQL',
+  'SHELL',
+  'PYTHON',
+  'JAVA',
+]);
 
 const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
   switch (status) {
@@ -95,11 +104,18 @@ const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
 };
 
 const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
+  const intl = useIntl();
   const runtime = data.runtime;
   const visual = runtimeVisual(runtime?.status);
   const duration = formatRuntimeDuration(runtime?.elapsedMillis);
   const runtimeActive = isWorkflowNodeActive(runtime?.status);
   const errorTitle = runtime?.errorMessage || runtime?.failureReason;
+  const normalizedTaskType = (data.taskType || '').trim().toUpperCase();
+  const compactNode = COMPACT_TASK_TYPES.has(normalizedTaskType);
+  const statusMessageId = runtimeStatusMessageId(runtime?.status);
+  const statusLabel = statusMessageId
+    ? intl.formatMessage({ id: statusMessageId })
+    : runtime?.status || '';
 
   return (
     <div className="group relative w-60">
@@ -118,7 +134,8 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
       <div
         title={errorTitle}
         className={[
-          'relative rounded-[15px] border bg-white px-3 py-3',
+          'relative rounded-[15px] border bg-white px-3',
+          compactNode ? 'py-2' : 'py-3',
           'shadow-[0_1px_2px_rgba(22,24,35,.06)]',
           'transition-[border-color,box-shadow,opacity] duration-200',
           runtimeActive ? '' : 'group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
@@ -129,13 +146,11 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
           selected && visual ? 'ring-1 ring-[rgba(97,114,243,.22)]' : '',
         ].join(' ')}
       >
-        <div className="flex min-h-9 items-center gap-2.5">
+        <div className={['flex items-center gap-2.5', compactNode ? 'min-h-8' : 'min-h-9'].join(' ')}>
           <WorkflowNodeIcon taskType={data.taskType} />
-
           <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
             {data.label}
           </div>
-
           {runtime && visual ? (
             <span
               className={[
@@ -145,7 +160,7 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
               ].join(' ')}
             >
               {visual.icon}
-              {runtimeStatusLabel(runtime.status)}
+              {statusLabel}
             </span>
           ) : null}
         </div>
@@ -158,10 +173,13 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
               {runtime.errorMessage
                 ? runtime.errorMessage
                 : runtime.attemptCount > 1
-                  ? `第 ${runtime.currentAttemptNumber || runtime.attemptCount} 次尝试`
+                  ? intl.formatMessage(
+                      { id: 'pages.workflow.editor.runtime.attempt' },
+                      { count: runtime.currentAttemptNumber || runtime.attemptCount },
+                    )
                   : runtimeActive
-                    ? '正在执行任务…'
-                    : '本次测试运行'}
+                    ? intl.formatMessage({ id: 'pages.workflow.editor.runtime.executingTask' })
+                    : intl.formatMessage({ id: 'pages.workflow.editor.runtime.testRun' })}
             </div>
             {duration ? <span className="ml-2 shrink-0 font-medium text-[#667085]">{duration}</span> : null}
           </div>

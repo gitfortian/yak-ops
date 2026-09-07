@@ -28,7 +28,10 @@ import {
 import { ArrowLeft, PlayCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-type DetailTabKey = 'overview' | 'access' | 'runtime' | 'logs';
+import DataServiceAccessControlPanel from '../components/DataServiceAccessControlPanel';
+import DataServiceApiCallPanel from '../components/DataServiceApiCallPanel';
+
+type DetailTabKey = 'overview' | 'access' | 'network' | 'runtime' | 'logs';
 
 const formatTime = (value?: string | null) =>
   value ? value.replace('T', ' ').slice(0, 19) : '-';
@@ -193,11 +196,6 @@ export default function DataServiceDetailPage() {
       || `#${service.dataSourceId}`;
   }, [dataSources, service?.dataSourceId]);
 
-  const activeKeys = useMemo(
-    () => keys.filter((item) => item.enabled).length,
-    [keys],
-  );
-
   const logColumns: TableColumnsType<DataServiceCallLog> = [
     {
       title: '调用方',
@@ -314,16 +312,19 @@ export default function DataServiceDetailPage() {
   );
 
   const accessContent = (
-    <SectionCard title="API Key">
-      <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
-        <MetricTile
-          label="访问模式"
-          value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'}
-        />
-        <MetricTile label="API Keys" value={keys.length} />
-        <MetricTile label="启用 Key" value={activeKeys} />
-      </div>
-    </SectionCard>
+    <DataServiceApiCallPanel
+      service={service}
+      keys={keys}
+      canManageAccess={canManageAccess}
+      onAuthModeChange={(mode) => {
+        setService((current) => current ? { ...current, authMode: mode } : current);
+      }}
+      onKeysChange={setKeys}
+    />
+  );
+
+  const networkAccessContent = (
+    <DataServiceAccessControlPanel apiId={service.id} />
   );
 
   const runtimeContent = (
@@ -388,7 +389,10 @@ export default function DataServiceDetailPage() {
     children: ReactNode;
   }> = [
     { key: 'overview', label: '总览', children: overviewContent },
-    ...(canManageAccess ? [{ key: 'access' as const, label: 'API Key', children: accessContent }] : []),
+    { key: 'access', label: 'API 调用', children: accessContent },
+    ...(canManageAccess
+      ? [{ key: 'network' as const, label: '访问控制', children: networkAccessContent }]
+      : []),
     ...(canRuntime ? [{ key: 'runtime' as const, label: 'Runtime', children: runtimeContent }] : []),
     ...(canObserve ? [{ key: 'logs' as const, label: '调用记录', children: logsContent }] : []),
   ];

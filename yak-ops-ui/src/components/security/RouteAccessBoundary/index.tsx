@@ -10,7 +10,7 @@ import {
   getRouteMetadata,
   type NavigationRoute,
 } from '@/config/navigation';
-import ForbiddenPage from '@/pages/403';
+import ForbiddenPage from '@/components/security/ForbiddenPage';
 
 export interface RouteAccessBoundaryProps {
   /**

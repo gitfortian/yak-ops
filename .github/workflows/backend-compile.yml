@@ -1,0 +1,90 @@
+name: Backend Compile
+
+on:
+  pull_request:
+    paths:
+      - 'pom.xml'
+      - '**/pom.xml'
+      - 'yak-ops-bom/**'
+      - 'yak-ops-common/**'
+      - 'yak-ops-spi/**'
+      - 'yak-ops-core/**'
+      - 'yak-ops-business/**'
+      - 'yak-ops-plugins/**'
+      - 'yak-ops-boot/**'
+      - 'release.env'
+      - '.github/workflows/backend-compile.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'pom.xml'
+      - '**/pom.xml'
+      - 'yak-ops-bom/**'
+      - 'yak-ops-common/**'
+      - 'yak-ops-spi/**'
+      - 'yak-ops-core/**'
+      - 'yak-ops-business/**'
+      - 'yak-ops-plugins/**'
+      - 'yak-ops-boot/**'
+      - 'release.env'
+      - '.github/workflows/backend-compile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compile backend with Java 21
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Yak Ops
+        uses: actions/checkout@v7
+
+      - name: Load Yak Framework ref
+        shell: bash
+        run: |
+          set -a
+          source release.env
+          set +a
+          echo "YAK_FRAMEWORK_REF=$YAK_FRAMEWORK_REF" >> "$GITHUB_ENV"
+
+      - name: Require Yak Framework read token
+        shell: bash
+        env:
+          YAK_FRAMEWORK_READ_TOKEN: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+        run: |
+          if [[ -z "$YAK_FRAMEWORK_READ_TOKEN" ]]; then
+            echo "::error::YAK_FRAMEWORK_READ_TOKEN is required to compile the backend because yak-framework is private."
+            exit 1
+          fi
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Checkout pinned Yak Framework
+        uses: actions/checkout@v7
+        with:
+          repository: weifuwan/yak-framework
+          ref: ${{ env.YAK_FRAMEWORK_REF }}
+          path: .deps/yak-framework
+          token: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Install Yak Framework
+        working-directory: .deps/yak-framework
+        run: mvn -B -ntp -DskipTests install
+
+      - name: Compile Yak Ops backend
+        run: ./mvnw -B -ntp -DskipTests -pl yak-ops-boot -am compile

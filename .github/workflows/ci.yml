@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate and build release distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Yak Ops
+        uses: actions/checkout@v7
+
+      - name: Load release metadata
+        shell: bash
+        run: |
+          set -a
+          source release.env
+          set +a
+          grep -E '^[A-Z0-9_]+=' release.env >> "$GITHUB_ENV"
+
+      - name: Check release metadata
+        run: ./scripts/release/check-release-metadata.sh
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: yak-ops-ui/yarn.lock
+
+      - name: Enable Yarn Classic
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Install frontend dependencies
+        working-directory: yak-ops-ui
+        env:
+          HUSKY: '0'
+        run: yarn install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: yak-ops-ui
+        run: yarn build
+
+      - name: Detect Yak Framework access
+        id: framework_auth
+        shell: bash
+        env:
+          YAK_FRAMEWORK_READ_TOKEN: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+        run: |
+          if [[ -n "$YAK_FRAMEWORK_READ_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::YAK_FRAMEWORK_READ_TOKEN is not configured. Frontend and release metadata were validated, but the Maven distribution build is skipped because yak-framework is private."
+          fi
+
+      - name: Set up Java 21
+        if: steps.framework_auth.outputs.available == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Checkout pinned Yak Framework
+        if: steps.framework_auth.outputs.available == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: weifuwan/yak-framework
+          ref: ${{ env.YAK_FRAMEWORK_REF }}
+          path: .deps/yak-framework
+          token: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Install pinned Yak Framework
+        if: steps.framework_auth.outputs.available == 'true'
+        working-directory: .deps/yak-framework
+        run: mvn -B -ntp -DskipTests install
+
+      - name: Normalize release version
+        if: steps.framework_auth.outputs.available == 'true'
+        run: ./scripts/release/prepare-release-version.sh
+
+      - name: Package Yak Ops
+        if: steps.framework_auth.outputs.available == 'true'
+        run: ./mvnw -B -ntp clean package -DskipTests
+
+      - name: Upload distribution
+        if: steps.framework_auth.outputs.available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: yak-ops-${{ env.YAK_OPS_VERSION }}
+          path: yak-ops-dist/target/yak-ops-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7

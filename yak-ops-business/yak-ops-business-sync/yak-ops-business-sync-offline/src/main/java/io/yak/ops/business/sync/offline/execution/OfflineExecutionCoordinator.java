@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
@@ -18,16 +19,20 @@ import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpRequestException;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpTransportException;
+import io.yak.ops.business.sync.offline.engine.plan.OfflineExecutionPlan;
+import io.yak.ops.business.sync.offline.engine.plan.OfflineExecutionPlanCodec;
 import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecutionAdapter;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Coordinates claim -> frozen scope -> Link-Up submit -> Attempt state application. */
+/** Coordinates claim -> frozen scope/plan -> Link-Up submit -> Attempt state application. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineExecutionCoordinator {
@@ -41,8 +46,11 @@ public class OfflineExecutionCoordinator {
   private final OfflineExecutionStateManager stateManager;
   private final OfflineAuditBridge auditBridge;
   private final LinkUpClient linkUpClient;
+  private final OfflineExecutionPlanCodec executionPlanCodec;
+  private final OfflineFanOutExecutionCoordinator fanOutCoordinator;
   private final ObjectMapper objectMapper;
 
+  @Autowired
   public OfflineExecutionCoordinator(
       OfflineJobDefinitionService definitionService,
       OfflineExecutionClaimManager claimManager,
@@ -53,6 +61,8 @@ public class OfflineExecutionCoordinator {
       OfflineExecutionStateManager stateManager,
       OfflineAuditBridge auditBridge,
       LinkUpClient linkUpClient,
+      OfflineExecutionPlanCodec executionPlanCodec,
+      OfflineFanOutExecutionCoordinator fanOutCoordinator,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.definitionService = definitionService;
     this.claimManager = claimManager;
@@ -63,7 +73,42 @@ public class OfflineExecutionCoordinator {
     this.stateManager = stateManager;
     this.auditBridge = auditBridge;
     this.linkUpClient = linkUpClient;
+    this.executionPlanCodec = executionPlanCodec;
+    this.fanOutCoordinator = fanOutCoordinator;
     this.objectMapper = objectMapper;
+  }
+
+  /** Keeps the pre-PR7 focused-test constructor source-compatible. */
+  public OfflineExecutionCoordinator(
+      OfflineJobDefinitionService definitionService,
+      OfflineExecutionClaimManager claimManager,
+      OfflineJobExecutionRepository executionRepository,
+      OfflineBatchExecutionRepository batchRepository,
+      OfflineBatchRuntime batchRuntime,
+      OfflineBatchScopeExecutionAdapter scopeExecutionAdapter,
+      OfflineExecutionStateManager stateManager,
+      OfflineAuditBridge auditBridge,
+      LinkUpClient linkUpClient,
+      ObjectMapper objectMapper) {
+    this(
+        definitionService,
+        claimManager,
+        executionRepository,
+        batchRepository,
+        batchRuntime,
+        scopeExecutionAdapter,
+        stateManager,
+        auditBridge,
+        linkUpClient,
+        new OfflineExecutionPlanCodec(objectMapper),
+        new OfflineFanOutExecutionCoordinator(
+            batchRepository,
+            definitionService,
+            stateManager,
+            linkUpClient,
+            new OfflineExecutionPlanCodec(objectMapper),
+            objectMapper),
+        objectMapper);
   }
 
   public OfflineJobExecution execute(
@@ -118,6 +163,10 @@ public class OfflineExecutionCoordinator {
     if (previous == null || previous.getId() == null) {
       throw new IllegalArgumentException("重试来源实例不能为空");
     }
+    if (fanOutCoordinator.isFanOut(previous)) {
+      throw new IllegalStateException(
+          "FAN_OUT 暂不支持整组 Retry；部分表可能已经远端提交成功，请重新执行任务或后续按失败表重试");
+    }
     return submitClaimIfNeeded(claimManager.claimRetry(previous.getId()));
   }
 
@@ -145,7 +194,9 @@ public class OfflineExecutionCoordinator {
         audit,
         () -> {
           stateManager.markCancellationRequested(execution);
-          if (StringUtils.hasText(execution.getEngineJobId())) {
+          if (fanOutCoordinator.isFanOut(execution)) {
+            fanOutCoordinator.cancel(execution);
+          } else if (StringUtils.hasText(execution.getEngineJobId())) {
             stateManager.applySnapshot(
                 execution,
                 linkUpClient.cancel(execution.getEngineJobId()),
@@ -154,6 +205,16 @@ public class OfflineExecutionCoordinator {
           auditBridge.observeState(execution);
           return execution;
         });
+  }
+
+  public boolean reconcileFanOutIfNeeded(OfflineJobExecution execution) {
+    if (!fanOutCoordinator.isFanOut(execution)) {
+      return false;
+    }
+    AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+    callInAuditContext(audit, () -> fanOutCoordinator.reconcile(execution));
+    auditBridge.observeState(execution);
+    return true;
   }
 
   public void applySnapshot(
@@ -189,6 +250,18 @@ public class OfflineExecutionCoordinator {
 
   private OfflineJobExecution submitClaim(OfflineExecutionClaim claim) {
     OfflineJobExecution execution = claim.getExecution();
+    Optional<OfflineExecutionPlan> plan = executionPlanCodec.decode(claim.getLogicalJobSpecJson());
+    if (plan.isPresent() && plan.get().isFanOut()) {
+      requireFullSelection(execution);
+      stateManager.recordCreated(execution);
+      AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+      OfflineJobExecution result =
+          callInAuditContext(audit, () -> fanOutCoordinator.submit(execution, plan.get()));
+      auditBridge.submitted(execution);
+      auditBridge.observeState(execution);
+      return result;
+    }
+
     String executionJobSpec = resolveScopedExecutionJobSpec(claim);
     stateManager.recordCreated(execution);
     AuditOperationHandle audit = auditBridge.ensureOperation(execution);
@@ -254,6 +327,22 @@ public class OfflineExecutionCoordinator {
               batch.batchScope());
     }
     return definitionService.resolveExecutionJobSpec(logicalJobSpec);
+  }
+
+  private void requireFullSelection(OfflineJobExecution execution) {
+    Long batchId = execution.getBatchId();
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalStateException("FAN_OUT 执行必须绑定 BatchExecution");
+    }
+    BatchExecution batch =
+        batchRepository
+            .findById(batchId)
+            .orElseThrow(
+                () -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
+    if (!(batch.batchScope() instanceof BatchScope.FullSelection)) {
+      throw new IllegalStateException(
+          "FAN_OUT 当前仅支持 FullSelection；DataWindow / Partition / Cursor scoped Batch 仍保持单表边界");
+    }
   }
 
   private void ensureLatestAttemptForCancel(OfflineJobExecution execution) {

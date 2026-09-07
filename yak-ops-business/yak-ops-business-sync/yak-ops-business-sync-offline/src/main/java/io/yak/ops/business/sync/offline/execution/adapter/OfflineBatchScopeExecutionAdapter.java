@@ -45,6 +45,10 @@ public class OfflineBatchScopeExecutionAdapter implements OfflineExecutionScopeV
     }
 
     ObjectNode root = parseObject(logicalJobSpecJson);
+    if ("OfflineExecutionPlan".equals(root.path("kind").asText())) {
+      throw new IllegalStateException(
+          "FAN_OUT 当前仅支持 FULL_SELECTION BatchScope；DataWindow / Partition / Cursor 不会跨表猜测路由");
+    }
     ObjectNode options = requireScopedSourceOptions(root);
     String predicate = predicate(taskId, options, scope);
     mergeWhereCondition(options, predicate);
@@ -110,10 +114,11 @@ public class OfflineBatchScopeExecutionAdapter implements OfflineExecutionScopeV
               options,
               "partition_column",
               "PartitionScope 需要 source.options.partition_column"));
-      String values = partitions.partitions().stream()
-          .map(this::literal)
-          .reduce((left, right) -> left + ", " + right)
-          .orElseThrow();
+      String values =
+          partitions.partitions().stream()
+              .map(this::literal)
+              .reduce((left, right) -> left + ", " + right)
+              .orElseThrow();
       return column + " IN (" + values + ")";
     }
 

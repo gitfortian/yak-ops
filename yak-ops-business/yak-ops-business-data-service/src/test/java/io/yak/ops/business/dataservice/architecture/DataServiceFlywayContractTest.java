@@ -22,11 +22,12 @@ class DataServiceFlywayContractTest {
   }
 
   @Test
-  void dedicatedNamespaceContainsBaselineAndProjectContract() throws IOException {
+  void dedicatedNamespaceContainsForwardOnlyAccessMigrations() throws IOException {
     assertThat(sqlFiles(dedicatedMigrationRoot()))
         .containsExactly(
             "V1__baseline_data_service.sql",
-            "V2__contract_project_scope.sql");
+            "V2__ip_access_policy.sql",
+            "V3__consumer_access_model.sql");
 
     String baseline = Files.readString(
         dedicatedMigrationRoot().resolve("V1__baseline_data_service.sql"));
@@ -41,13 +42,26 @@ class DataServiceFlywayContractTest {
         .contains("runtime_generation")
         .doesNotContain("ALTER TABLE");
 
-    String contract = Files.readString(
-        dedicatedMigrationRoot().resolve("V2__contract_project_scope.sql"));
-    assertThat(contract)
-        .contains("ALTER TABLE yak_ops_data_service_api")
-        .contains("ALTER TABLE yak_ops_data_service_call_log")
-        .contains("project_id BIGINT UNSIGNED NOT NULL")
-        .doesNotContain("UPDATE yak_ops_data_service");
+    String accessPolicy = Files.readString(
+        dedicatedMigrationRoot().resolve("V2__ip_access_policy.sql"));
+    assertThat(accessPolicy)
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_ip_access_policy")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_ip_access_rule")
+        .contains("ALLOWLIST")
+        .contains("DENYLIST")
+        .doesNotContain("ALTER TABLE yak_ops_data_service_api");
+
+    String consumerAccess = Files.readString(
+        dedicatedMigrationRoot().resolve("V3__consumer_access_model.sql"));
+    assertThat(consumerAccess)
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_consumer")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_consumer_api_grant")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_consumer_ip_access_policy")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_consumer_ip_access_rule")
+        .contains("ADD COLUMN consumer_id")
+        .contains("legacy-")
+        .contains("MODIFY COLUMN api_id")
+        .doesNotContain("DROP TABLE");
   }
 
   @Test

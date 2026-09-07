@@ -14,6 +14,7 @@ public class DataServiceApiKeyPO {
   @TableId(type = IdType.AUTO)
   private Long id;
   private Long apiId;
+  private Long consumerId;
   private String name;
   private String keyPrefix;
   private String keyHash;

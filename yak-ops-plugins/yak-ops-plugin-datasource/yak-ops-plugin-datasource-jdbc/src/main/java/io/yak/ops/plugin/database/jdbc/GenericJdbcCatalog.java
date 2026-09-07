@@ -1,5 +1,7 @@
 package io.yak.ops.plugin.database.jdbc;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
@@ -39,6 +41,7 @@ import java.util.stream.Collectors;
 /** Generic JDBC Catalog based on {@link DatabaseMetaData} and typed lightweight-read requests. */
 public class GenericJdbcCatalog implements DataSourceCatalog {
 
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Pattern PLUGIN_VARIABLE_PATTERN = Pattern.compile("\\$\\{var:([^}]+)}");
   private static final DateTimeFormatter DATETIME_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -85,7 +88,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     try (Connection opened = openConnection()) {
       Set<String> schemas = new LinkedHashSet<>();
       DatabaseMetaData metadata = opened.getMetaData();
-      try (ResultSet resultSet = schemas(metadata, trimToNull(database))) {
+      String catalog = metadataCatalog(database);
+      try (ResultSet resultSet = schemas(metadata, catalog)) {
         while (resultSet.next()) {
           String schema = resultSet.getString("TABLE_SCHEM");
           if (includeSchema(schema)) schemas.add(schema);
@@ -196,7 +200,6 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(query)) {
       statement.setQueryTimeout(queryTimeoutSeconds);
-      // Keep the JDBC-level cap as a second line of defense even though the SQL is already bounded.
       statement.setMaxRows(safeLimit);
       try (ResultSet resultSet = statement.executeQuery()) {
         ResultSetMetaData metadata = resultSet.getMetaData();
@@ -209,8 +212,6 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           }
           rows.add(row);
         }
-        // Preview is intentionally bounded and must not trigger an implicit full COUNT scan.
-        // The count endpoint remains available when an exact cardinality is explicitly required.
         return new DataSourceQueryResult(columns, rows, rows.size());
       }
     } catch (Exception exception) {
@@ -300,6 +301,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   protected String quoteIdentifier(String identifier) {
     if (isBlank(identifier)) throw new IllegalArgumentException("数据库标识符不能为空");
+    if (connection.dbType() == DataSourceDbType.SQL_SERVER) {
+      return "[" + identifier.trim().replace("]", "]]" ) + "]";
+    }
     String quote = usesBacktick() ? "`" : "\"";
     return quote + identifier.trim().replace(quote, quote + quote) + quote;
   }
@@ -329,15 +333,38 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     if (!request.sqlMode()) {
       return switch (connection.dbType()) {
         case ORACLE, DAMENG -> query + " WHERE ROWNUM <= " + limit;
-        case MYSQL, POSTGRE_SQL, DORIS, KINGBASE -> query + " LIMIT " + limit;
+        case DB2 -> query + " FETCH FIRST " + limit + " ROWS ONLY";
+        case SQL_SERVER ->
+            "SELECT TOP (" + limit + ") * FROM "
+                + buildTableReference(resolveTablePath(request.tablePath()));
+        case OCEANBASE ->
+            oceanBaseOracleMode()
+                ? query + " WHERE ROWNUM <= " + limit
+                : query + " LIMIT " + limit;
+        case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+            query + " LIMIT " + limit;
+        case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
+        case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
+            throw new IllegalStateException("Non-JDBC datasource must not use GenericJdbcCatalog");
       };
     }
 
     return switch (connection.dbType()) {
       case ORACLE, DAMENG ->
           "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit;
-      case MYSQL, POSTGRE_SQL, DORIS, KINGBASE ->
+      case DB2 ->
+          "SELECT * FROM (" + query + ") yak_ops_preview FETCH FIRST " + limit + " ROWS ONLY";
+      case SQL_SERVER ->
+          "SELECT TOP (" + limit + ") * FROM (" + query + ") yak_ops_preview";
+      case OCEANBASE ->
+          oceanBaseOracleMode()
+              ? "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit
+              : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
+      case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
+      case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
+      case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
+          throw new IllegalStateException("Non-JDBC datasource must not use GenericJdbcCatalog");
     };
   }
 
@@ -379,9 +406,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   private String metadataCatalog(String requestedDatabase) {
-    if (connection.dbType() == DataSourceDbType.ORACLE) {
-      // Oracle's JDBC catalog is not the service name. Supplying it can broaden or invalidate
-      // DatabaseMetaData lookups, so keep the catalog null and scope through schema instead.
+    if (usesOracleStyle() || connection.dbType() == DataSourceDbType.HANA) {
       return null;
     }
     return firstNonBlank(requestedDatabase, connection.database());
@@ -389,7 +414,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   private String metadataSchema(String requestedSchema, boolean narrowOracleDefault) {
     String schema = firstNonBlank(requestedSchema, connection.schema());
-    if (connection.dbType() != DataSourceDbType.ORACLE) {
+    if (!usesOracleStyle()) {
       return schema;
     }
     if (isBlank(schema) && narrowOracleDefault) {
@@ -496,18 +521,47 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   private boolean usesCatalogAsNamespace() {
-    return connection.dbType() == DataSourceDbType.MYSQL || connection.dbType() == DataSourceDbType.DORIS;
+    return connection.dbType() == DataSourceDbType.MYSQL
+        || connection.dbType() == DataSourceDbType.TIDB
+        || connection.dbType() == DataSourceDbType.GOLDENDB
+        || connection.dbType() == DataSourceDbType.DORIS
+        || connection.dbType() == DataSourceDbType.STARROCKS
+        || connection.dbType() == DataSourceDbType.CLICKHOUSE
+        || (connection.dbType() == DataSourceDbType.OCEANBASE && !oceanBaseOracleMode());
   }
 
   private boolean usesBacktick() {
     return usesCatalogAsNamespace();
   }
 
+  private boolean usesOracleStyle() {
+    return connection.dbType() == DataSourceDbType.ORACLE
+        || (connection.dbType() == DataSourceDbType.OCEANBASE && oceanBaseOracleMode());
+  }
+
+  private boolean oceanBaseOracleMode() {
+    if (connection.dbType() != DataSourceDbType.OCEANBASE) {
+      return false;
+    }
+    String normalizedJson = connection.normalizedJson();
+    if (isBlank(normalizedJson)) {
+      return false;
+    }
+    try {
+      JsonNode root = OBJECT_MAPPER.readTree(normalizedJson);
+      String mode = root.path("compatibleMode").asText(root.path("compatible_mode").asText("mysql"));
+      return "oracle".equalsIgnoreCase(mode);
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
   private String removeIdentifierQuotes(String identifier) {
     String value = identifier.trim();
     if (value.length() >= 2
         && ((value.startsWith("`") && value.endsWith("`"))
-            || (value.startsWith("\"") && value.endsWith("\"")))) {
+            || (value.startsWith("\"") && value.endsWith("\""))
+            || (value.startsWith("[") && value.endsWith("]")))) {
       return value.substring(1, value.length() - 1);
     }
     return value;

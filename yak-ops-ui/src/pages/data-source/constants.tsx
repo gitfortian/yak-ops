@@ -8,6 +8,10 @@ import type {
   PaginationInfo,
 } from './types';
 
+interface IntlFormatter {
+  formatMessage: (descriptor: { id: string }) => string;
+}
+
 export const PAGE_DEFAULT_PAGINATION: PaginationInfo = {
   pageNo: 1,
   pageSize: 10,
@@ -26,9 +30,26 @@ export const EMPTY_DATA_SOURCE_SUMMARY: DataSourceSummary = {
 
 export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'MYSQL', value: 'MYSQL' },
+  { label: 'TIDB', value: 'TIDB' },
+  { label: 'GOLDENDB', value: 'GOLDENDB' },
+  { label: 'HANA', value: 'HANA' },
   { label: 'ORACLE', value: 'ORACLE' },
   { label: 'POSTGRE_SQL', value: 'POSTGRE_SQL' },
+  { label: 'DB2', value: 'DB2' },
+  { label: 'OPEN_GAUSS', value: 'OPEN_GAUSS' },
+  { label: 'SQL_SERVER', value: 'SQL_SERVER' },
+  { label: 'OCEANBASE', value: 'OCEANBASE' },
+  { label: 'YASHAN_DB', value: 'YASHAN_DB' },
+  { label: 'HIGHGO', value: 'HIGHGO' },
+  { label: 'IRIS', value: 'IRIS' },
+  { label: 'XUGU', value: 'XUGU' },
+  { label: 'DUCKDB', value: 'DUCKDB' },
   { label: 'DORIS', value: 'DORIS' },
+  { label: 'STARROCKS', value: 'STARROCKS' },
+  { label: 'CLICKHOUSE', value: 'CLICKHOUSE' },
+  { label: 'ELASTICSEARCH7', value: 'ELASTICSEARCH7' },
+  { label: 'ELASTICSEARCH8', value: 'ELASTICSEARCH8' },
+  { label: 'MONGODB', value: 'MONGODB' },
   { label: 'KINGBASE', value: 'KINGBASE' },
   { label: 'DAMENG', value: 'DAMENG' },
 ];
@@ -39,51 +60,64 @@ export const ENVIRONMENT_OPTIONS: DataSourceOptionItem[] = [
   { label: 'PROD', value: 'PROD' },
 ];
 
-export const dataSourceGroupList: DataSourceGroup[] = [
+const relationalDataSource = (dbType: string) => ({
+  onlyDiScript: false,
+  dbType,
+  type: dbType,
+  connectorType: 'Jdbc',
+});
+
+const typedDataSource = (dbType: string, connectorType: string) => ({
+  onlyDiScript: false,
+  dbType,
+  type: dbType,
+  connectorType,
+});
+
+export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] => [
   {
-    groupName: '关系型数据库',
+    groupKey: 'relational',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.relational' }),
     datasourceList: [
-      {
-        onlyDiScript: false,
-        dbType: 'MYSQL',
-        type: 'MYSQL',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'ORACLE',
-        type: 'ORACLE',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'POSTGRE_SQL',
-        type: 'POSTGRE_SQL',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'KINGBASE',
-        type: 'KINGBASE',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'DAMENG',
-        type: 'DAMENG',
-        connectorType: 'Jdbc',
-      },
+      relationalDataSource('MYSQL'),
+      relationalDataSource('TIDB'),
+      relationalDataSource('GOLDENDB'),
+      relationalDataSource('HANA'),
+      relationalDataSource('ORACLE'),
+      relationalDataSource('POSTGRE_SQL'),
+      relationalDataSource('DB2'),
+      relationalDataSource('OPEN_GAUSS'),
+      relationalDataSource('SQL_SERVER'),
+      relationalDataSource('OCEANBASE'),
+      relationalDataSource('YASHAN_DB'),
+      relationalDataSource('HIGHGO'),
+      relationalDataSource('IRIS'),
+      relationalDataSource('XUGU'),
+      relationalDataSource('KINGBASE'),
+      relationalDataSource('DAMENG'),
     ],
   },
   {
-    groupName: 'OLAP 数据库',
+    groupKey: 'olap',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.olap' }),
     datasourceList: [
-      {
-        onlyDiScript: false,
-        dbType: 'DORIS',
-        type: 'DORIS',
-        connectorType: 'Doris',
-      },
+      typedDataSource('DORIS', 'Doris'),
+      typedDataSource('STARROCKS', 'StarRocks'),
+      typedDataSource('CLICKHOUSE', 'ClickHouse'),
+      typedDataSource('DUCKDB', 'Jdbc'),
+    ],
+  },
+  {
+    groupKey: 'document',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.document' }),
+    datasourceList: [typedDataSource('MONGODB', 'MongoDB')],
+  },
+  {
+    groupKey: 'search',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.search' }),
+    datasourceList: [
+      typedDataSource('ELASTICSEARCH7', 'Elasticsearch7'),
+      typedDataSource('ELASTICSEARCH8', 'Elasticsearch8'),
     ],
   },
 ];
@@ -95,40 +129,44 @@ interface EnvironmentTagConfig {
   icon: ReactNode;
 }
 
-export const environmentTagConfigMap: Record<string, EnvironmentTagConfig> = {
+export const getEnvironmentTagConfigMap = (
+  intl: IntlFormatter,
+): Record<string, EnvironmentTagConfig> => ({
   PROD: {
-    text: '生产',
+    text: intl.formatMessage({ id: 'pages.datasource.environment.prod' }),
     color: '#ff4d4f',
     backgroundColor: '#fff2f0',
     icon: <ShieldCheck size={12} />,
   },
   TEST: {
-    text: '测试',
+    text: intl.formatMessage({ id: 'pages.datasource.environment.test' }),
     color: '#52c41a',
     backgroundColor: '#f6ffed',
     icon: <FlaskConical size={12} />,
   },
   DEVELOP: {
-    text: '开发',
+    text: intl.formatMessage({ id: 'pages.datasource.environment.develop' }),
     color: '#1677ff',
     backgroundColor: '#e6f4ff',
     icon: <Code2 size={12} />,
   },
+});
+
+export const getDataSourceEnvironmentTabs = (intl: IntlFormatter) => {
+  const environmentTagConfigMap = getEnvironmentTagConfigMap(intl);
+  return [
+    {
+      key: 'all',
+      label: intl.formatMessage({ id: 'pages.datasource.environment.all' }),
+      value: undefined,
+    },
+    ...ENVIRONMENT_OPTIONS.map((item) => ({
+      key: item.value,
+      label: environmentTagConfigMap[item.value]?.text || item.label,
+      value: item.value,
+    })),
+  ];
 };
-
-export const ENVIRONMENT_FILTER_OPTIONS = ENVIRONMENT_OPTIONS.map((item) => ({
-  ...item,
-  label: environmentTagConfigMap[item.value]?.text || item.label,
-}));
-
-export const DATA_SOURCE_ENVIRONMENT_TABS = [
-  { key: 'all', label: '全部', value: undefined },
-  ...ENVIRONMENT_FILTER_OPTIONS.map((item) => ({
-    key: item.value,
-    label: item.label,
-    value: item.value,
-  })),
-];
 
 export const PAGE_ANIMATION = {
   fadeUp: {

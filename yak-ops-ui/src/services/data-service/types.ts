@@ -59,6 +59,8 @@ export interface DataServiceUpdatePayload {
 }
 
 export type DataServiceAuthMode = 'NONE' | 'API_KEY';
+export type DataServiceIpAccessMode = 'NONE' | 'ALLOWLIST' | 'DENYLIST';
+export type DataServiceIpAccessRuleType = 'ALLOWLIST' | 'DENYLIST';
 
 export type DataServiceSchemaType =
   | 'STRING'
@@ -182,6 +184,31 @@ export interface DataServiceApiKeyUpdate extends DataServiceApiKeyInput {
 export interface CreatedDataServiceApiKey {
   key: DataServiceApiKey;
   secret: string;
+}
+
+export interface DataServiceIpAccessRule {
+  id: number;
+  apiId: number;
+  ruleType: DataServiceIpAccessRuleType;
+  networkCidr: string;
+  description?: string | null;
+  enabled: boolean;
+  expiresAt?: string | null;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface DataServiceIpAccessPolicy {
+  mode: DataServiceIpAccessMode;
+  rules: DataServiceIpAccessRule[];
+}
+
+export interface DataServiceIpAccessRuleInput {
+  ruleType: DataServiceIpAccessRuleType;
+  networkCidr: string;
+  description?: string | null;
+  enabled?: boolean;
+  expiresAt?: string | null;
 }
 
 export interface DataServiceQueryResult {

@@ -63,7 +63,7 @@ class DataServiceInvokerTest {
         projectContextScope);
     definition = definition();
     when(reader.requireByPath("/orders")).thenReturn(definition);
-    when(authorizer.authorize(definition, null)).thenReturn(AccessContext.publicAccess());
+    when(authorizer.authorize(definition, null, null)).thenReturn(AccessContext.publicAccess());
   }
 
   @Test
@@ -75,6 +75,19 @@ class DataServiceInvokerTest {
     invoker.invoke("orders", Map.of("id", "1"), null);
 
     verify(projectContextScope).call(eq(new ProjectContext(3L, null)), any());
+  }
+
+  @Test
+  void publicInvocationPassesResolvedClientIpIntoAccessAuthorization() {
+    DataServiceQueryResponse response = new DataServiceQueryResponse(
+        List.of("id"), List.of(Map.of("id", 1L)), false, 1, 8L);
+    when(authorizer.authorize(definition, null, "203.0.113.8"))
+        .thenReturn(AccessContext.publicAccess());
+    when(executor.execute(eq(definition), any(), isNull())).thenReturn(response);
+
+    invoker.invoke("orders", Map.of("id", "1"), null, "203.0.113.8");
+
+    verify(authorizer).authorize(definition, null, "203.0.113.8");
   }
 
   @Test
@@ -112,7 +125,7 @@ class DataServiceInvokerTest {
   void authorizationFailureKeepsItsOriginalHttpSemanticWhenAuditFails() {
     DataServiceUnauthorizedException unauthorized =
         new DataServiceUnauthorizedException("invalid api key");
-    when(authorizer.authorize(definition, "bad-key")).thenThrow(unauthorized);
+    when(authorizer.authorize(definition, "bad-key", null)).thenThrow(unauthorized);
     doThrow(new IllegalStateException("audit db down"))
         .when(recorder)
         .record(eq(definition), any(), eq(false), eq(0L), eq(0), eq("invalid api key"), any());

@@ -96,6 +96,10 @@ public class OfflineExecutionReconciler {
         return;
       }
 
+      if (executionService.reconcileFanOutIfNeeded(execution)) {
+        return;
+      }
+
       LinkUpJobResponse response = queryExecution(execution);
       executionService.applySnapshot(execution, response, "RECONCILED");
       reconcileCancellation(execution, response);
