@@ -67,11 +67,11 @@ const THEME_STYLES: Record<
 function LayeredIcon({ theme, icon }: { theme: CardTheme; icon: ReactNode }) {
   const styles = THEME_STYLES[theme];
   return (
-    <div className="pointer-events-none absolute -left-px -top-[2px] z-[3] h-[80px] w-[76px] origin-center transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-[1px] group-hover:scale-[1.045]">
+    <div className="pointer-events-none absolute -left-px -top-[2px] z-[3] h-[80px] w-[76px] origin-center transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] ">
       <div className="absolute left-[2px] top-[8px] h-[72px] w-[59px] origin-bottom-right rotate-[20deg] rounded-[12px] border border-white/80 bg-[#d7d9df]/40 shadow-[0_4px_12px_rgba(31,35,41,0.035)] backdrop-blur-[4px] transition-[transform,border-width,border-color] duration-[360ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:rotate-[26deg] group-hover:border-2 group-hover:border-white" />
       <div className={`absolute left-0 top-[4px] flex h-[72px] w-[61px] items-center justify-center overflow-hidden rounded-[12px] border border-white/90 shadow-[0_7px_16px_rgba(31,35,41,0.09)] ${styles.panel}`}>
         <span className="absolute inset-x-[5px] top-[2px] h-[20px] rounded-full bg-white/25 blur-[8px]" />
-        <div className={`relative flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[9px] text-white transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.035] ${styles.core}`}>
+        <div className={`relative flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[9px] text-white transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]  ${styles.core}`}>
           <span className={`absolute -left-[7px] -top-[7px] h-[19px] w-[19px] rounded-full opacity-60 blur-[6px] ${styles.glow}`} />
           <span className="absolute -bottom-[7px] -right-[6px] h-[18px] w-[18px] rounded-full bg-white/40 blur-[6px]" />
           <span className="relative z-[2] flex h-5 w-5 items-center justify-center drop-shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
@@ -97,7 +97,7 @@ function QuickCreateCard({ item }: { item: QuickCreateItem }) {
     <button
       type="button"
       onClick={() => history.push(`/create?type=${item.key}`)}
-      className="group relative flex h-[76px] min-w-0 items-center overflow-visible rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.96] pr-4 text-left shadow-[0_3px_10px_rgba(31,35,41,0.045),0_1px_2px_rgba(31,35,41,0.025)] transition-[border-color,box-shadow,transform] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-px hover:border-[rgba(31,35,41,0.09)] hover:shadow-[0_8px_20px_rgba(31,35,41,0.07),0_1px_2px_rgba(31,35,41,0.025)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
+      className="group relative flex h-[76px] min-w-0 items-center overflow-visible rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.96] pr-4 text-left shadow-[0_3px_10px_rgba(31,35,41,0.045),0_1px_2px_rgba(31,35,41,0.025)] transition-[border-color,box-shadow,transform] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]  hover:border-[rgba(31,35,41,0.09)] hover:shadow-[0_8px_20px_rgba(31,35,41,0.07),0_1px_2px_rgba(31,35,41,0.025)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
     >
       <span
         aria-hidden="true"
@@ -116,7 +116,7 @@ function QuickCreateCard({ item }: { item: QuickCreateItem }) {
           <ChevronRight
             size={13}
             strokeWidth={1.8}
-            className="ml-[2px] shrink-0 -translate-x-[3px] text-[#92969f] opacity-0 transition-[opacity,transform] duration-[220ms] ease-out group-hover:translate-x-0 group-hover:opacity-100"
+            className="ml-[2px] shrink-0 -translate-x-[3px] text-[#92969f] opacity-0 transition-[opacity,transform] duration-[220ms] ease-out  group-hover:opacity-100"
           />
         </div>
       </div>
