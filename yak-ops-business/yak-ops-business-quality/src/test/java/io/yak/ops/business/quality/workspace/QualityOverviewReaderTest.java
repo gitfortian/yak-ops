@@ -58,6 +58,18 @@ class QualityOverviewReaderTest {
   }
 
   @Test
+  void shouldExposeFourRecentIssuesForHomepage() {
+    QualityOverviewRepository repository = new StubRepository(
+        new QualityOverviewRepository.OverviewStats(0L, 0L, 0L, 0L, 0L, 0L, 5L),
+        List.of(),
+        List.of(issue(1L), issue(2L), issue(3L), issue(4L), issue(5L)));
+
+    QualityOverviewReader.Overview overview = new QualityOverviewReader(repository).overview();
+
+    assertThat(overview.recentIssues()).hasSize(4);
+  }
+
+  @Test
   void shouldKeepPassRateUnavailableWhenNoRulesWereExecuted() {
     QualityOverviewRepository repository = new StubRepository(
         new QualityOverviewRepository.OverviewStats(0L, 0L, 0L, 0L, 0L, 0L, 0L),
@@ -123,6 +135,21 @@ class QualityOverviewReaderTest {
         LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 15)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("90 天");
+  }
+
+  private static QualityOverviewRepository.IssueSummary issue(long id) {
+    return new QualityOverviewRepository.IssueSummary(
+        id,
+        "quality-" + id,
+        11L,
+        "订单质量监控",
+        "warehouse.dwd_order",
+        "dwd_order",
+        "订单号不能为空",
+        "完整性",
+        "order_id",
+        "NOT_PASSED",
+        LocalDateTime.now().minusMinutes(id));
   }
 
   private record StubRepository(

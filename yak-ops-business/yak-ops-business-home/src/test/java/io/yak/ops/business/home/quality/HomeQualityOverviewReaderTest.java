@@ -49,6 +49,7 @@ class HomeQualityOverviewReaderTest {
     HomeQualityOverviewReader.OverviewResponse response =
         new HomeQualityOverviewReader(provider).overview();
 
+    assertThat(response.available()).isTrue();
     assertThat(response.passRate()).isEqualTo(97.5D);
     assertThat(response.monitoredTableCount()).isEqualTo(8L);
     assertThat(response.enabledRuleCount()).isEqualTo(24L);
@@ -77,6 +78,7 @@ class HomeQualityOverviewReaderTest {
     HomeQualityOverviewReader.OverviewResponse response =
         new HomeQualityOverviewReader(provider).overview();
 
+    assertThat(response.available()).isFalse();
     assertThat(response.passRate()).isNull();
     assertThat(response.monitoredTableCount()).isNull();
     assertThat(response.enabledRuleCount()).isNull();
@@ -98,6 +100,7 @@ class HomeQualityOverviewReaderTest {
     HomeQualityOverviewReader.OverviewResponse response =
         new HomeQualityOverviewReader(provider).overview();
 
+    assertThat(response.available()).isFalse();
     assertThat(response.passRate()).isNull();
     assertThat(response.monitoredTableCount()).isNull();
     assertThat(response.recentIssues()).isEmpty();

@@ -153,6 +153,8 @@ export interface HomeQualityIssue {
 }
 
 export interface HomeQualityOverview {
+  /** False means the quality read model is temporarily unavailable, not that metrics are zero. */
+  available?: boolean;
   rangeStart?: string | null;
   rangeEnd?: string | null;
   passRate: number | null;
