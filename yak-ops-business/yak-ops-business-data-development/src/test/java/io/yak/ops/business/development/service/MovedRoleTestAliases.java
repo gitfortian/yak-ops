@@ -5,11 +5,11 @@ import io.yak.ops.business.dataset.DevelopmentDatasetFacade;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskDraftRepository;
+import io.yak.ops.business.development.repository.DevelopmentTaskExecutionRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
 import io.yak.ops.business.job.task.TaskExecutionGateway;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Test-only source-compatibility aliases while production services move to role packages. */
 final class MovedRoleTestAliases {
@@ -18,8 +18,10 @@ final class MovedRoleTestAliases {
 
 class DataDevelopmentTaskRevisionProvider
     extends io.yak.ops.business.development.task.DataDevelopmentTaskRevisionProvider {
-  DataDevelopmentTaskRevisionProvider(DevelopmentTaskRevisionRepository repository) {
-    super(repository);
+  DataDevelopmentTaskRevisionProvider(
+      DevelopmentTaskRevisionRepository repository,
+      DevelopmentNodeRepository nodes) {
+    super(repository, nodes);
   }
 }
 
@@ -37,8 +39,10 @@ class DevelopmentTaskService extends io.yak.ops.business.development.task.Develo
 
 class DevelopmentTaskExecutionService
     extends io.yak.ops.business.development.execution.DevelopmentTaskExecutionService {
-  DevelopmentTaskExecutionService(JdbcTemplate jdbc, ObjectMapper mapper) {
-    super(jdbc, mapper);
+  DevelopmentTaskExecutionService(
+      DevelopmentTaskExecutionRepository repository,
+      ObjectMapper mapper) {
+    super(repository, mapper);
   }
 }
 
