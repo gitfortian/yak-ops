@@ -94,7 +94,7 @@ jobs:
         run: yarn build
 
       - name: Build distribution
-        run: ./mvnw -B -ntp clean package -DskipTests
+        run: bash ./mvnw -B -ntp clean package -DskipTests
 
       - name: Create checksums
         run: sha256sum yak-ops-dist/target/yak-ops-*.tar.gz > SHA256SUMS
