@@ -48,7 +48,7 @@ function NotificationRow({
       className="
         group
         flex
-        h-7
+        h-8
         w-full
         items-center
         gap-4
@@ -202,7 +202,7 @@ export default function NotificationCenter() {
         </button>
       </header>
 
-      <div className="min-h-[120px] pt-1">
+      <div className="min-h-[120px] pt-2">
         {state.items.length > 0 ? (
           <div>
             {state.items.map((item) => (
