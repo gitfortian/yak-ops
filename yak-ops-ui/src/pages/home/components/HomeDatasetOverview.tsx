@@ -148,7 +148,7 @@ export function DatasetOverview({ state }: { state: HomeAssetOverviewState }) {
           </div>
 
           {items.length > 0 ? (
-            <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2 xl:grid-cols-4">
               {items.map((item) => (
                 <DatasetRow key={item.id} item={item} />
               ))}
@@ -157,7 +157,7 @@ export function DatasetOverview({ state }: { state: HomeAssetOverviewState }) {
             <button
               type="button"
               onClick={() => history.push('/data-analysis/data-catalog')}
-              className="flex h-[108px] w-full items-center justify-center rounded-[12px] border border-dashed border-[#e3e6eb] bg-[#fafbfc] text-[11px] text-[#9da1a8]"
+              className="flex h-[84px] w-full items-center justify-center rounded-[12px] border border-dashed border-[#e3e6eb] bg-[#fafbfc] text-[11px] text-[#9da1a8]"
             >
               {state.loading
                 ? intl.formatMessage({ id: 'pages.home.common.loading' })

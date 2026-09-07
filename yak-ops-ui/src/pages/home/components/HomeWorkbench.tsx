@@ -19,7 +19,7 @@ export function HomeWorkbenchMain() {
     <div className="min-w-0 space-y-4">
       <DatasetOverview state={assetOverviewState} />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <HomeQualitySidebarOverview />
         <DataLineageOverview state={assetOverviewState} />
         <HomeVisualizationOverview />
