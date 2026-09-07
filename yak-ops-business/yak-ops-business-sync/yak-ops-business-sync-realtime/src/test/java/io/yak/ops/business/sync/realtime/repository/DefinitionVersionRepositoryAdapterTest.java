@@ -49,7 +49,7 @@ class DefinitionVersionRepositoryAdapterTest {
 
     assertThat(result.id()).isEqualTo(41L);
     assertThat(result.versionNo()).isEqualTo(2);
-    verify(versionMapper, never()).insert(any());
+    verify(versionMapper, never()).insert(any(RealtimeDefinitionVersionPO.class));
   }
 
   @Test
@@ -62,7 +62,7 @@ class DefinitionVersionRepositoryAdapterTest {
     when(definitionMapper.selectOne(any())).thenReturn(task());
     when(versionMapper.selectList(any())).thenReturn(List.of(), List.of(previous));
     when(json.write(any())).thenReturn("{}");
-    when(versionMapper.insert(any()))
+    when(versionMapper.insert(any(RealtimeDefinitionVersionPO.class)))
         .thenAnswer(
             invocation -> {
               RealtimeDefinitionVersionPO inserted = invocation.getArgument(0);
