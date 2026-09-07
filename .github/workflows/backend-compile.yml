@@ -12,7 +12,6 @@ on:
       - 'yak-ops-business/**'
       - 'yak-ops-plugins/**'
       - 'yak-ops-boot/**'
-      - '.github/maven-settings.xml'
       - '.github/workflows/backend-compile.yml'
   push:
     branches:
@@ -27,7 +26,6 @@ on:
       - 'yak-ops-business/**'
       - 'yak-ops-plugins/**'
       - 'yak-ops-boot/**'
-      - '.github/maven-settings.xml'
       - '.github/workflows/backend-compile.yml'
   workflow_dispatch:
 
@@ -44,10 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    env:
-      YAK_MAVEN_USERNAME: ${{ secrets.YAK_MAVEN_USERNAME }}
-      YAK_MAVEN_PASSWORD: ${{ secrets.YAK_MAVEN_PASSWORD }}
-
     steps:
       - name: Checkout Yak Ops
         uses: actions/checkout@v7
@@ -59,13 +53,5 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Require Yak Maven credentials
-        shell: bash
-        run: |
-          if [[ -z "$YAK_MAVEN_USERNAME" || -z "$YAK_MAVEN_PASSWORD" ]]; then
-            echo "::error::YAK_MAVEN_USERNAME and YAK_MAVEN_PASSWORD are required to resolve yak-framework snapshots."
-            exit 1
-          fi
-
       - name: Compile Yak Ops backend
-        run: ./mvnw -s .github/maven-settings.xml -B -ntp -DskipTests -pl yak-ops-boot -am compile
+        run: ./mvnw -B -ntp -DskipTests -pl yak-ops-boot -am compile
