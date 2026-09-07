@@ -11,7 +11,7 @@ source release.env
 set +a
 
 printf 'Normalizing Maven reactor to Yak Ops %s...\n' "$YAK_OPS_VERSION"
-./mvnw -B -ntp \
+bash ./mvnw -B -ntp \
     org.codehaus.mojo:versions-maven-plugin:2.21.0:set \
     -DnewVersion="$YAK_OPS_VERSION" \
     -DprocessAllModules=true \
