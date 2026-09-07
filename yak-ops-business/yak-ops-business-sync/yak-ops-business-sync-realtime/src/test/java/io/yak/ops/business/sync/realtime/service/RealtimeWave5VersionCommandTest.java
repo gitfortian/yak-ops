@@ -26,6 +26,7 @@ import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPip
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBinding;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBindings;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.DeployResult;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
@@ -265,10 +266,9 @@ class RealtimeWave5VersionCommandTest {
     when(dataSourceResolver.resolve(v3Spec)).thenReturn(resolved);
     when(dataSourceResolver.resolveCredentials(v3Spec))
         .thenReturn(
-            new CredentialBinding[] {
-              new CredentialBinding("source", "secret"),
-              new CredentialBinding("sink", "secret")
-            });
+            new CredentialBindings(
+                new CredentialBinding("source", "secret"),
+                new CredentialBinding("sink", "secret")));
     when(gateway.capabilities(environment)).thenReturn(new ObjectMapper().createObjectNode());
     when(compiler.compile("orders-sync", v3Spec, resolved)).thenReturn(compiled);
     when(gateway.validate(environment, compiled.yaml()))

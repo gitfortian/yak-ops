@@ -2,7 +2,7 @@ package io.yak.ops.business.sync.offline.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.framework.common.PagingResult;
+import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
@@ -14,7 +14,6 @@ class OfflineSyncContractTest {
   @Test
   void successfulResponseUsesFrameworkCode200() {
     assertThat(Result.success().getCode()).isEqualTo(200);
-    assertThat(PagingResult.success().getCode()).isEqualTo(200);
   }
 
   @Test
@@ -25,7 +24,8 @@ class OfflineSyncContractTest {
         io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO.class);
 
     assertThat(detail.getReturnType()).isEqualTo(Result.class);
-    assertThat(page.getReturnType()).isEqualTo(PagingResult.class);
+    assertThat(page.getGenericReturnType().getTypeName())
+        .contains(Result.class.getName(), PagingData.class.getName());
   }
 
   @Test

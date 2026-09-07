@@ -12,6 +12,7 @@ import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
 import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview;
+import io.yak.ops.business.development.lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
 import java.sql.Types;

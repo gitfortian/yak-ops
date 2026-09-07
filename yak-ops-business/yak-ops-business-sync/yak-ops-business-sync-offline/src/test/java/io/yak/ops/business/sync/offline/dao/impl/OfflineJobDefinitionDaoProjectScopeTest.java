@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.core.conditions.AbstractWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineExecutionEventMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
@@ -62,6 +63,7 @@ class OfflineJobDefinitionDaoProjectScopeTest {
         argThat(
             wrapper ->
                 wrapper.getSqlSegment().contains("project_id")
-                    && wrapper.getParamNameValuePairs().containsValue(7L)));
+                    && wrapper instanceof AbstractWrapper<?, ?, ?> abstractWrapper
+                    && abstractWrapper.getParamNameValuePairs().containsValue(7L)));
   }
 }

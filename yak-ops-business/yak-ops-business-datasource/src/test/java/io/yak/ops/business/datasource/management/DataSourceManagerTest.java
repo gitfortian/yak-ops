@@ -144,7 +144,7 @@ class DataSourceManagerTest {
         .thenReturn(profile);
     when(repository.insert(any(DataSourceDefinition.class))).thenReturn(false);
 
-    assertThatThrownBy(() -> manager().create(command)).isRuntimeException();
+    assertThatThrownBy(() -> manager().create(command)).isInstanceOf(RuntimeException.class);
 
     verify(auditOperation).failure(eq("DATASOURCE_CREATE_FAILED"), any(RuntimeException.class));
   }

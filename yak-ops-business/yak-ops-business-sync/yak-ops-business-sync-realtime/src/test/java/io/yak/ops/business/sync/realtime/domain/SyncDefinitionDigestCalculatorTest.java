@@ -2,7 +2,8 @@ package io.yak.ops.business.sync.realtime.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper.MappingResult;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper.MappingResult;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

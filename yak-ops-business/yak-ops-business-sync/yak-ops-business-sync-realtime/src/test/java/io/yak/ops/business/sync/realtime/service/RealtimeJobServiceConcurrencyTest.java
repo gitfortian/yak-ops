@@ -32,6 +32,7 @@ import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPip
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBinding;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest.CredentialBindings;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.DeployResult;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
@@ -165,10 +166,9 @@ class RealtimeJobServiceConcurrencyTest {
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
         .thenReturn(
-            new CredentialBinding[] {
-              new CredentialBinding("source", "secret"),
-              new CredentialBinding("sink", "secret")
-            });
+            new CredentialBindings(
+                new CredentialBinding("source", "secret"),
+                new CredentialBinding("sink", "secret")));
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult("job-new", "exactly-once"));
 
@@ -209,10 +209,9 @@ class RealtimeJobServiceConcurrencyTest {
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
         .thenReturn(
-            new CredentialBinding[] {
-              new CredentialBinding("source", "secret"),
-              new CredentialBinding("sink", "secret")
-            });
+            new CredentialBindings(
+                new CredentialBinding("source", "secret"),
+                new CredentialBinding("sink", "secret")));
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult("job-123", "exactly-once"));
     when(gateway.status(environment, "job-123"))

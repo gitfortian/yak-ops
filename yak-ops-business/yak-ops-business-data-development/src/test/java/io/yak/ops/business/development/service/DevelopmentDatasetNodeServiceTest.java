@@ -90,7 +90,7 @@ class DevelopmentDatasetNodeServiceTest {
     when(nodes.updateConfigured(501L, true)).thenReturn(true);
     NodeDataset saved = new NodeDataset(
         "501", "21", 7L, "sales_dataset", "销售数据", "ONLINE", null,
-        List.of(), List.of(), Instant.EPOCH, Instant.EPOCH);
+        List.of(), List.of(), null, null, null, Instant.EPOCH, Instant.EPOCH);
     when(datasets.save(eq(501L), eq(11L), eq("sales_dataset"), eq("销售数据"), anyList()))
         .thenReturn(saved);
 
@@ -133,7 +133,7 @@ class DevelopmentDatasetNodeServiceTest {
     when(nodes.findById(501L)).thenReturn(Optional.of(node(501L, "sales_dataset", "DATASET", true, 7L)));
     when(datasets.findByDevelopmentNodeId(501L)).thenReturn(Optional.of(new NodeDataset(
         "501", "21", 8L, "sales_dataset", "销售数据", "ONLINE", null,
-        List.of(), List.of(), Instant.EPOCH, Instant.EPOCH)));
+        List.of(), List.of(), null, null, null, Instant.EPOCH, Instant.EPOCH)));
 
     IllegalStateException error = assertThrows(
         IllegalStateException.class,
@@ -156,7 +156,7 @@ class DevelopmentDatasetNodeServiceTest {
     when(datasets.save(eq(501L), eq("10"), eq("select 1"), eq("sales_dataset"), eq("销售数据"), anyList()))
         .thenReturn(new NodeDataset(
             "501", "21", 8L, "sales_dataset", "销售数据", "DRAFT", null,
-            List.of(), List.of(), Instant.EPOCH, Instant.EPOCH));
+            List.of(), List.of(), null, null, null, Instant.EPOCH, Instant.EPOCH));
 
     IllegalStateException error = assertThrows(
         IllegalStateException.class,

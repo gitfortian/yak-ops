@@ -138,6 +138,20 @@ class DevelopmentDirectoryServiceTest {
     }
 
     @Override
+    public boolean updateParentId(Long id, Long parentId) {
+      DevelopmentDirectory current = values.get(id);
+      if (current == null) return false;
+      values.put(id, new DevelopmentDirectory(
+          current.id(),
+          parentId,
+          current.name(),
+          null,
+          current.createTime(),
+          Instant.now()));
+      return true;
+    }
+
+    @Override
     public boolean deleteById(Long id) {
       return values.remove(id) != null;
     }
@@ -177,6 +191,16 @@ class DevelopmentDirectoryServiceTest {
 
     @Override
     public boolean updateName(Long id, String name) {
+      return false;
+    }
+
+    @Override
+    public boolean updateConfigured(Long id, boolean configured) {
+      return false;
+    }
+
+    @Override
+    public boolean updateDirectoryId(Long id, Long directoryId) {
       return false;
     }
 

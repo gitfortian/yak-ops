@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.DomainMappingState;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationCandidate;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationSnapshot;
@@ -16,6 +15,7 @@ import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
