@@ -17,6 +17,16 @@ const ASSET_PREFIX = '/api/v1/home/assets';
 const QUALITY_PREFIX = '/api/v1/home/quality';
 const SCHEDULE_CENTER_PREFIX = '/api/v1/home/schedule-center';
 
+const requireAvailableQualityOverview = (
+  response: ApiResponse<HomeQualityOverview>,
+): ApiResponse<HomeQualityOverview> => {
+  if (response.data?.available === false) {
+    throw new Error('Home quality overview unavailable');
+  }
+
+  return response;
+};
+
 export const homeCockpitApi = {
   overview: (): Promise<ApiResponse<HomeCockpitOverview>> =>
     HttpUtils.get<HomeCockpitOverview>(COCKPIT_PREFIX),
@@ -46,7 +56,9 @@ export const homeAssetOverviewApi = {
 
 export const homeQualityOverviewApi = {
   overview: (): Promise<ApiResponse<HomeQualityOverview>> =>
-    HttpUtils.get<HomeQualityOverview>(`${QUALITY_PREFIX}/overview`),
+    HttpUtils.get<HomeQualityOverview>(`${QUALITY_PREFIX}/overview`).then(
+      requireAvailableQualityOverview,
+    ),
 };
 
 export const homeScheduleCenterApi = {

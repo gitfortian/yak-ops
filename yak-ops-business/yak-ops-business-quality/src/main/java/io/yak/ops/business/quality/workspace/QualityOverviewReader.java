@@ -25,7 +25,8 @@ public class QualityOverviewReader {
 
   private static final int RANGE_DAYS = 7;
   private static final int MAX_ANALYTICS_RANGE_DAYS = 90;
-  private static final int RECENT_ISSUE_LIMIT = 3;
+  private static final int HOME_RECENT_ISSUE_LIMIT = 4;
+  private static final int ISSUE_CONTRIBUTOR_LIMIT = 3;
 
   private final QualityOverviewRepository repository;
 
@@ -48,7 +49,7 @@ public class QualityOverviewReader {
         .map(this::dimension)
         .toList();
     List<RecentIssue> recentIssues = repository.recentIssues(
-            rangeStart, rangeEnd, RECENT_ISSUE_LIMIT).stream()
+            rangeStart, rangeEnd, HOME_RECENT_ISSUE_LIMIT).stream()
         .map(this::issue)
         .toList();
 
@@ -84,7 +85,7 @@ public class QualityOverviewReader {
     List<IssueContributor> contributors = dimensions.stream()
         .filter(item -> item.issues() > 0L)
         .sorted((left, right) -> Long.compare(right.issues(), left.issues()))
-        .limit(RECENT_ISSUE_LIMIT)
+        .limit(ISSUE_CONTRIBUTOR_LIMIT)
         .map(item -> new IssueContributor(
             item.dimension(), item.issues(), rate(item.issues(), totalIssues)))
         .toList();

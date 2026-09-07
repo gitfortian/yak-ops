@@ -34,6 +34,7 @@ public class HomeQualityOverviewReader {
 
   private OverviewResponse response(QualityOverviewReader.Overview overview) {
     return new OverviewResponse(
+        true,
         overview.rangeStart(),
         overview.rangeEnd(),
         overview.passRate(),
@@ -64,10 +65,11 @@ public class HomeQualityOverviewReader {
 
   private OverviewResponse unavailable() {
     return new OverviewResponse(
-        null, null, null, null, null, null, null, null, List.of(), List.of());
+        false, null, null, null, null, null, null, null, null, List.of(), List.of());
   }
 
   public record OverviewResponse(
+      boolean available,
       LocalDate rangeStart,
       LocalDate rangeEnd,
       Double passRate,

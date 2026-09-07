@@ -34,7 +34,9 @@
        FROM yak_quality_execution e
        WHERE e.project_id = #{projectId}
          AND e.queued_at &gt;= #{todayStart} AND e.queued_at &lt; #{todayEnd}) AS today_execution_count,
-      (SELECT COUNT(DISTINCT e.monitor_id)
+      (SELECT COUNT(DISTINCT CONCAT(
+          e.data_source_id, '|', COALESCE(e.database_name, ''), '|',
+          COALESCE(e.schema_name, ''), '|', e.table_name))
        FROM yak_quality_execution e
        WHERE e.project_id = #{projectId}
          AND e.queued_at &gt;= #{todayStart} AND e.queued_at &lt; #{todayEnd}
