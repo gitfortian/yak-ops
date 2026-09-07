@@ -25,16 +25,22 @@ export default function HomePage() {
             <QuickCreatePanel />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_410px]">
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_410px]">
             <div className="flex min-w-0 flex-col gap-4">
               <DataCenter />
               <HomeWorkbenchMain />
-              <HomeDataAssets />
             </div>
 
             <aside className="flex min-w-0 flex-col gap-4">
               <NotificationCenter />
               <ScheduleCenter />
+            </aside>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_410px]">
+            <HomeDataAssets />
+
+            <aside className="flex h-full min-w-0 flex-col gap-4">
               <HomeQuickNavigation />
               <HomeResourceCenter />
             </aside>
