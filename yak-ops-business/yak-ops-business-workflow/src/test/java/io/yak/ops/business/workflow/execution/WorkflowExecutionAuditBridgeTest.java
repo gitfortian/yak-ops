@@ -84,9 +84,10 @@ class WorkflowExecutionAuditBridgeTest {
         correlation.findCarrierJson("execution-2").orElseThrow(), AuditCarrier.class);
     assertThat(stored.operationId()).isEqualTo("AUD-1");
     assertThat(stored.actorName()).isEqualTo("alice");
-    assertThat(auditService.requests.getFirst().metadata())
-        .containsEntry("launchMode", "RETRY_FAILED_NODE")
-        .containsEntry("nodeId", "node-1");
+    assertThat(auditService.requests.getFirst().metadata().get("launchMode"))
+        .isEqualTo("RETRY_FAILED_NODE");
+    assertThat(auditService.requests.getFirst().metadata().get("nodeId"))
+        .isEqualTo("node-1");
 
     bridge.observeTerminal(new WorkflowExecutionTerminalEvent(
         "execution-2", "SUCCESS", Instant.parse("2026-09-02T07:31:00Z")));
@@ -190,7 +191,8 @@ class WorkflowExecutionAuditBridgeTest {
 
     @Override
     public AuditOperationHandle resume(AuditCarrier carrier) {
-      return handles.getOrDefault(carrier.operationId(), AuditOperationHandle.noop(carrier));
+      RecordingHandle handle = handles.get(carrier.operationId());
+      return handle == null ? AuditOperationHandle.noop(carrier) : handle;
     }
 
     RecordingHandle handle(String operationId) {

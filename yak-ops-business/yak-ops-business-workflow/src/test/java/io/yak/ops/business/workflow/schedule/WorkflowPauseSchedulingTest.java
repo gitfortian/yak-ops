@@ -33,9 +33,11 @@ class WorkflowPauseSchedulingTest {
   private WorkflowRuntime service;
 
   @AfterEach
-  void tearDown() {
+  void tearDown() throws ReflectiveOperationException {
     if (service != null) {
-      service.shutdown();
+      var shutdown = WorkflowRuntime.class.getDeclaredMethod("shutdown");
+      shutdown.setAccessible(true);
+      shutdown.invoke(service);
     }
   }
 

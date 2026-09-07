@@ -74,7 +74,7 @@ class WorkflowBackfillTriggerCoordinatorTest {
         .thenReturn(launched);
     when(launched.id()).thenReturn("execution-v5-20260810");
     when(admission.bindLaunch(any(WorkflowScheduleTriggerPO.class), eq("execution-v5-20260810")))
-        .thenReturn(AdmissionResult.none());
+        .thenReturn(new AdmissionResult(null, false, false));
 
     var result = coordinator.submitBackfill(
         backfill.getId(), occurrence.businessDate(), occurrence.scheduleInstant());
