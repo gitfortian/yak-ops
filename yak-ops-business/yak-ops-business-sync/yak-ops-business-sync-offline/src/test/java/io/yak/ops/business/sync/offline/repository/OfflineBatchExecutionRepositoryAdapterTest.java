@@ -286,6 +286,16 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     }
 
     @Override
+    public boolean updateAuditCarrier(Long batchId, String carrierJson, LocalDateTime updateTime) {
+      if (stored == null || !stored.getId().equals(batchId)) {
+        return false;
+      }
+      stored.setAuditCarrierJson(carrierJson);
+      stored.setUpdateTime(updateTime);
+      return true;
+    }
+
+    @Override
     public boolean insert(OfflineBatchExecutionPO batchPO) {
       batchPO.setId(101L);
       stored = batchPO;
