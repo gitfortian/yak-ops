@@ -9,13 +9,10 @@ Yak Ops uses a tag-driven release flow. The first public release baseline is `v0
 It records:
 
 - `YAK_OPS_VERSION`: public Yak Ops release version;
-- `YAK_FRAMEWORK_VERSION`: Maven coordinate expected by Yak Ops;
-- `YAK_FRAMEWORK_REF`: immutable Yak Framework source commit used by CI/release builds;
+- `YAK_FRAMEWORK_VERSION`: Maven Central version expected by Yak Ops;
 - `DOCKERHUB_NAMESPACE`: namespace used for published images.
 
-Yak Framework is currently a private repository, still uses `1.0.0-SNAPSHOT`, and does not yet have an immutable public Maven/GitHub release. To make Yak Ops release builds reproducible, CI checks out the exact `YAK_FRAMEWORK_REF` and installs that source revision before building Yak Ops.
-
-This is a temporary release constraint: external contributors can validate and build the Yak Ops frontend without private access, but a full Maven distribution build requires read access to `weifuwan/yak-framework`. Once Yak Framework is published as a stable public dependency, replace the snapshot coordinate and remove the private source checkout/token requirement.
+Yak Framework is published to Maven Central under `io.github.weifuwan`, so CI and release builds resolve it as a normal public Maven dependency. No private repository checkout, Maven repository credential, or Yak Framework read token is required.
 
 ## Why Maven POMs are normalized during release
 
@@ -25,26 +22,23 @@ The committed frontend `package.json` and Docker example tags must already match
 
 ## Required GitHub Actions secrets
 
-Configure these repository secrets before pushing the first release tag:
+Configure these repository secrets before pushing a release tag:
 
-- `YAK_FRAMEWORK_READ_TOKEN`: fine-grained GitHub personal access token with read-only **Contents** access to the private `weifuwan/yak-framework` repository;
 - `DOCKERHUB_USERNAME`: Docker Hub account allowed to push the Yak Ops images;
 - `DOCKERHUB_TOKEN`: Docker Hub access token for that account.
 
 The Docker Hub account must be able to push to the namespace declared by `DOCKERHUB_NAMESPACE`.
 
-For pull requests where `YAK_FRAMEWORK_READ_TOKEN` is unavailable (for example, untrusted fork PRs), CI still validates release metadata and performs a frozen frontend build. The Maven distribution steps are skipped with an explicit warning. On `main`, configure the token so CI also verifies the complete release distribution before a tag is created.
-
 ## Release flow
 
-1. Update `release.env` for the next release.
-2. Update the committed frontend version and `.env.example` Docker tags to the same version.
+1. Update `release.env` for the next release, including the Yak Framework version when it changes.
+2. Update the committed frontend version and `.env.example` Docker tags to the same Yak Ops version.
 3. Run `./scripts/release/check-release-metadata.sh`.
-4. Merge the release preparation changes into `main` and confirm the complete CI build passes with `YAK_FRAMEWORK_READ_TOKEN` configured.
+4. Merge the release preparation changes into `main` and confirm CI passes.
 5. Create and push a tag whose version exactly matches `release.env`, for example `v0.1.0`.
-6. The `Release` workflow checks out the tag and pinned Yak Framework commit, builds the frontend and Maven distribution from source, publishes both Docker images, creates `SHA256SUMS`, and creates the GitHub Release.
+6. The `Release` workflow builds the frontend and Maven distribution, publishes both Docker images, creates `SHA256SUMS`, and creates the GitHub Release.
 
-A mismatched tag or missing release credential is rejected before any image is published.
+A mismatched tag or missing Docker Hub credential is rejected before any image is published.
 
 ## Published artifacts
 
@@ -52,7 +46,7 @@ For `v0.1.0`, the workflow publishes:
 
 - `weifuwan/yak-ops:0.1.0` and `weifuwan/yak-ops:latest`;
 - `weifuwan/yak-ops-api:0.1.0` and `weifuwan/yak-ops-api:latest`;
-- `yak-ops-0.1.0.tar.gz` (the Maven distribution archive naming is produced by the reactor after version normalization);
+- `yak-ops-0.1.0.tar.gz`;
 - `SHA256SUMS` attached to the GitHub Release.
 
 ## Local image publishing
