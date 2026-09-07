@@ -17,6 +17,7 @@ import io.yak.ops.business.workflow.schedule.WorkflowScheduleRuntimeState;
 import io.yak.ops.business.workflow.schedule.engine.WorkflowScheduleEngineBridge;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.schedule.YakScheduleNamespaces;
 import io.yak.ops.core.project.ProjectContext;
 import io.yak.ops.core.project.ProjectContextScope;
 import java.time.Instant;
@@ -115,7 +116,7 @@ class WorkflowScheduleTriggerHandlerTest {
   private ScheduleExecutionContext context(Instant planned, long projectId) {
     return new ScheduleExecutionContext(
         "trigger-1",
-        new ScheduleKey(WorkflowScheduleEngineBridge.NAMESPACE, "schedule-1"),
+        new ScheduleKey(YakScheduleNamespaces.WORKFLOW, "schedule-1"),
         "quartz",
         WorkflowScheduleEngineBridge.HANDLER,
         Map.of(
