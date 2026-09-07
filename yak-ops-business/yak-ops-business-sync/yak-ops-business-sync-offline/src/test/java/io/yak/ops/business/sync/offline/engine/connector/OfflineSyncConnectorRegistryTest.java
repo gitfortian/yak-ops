@@ -32,6 +32,9 @@ class OfflineSyncConnectorRegistryTest {
     for (DataSourceDbType dbType : new DataSourceDbType[] {
       DataSourceDbType.TIDB,
       DataSourceDbType.GOLDENDB,
+      DataSourceDbType.GBASE8C,
+      DataSourceDbType.GBASE8A,
+      DataSourceDbType.GBASE8S,
       DataSourceDbType.HANA,
       DataSourceDbType.DB2,
       DataSourceDbType.OPEN_GAUSS,
@@ -59,6 +62,12 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GOLDENDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GOLDEN-DB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("ZTE-GOLDENDB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE8C")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE-8C")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE8A")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE-8A")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE8S")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GBASE-8S")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HANA")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAP-HANA")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAPHANA")).contains("jdbc");

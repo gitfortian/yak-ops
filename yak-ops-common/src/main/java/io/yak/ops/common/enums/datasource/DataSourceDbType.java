@@ -12,6 +12,9 @@ public enum DataSourceDbType {
   MYSQL("MySQL"),
   TIDB("TiDB"),
   GOLDENDB("GoldenDB"),
+  GBASE8C("GBase 8c"),
+  GBASE8A("GBase 8a"),
+  GBASE8S("GBase 8s"),
   HANA("SAP HANA"),
   ORACLE("Oracle"),
   POSTGRE_SQL("PostgreSQL"),
@@ -47,6 +50,12 @@ public enum DataSourceDbType {
       normalized = "TIDB";
     } else if ("GOLDEN_DB".equals(normalized) || "ZTE_GOLDENDB".equals(normalized)) {
       normalized = "GOLDENDB";
+    } else if ("GBASE_8C".equals(normalized)) {
+      normalized = "GBASE8C";
+    } else if ("GBASE_8A".equals(normalized)) {
+      normalized = "GBASE8A";
+    } else if ("GBASE_8S".equals(normalized)) {
+      normalized = "GBASE8S";
     } else if ("SAP_HANA".equals(normalized) || "SAPHANA".equals(normalized)) {
       normalized = "HANA";
     } else if ("OPENGAUSS".equals(normalized)) {
