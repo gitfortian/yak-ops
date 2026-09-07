@@ -4,7 +4,10 @@ import type {
   OfflineConnectorRuntimeSnapshot,
 } from '@/services/batch-link-up';
 
-import { isAutoCreateTableEnabledForDataSourceType } from '../connectorProfiles';
+import {
+  isAutoCreateTableEnabledForDataSourceType,
+  isUpsertEnabledForDataSourceType,
+} from '../connectorProfiles';
 import type { SyncEditorState } from './model';
 
 export const CONNECTOR_CAPABILITY = {
@@ -106,6 +109,7 @@ export const validateEditorCapabilities = (
   const sourceConfig = editor.source.config || {};
   const sinkConfig = editor.sink.config || {};
   const writeMode = String(sinkConfig.writeMode || '').toLowerCase();
+  const upsertEnabled = isUpsertEnabledForDataSourceType(editor.sink.dbType);
   const errors: string[] = [];
 
   // Datasource-profile policies are control-plane contracts and do not depend on Worker reachability.
@@ -115,6 +119,11 @@ export const validateEditorCapabilities = (
   ) {
     errors.push(
       `${editor.sink.dbType || '当前目标数据源'} Stage 1 仅支持写入已有表，请关闭自动建表`,
+    );
+  }
+  if (writeMode === 'upsert' && !upsertEnabled) {
+    errors.push(
+      `${editor.sink.dbType || '当前目标数据源'} 当前离线 Sink 不支持 Upsert/MERGE，请选择 Append 或 Overwrite`,
     );
   }
 
@@ -181,6 +190,7 @@ export const validateEditorCapabilities = (
 
   if (
     writeMode === 'upsert' &&
+    upsertEnabled &&
     !hasCapability(sink, CONNECTOR_CAPABILITY.UPSERT)
   ) {
     errors.push(

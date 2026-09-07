@@ -1,6 +1,7 @@
 package io.yak.ops.business.sync.offline.engine.connector.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -96,6 +97,51 @@ class JdbcOfflineSyncConnectorAdapterExecutionTest {
   }
 
   @Test
+  void injectsGBaseDialectAndDriverFallbacks() {
+    assertGBaseExecution(
+        DataSourceDbType.GBASE8C,
+        "jdbc:gbase8c://127.0.0.1:5432/app",
+        "gbase8c",
+        "com.gbase8c.Driver");
+    assertGBaseExecution(
+        DataSourceDbType.GBASE8A,
+        "jdbc:gbase://127.0.0.1:5258/app",
+        "gbase8a",
+        "com.gbase.jdbc.Driver");
+    assertGBaseExecution(
+        DataSourceDbType.GBASE8S,
+        "jdbc:gbasedbt-sqli://127.0.0.1:9088/app:GBASEDBTSERVER=node1",
+        "gbase8s",
+        "com.gbasedbt.jdbc.Driver");
+  }
+
+  @Test
+  void rejectsGBaseUpsertAtExecutionBoundary() {
+    ObjectMapper mapper = new ObjectMapper();
+    JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
+    DataSourcePO dataSource = new DataSourcePO();
+    dataSource.setId(14L);
+    dataSource.setName("gbase8c");
+    dataSource.setDbType(DataSourceDbType.GBASE8C);
+    dataSource.setConnectionParams(
+        "{\"jdbcUrl\":\"jdbc:gbase8c://127.0.0.1:5432/app\","
+            + "\"driverClassName\":\"com.gbase8c.Driver\","
+            + "\"username\":\"root\",\"password\":\"secret\"}");
+
+    ObjectNode options = mapper.createObjectNode();
+    options.put("table_path", "public.orders");
+    options.put("write_mode", "UPSERT");
+
+    assertThatThrownBy(
+            () ->
+                adapter.resolveForExecution(
+                    new ExecutionContext("jdbc", Role.SINK, "目标端", dataSource, options)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("GBase 8c")
+        .hasMessageContaining("Upsert/MERGE");
+  }
+
+  @Test
   void injectsHanaDialectAndSchemaFromDatasourceOwnedConnection() {
     ObjectMapper mapper = new ObjectMapper();
     JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
@@ -122,5 +168,31 @@ class JdbcOfflineSyncConnectorAdapterExecutionTest {
     assertThat(options.path("dialect").asText()).isEqualTo("hana");
     assertThat(options.path("schema").asText()).isEqualTo("SALES");
     assertThat(options.path("password").asText()).isEqualTo("secret");
+  }
+
+  private static void assertGBaseExecution(
+      DataSourceDbType dbType,
+      String jdbcUrl,
+      String expectedDialect,
+      String expectedDriver) {
+    ObjectMapper mapper = new ObjectMapper();
+    JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
+    DataSourcePO dataSource = new DataSourcePO();
+    dataSource.setId(20L + dbType.ordinal());
+    dataSource.setName(dbType.getDisplayName());
+    dataSource.setDbType(dbType);
+    dataSource.setConnectionParams(
+        "{\"jdbcUrl\":\""
+            + jdbcUrl
+            + "\",\"username\":\"root\",\"password\":\"secret\"}");
+
+    ObjectNode options = mapper.createObjectNode();
+    options.put("table_path", "orders");
+    adapter.resolveForExecution(
+        new ExecutionContext("jdbc", Role.SOURCE, "来源端", dataSource, options));
+
+    assertThat(options.path("url").asText()).isEqualTo(jdbcUrl);
+    assertThat(options.path("driver").asText()).isEqualTo(expectedDriver);
+    assertThat(options.path("dialect").asText()).isEqualTo(expectedDialect);
   }
 }

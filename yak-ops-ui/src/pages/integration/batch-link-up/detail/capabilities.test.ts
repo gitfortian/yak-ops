@@ -125,6 +125,33 @@ describe('offline connector capabilities', () => {
     );
   });
 
+  it('allows GBase automatic table creation but blocks unsupported upsert independently of Worker state', () => {
+    const value = editor();
+    value.sink.dbType = 'GBASE8C';
+    value.sink.pluginName = 'JDBC-GBASE8C';
+    value.sink.config = {
+      targetTableName: 'orders',
+      autoCreateTable: true,
+      writeMode: 'upsert',
+      primaryKey: 'id',
+    };
+
+    expect(validateEditorCapabilities(value, null)).toEqual([
+      'GBASE8C 当前离线 Sink 不支持 Upsert/MERGE，请选择 Append 或 Overwrite',
+    ]);
+    expect(
+      validateEditorCapabilities(
+        value,
+        snapshot(
+          ['TABLE_SCHEMA_DISCOVERY'],
+          ['AUTO_CREATE_TABLE', 'UPSERT'],
+        ),
+      ),
+    ).toEqual([
+      'GBASE8C 当前离线 Sink 不支持 Upsert/MERGE，请选择 Append 或 Overwrite',
+    ]);
+  });
+
   it('requires both connector roles to advertise MULTI_TABLE', () => {
     const value = editor();
     value.mode = 'GUIDE_MULTI';
