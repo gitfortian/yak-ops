@@ -62,7 +62,7 @@
             <artifactId>yak-ops-business-job</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-security-spring-boot-starter</artifactId>
         </dependency>
 

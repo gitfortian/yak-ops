@@ -19,29 +19,29 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-framework-parent</artifactId>
                 <version>${yak-framework.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-common</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-security-spring-boot-starter</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-schedule-spring-boot-starter</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-file</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>

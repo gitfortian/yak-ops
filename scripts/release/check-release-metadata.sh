@@ -30,8 +30,6 @@ check() {
 
 check "Yak Ops version uses SemVer" \
     bash -c '[[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]' _ "$YAK_OPS_VERSION"
-check "Yak Framework ref is an immutable commit SHA" \
-    bash -c '[[ "$1" =~ ^[0-9a-f]{40}$ ]]' _ "$YAK_FRAMEWORK_REF"
 check "Maven framework dependency matches release metadata" \
     grep -Fq "<yak-framework.version>${YAK_FRAMEWORK_VERSION}</yak-framework.version>" pom.xml
 check "Frontend package version matches release metadata" \

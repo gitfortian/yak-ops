@@ -118,16 +118,16 @@
             <artifactId>yak-ops-plugin-alert-all</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-security-spring-boot-starter</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-schedule-core</artifactId>
             <version>${yak-framework.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-schedule-plugin-quartz</artifactId>
             <version>${yak-framework.version}</version>
         </dependency>

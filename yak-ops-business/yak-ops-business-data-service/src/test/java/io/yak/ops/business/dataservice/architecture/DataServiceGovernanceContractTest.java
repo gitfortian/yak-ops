@@ -40,7 +40,7 @@ class DataServiceGovernanceContractTest {
   void managementRbacHasExplicitYakSecurityCompileDependency() throws IOException {
     String pom = Files.readString(modulePom());
     assertThat(pom)
-        .contains("<groupId>io.yak.framework</groupId>")
+        .contains("<groupId>io.github.weifuwan</groupId>")
         .contains("<artifactId>yak-security-spring-boot-starter</artifactId>");
   }
 
