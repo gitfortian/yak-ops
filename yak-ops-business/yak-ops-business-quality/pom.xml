@@ -42,12 +42,12 @@
             <artifactId>yak-ops-business-task-catalog</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-security-spring-boot-starter</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-schedule-api</artifactId>
             <version>${yak-framework.version}</version>
         </dependency>
