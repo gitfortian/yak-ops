@@ -54,4 +54,4 @@ jobs:
           cache: maven
 
       - name: Compile Yak Ops backend
-        run: ./mvnw -B -ntp -DskipTests -pl yak-ops-boot -am compile
+        run: bash ./mvnw -B -ntp -DskipTests -pl yak-ops-boot -am compile
