@@ -36,7 +36,8 @@ final class NativeSingleTableSupport {
   }
 
   static String sinkTable(JsonNode config) {
-    String value = text(config, "targetTableName", text(config, "table", null));
+    String explicit = text(config, "targetTableName", null);
+    String value = StringUtils.hasText(explicit) ? explicit : text(config, "table", null);
     return requireText(value, "请选择或填写目标表");
   }
 

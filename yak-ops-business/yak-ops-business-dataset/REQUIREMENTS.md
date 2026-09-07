@@ -32,7 +32,28 @@ dataSourceId + SQL + field contract
 
 冻结在 DatasetVersion 中。
 
-再次保存相同 datasource / SQL / schema 时只允许更新 Dataset 可变 metadata；来源或 schema 变化时追加新版本。
+### 3a. Draft Save
+
+SQL_QUERY Dataset 的编辑器保存必须：
+
+1. 将 `dataSourceId + SQL + fields` 写入 Dataset draft state（mutable）；
+2. draft state 不创建 DatasetVersion，不修改 currentVersionId；
+3. draft fields 写入 `yak_dataset_draft_field` 表，拥有 stable fieldId；
+4. 保存后 Facade 返回的 NodeDataset 必须包含 draft 字段，以便编辑器恢复工作状态。
+
+### 3b. Draft Publish
+
+SQL_QUERY Dataset 的发布必须：
+
+1. 从 draft state 读取 dataSourceId、SQL、draftFields；
+2. draft 缺少有效 dataSourceId 或 SQL 时显式拒绝；
+3. normalize field contract 后冻结为 immutable DatasetVersion；
+4. 更新 currentVersionId；
+5. 事务提交后请求派生血缘刷新。
+
+### 3c. SQL_QUERY Publish Idempotency
+
+发布时如果 current version 的 `dataSourceId + SQL + field contract` 与 draft 完全相同，保持幂等，不重复追加版本。
 
 ## 4. Schema Contract
 
@@ -84,7 +105,10 @@ Analysis 绑定 Dataset 时必须：
 - find by developmentNodeId；
 - standalone SQL preview / previewQuery / save；
 - legacy TaskAsset preview / save；
+- publishVersion；
 - public nested record shape。
+
+NodeDataset 必须包含 draft 字段（`draftDataSourceId` / `draftSql` / `draftFields`），以便编辑器在保存后恢复工作状态。
 
 Data Development 不直接调用 Dataset Repository / DAO / internal Manager。
 
@@ -138,6 +162,9 @@ Query Performance 是派生诊断 evidence，不属于 Dataset / Version / Query
 - Query Performance 可选过滤参数；
 - Query Performance VO 的诊断字段；
 - observability read-model Flyway 表；
-- Repository/DAO 的窄 observability persistence contract。
+- Repository/DAO 的窄 observability persistence contract；
+- Dataset draft columns 和 draft_field 表；
+- DevelopmentDatasetFacade 的 draft 字段和 publishVersion API；
+- SQL_QUERY publish idempotency 比对规则。
 
 这类演进必须保持现有 Query/Analysis/Dashboard 调用兼容，不能混入无关业务语义变化。

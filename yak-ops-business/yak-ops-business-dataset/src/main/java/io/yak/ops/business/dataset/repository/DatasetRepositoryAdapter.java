@@ -10,10 +10,12 @@ import io.yak.ops.business.dataset.DatasetStatus;
 import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
 import io.yak.ops.business.dataset.dao.DatasetDao;
+import io.yak.ops.business.dataset.dao.model.DatasetDraftFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
 import io.yak.ops.business.dataset.repository.support.DatasetJsonCodec;
+import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
@@ -218,6 +220,68 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   @Override
   public int nextVersionNo(long datasetId) {
     return datasetDao.selectNextVersionNo(requiredProjectId(), datasetId);
+  }
+
+  @Override
+  public void updateDraft(long datasetId, String draftDataSourceId, String draftSql) {
+    Long projectId = requiredProjectId();
+    requireSingle(
+        datasetDao.updateDraft(projectId, datasetId, draftDataSourceId, draftSql, null),
+        datasetId);
+  }
+
+  @Override
+  public DraftSource loadDraftSource(long datasetId) {
+    Long projectId = requiredProjectId();
+    DatasetPO po = datasetDao.selectDataset(projectId, datasetId);
+    if (po == null) throw new IllegalArgumentException("Dataset 不存在：" + datasetId);
+    return new DraftSource(po.getDraftDataSourceId(), po.getDraftSql());
+  }
+
+  @Override
+  public void saveDraftFields(long datasetId, List<DatasetFieldSpec> fields) {
+    Long projectId = requiredProjectId();
+    datasetDao.deleteDraftFields(projectId, datasetId);
+    if (fields == null || fields.isEmpty()) return;
+    List<DatasetDraftFieldPO> rows = new ArrayList<>(fields.size());
+    for (int index = 0; index < fields.size(); index++) {
+      DatasetFieldSpec spec = fields.get(index);
+      DatasetDraftFieldPO po = new DatasetDraftFieldPO();
+      po.setFieldId(spec.fieldId());
+      po.setDatasetId(datasetId);
+      po.setPhysicalName(spec.physicalName());
+      po.setDisplayName(spec.displayName());
+      po.setDataType(spec.dataType().name());
+      po.setNullable(spec.nullable());
+      po.setDescription(spec.description());
+      po.setDefaultRole(spec.defaultRole().name());
+      po.setSortOrder(index + 1);
+      rows.add(po);
+    }
+    int affectedRows = datasetDao.insertDraftFields(rows);
+    if (affectedRows != rows.size()) {
+      throw new IllegalStateException(
+          "保存 Dataset 草稿字段失败：expected=" + rows.size() + ", actual=" + affectedRows);
+    }
+  }
+
+  @Override
+  public List<DatasetFieldSpec> loadDraftFields(long datasetId) {
+    Long projectId = requiredProjectId();
+    return datasetDao.selectDraftFields(projectId, datasetId).stream()
+        .map(this::toFieldSpec)
+        .toList();
+  }
+
+  private DatasetFieldSpec toFieldSpec(DatasetDraftFieldPO po) {
+    return new DatasetFieldSpec(
+        po.getFieldId(),
+        po.getPhysicalName(),
+        po.getDisplayName(),
+        DatasetFieldDataType.valueOf(po.getDataType()),
+        Boolean.TRUE.equals(po.getNullable()),
+        po.getDescription(),
+        DatasetFieldRole.valueOf(po.getDefaultRole()));
   }
 
   private Long requiredProjectId() {

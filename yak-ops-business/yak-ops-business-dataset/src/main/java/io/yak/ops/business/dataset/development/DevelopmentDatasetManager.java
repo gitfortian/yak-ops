@@ -25,6 +25,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class DevelopmentDatasetManager {
 
+  /** Draft context exposed through the Facade for the editor to restore working state. */
+  public record DraftContext(
+      String dataSourceId,
+      String sql,
+      List<DatasetFieldSpec> fields) {
+    public DraftContext {
+      fields = fields == null ? List.of() : List.copyOf(fields);
+    }
+  }
+
   private final DatasetRepository repository;
   private final DatasetReader reader;
   private final DatasetPublisher publisher;
@@ -54,6 +64,16 @@ public class DevelopmentDatasetManager {
     return reader.findByDevelopmentNodeId(developmentNodeId);
   }
 
+  /** Load the current draft context (dataSourceId, SQL, draft fields) for the editor. */
+  public DraftContext loadDraftContext(long datasetId) {
+    DatasetRepository.DraftSource source = repository.loadDraftSource(datasetId);
+    List<DatasetFieldSpec> fields = repository.loadDraftFields(datasetId);
+    return new DraftContext(
+        source != null ? source.dataSourceId() : null,
+        source != null ? source.sql() : null,
+        fields);
+  }
+
   public List<DatasetFieldSpec> preview(String dataSourceId, String sql) {
     return discovery.preview(requireDataSourceId(dataSourceId), requireSql(sql));
   }
@@ -62,6 +82,7 @@ public class DevelopmentDatasetManager {
     return discovery.previewQuery(requireDataSourceId(dataSourceId), requireSql(sql));
   }
 
+  /** Save draft configuration (dataSource, SQL, fields) without creating an immutable version. */
   @Transactional("yakBusinessTransactionManager")
   public DatasetDetail saveSqlQuery(
       long developmentNodeId,
@@ -93,21 +114,61 @@ public class DevelopmentDatasetManager {
             ? fieldNormalizer.normalize(
                 datasetId, discovery.discover(datasetId, sourceId, sourceSql))
             : fieldNormalizer.normalize(datasetId, requestedFields);
-    DatasetDetail current = reader.require(datasetId);
-    DatasetVersion version = current.currentVersion();
-    if (version != null
-        && version.sourceType() == DatasetSourceType.SQL_QUERY
-        && Objects.equals(version.dataSourceId(), sourceId)
-        && Objects.equals(version.sql(), sourceSql)
+
+    // Save draft: only persist draft columns and draft fields, do NOT create a version.
+    repository.updateDraft(datasetId, sourceId, sourceSql);
+    repository.saveDraftFields(datasetId, fields);
+    lineagePublisher.request(datasetId);
+    return reader.require(datasetId);
+  }
+
+  /** Publish a new immutable version from the current draft (dataSource + SQL + fields). */
+  @Transactional("yakBusinessTransactionManager")
+  public DatasetDetail publishVersion(long developmentNodeId) {
+    requireDevelopmentNodeId(developmentNodeId);
+    DatasetDetail current = reader.findByDevelopmentNodeId(developmentNodeId)
+        .orElseThrow(() -> new IllegalArgumentException(
+            "Dataset 尚未创建，请先保存：developmentNodeId=" + developmentNodeId));
+    long datasetId = current.dataset().id();
+
+    // Read draft fields as the field contract for the new version.
+    List<DatasetFieldSpec> fields = repository.loadDraftFields(datasetId);
+    if (fields.isEmpty()) {
+      fields = current.fields().stream()
+          .map(f -> new DatasetFieldSpec(
+              f.fieldId(), f.physicalName(), f.displayName(),
+              f.dataType(), f.nullable(), f.description(), f.defaultRole()))
+          .toList();
+    }
+    fields = fieldNormalizer.normalize(datasetId, fields);
+
+    // Resolve the SQL source from the draft columns saved by the editor.
+    DatasetRepository.DraftSource draftSource = repository.loadDraftSource(datasetId);
+    String draftDataSourceId = draftSource.dataSourceId();
+    String draftSql = draftSource.sql();
+    if (draftDataSourceId == null || draftDataSourceId.isBlank() || draftSql == null || draftSql.isBlank()) {
+      throw new IllegalArgumentException(
+          "Dataset 缺少有效的数据源或 SQL 配置，请先保存草稿：datasetId=" + datasetId);
+    }
+
+    DatasetVersion currentVersion = current.currentVersion();
+    if (currentVersion != null
+        && currentVersion.sourceType() == DatasetSourceType.SQL_QUERY
+        && Objects.equals(currentVersion.dataSourceId(), draftDataSourceId)
+        && Objects.equals(currentVersion.sql(), draftSql)
         && fieldNormalizer.sameFields(current.fields(), fields)) {
+      // No material change since last version; skip version creation.
       lineagePublisher.request(datasetId);
       return current;
     }
 
-    if (newDataset) {
-      versionWriter.appendInitialSqlQuery(datasetId, sourceId, sourceSql, fields);
+    boolean hasExistingVersion = currentVersion != null;
+    if (!hasExistingVersion) {
+      versionWriter.appendInitialSqlQuery(
+          datasetId, draftDataSourceId, draftSql, fields);
     } else {
-      versionWriter.appendNextSqlQuery(datasetId, sourceId, sourceSql, fields);
+      versionWriter.appendNextSqlQuery(
+          datasetId, draftDataSourceId, draftSql, fields);
     }
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);

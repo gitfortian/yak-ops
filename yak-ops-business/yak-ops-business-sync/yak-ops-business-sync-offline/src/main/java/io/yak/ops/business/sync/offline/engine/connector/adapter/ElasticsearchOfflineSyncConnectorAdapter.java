@@ -143,9 +143,10 @@ public class ElasticsearchOfflineSyncConnectorAdapter implements OfflineSyncConn
   }
 
   private String sinkIndex(JsonNode config) {
-    return requireIndex(
-        text(config, "targetTableName", text(config, "table", text(config, "index", null))),
-        "请选择或填写目标 index");
+    String explicitTarget = text(config, "targetTableName", null);
+    String value = StringUtils.hasText(explicitTarget)
+        ? explicitTarget : text(config, "table", text(config, "index", null));
+    return requireIndex(value, "请选择或填写目标 index");
   }
 
   private String requireIndex(String value, String message) {

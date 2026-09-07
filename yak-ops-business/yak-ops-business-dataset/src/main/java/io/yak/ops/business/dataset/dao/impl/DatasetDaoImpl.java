@@ -2,10 +2,12 @@ package io.yak.ops.business.dataset.dao.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.dataset.dao.DatasetDao;
+import io.yak.ops.business.dataset.dao.mapper.DatasetDraftFieldMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetFieldMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetQueryPerformanceMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetVersionMapper;
+import io.yak.ops.business.dataset.dao.model.DatasetDraftFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetQueryPerformancePO;
@@ -29,10 +31,12 @@ public class DatasetDaoImpl implements DatasetDao {
   private static final int FIELD_INSERT_BATCH_SIZE = 200;
   private static final int MAX_QUERY_PERFORMANCE_LIMIT = 200;
   private static final int MAX_QUERY_PERFORMANCE_CLEANUP_BATCH = 5000;
+  private static final int DRAFT_FIELD_INSERT_BATCH_SIZE = 200;
 
   private final DatasetMapper datasetMapper;
   private final DatasetVersionMapper versionMapper;
   private final DatasetFieldMapper fieldMapper;
+  private final DatasetDraftFieldMapper draftFieldMapper;
   private final DatasetQueryPerformanceMapper queryPerformanceMapper;
 
   @Override
@@ -361,5 +365,76 @@ public class DatasetDaoImpl implements DatasetDao {
     if (cutoff == null) return 0;
     int limit = Math.max(1, Math.min(requestedLimit, MAX_QUERY_PERFORMANCE_CLEANUP_BATCH));
     return queryPerformanceMapper.deleteBefore(Timestamp.from(cutoff), limit);
+  }
+
+  // ---- Draft ----
+
+  @Override
+  public int updateDraft(long datasetId, String draftDataSourceId, String draftSql, String draftSchemaSnapshot) {
+    return updateDraft(null, datasetId, draftDataSourceId, draftSql, draftSchemaSnapshot);
+  }
+
+  @Override
+  public int updateDraft(Long projectId, long datasetId, String draftDataSourceId, String draftSql, String draftSchemaSnapshot) {
+    return datasetMapper.update(
+        null,
+        Wrappers.<DatasetPO>lambdaUpdate()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
+            .eq(DatasetPO::getId, datasetId)
+            .set(DatasetPO::getDraftDataSourceId, draftDataSourceId)
+            .set(DatasetPO::getDraftSql, draftSql)
+            .set(DatasetPO::getDraftSchemaSnapshot, draftSchemaSnapshot)
+            .set(DatasetPO::getUpdateTime, Timestamp.from(Instant.now())));
+  }
+
+  @Override
+  public int deleteDraftFields(long datasetId) {
+    return deleteDraftFields(null, datasetId);
+  }
+
+  @Override
+  public int deleteDraftFields(Long projectId, long datasetId) {
+    if (projectId != null) {
+      DatasetPO dataset = datasetMapper.selectOne(
+          Wrappers.<DatasetPO>lambdaQuery()
+              .eq(DatasetPO::getProjectId, projectId)
+              .eq(DatasetPO::getId, datasetId));
+      if (dataset == null) return 0;
+    }
+    return draftFieldMapper.delete(
+        Wrappers.<DatasetDraftFieldPO>lambdaQuery()
+            .eq(DatasetDraftFieldPO::getDatasetId, datasetId));
+  }
+
+  @Override
+  public int insertDraftFields(List<DatasetDraftFieldPO> fields) {
+    if (fields == null || fields.isEmpty()) return 0;
+    int affectedRows = 0;
+    for (int start = 0; start < fields.size(); start += DRAFT_FIELD_INSERT_BATCH_SIZE) {
+      int end = Math.min(start + DRAFT_FIELD_INSERT_BATCH_SIZE, fields.size());
+      affectedRows += draftFieldMapper.insertBatch(fields.subList(start, end));
+    }
+    return affectedRows;
+  }
+
+  @Override
+  public List<DatasetDraftFieldPO> selectDraftFields(long datasetId) {
+    return selectDraftFields(null, datasetId);
+  }
+
+  @Override
+  public List<DatasetDraftFieldPO> selectDraftFields(Long projectId, long datasetId) {
+    if (projectId != null) {
+      DatasetPO dataset = datasetMapper.selectOne(
+          Wrappers.<DatasetPO>lambdaQuery()
+              .eq(DatasetPO::getProjectId, projectId)
+              .eq(DatasetPO::getId, datasetId));
+      if (dataset == null) return List.of();
+    }
+    return draftFieldMapper.selectList(
+        Wrappers.<DatasetDraftFieldPO>lambdaQuery()
+            .eq(DatasetDraftFieldPO::getDatasetId, datasetId)
+            .orderByAsc(DatasetDraftFieldPO::getSortOrder)
+            .orderByAsc(DatasetDraftFieldPO::getPhysicalName));
   }
 }

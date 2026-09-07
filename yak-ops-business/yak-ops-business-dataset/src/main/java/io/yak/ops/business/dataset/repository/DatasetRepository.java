@@ -5,6 +5,7 @@ import io.yak.ops.business.dataset.DatasetField;
 import io.yak.ops.business.dataset.DatasetStatus;
 import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
+import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -48,4 +49,15 @@ public interface DatasetRepository {
   List<DatasetField> listFieldsByVersionIds(Collection<Long> versionIds);
 
   int nextVersionNo(long datasetId);
+
+  void updateDraft(long datasetId, String draftDataSourceId, String draftSql);
+
+  /** Returns the draft dataSourceId and sql saved by the editor, or nulls if never saved. */
+  DraftSource loadDraftSource(long datasetId);
+
+  void saveDraftFields(long datasetId, List<DatasetFieldSpec> fields);
+
+  List<DatasetFieldSpec> loadDraftFields(long datasetId);
+
+  record DraftSource(String dataSourceId, String sql) {}
 }
