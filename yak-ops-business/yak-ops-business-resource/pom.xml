@@ -38,7 +38,7 @@
             <artifactId>yak-ops-plugin-storage-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.framework</groupId>
+            <groupId>io.github.weifuwan</groupId>
             <artifactId>yak-security-spring-boot-starter</artifactId>
             <optional>true</optional>
         </dependency>
