@@ -8,6 +8,9 @@ export default {
   'pages.home.dataAssets.dashboardEmpty': '暂无仪表盘预览',
 
   'pages.home.quickNavigation.title': '快捷导航',
+  'pages.home.quickNavigation.digitalScreen': '去大屏',
+  'pages.home.quickNavigation.dataCatalog': '数据目录',
+  'pages.home.quickNavigation.dashboard': '仪表盘',
   'pages.home.quickNavigation.dataSource': '数据源',
   'pages.home.quickNavigation.offlineSync': '离线同步',
   'pages.home.quickNavigation.dataQuality': '数据质量',
