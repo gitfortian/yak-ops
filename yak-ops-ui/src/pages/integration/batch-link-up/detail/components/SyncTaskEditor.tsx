@@ -9,13 +9,11 @@ import {
   resolveEndpointCapability,
   validateEditorCapabilities,
 } from '../capabilities';
-import useConnectorSchema from '../hooks/useConnectorSchema';
 import useDataSourceColumns from '../hooks/useDataSourceColumns';
 import useDataSourceTables from '../hooks/useDataSourceTables';
 import useOfflineConnectorRuntime from '../hooks/useOfflineConnectorRuntime';
 import { updateEndpointConfig, type SyncEditorState } from '../model';
 import ChannelConfigSection from './ChannelConfigSection';
-import ConnectorExtraParameters from './ConnectorExtraParameters';
 import FieldMappingSection, { type FieldMappingValue } from './FieldMappingSection';
 import MultiTableConfigSection from './MultiTableConfigSection';
 import NotificationConfigSection from './NotificationConfigSection';
@@ -74,17 +72,6 @@ export default function SyncTaskEditor({
     connectorRuntime.snapshot,
   );
 
-  const sourceSchema = useConnectorSchema(
-    editor.source.connectorId,
-    'SOURCE',
-    sourceCapability.available,
-  );
-  const sinkSchema = useConnectorSchema(
-    editor.sink.connectorId,
-    'SINK',
-    sinkCapability.available,
-  );
-
   const isMongoSource =
     editor.mode === 'GUIDE_SINGLE' &&
     String(editor.source.connectorId || '').toLowerCase() === 'mongodb' &&
@@ -132,7 +119,7 @@ export default function SyncTaskEditor({
           type="info"
           showIcon
           message="正在读取 Link-Up Connector 能力"
-          description="能力确认完成前保留兼容表单，不会提前隐藏现有配置。"
+          description="能力确认完成前继续使用 Yak Ops 标准配置，保存时会校验当前 Connector 能力。"
         />
       );
     }
@@ -143,7 +130,7 @@ export default function SyncTaskEditor({
           type="warning"
           showIcon
           message="暂时无法读取 Link-Up Connector 能力"
-          description={`${connectorRuntime.error}。编辑器将保留兼容字段，保存时会再次校验。`}
+          description={`${connectorRuntime.error}。编辑器保留 Yak Ops 标准配置，保存时会再次校验。`}
         />
       );
     }
@@ -156,7 +143,7 @@ export default function SyncTaskEditor({
           message="Link-Up Worker 当前不可达"
           description={
             connectorRuntime.snapshot.errorMessage ||
-            '如果存在上次同步的 Schema，编辑器仅将其作为表单参考，不会把它视为当前可执行状态。'
+            '当前仅展示 Yak Ops 标准配置；Worker 恢复后会重新确认 Connector 能力。'
           }
         />
       );
@@ -206,30 +193,6 @@ export default function SyncTaskEditor({
     </div>
   ) : null;
 
-  const sourceExtraParameters = (
-    <div className="space-y-3.5">
-      {mongoFieldSelector}
-      <ConnectorExtraParameters
-        role="SOURCE"
-        schema={sourceSchema.schema}
-        loading={sourceSchema.loading}
-        error={sourceSchema.error}
-        config={sourceConfig}
-        onChange={updateSource}
-      />
-    </div>
-  );
-  const sinkExtraParameters = (
-    <ConnectorExtraParameters
-      role="SINK"
-      schema={sinkSchema.schema}
-      loading={sinkSchema.loading}
-      error={sinkSchema.error}
-      config={sinkConfig}
-      onChange={updateSink}
-    />
-  );
-
   return (
     <div className="space-y-5">
       {runtimeNotice}
@@ -255,8 +218,8 @@ export default function SyncTaskEditor({
             sourceLoading={sourceCatalog.loading}
             sourceReady={Boolean(sourceId)}
             targetReady={Boolean(targetId)}
-            sourceExtraParameters={sourceExtraParameters}
-            sinkExtraParameters={sinkExtraParameters}
+            sourceExtraParameters={null}
+            sinkExtraParameters={null}
             onSourceTableSearch={sourceCatalog.search}
             onSourceChange={updateSource}
             onSinkChange={updateSink}
@@ -279,8 +242,8 @@ export default function SyncTaskEditor({
             sourceReady={Boolean(sourceId)}
             targetReady={Boolean(targetId)}
             allowCustomTargetName={isMongoSink}
-            sourceExtraParameters={sourceExtraParameters}
-            sinkExtraParameters={sinkExtraParameters}
+            sourceExtraParameters={mongoFieldSelector}
+            sinkExtraParameters={null}
             onSourceTableSearch={sourceCatalog.search}
             onTargetTableSearch={targetCatalog.search}
             onSourceChange={(patch) =>
