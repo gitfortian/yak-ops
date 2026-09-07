@@ -36,14 +36,21 @@ const timestamp = (value?: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const dashboardItem = (value: DashboardSummary): RecentVisualization => ({
-  id: `dashboard-${value.id}`,
-  name: value.name,
-  updatedAt: value.updateTime || value.publishedTime || value.createTime,
-  path: value.publishedVersionId
-    ? `/dashboard/${value.id}`
-    : `/dashboard/${value.id}/edit`,
-});
+const dashboardItem = (value: DashboardSummary): RecentVisualization => {
+  const published = Boolean(value.publishedVersionId);
+  const hasUnpublishedChanges =
+    published && value.currentVersionNo > value.publishedVersionNo;
+
+  return {
+    id: `dashboard-${value.id}`,
+    name: value.name,
+    updatedAt: value.updateTime || value.publishedTime || value.createTime,
+    path:
+      published && !hasUnpublishedChanges
+        ? `/dashboard/${value.id}`
+        : `/dashboard/${value.id}/edit`,
+  };
+};
 
 const screenItem = (value: DigitalScreenInstance): RecentVisualization => ({
   id: `screen-${value.id}`,
@@ -142,6 +149,7 @@ export default function HomeVisualizationOverview() {
   return (
     <section className="flex h-[188px] min-w-0 flex-col rounded-[18px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-4">
       <SectionHeader
+        compact
         title={intl.formatMessage({ id: 'pages.home.visualization.title' })}
         onMore={() => history.push('/dashboard')}
       />

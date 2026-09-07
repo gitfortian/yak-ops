@@ -1,5 +1,5 @@
 import { history, useIntl } from '@umijs/max';
-import { Boxes, ChevronRight, Database, Table2 } from 'lucide-react';
+import { Boxes, ChevronRight, Table2 } from 'lucide-react';
 
 import {
   formatMetric,
@@ -85,6 +85,10 @@ export function DatasetOverview({ state }: { state: HomeAssetOverviewState }) {
   const intl = useIntl();
   const dataset = state.data?.dataset;
   const items = dataset?.recentDatasets?.slice(0, 4) ?? [];
+  const todayCreated =
+    dataset?.todayCreatedCount == null
+      ? '--'
+      : `+${formatMetric(dataset.todayCreatedCount, intl.locale)}`;
 
   return (
     <section className="rounded-[20px] border border-[#f0f1f3] bg-white px-5 pb-5 pt-5">
@@ -114,7 +118,7 @@ export function DatasetOverview({ state }: { state: HomeAssetOverviewState }) {
                 {intl.formatMessage({ id: 'pages.home.dataset.todayCreated' })}
               </span>
               <strong className="mt-1 block text-[17px] font-semibold text-[#343842]">
-                +{formatMetric(dataset?.todayCreatedCount, intl.locale)}
+                {todayCreated}
               </strong>
             </div>
           </div>

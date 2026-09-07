@@ -59,6 +59,7 @@ export default function HomeDataServiceOverview() {
   return (
     <section className="flex h-[188px] min-w-0 flex-col rounded-[18px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-4">
       <SectionHeader
+        compact
         title={intl.formatMessage({ id: 'pages.home.dataService.title' })}
         onMore={() => history.push('/data-service/overview')}
       />
@@ -77,20 +78,20 @@ export default function HomeDataServiceOverview() {
                 {intl.formatMessage({ id: 'pages.home.dataService.metric.apiTotal' })}
               </span>
             </div>
-            <div className="mt-1 flex items-center gap-3 text-[10px] text-[#8f949d]">
-              <span>
+            <div className="mt-1 grid grid-cols-3 gap-3 text-[9px] text-[#8f949d]">
+              <span className="min-w-0 truncate">
                 {intl.formatMessage({ id: 'pages.home.dataService.metric.running' })}{' '}
                 <strong className="font-semibold text-[#555a64]">
                   {formatMetric(data?.runningApis, intl.locale)}
                 </strong>
               </span>
-              <span>
+              <span className="min-w-0 truncate">
                 {intl.formatMessage({ id: 'pages.home.dataService.metric.successRate' })}{' '}
                 <strong className="font-semibold text-[#555a64]">
                   {formatRate(data)}
                 </strong>
               </span>
-              <span>
+              <span className="min-w-0 truncate">
                 {intl.formatMessage({ id: 'pages.home.dataService.metric.calls7d' })}{' '}
                 <strong className="font-semibold text-[#555a64]">
                   {formatMetric(data?.totalCalls, intl.locale)}

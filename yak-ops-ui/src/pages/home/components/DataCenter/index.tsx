@@ -98,7 +98,7 @@ export default function DataCenter() {
             }
           />
 
-          <div className="h-[263px] overflow-y-auto overflow-x-hidden pr-1">
+          <div className="h-[263px] overflow-auto pr-1">
             {activeTab === 'overview' && (
               <OverviewPanel
                 overview={overview}

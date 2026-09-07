@@ -70,6 +70,7 @@ export default function HomeQualitySidebarOverview() {
   return (
     <section className="flex h-[188px] min-w-0 flex-col rounded-[18px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-4">
       <SectionHeader
+        compact
         title={intl.formatMessage({ id: 'pages.home.quality.title' })}
         onMore={() => history.push('/data-quality/overview')}
       />
