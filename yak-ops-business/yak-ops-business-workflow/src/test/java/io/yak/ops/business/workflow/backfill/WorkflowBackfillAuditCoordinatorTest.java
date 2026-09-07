@@ -46,10 +46,9 @@ class WorkflowBackfillAuditCoordinatorTest {
     assertThat(audit.request.resourceType()).isEqualTo("WORKFLOW_BACKFILL");
     assertThat(audit.request.metadata().toString()).doesNotContain("backfill-secret");
     Map<String, ?> payload = audit.handle.events.get(0).payload();
-    assertThat(payload)
-        .containsEntry("changeType", "BACKFILL_CREATED")
-        .containsEntry("totalCount", 3)
-        .containsEntry("inputConfigured", true);
+    assertThat(payload.get("changeType")).isEqualTo("BACKFILL_CREATED");
+    assertThat(payload.get("totalCount")).isEqualTo(3);
+    assertThat(payload.get("inputConfigured")).isEqualTo(true);
     assertThat(payload.toString()).doesNotContain("backfill-secret");
   }
 
@@ -72,10 +71,10 @@ class WorkflowBackfillAuditCoordinatorTest {
     coordinator.createBusinessDateRerun("execution-source", source, request);
 
     assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_BUSINESS_DATE_RERUN");
-    assertThat(audit.request.metadata()).containsEntry("sourceExecutionId", "execution-source");
+    assertThat(audit.request.metadata().get("sourceExecutionId")).isEqualTo("execution-source");
     assertThat(audit.request.metadata().toString()).doesNotContain("rerun-secret");
-    assertThat(audit.handle.events.get(0).payload())
-        .containsEntry("changeType", "BUSINESS_DATE_RERUN_CREATED");
+    assertThat(audit.handle.events.get(0).payload().get("changeType"))
+        .isEqualTo("BUSINESS_DATE_RERUN_CREATED");
     assertThat(audit.handle.events.get(0).payload().toString()).doesNotContain("rerun-secret");
   }
 
