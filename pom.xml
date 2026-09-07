@@ -24,7 +24,7 @@
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <yak-framework.version>1.0.0-SNAPSHOT</yak-framework.version>
+        <yak-framework.version>0.1.0</yak-framework.version>
         <minio.version>8.6.0</minio.version>
         <hadoop.version>3.5.0</hadoop.version>
         <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
@@ -52,34 +52,34 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-framework-parent</artifactId>
                 <version>${yak-framework.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-common</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-security-spring-boot-starter</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-schedule-spring-boot-starter</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-workflow-engine</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.yak.framework</groupId>
+                <groupId>io.github.weifuwan</groupId>
                 <artifactId>yak-file</artifactId>
                 <version>${yak-framework.version}</version>
             </dependency>
