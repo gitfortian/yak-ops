@@ -10,7 +10,7 @@ export default function HomeDataAssets() {
   const intl = useIntl();
 
   return (
-    <section className="h-full min-h-[320px] rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
+    <section className="h-full min-h-[420px] rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <header>
         <h2 className="m-0 text-xl font-semibold tracking-[-0.35px] text-[#252832]">
           {intl.formatMessage({ id: 'pages.home.dataAssets.title' })}
