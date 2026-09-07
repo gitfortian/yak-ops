@@ -62,6 +62,14 @@
   .yak-status-icon__dot {
     opacity: 0.5;
   }
+
+  .yak-status-icon__running-image {
+    pointer-events: none;
+  }
+
+  .yak-status-icon__running-reduced-motion {
+    display: none;
+  }
 }
 
 .yak-status-icon--success {
@@ -138,6 +146,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .yak-status-icon--animated {
+    .yak-status-icon__running-image {
+      display: none;
+    }
+
+    .yak-status-icon__running-reduced-motion {
+      display: inline;
+    }
+
     .yak-status-icon__orbit,
     .yak-status-icon__dot {
       animation: none;
