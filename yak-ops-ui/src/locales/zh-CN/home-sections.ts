@@ -1,0 +1,23 @@
+export default {
+  'pages.home.dataAssets.title': '数据资产',
+  'pages.home.dataAssets.dataset': '数据集列表',
+  'pages.home.dataAssets.datasetEmpty': '暂无数据集预览',
+  'pages.home.dataAssets.dataService': '数据服务列表',
+  'pages.home.dataAssets.dataServiceEmpty': '暂无数据服务预览',
+  'pages.home.dataAssets.dashboard': '仪表盘列表',
+  'pages.home.dataAssets.dashboardEmpty': '暂无仪表盘预览',
+
+  'pages.home.quickNavigation.title': '快捷导航',
+  'pages.home.quickNavigation.dataSource': '数据源',
+  'pages.home.quickNavigation.offlineSync': '离线同步',
+  'pages.home.quickNavigation.dataQuality': '数据质量',
+  'pages.home.quickNavigation.dataService': '数据服务',
+
+  'pages.home.resourceCenter.title': '资源中心',
+  'pages.home.resourceCenter.files': '文件数量',
+  'pages.home.resourceCenter.folders': '文件夹',
+  'pages.home.resourceCenter.storage': '存储占用',
+  'pages.home.resourceCenter.recent': '最近资源',
+  'pages.home.resourceCenter.preview': '资源预览',
+  'pages.home.resourceCenter.empty': '暂无资源预览',
+};

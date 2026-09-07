@@ -1,6 +1,9 @@
 import DataCenter from './components/DataCenter';
+import HomeDataAssets from './components/HomeDataAssets';
 import { HomeBackground } from './components/HomeBackground';
 import { HomeHeader } from './components/HomeHeader';
+import HomeQuickNavigation from './components/HomeQuickNavigation';
+import HomeResourceCenter from './components/HomeResourceCenter';
 import { HomeWorkbenchMain } from './components/HomeWorkbench';
 import NotificationCenter from './components/NotificationCenter';
 import { QuickCreatePanel } from './components/QuickCreatePanel';
@@ -22,17 +25,18 @@ export default function HomePage() {
             <QuickCreatePanel />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_410px]">
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_410px]">
             <div className="flex min-w-0 flex-col gap-4">
               <DataCenter />
               <HomeWorkbenchMain />
+              <HomeDataAssets />
             </div>
 
             <aside className="flex min-w-0 flex-col gap-4">
               <NotificationCenter />
-              <div className="xl:flex-1 xl:[&>section]:h-full">
-                <ScheduleCenter />
-              </div>
+              <ScheduleCenter />
+              <HomeQuickNavigation />
+              <HomeResourceCenter />
             </aside>
           </div>
         </main>
