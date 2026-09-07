@@ -179,7 +179,7 @@ const DataSourcePage = () => {
                   className={
                     viewMode === 'list'
                       ? 'grid grid-cols-1 gap-[14px]'
-                      : 'grid grid-cols-1 gap-[14px] md:grid-cols-2 2xl:grid-cols-3'
+                      : 'grid grid-cols-1 gap-[14px] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
                   }
                 >
                   {records.map((record, index) => (
