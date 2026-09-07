@@ -1,0 +1,23 @@
+export default {
+  'pages.home.dataAssets.title': 'Data Assets',
+  'pages.home.dataAssets.dataset': 'Datasets',
+  'pages.home.dataAssets.datasetEmpty': 'No dataset preview yet',
+  'pages.home.dataAssets.dataService': 'Data Services',
+  'pages.home.dataAssets.dataServiceEmpty': 'No data service preview yet',
+  'pages.home.dataAssets.dashboard': 'Dashboards',
+  'pages.home.dataAssets.dashboardEmpty': 'No dashboard preview yet',
+
+  'pages.home.quickNavigation.title': 'Quick Navigation',
+  'pages.home.quickNavigation.dataSource': 'Data Sources',
+  'pages.home.quickNavigation.offlineSync': 'Batch Sync',
+  'pages.home.quickNavigation.dataQuality': 'Data Quality',
+  'pages.home.quickNavigation.dataService': 'Data Services',
+
+  'pages.home.resourceCenter.title': 'Resource Center',
+  'pages.home.resourceCenter.files': 'Files',
+  'pages.home.resourceCenter.folders': 'Folders',
+  'pages.home.resourceCenter.storage': 'Storage',
+  'pages.home.resourceCenter.recent': 'Recent Resources',
+  'pages.home.resourceCenter.preview': 'Preview',
+  'pages.home.resourceCenter.empty': 'No resource preview yet',
+};

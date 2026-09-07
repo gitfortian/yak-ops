@@ -13,6 +13,7 @@ import dataService from './en-US/data-service';
 import dataSource from './en-US/data-source';
 import globalHeader from './en-US/globalHeader';
 import home from './en-US/home';
+import homeSections from './en-US/home-sections';
 import menu from './en-US/menu';
 import pages from './en-US/pages';
 import pwa from './en-US/pwa';
@@ -47,6 +48,7 @@ export default {
   ...realtimeSync,
   ...dataQuality,
   ...home,
+  ...homeSections,
   ...dataDevelopment,
   ...dataDevelopmentEditor,
   ...workflow,
