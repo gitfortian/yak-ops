@@ -5,10 +5,12 @@ import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.business.job.task.SyncTaskExecution;
-import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskExecutor;
 import io.yak.ops.business.job.task.TaskRegistry;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.EdgeDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.NodeDTO;
@@ -99,7 +101,7 @@ class WorkflowPauseSchedulingTest {
       }
     };
     return new WorkflowRuntime(
-        new WorkflowEventStream(), registry, runner, 2L);
+        new WorkflowEventStream(), registry, new TaskExecutionGateway(List.of(runner)), 2L);
   }
 
   private void waitUntilStarted(FakeRunner runner, String taskId) throws InterruptedException {
@@ -139,7 +141,7 @@ class WorkflowPauseSchedulingTest {
     return instance.nodes().stream().filter(item -> id.equals(item.id())).findFirst().orElseThrow();
   }
 
-  private static final class FakeRunner implements SyncTaskRunner {
+  private static final class FakeRunner implements TaskExecutor {
     private final AtomicLong sequence = new AtomicLong();
     private final AtomicInteger cancels = new AtomicInteger();
     private final ConcurrentMap<String, AtomicInteger> starts = new ConcurrentHashMap<>();
@@ -160,7 +162,14 @@ class WorkflowPauseSchedulingTest {
     }
 
     @Override
-    public SyncTaskExecution start(String taskId) {
+    public String taskType() {
+      return "SYNC";
+    }
+
+    @Override
+    public TaskExecution start(
+        TaskVersionSnapshot snapshot, String idempotencyKey, Map<String, Object> input) {
+      String taskId = snapshot.taskId();
       String id = String.valueOf(sequence.incrementAndGet());
       State state = new State(
           id,
@@ -173,7 +182,7 @@ class WorkflowPauseSchedulingTest {
     }
 
     @Override
-    public SyncTaskExecution status(String executionId) {
+    public TaskExecution status(String executionId) {
       return view(executions.get(executionId));
     }
 
@@ -186,7 +195,7 @@ class WorkflowPauseSchedulingTest {
       }
     }
 
-    private SyncTaskExecution view(State state) {
+    private TaskExecution view(State state) {
       if (state == null) {
         throw new IllegalArgumentException("execution not found");
       }
@@ -194,7 +203,7 @@ class WorkflowPauseSchedulingTest {
       String status = state.canceled
           ? "CANCELED"
           : elapsed >= state.durationMillis ? "SUCCEEDED" : "RUNNING";
-      return new SyncTaskExecution(
+      return new TaskExecution(
           state.executionId,
           status,
           null,
