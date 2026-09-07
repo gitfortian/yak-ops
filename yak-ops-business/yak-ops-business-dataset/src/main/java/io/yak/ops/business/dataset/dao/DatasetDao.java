@@ -1,5 +1,6 @@
 package io.yak.ops.business.dataset.dao;
 
+import io.yak.ops.business.dataset.dao.model.DatasetDraftFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetQueryPerformancePO;
@@ -88,4 +89,20 @@ public interface DatasetDao {
       int limit);
 
   int deleteQueryPerformanceBefore(Instant cutoff, int limit);
+
+  // ---- Draft columns & draft-field table ----
+
+  int updateDraft(long datasetId, String draftDataSourceId, String draftSql, String draftSchemaSnapshot);
+
+  int updateDraft(Long projectId, long datasetId, String draftDataSourceId, String draftSql, String draftSchemaSnapshot);
+
+  int deleteDraftFields(long datasetId);
+
+  int deleteDraftFields(Long projectId, long datasetId);
+
+  int insertDraftFields(List<DatasetDraftFieldPO> fields);
+
+  List<DatasetDraftFieldPO> selectDraftFields(long datasetId);
+
+  List<DatasetDraftFieldPO> selectDraftFields(Long projectId, long datasetId);
 }

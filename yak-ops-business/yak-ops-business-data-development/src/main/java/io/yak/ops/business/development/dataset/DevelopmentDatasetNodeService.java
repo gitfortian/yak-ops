@@ -98,6 +98,17 @@ public class DevelopmentDatasetNodeService {
     return context(refreshed, saved, toSnapshot(source));
   }
 
+  /** Publish a new immutable version from the current draft. */
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DatasetNodeContext publish(long nodeId) {
+    DevelopmentNode datasetNode = requireDatasetNode(nodeId);
+    NodeDataset published = requireSameProject(
+        datasetNode,
+        datasetFacade.publishVersion(nodeId));
+    DevelopmentNode refreshed = nodeRepository.findById(nodeId).orElse(datasetNode);
+    return context(refreshed, published, null);
+  }
+
   private void markConfigured(DevelopmentNode datasetNode) {
     if (!datasetNode.configured() && !nodeRepository.updateConfigured(datasetNode.id(), true)) {
       throw new IllegalStateException("Dataset Node 配置状态更新失败：" + datasetNode.id());

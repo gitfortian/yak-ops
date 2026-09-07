@@ -128,11 +128,11 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       sinkTableTemplate = sinkTable(context.config(), context.mode());
       sinkTableView = sinkTableView(sinkTableTemplate, sourceTables, context.mode());
     } else {
+      String explicitTarget = text(context.config(), "targetTableName", null);
       sinkTableTemplate =
-          text(
-              context.config(),
-              "targetTableName",
-              text(context.config(), "table", text(options, "table_path", null)));
+          StringUtils.hasText(explicitTarget)
+              ? explicitTarget
+              : text(context.config(), "table", text(options, "table_path", null));
       if (!StringUtils.hasText(sinkTableTemplate)) {
         throw new IllegalArgumentException("请选择或填写目标表");
       }
@@ -316,7 +316,9 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
   }
 
   private String sinkTable(JsonNode config, String mode) {
-    String explicit = text(config, "targetTableName", text(config, "table", null));
+    String explicitTarget = text(config, "targetTableName", null);
+    String explicit = StringUtils.hasText(explicitTarget)
+        ? explicitTarget : text(config, "table", null);
     if ("GUIDE_SINGLE".equals(mode)) {
       if (!StringUtils.hasText(explicit)) {
         throw new IllegalArgumentException("请选择或填写目标表");

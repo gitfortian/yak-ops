@@ -78,6 +78,13 @@ public class DevelopmentDatasetNodeController {
         fields));
   }
 
+  @Operation(summary = "发布 Dataset 版本")
+  @RequiresPermission(DataDevelopmentPermissionCode.PUBLISH)
+  @PostMapping("/{nodeId}/dataset/publish")
+  public Result<DatasetNodeContext> publish(@PathVariable("nodeId") long nodeId) {
+    return Result.success(service.publish(nodeId));
+  }
+
   private static FieldDraft toFieldDraft(DatasetFieldRequest field) {
     return new FieldDraft(
         field.fieldId(), field.physicalName(), field.displayName(), field.dataType(),

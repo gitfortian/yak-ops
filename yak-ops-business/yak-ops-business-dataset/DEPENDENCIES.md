@@ -75,6 +75,16 @@ Publication 不直接依赖 TaskCatalogService、Datasource execution SPI、Line
 
 `DevelopmentDatasetManager` 是组合型 Dataset-side role，可以复用 Definition / Publication / Schema / Repository / Lineage refresh。
 
+Development 对 Repository 的窄 corridor：
+
+```text
+DevelopmentDatasetManager
+ -> DatasetRepository.findDatasetByDevelopmentNodeId
+ -> DatasetRepository.insertDevelopmentNodeDataset
+ -> DatasetRepository.updateDraft / loadDraftSource
+ -> DatasetRepository.saveDraftFields / loadDraftFields
+```
+
 Data Development 模块本身只能通过 `DevelopmentDatasetFacade` 进入 Dataset；不能跨模块直接依赖 `development.DatasetManager`、Repository 或 DAO。
 
 ## 6. Query Corridors

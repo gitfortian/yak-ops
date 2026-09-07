@@ -1,6 +1,7 @@
 package io.yak.ops.business.dataset;
 
 import io.yak.ops.business.dataset.development.DevelopmentDatasetManager;
+import io.yak.ops.business.dataset.development.DevelopmentDatasetManager.DraftContext;
 import io.yak.ops.business.dataset.publication.DatasetPublishCommand;
 import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
 import io.yak.ops.business.dataset.schema.DatasetSchemaDiscovery;
@@ -21,7 +22,10 @@ public class DevelopmentDatasetFacade {
   }
 
   public Optional<NodeDataset> findByDevelopmentNodeId(long developmentNodeId) {
-    return manager.find(developmentNodeId).map(detail -> toNodeDataset(developmentNodeId, detail));
+    return manager.find(developmentNodeId).map(detail -> {
+      DraftContext draft = tryLoadDraft(detail.dataset().id());
+      return toNodeDataset(developmentNodeId, detail, draft);
+    });
   }
 
   /** Standalone Dataset editor preview: datasource + SQL belong to Dataset itself. */
@@ -65,7 +69,8 @@ public class DevelopmentDatasetFacade {
             : fields.stream().map(DevelopmentDatasetFacade::toFieldSpec).toList();
     DatasetDetail detail =
         manager.saveSqlQuery(developmentNodeId, dataSourceId, sql, name, description, specs);
-    return toNodeDataset(developmentNodeId, detail);
+    DraftContext draft = new DraftContext(dataSourceId, sql, specs);
+    return toNodeDataset(developmentNodeId, detail, draft);
   }
 
   /** Legacy TaskAsset API retained for release flows/tests outside the Dataset node editor. */
@@ -90,13 +95,32 @@ public class DevelopmentDatasetFacade {
         manager.saveTaskAsset(
             developmentNodeId,
             new DatasetPublishCommand(sourceTaskAssetId, name, description, specs));
-    return toNodeDataset(developmentNodeId, detail);
+    return toNodeDataset(developmentNodeId, detail, null);
   }
 
-  private static NodeDataset toNodeDataset(long developmentNodeId, DatasetDetail detail) {
+  /** Publish a new immutable DatasetVersion from the current draft. */
+  public NodeDataset publishVersion(long developmentNodeId) {
+    DatasetDetail detail = manager.publishVersion(developmentNodeId);
+    return toNodeDataset(developmentNodeId, detail, null);
+  }
+
+  private NodeDataset toNodeDataset(
+      long developmentNodeId,
+      DatasetDetail detail,
+      DraftContext draft) {
     Dataset dataset = detail.dataset();
     VersionSnapshot currentVersion =
         detail.currentVersion() == null ? null : toVersion(detail.currentVersion());
+
+    // Draft takes priority over version: the editor should reflect the last saved work,
+    // even if no immutable version has been published yet.
+    String draftDataSourceId = draft != null ? draft.dataSourceId() : null;
+    String draftSql = draft != null ? draft.sql() : null;
+    List<FieldDraft> draftFields =
+        draft != null && !draft.fields().isEmpty()
+            ? draft.fields().stream().map(DevelopmentDatasetFacade::toFieldDraft).toList()
+            : null;
+
     return new NodeDataset(
         String.valueOf(developmentNodeId),
         String.valueOf(dataset.id()),
@@ -107,6 +131,9 @@ public class DevelopmentDatasetFacade {
         currentVersion,
         detail.versions().stream().map(DevelopmentDatasetFacade::toVersion).toList(),
         detail.fields().stream().map(DevelopmentDatasetFacade::toField).toList(),
+        draftDataSourceId,
+        draftSql,
+        draftFields,
         dataset.createTime(),
         dataset.updateTime());
   }
@@ -183,6 +210,14 @@ public class DevelopmentDatasetFacade {
     }
   }
 
+  private DraftContext tryLoadDraft(long datasetId) {
+    try {
+      return manager.loadDraftContext(datasetId);
+    } catch (RuntimeException ignored) {
+      return null;
+    }
+  }
+
   public record NodeDataset(
       String developmentNodeId,
       String datasetId,
@@ -193,6 +228,9 @@ public class DevelopmentDatasetFacade {
       VersionSnapshot currentVersion,
       List<VersionSnapshot> versions,
       List<FieldSnapshot> fields,
+      String draftDataSourceId,
+      String draftSql,
+      List<FieldDraft> draftFields,
       Instant createTime,
       Instant updateTime) {
 
@@ -218,6 +256,9 @@ public class DevelopmentDatasetFacade {
           currentVersion,
           versions,
           fields,
+          null,
+          null,
+          null,
           createTime,
           updateTime);
     }

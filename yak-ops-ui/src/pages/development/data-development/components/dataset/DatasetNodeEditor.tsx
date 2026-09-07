@@ -15,6 +15,7 @@ import {
   Play,
   Redo2,
   RefreshCw,
+  Rocket,
   Save,
   Search,
   Sparkles,
@@ -27,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   getDevelopmentDatasetNode,
+  publishDevelopmentDatasetNode,
   runDevelopmentDatasetNode,
   saveDevelopmentDatasetNode,
   type DevelopmentDatasetFieldDraft,
@@ -177,6 +179,7 @@ export default function DatasetNodeEditor({
   const [loadError, setLoadError] = useState<string>();
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [activePanel, setActivePanel] = useState<RightPanelKey>();
   const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
   const [resizing, setResizing] = useState(false);
@@ -197,13 +200,21 @@ export default function DatasetNodeEditor({
   useEffect(() => () => dirtyChangeRef.current?.(false), []);
 
   const applyContext = useCallback((next: DevelopmentDatasetNodeContext) => {
-    const currentVersion = next.dataset?.currentVersion;
-    const dataSourceId = currentVersion?.dataSourceId || undefined;
+    const ds = next.dataset;
+    const currentVersion = ds?.currentVersion;
+    // Draft takes priority over version: the editor should reflect the last saved work,
+    // even if no immutable version has been published yet.
+    const dataSourceId =
+      ds?.draftDataSourceId || currentVersion?.dataSourceId || undefined;
     savedDataSourceIdRef.current = dataSourceId;
     setContext(next);
-    setSqlText(currentVersion?.sql || '');
-    setDescription(next.dataset?.description || '');
-    setFields(toFieldDrafts(next));
+    setSqlText(ds?.draftSql || currentVersion?.sql || '');
+    setDescription(ds?.description || '');
+    setFields(
+      ds?.draftFields?.length
+        ? ds.draftFields
+        : toFieldDrafts(next),
+    );
     setQueryResult(undefined);
     hydrateSqlTaskConfig(node.id, JSON.stringify(dataSourceId ? { dataSourceId } : {}));
     setDirtyState(false);
@@ -434,6 +445,26 @@ export default function DatasetNodeEditor({
     }
   };
 
+  const publish = async () => {
+    if (!context?.dataset || publishing) return;
+    if (dirty) {
+      message.warning('当前有未保存修改，请先保存再发布版本');
+      return;
+    }
+    setPublishing(true);
+    try {
+      const next = await publishDevelopmentDatasetNode(node.id);
+      applyContext(next);
+      await onSaved?.();
+      setActivePanel('versions');
+      message.success(`版本已发布 · DV${next.dataset?.currentVersion?.versionNo || '-'}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '发布 Dataset 版本失败');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const propertiesPanel = (
     <div className="text-[12px] leading-5">
       <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-4 gap-y-4">
@@ -615,6 +646,7 @@ export default function DatasetNodeEditor({
 
   const canRun = Boolean(metadataContext.dataSourceId && sqlText.trim());
   const canSave = canRun && fields.length > 0 && dirty;
+  const canPublish = Boolean(context?.dataset && !dirty && !saving && !publishing);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
@@ -633,14 +665,25 @@ export default function DatasetNodeEditor({
           </ToolbarButton>
           <ToolbarDivider />
           <ToolbarButton
-            title="保存数据集版本"
-            disabled={!canSave || saving}
+            title="保存数据集"
+            disabled={!canSave || saving || publishing}
             onClick={() => void save()}
           >
             {saving ? (
               <LoaderCircle size={15} className="animate-spin" />
             ) : (
               <Save size={15} strokeWidth={1.8} />
+            )}
+          </ToolbarButton>
+          <ToolbarButton
+            title="发布版本"
+            disabled={!canPublish}
+            onClick={() => void publish()}
+          >
+            {publishing ? (
+              <LoaderCircle size={15} className="animate-spin" />
+            ) : (
+              <Rocket size={15} strokeWidth={1.8} />
             )}
           </ToolbarButton>
           <ToolbarDivider />

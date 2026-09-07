@@ -69,15 +69,22 @@ fieldId 是 Dataset 下游绑定的稳定标识；physicalName 是该版本实�
 Publication 的领域顺序：
 
 ```text
-exact source evidence
+exact source evidence (from draft or TaskAsset)
  -> normalized schema
  -> append DatasetVersion
  -> move currentVersionId
 ```
 
-不存在“修改 V3 使它变成 V4”。
+不存在"修改 V3 使它变成 V4"。
 
-Release publish 在 current TaskRevision 未变化时保持幂等。
+SQL_QUERY publish 在 draft source 与 current version 完全相同时保持幂等：
+
+```text
+same dataSourceId AND same SQL AND same field contract
+ -> no new version appended
+```
+
+QUERY_REVISION publish 在 current TaskRevision 未变化时保持幂等。
 
 ## 6. Current Source vs Version Snapshot
 
@@ -142,10 +149,29 @@ Data Development Dataset Node 与 Dataset 的长期关系：
 ```text
 DevelopmentNode
     -> stable Dataset identity
-        -> version history
+        -> draft state (mutable)
+        -> version history (immutable)
 ```
 
-保存同一节点的新 SQL/schema 应追加 DatasetVersion，而不是创建另一个 Dataset identity。
+Dataset 拥有可选的 draft state，与 immutable version 独立：
+
+- draft 包含 `dataSourceId + SQL + draftFields`，是编辑器当前工作状态；
+- 保存草稿只写入 draft state，不创建 DatasetVersion；
+- 发布从 draft 冻结为 immutable DatasetVersion，然后更新 currentVersionId；
+- draft state 可以多次覆写，不影响任何已有版本。
+
+## 9a. Draft vs Version
+
+```text
+draft state          != DatasetVersion
+draft dataSourceId   != version dataSourceId
+draft SQL            != version SQL
+draft field contract != version field contract
+```
+
+draft 是 mutable working copy，DatasetVersion 是 immutable frozen snapshot。
+
+Query Runtime / Analysis / Lineage 只消费 immutable version snapshot，不读 draft。
 
 ## 10. Lineage Projection
 
@@ -192,7 +218,10 @@ Dataset identity
 DatasetVersion append
 DatasetField schema
 currentVersion pointer
+Dataset draft state (dataSourceId + SQL + draftFields)
 ```
+
+Draft state 属于 Dataset identity 级别的 mutable working data，不属于 DatasetVersion。
 
 Query Performance 虽然通过独立 Repository port 持久化，但仍只是 observability read model，不属于 Dataset aggregate truth。
 
@@ -207,7 +236,8 @@ Repository 不拥有 Publication policy、Query routing 或 Lineage behavior。
 - fieldId 根据 displayName 自动重建；
 - Query 指定版本但允许自动漂移；
 - Lineage 结果反向决定 DatasetVersion；
-- DevelopmentNode 同时绑定多个“当前 Dataset identity”；
-- Query Performance 变成业务状态机。
+- DevelopmentNode 同时绑定多个"当前 Dataset identity"；
+- Query Performance 变成业务状态机；
+- Query Runtime / Analysis / Lineage 直接消费 draft state。
 
 模型表达不了的需求，先更新 Domain/Requirement 与测试，不通过隐藏 flag 绕过。

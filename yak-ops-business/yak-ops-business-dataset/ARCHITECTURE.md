@@ -171,11 +171,46 @@ DevelopmentDatasetFacade @Service
       -> DatasetPublisher
       -> DatasetSchemaDiscovery
       -> DatasetVersionWriter
-      -> DatasetRepository
+      -> DatasetRepository (draft load/save)
       -> DatasetLineageRefreshPublisher
 ```
 
 Manager 拥有 DevelopmentNode -> stable Dataset identity 的 Dataset-side lifecycle。
+
+### 9a. Draft Lifecycle
+
+```text
+Editor save
+ -> Manager.saveSqlQuery
+      -> Repository.updateDraft (dataSourceId, SQL)
+      -> Repository.saveDraftFields (fields)
+      -> NO version creation
+
+Editor publish
+ -> Manager.publishVersion
+      -> Repository.loadDraftSource (dataSourceId, SQL)
+      -> Repository.loadDraftFields
+      -> FieldNormalizer.normalize
+      -> VersionWriter.append*SqlQuery
+      -> LineageRefreshPublisher.request
+```
+
+Facade 的 `toNodeDataset` 从 Manager 提供的 `DraftContext` 填充 draft 字段，不直接依赖 Repository。
+
+### 9b. Draft Persistence
+
+Draft state 持久化层：
+
+```text
+DatasetRepository.updateDraft / loadDraftSource
+ -> DatasetRepositoryAdapter
+ -> DatasetDao
+
+DatasetRepository.saveDraftFields / loadDraftFields
+ -> DatasetRepositoryAdapter
+ -> DatasetDao
+ -> yak_dataset_draft_field
+```
 
 ## 10. Lineage
 

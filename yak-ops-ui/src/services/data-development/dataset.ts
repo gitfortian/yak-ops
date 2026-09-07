@@ -56,6 +56,9 @@ export interface DevelopmentDatasetNodeAsset {
   currentVersion?: DevelopmentDatasetNodeVersion | null;
   versions: DevelopmentDatasetNodeVersion[];
   fields: DevelopmentDatasetNodeField[];
+  draftDataSourceId?: DevelopmentId | null;
+  draftSql?: string | null;
+  draftFields?: DevelopmentDatasetFieldDraft[] | null;
   createTime?: string;
   updateTime?: string;
 }
@@ -116,3 +119,11 @@ export const saveDevelopmentDatasetNode = (
   payload: SaveDevelopmentDatasetNodePayload,
 ): Promise<DevelopmentDatasetNodeContext> =>
   HttpUtils.putData<DevelopmentDatasetNodeContext>(nodePath(nodeId), payload);
+
+export const publishDevelopmentDatasetNode = (
+  nodeId: DevelopmentId,
+): Promise<DevelopmentDatasetNodeContext> =>
+  HttpUtils.postData<DevelopmentDatasetNodeContext>(
+    `${nodePath(nodeId)}/publish`,
+    {},
+  );

@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS yak_dataset (
     description VARCHAR(2000) NULL,
     status VARCHAR(32) NOT NULL,
     current_version_id BIGINT NULL,
+    draft_data_source_id VARCHAR(128) NULL COMMENT 'Draft data source selected in the editor',
+    draft_sql LONGTEXT NULL COMMENT 'Draft SQL content in the editor',
+    draft_schema_snapshot JSON NULL COMMENT 'Draft field contract snapshot (mirrors yak_dataset_version.schema_snapshot layout)',
     create_time DATETIME(6) NOT NULL,
     update_time DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
@@ -51,6 +54,22 @@ CREATE TABLE IF NOT EXISTS yak_dataset_field (
     PRIMARY KEY (version_id, field_id),
     UNIQUE KEY uk_yak_dataset_field_physical_name (version_id, physical_name),
     KEY idx_yak_dataset_field_role (version_id, default_role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Draft field table: per-field overrides before version commit.
+CREATE TABLE IF NOT EXISTS yak_dataset_draft_field (
+    field_id VARCHAR(64) NOT NULL COMMENT 'Stable field identity (preserved across save/publish cycles)',
+    dataset_id BIGINT NOT NULL COMMENT 'FK to yak_dataset.id',
+    physical_name VARCHAR(128) NOT NULL,
+    display_name VARCHAR(200) NOT NULL,
+    data_type VARCHAR(32) NOT NULL,
+    nullable TINYINT(1) NOT NULL DEFAULT 1,
+    description VARCHAR(1000) NULL,
+    default_role VARCHAR(32) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (dataset_id, field_id),
+    UNIQUE KEY uk_yak_dataset_draft_field_physical_name (dataset_id, physical_name),
+    KEY idx_yak_dataset_draft_field_role (dataset_id, default_role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Persist Dataset Query Runtime diagnostics so evidence survives restarts and is shared across instances.

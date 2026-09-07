@@ -19,6 +19,9 @@ public class DatasetPO {
   private String description;
   private String status;
   private Long currentVersionId;
+  private String draftDataSourceId;
+  private String draftSql;
+  private String draftSchemaSnapshot;
   private Timestamp createTime;
   private Timestamp updateTime;
 }
