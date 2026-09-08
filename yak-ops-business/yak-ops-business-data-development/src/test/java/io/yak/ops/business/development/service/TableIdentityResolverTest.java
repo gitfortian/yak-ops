@@ -45,6 +45,15 @@ class TableIdentityResolverTest {
   }
 
   @Test
+  void canonicalDialectNamesUseTheSameResolutionFamilies() {
+    var twoPart = table("archive.orders", null, "archive", "orders");
+    assertEquals("table:1:sales.archive.orders",
+        resolve(twoPart, "1", "sales", "public", "POSTGRE_SQL").assetKey());
+    assertEquals("table:1:archive..orders",
+        resolve(twoPart, "1", "sales", "public", "STARROCKS").assetKey());
+  }
+
+  @Test
   void legacyContextIsIsolatedFromConfirmedAssets() {
     var identity = resolve(table("orders", null, null, "orders"), "1", null, null, null);
     assertEquals("table:unresolved:1:..orders", identity.assetKey());
