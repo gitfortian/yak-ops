@@ -10,6 +10,7 @@ import type { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import qulity from "@/assets/image/qulity.png";
 
 interface QualityOverviewState {
   data?: HomeQualityOverview;
@@ -374,30 +375,32 @@ function EmptyIssues({
   isChinese: boolean;
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center">
-      <div className="text-[32px] font-light leading-none text-[#d6d9de]">
-        —
-      </div>
+    <div className="flex min-h-[325px] flex-col items-center justify-center">
+      {failed ? (
+        <div className="text-[32px] font-light leading-none text-[#d6d9de]">
+          —
+        </div>
+      ) : (
+        <img
+          src={qulity}
+          alt=""
+          className="h-[260px] w-[260px] object-contain"
+        />
+      )}
 
-      <strong className="mt-3 text-[12px] font-medium text-[#646a74]">
+      <strong
+        className={`text-[12px] font-medium text-[#646a74] ${
+          failed ? 'mt-3' : 'mt-2'
+        }`}
+      >
         {failed
           ? isChinese
-            ? "质量问题加载失败"
-            : "Failed to load issues"
+            ? '质量问题加载失败'
+            : 'Failed to load issues'
           : isChinese
-          ? "近 7 日暂无质量问题"
-          : "No quality issues in the last 7 days"}
+            ? '近 7 日暂无质量问题'
+            : 'No quality issues in the last 7 days'}
       </strong>
-
-      <span className="mt-1 text-[10px] text-[#a2a6ad]">
-        {failed
-          ? isChinese
-            ? "请稍后刷新页面重试"
-            : "Please refresh and try again"
-          : isChinese
-          ? "当前数据质量状态良好"
-          : "Current data quality is healthy"}
-      </span>
     </div>
   );
 }

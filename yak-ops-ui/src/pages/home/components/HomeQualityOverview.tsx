@@ -1,20 +1,16 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
+import YakOpsEmpty from "@/components/YakOpsEmpty";
 import {
   homeQualityOverviewApi,
   type HomeQualityDimension,
   type HomeQualityIssue,
   type HomeQualityOverview,
-} from '@/services/home';
-import { BRAND_COLOR } from '@/styles/brand';
-import { history } from '@umijs/max';
-import type { EChartsOption } from 'echarts';
-import ReactECharts from 'echarts-for-react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-} from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+} from "@/services/home";
+import { BRAND_COLOR } from "@/styles/brand";
+import { history } from "@umijs/max";
+import type { EChartsOption } from "echarts";
+import ReactECharts from "echarts-for-react";
+import { AlertTriangle, CheckCircle2, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 interface QualityOverviewState {
   data?: HomeQualityOverview;
@@ -27,86 +23,109 @@ interface RadarDimensionDefinition {
   aliases: string[];
 }
 
-const COUNT_FORMATTER = new Intl.NumberFormat('zh-CN');
+const COUNT_FORMATTER = new Intl.NumberFormat("zh-CN");
+
 const RADAR_DIMENSIONS: RadarDimensionDefinition[] = [
-  { label: '完整性', aliases: ['完整性'] },
-  { label: '唯一性', aliases: ['唯一性'] },
-  { label: '有效性', aliases: ['有效性'] },
-  { label: '准确性', aliases: ['准确性'] },
-  { label: '时效性', aliases: ['时效性', '及时性'] },
+  { label: "完整性", aliases: ["完整性"] },
+  { label: "唯一性", aliases: ["唯一性"] },
+  { label: "有效性", aliases: ["有效性"] },
+  { label: "准确性", aliases: ["准确性"] },
+  { label: "时效性", aliases: ["时效性", "及时性"] },
 ];
 
 const formatMetric = (value?: number | null) =>
-  value == null ? '--' : COUNT_FORMATTER.format(value);
+  value == null ? "--" : COUNT_FORMATTER.format(value);
 
 const formatRate = (value?: number | null) =>
-  value == null ? '--' : value.toFixed(1);
+  value == null ? "--" : value.toFixed(1);
 
 const formatRateWithUnit = (value?: number | null) =>
-  value == null ? '--' : `${formatRate(value)}%`;
+  value == null ? "--" : `${formatRate(value)}%`;
 
 const relativeTime = (value?: string | null) => {
-  if (!value) return '--';
+  if (!value) return "--";
+
   const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return value;
+
+  if (!Number.isFinite(timestamp)) {
+    return value;
+  }
 
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes} 分钟前`;
+
+  if (minutes < 1) {
+    return "刚刚";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} 分钟前`;
+  }
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
+
+  if (hours < 24) {
+    return `${hours} 小时前`;
+  }
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} 天前`;
 
-  return new Date(timestamp).toLocaleDateString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
+  if (days < 7) {
+    return `${days} 天前`;
+  }
+
+  return new Date(timestamp).toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
   });
 };
 
 const objectLabel = (issue: HomeQualityIssue) =>
   issue.objectName || issue.tableName || issue.monitorName;
 
+/**
+ * 状态只表达文案，不再使用绿 / 黄 / 红多套颜色。
+ *
+ * 整个模块只保留品牌色作为视觉锚点，
+ * 避免 Dashboard 过于花哨。
+ */
 const healthState = (passRate?: number | null) => {
   if (passRate == null) {
     return {
-      label: '暂无质量执行数据',
-      className: 'text-[#7f858e]',
+      label: "暂无质量执行数据",
+      className: "text-[#858b94]",
       icon: null,
     };
   }
 
   if (passRate >= 95) {
     return {
-      label: '整体质量健康',
-      className: 'text-[#31865a]',
+      label: "整体质量健康",
+      className: "text-[#737a84]",
       icon: <CheckCircle2 size={14} strokeWidth={2} />,
     };
   }
 
   if (passRate >= 80) {
     return {
-      label: '质量表现需关注',
-      className: 'text-[#b87520]',
+      label: "质量表现需关注",
+      className: "text-[#737a84]",
       icon: <AlertTriangle size={14} strokeWidth={1.9} />,
     };
   }
 
   return {
-    label: '质量问题较多',
-    className: 'text-[#d94d59]',
+    label: "质量问题较多",
+    className: "text-[#737a84]",
     icon: <AlertTriangle size={14} strokeWidth={1.9} />,
   };
 };
 
 const normalizeRadarDimensions = (
-  dimensions: HomeQualityDimension[],
+  dimensions: HomeQualityDimension[]
 ): HomeQualityDimension[] =>
   RADAR_DIMENSIONS.map((definition) => {
     const matched = dimensions.find((item) =>
-      definition.aliases.includes(item.dimension),
+      definition.aliases.includes(item.dimension)
     );
 
     return {
@@ -129,16 +148,32 @@ function useQualityOverview(): QualityOverviewState {
     homeQualityOverviewApi
       .overview()
       .then((response) => {
-        if (!active) return;
-        if (!response.data) {
-          setState({ loading: false, failed: true });
+        if (!active) {
           return;
         }
 
-        setState({ data: response.data, loading: false, failed: false });
+        if (!response.data) {
+          setState({
+            loading: false,
+            failed: true,
+          });
+
+          return;
+        }
+
+        setState({
+          data: response.data,
+          loading: false,
+          failed: false,
+        });
       })
       .catch(() => {
-        if (active) setState({ loading: false, failed: true });
+        if (active) {
+          setState({
+            loading: false,
+            failed: true,
+          });
+        }
       });
 
     return () => {
@@ -158,7 +193,7 @@ function SectionHeader() {
 
       <button
         type="button"
-        onClick={() => history.push('/data-quality/overview')}
+        onClick={() => history.push("/data-quality/overview")}
         className="flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[13px] font-medium text-[#656b75] transition-colors hover:text-[#20232b]"
       >
         查看更多
@@ -177,15 +212,23 @@ function QualityMetric({
   value?: number | null;
   warning?: boolean;
 }) {
+  const shouldHighlight = warning && (value ?? 0) > 0;
+
   return (
     <div className="min-w-0">
       <div className="truncate text-[11px] font-medium leading-4 text-[#747b85]">
         {label}
       </div>
+
       <strong
-        className={`mt-1 block text-[18px] font-semibold leading-6 ${
-          warning && (value ?? 0) > 0 ? 'text-[#d94d59]' : 'text-[#343943]'
-        }`}
+        className="mt-1 block text-[18px] font-semibold leading-6 text-[#343943]"
+        style={
+          shouldHighlight
+            ? {
+                color: BRAND_COLOR,
+              }
+            : undefined
+        }
       >
         {formatMetric(value)}
       </strong>
@@ -195,78 +238,96 @@ function QualityMetric({
 
 function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
   const hasCompleteRadar = dimensions.every((item) => item.passRate != null);
+
   const dimensionMap = new Map(
-    dimensions.map((item) => [item.dimension, item]),
+    dimensions.map((item) => [item.dimension, item])
   );
 
   return {
     animation: hasCompleteRadar,
     animationDuration: 650,
+
     tooltip: hasCompleteRadar
       ? {
-          trigger: 'item',
+          trigger: "item",
           formatter: () =>
             dimensions
               .map(
                 (item) =>
-                  `${item.dimension}：${formatRateWithUnit(item.passRate)}`,
+                  `${item.dimension}：${formatRateWithUnit(item.passRate)}`
               )
-              .join('<br/>'),
+              .join("<br/>"),
         }
-      : { show: false },
+      : {
+          show: false,
+        },
+
     radar: {
-      center: ['50%', '52%'],
-      radius: '72%',
+      center: ["50%", "52%"],
+      radius: "72%",
       splitNumber: 4,
+
       indicator: dimensions.map((item) => ({
         name: item.dimension,
         max: 100,
       })),
+
       axisName: {
-        color: '#414751',
+        color: "#414751",
         fontSize: 12,
         fontWeight: 500,
         lineHeight: 18,
+
         formatter: (name: string) => {
           const dimension = dimensionMap.get(name);
+
           return `${name}\n${formatRateWithUnit(dimension?.passRate)}`;
         },
       },
+
       axisLine: {
         lineStyle: {
-          color: '#d9dde4',
+          color: "#d9dde4",
         },
       },
+
       splitLine: {
         lineStyle: {
-          color: '#dfe3e9',
+          color: "#e1e4e9",
         },
       },
+
       splitArea: {
         areaStyle: {
-          color: ['#ffffff', '#f8f9fb'],
+          color: ["#ffffff", "#fafbfc"],
         },
       },
     },
+
     series: hasCompleteRadar
       ? [
           {
-            type: 'radar',
-            symbol: 'circle',
+            type: "radar",
+            symbol: "circle",
             symbolSize: 5,
+
             data: [
               {
                 value: dimensions.map((item) => item.passRate ?? 0),
-                name: '规则通过率',
+
+                name: "规则通过率",
+
                 lineStyle: {
                   width: 2.2,
                   color: BRAND_COLOR,
                 },
+
                 itemStyle: {
                   color: BRAND_COLOR,
                 },
+
                 areaStyle: {
-                  color: 'rgba(254,44,85,0.1)',
+                  color: "rgba(254, 44, 85, 0.08)",
                 },
               },
             ],
@@ -278,12 +339,16 @@ function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
 
 function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
   const data = state.data;
+
   const health = healthState(data?.passRate);
+
   const dimensions = useMemo(
     () => normalizeRadarDimensions(data?.dimensions ?? []),
-    [data?.dimensions],
+    [data?.dimensions]
   );
+
   const option = useMemo(() => buildRadarOption(dimensions), [dimensions]);
+
   const showEmpty = !state.loading && !state.failed && data?.passRate == null;
 
   return (
@@ -295,11 +360,22 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
 
         <div className="shrink-0 text-right">
           <div className="flex items-end justify-end gap-1">
-            <strong className="text-[28px] font-semibold leading-8 tracking-[-0.7px] text-[#252a33]">
+            <strong
+              className="text-[28px] font-semibold leading-8 tracking-[-0.7px]"
+              style={{
+                color: BRAND_COLOR,
+              }}
+            >
               {formatRate(data?.passRate)}
             </strong>
+
             {data?.passRate != null ? (
-              <span className="mb-0.5 text-[11px] font-medium text-[#747b85]">
+              <span
+                className="mb-0.5 text-[11px] font-medium"
+                style={{
+                  color: BRAND_COLOR,
+                }}
+              >
                 %
               </span>
             ) : null}
@@ -309,11 +385,12 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
             className={`mt-1 flex items-center justify-end gap-1 text-[11px] font-medium ${health.className}`}
           >
             {health.icon}
+
             {state.loading
-              ? '加载中...'
+              ? "加载中..."
               : state.failed
-                ? '加载失败'
-                : health.label}
+              ? "加载失败"
+              : health.label}
           </div>
         </div>
       </div>
@@ -332,19 +409,25 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
           <ReactECharts
             option={option}
             notMerge
-            style={{ width: '100%', height: '278px' }}
+            style={{
+              width: "100%",
+              height: "278px",
+            }}
           />
         )}
       </div>
 
       <div className="grid grid-cols-4 gap-3 border-t border-[#e6e9ee] pt-3.5">
         <QualityMetric label="监控表" value={data?.monitoredTableCount} />
+
         <QualityMetric label="今日检测" value={data?.todayExecutionCount} />
+
         <QualityMetric
           label="问题表"
           value={data?.todayIssueTableCount}
           warning
         />
+
         <QualityMetric label="启用规则" value={data?.enabledRuleCount} />
       </div>
     </div>
@@ -352,24 +435,21 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
 }
 
 function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
-  const isError = issue.checkResult?.toUpperCase() === 'ERROR';
-
   return (
     <button
       type="button"
       onClick={() =>
         history.push(
-          `/data-quality/execution/${encodeURIComponent(issue.executionNo)}`,
+          `/data-quality/execution/${encodeURIComponent(issue.executionNo)}`
         )
       }
       className="group flex w-full items-center gap-3 border-0 bg-transparent py-3.5 text-left"
     >
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${
-          isError
-            ? 'bg-[#fff4e8] text-[#d98932]'
-            : 'bg-[#fff2f3] text-[#e35d69]'
-        }`}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[#fff4f6]"
+        style={{
+          color: BRAND_COLOR,
+        }}
       >
         <AlertTriangle size={15} strokeWidth={1.9} />
       </span>
@@ -379,6 +459,7 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
           <strong className="truncate text-[13px] font-medium text-[#343943]">
             {issue.ruleName}
           </strong>
+
           <span className="shrink-0 rounded-full bg-[#eceff3] px-2 py-0.5 text-[10px] font-medium text-[#666d78]">
             {issue.dimension}
           </span>
@@ -386,7 +467,7 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
 
         <span className="mt-1 block truncate text-[11px] text-[#7f858f]">
           {objectLabel(issue)}
-          {issue.columnName ? ` · ${issue.columnName}` : ''}
+          {issue.columnName ? ` · ${issue.columnName}` : ""}
         </span>
       </span>
 
@@ -406,6 +487,10 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
 function RecentIssues({ state }: { state: QualityOverviewState }) {
   const issues = state.data?.recentIssues ?? [];
 
+  const recentIssueCount = state.data?.recentIssueCount;
+
+  const hasIssues = (recentIssueCount ?? 0) > 0;
+
   return (
     <div className="min-w-0 rounded-[16px] border border-[#eef0f3] bg-[#fafbfc] px-4 pb-4 pt-4">
       <div className="flex items-center justify-between gap-3">
@@ -413,13 +498,18 @@ function RecentIssues({ state }: { state: QualityOverviewState }) {
           最近问题
         </strong>
 
-        <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#747b85]">
-          <AlertTriangle
-            size={12}
-            strokeWidth={1.9}
-            className="text-[#e35d69]"
-          />
-          {formatMetric(state.data?.recentIssueCount)} 项
+        <span
+          className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#747b85]"
+          style={
+            hasIssues
+              ? {
+                  color: BRAND_COLOR,
+                }
+              : undefined
+          }
+        >
+          <AlertTriangle size={12} strokeWidth={1.9} />
+          {formatMetric(recentIssueCount)} 项
         </span>
       </div>
 
@@ -429,22 +519,31 @@ function RecentIssues({ state }: { state: QualityOverviewState }) {
             <RecentIssueRow key={issue.id} issue={issue} />
           ))}
         </div>
-      ) : state.loading || state.failed || state.data?.recentIssueCount == null ? (
+      ) : state.loading ||
+        state.failed ||
+        state.data?.recentIssueCount == null ? (
         <div className="flex min-h-[318px] items-center justify-center text-[11px] text-[#858b94]">
           {state.loading
-            ? '质量问题加载中...'
+            ? "质量问题加载中..."
             : state.failed
-              ? '质量数据加载失败'
-              : '质量数据暂不可用'}
+            ? "质量数据加载失败"
+            : "质量数据暂不可用"}
         </div>
       ) : (
-        <div className="flex min-h-[318px] items-center justify-center">
-          <YakOpsEmpty
-            width={170}
-            height={114}
-            title="近 7 日暂无质量问题"
-            showCaption
+        <div className="flex min-h-[318px] flex-col items-center justify-center">
+          <img
+            src="/image/qulity.png"
+            alt=""
+            className="h-[128px] w-[128px] object-contain"
           />
+
+          <strong className="mt-3 text-[13px] font-medium leading-5 text-[#424751]">
+            近 7 日暂无质量问题
+          </strong>
+
+          <span className="mt-1 text-[11px] leading-4 text-[#8a9099]">
+            当前数据质量状态良好
+          </span>
         </div>
       )}
     </div>
