@@ -4,16 +4,23 @@ import JavaIcon from '@/components/data-development/icons/JavaIcon';
 import PythonIcon from '@/components/data-development/icons/PythonIcon';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
-import { JavaEditor, JavaRunConfig, JavaRunResult } from './java/JavaEditor';
-import { PythonEditor, PythonRunConfig, PythonRunResult } from './python/PythonEditor';
-import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
-import { SqlEditor, SqlRunConfig, SqlRunResult } from './sql/SqlEditor';
+import { JavaEditor, JavaRunResult } from './java/JavaEditor';
+import { PythonEditor, PythonRunResult } from './python/PythonEditor';
+import { ShellEditor, ShellRunResult } from './shell/ShellEditor';
+import { SqlEditor, SqlRunResult } from './sql/SqlEditor';
 import SqlToolbar from './sql/SqlToolbar';
 import type {
   DevelopmentEditorContext,
   DevelopmentEditorDefinition,
 } from './types';
 
+/**
+ * Keep optional editor capabilities closed by default.
+ *
+ * Scheduling belongs to Workflow, and runConfig should only be enabled by an
+ * editor once it has a real interactive configuration panel rather than a
+ * placeholder description.
+ */
 const commonCapabilities = {
   run: false,
   stop: false,
@@ -22,8 +29,7 @@ const commonCapabilities = {
   publish: false,
   share: true,
   properties: true,
-  runConfig: true,
-  scheduleConfig: true,
+  runConfig: false,
   versions: true,
 } as const;
 
@@ -51,9 +57,6 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
     },
     Editor: SqlEditor,
     Toolbar: SqlToolbar,
-    panels: {
-      'run-config': SqlRunConfig,
-    },
     RunResult: SqlRunResult,
   },
   SHELL: {
@@ -67,9 +70,6 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
       publish: true,
     },
     Editor: ShellEditor,
-    panels: {
-      'run-config': ShellRunConfig,
-    },
     RunResult: ShellRunResult,
   },
   PYTHON: {
@@ -83,9 +83,6 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
       publish: true,
     },
     Editor: PythonEditor,
-    panels: {
-      'run-config': PythonRunConfig,
-    },
     RunResult: PythonRunResult,
   },
   JAVA: {
@@ -99,9 +96,6 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
       publish: true,
     },
     Editor: JavaEditor,
-    panels: {
-      'run-config': JavaRunConfig,
-    },
     RunResult: JavaRunResult,
   },
 };
