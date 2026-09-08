@@ -1,16 +1,16 @@
+import qualityEmptyIllustration from '@/assets/image/qulity.png';
 import {
   homeQualityOverviewApi,
   type HomeQualityDimension,
   type HomeQualityIssue,
   type HomeQualityOverview,
-} from "@/services/home";
-import { BRAND_COLOR } from "@/styles/brand";
-import { history, useIntl } from "@umijs/max";
-import type { EChartsOption } from "echarts";
-import ReactECharts from "echarts-for-react";
-import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import qulity from "@/assets/image/qulity.png";
+} from '@/services/home';
+import { BRAND_COLOR } from '@/styles/brand';
+import { history, useIntl } from '@umijs/max';
+import type { EChartsOption } from 'echarts';
+import ReactECharts from 'echarts-for-react';
+import { ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface QualityOverviewState {
   data?: HomeQualityOverview;
@@ -19,76 +19,67 @@ interface QualityOverviewState {
 }
 
 interface RadarDimensionDefinition {
-  labelZh: string;
-  labelEn: string;
+  messageId: string;
   aliases: string[];
 }
 
 const RADAR_DIMENSIONS: RadarDimensionDefinition[] = [
   {
-    labelZh: "完整性",
-    labelEn: "Completeness",
-    aliases: ["完整性", "completeness"],
+    messageId: 'pages.home.quality.dimension.completeness',
+    aliases: ['完整性', 'completeness'],
   },
   {
-    labelZh: "唯一性",
-    labelEn: "Uniqueness",
-    aliases: ["唯一性", "uniqueness"],
+    messageId: 'pages.home.quality.dimension.uniqueness',
+    aliases: ['唯一性', 'uniqueness'],
   },
   {
-    labelZh: "有效性",
-    labelEn: "Validity",
-    aliases: ["有效性", "validity"],
+    messageId: 'pages.home.quality.dimension.validity',
+    aliases: ['有效性', 'validity'],
   },
   {
-    labelZh: "准确性",
-    labelEn: "Accuracy",
-    aliases: ["准确性", "accuracy"],
+    messageId: 'pages.home.quality.dimension.accuracy',
+    aliases: ['准确性', 'accuracy'],
   },
   {
-    labelZh: "时效性",
-    labelEn: "Timeliness",
-    aliases: ["时效性", "及时性", "timeliness"],
+    messageId: 'pages.home.quality.dimension.timeliness',
+    aliases: ['时效性', '及时性', 'timeliness'],
   },
 ];
 
 const formatMetric = (value: number | null | undefined, locale: string) => {
-  if (value == null) return "--";
-
+  if (value == null) return '--';
   return new Intl.NumberFormat(locale).format(value);
 };
 
 const formatRate = (value?: number | null) => {
-  if (value == null) return "--";
-
+  if (value == null) return '--';
   return value.toFixed(1);
 };
 
 const formatRateWithUnit = (value?: number | null) => {
-  if (value == null) return "--";
-
+  if (value == null) return '--';
   return `${value.toFixed(1)}%`;
 };
 
-function normalizeRadarDimensions(
+const normalizeRadarDimensions = (
   dimensions: HomeQualityDimension[],
-  isChinese: boolean
-): HomeQualityDimension[] {
-  return RADAR_DIMENSIONS.map((definition) => {
+  resolveLabel: (messageId: string) => string,
+): HomeQualityDimension[] =>
+  RADAR_DIMENSIONS.map((definition) => {
     const matched = dimensions.find((item) => {
       const value = item.dimension.toLowerCase();
-
-      return definition.aliases.some((alias) => alias.toLowerCase() === value);
+      return definition.aliases.some(
+        (alias) => alias.toLowerCase() === value,
+      );
     });
 
     return {
-      dimension: isChinese ? definition.labelZh : definition.labelEn,
+      dimension: resolveLabel(definition.messageId),
       total: matched?.total ?? 0,
       issues: matched?.issues ?? 0,
       passRate: matched?.passRate ?? null,
     };
   });
-}
 
 function useQualityOverview(): QualityOverviewState {
   const [state, setState] = useState<QualityOverviewState>({
@@ -105,10 +96,7 @@ function useQualityOverview(): QualityOverviewState {
         if (!active) return;
 
         if (!response.data) {
-          setState({
-            loading: false,
-            failed: true,
-          });
+          setState({ loading: false, failed: true });
           return;
         }
 
@@ -120,11 +108,7 @@ function useQualityOverview(): QualityOverviewState {
       })
       .catch(() => {
         if (!active) return;
-
-        setState({
-          loading: false,
-          failed: true,
-        });
+        setState({ loading: false, failed: true });
       });
 
     return () => {
@@ -135,102 +119,84 @@ function useQualityOverview(): QualityOverviewState {
   return state;
 }
 
-function relativeTime(value: string | null | undefined, isChinese: boolean) {
-  if (!value) return "--";
+function relativeTime(value: string | null | undefined, locale: string) {
+  if (!value) return '--';
 
   const timestamp = new Date(value).getTime();
-
-  if (!Number.isFinite(timestamp)) {
-    return value;
-  }
+  if (!Number.isFinite(timestamp)) return value;
 
   const diff = Math.max(0, Date.now() - timestamp);
   const minutes = Math.floor(diff / 60_000);
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
-  if (minutes < 1) {
-    return isChinese ? "刚刚" : "Just now";
-  }
-
-  if (minutes < 60) {
-    return isChinese ? `${minutes} 分钟前` : `${minutes}m ago`;
-  }
+  if (minutes < 1) return formatter.format(0, 'minute');
+  if (minutes < 60) return formatter.format(-minutes, 'minute');
 
   const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return isChinese ? `${hours} 小时前` : `${hours}h ago`;
-  }
+  if (hours < 24) return formatter.format(-hours, 'hour');
 
   const days = Math.floor(hours / 24);
+  if (days < 7) return formatter.format(-days, 'day');
 
-  if (days < 7) {
-    return isChinese ? `${days} 天前` : `${days}d ago`;
-  }
-
-  return new Date(timestamp).toLocaleDateString(isChinese ? "zh-CN" : "en-US", {
-    month: "2-digit",
-    day: "2-digit",
+  return new Date(timestamp).toLocaleDateString(locale, {
+    month: '2-digit',
+    day: '2-digit',
   });
 }
 
 function getObjectLabel(issue: HomeQualityIssue) {
-  return issue.objectName || issue.tableName || issue.monitorName || "--";
+  return issue.objectName || issue.tableName || issue.monitorName || '--';
 }
 
-function getHealthStatus(
-  passRate: number | null | undefined,
-  isChinese: boolean
-) {
+function getHealthStatus(passRate: number | null | undefined) {
   if (passRate == null) {
     return {
-      label: isChinese ? "暂无质量数据" : "No quality data",
-      textClass: "text-[#858b94]",
-      dotClass: "bg-[#c8ccd2]",
+      messageId: 'pages.home.quality.health.noData',
+      textClass: 'text-[#858b94]',
+      dotClass: 'bg-[#c8ccd2]',
     };
   }
 
   if (passRate >= 95) {
     return {
-      label: isChinese ? "整体质量健康" : "Quality is healthy",
-      textClass: "text-[#34855d]",
-      dotClass: "bg-[#53a675]",
+      messageId: 'pages.home.quality.health.healthy',
+      textClass: 'text-[#34855d]',
+      dotClass: 'bg-[#53a675]',
     };
   }
 
   if (passRate >= 80) {
     return {
-      label: isChinese ? "部分指标需要关注" : "Some metrics need attention",
-      textClass: "text-[#a76c24]",
-      dotClass: "bg-[#d99a45]",
+      messageId: 'pages.home.quality.health.attention',
+      textClass: 'text-[#a76c24]',
+      dotClass: 'bg-[#d99a45]',
     };
   }
 
   return {
-    label: isChinese ? "存在较多质量问题" : "Quality issues detected",
-    textClass: "text-[#c64e59]",
-    dotClass: "bg-[#df5a66]",
+    messageId: 'pages.home.quality.health.risky',
+    textClass: 'text-[#c64e59]',
+    dotClass: 'bg-[#df5a66]',
   };
 }
 
 function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
   const hasData = dimensions.some((item) => item.passRate != null);
-
   const dimensionMap = new Map(
-    dimensions.map((item) => [item.dimension, item])
+    dimensions.map((item) => [item.dimension, item]),
   );
 
   return {
     animation: hasData,
     animationDuration: 700,
-    animationEasing: "cubicOut",
-
+    animationEasing: 'cubicOut',
     tooltip: hasData
       ? {
-          trigger: "item",
+          trigger: 'item',
           borderWidth: 0,
-          backgroundColor: "rgba(32, 35, 43, 0.92)",
+          backgroundColor: 'rgba(32, 35, 43, 0.92)',
           textStyle: {
-            color: "#ffffff",
+            color: '#ffffff',
             fontSize: 12,
           },
           padding: [9, 12],
@@ -238,105 +204,83 @@ function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
             dimensions
               .map(
                 (item) =>
-                  `${item.dimension}&nbsp;&nbsp;${formatRateWithUnit(
-                    item.passRate
-                  )}`
+                  `${item.dimension}&nbsp;&nbsp;${formatRateWithUnit(item.passRate)}`,
               )
-              .join("<br/>"),
+              .join('<br/>'),
         }
-      : {
-          show: false,
-        },
-
+      : { show: false },
     radar: {
-      center: ["50%", "52%"],
-      radius: "66%",
+      center: ['50%', '52%'],
+      radius: '66%',
       splitNumber: 4,
-
       indicator: dimensions.map((item) => ({
         name: item.dimension,
         max: 100,
       })),
-
       axisName: {
-        color: "#565c66",
+        color: '#565c66',
         fontSize: 11,
         fontWeight: 500,
         lineHeight: 18,
-
         formatter: (name: string) => {
           const dimension = dimensionMap.get(name);
-
-          return `{name|${name}}\n{value|${formatRateWithUnit(
-            dimension?.passRate
-          )}}`;
+          return `{name|${name}}\n{value|${formatRateWithUnit(dimension?.passRate)}}`;
         },
-
         rich: {
           name: {
-            color: "#656b75",
+            color: '#656b75',
             fontSize: 11,
             fontWeight: 500,
             lineHeight: 17,
           },
-
           value: {
-            color: "#a0a5ad",
+            color: '#a0a5ad',
             fontSize: 9,
             fontWeight: 400,
             lineHeight: 14,
           },
         },
       },
-
       axisLine: {
         lineStyle: {
-          color: "#e6e8ec",
+          color: '#e6e8ec',
           width: 1,
         },
       },
-
       splitLine: {
         lineStyle: {
-          color: "#e5e8ec",
+          color: '#e5e8ec',
           width: 1,
         },
       },
-
       splitArea: {
         areaStyle: {
-          color: ["#ffffff", "#fafbfc", "#ffffff", "#fafbfc"],
+          color: ['#ffffff', '#fafbfc', '#ffffff', '#fafbfc'],
         },
       },
     },
-
     series: hasData
       ? [
           {
-            type: "radar",
-
-            symbol: "circle",
+            type: 'radar',
+            symbol: 'circle',
             symbolSize: 4,
-
             lineStyle: {
               width: 2,
               color: BRAND_COLOR,
             },
-
             itemStyle: {
               color: BRAND_COLOR,
-              borderColor: "#ffffff",
+              borderColor: '#ffffff',
               borderWidth: 1.5,
             },
-
             areaStyle: {
-              color: "rgba(254, 44, 85, 0.09)",
+              color: 'rgba(254, 44, 85, 0.09)',
             },
-
             data: [
               {
                 value: dimensions.map((item) => item.passRate ?? 0),
-                name: "Quality",
+                name: 'Quality',
               },
             ],
           },
@@ -354,12 +298,10 @@ function LoadingLines() {
           className="flex h-[68px] animate-pulse items-center gap-3"
         >
           <div className="h-2 w-2 rounded-full bg-[#eceef1]" />
-
           <div className="min-w-0 flex-1">
             <div className="h-3 w-[42%] rounded bg-[#eceef1]" />
             <div className="mt-2 h-2.5 w-[62%] rounded bg-[#f1f2f4]" />
           </div>
-
           <div className="h-2.5 w-12 rounded bg-[#f1f2f4]" />
         </div>
       ))}
@@ -367,13 +309,9 @@ function LoadingLines() {
   );
 }
 
-function EmptyIssues({
-  failed,
-  isChinese,
-}: {
-  failed: boolean;
-  isChinese: boolean;
-}) {
+function EmptyIssues({ failed }: { failed: boolean }) {
+  const intl = useIntl();
+
   return (
     <div className="flex min-h-[325px] flex-col items-center justify-center">
       {failed ? (
@@ -382,24 +320,20 @@ function EmptyIssues({
         </div>
       ) : (
         <img
-          src={qulity}
+          src={qualityEmptyIllustration}
           alt=""
           className="h-[260px] w-[260px] object-contain"
         />
       )}
 
       <strong
-        className={`text-[12px] font-medium text-[#646a74] ${
-          failed ? 'mt-3' : 'mt-2'
-        }`}
+        className={`text-[12px] font-medium text-[#646a74] ${failed ? 'mt-3' : 'mt-2'}`}
       >
-        {failed
-          ? isChinese
-            ? '质量问题加载失败'
-            : 'Failed to load issues'
-          : isChinese
-            ? '近 7 日暂无质量问题'
-            : 'No quality issues in the last 7 days'}
+        {intl.formatMessage({
+          id: failed
+            ? 'pages.home.quality.issueFailed'
+            : 'pages.home.quality.emptyIssues',
+        })}
       </strong>
     </div>
   );
@@ -423,10 +357,9 @@ function QualityMetric({
       <div className="truncate text-[12px] leading-4 text-[#9398a1]">
         {label}
       </div>
-
       <strong
         className={`mt-0.5 block truncate text-[16px] font-semibold leading-6 tracking-[-0.3px] ${
-          hasWarning ? "text-[#d55360]" : "text-[#343943]"
+          hasWarning ? 'text-[#d55360]' : 'text-[#343943]'
         }`}
       >
         {formatMetric(value, locale)}
@@ -435,150 +368,122 @@ function QualityMetric({
   );
 }
 
-function QualityRadar({
-  state,
-  isChinese,
-  locale,
-}: {
-  state: QualityOverviewState;
-  isChinese: boolean;
-  locale: string;
-}) {
+function QualityRadar({ state }: { state: QualityOverviewState }) {
+  const intl = useIntl();
   const data = state.data;
 
   const dimensions = useMemo(
-    () => normalizeRadarDimensions(data?.dimensions ?? [], isChinese),
-    [data?.dimensions, isChinese]
+    () =>
+      normalizeRadarDimensions(data?.dimensions ?? [], (messageId) =>
+        intl.formatMessage({ id: messageId }),
+      ),
+    [data?.dimensions, intl],
   );
-
   const option = useMemo(() => buildRadarOption(dimensions), [dimensions]);
-
-  const health = getHealthStatus(data?.passRate, isChinese);
+  const health = getHealthStatus(data?.passRate);
 
   return (
     <div className="flex min-w-0 flex-col lg:pr-7">
       <div className="flex items-start justify-between gap-5">
         <div>
           <div className="text-[12px] font-medium text-[#858b94]">
-            {isChinese ? "综合通过率" : "Overall pass rate"}
+            {intl.formatMessage({ id: 'pages.home.quality.overallPassRate' })}
           </div>
 
           <div className="mt-1 flex items-baseline gap-1">
             <strong className="text-[34px] font-semibold leading-[40px] tracking-[-1px] text-[#262a32]">
-              {state.loading ? "--" : formatRate(data?.passRate)}
+              {state.loading ? '--' : formatRate(data?.passRate)}
             </strong>
-
-            {data?.passRate != null && (
+            {data?.passRate != null ? (
               <span className="text-[13px] font-medium text-[#7d838c]">%</span>
-            )}
+            ) : null}
           </div>
 
           <div
             className={`mt-1 flex items-center gap-1.5 text-[10px] font-medium ${health.textClass}`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${health.dotClass}`} />
-
-            {state.loading
-              ? isChinese
-                ? "质量数据加载中"
-                : "Loading quality data"
-              : state.failed
-              ? isChinese
-                ? "质量数据加载失败"
-                : "Failed to load quality data"
-              : health.label}
+            {intl.formatMessage({
+              id: state.loading
+                ? 'pages.home.quality.loading'
+                : state.failed
+                  ? 'pages.home.quality.failed'
+                  : health.messageId,
+            })}
           </div>
         </div>
 
         <span className="mt-1 shrink-0 rounded-full bg-[#f5f6f8] px-2.5 py-1 text-[12px] font-medium text-[#858b94]">
-          {isChinese ? "近 7 日" : "Last 7 days"}
+          {intl.formatMessage({ id: 'pages.home.quality.period7d' })}
         </span>
       </div>
 
       <div className="mt-1 min-h-[235px]">
         {state.failed ? (
           <div className="flex h-[235px] items-center justify-center text-[11px] text-[#9a9fa7]">
-            {isChinese ? "暂无质量维度数据" : "No dimension data"}
+            {intl.formatMessage({
+              id: 'pages.home.quality.dimensionUnavailable',
+            })}
           </div>
         ) : (
           <ReactECharts
             option={option}
             notMerge
             lazyUpdate
-            style={{
-              width: "100%",
-              height: 235,
-            }}
+            style={{ width: '100%', height: 235 }}
           />
         )}
       </div>
 
       <div className="grid grid-cols-3 gap-5 border-t border-[#eceef1] pt-3.5">
         <QualityMetric
-          label={isChinese ? "监控表" : "Monitored tables"}
+          label={intl.formatMessage({
+            id: 'pages.home.quality.metric.monitoredTables',
+          })}
           value={data?.monitoredTableCount}
-          locale={locale}
+          locale={intl.locale}
         />
-
         <QualityMetric
-          label={isChinese ? "今日检测" : "Checks today"}
+          label={intl.formatMessage({
+            id: 'pages.home.quality.metric.todayChecks',
+          })}
           value={data?.todayExecutionCount}
-          locale={locale}
+          locale={intl.locale}
         />
-
         <QualityMetric
-          label={isChinese ? "启用规则" : "Enabled rules"}
+          label={intl.formatMessage({
+            id: 'pages.home.quality.metric.enabledRules',
+          })}
           value={data?.enabledRuleCount}
-          locale={locale}
+          locale={intl.locale}
         />
       </div>
     </div>
   );
 }
 
-function IssueRow({
-  issue,
-  isChinese,
-}: {
-  issue: HomeQualityIssue;
-  isChinese: boolean;
-}) {
-  const checkResult = issue.checkResult?.toUpperCase();
-
-  const executionError = checkResult === "ERROR";
-
-  const statusLabel = executionError
-    ? isChinese
-      ? "执行异常"
-      : "Execution error"
-    : isChinese
-    ? "未通过"
-    : "Failed";
+function IssueRow({ issue }: { issue: HomeQualityIssue }) {
+  const intl = useIntl();
+  const executionError = issue.checkResult?.toUpperCase() === 'ERROR';
+  const statusLabel = intl.formatMessage({
+    id: executionError
+      ? 'pages.home.quality.status.executionError'
+      : 'pages.home.quality.status.failed',
+  });
 
   return (
     <button
       type="button"
       onClick={() =>
         history.push(
-          `/data-quality/execution/${encodeURIComponent(issue.executionNo)}`
+          `/data-quality/execution/${encodeURIComponent(issue.executionNo)}`,
         )
       }
-      className="
-        group
-        flex
-        w-full
-        min-w-0
-        items-center
-        gap-3
-        border-0
-        bg-transparent
-        py-[13px]
-        text-left
-      "
+      className="group flex w-full min-w-0 items-center gap-3 border-0 bg-transparent py-[13px] text-left"
     >
       <span
         className={`h-8 w-[3px] shrink-0 rounded-full ${
-          executionError ? "bg-[#dfa04d]" : "bg-[#df5d69]"
+          executionError ? 'bg-[#dfa04d]' : 'bg-[#df5d69]'
         }`}
       />
 
@@ -587,14 +492,12 @@ function IssueRow({
           <strong className="min-w-0 truncate text-[12px] font-medium leading-5 text-[#373c45] transition-colors group-hover:text-[#20242b]">
             {issue.ruleName}
           </strong>
-
           <span className="shrink-0 rounded-full bg-[#f3f4f6] px-2 py-[2px] text-[9px] font-medium leading-4 text-[#737983]">
             {issue.dimension}
           </span>
-
           <span
             className={`hidden shrink-0 text-[9px] font-medium sm:inline ${
-              executionError ? "text-[#b97b2f]" : "text-[#cf5863]"
+              executionError ? 'text-[#b97b2f]' : 'text-[#cf5863]'
             }`}
           >
             {statusLabel}
@@ -603,21 +506,18 @@ function IssueRow({
 
         <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-4 text-[#9499a2]">
           <span className="truncate">{getObjectLabel(issue)}</span>
-
-          {issue.columnName && (
+          {issue.columnName ? (
             <>
               <span className="shrink-0 text-[#d1d4d9]">·</span>
-
               <span className="truncate">{issue.columnName}</span>
             </>
-          )}
+          ) : null}
         </span>
       </span>
 
       <span className="shrink-0 text-[9px] text-[#a0a5ad]">
-        {relativeTime(issue.queuedAt, isChinese)}
+        {relativeTime(issue.queuedAt, intl.locale)}
       </span>
-
       <span className="shrink-0 translate-x-[-2px] text-[17px] font-light leading-none text-[#c3c7cd] opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100">
         ›
       </span>
@@ -625,66 +525,54 @@ function IssueRow({
   );
 }
 
-function RecentIssues({
-  state,
-  isChinese,
-  locale,
-}: {
-  state: QualityOverviewState;
-  isChinese: boolean;
-  locale: string;
-}) {
+function RecentIssues({ state }: { state: QualityOverviewState }) {
+  const intl = useIntl();
   const data = state.data;
-
   const issues = (data?.recentIssues ?? []).slice(0, 4);
-
   const issueCount = data?.recentIssueCount;
 
   return (
     <div className="flex min-w-0 flex-col lg:border-l lg:border-[#eceef1] lg:pl-7">
       <div className="flex shrink-0 items-start justify-between gap-5">
-        <div>
-          <div className="flex items-baseline gap-2">
-            <h3 className="m-0 text-[15px] font-semibold tracking-[-0.2px] text-[#2b3038]">
-              {isChinese ? "待处理问题" : "Issues to review"}
-            </h3>
-
-            {(issueCount ?? 0) > 0 && (
-              <strong className="text-[13px] font-semibold text-[#d6525f]">
-                {formatMetric(issueCount, locale)}
-              </strong>
-            )}
-          </div>
+        <div className="flex items-baseline gap-2">
+          <h3 className="m-0 text-[15px] font-semibold tracking-[-0.2px] text-[#2b3038]">
+            {intl.formatMessage({ id: 'pages.home.quality.pendingIssues' })}
+          </h3>
+          {(issueCount ?? 0) > 0 ? (
+            <strong className="text-[13px] font-semibold text-[#d6525f]">
+              {formatMetric(issueCount, intl.locale)}
+            </strong>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 gap-6">
           <div className="text-right">
             <div className="text-[12px] leading-4 text-[#a0a5ad]">
-              {isChinese ? "今日问题表" : "Issue tables"}
+              {intl.formatMessage({
+                id: 'pages.home.quality.metric.todayIssueTables',
+              })}
             </div>
-
             <strong
               className={`mt-0.5 block text-[15px] font-semibold leading-5 ${
                 (data?.todayIssueTableCount ?? 0) > 0
-                  ? "text-[#d6525f]"
-                  : "text-[#3f444d]"
+                  ? 'text-[#d6525f]'
+                  : 'text-[#3f444d]'
               }`}
             >
-              {formatMetric(data?.todayIssueTableCount, locale)}
+              {formatMetric(data?.todayIssueTableCount, intl.locale)}
             </strong>
           </div>
 
           <div className="text-right">
             <div className="text-[12px] leading-4 text-[#a0a5ad]">
-              {isChinese ? "近 7 日问题" : "7d issues"}
+              {intl.formatMessage({ id: 'pages.home.quality.issues7d' })}
             </div>
-
             <strong
               className={`mt-0.5 block text-[15px] font-semibold leading-5 ${
-                (issueCount ?? 0) > 0 ? "text-[#d6525f]" : "text-[#3f444d]"
+                (issueCount ?? 0) > 0 ? 'text-[#d6525f]' : 'text-[#3f444d]'
               }`}
             >
-              {formatMetric(issueCount, locale)}
+              {formatMetric(issueCount, intl.locale)}
             </strong>
           </div>
         </div>
@@ -696,11 +584,11 @@ function RecentIssues({
         ) : issues.length > 0 ? (
           <div className="divide-y divide-[#eceef1]">
             {issues.map((issue) => (
-              <IssueRow key={issue.id} issue={issue} isChinese={isChinese} />
+              <IssueRow key={issue.id} issue={issue} />
             ))}
           </div>
         ) : (
-          <EmptyIssues failed={state.failed} isChinese={isChinese} />
+          <EmptyIssues failed={state.failed} />
         )}
       </div>
     </div>
@@ -709,61 +597,35 @@ function RecentIssues({
 
 function DataQualityPanel() {
   const intl = useIntl();
-
   const state = useQualityOverview();
-
-  const isChinese = intl.locale.toLowerCase().startsWith("zh");
 
   return (
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <header className="flex items-start justify-between gap-6">
-        <div>
-          <h2 className="m-0 text-[18px] font-semibold tracking-[-0.35px] text-[#252932]">
-            {isChinese ? "数据质量" : "Data Quality"}
-          </h2>
-        </div>
+        <h2 className="m-0 text-[18px] font-semibold tracking-[-0.35px] text-[#252932]">
+          {intl.formatMessage({ id: 'pages.home.quality.title' })}
+        </h2>
 
         <button
           type="button"
-          onClick={() => history.push("/data-quality/overview")}
+          onClick={() => history.push('/data-quality/overview')}
           className="group flex shrink-0 items-center gap-1 border-0 bg-transparent p-0 text-[12px] font-medium text-[#7a8089] transition-colors hover:text-[#30353d]"
         >
-          查看更多
+          {intl.formatMessage({ id: 'pages.home.common.viewMore' })}
           <ChevronRight size={15} strokeWidth={1.9} />
         </button>
       </header>
 
       <div className="mt-4 pt-4">
         <div className="grid min-w-0 grid-cols-1 gap-7 lg:grid-cols-[minmax(300px,0.82fr)_minmax(460px,1.18fr)] lg:gap-0">
-          <QualityRadar
-            state={state}
-            isChinese={isChinese}
-            locale={intl.locale}
-          />
-
-          <RecentIssues
-            state={state}
-            isChinese={isChinese}
-            locale={intl.locale}
-          />
+          <QualityRadar state={state} />
+          <RecentIssues state={state} />
         </div>
       </div>
     </section>
   );
 }
 
-/**
- * 首页主工作区。
- *
- * 当前首页不再展示“数据资产 / 数据交付”聚合入口，
- * 而是直接展示用户最需要关注的数据质量状态。
- *
- * 左侧回答：
- * 数据整体是否可信？
- *
- * 右侧回答：
- * 具体哪里出了问题？
- */
 export function HomeWorkbenchMain() {
   return (
     <div className="min-w-0">
