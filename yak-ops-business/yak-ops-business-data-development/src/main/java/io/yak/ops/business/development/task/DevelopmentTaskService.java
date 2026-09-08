@@ -90,7 +90,20 @@ public class DevelopmentTaskService {
 
   public DevelopmentTaskDraft getDraft(Long nodeId) {
     DevelopmentNode node = nodes.requireTaskNode(nodeId);
-    return drafts.get(node);
+    DevelopmentTaskDraft draft = drafts.get(node);
+    TaskDefinition normalized = definitions.normalize(
+        node,
+        draft.definition().taskType(),
+        draft.definition().schemaVersion(),
+        draft.definition().content(),
+        draft.definition().configJson());
+    if (normalized.equals(draft.definition())) return draft;
+    return new DevelopmentTaskDraft(
+        draft.nodeId(),
+        normalized,
+        draft.draftRevision(),
+        draft.createTime(),
+        draft.updateTime());
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
