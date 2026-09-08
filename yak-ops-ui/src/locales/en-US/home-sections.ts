@@ -5,7 +5,10 @@ export default {
   'pages.home.dataAssets.dataService': 'Data Services',
   'pages.home.dataAssets.dataServiceEmpty': 'No data service preview yet',
   'pages.home.dataAssets.dashboard': 'Dashboards',
+  'pages.home.dataAssets.dashboardTab': 'Dashboard',
   'pages.home.dataAssets.dashboardEmpty': 'No dashboard preview yet',
+  'pages.home.dataAssets.screenTab': 'Digital Screen',
+  'pages.home.dataAssets.screenEmpty': 'No digital screen preview yet',
 
   'pages.home.quickNavigation.title': 'Quick Navigation',
   'pages.home.quickNavigation.digitalScreen': 'Digital Screen',

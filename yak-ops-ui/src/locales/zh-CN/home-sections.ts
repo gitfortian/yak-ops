@@ -5,7 +5,10 @@ export default {
   'pages.home.dataAssets.dataService': '数据服务列表',
   'pages.home.dataAssets.dataServiceEmpty': '暂无数据服务预览',
   'pages.home.dataAssets.dashboard': '仪表盘列表',
+  'pages.home.dataAssets.dashboardTab': '仪表盘',
   'pages.home.dataAssets.dashboardEmpty': '暂无仪表盘预览',
+  'pages.home.dataAssets.screenTab': '大屏',
+  'pages.home.dataAssets.screenEmpty': '暂无大屏预览',
 
   'pages.home.quickNavigation.title': '快捷导航',
   'pages.home.quickNavigation.digitalScreen': '去大屏',
