@@ -1,7 +1,9 @@
+import type { DevelopmentSqlDialect } from '@/services/data-development';
 import { useIntl } from '@umijs/max';
 import { Input, Modal, Select, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
+import { getDevelopmentSqlDialectLabel } from '../sqlDatabaseProfiles';
 import type {
   DevelopmentDirectory,
   DevelopmentId,
@@ -11,6 +13,7 @@ import type {
 interface CreateDevelopmentNodeModalProps {
   open: boolean;
   type: DevelopmentNodeType;
+  sqlDialect?: DevelopmentSqlDialect;
   directories: DevelopmentDirectory[];
   defaultDirectoryId?: DevelopmentId;
   loading?: boolean;
@@ -26,7 +29,8 @@ const ROOT_VALUE = '__root__';
 
 const CreateDevelopmentNodeModal = ({
   open,
-  type: initialType,
+  type,
+  sqlDialect,
   directories,
   defaultDirectoryId,
   loading = false,
@@ -34,27 +38,26 @@ const CreateDevelopmentNodeModal = ({
   onNext,
 }: CreateDevelopmentNodeModalProps) => {
   const intl = useIntl();
-  const [type, setType] = useState<DevelopmentNodeType>(initialType);
   const [directoryId, setDirectoryId] = useState<DevelopmentId>();
   const [name, setName] = useState('');
 
-  const typeOptions = useMemo(
-    () => [
-      { label: 'SQL', value: 'SQL' },
-      { label: 'Shell', value: 'SHELL' },
-      { label: 'Python', value: 'PYTHON' },
-      { label: 'Java', value: 'JAVA' },
-      {
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.datasetNode' }).replace(/ Node$| 节点$/, ''),
-        value: 'DATASET',
-      },
-      {
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.dataServiceNode' }).replace(/ Node$| 节点$/, ''),
-        value: 'DATA_SERVICE',
-      },
-    ],
-    [intl],
-  );
+  const typeLabel = useMemo(() => {
+    if (type === 'SQL') return getDevelopmentSqlDialectLabel(sqlDialect);
+    if (type === 'SHELL') return 'Shell';
+    if (type === 'PYTHON') return 'Python';
+    if (type === 'JAVA') return 'Java';
+    if (type === 'DATASET') {
+      return intl
+        .formatMessage({ id: 'pages.dataDevelopment.workspace.datasetNode' })
+        .replace(/ Node$| 节点$/, '');
+    }
+    if (type === 'DATA_SERVICE') {
+      return intl
+        .formatMessage({ id: 'pages.dataDevelopment.workspace.dataServiceNode' })
+        .replace(/ Node$| 节点$/, '');
+    }
+    return type;
+  }, [intl, sqlDialect, type]);
 
   const pathOptions = useMemo(
     () => [
@@ -69,10 +72,9 @@ const CreateDevelopmentNodeModal = ({
 
   useEffect(() => {
     if (!open) return;
-    setType(initialType);
     setDirectoryId(defaultDirectoryId);
     setName('');
-  }, [defaultDirectoryId, initialType, open]);
+  }, [defaultDirectoryId, open, sqlDialect, type]);
 
   const normalizedName = name.trim();
 
@@ -101,13 +103,9 @@ const CreateDevelopmentNodeModal = ({
           <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
           {intl.formatMessage({ id: 'pages.dataDevelopment.modal.node.type' })}
         </Typography.Text>
-        <Select
-          value={type}
-          options={typeOptions}
-          className="w-full"
-          disabled={loading}
-          onChange={(value) => setType(value as DevelopmentNodeType)}
-        />
+        <div className="flex h-8 items-center rounded-md border border-[#d9d9d9] bg-[#fafafa] px-3 text-[13px] text-[#475467]">
+          {typeLabel}
+        </div>
 
         <Typography.Text className="text-[13px] text-[#344054]">
           <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
