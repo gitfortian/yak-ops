@@ -29,46 +29,49 @@ export type DevelopmentSqlDialect =
   (typeof DEVELOPMENT_SQL_DIALECT_VALUES)[number];
 
 const SQL_DIALECTS = new Set<string>(DEVELOPMENT_SQL_DIALECT_VALUES);
+const SQL_DIALECT_ALIASES: Record<string, DevelopmentSqlDialect> = {
+  AUTO: 'GENERIC',
+  UNKNOWN: 'GENERIC',
+  GENERIC_SQL: 'GENERIC',
+  POSTGRES: 'POSTGRE_SQL',
+  POSTGRESQL: 'POSTGRE_SQL',
+  PGSQL: 'POSTGRE_SQL',
+  MARIADB: 'MYSQL',
+  GOLDEN_DB: 'GOLDENDB',
+  ZTE_GOLDENDB: 'GOLDENDB',
+  GBASE_8C: 'GBASE8C',
+  GBASE_8A: 'GBASE8A',
+  GBASE_8S: 'GBASE8S',
+  SAP_HANA: 'HANA',
+  SAPHANA: 'HANA',
+  OPENGAUSS: 'OPEN_GAUSS',
+  SQLSERVER: 'SQL_SERVER',
+  MSSQL: 'SQL_SERVER',
+  YASHANDB: 'YASHAN_DB',
+  YASDB: 'YASHAN_DB',
+  HIGH_GO: 'HIGHGO',
+  HGDB: 'HIGHGO',
+  INTERSYSTEMS_IRIS: 'IRIS',
+  XUGUDB: 'XUGU',
+  DUCK_DB: 'DUCKDB',
+  STAR_ROCKS: 'STARROCKS',
+  KINGBASEES: 'KINGBASE',
+  DM: 'DAMENG',
+};
 
 export const normalizeDevelopmentSqlDialect = (
   value?: unknown,
 ): DevelopmentSqlDialect => {
   if (typeof value !== 'string' || !value.trim()) return 'GENERIC';
 
-  let normalized = value.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_');
-  normalized =
-    {
-      AUTO: 'GENERIC',
-      UNKNOWN: 'GENERIC',
-      GENERIC_SQL: 'GENERIC',
-      POSTGRES: 'POSTGRE_SQL',
-      POSTGRESQL: 'POSTGRE_SQL',
-      PGSQL: 'POSTGRE_SQL',
-      MARIADB: 'MYSQL',
-      GOLDEN_DB: 'GOLDENDB',
-      ZTE_GOLDENDB: 'GOLDENDB',
-      GBASE_8C: 'GBASE8C',
-      GBASE_8A: 'GBASE8A',
-      GBASE_8S: 'GBASE8S',
-      SAP_HANA: 'HANA',
-      SAPHANA: 'HANA',
-      OPENGAUSS: 'OPEN_GAUSS',
-      SQLSERVER: 'SQL_SERVER',
-      MSSQL: 'SQL_SERVER',
-      YASHANDB: 'YASHAN_DB',
-      YASDB: 'YASHAN_DB',
-      HIGH_GO: 'HIGHGO',
-      HGDB: 'HIGHGO',
-      INTERSYSTEMS_IRIS: 'IRIS',
-      XUGUDB: 'XUGU',
-      DUCK_DB: 'DUCKDB',
-      STAR_ROCKS: 'STARROCKS',
-      KINGBASEES: 'KINGBASE',
-      DM: 'DAMENG',
-    }[normalized] || normalized;
-
-  return SQL_DIALECTS.has(normalized)
-    ? (normalized as DevelopmentSqlDialect)
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, '_')
+    .replace(/\s+/g, '_');
+  const aliased = SQL_DIALECT_ALIASES[normalized] || normalized;
+  return SQL_DIALECTS.has(aliased)
+    ? (aliased as DevelopmentSqlDialect)
     : 'GENERIC';
 };
 
