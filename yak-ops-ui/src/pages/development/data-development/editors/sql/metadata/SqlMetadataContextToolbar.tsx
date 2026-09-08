@@ -5,6 +5,10 @@ import { ChevronDown, Database, Layers3, Search, Server } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  getDevelopmentSqlDialectLabel,
+  sqlDialectMatchesDataSource,
+} from '../../../sqlDatabaseProfiles';
 import type { DevelopmentId } from '../../../types';
 import {
   selectSqlDatabaseContext,
@@ -120,7 +124,7 @@ const ContextPicker = ({
             );
           })
         ) : (
-          <div className="flex h-10 items-center justify-center text-[11px] text-[#98a2b3]">
+          <div className="flex h-10 items-center justify-center px-3 text-center text-[11px] text-[#98a2b3]">
             {intl.formatMessage({ id: 'pages.dataDevelopment.editor.sqlMetadata.noMatch' })}
           </div>
         )}
@@ -231,16 +235,37 @@ const SqlMetadataContextToolbar = ({
     };
   }, []);
 
+  const compatibleDataSources = useMemo(
+    () =>
+      dataSources.filter((item) =>
+        sqlDialectMatchesDataSource(context.dialect, item.dbType),
+      ),
+    [context.dialect, dataSources],
+  );
+
   useEffect(() => {
-    if (!context.dataSourceId || context.dataSourceName || !dataSources.length) return;
+    if (!context.dataSourceId || !dataSources.length) return;
     const selected = dataSources.find((item) => item.value === context.dataSourceId);
     if (!selected) return;
+
+    if (!sqlDialectMatchesDataSource(context.dialect, selected.dbType)) {
+      selectSqlDataSourceContext(nodeId, undefined);
+      return;
+    }
+
+    if (context.dataSourceName) return;
     selectSqlDataSourceContext(nodeId, {
       id: selected.value,
       name: selected.label,
       dbType: selected.dbType,
     });
-  }, [context.dataSourceId, context.dataSourceName, dataSources, nodeId]);
+  }, [
+    context.dataSourceId,
+    context.dataSourceName,
+    context.dialect,
+    dataSources,
+    nodeId,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -281,10 +306,12 @@ const SqlMetadataContextToolbar = ({
   const showSchemaPicker = Boolean(
     context.dataSourceId &&
       normalizedDbType &&
-      !['MYSQL', 'MARIADB', 'SQLITE'].includes(normalizedDbType),
+      !['MYSQL', 'TIDB', 'GOLDENDB', 'DORIS', 'STARROCKS'].includes(
+        normalizedDbType,
+      ),
   );
 
-  const dataSourceItems = dataSources.map((item) => ({
+  const dataSourceItems = compatibleDataSources.map((item) => ({
     value: item.value,
     label: `@${item.label}`,
     searchText: item.dbType,
@@ -305,6 +332,10 @@ const SqlMetadataContextToolbar = ({
   const schemaPlaceholder = bindingLoading
     ? intl.formatMessage({ id: 'pages.dataDevelopment.editor.sqlMetadata.loading' })
     : intl.formatMessage({ id: 'pages.dataDevelopment.editor.sqlMetadata.defaultSchema' });
+  const dataSourcePlaceholder =
+    context.dialect === 'GENERIC'
+      ? '@datasource'
+      : `@${getDevelopmentSqlDialectLabel(context.dialect)}`;
 
   return (
     <>
@@ -316,7 +347,7 @@ const SqlMetadataContextToolbar = ({
           ariaLabel={intl.formatMessage({ id: 'pages.dataDevelopment.editor.sqlMetadata.selectDataSource' })}
           value={context.dataSourceId}
           displayValue={context.dataSourceName ? `@${context.dataSourceName}` : undefined}
-          placeholder="@datasource"
+          placeholder={dataSourcePlaceholder}
           icon={
             <Server
               size={13}
@@ -326,10 +357,10 @@ const SqlMetadataContextToolbar = ({
           }
           items={dataSourceItems}
           loading={dataSourceLoading}
-          popupWidth={210}
+          popupWidth={230}
           minWidthClassName="min-w-[108px]"
           onSelect={(value) => {
-            const selected = dataSources.find((item) => item.value === value);
+            const selected = compatibleDataSources.find((item) => item.value === value);
             if (!selected) return;
             selectSqlDataSourceContext(nodeId, {
               id: selected.value,
