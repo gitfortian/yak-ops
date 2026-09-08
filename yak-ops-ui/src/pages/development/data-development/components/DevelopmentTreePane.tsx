@@ -179,6 +179,9 @@ const DevelopmentTreePane = ({
   onCollapsedChange,
 }: DevelopmentTreePaneProps) => {
   const intl = useIntl();
+  const chinese = intl.locale.toLowerCase().startsWith('zh');
+  const databaseGroupLabel = chinese ? '数据库' : 'Database';
+  const generalGroupLabel = chinese ? '通用' : 'General';
   const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<string[]>([]);
   const expansionInitializedRef = useRef(false);
 
@@ -197,7 +200,7 @@ const DevelopmentTreePane = ({
     () => [
       {
         key: 'database-group',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.databaseGroup' }),
+        label: databaseGroupLabel,
         icon: <Database size={14} strokeWidth={1.8} />,
         children: DATA_DEVELOPMENT_SQL_DATABASE_PROFILES.map((profile) => ({
           key: `create-sql-dialect:${profile.dialect}`,
@@ -207,7 +210,7 @@ const DevelopmentTreePane = ({
       },
       {
         key: 'general-group',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.generalGroup' }),
+        label: generalGroupLabel,
         icon: <Code2 size={14} strokeWidth={1.8} />,
         children: [
           {
@@ -239,7 +242,7 @@ const DevelopmentTreePane = ({
         icon: <Network size={14} strokeWidth={1.8} className="text-[#475467]" />,
       },
     ],
-    [intl],
+    [databaseGroupLabel, generalGroupLabel, intl],
   );
 
   const contextMenuItems = (node: DevelopmentTreeNode): MenuProps['items'] => {
