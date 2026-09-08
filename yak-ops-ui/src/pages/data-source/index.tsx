@@ -1,27 +1,18 @@
-import { useIntl } from '@umijs/max';
-import { message, Modal, Pagination, Spin } from 'antd';
-import { motion } from 'framer-motion';
-import { useRef } from 'react';
+import { useIntl } from "@umijs/max";
+import { message, Modal, Pagination, Spin } from "antd";
+import { motion } from "framer-motion";
+import { useRef } from "react";
 
-import AddOrEditDataSourceModal from './components/AddOrEditDataSourceModal';
-import DataSourceCard from './components/DataSourceCard';
-import DataSourceEmptyState from './components/DataSourceEmptyState';
-import DataSourcePageHeader from './components/DataSourcePageHeader';
-import DataSourceSummaryCards from './components/DataSourceSummaryCards';
-import DataSourceToolbar from './components/DataSourceToolbar';
-import {
-  DATA_SOURCE_PAGE_SIZE_OPTIONS,
-  PAGE_ANIMATION,
-} from './constants';
-import { useDataSourcePage } from './hooks/useDataSourcePage';
-import type {
-  DataSourceModalRef,
-  DataSourceRecord,
-} from './types';
-import {
-  DataSourceOperateType,
-  dataSourceRecordKey,
-} from './types';
+import AddOrEditDataSourceModal from "./components/AddOrEditDataSourceModal";
+import DataSourceCard from "./components/DataSourceCard";
+import DataSourceEmptyState from "./components/DataSourceEmptyState";
+import DataSourcePageHeader from "./components/DataSourcePageHeader";
+import DataSourceSummaryCards from "./components/DataSourceSummaryCards";
+import DataSourceToolbar from "./components/DataSourceToolbar";
+import { DATA_SOURCE_PAGE_SIZE_OPTIONS, PAGE_ANIMATION } from "./constants";
+import { useDataSourcePage } from "./hooks/useDataSourcePage";
+import type { DataSourceModalRef, DataSourceRecord } from "./types";
+import { DataSourceOperateType, dataSourceRecordKey } from "./types";
 
 const { confirm } = Modal;
 
@@ -82,28 +73,30 @@ const DataSourcePage = () => {
     if (!permissions.canDelete) return;
 
     confirm({
-      title: intl.formatMessage({ id: 'pages.datasource.delete.confirmTitle' }),
+      title: intl.formatMessage({ id: "pages.datasource.delete.confirmTitle" }),
       centered: true,
       content: (
         <span>
           {intl.formatMessage(
-            { id: 'pages.datasource.delete.content' },
-            { name: record.name || '-' },
+            { id: "pages.datasource.delete.content" },
+            { name: record.name || "-" }
           )}
           <br />
-          {intl.formatMessage({ id: 'pages.datasource.delete.warning' })}
+          {intl.formatMessage({ id: "pages.datasource.delete.warning" })}
         </span>
       ),
-      okText: intl.formatMessage({ id: 'pages.datasource.delete.okText' }),
-      cancelText: intl.formatMessage({ id: 'pages.datasource.delete.cancelText' }),
-      okType: 'primary',
-      okButtonProps: { size: 'small', danger: true },
-      cancelButtonProps: { size: 'small' },
+      okText: intl.formatMessage({ id: "pages.datasource.delete.okText" }),
+      cancelText: intl.formatMessage({
+        id: "pages.datasource.delete.cancelText",
+      }),
+      okType: "primary",
+      okButtonProps: { size: "small", danger: true },
+      cancelButtonProps: { size: "small" },
       maskClosable: true,
       async onOk() {
         if (record.id === undefined || record.id === null) {
           message.error(
-            intl.formatMessage({ id: 'pages.datasource.delete.idMissing' }),
+            intl.formatMessage({ id: "pages.datasource.delete.idMissing" })
           );
           return;
         }
@@ -112,7 +105,7 @@ const DataSourcePage = () => {
           const deleted = await removeRecord(record.id);
           if (deleted) {
             message.success(
-              intl.formatMessage({ id: 'pages.datasource.delete.success' }),
+              intl.formatMessage({ id: "pages.datasource.delete.success" })
             );
           }
         } catch {
@@ -127,7 +120,7 @@ const DataSourcePage = () => {
       const connected = await testRecord(record);
       if (connected) {
         message.success(
-          intl.formatMessage({ id: 'pages.datasource.test.success' }),
+          intl.formatMessage({ id: "pages.datasource.test.success" })
         );
       }
     } catch {
@@ -137,16 +130,18 @@ const DataSourcePage = () => {
 
   return (
     <>
-      <div className="min-h-[calc(100dvh-56px)] bg-[#f7f8fa] text-[#242731]">
+      <div className="min-h-[calc(100dvh-64px)] bg-[#f7f8fa] text-[#242731]">
         <motion.main
           initial="hidden"
           animate="visible"
           variants={PAGE_ANIMATION.sectionStagger}
-          className="px-4 pb-4 pt-4"
+          // className="px-4 pb-4 pt-4"
         >
           <motion.section
             variants={PAGE_ANIMATION.fadeUp}
-            className="flex min-h-[calc(100dvh-88px)] flex-col rounded-[20px] bg-white px-6 pb-4 pt-5 shadow-[0_2px_10px_rgba(31,35,41,0.025)] max-md:px-4"
+            className="flex min-h-[calc(100dvh-64px)] flex-col 
+             bg-white px-6 pb-4 pt-5 shadow-[0_2px_10px_rgba(31,35,41,0.025)] max-md:px-4"
+            style={{ borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
           >
             <div className="space-y-5">
               <DataSourcePageHeader
@@ -177,16 +172,16 @@ const DataSourcePage = () => {
                   initial="hidden"
                   animate="visible"
                   className={
-                    viewMode === 'list'
-                      ? 'grid grid-cols-1 gap-[14px]'
-                      : 'grid grid-cols-1 gap-[14px] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+                    viewMode === "list"
+                      ? "grid grid-cols-1 gap-[14px]"
+                      : "grid grid-cols-1 gap-[14px] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
                   }
                 >
                   {records.map((record, index) => (
                     <DataSourceCard
                       key={
                         dataSourceRecordKey(record.id) ||
-                        `${record.name || 'data-source'}-${index}`
+                        `${record.name || "data-source"}-${index}`
                       }
                       record={record}
                       viewMode={viewMode}
@@ -195,7 +190,9 @@ const DataSourcePage = () => {
                       editingId={editingId}
                       onEdit={(item) => void handleEdit(item)}
                       onDelete={handleDelete}
-                      onTestConnection={(item) => void handleTestConnection(item)}
+                      onTestConnection={(item) =>
+                        void handleTestConnection(item)
+                      }
                     />
                   ))}
                 </motion.section>
@@ -227,8 +224,8 @@ const DataSourcePage = () => {
                     disabled={loading}
                     showTotal={(total, range) =>
                       intl.formatMessage(
-                        { id: 'pages.datasource.pagination.total' },
-                        { start: range[0], end: range[1], total },
+                        { id: "pages.datasource.pagination.total" },
+                        { start: range[0], end: range[1], total }
                       )
                     }
                     onChange={changePage}
