@@ -459,15 +459,16 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
             }
           >
             <span>
-              <Button
+              <YakButton
                 type="primary"
                 loading={statusAction}
                 disabled={testing || saving || !canPublish}
                 icon={<Rocket size={13} />}
                 onClick={confirmPublish}
+                className={publishMoreItems.length ? '!rounded-r-[4px]' : undefined}
               >
                 {publishButtonText}
-              </Button>
+              </YakButton>
             </span>
           </Tooltip>
 
@@ -482,13 +483,13 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
                 },
               }}
             >
-              <Button
+              <YakButton
                 type="primary"
-                size="small"
+                iconOnly
                 aria-label={intl.formatMessage({ id: 'pages.workflow.editor.toolbar.morePublishActions' })}
                 disabled={testing || busy}
                 icon={<ChevronDown size={12} />}
-                className="!-ml-px !h-8 !w-7 !min-w-0 !rounded-[4px] !rounded-r-[7px] !border-l-white/30 !p-0 !shadow-none"
+                className="!-ml-px !rounded-l-[4px] !border-l-white/20"
               />
             </Dropdown>
           ) : null}
