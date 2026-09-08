@@ -11,7 +11,6 @@ import type {
 export type DevelopmentEditorPanelKey =
   | 'properties'
   | 'run-config'
-  | 'schedule-config'
   | 'versions';
 
 export interface DevelopmentEditorContext {
@@ -47,8 +46,8 @@ export interface DevelopmentEditorCapabilities {
   share: boolean;
   format?: boolean;
   properties: boolean;
+  /** Optional advanced runtime configuration; closed unless an editor explicitly implements it. */
   runConfig: boolean;
-  scheduleConfig: boolean;
   versions: boolean;
   lineage?: boolean;
 }
