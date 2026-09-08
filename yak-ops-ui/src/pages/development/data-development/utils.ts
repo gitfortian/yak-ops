@@ -3,6 +3,10 @@ import {
   DATA_DEVELOPMENT_MAX_TREE_WIDTH,
   DATA_DEVELOPMENT_MIN_TREE_WIDTH,
 } from './constants';
+import {
+  getDevelopmentResourceSqlDialect,
+  getDevelopmentSqlDialectLabel,
+} from './sqlDatabaseProfiles';
 import type {
   DevelopmentDirectory,
   DevelopmentId,
@@ -73,6 +77,11 @@ export const buildDevelopmentTreeData = (
         const parentPath = directoryId
           ? directoryPathMap.get(directoryId) || ''
           : '';
+        const sqlDialect =
+          node.type === 'SQL' ? getDevelopmentResourceSqlDialect(node) : undefined;
+        const displayType = sqlDialect
+          ? getDevelopmentSqlDialectLabel(sqlDialect)
+          : node.type;
         return {
           key: developmentNodeKey(node.id),
           title: node.name,
@@ -80,7 +89,8 @@ export const buildDevelopmentTreeData = (
           resourceId: node.id,
           resourcePath: `${parentPath}/${node.name}`,
           taskType: node.type,
-          searchText: `${node.name} ${node.type} ${node.id}`,
+          sqlDialect,
+          searchText: `${node.name} ${node.type} ${displayType} ${node.id}`,
           updatedBy: node.updatedBy,
           updateTime: node.updateTime,
           pendingPublish: node.pendingPublish,
