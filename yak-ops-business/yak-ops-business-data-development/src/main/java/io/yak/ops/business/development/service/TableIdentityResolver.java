@@ -62,17 +62,24 @@ public class TableIdentityResolver {
     }
   }
 
+  /**
+   * Lineage only needs SQL name-resolution families. Canonical task dialect parsing lives in the
+   * shared SPI model so authoring, runtime and lineage do not maintain separate alias rules.
+   */
   public enum SqlDialect {
     POSTGRESQL,
     MYSQL,
     UNKNOWN;
 
     public static SqlDialect from(String value) {
-      if (value == null) return UNKNOWN;
-      String normalized = value.trim().toLowerCase(Locale.ROOT);
-      if (normalized.contains("postgres")) return POSTGRESQL;
-      if (normalized.contains("mysql") || normalized.contains("mariadb")
-          || normalized.contains("doris")) return MYSQL;
+      final io.yak.ops.spi.task.model.SqlDialect dialect;
+      try {
+        dialect = io.yak.ops.spi.task.model.SqlDialect.parseOrGeneric(value);
+      } catch (IllegalArgumentException ignored) {
+        return UNKNOWN;
+      }
+      if (dialect.isPostgresFamily()) return POSTGRESQL;
+      if (dialect.isMysqlFamily()) return MYSQL;
       return UNKNOWN;
     }
   }
