@@ -224,7 +224,9 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
         "SELECT d.node_id, d.config_json FROM yak_dev_task_draft d "
             + "JOIN yak_dev_node n ON n.id = d.node_id "
             + "WHERE n.project_id = ? AND n.deleted = 0 AND UPPER(d.task_type) = 'SQL'",
-        rs -> result.put(rs.getLong("node_id"), parseSqlDialect(rs.getString("config_json"))),
+        rs -> {
+          result.put(rs.getLong("node_id"), parseSqlDialect(rs.getString("config_json")));
+        },
         projectId);
     return result;
   }
