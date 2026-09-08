@@ -1,9 +1,8 @@
 import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { useIntl } from '@umijs/max';
-import { message } from 'antd';
 import { RefreshCw, X } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type {
   DevelopmentEditorDefinition,
@@ -42,7 +41,6 @@ const panelDefinitions: Array<{
 }> = [
   { key: 'properties', messageId: 'pages.dataDevelopment.right.properties', capability: 'properties' },
   { key: 'run-config', messageId: 'pages.dataDevelopment.right.runConfig', capability: 'runConfig' },
-  { key: 'schedule-config', messageId: 'pages.dataDevelopment.right.scheduleConfig', capability: 'scheduleConfig' },
   { key: 'versions', messageId: 'pages.dataDevelopment.right.versions', capability: 'versions' },
 ];
 
@@ -61,7 +59,15 @@ const RightPanel = ({
   const items = useMemo(
     () =>
       panelDefinitions
-        .filter((item) => Boolean(definition.capabilities[item.capability]))
+        .filter((item) => {
+          if (!definition.capabilities[item.capability]) return false;
+          // Runtime config is intentionally opt-in: a tab is only useful when
+          // the editor provides a real interactive panel for it.
+          if (item.key === 'run-config') {
+            return Boolean(definition.panels?.['run-config']);
+          }
+          return true;
+        })
         .map((item) => ({
           ...item,
           label: intl.formatMessage({ id: item.messageId }),
@@ -69,6 +75,12 @@ const RightPanel = ({
     [definition, intl],
   );
   const activeItem = items.find((item) => item.key === activeTab);
+
+  useEffect(() => {
+    if (activeTab && !items.some((item) => item.key === activeTab)) {
+      setActiveTab(undefined);
+    }
+  }, [activeTab, items]);
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!activeTab) return;
@@ -138,29 +150,7 @@ const RightPanel = ({
       );
     }
 
-    if (activeTab === 'run-config') {
-      return (
-        <div className="text-[12px] leading-6 text-[#667085]">
-          <div className="font-medium text-[#344054]">
-            {intl.formatMessage({ id: 'pages.dataDevelopment.right.runConfig' })}
-          </div>
-          <div className="mt-2">
-            {intl.formatMessage({ id: 'pages.dataDevelopment.right.runConfigComing' })}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="text-[12px] leading-6 text-[#667085]">
-        <div className="font-medium text-[#344054]">
-          {intl.formatMessage({ id: 'pages.dataDevelopment.right.scheduleConfig' })}
-        </div>
-        <div className="mt-2">
-          {intl.formatMessage({ id: 'pages.dataDevelopment.right.scheduleConfigComing' })}
-        </div>
-      </div>
-    );
+    return null;
   };
 
   return (
@@ -189,26 +179,17 @@ const RightPanel = ({
             <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
               <span className="text-[13px] font-semibold text-[#30323b]">{activeItem?.label}</span>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title={intl.formatMessage({ id: 'pages.dataDevelopment.common.refresh' })}
-                  onClick={() => {
-                    if (activeTab === 'versions') {
-                      setManualRefreshKey((current) => current + 1);
-                    } else {
-                      message.info(
-                        intl.formatMessage(
-                          { id: 'pages.dataDevelopment.right.refreshComing' },
-                          { panel: activeItem?.label || '' },
-                        ),
-                      );
-                    }
-                  }}
-                  className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
-                >
-                  <RefreshCw size={13} strokeWidth={1.8} />
-                  {intl.formatMessage({ id: 'pages.dataDevelopment.common.refresh' })}
-                </button>
+                {activeTab === 'versions' ? (
+                  <button
+                    type="button"
+                    title={intl.formatMessage({ id: 'pages.dataDevelopment.common.refresh' })}
+                    onClick={() => setManualRefreshKey((current) => current + 1)}
+                    className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                  >
+                    <RefreshCw size={13} strokeWidth={1.8} />
+                    {intl.formatMessage({ id: 'pages.dataDevelopment.common.refresh' })}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   title={intl.formatMessage({ id: 'pages.dataDevelopment.tabs.close' })}
