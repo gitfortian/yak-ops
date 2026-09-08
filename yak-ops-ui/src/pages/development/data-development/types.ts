@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import type {
   DevelopmentId,
   DevelopmentNodeType,
+  DevelopmentSqlDialect,
 } from '@/services/data-development';
 import type { DataNode } from 'antd/es/tree';
 
@@ -17,6 +18,7 @@ export type DevelopmentNodeCreateType = DevelopmentNodeType;
 export type DevelopmentTreeAction =
   | 'create-directory'
   | 'create-sql'
+  | `create-sql-dialect:${DevelopmentSqlDialect}`
   | 'create-shell'
   | 'create-python'
   | 'create-java'
@@ -35,6 +37,7 @@ export interface DevelopmentTreeNode extends DataNode {
   resourceId: DevelopmentId;
   resourcePath: string;
   taskType?: DevelopmentNodeType;
+  sqlDialect?: DevelopmentSqlDialect;
   searchText?: string;
   updatedBy?: string | null;
   updateTime?: string;

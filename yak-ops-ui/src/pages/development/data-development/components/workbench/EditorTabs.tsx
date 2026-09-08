@@ -1,6 +1,6 @@
 import { useIntl } from '@umijs/max';
 import { Dropdown, Tooltip } from 'antd';
-import { Check, MoreHorizontal, X } from 'lucide-react';
+import { Check, Database, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { getEditorAppearance } from '../../editors/registry';
@@ -8,6 +8,10 @@ import {
   getEditorSession,
   useEditorSessionVersion,
 } from '../../editors/session/editorSessionStore';
+import {
+  getDevelopmentResourceSqlDialect,
+  getDevelopmentSqlDialectLabel,
+} from '../../sqlDatabaseProfiles';
 import type {
   DevelopmentId,
   DevelopmentResourceNode,
@@ -29,6 +33,17 @@ interface EditorTabsProps {
   onClose: (nodeId: DevelopmentId) => void;
   onAction: (action: EditorTabAction) => void;
 }
+
+const editorAppearanceForNode = (node: DevelopmentResourceNode) => {
+  const appearance = getEditorAppearance(node.type);
+  if (node.type !== 'SQL') return appearance;
+  return {
+    ...appearance,
+    label: getDevelopmentSqlDialectLabel(getDevelopmentResourceSqlDialect(node)),
+    icon: Database,
+    iconClassName: 'text-[#f79009]',
+  };
+};
 
 const EditorTabs = ({
   nodeMap,
@@ -70,7 +85,7 @@ const EditorTabs = ({
         children: openNodeIds.map((nodeId) => {
           const node = nodeMap.get(nodeId);
           const active = nodeId === activeNodeId;
-          const appearance = node ? getEditorAppearance(node.type) : undefined;
+          const appearance = node ? editorAppearanceForNode(node) : undefined;
           const Icon = appearance?.icon;
           return {
             key: `focus:${nodeId}`,
@@ -83,6 +98,11 @@ const EditorTabs = ({
               <div className="flex min-w-[190px] items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="max-w-[200px] truncate">{node?.name || nodeId}</span>
+                  {appearance ? (
+                    <span className="shrink-0 text-[10px] text-[#98a2b3]">
+                      {appearance.label}
+                    </span>
+                  ) : null}
                   {isDirty(nodeId) ? (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"
@@ -133,7 +153,7 @@ const EditorTabs = ({
             const node = nodeMap.get(nodeId);
             if (!node) return null;
             const active = nodeId === activeNodeId;
-            const appearance = getEditorAppearance(node.type);
+            const appearance = editorAppearanceForNode(node);
             const Icon = appearance.icon;
 
             return (
@@ -169,6 +189,11 @@ const EditorTabs = ({
                   ].join(' ')}>
                     {node.name}
                   </span>
+                  {node.type === 'SQL' ? (
+                    <span className="shrink-0 text-[9px] text-[#98a2b3]">
+                      {appearance.label}
+                    </span>
+                  ) : null}
                   {isDirty(nodeId) ? (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"

@@ -2,6 +2,7 @@ import { useIntl } from '@umijs/max';
 import { useMemo, useState } from 'react';
 
 import SqlResultWorkspace from '../../components/sql-result/SqlResultWorkspace';
+import { getDevelopmentSqlDialectLabel } from '../../sqlDatabaseProfiles';
 import {
   updateEditorSessionContent,
   updateEditorSessionViewState,
@@ -46,6 +47,7 @@ export const SqlEditor = ({
     ],
   );
   const noDataSource = intl.formatMessage({ id: 'pages.dataDevelopment.editor.noDataSource' });
+  const dialectLabel = getDevelopmentSqlDialectLabel(metadataContext.dialect);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
@@ -64,7 +66,7 @@ export const SqlEditor = ({
 
       <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#eef0f2] bg-[#fafafa] px-2.5 text-[10px] text-[#7b808a]">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="font-medium text-[#667085]">SQL</span>
+          <span className="font-medium text-[#667085]">{dialectLabel}</span>
           <span className="truncate">{node.name}</span>
           {session.dirty ? (
             <span className="inline-flex shrink-0 items-center gap-1 text-[#667085]">

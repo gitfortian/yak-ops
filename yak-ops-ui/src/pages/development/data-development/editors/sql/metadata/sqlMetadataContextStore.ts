@@ -57,7 +57,6 @@ const normalizePersistedContext = (
     nodeId: context.nodeId,
     dataSourceId: optionalString('dataSourceId'),
     dataSourceName: optionalString('dataSourceName'),
-    // v1 local storage used `dbType`; accept it while persisting the canonical dialect shape.
     dialect,
     dbType: dialect,
     database: optionalString('database'),
@@ -203,10 +202,14 @@ export const selectSqlDataSourceContext = (
   nodeId: DevelopmentId,
   dataSource?: { id: string; name?: string; dbType?: string },
 ) => {
+  const current = ensureSqlMetadataContext(nodeId);
+  const dialect = dataSource?.dbType
+    ? normalizeDevelopmentSqlDialect(dataSource.dbType)
+    : current.dialect;
   const next = updateSqlMetadataContext(nodeId, {
     dataSourceId: dataSource?.id,
     dataSourceName: dataSource?.name,
-    dialect: normalizeDevelopmentSqlDialect(dataSource?.dbType),
+    dialect,
     database: undefined,
     schema: undefined,
   });

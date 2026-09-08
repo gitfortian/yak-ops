@@ -2,10 +2,13 @@ package io.yak.ops.business.development.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.dao.mapper.DevelopmentNodeMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.common.bean.po.development.DevelopmentNodePO;
 import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.spi.task.model.SqlDialect;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +23,7 @@ import org.springframework.stereotype.Repository;
 public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeRepository {
 
   private static final long ROOT_DIRECTORY_ID = 0L;
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   private final DevelopmentNodeMapper mapper;
   private final JdbcTemplate jdbcTemplate;
@@ -60,7 +64,7 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
     po.setCreateTime(now);
     po.setUpdateTime(now);
     mapper.insert(po);
-    return toDomain(po, false);
+    return toDomain(po, false, null);
   }
 
   @Override
@@ -71,7 +75,10 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
                 new LambdaQueryWrapper<DevelopmentNodePO>()
                     .eq(DevelopmentNodePO::getId, id)
                     .eq(DevelopmentNodePO::getProjectId, projectId)))
-        .map(po -> toDomain(po, hasUnpublishedChanges(po.getId())));
+        .map(po -> toDomain(
+            po,
+            hasUnpublishedChanges(po.getId()),
+            loadSqlDialect(po.getId(), projectId)));
   }
 
   @Override
@@ -83,8 +90,12 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
             .orderByAsc(DevelopmentNodePO::getName)
             .orderByAsc(DevelopmentNodePO::getId));
     Map<Long, Boolean> pendingPublishByNodeId = loadPendingPublishByNodeId(projectId);
+    Map<Long, String> sqlDialectByNodeId = loadSqlDialectByNodeId(projectId);
     return nodes.stream()
-        .map(po -> toDomain(po, Boolean.TRUE.equals(pendingPublishByNodeId.get(po.getId()))))
+        .map(po -> toDomain(
+            po,
+            Boolean.TRUE.equals(pendingPublishByNodeId.get(po.getId())),
+            sqlDialectByNodeId.get(po.getId())))
         .toList();
   }
 
@@ -207,6 +218,52 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
     return result;
   }
 
+  private Map<Long, String> loadSqlDialectByNodeId(Long projectId) {
+    Map<Long, String> result = new HashMap<>();
+    jdbcTemplate.query(
+        "SELECT d.node_id, d.config_json FROM yak_dev_task_draft d "
+            + "JOIN yak_dev_node n ON n.id = d.node_id "
+            + "WHERE n.project_id = ? AND n.deleted = 0 AND UPPER(d.task_type) = 'SQL'",
+        rs -> {
+          result.put(rs.getLong("node_id"), parseSqlDialect(rs.getString("config_json")));
+        },
+        projectId);
+    return result;
+  }
+
+  private String loadSqlDialect(Long nodeId, Long projectId) {
+    List<String> values = jdbcTemplate.query(
+        "SELECT d.config_json FROM yak_dev_task_draft d "
+            + "JOIN yak_dev_node n ON n.id = d.node_id "
+            + "WHERE d.node_id = ? AND n.project_id = ? AND n.deleted = 0 "
+            + "AND UPPER(d.task_type) = 'SQL'",
+        (rs, rowNum) -> parseSqlDialect(rs.getString("config_json")),
+        nodeId,
+        projectId);
+    return values.isEmpty() ? null : values.get(0);
+  }
+
+  private String parseSqlDialect(String configJson) {
+    if (configJson == null || configJson.isBlank()) return SqlDialect.GENERIC.name();
+    try {
+      JsonNode root = OBJECT_MAPPER.readTree(configJson);
+      if (root == null || !root.isObject()) return SqlDialect.GENERIC.name();
+      String value = text(root, "dialect");
+      if (value == null) value = text(root, "databaseType");
+      if (value == null) value = text(root, "dbType");
+      return SqlDialect.parseOrGeneric(value).name();
+    } catch (Exception ignored) {
+      return SqlDialect.GENERIC.name();
+    }
+  }
+
+  private String text(JsonNode root, String key) {
+    JsonNode value = root.get(key);
+    if (value == null || value.isNull()) return null;
+    String text = value.asText();
+    return text == null || text.isBlank() ? null : text.trim();
+  }
+
   private boolean hasUnpublishedChanges(Long nodeId) {
     Long draftRevision = jdbcTemplate.queryForObject(
         "SELECT MAX(draft_revision) FROM yak_dev_task_draft WHERE node_id = ?",
@@ -221,7 +278,10 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
     return publishedDraftRevision == null || draftRevision > publishedDraftRevision;
   }
 
-  private DevelopmentNode toDomain(DevelopmentNodePO po, boolean pendingPublish) {
+  private DevelopmentNode toDomain(
+      DevelopmentNodePO po,
+      boolean pendingPublish,
+      String sqlDialect) {
     Long directoryId = po.getDirectoryId() == null || po.getDirectoryId() == ROOT_DIRECTORY_ID
         ? null
         : po.getDirectoryId();
@@ -235,6 +295,7 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
         po.getCreateTime(),
         po.getUpdateTime(),
         po.getUpdatedBy(),
-        pendingPublish);
+        pendingPublish,
+        "SQL".equalsIgnoreCase(po.getType()) ? sqlDialect : null);
   }
 }

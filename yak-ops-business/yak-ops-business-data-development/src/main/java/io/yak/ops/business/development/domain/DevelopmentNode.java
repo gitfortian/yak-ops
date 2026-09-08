@@ -15,7 +15,8 @@ public record DevelopmentNode(
     Instant createTime,
     Instant updateTime,
     String updatedBy,
-    boolean pendingPublish) {
+    boolean pendingPublish,
+    String sqlDialect) {
 
   /** Keeps existing callers source-compatible while tree metadata is populated by persistence. */
   public DevelopmentNode(
@@ -27,7 +28,23 @@ public record DevelopmentNode(
       boolean configured,
       Instant createTime,
       Instant updateTime) {
-    this(id, name, type, projectId, directoryId, configured, createTime, updateTime, null, false);
+    this(id, name, type, projectId, directoryId, configured, createTime, updateTime, null, false, null);
+  }
+
+  /** Keeps callers that already provide updater/publish metadata source-compatible. */
+  public DevelopmentNode(
+      Long id,
+      String name,
+      String type,
+      Long projectId,
+      Long directoryId,
+      boolean configured,
+      Instant createTime,
+      Instant updateTime,
+      String updatedBy,
+      boolean pendingPublish) {
+    this(id, name, type, projectId, directoryId, configured, createTime, updateTime, updatedBy,
+        pendingPublish, null);
   }
 
   /** Resolves the domain node type instead of spreading string parsing across application services. */

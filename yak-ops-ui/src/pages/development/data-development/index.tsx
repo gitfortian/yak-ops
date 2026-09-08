@@ -50,12 +50,13 @@ export default function DataDevelopmentPage() {
         <CreateDevelopmentNodeModal
           open={page.createNodeOpen}
           type={page.createNodeType}
+          sqlDialect={page.createSqlDialect}
           directories={page.directories}
           loading={page.nodeSaving}
           defaultDirectoryId={page.directoryIdForSelection}
           onCancel={page.closeCreateNode}
           onNext={(type, directoryId, name) =>
-            void page.submitNode(type, directoryId, name)
+            void page.submitNode(type, directoryId, name, page.createSqlDialect)
           }
         />
 
