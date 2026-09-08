@@ -1,3 +1,4 @@
+import { normalizeDevelopmentSqlDialect } from '@/services/data-development';
 import {
   DATA_DEVELOPMENT_DEFAULT_TREE_WIDTH,
   DATA_DEVELOPMENT_MAX_TREE_WIDTH,
@@ -12,6 +13,7 @@ import type {
   DevelopmentId,
   DevelopmentNodeType,
   DevelopmentResourceNode,
+  DevelopmentSqlDialect,
   DevelopmentTreeAction,
   DevelopmentTreeNode,
   DevelopmentTreeNodeKey,
@@ -50,13 +52,22 @@ export const parseDevelopmentTreeWidth = (storedValue: string | null) => {
 export const developmentNodeTypeForAction = (
   action: DevelopmentTreeAction,
 ): DevelopmentNodeType | undefined => {
-  if (action === 'create-sql') return 'SQL';
+  if (action === 'create-sql' || action.startsWith('create-sql-dialect:')) return 'SQL';
   if (action === 'create-shell') return 'SHELL';
   if (action === 'create-python') return 'PYTHON';
   if (action === 'create-java') return 'JAVA';
   if (action === 'create-dataset') return 'DATASET';
   if (action === 'create-data-service') return 'DATA_SERVICE';
   return undefined;
+};
+
+export const developmentSqlDialectForAction = (
+  action: DevelopmentTreeAction,
+): DevelopmentSqlDialect | undefined => {
+  const prefix = 'create-sql-dialect:';
+  if (!action.startsWith(prefix)) return undefined;
+  const dialect = normalizeDevelopmentSqlDialect(action.substring(prefix.length));
+  return dialect === 'GENERIC' ? undefined : dialect;
 };
 
 export const buildDevelopmentTreeData = (
