@@ -3,7 +3,9 @@ package io.yak.ops.business.development.task;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.spi.task.model.SqlDialect;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.util.Locale;
 import org.springframework.stereotype.Component;
@@ -39,19 +41,41 @@ public class DevelopmentTaskDefinitionNormalizer {
         normalizedType,
         schemaVersion,
         content == null ? "" : content,
-        normalizeConfigJson(configJson));
+        normalizeConfigJson(normalizedType, configJson));
   }
 
-  private String normalizeConfigJson(String configJson) {
+  private String normalizeConfigJson(String taskType, String configJson) {
     String raw = configJson == null || configJson.isBlank() ? "{}" : configJson.trim();
     try {
       JsonNode node = objectMapper.readTree(raw);
       if (node == null || !node.isObject()) {
         throw new IllegalArgumentException("configJson 必须是 JSON Object");
       }
-      return objectMapper.writeValueAsString(node);
+      ObjectNode object = (ObjectNode) node;
+      if ("SQL".equals(taskType)) {
+        normalizeSqlDialect(object);
+      }
+      return objectMapper.writeValueAsString(object);
     } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException("configJson 不是合法 JSON", exception);
     }
+  }
+
+  private void normalizeSqlDialect(ObjectNode config) {
+    String rawDialect = text(config, "dialect");
+    if (rawDialect == null) rawDialect = text(config, "databaseType");
+    if (rawDialect == null) rawDialect = text(config, "dbType");
+
+    SqlDialect dialect = SqlDialect.parseOrGeneric(rawDialect);
+    config.put("dialect", dialect.name());
+    config.remove("databaseType");
+    config.remove("dbType");
+  }
+
+  private String text(ObjectNode config, String key) {
+    JsonNode value = config.get(key);
+    if (value == null || value.isNull()) return null;
+    String text = value.asText();
+    return text == null || text.isBlank() ? null : text.trim();
   }
 }

@@ -2,13 +2,14 @@ package io.yak.ops.plugin.task.sql;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.spi.task.model.SqlDialect;
 
 /** SQL task plugin-owned schemaVersion=1 configuration. */
 record SqlTaskConfig(
     String dataSourceId,
     String databaseName,
     String schemaName,
-    String dialect,
+    SqlDialect dialect,
     int maxRows,
     int timeoutSeconds) {
 
@@ -39,7 +40,7 @@ record SqlTaskConfig(
           dataSourceId,
           firstText(root, "databaseName", "database", "catalog"),
           firstText(root, "schemaName", "schema"),
-          firstText(root, "dialect", "dbType"),
+          SqlDialect.parseOrGeneric(firstText(root, "dialect", "databaseType", "dbType")),
           maxRows,
           timeoutSeconds);
     } catch (IllegalArgumentException exception) {

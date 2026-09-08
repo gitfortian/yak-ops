@@ -1,23 +1,30 @@
-import { useSyncExternalStore } from "react";
+import {
+  normalizeDevelopmentSqlDialect,
+  parseDevelopmentSqlTaskConfig,
+  type DevelopmentSqlDialect,
+} from '@/services/data-development';
+import { useSyncExternalStore } from 'react';
 
-import { updateEditorSessionConfig } from "../../session/editorSessionStore";
-import type { DevelopmentId } from "../../../types";
+import { updateEditorSessionConfig } from '../../session/editorSessionStore';
+import type { DevelopmentId } from '../../../types';
 
 export interface SqlMetadataContext {
   nodeId: DevelopmentId;
   dataSourceId?: string;
   dataSourceName?: string;
-  dbType?: string;
+  dialect: DevelopmentSqlDialect;
+  /** @deprecated Compatibility alias for existing SQL-assistance code; use dialect. */
+  dbType?: DevelopmentSqlDialect;
   database?: string;
   schema?: string;
   updatedAt: number;
 }
 
-const STORAGE_KEY = "yak-data-development.sql-metadata-contexts.v1";
+const STORAGE_KEY = 'yak-data-development.sql-metadata-contexts.v1';
 
 interface PersistedSqlMetadataContexts {
   version: 1;
-  contexts: SqlMetadataContext[];
+  contexts: unknown[];
 }
 
 const contexts = new Map<DevelopmentId, SqlMetadataContext>();
@@ -26,22 +33,37 @@ const listeners = new Set<() => void>();
 let hydrated = false;
 let version = 0;
 
-const isBrowser = () => typeof window !== "undefined";
+const isBrowser = () => typeof window !== 'undefined';
 
-const isPersistedContext = (value: unknown): value is SqlMetadataContext => {
-  if (!value || typeof value !== "object") return false;
-  const context = value as Partial<SqlMetadataContext>;
-  return (
-    typeof context.nodeId === "string" &&
-    typeof context.updatedAt === "number" &&
-    (context.dataSourceId === undefined ||
-      typeof context.dataSourceId === "string") &&
-    (context.dataSourceName === undefined ||
-      typeof context.dataSourceName === "string") &&
-    (context.dbType === undefined || typeof context.dbType === "string") &&
-    (context.database === undefined || typeof context.database === "string") &&
-    (context.schema === undefined || typeof context.schema === "string")
+const normalizePersistedContext = (
+  value: unknown,
+): SqlMetadataContext | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const context = value as Record<string, unknown>;
+  if (
+    typeof context.nodeId !== 'string' ||
+    typeof context.updatedAt !== 'number'
+  ) {
+    return undefined;
+  }
+
+  const optionalString = (key: string) =>
+    typeof context[key] === 'string' ? (context[key] as string) : undefined;
+  const dialect = normalizeDevelopmentSqlDialect(
+    optionalString('dialect') || optionalString('dbType'),
   );
+
+  return {
+    nodeId: context.nodeId,
+    dataSourceId: optionalString('dataSourceId'),
+    dataSourceName: optionalString('dataSourceName'),
+    // v1 local storage used `dbType`; accept it while persisting the canonical dialect shape.
+    dialect,
+    dbType: dialect,
+    database: optionalString('database'),
+    schema: optionalString('schema'),
+    updatedAt: context.updatedAt,
+  };
 };
 
 const ensureHydrated = () => {
@@ -54,8 +76,9 @@ const ensureHydrated = () => {
     if (!raw) return;
     const parsed = JSON.parse(raw) as Partial<PersistedSqlMetadataContexts>;
     if (parsed.version !== 1 || !Array.isArray(parsed.contexts)) return;
-    parsed.contexts.forEach((context) => {
-      if (isPersistedContext(context)) contexts.set(context.nodeId, context);
+    parsed.contexts.forEach((value) => {
+      const context = normalizePersistedContext(value);
+      if (context) contexts.set(context.nodeId, context);
     });
   } catch {
     // Ignore malformed or unavailable local storage. SQL editing still works in memory.
@@ -98,8 +121,10 @@ const configJsonForContext = (context: Partial<SqlMetadataContext>) =>
         dataSourceId: context.dataSourceId,
         databaseName: context.database,
         schemaName: context.schema,
-        dialect: context.dbType,
-      }).filter(([, value]) => value !== undefined && value !== ""),
+        dialect: normalizeDevelopmentSqlDialect(
+          context.dialect ?? context.dbType,
+        ),
+      }).filter(([, value]) => value !== undefined && value !== ''),
     ),
   );
 
@@ -112,6 +137,8 @@ export const ensureSqlMetadataContext = (
 
   const context: SqlMetadataContext = {
     nodeId,
+    dialect: 'GENERIC',
+    dbType: 'GENERIC',
     updatedAt: Date.now(),
   };
   contexts.set(nodeId, context);
@@ -128,12 +155,17 @@ export const getSqlTaskConfigJson = (nodeId: DevelopmentId) =>
 
 export const updateSqlMetadataContext = (
   nodeId: DevelopmentId,
-  patch: Partial<Omit<SqlMetadataContext, "nodeId" | "updatedAt">>,
+  patch: Partial<Omit<SqlMetadataContext, 'nodeId' | 'updatedAt'>>,
 ) => {
   const current = ensureSqlMetadataContext(nodeId);
+  const dialect = normalizeDevelopmentSqlDialect(
+    patch.dialect ?? patch.dbType ?? current.dialect ?? current.dbType,
+  );
   const next: SqlMetadataContext = {
     ...current,
     ...patch,
+    dialect,
+    dbType: dialect,
     nodeId,
     updatedAt: Date.now(),
   };
@@ -147,38 +179,18 @@ export const hydrateSqlTaskConfig = (
   nodeId: DevelopmentId,
   configJson: string,
 ) => {
-  let dataSourceId: string | undefined;
-  let databaseName: string | undefined;
-  let schemaName: string | undefined;
-  let dialect: string | undefined;
-  try {
-    const parsed = JSON.parse(configJson || "{}") as {
-      dataSourceId?: unknown;
-      databaseName?: unknown;
-      schemaName?: unknown;
-      dialect?: unknown;
-    };
-    dataSourceId =
-      typeof parsed.dataSourceId === "string" ? parsed.dataSourceId : undefined;
-    databaseName =
-      typeof parsed.databaseName === "string" ? parsed.databaseName : undefined;
-    schemaName =
-      typeof parsed.schemaName === "string" ? parsed.schemaName : undefined;
-    dialect = typeof parsed.dialect === "string" ? parsed.dialect : undefined;
-  } catch {
-    dataSourceId = undefined;
-  }
-
+  const config = parseDevelopmentSqlTaskConfig(configJson);
   const current = ensureSqlMetadataContext(nodeId);
-  const sameDataSource = current.dataSourceId === dataSourceId;
+  const sameDataSource = current.dataSourceId === config.dataSourceId;
   const next: SqlMetadataContext = {
     ...current,
     nodeId,
-    dataSourceId,
+    dataSourceId: config.dataSourceId,
     dataSourceName: sameDataSource ? current.dataSourceName : undefined,
-    dbType: dialect ?? (sameDataSource ? current.dbType : undefined),
-    database: databaseName,
-    schema: schemaName,
+    dialect: config.dialect,
+    dbType: config.dialect,
+    database: config.databaseName,
+    schema: config.schemaName,
     updatedAt: Date.now(),
   };
   contexts.set(nodeId, next);
@@ -194,7 +206,7 @@ export const selectSqlDataSourceContext = (
   const next = updateSqlMetadataContext(nodeId, {
     dataSourceId: dataSource?.id,
     dataSourceName: dataSource?.name,
-    dbType: dataSource?.dbType,
+    dialect: normalizeDevelopmentSqlDialect(dataSource?.dbType),
     database: undefined,
     schema: undefined,
   });
