@@ -322,7 +322,7 @@ function EmptyIssues({ failed }: { failed: boolean }) {
         <img
           src={qualityEmptyIllustration}
           alt=""
-          className="h-[260px] w-[260px] object-contain"
+          className="h-[180px] w-[180px] object-contain"
         />
       )}
 

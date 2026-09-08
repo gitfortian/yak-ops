@@ -111,7 +111,7 @@ function WeChatQrHelp() {
         </div>
       )}
       <span className="text-center text-[11px] leading-5 text-[#888]">
-        微信扫码获取账号 / 密码
+        输入 <span style={{background: "rgba(0,0,0,0.03)", paddingLeft: 4, paddingRight: 4, borderRadius: 4}}>9527</span> 获取账号 / 密码
       </span>
     </div>
   );
