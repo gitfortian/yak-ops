@@ -35,6 +35,7 @@ import {
   developmentIdFromTreeKey,
   developmentNodeKey,
   developmentNodeTypeForAction,
+  developmentSqlDialectForAction,
   filterDevelopmentTreeData,
   parseDevelopmentTreeWidth,
 } from '../utils';
@@ -256,8 +257,6 @@ export const useDataDevelopmentPage = () => {
               baseRevision: 0,
             });
           } catch (error) {
-            // Dialect is part of the SQL authoring identity in PR2. Do not leave a half-created
-            // generic node behind when its initial dialect draft cannot be persisted.
             await deleteDevelopmentNode(created.id).catch(() => undefined);
             throw error;
           }
@@ -304,7 +303,7 @@ export const useDataDevelopmentPage = () => {
 
       const type = developmentNodeTypeForAction(action);
       if (type) {
-        openCreateNode(type);
+        openCreateNode(type, developmentSqlDialectForAction(action));
         return;
       }
       if (action === 'copy-name') {
