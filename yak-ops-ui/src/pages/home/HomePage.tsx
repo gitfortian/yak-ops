@@ -39,8 +39,6 @@ export default function HomePage() {
               <HomeResourceCenter />
             </aside>
           </div>
-
-          
         </main>
       </div>
     </div>
