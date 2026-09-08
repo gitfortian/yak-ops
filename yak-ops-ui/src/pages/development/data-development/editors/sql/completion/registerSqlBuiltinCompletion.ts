@@ -1,129 +1,19 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import {
-  SQL_BUILTIN_FUNCTIONS,
-  SQL_KEYWORDS,
-} from './sqlBuiltinCatalog';
-
-type SqlLexicalState =
-  | 'code'
-  | 'single-quote'
-  | 'double-quote'
-  | 'backtick'
-  | 'bracket-identifier'
-  | 'line-comment'
-  | 'block-comment';
+  getSqlEditorNodeId,
+  getSqlLexicalState,
+  getSqlTextBeforePosition,
+} from '../assistance/sqlTextContext';
+import { getSqlMetadataContext } from '../metadata/sqlMetadataContextStore';
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
 
 let providerDisposable: monaco.IDisposable | undefined;
 let providerConsumers = 0;
 
-const getTextBeforePosition = (
-  model: monaco.editor.ITextModel,
-  position: monaco.Position,
-) =>
-  model.getValueInRange(
-    new monaco.Range(1, 1, position.lineNumber, position.column),
-  );
-
-const getLexicalState = (text: string): SqlLexicalState => {
-  let state: SqlLexicalState = 'code';
-
-  for (let index = 0; index < text.length; index += 1) {
-    const current = text[index];
-    const next = text[index + 1];
-
-    if (state === 'line-comment') {
-      if (current === '\n') state = 'code';
-      continue;
-    }
-
-    if (state === 'block-comment') {
-      if (current === '*' && next === '/') {
-        state = 'code';
-        index += 1;
-      }
-      continue;
-    }
-
-    if (state === 'single-quote') {
-      if (current === '\\') {
-        index += 1;
-        continue;
-      }
-      if (current === "'" && next === "'") {
-        index += 1;
-        continue;
-      }
-      if (current === "'") state = 'code';
-      continue;
-    }
-
-    if (state === 'double-quote') {
-      if (current === '\\') {
-        index += 1;
-        continue;
-      }
-      if (current === '"' && next === '"') {
-        index += 1;
-        continue;
-      }
-      if (current === '"') state = 'code';
-      continue;
-    }
-
-    if (state === 'backtick') {
-      if (current === '\\') {
-        index += 1;
-        continue;
-      }
-      if (current === '`' && next === '`') {
-        index += 1;
-        continue;
-      }
-      if (current === '`') state = 'code';
-      continue;
-    }
-
-    if (state === 'bracket-identifier') {
-      if (current === ']' && next === ']') {
-        index += 1;
-        continue;
-      }
-      if (current === ']') state = 'code';
-      continue;
-    }
-
-    if (current === '-' && next === '-') {
-      state = 'line-comment';
-      index += 1;
-      continue;
-    }
-    if (current === '/' && next === '*') {
-      state = 'block-comment';
-      index += 1;
-      continue;
-    }
-    if (current === "'") {
-      state = 'single-quote';
-      continue;
-    }
-    if (current === '"') {
-      state = 'double-quote';
-      continue;
-    }
-    if (current === '`') {
-      state = 'backtick';
-      continue;
-    }
-    if (current === '[') {
-      state = 'bracket-identifier';
-    }
-  }
-
-  return state;
-};
-
 const formatCandidateName = (name: string, prefix: string) => {
+  const mixedCase = name !== name.toUpperCase() && name !== name.toLowerCase();
+  if (mixedCase) return name;
   if (prefix && prefix === prefix.toLowerCase()) return name.toLowerCase();
   return name;
 };
@@ -149,8 +39,8 @@ const shouldProvideCompletion = (
   position: monaco.Position,
   wordStartColumn: number,
 ) => {
-  const textBeforePosition = getTextBeforePosition(model, position);
-  if (getLexicalState(textBeforePosition) !== 'code') return false;
+  const textBeforePosition = getSqlTextBeforePosition(model, position);
+  if (getSqlLexicalState(textBeforePosition) !== 'code') return false;
 
   if (wordStartColumn > 1) {
     const characterBeforeWord = model.getValueInRange(
@@ -167,6 +57,12 @@ const shouldProvideCompletion = (
   return true;
 };
 
+const getProfileForModel = (model: monaco.editor.ITextModel) => {
+  const nodeId = getSqlEditorNodeId(model);
+  const context = nodeId ? getSqlMetadataContext(nodeId) : undefined;
+  return resolveSqlEditorProfile(context?.dialect);
+};
+
 const createProvider = () =>
   monaco.languages.registerCompletionItemProvider('sql', {
     provideCompletionItems: (model, position) => {
@@ -175,8 +71,9 @@ const createProvider = () =>
         return { suggestions: [] };
       }
 
+      const profile = getProfileForModel(model);
       const keywordSuggestions: monaco.languages.CompletionItem[] =
-        SQL_KEYWORDS.map((keyword) => ({
+        profile.keywords.map((keyword) => ({
           label: keyword,
           kind: monaco.languages.CompletionItemKind.Keyword,
           insertText: formatCandidateName(keyword, prefix),
@@ -187,7 +84,7 @@ const createProvider = () =>
         }));
 
       const functionSuggestions: monaco.languages.CompletionItem[] =
-        SQL_BUILTIN_FUNCTIONS.map((definition) => {
+        profile.functions.map((definition) => {
           const name = formatCandidateName(definition.name, prefix);
           return {
             label: definition.name,

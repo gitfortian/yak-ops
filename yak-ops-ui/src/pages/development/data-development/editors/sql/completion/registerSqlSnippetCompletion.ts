@@ -1,13 +1,21 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import {
+  getSqlEditorNodeId,
   getSqlLexicalState,
   getSqlTextBeforePosition,
 } from '../assistance/sqlTextContext';
-import { SQL_SNIPPETS } from './sqlSnippetCatalog';
+import { getSqlMetadataContext } from '../metadata/sqlMetadataContextStore';
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
 
 let providerDisposable: monaco.IDisposable | undefined;
 let providerConsumers = 0;
+
+const getProfileForModel = (model: monaco.editor.ITextModel) => {
+  const nodeId = getSqlEditorNodeId(model);
+  const context = nodeId ? getSqlMetadataContext(nodeId) : undefined;
+  return resolveSqlEditorProfile(context?.dialect);
+};
 
 const createProvider = () =>
   monaco.languages.registerCompletionItemProvider('sql', {
@@ -44,9 +52,10 @@ const createProvider = () =>
         position.lineNumber,
         word.endColumn,
       );
+      const profile = getProfileForModel(model);
 
       return {
-        suggestions: SQL_SNIPPETS.map((snippet, index) => ({
+        suggestions: profile.snippets.map((snippet, index) => ({
           label: snippet.label,
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertText: snippet.body,

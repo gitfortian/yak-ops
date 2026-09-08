@@ -1,3 +1,7 @@
+import type { DevelopmentSqlDialect } from '@/services/data-development';
+
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
+
 const protectSqlSegments = (sql: string) => {
   const segments: string[] = [];
   let output = '';
@@ -60,7 +64,10 @@ const protectSqlSegments = (sql: string) => {
 
     if (current === '/' && next === '*') {
       let end = index + 2;
-      while (end < sql.length && !(sql[end] === '*' && sql[end + 1] === '/')) {
+      while (
+        end < sql.length &&
+        !(sql[end] === '*' && sql[end + 1] === '/')
+      ) {
         end += 1;
       }
       end = Math.min(sql.length, end + 2);
@@ -83,18 +90,18 @@ const restoreSqlSegments = (sql: string, segments: string[]) =>
     sql,
   );
 
-const CLAUSE_PATTERN = [
-  'LEFT\\s+OUTER\\s+JOIN',
-  'RIGHT\\s+OUTER\\s+JOIN',
-  'FULL\\s+OUTER\\s+JOIN',
-  'LEFT\\s+JOIN',
-  'RIGHT\\s+JOIN',
-  'FULL\\s+JOIN',
-  'INNER\\s+JOIN',
-  'CROSS\\s+JOIN',
-  'GROUP\\s+BY',
-  'ORDER\\s+BY',
-  'UNION\\s+ALL',
+const BASE_CLAUSES = [
+  'LEFT OUTER JOIN',
+  'RIGHT OUTER JOIN',
+  'FULL OUTER JOIN',
+  'LEFT JOIN',
+  'RIGHT JOIN',
+  'FULL JOIN',
+  'INNER JOIN',
+  'CROSS JOIN',
+  'GROUP BY',
+  'ORDER BY',
+  'UNION ALL',
   'UNION',
   'FROM',
   'WHERE',
@@ -104,18 +111,40 @@ const CLAUSE_PATTERN = [
   'VALUES',
   'LIMIT',
   'OFFSET',
-].join('|');
+] as const;
 
-export const formatSqlText = (sql: string) => {
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const clausePattern = (value: string) =>
+  value
+    .trim()
+    .split(/\s+/)
+    .map(escapeRegExp)
+    .join('\\s+');
+
+const buildClausePattern = (dialect?: DevelopmentSqlDialect | string) => {
+  const profile = resolveSqlEditorProfile(dialect);
+  const clauses = [...BASE_CLAUSES, ...profile.formatterClauses].sort(
+    (left, right) => right.length - left.length,
+  );
+  return clauses.map(clausePattern).join('|');
+};
+
+export const formatSqlText = (
+  sql: string,
+  dialect?: DevelopmentSqlDialect | string,
+) => {
   if (!sql.trim()) return sql;
 
   const normalized = sql.replace(/\r\n?/g, '\n');
   const { output, segments } = protectSqlSegments(normalized);
+  const pattern = buildClausePattern(dialect);
 
   let formatted = output
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
-    .replace(new RegExp(`\\s+(${CLAUSE_PATTERN})\\s+`, 'gi'), '\n$1 ')
+    .replace(new RegExp(`\\s+(${pattern})\\s+`, 'gi'), '\n$1 ')
     .replace(/\s+(AND|OR)\s+/gi, '\n  $1 ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
