@@ -114,14 +114,8 @@ const WorkflowNodeInspector = ({
       <header className="shrink-0 bg-white">
         <div className="flex h-12 items-center gap-2 border-b border-[#eef0f2] px-4">
           <WorkflowNodeIcon taskType={node.data.taskType} size="sm" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold text-[#161823]">
-              {node.data.label}
-            </div>
-            <div className="mt-0.5 truncate text-[9px] text-[#98a2b3]">
-              {node.data.typeLabel || node.data.taskType ||
-                intl.formatMessage({ id: 'pages.workflow.editor.inspector.taskNode' })}
-            </div>
+          <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#161823]">
+            {node.data.label}
           </div>
 
           <div className="flex shrink-0 items-center gap-0.5">
