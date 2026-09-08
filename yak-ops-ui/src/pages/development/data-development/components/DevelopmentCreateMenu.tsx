@@ -80,6 +80,9 @@ const DevelopmentCreateMenu = ({
   const intl = useIntl();
   const [open, setOpen] = useState(false);
   const [level, setLevel] = useState<CreateMenuLevel>();
+  const chinese = intl.locale.toLowerCase().startsWith('zh');
+  const databaseLabel = chinese ? '数据库' : 'Database';
+  const generalLabel = chinese ? '通用' : 'General';
 
   const closeAnd = (action: () => void) => {
     action();
@@ -88,7 +91,7 @@ const DevelopmentCreateMenu = ({
   };
 
   const content = (
-    <div className="relative" onMouseLeave={() => undefined}>
+    <div className="relative">
       <MenuPanel>
         <MenuItem
           label={intl.formatMessage({ id: 'pages.dataDevelopment.workspace.createNode' })}
@@ -112,14 +115,14 @@ const DevelopmentCreateMenu = ({
         >
           <MenuPanel>
             <MenuItem
-              label={intl.formatMessage({ id: 'pages.dataDevelopment.workspace.databaseGroup' })}
+              label={databaseLabel}
               icon={<Database size={14} strokeWidth={1.8} />}
               arrow
               active={level === 'database'}
               onMouseEnter={() => setLevel('database')}
             />
             <MenuItem
-              label={intl.formatMessage({ id: 'pages.dataDevelopment.workspace.generalGroup' })}
+              label={generalLabel}
               icon={<Code2 size={14} strokeWidth={1.8} />}
               arrow
               active={level === 'general'}
