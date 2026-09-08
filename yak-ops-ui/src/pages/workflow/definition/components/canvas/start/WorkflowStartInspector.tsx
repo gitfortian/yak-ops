@@ -373,12 +373,11 @@ const WorkflowStartInspector = ({
 
         <header className="shrink-0 bg-white">
           <div className="flex h-12 items-center gap-2 border-b border-[#eef0f2] px-4">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#0b7a45] bg-[#079455] text-white">
-              <PlayIcon />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-white/20 bg-[#155eef] text-white shadow-[0_1px_2px_rgba(16,24,40,.08)]">
+              <DifyStartIcon />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold text-[#161823]">{startLabel}</div>
-              <div className="mt-0.5 truncate text-[9px] text-[#98a2b3]">{workflowName}</div>
+            <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#161823]">
+              {startLabel}
             </div>
             <button
               type="button"
@@ -410,13 +409,8 @@ const WorkflowStartInspector = ({
         <div className="min-h-0 flex-1 overflow-y-auto">
           {activeTab === 'settings' ? (
             <div className="pb-6">
-              <div className="px-4 py-4 text-[11px] leading-5 text-[#667085]">
-                {intl.formatMessage({ id: 'pages.workflow.editor.startInspector.descriptionText' })}
-              </div>
-
               <StartSection
                 title={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.inputs' })}
-                description={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.inputsHint' })}
                 action={
                   !locked ? (
                     <button
@@ -439,7 +433,6 @@ const WorkflowStartInspector = ({
 
               <StartSection
                 title={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.variables' })}
-                description={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.variablesHint' })}
                 action={
                   !locked ? (
                     <button
@@ -462,7 +455,6 @@ const WorkflowStartInspector = ({
 
               <StartSection
                 title={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.systemVariables' })}
-                description={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.systemVariablesHint' })}
               >
                 {systemVariables.map((item) => (
                   <div key={item.name} className="flex min-h-[44px] items-center gap-2 border-b border-[#f0f1f3] px-1 py-2 last:border-b-0">
@@ -633,37 +625,62 @@ const WorkflowStartInspector = ({
   );
 };
 
-const PlayIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-    <path d="M3 2.25L8.25 5.5L3 8.75V2.25Z" fill="currentColor" />
+const DifyStartIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+    className="h-4 w-4"
+  >
+    <circle
+      cx="7.1"
+      cy="5.45"
+      r="2.35"
+      stroke="currentColor"
+      strokeWidth="1.75"
+    />
+    <path
+      d="M2.85 14.35c.45-2.65 2.05-4.05 4.35-4.05 1.26 0 2.3.32 3.08.95"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+    />
+    <path
+      d="m11.55 14.55 3.25-3.25a1.75 1.75 0 1 1 2.48 2.48l-3.25 3.25a1.75 1.75 0 0 1-2.48 0"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="m14.2 13.2-3.25 3.25a1.75 1.75 0 0 1-2.48-2.48l2.35-2.35"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const StartDot = () => (
-  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#079455] text-white">
-    <PlayIcon />
+  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#155eef] text-white shadow-[0_1px_2px_rgba(16,24,40,.08)]">
+    <DifyStartIcon />
   </span>
 );
 
 const StartSection = ({
   title,
-  description,
   action,
   children,
 }: {
   title: string;
-  description?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <section className="border-t border-[#f0f1f3] px-4 py-4 first:border-t-0">
     <div className="mb-2 flex items-start justify-between gap-3">
-      <div>
-        <div className="text-[12px] font-semibold text-[#344054]">{title}</div>
-        {description ? (
-          <div className="mt-0.5 text-[9px] leading-4 text-[#98a2b3]">{description}</div>
-        ) : null}
-      </div>
+      <div className="text-[12px] font-semibold text-[#344054]">{title}</div>
       {action}
     </div>
     {children}
