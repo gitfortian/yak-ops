@@ -1,4 +1,5 @@
 import { YakButton, YakEmpty } from '@/components/ui';
+import type { DevelopmentSqlDialect } from '@/services/data-development';
 import { useIntl } from '@umijs/max';
 import type { MenuProps, TreeProps } from 'antd';
 import { Dropdown, Input, Spin, Tooltip, Tree } from 'antd';
@@ -25,6 +26,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import JavaIcon from '@/components/data-development/icons/JavaIcon';
 import PythonIcon from '@/components/data-development/icons/PythonIcon';
+import DevelopmentCreateMenu from './DevelopmentCreateMenu';
+import {
+  DATA_DEVELOPMENT_SQL_DATABASE_PROFILES,
+  getDevelopmentSqlDialectLabel,
+} from '../sqlDatabaseProfiles';
 import type {
   DevelopmentNodeCreateType,
   DevelopmentTreeAction,
@@ -46,7 +52,10 @@ interface DevelopmentTreePaneProps {
   leftWidth: number;
   collapsed: boolean;
   onCreateDirectory: () => void;
-  onCreateNode: (type: DevelopmentNodeCreateType) => void;
+  onCreateNode: (
+    type: DevelopmentNodeCreateType,
+    sqlDialect?: DevelopmentSqlDialect,
+  ) => void;
   onResourceAction: (
     action: DevelopmentTreeAction,
     node: DevelopmentTreeNode,
@@ -65,14 +74,17 @@ const nodeTypeIconClassName = (taskType?: string) => {
   return 'text-[#667085]';
 };
 
-const nodeIcon = (taskType?: string): ReactNode => {
+const nodeIcon = (
+  taskType?: string,
+  _sqlDialect?: DevelopmentSqlDialect,
+): ReactNode => {
   const className = `shrink-0 ${nodeTypeIconClassName(taskType)}`;
   if (taskType === 'SHELL') {
     return <TerminalSquare size={13} strokeWidth={1.8} className={className} />;
   }
   if (taskType === 'PYTHON') return <PythonIcon size={13} />;
   if (taskType === 'JAVA') return <JavaIcon size={13} />;
-  if (taskType === 'DATASET') {
+  if (taskType === 'SQL' || taskType === 'DATASET') {
     return <Database size={13} strokeWidth={1.8} className={className} />;
   }
   if (taskType === 'DATA_SERVICE') {
@@ -140,18 +152,6 @@ const collectExpandedDirectoryKeys = (
       : childKeys;
   });
 
-const createTypeForMenuKey = (
-  key: string,
-): DevelopmentNodeCreateType | undefined => {
-  if (key === 'node-sql' || key === 'create-sql') return 'SQL';
-  if (key === 'node-shell' || key === 'create-shell') return 'SHELL';
-  if (key === 'node-python' || key === 'create-python') return 'PYTHON';
-  if (key === 'node-java' || key === 'create-java') return 'JAVA';
-  if (key === 'node-dataset' || key === 'create-dataset') return 'DATASET';
-  if (key === 'node-data-service' || key === 'create-data-service') return 'DATA_SERVICE';
-  return undefined;
-};
-
 const padTimePart = (value: number) => String(value).padStart(2, '0');
 const formatUpdateTime = (value?: string) => {
   if (!value) return '';
@@ -196,53 +196,51 @@ const DevelopmentTreePane = ({
   const nodeCreateItems = useMemo<NonNullable<MenuProps['items']>>(
     () => [
       {
-        key: 'node-sql',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.sqlNode' }),
-        icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
+        key: 'database-group',
+        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.databaseGroup' }),
+        icon: <Database size={14} strokeWidth={1.8} />,
+        children: DATA_DEVELOPMENT_SQL_DATABASE_PROFILES.map((profile) => ({
+          key: `create-sql-dialect:${profile.dialect}`,
+          label: profile.label,
+          icon: <Database size={13} strokeWidth={1.7} className="text-[#f79009]" />,
+        })),
       },
       {
-        key: 'node-shell',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.shellNode' }),
-        icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
-      },
-      {
-        key: 'node-python',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.pythonNode' }),
-        icon: <PythonIcon size={14} />,
-      },
-      {
-        key: 'node-java',
-        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.javaNode' }),
-        icon: <JavaIcon size={14} />,
+        key: 'general-group',
+        label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.generalGroup' }),
+        icon: <Code2 size={14} strokeWidth={1.8} />,
+        children: [
+          {
+            key: 'create-shell',
+            label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.shellNode' }),
+            icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
+          },
+          {
+            key: 'create-python',
+            label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.pythonNode' }),
+            icon: <PythonIcon size={14} />,
+          },
+          {
+            key: 'create-java',
+            label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.javaNode' }),
+            icon: <JavaIcon size={14} />,
+          },
+        ],
       },
       { type: 'divider' },
       {
-        key: 'node-dataset',
+        key: 'create-dataset',
         label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.datasetNode' }),
         icon: <Database size={14} strokeWidth={1.8} className="text-[#667085]" />,
       },
       {
-        key: 'node-data-service',
+        key: 'create-data-service',
         label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.dataServiceNode' }),
         icon: <Network size={14} strokeWidth={1.8} className="text-[#475467]" />,
       },
     ],
     [intl],
   );
-
-  const createMenuItems: MenuProps['items'] = [
-    {
-      key: 'node',
-      label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.createNode' }),
-      icon: <Code2 size={14} strokeWidth={1.8} />,
-      children: nodeCreateItems,
-    },
-    {
-      key: 'directory',
-      label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.createDirectory' }),
-      icon: <FolderPlus size={14} strokeWidth={1.8} />,
-    },
-  ];
 
   const contextMenuItems = (node: DevelopmentTreeNode): MenuProps['items'] => {
     const commonItems: MenuProps['items'] = [
@@ -281,10 +279,7 @@ const DevelopmentTreePane = ({
         key: 'create-node',
         label: intl.formatMessage({ id: 'pages.dataDevelopment.workspace.createNode' }),
         icon: <Code2 size={14} strokeWidth={1.8} />,
-        children: nodeCreateItems.map((item) => {
-          if (!item || item.type === 'divider') return item;
-          return { ...item, key: String(item.key).replace('node-', 'create-') };
-        }),
+        children: nodeCreateItems,
       },
       {
         key: 'create-directory',
@@ -312,6 +307,10 @@ const DevelopmentTreePane = ({
     ]
       .filter(Boolean)
       .join(' ');
+    const displayType =
+      node.taskType === 'SQL'
+        ? getDevelopmentSqlDialectLabel(node.sqlDialect)
+        : node.taskType;
 
     return (
       <Dropdown
@@ -336,7 +335,7 @@ const DevelopmentTreePane = ({
             </Tooltip>
           ) : null}
           {isNode ? (
-            nodeIcon(node.taskType)
+            nodeIcon(node.taskType, node.sqlDialect)
           ) : (
             <DevelopmentFolderIcon expanded={expandedDirectoryKeys.includes(node.key)} />
           )}
@@ -351,8 +350,8 @@ const DevelopmentTreePane = ({
           {isNode && updateMeta ? (
             <span className="min-w-0 flex-1 truncate text-[11px] text-[#98a2b3]">{updateMeta}</span>
           ) : null}
-          {isNode && node.taskType ? (
-            <span className="shrink-0 text-[10px] text-[#98a2b3]">{node.taskType}</span>
+          {isNode && displayType ? (
+            <span className="shrink-0 text-[10px] text-[#98a2b3]">{displayType}</span>
           ) : null}
         </div>
       </Dropdown>
@@ -370,23 +369,9 @@ const DevelopmentTreePane = ({
             <span className="text-[13px] font-semibold text-[#30323b]">
               {intl.formatMessage({ id: 'pages.dataDevelopment.workspace.catalog' })}
             </span>
-            <Dropdown
-              trigger={['click']}
-              placement="bottomRight"
-              menu={{
-                items: createMenuItems,
-                triggerSubMenuAction: 'hover',
-                subMenuOpenDelay: 0.05,
-                subMenuCloseDelay: 0.1,
-                onClick: ({ key }) => {
-                  if (key === 'directory') {
-                    onCreateDirectory();
-                    return;
-                  }
-                  const type = createTypeForMenuKey(key);
-                  if (type) onCreateNode(type);
-                },
-              }}
+            <DevelopmentCreateMenu
+              onCreateDirectory={onCreateDirectory}
+              onCreateNode={onCreateNode}
             >
               <Tooltip
                 title={intl.formatMessage({ id: 'pages.dataDevelopment.workspace.create' })}
@@ -401,7 +386,7 @@ const DevelopmentTreePane = ({
                   className="!h-7 !w-7 !p-0 hover:!bg-white"
                 />
               </Tooltip>
-            </Dropdown>
+            </DevelopmentCreateMenu>
           </div>
 
           <div className="flex h-9 shrink-0 items-center border-b border-[#e8e9ec] px-2.5">
