@@ -91,6 +91,8 @@ public class DevelopmentTaskService {
   public DevelopmentTaskDraft getDraft(Long nodeId) {
     DevelopmentNode node = nodes.requireTaskNode(nodeId);
     DevelopmentTaskDraft draft = drafts.get(node);
+    if (!"SQL".equalsIgnoreCase(node.type())) return draft;
+
     TaskDefinition normalized = definitions.normalize(
         node,
         draft.definition().taskType(),
