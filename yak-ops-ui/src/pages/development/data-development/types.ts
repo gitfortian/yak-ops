@@ -18,6 +18,7 @@ export type DevelopmentNodeCreateType = DevelopmentNodeType;
 export type DevelopmentTreeAction =
   | 'create-directory'
   | 'create-sql'
+  | `create-sql-dialect:${DevelopmentSqlDialect}`
   | 'create-shell'
   | 'create-python'
   | 'create-java'
