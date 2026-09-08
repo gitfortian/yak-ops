@@ -13,6 +13,8 @@ export interface SqlMetadataContext {
   dataSourceId?: string;
   dataSourceName?: string;
   dialect: DevelopmentSqlDialect;
+  /** @deprecated Compatibility alias for existing SQL-assistance code; use dialect. */
+  dbType?: DevelopmentSqlDialect;
   database?: string;
   schema?: string;
   updatedAt: number;
@@ -47,15 +49,17 @@ const normalizePersistedContext = (
 
   const optionalString = (key: string) =>
     typeof context[key] === 'string' ? (context[key] as string) : undefined;
+  const dialect = normalizeDevelopmentSqlDialect(
+    optionalString('dialect') || optionalString('dbType'),
+  );
 
   return {
     nodeId: context.nodeId,
     dataSourceId: optionalString('dataSourceId'),
     dataSourceName: optionalString('dataSourceName'),
     // v1 local storage used `dbType`; accept it while persisting the canonical dialect shape.
-    dialect: normalizeDevelopmentSqlDialect(
-      optionalString('dialect') || optionalString('dbType'),
-    ),
+    dialect,
+    dbType: dialect,
     database: optionalString('database'),
     schema: optionalString('schema'),
     updatedAt: context.updatedAt,
@@ -117,7 +121,9 @@ const configJsonForContext = (context: Partial<SqlMetadataContext>) =>
         dataSourceId: context.dataSourceId,
         databaseName: context.database,
         schemaName: context.schema,
-        dialect: normalizeDevelopmentSqlDialect(context.dialect),
+        dialect: normalizeDevelopmentSqlDialect(
+          context.dialect ?? context.dbType,
+        ),
       }).filter(([, value]) => value !== undefined && value !== ''),
     ),
   );
@@ -132,6 +138,7 @@ export const ensureSqlMetadataContext = (
   const context: SqlMetadataContext = {
     nodeId,
     dialect: 'GENERIC',
+    dbType: 'GENERIC',
     updatedAt: Date.now(),
   };
   contexts.set(nodeId, context);
@@ -151,10 +158,14 @@ export const updateSqlMetadataContext = (
   patch: Partial<Omit<SqlMetadataContext, 'nodeId' | 'updatedAt'>>,
 ) => {
   const current = ensureSqlMetadataContext(nodeId);
+  const dialect = normalizeDevelopmentSqlDialect(
+    patch.dialect ?? patch.dbType ?? current.dialect ?? current.dbType,
+  );
   const next: SqlMetadataContext = {
     ...current,
     ...patch,
-    dialect: normalizeDevelopmentSqlDialect(patch.dialect ?? current.dialect),
+    dialect,
+    dbType: dialect,
     nodeId,
     updatedAt: Date.now(),
   };
@@ -177,6 +188,7 @@ export const hydrateSqlTaskConfig = (
     dataSourceId: config.dataSourceId,
     dataSourceName: sameDataSource ? current.dataSourceName : undefined,
     dialect: config.dialect,
+    dbType: config.dialect,
     database: config.databaseName,
     schema: config.schemaName,
     updatedAt: Date.now(),
