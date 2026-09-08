@@ -10,7 +10,7 @@ import { useForm } from "antd/es/form/Form";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 
-const WECHAT_QR_CODE_SRC = "/wechat-official-account-qr.png";
+const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 const FORM_ITEM_CLASS_NAME =
   "!mb-5 [&_.ant-form-item-explain]:!pt-1.5 [&_.ant-form-item-explain-error]:!text-[12px] [&_.ant-form-item-explain-error]:!leading-[18px] [&_.ant-form-item-explain-error]:!text-[#b42318]";
 
