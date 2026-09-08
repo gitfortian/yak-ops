@@ -1,12 +1,12 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
-import { SQL_BUILTIN_FUNCTIONS } from '../completion/sqlBuiltinCatalog';
 import { loadSqlColumns, loadSqlTables } from '../metadata/sqlMetadataCache';
 import { getSqlMetadataContext } from '../metadata/sqlMetadataContextStore';
 import type {
   SqlCatalogColumn,
   SqlCatalogTable,
 } from '../metadata/sqlMetadataService';
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
 import {
   findSqlTableReference,
   getCurrentSqlStatementText,
@@ -20,10 +20,6 @@ import {
 
 let providerDisposable: monaco.IDisposable | undefined;
 let providerConsumers = 0;
-
-const builtinFunctionMap = new Map(
-  SQL_BUILTIN_FUNCTIONS.map((definition) => [definition.name.toUpperCase(), definition]),
-);
 
 const escapeMarkdown = (value: string) =>
   value.replace(/([\\`*_{}\[\]()#+\-.!|>])/g, '\\$1');
@@ -135,7 +131,13 @@ const provideHover = async (
   if (getSqlLexicalState(textBeforePosition) !== 'code') return undefined;
 
   const range = wordRange(position, word);
-  const builtin = builtinFunctionMap.get(word.word.toUpperCase());
+  const nodeId = getSqlEditorNodeId(model);
+  const context = nodeId ? getSqlMetadataContext(nodeId) : undefined;
+  const profile = resolveSqlEditorProfile(context?.dialect);
+  const builtin = profile.functions.find(
+    (definition) =>
+      definition.name.toUpperCase() === word.word.toUpperCase(),
+  );
   if (builtin && isFunctionCall(model, position, word)) {
     return {
       range,
@@ -146,8 +148,6 @@ const provideHover = async (
     };
   }
 
-  const nodeId = getSqlEditorNodeId(model);
-  const context = nodeId ? getSqlMetadataContext(nodeId) : undefined;
   if (!context?.dataSourceId) return undefined;
 
   const references = parseSqlTableReferences(

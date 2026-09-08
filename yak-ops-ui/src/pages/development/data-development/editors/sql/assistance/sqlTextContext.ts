@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import type { DevelopmentId } from '../../../types';
 import type { SqlMetadataContext } from '../metadata/sqlMetadataContextStore';
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
 
 export type SqlLexicalState =
   | 'code'
@@ -201,10 +202,8 @@ const tableReferenceFromParts = (
 
   if (parts.length === 2) {
     const first = parts[0];
-    const mysqlLike = ['MYSQL', 'MARIADB', 'DORIS'].includes(
-      (context.dbType || '').toUpperCase(),
-    );
-    return mysqlLike
+    const profile = resolveSqlEditorProfile(context.dialect);
+    return profile.twoPartNamespace === 'database'
       ? { database: first, table, alias }
       : { database: context.database, schema: first, table, alias };
   }

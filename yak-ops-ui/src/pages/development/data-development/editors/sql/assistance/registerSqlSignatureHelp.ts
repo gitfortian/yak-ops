@@ -1,6 +1,8 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
-import { SQL_BUILTIN_FUNCTIONS } from '../completion/sqlBuiltinCatalog';
+import { getSqlMetadataContext } from '../metadata/sqlMetadataContextStore';
+import { resolveSqlEditorProfile } from '../profiles/sqlEditorProfiles';
+import { getSqlEditorNodeId } from './sqlTextContext';
 
 interface FunctionFrame {
   name?: string;
@@ -18,14 +20,13 @@ type ScanState =
 let providerDisposable: monaco.IDisposable | undefined;
 let providerConsumers = 0;
 
-const functionMap = new Map(
-  SQL_BUILTIN_FUNCTIONS.map((definition) => [definition.name.toUpperCase(), definition]),
-);
-
 const previousIdentifier = (text: string, offset: number) =>
   text.slice(0, offset).match(/([A-Za-z_][\w$]*)\s*$/)?.[1];
 
-const findActiveFunction = (text: string): FunctionFrame | undefined => {
+const findActiveFunction = (
+  text: string,
+  functionNames: ReadonlySet<string>,
+): FunctionFrame | undefined => {
   const stack: FunctionFrame[] = [];
   let state: ScanState = 'code';
 
@@ -108,7 +109,7 @@ const findActiveFunction = (text: string): FunctionFrame | undefined => {
 
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const frame = stack[index];
-    if (frame.name && functionMap.has(frame.name.toUpperCase())) return frame;
+    if (frame.name && functionNames.has(frame.name.toUpperCase())) return frame;
   }
   return undefined;
 };
@@ -131,7 +132,16 @@ const createProvider = () =>
       const text = model.getValueInRange(
         new monaco.Range(1, 1, position.lineNumber, position.column),
       );
-      const frame = findActiveFunction(text);
+      const nodeId = getSqlEditorNodeId(model);
+      const context = nodeId ? getSqlMetadataContext(nodeId) : undefined;
+      const profile = resolveSqlEditorProfile(context?.dialect);
+      const functionMap = new Map(
+        profile.functions.map((definition) => [
+          definition.name.toUpperCase(),
+          definition,
+        ]),
+      );
+      const frame = findActiveFunction(text, new Set(functionMap.keys()));
       if (!frame?.name) return undefined;
 
       const definition = functionMap.get(frame.name.toUpperCase());

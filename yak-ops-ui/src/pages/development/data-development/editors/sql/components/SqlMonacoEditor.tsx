@@ -22,6 +22,7 @@ import {
   subscribeYakEditorSettings,
 } from '../editorSettings';
 import { formatSqlText } from '../formatting/formatSqlText';
+import { getSqlMetadataContext } from '../metadata/sqlMetadataContextStore';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 import {
   getSqlStatementRanges,
@@ -282,7 +283,10 @@ const SqlMonacoEditor = ({
         return;
       }
       if (command === 'format' && !readOnly) {
-        const formatted = formatSqlText(model.getValue());
+        const formatted = formatSqlText(
+          model.getValue(),
+          getSqlMetadataContext(id)?.dialect,
+        );
         if (formatted === model.getValue()) return;
         editor.pushUndoStop();
         editor.executeEdits('yak-sql-format', [{ range: model.getFullModelRange(), text: formatted, forceMoveMarkers: true }]);
