@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import type {
   DevelopmentId,
   DevelopmentNodeType,
+  DevelopmentSqlDialect,
 } from '@/services/data-development';
 import type { DataNode } from 'antd/es/tree';
 
@@ -35,6 +36,7 @@ export interface DevelopmentTreeNode extends DataNode {
   resourceId: DevelopmentId;
   resourcePath: string;
   taskType?: DevelopmentNodeType;
+  sqlDialect?: DevelopmentSqlDialect;
   searchText?: string;
   updatedBy?: string | null;
   updateTime?: string;
