@@ -167,6 +167,7 @@ const WorkflowDefinitionContent = () => {
   const [failureStrategy, setFailureStrategy] = useState<WorkflowFailureStrategy>('CONTINUE_INDEPENDENT_BRANCHES');
   const [startConfig, setStartConfig] = useState<WorkflowStartConfig>(DEFAULT_START_CONFIG);
   const [startSelected, setStartSelected] = useState(false);
+  const [inspectorNodeId, setInspectorNodeId] = useState<string>();
   const [startNodeState, setStartNodeState] = useState<Node<WorkflowStartNodeData>>({
     id: WORKFLOW_START_NODE_ID,
     type: 'start',
@@ -184,9 +185,25 @@ const WorkflowDefinitionContent = () => {
 
   const nodeTypes = useMemo(() => ({ workflow: WorkflowNode, start: WorkflowStartNode, note: WorkflowNoteNode }), []);
   const edgeTypes = useMemo(() => ({ workflow: WorkflowEdge }), []);
-  const selectedNode = useMemo(() => nodes.find((node) => node.selected), [nodes]);
+  const startInspectorOpen = inspectorNodeId === WORKFLOW_START_NODE_ID;
+  const selectedNode = useMemo(
+    () => inspectorNodeId && inspectorNodeId !== WORKFLOW_START_NODE_ID
+      ? nodes.find((node) => node.id === inspectorNodeId)
+      : undefined,
+    [inspectorNodeId, nodes],
+  );
   // 测试运行期间锁住结构编辑，避免正在执行的 nodeId 与画布拓扑发生漂移。
   const locked = testing;
+
+  useEffect(() => {
+    if (
+      inspectorNodeId
+      && inspectorNodeId !== WORKFLOW_START_NODE_ID
+      && !nodes.some((node) => node.id === inspectorNodeId)
+    ) {
+      setInspectorNodeId(undefined);
+    }
+  }, [inspectorNodeId, nodes]);
 
   const rootNodes = useMemo(() => {
     const targets = new Set(edges.map((edge) => edge.target));
@@ -245,6 +262,7 @@ const WorkflowDefinitionContent = () => {
     setFailureStrategy(snapshot.failureStrategy);
     setStartConfig({ ...snapshot.startConfig, nextNodeIds: [...snapshot.startConfig.nextNodeIds] });
     setStartSelected(false);
+    setInspectorNodeId(undefined);
     setStartNodeState((current) => ({
       ...current,
       position: snapshot.startConfig.position,
@@ -345,6 +363,7 @@ const WorkflowDefinitionContent = () => {
     setFailureStrategy(value.failureStrategy || 'CONTINUE_INDEPENDENT_BRANCHES');
     setStartConfig(hydratedStartConfig);
     setStartSelected(false);
+    setInspectorNodeId(undefined);
     setControlMode('pointer');
     setStartNodeState((current) => ({
       ...current,
@@ -461,15 +480,21 @@ const WorkflowDefinitionContent = () => {
     const task = JSON.parse(raw) as WorkflowTaskDefinition;
     const bounds = wrapperRef.current.getBoundingClientRect();
     const sequence = sequenceRef.current++;
+    const nodeId = `task-${Date.now()}-${sequence}`;
     markHistory(`${task.name} 节点已添加`);
     setStartSelected(false);
+    setInspectorNodeId(nodeId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    setNodes((current) => [...current, {
-      id: `task-${Date.now()}-${sequence}`,
-      type: 'workflow',
-      position: reactFlowInstance.project({ x: event.clientX - bounds.left, y: event.clientY - bounds.top }),
-      data: createNodeData(task),
-    }]);
+    setNodes((current) => [
+      ...current.map((node) => ({ ...node, selected: false })),
+      {
+        id: nodeId,
+        type: 'workflow',
+        selected: true,
+        position: reactFlowInstance.project({ x: event.clientX - bounds.left, y: event.clientY - bounds.top }),
+        data: createNodeData(task),
+      },
+    ]);
   };
 
   const getCanvasCenterPosition = useCallback((width: number, height: number) => {
@@ -484,13 +509,15 @@ const WorkflowDefinitionContent = () => {
     const position = getCanvasCenterPosition(WORKFLOW_NODE_WIDTH, 72);
     if (!task || !position) return;
     const sequence = sequenceRef.current++;
+    const nodeId = `task-${Date.now()}-${sequence}`;
     markHistory(`${task.name} 节点已添加`);
     setControlMode('pointer');
     setStartSelected(false);
+    setInspectorNodeId(nodeId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [
       ...current.map((node) => ({ ...node, selected: false })),
-      { id: `task-${Date.now()}-${sequence}`, type: 'workflow', position, selected: true, data: createNodeData(task) },
+      { id: nodeId, type: 'workflow', position, selected: true, data: createNodeData(task) },
     ]);
   }, [getCanvasCenterPosition, locked, markHistory, setNodes, tasks]);
 
@@ -552,6 +579,7 @@ const WorkflowDefinitionContent = () => {
     const nodeId = `task-${Date.now()}-${sequence}`;
     markHistory(`${task.name} 节点已插入`);
     setStartSelected(false);
+    setInspectorNodeId(nodeId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
       id: nodeId,
@@ -583,6 +611,7 @@ const WorkflowDefinitionContent = () => {
       : { x: sourceNode.position.x + sourceWidth + WORKFLOW_NODE_HORIZONTAL_GAP, y: sourceNode.position.y };
     markHistory(`${task.name} 节点已添加`);
     setStartSelected(false);
+    setInspectorNodeId(nodeId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
       id: nodeId,
@@ -615,6 +644,7 @@ const WorkflowDefinitionContent = () => {
       : { x: startConfig.position.x + WORKFLOW_NODE_WIDTH + WORKFLOW_NODE_HORIZONTAL_GAP, y: startConfig.position.y };
     markHistory(`${task.name} 节点已添加并连接开始节点`);
     setStartSelected(false);
+    setInspectorNodeId(nodeId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
       id: nodeId,
@@ -637,6 +667,7 @@ const WorkflowDefinitionContent = () => {
     const duplicatedId = `task-${Date.now()}-${sequence}`;
     markHistory(`${sourceNode.data.label} 节点已复制`);
     setStartSelected(false);
+    setInspectorNodeId(duplicatedId);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
       ...sourceNode,
@@ -712,13 +743,16 @@ const WorkflowDefinitionContent = () => {
         ...current,
         nextNodeIds: current.nextNodeIds.filter((nodeId) => !removedSet.has(nodeId)),
       }));
+      if (inspectorNodeId && removedSet.has(inspectorNodeId)) {
+        setInspectorNodeId(undefined);
+      }
     }
     if (taskChanges.some((change) => change.type === 'select' && change.selected)) {
       setStartSelected(false);
       setNoteNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
     }
     if (taskChanges.length) onNodesChange(taskChanges);
-  }, [locked, markHistory, nodes, noteNodes, onNodesChange, setNodes]);
+  }, [inspectorNodeId, locked, markHistory, nodes, noteNodes, onNodesChange, setNodes]);
 
   const handleCanvasEdgesChange = useCallback((changes: EdgeChange[]) => {
     const removedStartTargets = changes
@@ -764,9 +798,13 @@ const WorkflowDefinitionContent = () => {
   }, [explicitStartTargetIds, nodes]);
 
   const closeNodeInspector = useCallback(() => {
+    setInspectorNodeId(undefined);
     setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
   }, [setNodes]);
-  const closeStartInspector = useCallback(() => setStartSelected(false), []);
+  const closeStartInspector = useCallback(() => {
+    setInspectorNodeId(undefined);
+    setStartSelected(false);
+  }, []);
 
   const taskCanvasNodes = useMemo(() => nodes.map((node) => ({
     ...node,
@@ -1020,6 +1058,7 @@ const WorkflowDefinitionContent = () => {
               setEdges([]);
               setStartConfig((current) => ({ ...current, nextNodeIds: [] }));
               setStartSelected(true);
+              setInspectorNodeId(WORKFLOW_START_NODE_ID);
               setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
             }
           }}
@@ -1029,7 +1068,7 @@ const WorkflowDefinitionContent = () => {
           onOffline={() => void handleOffline()}
         />
         <div ref={wrapperRef} className="relative min-h-0 flex-1 bg-[#f2f4f7]" onDrop={handleDrop}>
-          {startSelected ? (
+          {startInspectorOpen ? (
             <WorkflowStartInspector
               definitionId={id}
               workflowName={workflowName}
@@ -1068,6 +1107,7 @@ const WorkflowDefinitionContent = () => {
             onNodeClick={(_, node) => {
               if (controlMode === 'hand') return;
               if (node.id === WORKFLOW_START_NODE_ID) {
+                setInspectorNodeId(WORKFLOW_START_NODE_ID);
                 setStartSelected(true);
                 setNodes((current) => current.map((item) => item.selected ? { ...item, selected: false } : item));
                 setNoteNodes((current) => current.map((item) => item.selected ? { ...item, selected: false } : item));
@@ -1075,15 +1115,10 @@ const WorkflowDefinitionContent = () => {
                 setStartSelected(false);
                 setNodes((current) => current.map((item) => item.selected ? { ...item, selected: false } : item));
               } else {
+                setInspectorNodeId(node.id);
                 setStartSelected(false);
                 setNoteNodes((current) => current.map((item) => item.selected ? { ...item, selected: false } : item));
               }
-            }}
-            onPaneClick={() => {
-              if (controlMode === 'hand') return;
-              setStartSelected(false);
-              closeNodeInspector();
-              setNoteNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
             }}
             onNodeMouseEnter={handleNodeMouseEnter}
             onNodeMouseLeave={handleNodeMouseLeave}
