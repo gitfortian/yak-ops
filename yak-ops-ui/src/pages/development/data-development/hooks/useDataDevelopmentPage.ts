@@ -9,10 +9,12 @@ import {
   moveDevelopmentNode,
   renameDevelopmentDirectory,
   renameDevelopmentNode,
+  saveDevelopmentTaskDraft,
   type DevelopmentDirectory,
   type DevelopmentId,
   type DevelopmentNodeType,
   type DevelopmentResourceNode,
+  type DevelopmentSqlDialect,
 } from '@/services/data-development';
 import { useIntl } from '@umijs/max';
 import { message } from 'antd';
@@ -61,6 +63,8 @@ export const useDataDevelopmentPage = () => {
   const [createNodeOpen, setCreateNodeOpen] = useState(false);
   const [createNodeType, setCreateNodeType] =
     useState<DevelopmentNodeType>('SQL');
+  const [createSqlDialect, setCreateSqlDialect] =
+    useState<DevelopmentSqlDialect>();
   const [nodeSaving, setNodeSaving] = useState(false);
   const [createDirectoryOpen, setCreateDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
@@ -181,10 +185,14 @@ export const useDataDevelopmentPage = () => {
     [treeCollapsed, treeWidth],
   );
 
-  const openCreateNode = useCallback((type: DevelopmentNodeType) => {
-    setCreateNodeType(type);
-    setCreateNodeOpen(true);
-  }, []);
+  const openCreateNode = useCallback(
+    (type: DevelopmentNodeType, sqlDialect?: DevelopmentSqlDialect) => {
+      setCreateNodeType(type);
+      setCreateSqlDialect(type === 'SQL' ? sqlDialect : undefined);
+      setCreateNodeOpen(true);
+    },
+    [],
+  );
 
   const closeCreateNode = useCallback(() => {
     if (!nodeSaving) setCreateNodeOpen(false);
@@ -226,14 +234,35 @@ export const useDataDevelopmentPage = () => {
       type: DevelopmentNodeType,
       directoryId: DevelopmentId | undefined,
       name: string,
+      sqlDialect?: DevelopmentSqlDialect,
     ) => {
       setNodeSaving(true);
+      let createdId: DevelopmentId | undefined;
       try {
         const created = await createDevelopmentNode({
           name,
           type,
           directoryId,
         });
+        createdId = created.id;
+
+        if (type === 'SQL' && sqlDialect) {
+          try {
+            await saveDevelopmentTaskDraft(created.id, {
+              taskType: 'SQL',
+              schemaVersion: 1,
+              content: '',
+              configJson: JSON.stringify({ dialect: sqlDialect }),
+              baseRevision: 0,
+            });
+          } catch (error) {
+            // Dialect is part of the SQL authoring identity in PR2. Do not leave a half-created
+            // generic node behind when its initial dialect draft cannot be persisted.
+            await deleteDevelopmentNode(created.id).catch(() => undefined);
+            throw error;
+          }
+        }
+
         setCreateNodeOpen(false);
         setTreeKeyword('');
         await loadTree();
@@ -245,6 +274,7 @@ export const useDataDevelopmentPage = () => {
             ? error.message
             : text('pages.dataDevelopment.workspace.nodeCreateFailed'),
         );
+        if (createdId) await loadTree();
       } finally {
         setNodeSaving(false);
       }
@@ -419,6 +449,7 @@ export const useDataDevelopmentPage = () => {
     treeCollapsed,
     createNodeOpen,
     createNodeType,
+    createSqlDialect,
     nodeSaving,
     createDirectoryOpen,
     directorySaving,
