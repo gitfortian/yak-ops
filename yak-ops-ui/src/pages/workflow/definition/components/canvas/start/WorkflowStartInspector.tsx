@@ -45,42 +45,68 @@ interface EditorDraft {
   defaultText: string;
 }
 
+interface StartTypeOption<T extends WorkflowStartValueType = WorkflowStartValueType> {
+  value: T;
+  label: string;
+}
+
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const TYPE_OPTIONS: WorkflowStartValueType[] = [
-  'String',
-  'Number',
-  'Boolean',
-  'Date',
-  'File',
-  'Object',
-  'Array',
+const isInputField = (
+  value: WorkflowStartInputField | WorkflowStartVariable,
+): value is WorkflowStartInputField => 'required' in value;
+
+const INPUT_TYPE_OPTIONS: StartTypeOption[] = [
+  { value: 'STRING', label: 'String' },
+  { value: 'NUMBER', label: 'Number' },
+  { value: 'BOOLEAN', label: 'Boolean' },
+  { value: 'FILE', label: 'File' },
+  { value: 'ARRAY_STRING', label: 'Array[String]' },
 ];
+
+const VARIABLE_TYPE_OPTIONS: Array<StartTypeOption<WorkflowStartVariable['type']>> = [
+  { value: 'STRING', label: 'String' },
+  { value: 'NUMBER', label: 'Number' },
+  { value: 'BOOLEAN', label: 'Boolean' },
+  { value: 'ARRAY_STRING', label: 'Array[String]' },
+];
+
+const valueToDraftText = (value: unknown) => {
+  if (value === undefined || value === null) return '';
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+};
 
 const createDraft = (
   value?: WorkflowStartInputField | WorkflowStartVariable,
-): EditorDraft => ({
-  name: value?.name || '',
-  label: value?.label || '',
-  type: value?.type || 'String',
-  required: 'required' in (value || {}) ? Boolean((value as WorkflowStartInputField).required) : false,
-  description: value?.description || '',
-  defaultText:
-    value?.defaultValue === undefined
-      ? ''
-      : typeof value.defaultValue === 'string'
-        ? value.defaultValue
-        : JSON.stringify(value.defaultValue),
-});
+): EditorDraft => {
+  const inputField = value && isInputField(value) ? value : undefined;
+  const variable = value && !isInputField(value) ? value : undefined;
+  const currentValue = inputField ? inputField.defaultValue : variable?.value;
+
+  return {
+    name: value?.name || '',
+    label: inputField?.label || value?.name || '',
+    type: value?.type || 'STRING',
+    required: Boolean(inputField?.required),
+    description: inputField?.description || '',
+    defaultText: valueToDraftText(currentValue),
+  };
+};
 
 const defaultValueText = (value: unknown) => {
   if (value === undefined || value === null || value === '') return '--';
+  if (Array.isArray(value)) return value.map(String).join(', ');
   if (typeof value === 'string') return value;
   return JSON.stringify(value);
 };
 
 const formatTime = (value?: string) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '--';
+
+const referenceScope = (scope: VariableScope) =>
+  scope === 'variables' ? 'vars' : 'inputs';
 
 const WorkflowStartInspector = ({
   definitionId,
@@ -113,6 +139,22 @@ const WorkflowStartInspector = ({
     [config.inputs, config.variables],
   );
 
+  const systemVariables = useMemo(
+    () => [
+      {
+        name: 'definitionId',
+        value: definitionId || '--',
+        type: 'STRING' as const,
+      },
+      {
+        name: 'workflowName',
+        value: workflowName || '--',
+        type: 'STRING' as const,
+      },
+    ],
+    [definitionId, workflowName],
+  );
+
   const openEditor = (
     scope: VariableScope,
     index?: number,
@@ -135,29 +177,22 @@ const WorkflowStartInspector = ({
   ): unknown => {
     const normalized = text.trim();
     if (!normalized) return undefined;
-    if (type === 'String' || type === 'Date') return normalized;
-    if (type === 'Number') {
+    if (type === 'STRING') return normalized;
+    if (type === 'NUMBER') {
       const value = Number(normalized);
       if (!Number.isFinite(value)) throw new Error('Invalid number');
       return value;
     }
-    if (type === 'Boolean') {
+    if (type === 'BOOLEAN') {
       if (normalized === 'true') return true;
       if (normalized === 'false') return false;
       throw new Error('Boolean must be true or false');
     }
-    if (type === 'File') return undefined;
-    try {
-      return JSON.parse(normalized);
-    } catch {
-      if (type === 'Array') {
-        return normalized
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-      throw new Error('Invalid JSON');
-    }
+    if (type === 'FILE') return undefined;
+    return normalized
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
   };
 
   const saveDraft = () => {
@@ -192,7 +227,10 @@ const WorkflowStartInspector = ({
     }
 
     if (modalScope === 'inputs') {
+      const current =
+        modalIndex !== undefined ? config.inputs[modalIndex] : undefined;
       const next: WorkflowStartInputField = {
+        id: current?.id || `input-${Date.now()}`,
         name,
         label: draft.label.trim() || name,
         type: draft.type,
@@ -205,12 +243,15 @@ const WorkflowStartInspector = ({
       else inputs.splice(modalIndex, 1, next);
       onChange({ ...config, inputs });
     } else {
+      const current =
+        modalIndex !== undefined ? config.variables[modalIndex] : undefined;
+      const variableType: WorkflowStartVariable['type'] =
+        draft.type === 'FILE' ? 'STRING' : draft.type;
       const next: WorkflowStartVariable = {
+        id: current?.id || `var-${Date.now()}`,
         name,
-        label: draft.label.trim() || name,
-        type: draft.type,
-        description: draft.description.trim() || undefined,
-        defaultValue,
+        type: variableType,
+        value: defaultValue,
       };
       const variables = [...config.variables];
       if (modalIndex === undefined) variables.push(next);
@@ -251,54 +292,63 @@ const WorkflowStartInspector = ({
     scope: VariableScope,
     item: WorkflowStartInputField | WorkflowStartVariable,
     index: number,
-  ) => (
-    <div
-      key={`${scope}-${item.name}`}
-      className="group flex min-h-[50px] items-center gap-2 border-b border-[#f0f1f3] px-1 py-2 last:border-b-0"
-    >
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f5f6f7] text-[#667085]">
-        <Variable size={13} />
-      </div>
-      <button
-        type="button"
-        disabled={locked}
-        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left disabled:cursor-default"
-        onClick={() => openEditor(scope, index, item)}
+  ) => {
+    const inputField = isInputField(item) ? item : undefined;
+    const currentValue = inputField
+      ? inputField.defaultValue
+      : (item as WorkflowStartVariable).value;
+    const displayLabel = inputField?.label || item.name;
+
+    return (
+      <div
+        key={`${scope}-${item.name}`}
+        className="group flex min-h-[50px] items-center gap-2 border-b border-[#f0f1f3] px-1 py-2 last:border-b-0"
       >
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[11px] font-medium text-[#344054]">
-            {item.label || item.name}
-          </span>
-          {'required' in item && item.required ? (
-            <span className="shrink-0 rounded bg-[#fff1f3] px-1 py-0.5 text-[8px] font-medium text-[#d92d50]">
-              {intl.formatMessage({ id: 'pages.workflow.editor.startInspector.required' })}
-            </span>
-          ) : null}
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f5f6f7] text-[#667085]">
+          <Variable size={13} />
         </div>
-        <div className="mt-0.5 truncate font-mono text-[9px] text-[#98a2b3]">
-          {scope}.{item.name} · {item.type}
-          {item.defaultValue !== undefined ? ` · ${defaultValueText(item.defaultValue)}` : ''}
-        </div>
-      </button>
-      {!locked ? (
         <button
           type="button"
-          aria-label={intl.formatMessage({
-            id:
-              scope === 'inputs'
-                ? 'pages.workflow.editor.startInspector.deleteInput'
-                : 'pages.workflow.editor.startInspector.deleteVariable',
-          })}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-[#b0b7c3] opacity-0 hover:bg-[#fff1f3] hover:text-[#d92d50] group-hover:opacity-100"
-          onClick={() => removeItem(scope, index)}
+          disabled={locked}
+          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left disabled:cursor-default"
+          onClick={() => openEditor(scope, index, item)}
         >
-          <Trash2 size={13} />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-[11px] font-medium text-[#344054]">
+              {displayLabel}
+            </span>
+            {inputField?.required ? (
+              <span className="shrink-0 rounded bg-[#fff1f3] px-1 py-0.5 text-[8px] font-medium text-[#d92d50]">
+                {intl.formatMessage({ id: 'pages.workflow.editor.startInspector.required' })}
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-0.5 truncate font-mono text-[9px] text-[#98a2b3]">
+            {referenceScope(scope)}.{item.name} · {item.type}
+            {currentValue !== undefined ? ` · ${defaultValueText(currentValue)}` : ''}
+          </div>
         </button>
-      ) : null}
-    </div>
-  );
+        {!locked ? (
+          <button
+            type="button"
+            aria-label={intl.formatMessage({
+              id:
+                scope === 'inputs'
+                  ? 'pages.workflow.editor.startInspector.deleteInput'
+                  : 'pages.workflow.editor.startInspector.deleteVariable',
+            })}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-[#b0b7c3] opacity-0 hover:bg-[#fff1f3] hover:text-[#d92d50] group-hover:opacity-100"
+            onClick={() => removeItem(scope, index)}
+          >
+            <Trash2 size={13} />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
 
   const startLabel = intl.formatMessage({ id: 'pages.workflow.editor.start' });
+  const typeOptions = modalScope === 'variables' ? VARIABLE_TYPE_OPTIONS : INPUT_TYPE_OPTIONS;
 
   return (
     <>
@@ -414,12 +464,12 @@ const WorkflowStartInspector = ({
                 title={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.systemVariables' })}
                 description={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.systemVariablesHint' })}
               >
-                {config.systemVariables.map((item) => (
+                {systemVariables.map((item) => (
                   <div key={item.name} className="flex min-h-[44px] items-center gap-2 border-b border-[#f0f1f3] px-1 py-2 last:border-b-0">
                     <GitBranch size={13} className="shrink-0 text-[#98a2b3]" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[11px] font-medium text-[#475467]">{item.label}</div>
-                      <div className="mt-0.5 font-mono text-[9px] text-[#98a2b3]">sys.{item.name} · {item.type}</div>
+                      <div className="truncate text-[11px] font-medium text-[#475467]">sys.{item.name}</div>
+                      <div className="mt-0.5 truncate font-mono text-[9px] text-[#98a2b3]">{item.value} · {item.type}</div>
                     </div>
                     <span className="rounded bg-[#f5f6f7] px-1.5 py-0.5 text-[8px] text-[#98a2b3]">
                       {intl.formatMessage({ id: 'pages.workflow.editor.startInspector.readonly' })}
@@ -499,32 +549,34 @@ const WorkflowStartInspector = ({
               placeholder={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.variableNamePlaceholder' })}
               onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
             />
-            {draft.name.trim() ? (
+            {draft.name.trim() && modalScope ? (
               <div className="mt-1 text-[9px] text-[#98a2b3]">
                 {intl.formatMessage(
                   { id: 'pages.workflow.editor.startInspector.reference' },
-                  { scope: modalScope, name: draft.name.trim() },
+                  { scope: referenceScope(modalScope), name: draft.name.trim() },
                 )}
               </div>
             ) : null}
           </EditorField>
-          <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.displayName' })}>
-            <Input
-              value={draft.label}
-              placeholder={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.displayNamePlaceholder' })}
-              onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-            />
-          </EditorField>
+          {modalScope === 'inputs' ? (
+            <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.displayName' })}>
+              <Input
+                value={draft.label}
+                placeholder={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.displayNamePlaceholder' })}
+                onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
+              />
+            </EditorField>
+          ) : null}
           <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.type' })} required>
             <Select
               className="w-full"
               value={draft.type}
-              options={TYPE_OPTIONS.map((value) => ({ value, label: value }))}
-              onChange={(value) =>
+              options={typeOptions}
+              onChange={(value: WorkflowStartValueType) =>
                 setDraft((current) => ({
                   ...current,
                   type: value,
-                  defaultText: value === 'File' ? '' : current.defaultText,
+                  defaultText: value === 'FILE' ? '' : current.defaultText,
                 }))
               }
             />
@@ -538,19 +590,21 @@ const WorkflowStartInspector = ({
               />
             </EditorField>
           ) : null}
-          <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.description' })}>
-            <Input.TextArea
-              rows={2}
-              value={draft.description}
-              onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
-            />
-          </EditorField>
+          {modalScope === 'inputs' ? (
+            <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.description' })}>
+              <Input.TextArea
+                rows={2}
+                value={draft.description}
+                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+              />
+            </EditorField>
+          ) : null}
           <EditorField label={intl.formatMessage({ id: 'pages.workflow.editor.startInspector.defaultValue' })}>
-            {draft.type === 'File' ? (
+            {draft.type === 'FILE' ? (
               <div className="rounded-lg bg-[#f7f8fa] px-3 py-2 text-[10px] leading-5 text-[#667085]">
                 {intl.formatMessage({ id: 'pages.workflow.editor.startInspector.fileDefaultHint' })}
               </div>
-            ) : draft.type === 'Boolean' ? (
+            ) : draft.type === 'BOOLEAN' ? (
               <Select
                 allowClear
                 className="w-full"
@@ -565,7 +619,7 @@ const WorkflowStartInspector = ({
               <Input
                 value={draft.defaultText}
                 placeholder={
-                  draft.type === 'Array'
+                  draft.type === 'ARRAY_STRING'
                     ? intl.formatMessage({ id: 'pages.workflow.editor.startInspector.arrayPlaceholder' })
                     : undefined
                 }
