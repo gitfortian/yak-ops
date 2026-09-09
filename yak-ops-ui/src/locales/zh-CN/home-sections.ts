@@ -1,8 +1,8 @@
 export default {
   'pages.home.dataAssets.title': '数据资产',
-  'pages.home.dataAssets.dataset': '数据集列表',
+  'pages.home.dataAssets.dataset': '数据集',
   'pages.home.dataAssets.datasetEmpty': '暂无数据集预览',
-  'pages.home.dataAssets.dataService': '数据服务列表',
+  'pages.home.dataAssets.dataService': '数据服务',
   'pages.home.dataAssets.dataServiceEmpty': '暂无数据服务预览',
   'pages.home.dataAssets.dashboard': '仪表盘列表',
   'pages.home.dataAssets.dashboardTab': '仪表盘',

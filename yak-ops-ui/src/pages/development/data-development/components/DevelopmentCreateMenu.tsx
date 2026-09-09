@@ -29,7 +29,7 @@ interface DevelopmentCreateMenuProps {
 type CreateMenuLevel = 'node' | 'database' | 'general';
 
 const PANEL_WIDTH = 168;
-const PANEL_GAP = 6;
+const PANEL_GAP = 0;
 
 const MenuPanel = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
   <div
