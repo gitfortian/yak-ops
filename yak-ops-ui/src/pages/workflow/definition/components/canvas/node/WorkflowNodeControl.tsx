@@ -49,7 +49,8 @@ const WorkflowNodeControl = ({
       ].join(' ')}
     >
       <div
-        className="nodrag nopan flex h-6 items-center rounded-lg border border-[rgba(22,24,35,.08)] bg-[rgba(255,255,255,.96)] px-0.5 text-[#667085] shadow-[0_3px_10px_rgba(22,24,35,.12)] backdrop-blur-sm"
+        className="nodrag nopan nowheel flex h-6 items-center rounded-lg border border-[rgba(22,24,35,.08)] bg-[rgba(255,255,255,.96)] px-0.5 text-[#667085] shadow-[0_3px_10px_rgba(22,24,35,.12)] backdrop-blur-sm"
+        onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
@@ -70,7 +71,14 @@ const WorkflowNodeControl = ({
           <button
             type="button"
             aria-label="节点操作"
+            aria-expanded={open}
             className="flex h-5 w-5 items-center justify-center rounded-md border-0 bg-transparent p-0 text-[#667085] hover:bg-[#f2f4f7] hover:text-[#161823]"
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen((current) => !current);
+            }}
           >
             <MoreHorizontal size={14} strokeWidth={2} />
           </button>
