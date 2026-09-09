@@ -5,6 +5,7 @@
     alt="Yak Ops 横幅"
   />
 </p>
+<img width="360" height="544" alt="image" src="https://github.com/user-attachments/assets/5d9293fe-29cf-4206-9e3f-1e374388a6a1" />
 
 <h1 align="center">Yak Ops</h1>
 
