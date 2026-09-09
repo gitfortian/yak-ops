@@ -4,6 +4,7 @@ import { SettingDrawer } from "@ant-design/pro-components";
 import "@ant-design/v5-patch-for-react-19";
 import type { RequestConfig, RunTimeLayoutConfig } from "@umijs/max";
 import { getLocale, history, useModel } from "@umijs/max";
+import "d3-transition";
 import { useEffect } from "react";
 
 import defaultSettings from "../config/defaultSettings";
