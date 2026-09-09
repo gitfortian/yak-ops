@@ -20,6 +20,12 @@
   <a href="./README.md">English</a>
   ·
   <a href="./README_CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://yak-ops.com/">Website</a>
+  ·
+  <a href="https://demo.yak-ops.com/">Live Demo</a>
   ·
   <a href="https://doc.yak-ops.com/">Documentation</a>
   ·
