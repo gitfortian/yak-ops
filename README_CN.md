@@ -5,7 +5,6 @@
     alt="Yak Ops 横幅"
   />
 </p>
-<img width="360" height="544" alt="image" src="https://github.com/user-attachments/assets/5d9293fe-29cf-4206-9e3f-1e374388a6a1" />
 
 <h1 align="center">Yak Ops</h1>
 
@@ -310,6 +309,9 @@ Yak Ops 在 GitHub 上公开开发。Bug、产品建议、设计讨论、文档�
 提交代码前请阅读 [`CODE_STYLE.md`](CODE_STYLE.md)。前端修改还应遵循 [`yak-ops-ui/FRONTEND_CODE_STYLE.md`](yak-ops-ui/FRONTEND_CODE_STYLE.md)。
 
 如果 Yak Ops 对你有帮助，一个 ⭐ 可以让更多人看到这个项目。
+
+<img width="160" height="244" alt="image" src="https://github.com/user-attachments/assets/5d9293fe-29cf-4206-9e3f-1e374388a6a1" />
+
 
 ## 开源许可证
 
