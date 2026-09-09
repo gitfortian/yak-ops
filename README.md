@@ -300,7 +300,7 @@ Before contributing code, please read [`CODE_STYLE.md`](CODE_STYLE.md). Frontend
 
 If Yak Ops is useful to you, a ⭐ helps more people discover the project.
 
-<img width="160" height="264" alt="image" src="https://github.com/user-attachments/assets/a4c596d4-61eb-4bdf-b452-28d19c5b7423" />
+<img width="180" height="264" alt="image" src="https://github.com/user-attachments/assets/a4c596d4-61eb-4bdf-b452-28d19c5b7423" />
 
 ## License
 
