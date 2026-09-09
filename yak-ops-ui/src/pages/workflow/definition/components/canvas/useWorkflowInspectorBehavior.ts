@@ -29,11 +29,17 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   useEffect(() => {
     const keepInspectorOpen = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof Element) || !target.closest('.react-flow__pane')) return;
+      if (!(target instanceof Element)) return;
 
-      // React Flow clears node selection when the pane receives a click. The workflow
-      // inspector intentionally behaves like Dify: clicking empty canvas keeps the
-      // current inspector open, and only its explicit close button dismisses it.
+      // React Flow nodes live inside the pane. Let node clicks propagate so the
+      // editor can switch the inspector to the newly selected node while it is open.
+      if (target.closest('.react-flow__node')) return;
+
+      if (!target.closest('.react-flow__pane')) return;
+
+      // React Flow clears node selection when the empty pane receives a click. The
+      // workflow inspector intentionally behaves like Dify: clicking empty canvas
+      // keeps the current inspector open, and only its explicit close button dismisses it.
       event.stopPropagation();
       event.stopImmediatePropagation();
     };
