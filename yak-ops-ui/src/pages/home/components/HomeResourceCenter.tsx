@@ -1,12 +1,12 @@
 import { FileSuffixIcon } from '@/components/resource/FileSuffixIcon';
 import { YAK_OPS_PERMISSIONS } from '@/constants/yakOpsPermissions';
 import usePermissionAccess from '@/hooks/usePermissionAccess';
-import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
-  fetchResourceTree,
-  uploadResource,
-  type ResourceItem,
-} from '@/services/resource-management';
+  homeResourceCenterApi,
+  type HomeResourceCenterOverview,
+} from '@/services/home';
+import { API_SUCCESS_CODE } from '@/services/http/response';
+import { uploadResource } from '@/services/resource-management';
 import { history, useIntl } from '@umijs/max';
 import { message } from 'antd';
 import {
@@ -18,74 +18,20 @@ import {
   RefreshCw,
   Upload,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { HomeEmptyState } from './HomeEmptyState';
 
 const RESOURCE_MANAGEMENT_PATH = '/resource-management';
 const ROOT_RESOURCE_ID = 0;
-const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const RECENT_FILE_LIMIT = 3;
 
-interface ResourceSummary {
-  files: number;
-  folders: number;
-  totalBytes: number;
-}
-
-const parseResourceTime = (value?: string) => {
+const parseResourceTime = (value?: string | null) => {
   if (!value) return Number.NaN;
   const normalized = value.includes(' ') ? value.replace(' ', 'T') : value;
   return new Date(normalized).getTime();
 };
 
-const flattenResources = (resources: ResourceItem[]) => {
-  const result: ResourceItem[] = [];
-
-  const visit = (items: ResourceItem[]) => {
-    items.forEach((item) => {
-      result.push(item);
-      if (item.children?.length) visit(item.children);
-    });
-  };
-
-  visit(resources);
-  return result;
-};
-
-const summarizeResources = (resources: ResourceItem[]): ResourceSummary =>
-  flattenResources(resources).reduce<ResourceSummary>(
-    (summary, item) => {
-      if (item.nodeType === 'DIRECTORY') {
-        summary.folders += 1;
-      } else {
-        summary.files += 1;
-        summary.totalBytes += Number(item.fileSize || 0);
-      }
-      return summary;
-    },
-    { files: 0, folders: 0, totalBytes: 0 },
-  );
-
-const getRecentFiles = (resources: ResourceItem[]) => {
-  const recentBoundary = Date.now() - RECENT_WINDOW_MS;
-
-  return flattenResources(resources)
-    .filter((item) => item.nodeType === 'FILE')
-    .map((item) => ({
-      item,
-      timestamp: parseResourceTime(item.updateTime || item.createTime),
-    }))
-    .filter(
-      ({ timestamp }) =>
-        Number.isFinite(timestamp) && timestamp >= recentBoundary,
-    )
-    .sort((left, right) => right.timestamp - left.timestamp)
-    .slice(0, RECENT_FILE_LIMIT)
-    .map(({ item }) => item);
-};
-
-const formatFileSize = (bytes?: number) => {
+const formatFileSize = (bytes?: number | null) => {
   const value = Number(bytes || 0);
   if (value <= 0) return '0 B';
 
@@ -95,11 +41,15 @@ const formatFileSize = (bytes?: number) => {
     units.length - 1,
   );
   const normalized = value / 1024 ** unitIndex;
-  const precision = normalized >= 100 || unitIndex === 0 ? 0 : normalized >= 10 ? 1 : 2;
+  const precision =
+    normalized >= 100 || unitIndex === 0 ? 0 : normalized >= 10 ? 1 : 2;
   return `${normalized.toFixed(precision)} ${units[unitIndex]}`;
 };
 
-const formatRelativeTime = (value: string | undefined, locale: string) => {
+const formatRelativeTime = (
+  value: string | null | undefined,
+  locale: string,
+) => {
   const timestamp = parseResourceTime(value);
   if (!Number.isFinite(timestamp)) return '--';
 
@@ -159,23 +109,23 @@ export default function HomeResourceCenter() {
   const canCreate = can(YAK_OPS_PERMISSIONS.resource.create);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const [resources, setResources] = useState<ResourceItem[]>([]);
+  const [overview, setOverview] = useState<HomeResourceCenterOverview>();
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const loadResources = useCallback(async () => {
+  const loadOverview = useCallback(async () => {
     if (!canRead) return;
 
     try {
       setLoading(true);
       setFailed(false);
-      const response = await fetchResourceTree();
-      if (response.code !== API_SUCCESS_CODE) {
+      const response = await homeResourceCenterApi.overview();
+      if (response.code !== API_SUCCESS_CODE || !response.data) {
         setFailed(true);
         return;
       }
-      setResources(response.data || []);
+      setOverview(response.data);
     } catch {
       setFailed(true);
     } finally {
@@ -184,11 +134,8 @@ export default function HomeResourceCenter() {
   }, [canRead]);
 
   useEffect(() => {
-    void loadResources();
-  }, [loadResources]);
-
-  const summary = useMemo(() => summarizeResources(resources), [resources]);
-  const recentFiles = useMemo(() => getRecentFiles(resources), [resources]);
+    void loadOverview();
+  }, [loadOverview]);
 
   const handleUpload = async (file?: File) => {
     if (!file || !canCreate) return;
@@ -207,7 +154,7 @@ export default function HomeResourceCenter() {
         response.message ||
           intl.formatMessage({ id: 'pages.home.resourceCenter.uploadSuccess' }),
       );
-      await loadResources();
+      await loadOverview();
     } catch {
       message.error(
         intl.formatMessage({ id: 'pages.home.resourceCenter.uploadFailed' }),
@@ -221,25 +168,32 @@ export default function HomeResourceCenter() {
     {
       key: 'files',
       label: intl.formatMessage({ id: 'pages.home.resourceCenter.files' }),
-      value: summary.files.toLocaleString(intl.locale),
+      value:
+        overview?.fileCount == null
+          ? '--'
+          : overview.fileCount.toLocaleString(intl.locale),
       icon: Files,
       iconClassName: 'bg-[#fff1f4] text-[#ff4d6d]',
     },
     {
       key: 'folders',
       label: intl.formatMessage({ id: 'pages.home.resourceCenter.folders' }),
-      value: summary.folders.toLocaleString(intl.locale),
+      value:
+        overview?.folderCount == null
+          ? '--'
+          : overview.folderCount.toLocaleString(intl.locale),
       icon: FolderTree,
       iconClassName: 'bg-[#f3f5f8] text-[#707681]',
     },
     {
       key: 'storage',
       label: intl.formatMessage({ id: 'pages.home.resourceCenter.storage' }),
-      value: formatFileSize(summary.totalBytes),
+      value: overview?.totalBytes == null ? '--' : formatFileSize(overview.totalBytes),
       icon: HardDrive,
       iconClassName: 'bg-[#f3f1ff] text-[#7568ed]',
     },
   ];
+  const recentFiles = overview?.recentFiles || [];
 
   return (
     <section className="flex min-h-[420px] flex-1 flex-col rounded-[22px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-5">
@@ -269,7 +223,7 @@ export default function HomeResourceCenter() {
           size="medium"
           className="min-h-[300px] flex-1"
         />
-      ) : loading && resources.length === 0 ? (
+      ) : loading && !overview ? (
         <ResourceCenterSkeleton />
       ) : (
         <>
@@ -323,7 +277,7 @@ export default function HomeResourceCenter() {
                 />
                 <button
                   type="button"
-                  onClick={() => void loadResources()}
+                  onClick={() => void loadOverview()}
                   className="mt-2 border-0 bg-transparent p-0 text-[10px] font-medium text-[#6f7681] hover:text-[#252832]"
                 >
                   {intl.formatMessage({ id: 'pages.home.resourceCenter.retry' })}
@@ -333,12 +287,15 @@ export default function HomeResourceCenter() {
               <div className="mt-2 divide-y divide-[#f1f2f4]">
                 {recentFiles.map((resource) => (
                   <div
-                    key={String(resource.id)}
+                    key={resource.id}
                     className="flex min-w-0 items-center gap-3 py-2.5"
                     title={resource.fullPath || resource.name}
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#f5f6f8]">
-                      <FileSuffixIcon suffix={resource.suffix} size={18} />
+                      <FileSuffixIcon
+                        suffix={resource.suffix || undefined}
+                        size={18}
+                      />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[12px] font-medium text-[#3c4049]">
@@ -350,10 +307,7 @@ export default function HomeResourceCenter() {
                         </span>
                         <span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[#c7cad0]" />
                         <span className="min-w-0 truncate">
-                          {formatRelativeTime(
-                            resource.updateTime || resource.createTime,
-                            intl.locale,
-                          )}
+                          {formatRelativeTime(resource.updatedAt, intl.locale)}
                         </span>
                       </div>
                     </div>

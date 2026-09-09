@@ -9,11 +9,14 @@ import io.yak.ops.business.home.controller.v1.HomeAssetOverviewController;
 import io.yak.ops.business.home.controller.v1.HomeCockpitController;
 import io.yak.ops.business.home.controller.v1.HomeDataCenterController;
 import io.yak.ops.business.home.controller.v1.HomeQualityOverviewController;
+import io.yak.ops.business.home.controller.v1.HomeResourceCenterController;
 import io.yak.ops.business.home.controller.v1.HomeScheduleCenterController;
 import io.yak.ops.business.home.datacenter.HomeDataCenterReader;
 import io.yak.ops.business.home.quality.HomeQualityOverviewReader;
+import io.yak.ops.business.home.resource.HomeResourceCenterReader;
 import io.yak.ops.business.home.schedule.HomeScheduleCenterReader;
 import io.yak.ops.business.quality.QualityPermissionCode;
+import io.yak.ops.common.constant.resource.ResourcePermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import java.util.LinkedHashMap;
@@ -33,6 +36,7 @@ class HomeArchitectureTest {
         HomeDataCenterReader.class,
         HomeAssetOverviewReader.class,
         HomeQualityOverviewReader.class,
+        HomeResourceCenterReader.class,
         HomeScheduleCenterReader.class)) {
       assertThat(reader.getAnnotation(Component.class))
           .as("%s must be an internal @Component read role", reader.getSimpleName())
@@ -52,6 +56,7 @@ class HomeArchitectureTest {
     expectedRoutes.put(HomeDataCenterController.class, "/api/v1/home/data-center");
     expectedRoutes.put(HomeAssetOverviewController.class, "/api/v1/home/assets");
     expectedRoutes.put(HomeQualityOverviewController.class, "/api/v1/home/quality");
+    expectedRoutes.put(HomeResourceCenterController.class, "/api/v1/home/resources");
     expectedRoutes.put(HomeScheduleCenterController.class, "/api/v1/home/schedule-center");
 
     for (Map.Entry<Class<?>, String> entry : expectedRoutes.entrySet()) {
@@ -69,5 +74,10 @@ class HomeArchitectureTest {
         HomeQualityOverviewController.class.getAnnotation(RequiresPermission.class);
     assertThat(qualityPermission).isNotNull();
     assertThat(qualityPermission.value()).isEqualTo(QualityPermissionCode.EXECUTION_READ);
+
+    RequiresPermission resourcePermission =
+        HomeResourceCenterController.class.getAnnotation(RequiresPermission.class);
+    assertThat(resourcePermission).isNotNull();
+    assertThat(resourcePermission.value()).isEqualTo(ResourcePermissionCode.READ);
   }
 }
