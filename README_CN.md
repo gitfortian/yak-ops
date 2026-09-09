@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    src="https://github.com/user-attachments/assets/901d765c-cbd7-4f39-ae3a-de6716ae09f2"
+    src="https://github.com/user-attachments/assets/74def480-8353-45d3-982e-54606cd54474"
     width="100%"
     alt="Yak Ops 横幅"
   />
