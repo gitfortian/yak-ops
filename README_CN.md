@@ -316,8 +316,7 @@ Yak Ops 在 GitHub 上公开开发。Bug、产品建议、设计讨论、文档�
 
 如果 Yak Ops 对你有帮助，一个 ⭐ 可以让更多人看到这个项目。
 
-<img width="160" height="244" alt="image" src="https://github.com/user-attachments/assets/5d9293fe-29cf-4206-9e3f-1e374388a6a1" />
-
+<img width="160" height="244" alt="image" src="https://github.com/user-attachments/assets/54df60b1-781d-4815-a2c5-a6db3179d740" />
 
 ## 开源许可证
 
