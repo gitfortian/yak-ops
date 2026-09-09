@@ -7,6 +7,7 @@ import type {
   HomeDataCenterPeriod,
   HomeQualityOverview,
   HomeRecentResponse,
+  HomeResourceCenterOverview,
   HomeScheduleCalendar,
   HomeScheduleResponse,
 } from './types';
@@ -15,6 +16,7 @@ const COCKPIT_PREFIX = '/api/v1/home/cockpit';
 const DATA_CENTER_PREFIX = '/api/v1/home/data-center';
 const ASSET_PREFIX = '/api/v1/home/assets';
 const QUALITY_PREFIX = '/api/v1/home/quality';
+const RESOURCE_CENTER_PREFIX = '/api/v1/home/resources';
 const SCHEDULE_CENTER_PREFIX = '/api/v1/home/schedule-center';
 
 const requireAvailableQualityOverview = (
@@ -22,6 +24,16 @@ const requireAvailableQualityOverview = (
 ): ApiResponse<HomeQualityOverview> => {
   if (response.data?.available === false) {
     throw new Error('Home quality overview unavailable');
+  }
+
+  return response;
+};
+
+const requireAvailableResourceCenterOverview = (
+  response: ApiResponse<HomeResourceCenterOverview>,
+): ApiResponse<HomeResourceCenterOverview> => {
+  if (response.data?.available === false) {
+    throw new Error('Home resource center unavailable');
   }
 
   return response;
@@ -59,6 +71,13 @@ export const homeQualityOverviewApi = {
     HttpUtils.get<HomeQualityOverview>(`${QUALITY_PREFIX}/overview`).then(
       requireAvailableQualityOverview,
     ),
+};
+
+export const homeResourceCenterApi = {
+  overview: (): Promise<ApiResponse<HomeResourceCenterOverview>> =>
+    HttpUtils.get<HomeResourceCenterOverview>(
+      `${RESOURCE_CENTER_PREFIX}/overview`,
+    ).then(requireAvailableResourceCenterOverview),
 };
 
 export const homeScheduleCenterApi = {

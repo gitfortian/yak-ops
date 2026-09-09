@@ -199,6 +199,24 @@ export interface HomeScheduleCalendar {
   overview: HomeScheduleSummary[];
 }
 
+export interface HomeResourceCenterRecentFile {
+  id: string;
+  name: string;
+  fullPath?: string | null;
+  suffix?: string | null;
+  fileSize: number;
+  updatedAt?: string | null;
+}
+
+export interface HomeResourceCenterOverview {
+  /** False means the resource read model is temporarily unavailable, not that metrics are zero. */
+  available?: boolean;
+  fileCount: number | null;
+  folderCount: number | null;
+  totalBytes: number | null;
+  recentFiles: HomeResourceCenterRecentFile[];
+}
+
 export interface HomeCockpitHeaderStats {
   dataSourceCount: number;
   runningCount: number;
