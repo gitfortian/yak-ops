@@ -1,18 +1,15 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
+import YakButton from '@/components/YakButton';
 import { YAK_OPS_PERMISSIONS } from '@/constants/yakOpsPermissions';
 import usePermissionAccess from '@/hooks/usePermissionAccess';
 import { API_SUCCESS_CODE } from '@/services/http/response';
-import { BRAND_COLOR, BRAND_THEME } from '@/styles/brand';
+import { BRAND_THEME } from '@/styles/brand';
 import {
   Breadcrumb,
-  Button,
   ConfigProvider,
   Dropdown,
-  Empty,
   Input,
   message,
   Modal,
-  Space,
   Spin,
   Table,
   Tag,
@@ -54,7 +51,6 @@ import MoveResourceModal from './components/MoveResourceModal';
 import ResourceDetailDrawer from './components/ResourceDetailDrawer';
 import ResourceMetadataModal from './components/ResourceMetadataModal';
 import StorageTypeLabel from './components/StorageTypeLabel';
-import './index.less';
 import {
   createDirectory,
   createTextResource,
@@ -87,10 +83,65 @@ import {
   resourceKey,
   ROOT_RESOURCE_ID,
 } from './utils';
-import YakButton from '@/components/YakButton';
 
 const { confirm } = Modal;
 
+const TREE_CLASS_NAME = [
+  'min-h-[540px] bg-white p-2',
+  'max-[860px]:min-h-[180px] max-[860px]:max-h-[260px] max-[860px]:overflow-auto',
+  '[&_.ant-tree-node-content-wrapper]:min-h-8',
+  '[&_.ant-tree-node-content-wrapper]:rounded-md',
+  '[&_.ant-tree-node-content-wrapper]:px-[7px]',
+  '[&_.ant-tree-node-content-wrapper]:py-[3px]',
+  '[&_.ant-tree-node-content-wrapper]:leading-[26px]',
+  '[&_.ant-tree-node-content-wrapper:hover]:bg-[#f5f6f7]',
+  '[&_.ant-tree-node-selected]:!bg-[var(--ant-color-primary-bg)]',
+  '[&_.ant-tree-node-selected]:!text-[var(--ant-color-primary)]',
+  '[&_.ant-tree-title]:text-[13px]',
+].join(' ');
+
+const SEARCH_CLASS_NAME = [
+  'w-[230px] max-[860px]:w-full',
+  '!border-transparent !bg-[#f5f5f6] !shadow-none',
+  'hover:!border-transparent hover:!bg-[#efeff0]',
+  '[&.ant-input-affix-wrapper-focused]:!border-transparent',
+  '[&.ant-input-affix-wrapper-focused]:!bg-[#efeff0]',
+  '[&.ant-input-affix-wrapper-focused]:!shadow-none',
+].join(' ');
+
+const TABLE_CLASS_NAME = [
+  'h-full w-full bg-white',
+  '[&_.ant-table]:rounded-none',
+  '[&_.ant-table]:bg-white',
+  '[&_.ant-table]:text-xs',
+  '[&_.ant-table-container]:bg-white',
+  '[&_.ant-table-content]:bg-white',
+  '[&_.ant-table-thead>tr>th]:h-10',
+  '[&_.ant-table-thead>tr>th]:!border-[#eaecf0]',
+  '[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb]',
+  '[&_.ant-table-thead>tr>th]:!px-3.5',
+  '[&_.ant-table-thead>tr>th]:!py-2',
+  '[&_.ant-table-thead>tr>th]:!text-xs',
+  '[&_.ant-table-thead>tr>th]:!font-medium',
+  '[&_.ant-table-thead>tr>th]:!text-[#667085]',
+  '[&_.ant-table-tbody>tr>td]:h-[58px]',
+  '[&_.ant-table-tbody>tr>td]:!border-[#f0f2f5]',
+  '[&_.ant-table-tbody>tr>td]:!bg-white',
+  '[&_.ant-table-tbody>tr>td]:!px-3.5',
+  '[&_.ant-table-tbody>tr>td]:!py-2',
+  '[&_.ant-table-tbody>tr>td]:!text-[#667085]',
+  '[&_.ant-table-tbody>tr:hover>td]:!bg-[#fafbfc]',
+  '[&_.ant-table-cell-fix-right]:!bg-white',
+  '[&_.ant-table-tbody>tr:hover_.ant-table-cell-fix-right]:!bg-[#fafbfc]',
+  '[&_.ant-table-placeholder>td]:!h-[calc(100vh-327px)]',
+  '[&_.ant-table-placeholder>td]:!min-h-[470px]',
+  '[&_.ant-table-placeholder>td]:!border-b-0',
+  '[&_.ant-table-placeholder>td]:!bg-white',
+  '[&_.ant-table-placeholder>td]:!p-0',
+  '[&_.ant-table-placeholder:hover>td]:!bg-white',
+  'max-[860px]:[&_.ant-table-placeholder>td]:!h-auto',
+  'max-[860px]:[&_.ant-table-placeholder>td]:!min-h-[360px]',
+].join(' ');
 
 const ResourceManagementPage = () => {
   const { can } = usePermissionAccess();
@@ -144,21 +195,26 @@ const ResourceManagementPage = () => {
   const loadList = useCallback(async () => {
     const requestSeq = listRequestSeqRef.current + 1;
     listRequestSeqRef.current = requestSeq;
+
     try {
       setListLoading(true);
       const response = await fetchResourceList(
         selectedDirectoryId,
         debouncedKeyword || undefined,
       );
+
       if (
         requestSeq !== listRequestSeqRef.current ||
         response.code !== API_SUCCESS_CODE
       ) {
         return;
       }
+
       setResourceList(response.data || []);
     } finally {
-      if (requestSeq === listRequestSeqRef.current) setListLoading(false);
+      if (requestSeq === listRequestSeqRef.current) {
+        setListLoading(false);
+      }
     }
   }, [debouncedKeyword, selectedDirectoryId]);
 
@@ -167,6 +223,7 @@ const ResourceManagementPage = () => {
       () => setDebouncedKeyword(keyword.trim()),
       keyword.trim() ? 250 : 0,
     );
+
     return () => window.clearTimeout(timer);
   }, [keyword]);
 
@@ -190,19 +247,24 @@ const ResourceManagementPage = () => {
     () => findResource(resourceTree, selectedDirectoryId),
     [resourceTree, selectedDirectoryId],
   );
+
   const selectedDirectoryName = selectedDirectory?.name || '全部资源';
+
   const breadcrumbs = useMemo(
     () => getResourceBreadcrumbs(resourceTree, selectedDirectoryId),
     [resourceTree, selectedDirectoryId],
   );
+
   const summary = useMemo(
     () => getResourceSummary(resourceTree),
     [resourceTree],
   );
+
   const directoryTree = useMemo(
     () => buildDirectoryTree(resourceTree),
     [resourceTree],
   );
+
   const moveDirectoryTree = useMemo(
     () => buildDirectoryTree(resourceTree, { movingResource }),
     [movingResource, resourceTree],
@@ -218,6 +280,7 @@ const ResourceManagementPage = () => {
       navigateToDirectory(resource.id);
       return;
     }
+
     setDetailResource(resource);
   };
 
@@ -228,7 +291,9 @@ const ResourceManagementPage = () => {
         parentId: selectedDirectoryId,
         ...values,
       });
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '文件夹创建成功');
       setDirectoryModalOpen(false);
       refresh();
@@ -246,7 +311,9 @@ const ResourceManagementPage = () => {
         parentId: selectedDirectoryId,
         ...values,
       });
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '文件创建成功');
       setTextModalOpen(false);
       refresh();
@@ -259,15 +326,20 @@ const ResourceManagementPage = () => {
     values: ResourceMetadataFormValues,
   ) => {
     if (!metadataResource) return;
+
     try {
       setSaving(true);
       const response = await updateResource(metadataResource.id, values);
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '资源信息已更新');
       setMetadataResource(undefined);
+
       if (detailResource?.id === metadataResource.id) {
         setDetailResource(response.data);
       }
+
       refresh();
     } finally {
       setSaving(false);
@@ -276,15 +348,20 @@ const ResourceManagementPage = () => {
 
   const handleMoveResource = async (values: MoveResourceFormValues) => {
     if (!movingResource) return;
+
     try {
       setSaving(true);
       const response = await moveResource(movingResource.id, values);
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '资源移动成功');
       setMovingResource(undefined);
+
       if (detailResource?.id === movingResource.id) {
         setDetailResource(response.data);
       }
+
       refresh();
     } finally {
       setSaving(false);
@@ -293,6 +370,7 @@ const ResourceManagementPage = () => {
 
   const handleDelete = (resource: ResourceItem) => {
     if (!canDelete) return;
+
     confirm({
       title: `确认删除${isDirectory(resource) ? '文件夹' : '文件'}吗？`,
       centered: true,
@@ -305,8 +383,13 @@ const ResourceManagementPage = () => {
       async onOk() {
         const response = await deleteResource(resource.id);
         if (response.code !== API_SUCCESS_CODE) return;
+
         message.success(response.message || '删除成功');
-        if (detailResource?.id === resource.id) setDetailResource(undefined);
+
+        if (detailResource?.id === resource.id) {
+          setDetailResource(undefined);
+        }
+
         refresh();
       },
     });
@@ -323,15 +406,21 @@ const ResourceManagementPage = () => {
 
   const handleUpload = async (file?: File) => {
     if (!file) return;
+
     try {
       setUploading(true);
       const response = await uploadResource(selectedDirectoryId, file);
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '文件上传成功');
       refresh();
     } finally {
       setUploading(false);
-      if (uploadInputRef.current) uploadInputRef.current.value = '';
+
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = '';
+      }
     }
   };
 
@@ -342,18 +431,29 @@ const ResourceManagementPage = () => {
 
   const handleReplaceFile = async (file?: File) => {
     const resource = replacingResourceRef.current;
+
     if (!resource || !file) return;
+
     try {
       setUploading(true);
       const response = await replaceResourceFile(resource.id, file);
+
       if (response.code !== API_SUCCESS_CODE) return;
+
       message.success(response.message || '文件替换成功');
-      if (detailResource?.id === resource.id) setDetailResource(response.data);
+
+      if (detailResource?.id === resource.id) {
+        setDetailResource(response.data);
+      }
+
       refresh();
     } finally {
       setUploading(false);
       replacingResourceRef.current = undefined;
-      if (replaceInputRef.current) replaceInputRef.current.value = '';
+
+      if (replaceInputRef.current) {
+        replaceInputRef.current.value = '';
+      }
     }
   };
 
@@ -361,7 +461,11 @@ const ResourceManagementPage = () => {
     [
       {
         key: 'open',
-        icon: isDirectory(resource) ? <Folder size={15} /> : <FileSuffixIcon suffix={resource.suffix} size={15} />,
+        icon: isDirectory(resource) ? (
+          <Folder size={15} />
+        ) : (
+          <FileSuffixIcon suffix={resource.suffix} size={15} />
+        ),
         label: isDirectory(resource) ? '打开文件夹' : '查看详情',
       },
       !isDirectory(resource) && canDownload
@@ -437,20 +541,35 @@ const ResourceManagementPage = () => {
       render: (_, resource) => (
         <button
           type="button"
-          className="resource-name-cell"
+          className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left text-inherit"
           onClick={() => openResource(resource)}
         >
           <span
             className={[
-              'resource-name-cell__icon',
-              isDirectory(resource) ? 'is-directory' : 'is-file',
+              'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px]',
+              isDirectory(resource)
+                ? 'bg-[var(--ant-color-primary-bg)] text-[var(--ant-color-primary)]'
+                : 'bg-[#f2f4f7] text-[#667085]',
             ].join(' ')}
           >
-            {isDirectory(resource) ? <Folder size={19} /> : <FileSuffixIcon suffix={resource.suffix} />}
+            {isDirectory(resource) ? (
+              <Folder size={19} />
+            ) : (
+              <FileSuffixIcon suffix={resource.suffix} />
+            )}
           </span>
-          <span className="resource-name-cell__text">
-            <strong title={resource.name}>{resource.name}</strong>
-            <small title={resource.description || resource.fullPath}>
+
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <strong
+              className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium text-[#344054]"
+              title={resource.name}
+            >
+              {resource.name}
+            </strong>
+            <small
+              className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[#98a2b3]"
+              title={resource.description || resource.fullPath}
+            >
               {resource.description || resource.fullPath}
             </small>
           </span>
@@ -466,7 +585,9 @@ const ResourceManagementPage = () => {
         isDirectory(resource) ? (
           <Tag bordered={false}>文件夹</Tag>
         ) : (
-          <Tag bordered={false}>{resource.suffix?.toUpperCase() || 'FILE'}</Tag>
+          <Tag bordered={false}>
+            {resource.suffix?.toUpperCase() || 'FILE'}
+          </Tag>
         ),
     },
     {
@@ -489,7 +610,8 @@ const ResourceManagementPage = () => {
       dataIndex: 'version',
       key: 'version',
       width: 90,
-      render: (value, resource) => (isDirectory(resource) ? '-' : `v${value || 1}`),
+      render: (value, resource) =>
+        isDirectory(resource) ? '-' : `v${value || 1}`,
     },
     {
       title: '更新时间',
@@ -516,7 +638,7 @@ const ResourceManagementPage = () => {
             },
           }}
         >
-          <Button
+          <YakButton
             type="text"
             size="small"
             aria-label={`操作 ${resource.name}`}
@@ -533,7 +655,7 @@ const ResourceManagementPage = () => {
       title: (
         <button
           type="button"
-          className="resource-breadcrumb-button"
+          className="max-w-[180px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent p-0 text-[#475467] transition-colors hover:text-[#667085]"
           onClick={() => navigateToDirectory(ROOT_RESOURCE_ID)}
         >
           全部资源
@@ -544,7 +666,7 @@ const ResourceManagementPage = () => {
       title: (
         <button
           type="button"
-          className="resource-breadcrumb-button"
+          className="max-w-[180px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent p-0 text-[#475467] transition-colors hover:text-[#667085]"
           onClick={() => navigateToDirectory(resource.id)}
         >
           {resource.name}
@@ -555,15 +677,15 @@ const ResourceManagementPage = () => {
 
   return (
     <ConfigProvider theme={BRAND_THEME}>
-      <div className="resource-page">
-        <header className="resource-header">
+      <div className="min-h-[calc(100vh-64px)] bg-white px-5 pb-5 pt-4 text-[#101828] max-[860px]:p-3.5">
+        <header className="mb-2 flex min-h-11 items-center justify-between gap-4 max-[860px]:items-stretch max-[860px]:flex-col">
           <div>
-            <h1>资源管理</h1>
-            <p>
-              默认使用内置 Local 文件存储，也可按部署需要切换 MinIO 或 HDFS。
-            </p>
+            <h1 className="m-0 text-[17px] font-semibold leading-6 text-[#161823]">
+              资源管理
+            </h1>
           </div>
-          <Space size={10} wrap>
+
+          <div className="flex flex-wrap items-center gap-2 [&_.ant-btn]:h-8">
             {canCreate && (
               <YakButton
                 icon={<FolderPlus size={16} />}
@@ -572,6 +694,7 @@ const ResourceManagementPage = () => {
                 新建文件夹
               </YakButton>
             )}
+
             {canCreate && (
               <YakButton
                 icon={<FilePlus2 size={16} />}
@@ -580,81 +703,127 @@ const ResourceManagementPage = () => {
                 在线创建
               </YakButton>
             )}
+
             {canCreate && (
-              <Button
+              <YakButton
                 type="primary"
                 loading={uploading}
                 icon={<Upload size={16} />}
                 onClick={() => uploadInputRef.current?.click()}
               >
                 上传文件
-              </Button>
+              </YakButton>
             )}
-          </Space>
+          </div>
         </header>
 
-        <section className="resource-overview">
-          <div className="resource-overview-card">
-            <span><Files size={20} /></span>
-            <div><small>文件数量</small><strong>{summary.files}</strong></div>
+        <section className="mb-3 grid grid-cols-4 gap-2 max-[1180px]:grid-cols-2 max-[620px]:grid-cols-1">
+          <div className="flex min-h-[70px] min-w-0 items-center gap-3 border border-[#f0f0f0] bg-[#fafbfc] px-4 py-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] bg-[#f3f6ff] text-[#6c7fd8]">
+              <Files size={20} />
+            </span>
+            <div className="min-w-0">
+              <small className="mb-0.5 block text-[11px] leading-[18px] text-[rgba(22,24,35,0.45)]">
+                文件数量
+              </small>
+              <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-lg font-semibold leading-6 text-[#161823]">
+                {summary.files}
+              </strong>
+            </div>
           </div>
-          <div className="resource-overview-card">
-            <span><FolderTree size={20} /></span>
-            <div><small>文件夹</small><strong>{summary.directories}</strong></div>
+
+          <div className="flex min-h-[70px] min-w-0 items-center gap-3 border border-[#f0f0f0] bg-[#fafbfc] px-4 py-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] bg-[#f4f6f8] text-[#7b8493]">
+              <FolderTree size={20} />
+            </span>
+            <div className="min-w-0">
+              <small className="mb-0.5 block text-[11px] leading-[18px] text-[rgba(22,24,35,0.45)]">
+                文件夹
+              </small>
+              <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-lg font-semibold leading-6 text-[#161823]">
+                {summary.directories}
+              </strong>
+            </div>
           </div>
-          <div className="resource-overview-card">
-            <span><HardDrive size={20} /></span>
-            <div><small>资源容量</small><strong>{formatFileSize(summary.totalBytes)}</strong></div>
+
+          <div className="flex min-h-[70px] min-w-0 items-center gap-3 border border-[#f0f0f0] bg-[#fafbfc] px-4 py-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] bg-[#f4f2ff] text-[#7568ed]">
+              <HardDrive size={20} />
+            </span>
+            <div className="min-w-0">
+              <small className="mb-0.5 block text-[11px] leading-[18px] text-[rgba(22,24,35,0.45)]">
+                资源容量
+              </small>
+              <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-lg font-semibold leading-6 text-[#161823]">
+                {formatFileSize(summary.totalBytes)}
+              </strong>
+            </div>
           </div>
-          <div className="resource-overview-card resource-overview-card--plugins">
-            <span><Database size={20} /></span>
-            <div>
-              <small>存储插件</small>
-              <div className="resource-plugin-list">
+
+          <div className="flex min-h-[70px] min-w-0 items-center gap-3 border border-[#f0f0f0] bg-[#fafbfc] px-4 py-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] bg-[#f1f8f5] text-[#5f8f79]">
+              <Database size={20} />
+            </span>
+
+            <div className="min-w-0">
+              <small className="mb-0.5 block text-[11px] leading-[18px] text-[rgba(22,24,35,0.45)]">
+                存储插件
+              </small>
+
+              <div className="flex min-w-0 flex-wrap gap-[5px]">
                 {storagePlugins.length ? (
                   storagePlugins.map((plugin) => (
                     <Tag
                       key={plugin.type}
                       bordered={false}
-                      className={plugin.active ? 'is-active' : ''}
+                      className={[
+                        '!m-0 !h-[22px] !px-[7px] !leading-[22px]',
+                        plugin.active
+                          ? '!bg-[#eef8f2] !text-[#4d8c6b]'
+                          : '!bg-[#f2f3f5] !text-[rgba(22,24,35,0.58)]',
+                      ].join(' ')}
                     >
                       {plugin.name || plugin.type}
                       {plugin.active ? ' · 当前' : ''}
                     </Tag>
                   ))
                 ) : (
-                  <strong>-</strong>
+                  <strong className="text-lg font-semibold text-[#161823]">
+                    -
+                  </strong>
                 )}
               </div>
             </div>
           </div>
         </section>
 
-        <section className="resource-workbench">
-          <aside className="resource-tree-panel">
-            <div className="resource-tree-panel__header">
-              <div>
+        <section className="grid h-[calc(100vh-237px)] min-h-[560px] grid-cols-[250px_minmax(0,1fr)] overflow-hidden border border-[#e4e7ec] bg-white max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[860px]:h-auto max-[860px]:min-h-0 max-[860px]:grid-cols-1">
+          <aside className="min-w-0 border-r border-[#e4e7ec] bg-white max-[860px]:border-b max-[860px]:border-r-0">
+            <div className="flex h-[50px] items-center justify-between border-b border-[#eaecf0] bg-white pl-3.5 pr-2.5">
+              <div className="flex items-center gap-[7px] text-[#344054]">
                 <FolderTree size={17} />
-                <strong>目录</strong>
+                <strong className="text-[13px] font-semibold">目录</strong>
               </div>
+
               <Tooltip title="刷新目录">
-                <Button
+                <YakButton
                   type="text"
                   size="small"
                   disabled={treeLoading}
                   icon={
                     <RefreshCw
                       size={15}
-                      className={treeLoading ? 'is-spinning' : ''}
+                      className={treeLoading ? 'animate-spin' : ''}
                     />
                   }
                   onClick={refresh}
                 />
               </Tooltip>
             </div>
+
             <Spin spinning={treeLoading}>
               <Tree
-                className="resource-directory-tree"
+                className={TREE_CLASS_NAME}
                 treeData={directoryTree}
                 selectedKeys={[resourceKey(selectedDirectoryId)]}
                 defaultExpandAll
@@ -663,48 +832,58 @@ const ResourceManagementPage = () => {
                 onSelect={(keys) => {
                   const selectedKey = keys[0];
                   if (selectedKey === undefined) return;
-                  const resource = findResource(resourceTree, String(selectedKey));
+
+                  const resource = findResource(
+                    resourceTree,
+                    String(selectedKey),
+                  );
+
                   navigateToDirectory(resource?.id ?? ROOT_RESOURCE_ID);
                 }}
               />
             </Spin>
           </aside>
 
-          <main className="resource-list-panel">
-            <div className="resource-list-toolbar">
-              <div>
+          <main className="flex min-h-0 min-w-0 flex-col bg-white">
+            <div className="flex min-h-[50px] items-center justify-between gap-4 border-b border-[#eaecf0] py-[7px] pl-4 pr-3 max-[860px]:items-stretch max-[860px]:flex-col">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <Breadcrumb items={breadcrumbItems} />
-                <span className="resource-list-toolbar__count">
+                <span className="shrink-0 border-l border-[#e4e7ec] pl-2.5 text-xs text-[#98a2b3]">
                   {resourceList.length} 项
                 </span>
               </div>
-              <Space size={8}>
+
+              <div className="flex items-center gap-2 max-[860px]:w-full">
                 <Input
-                  className="resource-search"
+                  className={SEARCH_CLASS_NAME}
                   allowClear
                   prefix={<Search size={15} />}
                   value={keyword}
                   placeholder="搜索当前目录"
                   onChange={(event) => setKeyword(event.target.value)}
                 />
+
                 <Tooltip title="刷新列表">
                   <YakButton
                     icon={
                       <RefreshCw
                         size={15}
-                        className={listLoading ? 'is-spinning' : ''}
+                        className={listLoading ? 'animate-spin' : ''}
                       />
                     }
                     disabled={listLoading}
                     onClick={refresh}
                   />
                 </Tooltip>
-              </Space>
+              </div>
             </div>
 
-            <Spin spinning={listLoading}>
+            <Spin
+              spinning={listLoading}
+              className="min-h-0 flex-1 bg-white [&_.ant-spin-container]:h-full [&_.ant-spin-container]:bg-white"
+            >
               <Table<ResourceItem>
-                className="resource-table"
+                className={TABLE_CLASS_NAME}
                 rowKey={(record) => resourceKey(record.id)}
                 columns={columns}
                 dataSource={resourceList}
@@ -712,24 +891,36 @@ const ResourceManagementPage = () => {
                 scroll={{ x: 1080 }}
                 locale={{
                   emptyText: (
-                    <Empty
-                      image={<YakOpsEmpty primaryColor={BRAND_COLOR} />}
-                      description={
-                        debouncedKeyword
-                          ? '当前目录没有匹配的资源'
-                          : '当前文件夹为空'
-                      }
-                    >
+                    <div className="flex min-h-[calc(100vh-327px)] w-full flex-col items-center justify-center bg-white px-6 pb-16 pt-10 text-center max-[860px]:min-h-[360px]">
+                      <img
+                        src="/image/add.png"
+                        alt=""
+                        className="block h-28 w-28 shrink-0 object-contain"
+                      />
+
+                      <div className="mt-3.5 text-[13px] font-medium leading-5 text-[#667085]">
+                        {debouncedKeyword
+                          ? '没有找到匹配的资源'
+                          : '当前文件夹为空'}
+                      </div>
+
+                      {!debouncedKeyword && (
+                        <div className="mt-1 text-[11px] leading-[18px] text-[#b0b6c0]">
+                          上传文件或在线创建一个资源
+                        </div>
+                      )}
+
                       {canCreate && !debouncedKeyword && (
-                        <Button
+                        <YakButton
+                          className="mt-4"
                           type="primary"
                           icon={<Upload size={15} />}
                           onClick={() => uploadInputRef.current?.click()}
                         >
                           上传第一个文件
-                        </Button>
+                        </YakButton>
                       )}
-                    </Empty>
+                    </div>
                   ),
                 }}
                 onRow={(resource) => ({
@@ -746,6 +937,7 @@ const ResourceManagementPage = () => {
           type="file"
           onChange={(event) => void handleUpload(event.target.files?.[0])}
         />
+
         <input
           ref={replaceInputRef}
           hidden
@@ -760,6 +952,7 @@ const ResourceManagementPage = () => {
           onCancel={() => setDirectoryModalOpen(false)}
           onSubmit={handleCreateDirectory}
         />
+
         <CreateTextResourceModal
           open={textModalOpen}
           parentName={selectedDirectoryName}
@@ -767,6 +960,7 @@ const ResourceManagementPage = () => {
           onCancel={() => setTextModalOpen(false)}
           onSubmit={handleCreateTextResource}
         />
+
         <ResourceMetadataModal
           open={Boolean(metadataResource)}
           resource={metadataResource}
@@ -774,6 +968,7 @@ const ResourceManagementPage = () => {
           onCancel={() => setMetadataResource(undefined)}
           onSubmit={handleUpdateMetadata}
         />
+
         <MoveResourceModal
           open={Boolean(movingResource)}
           resource={movingResource}
@@ -782,6 +977,7 @@ const ResourceManagementPage = () => {
           onCancel={() => setMovingResource(undefined)}
           onSubmit={handleMoveResource}
         />
+
         <ResourceDetailDrawer
           open={Boolean(detailResource)}
           resource={detailResource}
