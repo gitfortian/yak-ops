@@ -41,7 +41,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
     public UserPreferenceVO updateFavorite(
             UserPreferenceScene scene, String itemKey, UserPreferenceFavoriteDTO dto, String userId) {
         String ownerUserId = requireUserId(userId);
-        UserPreferenceScene preferenceScene = requireScene(scene);
+        UserPreferenceScene preferenceScene = requireFavoriteScene(scene);
         String preferenceItemKey = requireItemKey(itemKey);
         if (dto == null || dto.getFavorite() == null) throw new IllegalArgumentException("favorite 不能为空");
 
@@ -68,7 +68,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
     @Transactional(rollbackFor = Exception.class)
     public UserPreferenceVO recordUsage(UserPreferenceScene scene, String itemKey, String userId) {
         String ownerUserId = requireUserId(userId);
-        UserPreferenceScene preferenceScene = requireScene(scene);
+        UserPreferenceScene preferenceScene = requireUsageScene(scene);
         String preferenceItemKey = requireItemKey(itemKey);
         LocalDateTime usedAt = DateUtils.now();
 
@@ -122,6 +122,22 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
     private UserPreferenceScene requireScene(UserPreferenceScene scene) {
         if (scene == null) throw new IllegalArgumentException("scene 不能为空");
         return scene;
+    }
+
+    private UserPreferenceScene requireFavoriteScene(UserPreferenceScene scene) {
+        UserPreferenceScene value = requireScene(scene);
+        if (value != UserPreferenceScene.PRODUCT_MENU) {
+            throw new IllegalArgumentException("当前偏好场景不支持收藏操作");
+        }
+        return value;
+    }
+
+    private UserPreferenceScene requireUsageScene(UserPreferenceScene scene) {
+        UserPreferenceScene value = requireScene(scene);
+        if (value != UserPreferenceScene.DATASOURCE_CREATE_TYPE) {
+            throw new IllegalArgumentException("当前偏好场景不支持使用记录");
+        }
+        return value;
     }
 
     private String requireItemKey(String itemKey) {
