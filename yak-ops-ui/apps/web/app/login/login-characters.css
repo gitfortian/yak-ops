@@ -101,9 +101,7 @@
 }
 
 .yak-login-character--orange__body {
-  transform:
-    translateX(var(--yak-orange-shift-x))
-    scaleX(var(--yak-orange-scale-x))
+  transform: translateX(var(--yak-orange-shift-x)) scaleX(var(--yak-orange-scale-x))
     scaleY(var(--yak-orange-scale-y));
 }
 
