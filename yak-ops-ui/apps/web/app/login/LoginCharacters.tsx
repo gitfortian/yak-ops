@@ -14,36 +14,36 @@ function PurpleCharacter() {
         <g className="yak-login-character--purple__breathe">
           <g className="yak-login-character--purple__focus">
             <g className="yak-login-character--purple__body">
-            <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
-            <g className="yak-login-character--purple__face">
-              <g className="yak-login-character--purple__focus-eyes">
-                <g className="yak-login-character--purple__eyes">
-                  <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
-                <circle
-                  className="yak-login-character--purple__pupil"
-                  cx="269"
-                  cy="142"
-                  r="3.5"
-                  fill="#171717"
-                />
-                <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
-                  <circle
-                    className="yak-login-character--purple__pupil"
-                    cx="337"
-                    cy="142"
-                    r="3.5"
-                    fill="#171717"
-                  />
+              <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
+              <g className="yak-login-character--purple__face">
+                <g className="yak-login-character--purple__focus-eyes">
+                  <g className="yak-login-character--purple__eyes">
+                    <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
+                    <circle
+                      className="yak-login-character--purple__pupil"
+                      cx="269"
+                      cy="142"
+                      r="3.5"
+                      fill="#171717"
+                    />
+                    <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
+                    <circle
+                      className="yak-login-character--purple__pupil"
+                      cx="337"
+                      cy="142"
+                      r="3.5"
+                      fill="#171717"
+                    />
+                  </g>
                 </g>
+                <path
+                  d="M292 172Q303 177 314 172"
+                  fill="none"
+                  stroke="#171717"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
               </g>
-              <path
-                d="M292 172Q303 177 314 172"
-                fill="none"
-                stroke="#171717"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </g>
             </g>
           </g>
         </g>
@@ -59,29 +59,29 @@ function BlackCharacter() {
         <g className="yak-login-character--black__breathe">
           <g className="yak-login-character--black__focus">
             <g className="yak-login-character--black__body">
-            <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
-            <g className="yak-login-character--black__face">
-              <g className="yak-login-character--black__focus-eyes">
-                <g className="yak-login-character--black__eyes">
-                  <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
-                <circle
-                  className="yak-login-character--black__pupil"
-                  cx="378"
-                  cy="276"
-                  r="3.2"
-                  fill="#171717"
-                />
-                <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
-                  <circle
-                    className="yak-login-character--black__pupil"
-                    cx="426"
-                    cy="276"
-                    r="3.2"
-                    fill="#171717"
-                  />
+              <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
+              <g className="yak-login-character--black__face">
+                <g className="yak-login-character--black__focus-eyes">
+                  <g className="yak-login-character--black__eyes">
+                    <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
+                    <circle
+                      className="yak-login-character--black__pupil"
+                      cx="378"
+                      cy="276"
+                      r="3.2"
+                      fill="#171717"
+                    />
+                    <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
+                    <circle
+                      className="yak-login-character--black__pupil"
+                      cx="426"
+                      cy="276"
+                      r="3.2"
+                      fill="#171717"
+                    />
+                  </g>
                 </g>
               </g>
-            </g>
             </g>
           </g>
         </g>
@@ -97,25 +97,25 @@ function YellowCharacter() {
         <g className="yak-login-character--yellow__breathe">
           <g className="yak-login-character--yellow__focus">
             <g className="yak-login-character--yellow__body">
-            <path
-              d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
-              fill="#F3D30B"
-            />
-            <g className="yak-login-character--yellow__face">
-              <g className="yak-login-character--yellow__focus-eyes">
-                <g className="yak-login-character--yellow__eyes">
-                  <circle cx="492" cy="373" r="4.2" fill="#171717" />
-                  <circle cx="535" cy="373" r="4.2" fill="#171717" />
-                </g>
-              </g>
               <path
-                d="M488 410H539"
-                fill="none"
-                stroke="#171717"
-                strokeWidth="3"
-                strokeLinecap="round"
+                d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
+                fill="#F3D30B"
               />
-            </g>
+              <g className="yak-login-character--yellow__face">
+                <g className="yak-login-character--yellow__focus-eyes">
+                  <g className="yak-login-character--yellow__eyes">
+                    <circle cx="492" cy="373" r="4.2" fill="#171717" />
+                    <circle cx="535" cy="373" r="4.2" fill="#171717" />
+                  </g>
+                </g>
+                <path
+                  d="M488 410H539"
+                  fill="none"
+                  stroke="#171717"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              </g>
             </g>
           </g>
         </g>
@@ -131,22 +131,22 @@ function OrangeCharacter() {
         <g className="yak-login-character--orange__breathe">
           <g className="yak-login-character--orange__focus">
             <g className="yak-login-character--orange__body">
-            <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
-            <g className="yak-login-character--orange__face">
-              <g className="yak-login-character--orange__focus-eyes">
-                <g className="yak-login-character--orange__eyes">
-                  <circle cx="192" cy="451" r="4.2" fill="#171717" />
-                  <circle cx="252" cy="451" r="4.2" fill="#171717" />
+              <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
+              <g className="yak-login-character--orange__face">
+                <g className="yak-login-character--orange__focus-eyes">
+                  <g className="yak-login-character--orange__eyes">
+                    <circle cx="192" cy="451" r="4.2" fill="#171717" />
+                    <circle cx="252" cy="451" r="4.2" fill="#171717" />
+                  </g>
                 </g>
+                <path
+                  d="M211 483Q222 488 233 483"
+                  fill="none"
+                  stroke="#171717"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
               </g>
-              <path
-                d="M211 483Q222 488 233 483"
-                fill="none"
-                stroke="#171717"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </g>
             </g>
           </g>
         </g>
