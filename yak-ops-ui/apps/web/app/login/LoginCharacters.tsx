@@ -45,13 +45,29 @@ function PurpleCharacter() {
 
 function BlackCharacter() {
   return (
-    <g data-character="black">
-      <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
-      <g>
-        <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
-        <circle cx="378" cy="276" r="3.2" fill="#171717" />
-        <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
-        <circle cx="426" cy="276" r="3.2" fill="#171717" />
+    <g data-character="black" className="yak-login-character yak-login-character--black">
+      <g className="yak-login-character--black__breathe">
+        <g className="yak-login-character--black__body">
+          <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
+          <g className="yak-login-character--black__face">
+            <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
+            <circle
+              className="yak-login-character--black__pupil"
+              cx="378"
+              cy="276"
+              r="3.2"
+              fill="#171717"
+            />
+            <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
+            <circle
+              className="yak-login-character--black__pupil"
+              cx="426"
+              cy="276"
+              r="3.2"
+              fill="#171717"
+            />
+          </g>
+        </g>
       </g>
     </g>
   );
@@ -98,8 +114,10 @@ export default function LoginCharacters() {
 
     let targetX = 0;
     let targetY = 0;
-    let currentX = 0;
-    let currentY = 0;
+    let purpleX = 0;
+    let purpleY = 0;
+    let blackX = 0;
+    let blackY = 0;
     let frame = 0;
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -111,15 +129,25 @@ export default function LoginCharacters() {
     };
 
     const animate = () => {
-      currentX += (targetX - currentX) * 0.075;
-      currentY += (targetY - currentY) * 0.075;
+      purpleX += (targetX - purpleX) * 0.075;
+      purpleY += (targetY - purpleY) * 0.075;
 
-      scene.style.setProperty("--yak-purple-lean", `${currentX * -8}deg`);
-      scene.style.setProperty("--yak-purple-stretch", String(1 - currentY * 0.04));
-      scene.style.setProperty("--yak-purple-face-x", `${currentX * 10}px`);
-      scene.style.setProperty("--yak-purple-face-y", `${currentY * 5}px`);
-      scene.style.setProperty("--yak-purple-pupil-x", `${currentX * 4}px`);
-      scene.style.setProperty("--yak-purple-pupil-y", `${currentY * 2.5}px`);
+      blackX += (targetX - blackX) * 0.042;
+      blackY += (targetY - blackY) * 0.042;
+
+      scene.style.setProperty("--yak-purple-lean", `${purpleX * -8}deg`);
+      scene.style.setProperty("--yak-purple-stretch", String(1 - purpleY * 0.04));
+      scene.style.setProperty("--yak-purple-face-x", `${purpleX * 10}px`);
+      scene.style.setProperty("--yak-purple-face-y", `${purpleY * 5}px`);
+      scene.style.setProperty("--yak-purple-pupil-x", `${purpleX * 4}px`);
+      scene.style.setProperty("--yak-purple-pupil-y", `${purpleY * 2.5}px`);
+
+      scene.style.setProperty("--yak-black-lean", `${blackX * -4.5}deg`);
+      scene.style.setProperty("--yak-black-stretch", String(1 - blackY * 0.018));
+      scene.style.setProperty("--yak-black-face-x", `${blackX * 5}px`);
+      scene.style.setProperty("--yak-black-face-y", `${blackY * 2.5}px`);
+      scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
+      scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
       frame = window.requestAnimationFrame(animate);
     };
