@@ -246,30 +246,25 @@
   opacity: 0;
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--purple__focus {
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
   transform: translateX(12px) skewX(-5deg) scaleY(1.055);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--black__focus {
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
   transform: translateX(8px) skewX(-3deg) scaleY(1.035);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--orange__focus {
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--orange__focus {
   transform: translateX(12px) scaleX(1.045) scaleY(1.035);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--yellow__focus {
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--yellow__focus {
   transform: translateX(10px) rotate(-3deg) scaleY(1.045);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible
   .yak-login-character--purple__focus-eyes,
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--black__focus-eyes,
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus-eyes,
 .yak-login-characters.is-password-focus.is-password-visible
   .yak-login-character--orange__focus-eyes,
 .yak-login-characters.is-password-focus.is-password-visible
@@ -277,10 +272,8 @@
   transform: scaleX(1.08) scaleY(1.12);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--purple__pupil,
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--black__pupil {
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__pupil,
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__pupil {
   opacity: 1;
 }
 
