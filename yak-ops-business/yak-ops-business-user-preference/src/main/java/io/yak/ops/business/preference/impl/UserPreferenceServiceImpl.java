@@ -83,8 +83,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
         return requirePreference(ownerUserId, preferenceScene, preferenceItemKey);
     }
 
-    private UserPreferenceEntity newPreference(
-            String userId, UserPreferenceScene scene, String itemKey) {
+    private UserPreferenceEntity newPreference(String userId, UserPreferenceScene scene, String itemKey) {
         UserPreferenceEntity preference = new UserPreferenceEntity();
         preference.setUserId(userId);
         preference.setScene(scene.name());
@@ -95,8 +94,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
         return preference;
     }
 
-    private int nextFavoriteSortOrder(
-            String userId, UserPreferenceScene scene, UserPreferenceEntity existing) {
+    private int nextFavoriteSortOrder(String userId, UserPreferenceScene scene, UserPreferenceEntity existing) {
         if (existing != null
                 && Boolean.TRUE.equals(existing.getFavorite())
                 && existing.getSortOrder() != null
