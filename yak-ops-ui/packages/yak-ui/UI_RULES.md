@@ -58,6 +58,11 @@ Base UI is an implementation dependency, not a product-facing API.
 - Drawer motion is enabled by default; product flows that intentionally need immediate open / close use the explicit `animated={false}` opt-out instead of overriding transition classes through `className`.
 - Dialog / Modal / Drawer / Popover / Menu popup interaction, focus restore, Escape and outside press behavior stay in Base UI.
 - Toast is the common replacement for message / notification feedback.
+- Toast Visual Contract V2 uses a top-right 360px glass-panel card with a subtle tone halo, a semantic 20px status icon, clear title / description / meta hierarchy and a 28px icon-button close affordance. Product code must not recreate Toast visuals.
+- Toast notifications stack by default instead of growing as an unbounded vertical list. The front card remains fully readable, cards behind it use a small peek / scale treatment, hover or focus expands the stack, and the default visible limit is three.
+- Toast enter / exit motion is transform + opacity only: cards enter from above, leave upward or in the swipe direction, and use a smooth decelerating curve without bounce or spring motion.
+- Toast tone is semantic only: success / error / warning / info own icon and halo color, while the main card remains a neutral panel. Do not tint the whole Toast surface with status colors.
+- Toast keeps generic action composition only. Error-copy, retry, request diagnostics and other product-specific behavior stay in the app layer.
 - Badge is the common lightweight status-label primitive; product-specific status semantics stay outside Yak UI.
 - Table owns generic tabular rendering, loading / empty presentation, scroll / sticky header and pagination placement; product code owns fetching, filters, mutations and business cell content.
 - PageHeader owns generic page title, description, right-side composition and optional divider; product code owns page actions and business behavior.
