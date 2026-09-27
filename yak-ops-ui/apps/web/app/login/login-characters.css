@@ -11,6 +11,13 @@
   --yak-black-face-y: 0px;
   --yak-black-pupil-x: 0px;
   --yak-black-pupil-y: 0px;
+  --yak-orange-shift-x: 0px;
+  --yak-orange-scale-x: 1;
+  --yak-orange-scale-y: 1;
+  --yak-orange-face-x: 0px;
+  --yak-orange-face-y: 0px;
+  --yak-orange-eye-x: 0px;
+  --yak-orange-eye-y: 0px;
 }
 
 .yak-login-character--purple__breathe,
@@ -71,6 +78,43 @@
   transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
 }
 
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body,
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes {
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes {
+  transform-origin: center;
+}
+
+.yak-login-character--orange__breathe {
+  animation: yak-orange-breathe 4.8s ease-in-out 0.35s infinite;
+}
+
+.yak-login-character--orange__body {
+  transform:
+    translateX(var(--yak-orange-shift-x))
+    scaleX(var(--yak-orange-scale-x))
+    scaleY(var(--yak-orange-scale-y));
+}
+
+.yak-login-character--orange__face {
+  transform: translate(var(--yak-orange-face-x), var(--yak-orange-face-y));
+}
+
+.yak-login-character--orange__eyes {
+  transform: translate(var(--yak-orange-eye-x), var(--yak-orange-eye-y));
+}
+
 @keyframes yak-purple-breathe {
   0%,
   100% {
@@ -93,9 +137,25 @@
   }
 }
 
+@keyframes yak-orange-breathe {
+  0%,
+  100% {
+    transform: scaleX(1) scaleY(1) translateY(0);
+  }
+
+  42% {
+    transform: scaleX(1.012) scaleY(0.992) translateY(1px);
+  }
+
+  68% {
+    transform: scaleX(0.996) scaleY(1.014) translateY(-2px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .yak-login-character--purple__breathe,
-  .yak-login-character--black__breathe {
+  .yak-login-character--black__breathe,
+  .yak-login-character--orange__breathe {
     animation: none;
   }
 
@@ -104,7 +164,10 @@
   .yak-login-character--purple__pupil,
   .yak-login-character--black__body,
   .yak-login-character--black__face,
-  .yak-login-character--black__pupil {
+  .yak-login-character--black__pupil,
+  .yak-login-character--orange__body,
+  .yak-login-character--orange__face,
+  .yak-login-character--orange__eyes {
     transform: none;
   }
 }
