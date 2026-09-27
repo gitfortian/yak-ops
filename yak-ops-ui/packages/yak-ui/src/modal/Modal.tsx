@@ -11,6 +11,7 @@ export interface ModalProps {
   footer?: ReactNode;
   width?: number | string;
   centered?: boolean;
+  maskClosable?: boolean;
   closeLabel?: string;
   className?: string;
   headerClassName?: string;
@@ -27,6 +28,7 @@ export function Modal({
   footer,
   width = 640,
   centered = false,
+  maskClosable = false,
   closeLabel = "Close",
   className,
   headerClassName,
@@ -37,6 +39,7 @@ export function Modal({
   return (
     <BaseDialog.Root
       open={open}
+      disablePointerDismissal={!maskClosable}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose();
       }}
