@@ -83,10 +83,8 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
     const previousPreference = preferences.find((preference) => preference.itemKey === productId);
     const nextFavorite = !Boolean(previousPreference?.favorite);
     const nextSortOrder = nextFavorite
-      ? Math.max(
-          0,
-          ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder),
-        ) + 1
+      ? Math.max(0, ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder)) +
+        1
       : 0;
     const optimisticPreference: UserPreferenceRecord = {
       scene: PRODUCT_MENU_SCENE,
