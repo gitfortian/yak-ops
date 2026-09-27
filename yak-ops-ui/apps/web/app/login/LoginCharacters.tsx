@@ -44,10 +44,8 @@ function buildOrangeBodyPath(x: number, y: number, activity: number) {
   const sideLift = Math.abs(horizontal) * 5;
   const crownX = 244 + horizontal * 18;
   const crownY = 392 - pointerLift - motionLift - sideLift;
-  const leftLift =
-    Math.max(-horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
-  const rightLift =
-    Math.max(horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
+  const leftLift = Math.max(-horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
+  const rightLift = Math.max(horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
 
   return [
     "M65 550",
