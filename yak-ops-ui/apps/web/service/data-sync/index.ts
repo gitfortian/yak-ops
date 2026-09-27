@@ -2,6 +2,9 @@ import HttpUtils from "@/service/http/HttpUtils";
 
 import type {
   DataSyncMappingPreview,
+  DataSyncInstancePageParams,
+  DataSyncInstancePageResult,
+  DataSyncInstanceRecord,
   DataSyncMappingPreviewPayload,
   DataSyncTaskPageParams,
   DataSyncTaskPageResult,
@@ -41,3 +44,18 @@ export const previewDataSyncMapping = (
     `${DATA_SYNC_API_PREFIX}/tasks/mapping-preview`,
     payload,
   );
+
+
+export const runDataSyncTask = (id: string): Promise<DataSyncInstanceRecord> =>
+  HttpUtils.postData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/run`);
+
+export const listDataSyncInstances = (
+  params: DataSyncInstancePageParams,
+): Promise<DataSyncInstancePageResult> =>
+  HttpUtils.postData<DataSyncInstancePageResult>(`${DATA_SYNC_API_PREFIX}/instances/page`, params);
+
+export const getDataSyncInstance = (id: string): Promise<DataSyncInstanceRecord> =>
+  HttpUtils.getData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/instances/${id}`);
+
+export const cancelDataSyncInstance = (id: string): Promise<DataSyncInstanceRecord> =>
+  HttpUtils.postData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/instances/${id}/cancel`);

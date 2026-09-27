@@ -2,7 +2,11 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 
 import { DataSourcePage } from "@/app/datasource";
 import LoginPage from "@/app/login";
-import { OfflineSyncEditorPage, OfflineSyncPage } from "@/app/offline-sync";
+import {
+  OfflineSyncEditorPage,
+  OfflineSyncInstanceDetailPage,
+  OfflineSyncPage,
+} from "@/app/offline-sync";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -108,6 +112,10 @@ export default function AppRouter() {
           <Route path="/data-source" element={<DataSourcePage />} />
           <Route path="/offline-sync" element={<OfflineSyncPage />} />
           <Route path="/offline-sync/new" element={<OfflineSyncEditorPage />} />
+          <Route
+            path="/offline-sync/instances/:id"
+            element={<OfflineSyncInstanceDetailPage />}
+          />
           <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
         </Route>
 
