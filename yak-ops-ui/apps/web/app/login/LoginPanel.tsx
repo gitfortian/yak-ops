@@ -11,14 +11,11 @@ import { useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
-import type { ActionType, FocusedField } from "./LoginScene";
 
 const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
-  onFire?: (type: ActionType) => void;
-  onFieldFocusChange?: (field: FocusedField) => void;
 }
 
 interface LoginValues {
@@ -93,27 +90,13 @@ function WeChatQrHelp() {
   );
 }
 
-export default function LoginPanel({
-  onAuthenticated,
-  onFire,
-  onFieldFocusChange,
-}: LoginPanelProps) {
+export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
     userName: "",
     userPassword: "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof LoginValues, string>>>({});
   const [loading, setLoading] = useState(false);
-  const lastFireRef = useRef<Record<string, number>>({});
-
-  const fireThrottled = (key: string, type: ActionType, gapMs = 900) => {
-    const now = Date.now();
-    const last = lastFireRef.current[key] ?? 0;
-    if (now - last < gapMs) return;
-
-    lastFireRef.current[key] = now;
-    onFire?.(type);
-  };
 
   const handleAccountLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -130,8 +113,6 @@ export default function LoginPanel({
         userName: values.userName.trim(),
         pw: values.userPassword,
       });
-      onFieldFocusChange?.(null);
-      onFire?.("THANKS");
       await onAuthenticated();
 
       notifyOnce("login-success", {
@@ -142,7 +123,6 @@ export default function LoginPanel({
         duration: 2,
       });
     } catch {
-      onFire?.("SHAKE");
       // Global request handling surfaces HTTP, business and network failures once.
     } finally {
       setLoading(false);
@@ -168,11 +148,6 @@ export default function LoginPanel({
           value={values.userName}
           aria-invalid={Boolean(errors.userName) || undefined}
           aria-describedby={errors.userName ? "login-username-error" : undefined}
-          onFocus={() => {
-            onFieldFocusChange?.("userName");
-            fireThrottled("focus-user", "SURPRISE", 1200);
-          }}
-          onBlur={() => onFieldFocusChange?.(null)}
           onChange={(event) => {
             setValues((current) => ({ ...current, userName: event.target.value }));
             if (errors.userName) {
@@ -203,11 +178,6 @@ export default function LoginPanel({
           value={values.userPassword}
           aria-invalid={Boolean(errors.userPassword) || undefined}
           aria-describedby={errors.userPassword ? "login-password-error" : undefined}
-          onFocus={() => {
-            onFieldFocusChange?.("userPassword");
-            fireThrottled("focus-password", "BLINK", 1200);
-          }}
-          onBlur={() => onFieldFocusChange?.(null)}
           onChange={(event) => {
             setValues((current) => ({ ...current, userPassword: event.target.value }));
             if (errors.userPassword) {
@@ -223,14 +193,7 @@ export default function LoginPanel({
         ) : null}
       </div>
 
-      <Button
-        variant="primary"
-        size="large"
-        type="submit"
-        loading={loading}
-        className="w-full"
-        onMouseEnter={() => fireThrottled("login-hover", "SMILE")}
-      >
+      <Button variant="primary" size="large" type="submit" loading={loading} className="w-full">
         登录
       </Button>
 
