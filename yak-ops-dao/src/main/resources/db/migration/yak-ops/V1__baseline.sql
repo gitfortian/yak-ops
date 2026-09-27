@@ -1,5 +1,5 @@
 -- Yak Ops first stable schema baseline.
--- Current product scope contains user/login persistence, workspace membership and datasource management persistence.
+-- Current product scope contains user/login persistence, workspace membership, user preferences and datasource management persistence.
 -- This baseline is for rebuildable early-stage databases. Once released to a shared environment it becomes immutable.
 
 CREATE TABLE yak_security_user (
@@ -63,6 +63,26 @@ CREATE TABLE yak_ops_workspace_member (
   DEFAULT CHARACTER SET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='工作空间成员关系表';
+
+CREATE TABLE yak_ops_user_preference (
+    id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
+    user_id VARCHAR(64) NOT NULL COMMENT '偏好所属用户ID',
+    scene VARCHAR(64) NOT NULL COMMENT '偏好场景，例如 PRODUCT_MENU 或 DATASOURCE_CREATE_TYPE',
+    item_key VARCHAR(128) NOT NULL COMMENT '场景内稳定业务标识',
+    favorite TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否被用户显式收藏：0 否，1 是',
+    sort_order INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '收藏展示顺序，未收藏时为0',
+    use_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '累计使用次数',
+    last_used_time DATETIME(3) NULL COMMENT '最近一次使用时间',
+    create_time DATETIME(3) NOT NULL COMMENT '创建时间',
+    update_time DATETIME(3) NOT NULL COMMENT '更新时间',
+    create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
+    update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ops_user_preference_user_scene_item (user_id, scene, item_key)
+) ENGINE=InnoDB
+  DEFAULT CHARACTER SET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户偏好表';
 
 CREATE TABLE yak_ops_data_source (
     id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
