@@ -354,15 +354,9 @@ public class DataSyncServiceImpl implements DataSyncService {
         snapshot.setTaskName(task.getName());
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSource(endpointSnapshot(
-                source,
-                resolvedScope.getSourceDatabase(),
-                resolvedScope.getSourceSchema(),
-                task.getSourceTable()));
+                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
         snapshot.setTarget(endpointSnapshot(
-                target,
-                resolvedScope.getTargetDatabase(),
-                resolvedScope.getTargetSchema(),
-                task.getTargetTable()));
+                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable()));
         snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
         return snapshot;
     }
