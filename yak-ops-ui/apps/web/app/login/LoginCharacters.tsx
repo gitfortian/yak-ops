@@ -301,14 +301,13 @@ export default function LoginCharacters({
       const interactionTargetX =
         activeResult !== "idle"
           ? 0
-          :
-        activeFocus === "userName"
-          ? 1
-          : passwordPeek
-            ? 1.12
-            : activeFocus === "userPassword"
-              ? -0.82
-              : targetX;
+          : activeFocus === "userName"
+            ? 1
+            : passwordPeek
+              ? 1.12
+              : activeFocus === "userPassword"
+                ? -0.82
+                : targetX;
       const interactionTargetY =
         activeResult !== "idle"
           ? 0
