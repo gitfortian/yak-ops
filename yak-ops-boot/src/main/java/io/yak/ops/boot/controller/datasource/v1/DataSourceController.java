@@ -6,9 +6,9 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
+import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -78,8 +78,7 @@ public class DataSourceController {
     @Operation(summary = "查询数据源可见Schema")
     @GetMapping("/{id}/catalog/schemas")
     public Result<List<String>> catalogSchemas(
-            @PathVariable("id") String id,
-            @RequestParam(value = "database", required = false) String database) {
+            @PathVariable("id") String id, @RequestParam(value = "database", required = false) String database) {
         return Result.success(dataSourceService.queryCatalogSchemas(id, database));
     }
 

@@ -44,8 +44,7 @@ public class DataSyncController {
 
     @Operation(summary = "编辑离线同步任务")
     @PutMapping("/tasks/{id}")
-    public Result<DataSyncTaskVO> updateTask(
-            @PathVariable("id") String id, @Valid @RequestBody DataSyncTaskDTO dto) {
+    public Result<DataSyncTaskVO> updateTask(@PathVariable("id") String id, @Valid @RequestBody DataSyncTaskDTO dto) {
         return Result.success(dataSyncService.updateTask(id, dto));
     }
 
@@ -69,8 +68,7 @@ public class DataSyncController {
 
     @Operation(summary = "预览来源与目标表字段自动映射")
     @PostMapping("/tasks/mapping-preview")
-    public Result<DataSyncMappingPreviewVO> mappingPreview(
-            @Valid @RequestBody DataSyncMappingPreviewDTO dto) {
+    public Result<DataSyncMappingPreviewVO> mappingPreview(@Valid @RequestBody DataSyncMappingPreviewDTO dto) {
         return Result.success(dataSyncService.previewMapping(dto));
     }
 }
