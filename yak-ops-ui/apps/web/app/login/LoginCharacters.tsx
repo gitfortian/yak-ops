@@ -262,6 +262,14 @@ function OrangeCharacter() {
                     fill="#171717"
                   />
                   <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
+                    d="M214 494Q231 504 248 494"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
                     d="M204 485H257C254 509 244 521 230.5 521C217 521 207 509 204 485Z"
                     fill="#171717"
