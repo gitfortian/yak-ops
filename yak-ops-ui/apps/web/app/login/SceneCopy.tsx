@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 
-const COPY = [
-  "Welcome To Baize Flow 🌊",
-  "让数据优雅的流动起来 💫",
-  "让流动更轻一点 ✨",
-];
+const COPY = ["Welcome To Baize Flow 🌊", "让数据优雅的流动起来 💫", "让流动更轻一点 ✨"];
 
 function CyclingCopy() {
   const [index, setIndex] = useState(0);
