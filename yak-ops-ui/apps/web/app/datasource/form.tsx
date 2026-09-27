@@ -58,6 +58,7 @@ type MySqlDriverId = "AUTO" | "MYSQL_8" | "MYSQL_5";
 interface FormValues {
   name: string;
   dbType: string;
+  jdbcUrl: string;
   host: string;
   port: string;
   database: string;
@@ -71,6 +72,7 @@ interface FormValues {
 type FormErrorKey =
   | "name"
   | "dbType"
+  | "jdbcUrl"
   | "host"
   | "port"
   | "database"
@@ -102,6 +104,7 @@ const normalizeMySqlDriverId = (value: unknown): MySqlDriverId => {
 const EMPTY_FORM: FormValues = {
   name: "",
   dbType: "MYSQL",
+  jdbcUrl: "",
   host: DEFAULT_HOST,
   port: defaultPort("MYSQL"),
   database: "",
@@ -142,19 +145,41 @@ const parseProperties = (value: unknown): JdbcProperty[] => {
 
 const parseOriginalJson = (record?: DataSourceRecord): Partial<FormValues> => {
   const dbType = normalizeDataSourceType(record?.dbType) || "MYSQL";
+  const recordJdbcUrl = record?.jdbcUrl?.trim() || "";
   if (!record?.originalJson) {
+    if (dbType === "ORACLE") return { jdbcUrl: recordJdbcUrl };
+    const jdbc = parseJdbcUrl(dbType, recordJdbcUrl);
     return {
-      ...parseJdbcUrl(dbType, record?.jdbcUrl),
-      port: parseJdbcUrl(dbType, record?.jdbcUrl).port || defaultPort(dbType),
+      ...jdbc,
+      port: jdbc.port || defaultPort(dbType),
     };
   }
   try {
     const value = JSON.parse(record.originalJson);
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const jdbc = parseJdbcUrl(
-      dbType,
-      typeof value.jdbcUrl === "string" ? value.jdbcUrl : record?.jdbcUrl,
-    );
+    const explicitJdbcUrl =
+      typeof value.jdbcUrl === "string" && value.jdbcUrl.trim()
+        ? value.jdbcUrl.trim()
+        : recordJdbcUrl;
+
+    if (dbType === "ORACLE") {
+      const host = typeof value.host === "string" ? value.host.trim() : "";
+      const port =
+        typeof value.port === "number" || typeof value.port === "string"
+          ? String(value.port)
+          : defaultPort("ORACLE");
+      const database = typeof value.database === "string" ? value.database.trim() : "";
+      const legacyJdbcUrl =
+        host && database ? "jdbc:oracle:thin:@//" + host + ":" + port + "/" + database : "";
+      return {
+        jdbcUrl: explicitJdbcUrl || legacyJdbcUrl,
+        username: typeof value.username === "string" ? value.username : undefined,
+        password: typeof value.password === "string" ? value.password : undefined,
+        properties: parseProperties(value.properties),
+      };
+    }
+
+    const jdbc = parseJdbcUrl(dbType, explicitJdbcUrl);
     return {
       host: typeof value.host === "string" && value.host.trim() ? value.host : jdbc.host,
       port:
@@ -171,9 +196,11 @@ const parseOriginalJson = (record?: DataSourceRecord): Partial<FormValues> => {
       properties: parseProperties(value.properties),
     };
   } catch {
+    if (dbType === "ORACLE") return { jdbcUrl: recordJdbcUrl };
+    const jdbc = parseJdbcUrl(dbType, recordJdbcUrl);
     return {
-      ...parseJdbcUrl(dbType, record?.jdbcUrl),
-      port: parseJdbcUrl(dbType, record?.jdbcUrl).port || defaultPort(dbType),
+      ...jdbc,
+      port: jdbc.port || defaultPort(dbType),
     };
   }
 };
@@ -186,9 +213,6 @@ const buildJdbcPreview = (values: FormValues) => {
   let jdbcUrl: string;
 
   switch (normalizeDataSourceType(values.dbType)) {
-    case "ORACLE":
-      jdbcUrl = "jdbc:oracle:thin:@//" + authority + "/" + database;
-      break;
     case "POSTGRE_SQL":
       jdbcUrl = "jdbc:postgresql://" + authority + "/" + database;
       break;
@@ -219,6 +243,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
   const [propertyKeysLoading, setPropertyKeysLoading] = useState(false);
   const editing = Boolean(record?.id);
   const busy = testing || submitting;
+  const isOracle = normalizeDataSourceType(values.dbType) === "ORACLE";
 
   useEffect(() => {
     if (!open) return;
@@ -228,6 +253,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       ...EMPTY_FORM,
       name: record?.name || "",
       dbType,
+      jdbcUrl: original.jdbcUrl || "",
       host: original.host || DEFAULT_HOST,
       port: original.port || defaultPort(dbType),
       database: original.database || "",
@@ -246,7 +272,12 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
   }, [open, record]);
 
   useEffect(() => {
-    if (!open || createStep !== "config" || !values.dbType) {
+    if (
+      !open ||
+      createStep !== "config" ||
+      !values.dbType ||
+      normalizeDataSourceType(values.dbType) === "ORACLE"
+    ) {
       setPropertyKeyOptions([]);
       setPropertyKeysLoading(false);
       return;
@@ -342,14 +373,31 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       next.name = intl.formatMessage({ id: "pages.datasource.form.dsNameRequired" });
     if (!values.dbType)
       next.dbType = intl.formatMessage({ id: "pages.datasource.form.dbTypeRequired" });
-    if (!values.host.trim())
-      next.host = intl.formatMessage({ id: "pages.datasource.form.hostRequired" });
-    if (!values.port.trim())
-      next.port = intl.formatMessage({ id: "pages.datasource.form.portRequired" });
-    else if (!Number.isInteger(port) || port < 1 || port > 65535)
-      next.port = intl.formatMessage({ id: "pages.datasource.form.portInvalid" });
-    if (!values.database.trim())
-      next.database = intl.formatMessage({ id: "pages.datasource.form.databaseRequired" });
+
+    if (isOracle) {
+      if (!values.jdbcUrl.trim())
+        next.jdbcUrl = intl.formatMessage({ id: "pages.datasource.form.jdbcUrlRequired" });
+      else if (!values.jdbcUrl.trim().toLowerCase().startsWith("jdbc:oracle:"))
+        next.jdbcUrl = intl.formatMessage({ id: "pages.datasource.form.jdbcUrlInvalid" });
+    } else {
+      if (!values.host.trim())
+        next.host = intl.formatMessage({ id: "pages.datasource.form.hostRequired" });
+      if (!values.port.trim())
+        next.port = intl.formatMessage({ id: "pages.datasource.form.portRequired" });
+      else if (!Number.isInteger(port) || port < 1 || port > 65535)
+        next.port = intl.formatMessage({ id: "pages.datasource.form.portInvalid" });
+      if (!values.database.trim())
+        next.database = intl.formatMessage({ id: "pages.datasource.form.databaseRequired" });
+
+      const propertyKeys = values.properties.map((property) => property.key.trim());
+      const normalizedPropertyKeys = propertyKeys.map(normalizePropertyKey);
+      if (propertyKeys.some((key) => !key)) {
+        next.properties = intl.formatMessage({ id: "pages.datasource.form.propertyKeyRequired" });
+      } else if (new Set(normalizedPropertyKeys).size !== normalizedPropertyKeys.length) {
+        next.properties = intl.formatMessage({ id: "pages.datasource.form.propertyKeyDuplicate" });
+      }
+    }
+
     if (!values.username.trim())
       next.username = intl.formatMessage({ id: "pages.datasource.form.usernameRequired" });
     if (values.name.length > 128)
@@ -357,29 +405,32 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     if (values.remark.length > 500)
       next.remark = intl.formatMessage({ id: "pages.datasource.form.descriptionMax" });
 
-    const propertyKeys = values.properties.map((property) => property.key.trim());
-    const normalizedPropertyKeys = propertyKeys.map(normalizePropertyKey);
-    if (propertyKeys.some((key) => !key)) {
-      next.properties = intl.formatMessage({ id: "pages.datasource.form.propertyKeyRequired" });
-    } else if (new Set(normalizedPropertyKeys).size !== normalizedPropertyKeys.length) {
-      next.properties = intl.formatMessage({ id: "pages.datasource.form.propertyKeyDuplicate" });
-    }
-
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const connectionParams = (): DataSourceConnectionParams => ({
-    host: values.host.trim(),
-    port: Number(values.port),
-    database: values.database.trim(),
-    username: values.username.trim(),
-    password: values.password,
-    ...(normalizeDataSourceType(values.dbType) === "MYSQL" ? { driverId: values.driverId } : {}),
-    properties: Object.fromEntries(
+  const connectionParams = (): DataSourceConnectionParams => {
+    const properties = Object.fromEntries(
       values.properties.map((property) => [property.key.trim(), property.value]),
-    ),
-  });
+    );
+    if (isOracle) {
+      return {
+        jdbcUrl: values.jdbcUrl.trim(),
+        username: values.username.trim(),
+        password: values.password,
+        properties,
+      };
+    }
+    return {
+      host: values.host.trim(),
+      port: Number(values.port),
+      database: values.database.trim(),
+      username: values.username.trim(),
+      password: values.password,
+      ...(normalizeDataSourceType(values.dbType) === "MYSQL" ? { driverId: values.driverId } : {}),
+      properties,
+    };
+  };
 
   const handleTest = async () => {
     if (busy || !validate()) return;
@@ -433,6 +484,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
         : {
             ...current,
             dbType: normalizedType,
+            jdbcUrl: "",
             host: DEFAULT_HOST,
             port: defaultPort(normalizedType),
             database: "",
@@ -481,6 +533,34 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
         {buildJdbcPreview(values)}
       </div>
     </div>
+  );
+
+  const oracleJdbcUrlField = (
+    <Field
+      invalid={Boolean(errors.jdbcUrl)}
+      className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3"
+    >
+      <FieldLabel required htmlFor="datasource-jdbc-url" className="pt-1.5 text-xs leading-4">
+        {intl.formatMessage({ id: "pages.datasource.form.jdbcUrl" })}
+      </FieldLabel>
+      <div className="min-w-0">
+        <Input
+          id="datasource-jdbc-url"
+          required
+          size="small"
+          variant="outlined"
+          value={values.jdbcUrl}
+          aria-invalid={Boolean(errors.jdbcUrl) || undefined}
+          placeholder={intl.formatMessage({
+            id: "pages.datasource.form.oracleJdbcUrlPlaceholder",
+          })}
+          onChange={(event) => patch("jdbcUrl", event.target.value)}
+        />
+        <FieldError match={Boolean(errors.jdbcUrl)} className="mt-1">
+          {errors.jdbcUrl}
+        </FieldError>
+      </div>
+    </Field>
   );
 
   const connectionAddressField = (
@@ -828,7 +908,15 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     </div>
   );
 
-  const connectionFields = (
+  const connectionFields = isOracle ? (
+    <>
+      {oracleJdbcUrlField}
+      {accessIdentityField}
+      {usernameField}
+      {passwordField}
+      {authOptionField}
+    </>
+  ) : (
     <>
       {jdbcPreviewField}
       {connectionAddressField}
