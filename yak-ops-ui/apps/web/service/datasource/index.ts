@@ -64,14 +64,10 @@ export const testDataSourceConnectionWithParams = (
 ): Promise<boolean> =>
   HttpUtils.postData<boolean>(`${DATA_SOURCE_API_PREFIX}/connect-test-with-param`, payload);
 
-
 export const listDataSourceDatabases = (id: DataSourceId): Promise<string[]> =>
   HttpUtils.getData<string[]>(`${DATA_SOURCE_API_PREFIX}/${id}/catalog/databases`);
 
-export const listDataSourceSchemas = (
-  id: DataSourceId,
-  database?: string,
-): Promise<string[]> => {
+export const listDataSourceSchemas = (id: DataSourceId, database?: string): Promise<string[]> => {
   const query = database ? `?database=${encodeURIComponent(database)}` : "";
   return HttpUtils.getData<string[]>(`${DATA_SOURCE_API_PREFIX}/${id}/catalog/schemas${query}`);
 };

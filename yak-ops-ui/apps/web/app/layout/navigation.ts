@@ -1,4 +1,11 @@
-import { ArrowRightLeft, Database, LayoutGrid, Settings, Users, type LucideIcon } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Database,
+  LayoutGrid,
+  Settings,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 export type ProductNavigationItem = {
   label: string;

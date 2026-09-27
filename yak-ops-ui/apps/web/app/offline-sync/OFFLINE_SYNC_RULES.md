@@ -1,6 +1,7 @@
 # Offline Sync Frontend Rules
 
 Scope:
+
 - `yak-ops-ui/apps/web/app/offline-sync/**`
 - `yak-ops-ui/apps/web/service/data-sync/**`
 
@@ -9,6 +10,7 @@ Scope:
 The offline editor configures and persists task definitions only.
 
 Must:
+
 - Reuse saved Datasource resources; never ask for database credentials.
 - Use Datasource Catalog API for database / Schema / table discovery.
 - Display backend mapping preview as the source of truth.
@@ -18,6 +20,7 @@ Must:
 - Use existing Yak UI primitives.
 
 Must Not:
+
 - Add run / stop / retry controls before execution lifecycle exists.
 - Add filter SQL, split key, pre/post SQL, resource group or Transform.
 - Reimplement JDBC type compatibility in frontend code.

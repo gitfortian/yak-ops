@@ -281,13 +281,15 @@ export function OfflineSyncEditorPage() {
   const editing = Boolean(id);
   const navigate = useNavigate();
   const location = useLocation();
-  const draft = (location.state as {
-    draft?: {
-      name?: string;
-      sourceDataSourceId?: string;
-      targetDataSourceId?: string;
-    };
-  } | null)?.draft;
+  const draft = (
+    location.state as {
+      draft?: {
+        name?: string;
+        sourceDataSourceId?: string;
+        targetDataSourceId?: string;
+      };
+    } | null
+  )?.draft;
 
   const [form, setForm] = useState<EditorForm>(() => ({
     ...EMPTY_FORM,
@@ -351,10 +353,7 @@ export function OfflineSyncEditorPage() {
 
   const mappingPayload = useMemo(
     () =>
-      form.sourceDataSourceId &&
-      form.sourceTable &&
-      form.targetDataSourceId &&
-      form.targetTable
+      form.sourceDataSourceId && form.sourceTable && form.targetDataSourceId && form.targetTable
         ? {
             sourceDataSourceId: form.sourceDataSourceId,
             sourceDatabase: form.sourceDatabase || undefined,
@@ -629,7 +628,10 @@ export function OfflineSyncEditorPage() {
             />
           </div>
 
-          <section id="mapping" className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
+          <section
+            id="mapping"
+            className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
+          >
             <div className="flex items-center justify-between border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5">
               <h2 className="text-sm font-semibold text-[#344054]">字段映射</h2>
               {mapping ? (

@@ -111,14 +111,18 @@ export function OfflineSyncPage() {
         return (
           <div className="flex min-w-0 items-center gap-3 text-[13px]">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">{source?.name || "未知数据源"}</div>
+              <div className="truncate font-medium text-[#344054]">
+                {source?.name || "未知数据源"}
+              </div>
               <div className="truncate text-xs text-[#667085]">
                 {pathText(record.sourceDatabase, record.sourceSchema, record.sourceTable)}
               </div>
             </div>
             <ArrowRight size={15} className="shrink-0 text-[#98a2b3]" />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">{target?.name || "未知数据源"}</div>
+              <div className="truncate font-medium text-[#344054]">
+                {target?.name || "未知数据源"}
+              </div>
               <div className="truncate text-xs text-[#667085]">
                 {pathText(record.targetDatabase, record.targetSchema, record.targetTable)}
               </div>
