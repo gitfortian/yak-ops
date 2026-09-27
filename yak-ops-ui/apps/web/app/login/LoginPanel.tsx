@@ -92,10 +92,7 @@ function WeChatQrHelp() {
   );
 }
 
-export default function LoginPanel({
-  onAuthenticated,
-  onFocusStateChange,
-}: LoginPanelProps) {
+export default function LoginPanel({ onAuthenticated, onFocusStateChange }: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
     userName: "",
     userPassword: "",
