@@ -1,0 +1,42 @@
+package io.yak.ops.flow.connector.jdbc.dialect;
+
+import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import java.util.stream.Collectors;
+
+/**
+ * YakFlow JDBC Connector 的数据库 SQL 方言边界，只处理标识符与当前批量同步需要的固定 SQL。
+ *
+ * @author weifuwan
+ * @since 2026-09-27
+ */
+public interface JdbcDialect {
+
+    String quoteIdentifier(String identifier);
+
+    String qualifiedTable(DataSourceTablePath table);
+
+    default String selectSql(DataSourceTablePath table, YakTableSchema schema) {
+        String columns = schema.columns().stream()
+                .map(YakColumn::name)
+                .map(this::quoteIdentifier)
+                .collect(Collectors.joining(", "));
+        String orderBy = schema.primaryKeys().isEmpty()
+                ? ""
+                : " ORDER BY "
+                        + schema.primaryKeys().stream()
+                                .map(this::quoteIdentifier)
+                                .collect(Collectors.joining(", "));
+        return "SELECT " + columns + " FROM " + qualifiedTable(table) + orderBy;
+    }
+
+    default String insertSql(DataSourceTablePath table, YakTableSchema schema) {
+        String columns = schema.columns().stream()
+                .map(YakColumn::name)
+                .map(this::quoteIdentifier)
+                .collect(Collectors.joining(", "));
+        String placeholders = schema.columns().stream().map(ignored -> "?").collect(Collectors.joining(", "));
+        return "INSERT INTO " + qualifiedTable(table) + " (" + columns + ") VALUES (" + placeholders + ")";
+    }
+}

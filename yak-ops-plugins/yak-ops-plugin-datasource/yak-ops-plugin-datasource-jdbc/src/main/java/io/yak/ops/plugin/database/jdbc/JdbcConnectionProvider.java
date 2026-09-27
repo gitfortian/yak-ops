@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.database.jdbc;
 
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.sql.Connection;
 
 /**
@@ -13,5 +14,5 @@ import java.sql.Connection;
 @FunctionalInterface
 public interface JdbcConnectionProvider {
 
-    Connection open(JdbcConnectionProperties connection, int timeoutSeconds) throws Exception;
+    Connection open(DataSourceConnection connection, int timeoutSeconds) throws Exception;
 }

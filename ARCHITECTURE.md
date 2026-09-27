@@ -81,6 +81,14 @@ The checkpoint barrier is an ordering boundary, not an exactly-once claim: Sourc
 
 The Local Runtime depends on `yak-flow-api` only. It does not depend on Spring, Yak Ops Business/DAO, JDBC or Debezium, and it does not introduce distributed scheduling, worker discovery or resource management.
 
+### `yak-flow/yak-flow-connector-jdbc`
+
+Owns YakFlow bounded JDBC table transfer. The first acceptance path is MySQL Source to MySQL, PostgreSQL or Oracle Sink.
+
+The connector reuses the normalized `DataSourceConnection` and JDBC connection runtime from the existing Datasource plugin boundary. It owns synchronization-specific SQL generation, row reading, logical type conversion, bounded Source lifecycle and batched Sink writes. Datasource plugins continue to own connection parsing, Driver selection, SSH tunneling and Catalog discovery.
+
+Phase 3 intentionally requires the target table to exist. Auto-create DDL, schema evolution and CDC changelog writes are not part of this module stage.
+
 ### `yak-ops-business`
 
 Owns the application Service Layer. Stable capabilities expose one public Service Layer interface and keep Spring implementation, transactions, validation and DAO/Plugin orchestration in `impl`.
@@ -200,7 +208,7 @@ Boot
 
 Boot owns protocol entry and application assembly.
 
-YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model; future connector modules depend on the API rather than introducing separate batch and CDC protocols.
+YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; CDC remains a later connector stage.
 
 Security, Workspace, User Preference and Datasource own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
 
