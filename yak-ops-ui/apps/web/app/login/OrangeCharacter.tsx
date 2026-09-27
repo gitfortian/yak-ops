@@ -1,5 +1,13 @@
 import { useEffect, useRef } from "react";
 
+const FACE_ORIGIN_X = 79;
+const FACE_ORIGIN_Y = 54;
+const FACE_MAX_LEFT = 7;
+const FACE_MAX_RIGHT = 28;
+const FACE_MAX_UP = 4;
+const FACE_MAX_DOWN = 14;
+const FACE_TRACK_DISTANCE = 150;
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -25,8 +33,8 @@ export default function OrangeCharacter() {
         currentX = targetX;
         currentY = targetY;
       } else {
-        currentX += (targetX - currentX) * 0.16;
-        currentY += (targetY - currentY) * 0.16;
+        currentX += (targetX - currentX) * 0.12;
+        currentY += (targetY - currentY) * 0.12;
       }
 
       face.setAttribute(
@@ -46,16 +54,37 @@ export default function OrangeCharacter() {
     const handlePointerMove = (event: PointerEvent) => {
       if (event.pointerType && event.pointerType !== "mouse" && event.pointerType !== "pen") return;
 
-      const rect = svg.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
+      const matrix = svg.getScreenCTM();
+      if (!matrix) return;
 
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const x = clamp((event.clientX - centerX) / (rect.width * 0.85), -1, 1);
-      const y = clamp((event.clientY - centerY) / (rect.height * 0.9), -1, 1);
+      const pointer = svg.createSVGPoint();
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      const localPointer = pointer.matrixTransform(matrix.inverse());
 
-      targetX = x * 8;
-      targetY = y * 5;
+      const deltaX = localPointer.x - FACE_ORIGIN_X;
+      const deltaY = localPointer.y - FACE_ORIGIN_Y;
+      const distance = Math.hypot(deltaX, deltaY);
+      if (distance < 0.01) {
+        targetX = 0;
+        targetY = 0;
+        scheduleRender();
+        return;
+      }
+
+      const strength = clamp(distance / FACE_TRACK_DISTANCE, 0, 1);
+      const directionX = deltaX / distance;
+      const directionY = deltaY / distance;
+
+      const horizontalLimit = directionX < 0 ? FACE_MAX_LEFT : FACE_MAX_RIGHT;
+      const horizontal = directionX * horizontalLimit * strength;
+
+      const leftEdgeDrop = clamp(-horizontal / FACE_MAX_LEFT, 0, 1) * 7;
+      const sideDrop = Math.pow(Math.abs(horizontal) / FACE_MAX_RIGHT, 2) * 2;
+      const vertical = directionY * 8 * strength + leftEdgeDrop + sideDrop;
+
+      targetX = horizontal;
+      targetY = clamp(vertical, -FACE_MAX_UP, FACE_MAX_DOWN);
       scheduleRender();
     };
 
@@ -85,11 +114,16 @@ export default function OrangeCharacter() {
       role="img"
       viewBox="0 0 220 128"
     >
+      <defs>
+        <clipPath id="orange-character-body-clip">
+          <path d="M14 118C14 61 56 17 109 14C166 11 206 58 206 118H14Z" />
+        </clipPath>
+      </defs>
       <path
         d="M14 118C14 61 56 17 109 14C166 11 206 58 206 118H14Z"
         fill="#FF7931"
       />
-      <g ref={faceRef}>
+      <g ref={faceRef} clipPath="url(#orange-character-body-clip)">
         <circle cx="56" cy="43" r="4.8" fill="#171717" />
         <circle cx="98" cy="50" r="4.6" fill="#171717" />
         <path
