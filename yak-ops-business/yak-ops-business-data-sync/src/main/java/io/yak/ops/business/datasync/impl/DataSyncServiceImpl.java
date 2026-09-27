@@ -239,7 +239,8 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncTaskVO target = new DataSyncTaskVO();
         target.setId(source.getId());
         target.setName(source.getName());
-        target.setSyncType(source.getSyncType() == null ? null : source.getSyncType().name());
+        target.setSyncType(
+                source.getSyncType() == null ? null : source.getSyncType().name());
         target.setSourceDataSourceId(source.getSourceDataSourceId());
         target.setSourceDatabase(source.getSourceDatabase());
         target.setSourceSchema(source.getSourceSchema());
@@ -272,7 +273,8 @@ public class DataSyncServiceImpl implements DataSyncService {
         target.setTaskId(source.getTaskId());
         target.setTaskName(source.getTaskName());
         target.setTaskVersion(source.getTaskVersion());
-        target.setTriggerType(source.getTriggerType() == null ? null : source.getTriggerType().name());
+        target.setTriggerType(
+                source.getTriggerType() == null ? null : source.getTriggerType().name());
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
         target.setReadRows(source.getReadRows());
         target.setWriteRows(source.getWriteRows());
