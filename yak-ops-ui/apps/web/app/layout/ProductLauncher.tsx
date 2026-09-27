@@ -57,6 +57,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
       .then((nextPreferences) => {
         if (active) setPreferences(nextPreferences);
       })
+      .catch(() => undefined)
       .finally(() => {
         if (active) setFavoritesLoading(false);
       });
