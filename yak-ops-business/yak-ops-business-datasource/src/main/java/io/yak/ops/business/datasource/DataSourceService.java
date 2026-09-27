@@ -1,10 +1,14 @@
 package io.yak.ops.business.datasource;
 
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
+import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
+import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
@@ -47,6 +51,18 @@ public interface DataSourceService {
      * @return Provider 属性名候选项
      */
     DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType);
+
+    /** 查询已保存数据源可见的数据库列表。 */
+    List<String> queryCatalogDatabases(String id);
+
+    /** 查询已保存数据源指定数据库下可见的 Schema 列表。 */
+    List<String> queryCatalogSchemas(String id, String database);
+
+    /** 查询已保存数据源的表 / 视图元数据。 */
+    List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
+
+    /** 查询已保存数据源指定表的字段元数据。 */
+    List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
 
     /** 删除指定数据源。 */
     boolean deleteDataSource(String id);

@@ -5,11 +5,15 @@ import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
+import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
+import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectionDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -21,6 +25,10 @@ import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.dao.repository.datasource.DataSourcePageQuery;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalogQuery;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTable;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -130,6 +138,59 @@ public class DataSourceServiceImpl implements DataSourceService {
         DataSourceConnectionPropertyKeysVO result = new DataSourceConnectionPropertyKeysVO();
         result.setAcceptedPropertyKeys(pluginRegistry.connectionPropertyKeys(canonicalType));
         return result;
+    }
+
+    @Override
+    public List<String> queryCatalogDatabases(String id) {
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        return pluginRegistry.catalogDatabases(
+                entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds());
+    }
+
+    @Override
+    public List<String> queryCatalogSchemas(String id, String database) {
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        return pluginRegistry.catalogSchemas(
+                entity.getDbType(),
+                entity.getConnectionParams(),
+                connectionTestTimeoutSeconds(),
+                normalizeNullable(database));
+    }
+
+    @Override
+    public List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto) {
+        if (dto == null) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表查询参数不能为空");
+        }
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        DataSourceCatalogQuery query = new DataSourceCatalogQuery(
+                normalizeNullable(dto.getDatabase()),
+                normalizeNullable(dto.getSchema()),
+                normalizeNullable(dto.getKeyword()),
+                dto.getLimit());
+        return pluginRegistry
+                .catalogTables(entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), query)
+                .stream()
+                .map(this::toCatalogTableVO)
+                .toList();
+    }
+
+    @Override
+    public List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto) {
+        if (dto == null || !StringUtils.hasText(dto.getTable())) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
+        }
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        DataSourceTablePath tablePath = new DataSourceTablePath(
+                normalizeNullable(dto.getDatabase()),
+                normalizeNullable(dto.getSchema()),
+                dto.getTable().trim());
+        return pluginRegistry
+                .catalogColumns(
+                        entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
+                .stream()
+                .map(this::toCatalogColumnVO)
+                .toList();
     }
 
     @Override
@@ -357,6 +418,30 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     private int connectionTestTimeoutSeconds() {
         return Math.max(1, properties.getConnectionTestTimeoutSeconds());
+    }
+
+    private DataSourceCatalogTableVO toCatalogTableVO(DataSourceTable source) {
+        DataSourceCatalogTableVO target = new DataSourceCatalogTableVO();
+        target.setDatabase(source.database());
+        target.setSchema(source.schema());
+        target.setName(source.name());
+        target.setType(source.type());
+        target.setRemarks(source.remarks());
+        return target;
+    }
+
+    private DataSourceCatalogColumnVO toCatalogColumnVO(DataSourceColumn source) {
+        DataSourceCatalogColumnVO target = new DataSourceCatalogColumnVO();
+        target.setName(source.name());
+        target.setTypeName(source.typeName());
+        target.setJdbcType(source.jdbcType());
+        target.setSize(source.size());
+        target.setScale(source.scale());
+        target.setNullable(source.nullable());
+        target.setOrdinalPosition(source.ordinalPosition());
+        target.setPrimaryKey(source.primaryKey());
+        target.setRemarks(source.remarks());
+        return target;
     }
 
     private DataSourceBatchConnectTestResultVO toBatchConnectTestResult(String dataSourceId, boolean connected) {
