@@ -112,10 +112,7 @@ export default function AppRouter() {
           <Route path="/data-source" element={<DataSourcePage />} />
           <Route path="/offline-sync" element={<OfflineSyncPage />} />
           <Route path="/offline-sync/new" element={<OfflineSyncEditorPage />} />
-          <Route
-            path="/offline-sync/instances/:id"
-            element={<OfflineSyncInstanceDetailPage />}
-          />
+          <Route path="/offline-sync/instances/:id" element={<OfflineSyncInstanceDetailPage />} />
           <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
         </Route>
 

@@ -49,8 +49,7 @@ final class OfflineSyncSchemaResolver {
         return JdbcSchemaMapper.fromColumns(mapped);
     }
 
-    private static List<DataSourceColumn> toColumns(
-            List<DataSourceCatalogColumnVO> columns, boolean rewriteOrdinal) {
+    private static List<DataSourceColumn> toColumns(List<DataSourceCatalogColumnVO> columns, boolean rewriteOrdinal) {
         List<DataSourceCatalogColumnVO> ordered = columns.stream()
                 .sorted(Comparator.comparingInt(OfflineSyncSchemaResolver::ordinal))
                 .toList();

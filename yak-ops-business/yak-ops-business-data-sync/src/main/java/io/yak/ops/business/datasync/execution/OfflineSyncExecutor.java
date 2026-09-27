@@ -202,11 +202,7 @@ public class OfflineSyncExecutor {
                     errorCode,
                     message);
         }
-        LOG.error(
-                "离线同步实例执行异常，workspaceId={}, instanceId={}, error={}",
-                workspaceId,
-                instanceId,
-                message);
+        LOG.error("离线同步实例执行异常，workspaceId={}, instanceId={}, error={}", workspaceId, instanceId, message);
     }
 
     private void transitionTerminal(
@@ -246,8 +242,6 @@ public class OfflineSyncExecutor {
                     : throwable.getClass().getSimpleName();
         }
         String masked = SensitiveUtils.mask(message);
-        return masked.length() > MAX_ERROR_MESSAGE_LENGTH
-                ? masked.substring(0, MAX_ERROR_MESSAGE_LENGTH)
-                : masked;
+        return masked.length() > MAX_ERROR_MESSAGE_LENGTH ? masked.substring(0, MAX_ERROR_MESSAGE_LENGTH) : masked;
     }
 }

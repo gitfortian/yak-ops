@@ -239,7 +239,8 @@ public class DataSyncServiceImpl implements DataSyncService {
                 dto.getTriggerType(),
                 dto.getStartTimeStart(),
                 dto.getStartTimeEnd());
-        return PagingData.from(instanceRepository.queryPage(workspaceId, query).map(value -> toInstanceVO(value, false)));
+        return PagingData.from(
+                instanceRepository.queryPage(workspaceId, query).map(value -> toInstanceVO(value, false)));
     }
 
     @Override
@@ -346,16 +347,10 @@ public class DataSyncServiceImpl implements DataSyncService {
         snapshot.setTaskId(task.getId());
         snapshot.setTaskName(task.getName());
         snapshot.setTaskVersion(task.getDefinitionVersion());
-        snapshot.setSource(endpointSnapshot(
-                source,
-                task.getSourceDatabase(),
-                task.getSourceSchema(),
-                task.getSourceTable()));
-        snapshot.setTarget(endpointSnapshot(
-                target,
-                task.getTargetDatabase(),
-                task.getTargetSchema(),
-                task.getTargetTable()));
+        snapshot.setSource(
+                endpointSnapshot(source, task.getSourceDatabase(), task.getSourceSchema(), task.getSourceTable()));
+        snapshot.setTarget(
+                endpointSnapshot(target, task.getTargetDatabase(), task.getTargetSchema(), task.getTargetTable()));
         snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
         return snapshot;
     }
@@ -372,8 +367,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         return endpoint;
     }
 
-    private void submitAfterCommit(
-            String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
+    private void submitAfterCommit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Runnable submit = () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             submit.run();
