@@ -58,8 +58,12 @@ app/layout/
 - `AppLayout` 是认证后产品页面唯一的 viewport owner，也是 Global Product Launcher 状态 owner；通过 Product 参数服务数据集成和管理中心，不复制第二套 Shell。
 - TopBar、ProductSidebar、ProductLauncher 属于 Shell，不属于 Datasource 或 Management Domain。
 - 数据集成是 Workspace-scoped Product；管理中心是系统级 Product，不显示 Workspace Switcher，也不受 current Workspace gate。
-- 产品内导航和全局一级产品项统一读取 `app/layout/navigation.ts`，不要维护两套真实产品常量。
+- `app/layout/navigation.ts` 是全局产品 Registry，拥有稳定 product id / label / route / icon；User Preference 只保存稳定 product id，不复制展示文案、路由或图标。
 - `所有产品` 是 ProductLauncher 自己的 `view-all` 入口，不允许混进真实产品数组；点击后只控制二级 AllProductMenu。
+- ProductLauncher 一级真实产品区只展示当前用户在 `PRODUCT_MENU` 场景标星的产品，并按服务端 `sortOrder` 排序；没有收藏时展示轻量空状态，不自动注入默认产品。
+- AllProductMenu 展示完整 Product Registry，并在每个产品右侧提供收藏星标；收藏成功后一级菜单必须立即同步新增，取消收藏后必须立即移除。
+- 产品收藏使用 `service/preference` 调用 User Preference API，显式省略 Workspace Header；服务端数据库是跨登录、跨设备偏好的 Source of Truth。
+- 收藏切换允许前端乐观更新；请求失败时只回滚当前产品的收藏状态，不覆盖其他已完成的收藏变更。
 - ProductLauncher 使用固定宽度 220px 的 Launcher Track；位移动画必须作用在 Track，而不是只作用在一级菜单。打开使用 `translateX(-220px) → translateX(0)` 和 `300ms ease-in-out`，关闭使用 `220ms ease-in-out`。
 - ProductSidebar 默认背景固定 `#FAFAFA`；二级深色面板关闭时不得残留覆盖默认 Sidebar。
 - ProductSidebar 菜单项使用整行布局，不使用圆角卡片；选中态背景为 `#DFE6FA`，右侧使用 `#1645D1` 2px 高亮边。
