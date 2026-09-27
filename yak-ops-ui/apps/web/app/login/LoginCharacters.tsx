@@ -88,18 +88,24 @@ function YellowCharacter() {
 
 function OrangeCharacter() {
   return (
-    <g data-character="orange">
-      <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
-      <g>
-        <circle cx="192" cy="451" r="4.2" fill="#171717" />
-        <circle cx="252" cy="451" r="4.2" fill="#171717" />
-        <path
-          d="M211 483Q222 488 233 483"
-          fill="none"
-          stroke="#171717"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
+    <g data-character="orange" className="yak-login-character yak-login-character--orange">
+      <g className="yak-login-character--orange__breathe">
+        <g className="yak-login-character--orange__body">
+          <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
+          <g className="yak-login-character--orange__face">
+            <g className="yak-login-character--orange__eyes">
+              <circle cx="192" cy="451" r="4.2" fill="#171717" />
+              <circle cx="252" cy="451" r="4.2" fill="#171717" />
+            </g>
+            <path
+              d="M211 483Q222 488 233 483"
+              fill="none"
+              stroke="#171717"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </g>
+        </g>
       </g>
     </g>
   );
@@ -118,6 +124,10 @@ export default function LoginCharacters() {
     let purpleY = 0;
     let blackX = 0;
     let blackY = 0;
+    let orangeX = 0;
+    let orangeY = 0;
+    let orangeVelocityX = 0;
+    let orangeVelocityY = 0;
     let frame = 0;
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -135,6 +145,19 @@ export default function LoginCharacters() {
       blackX += (targetX - blackX) * 0.042;
       blackY += (targetY - blackY) * 0.042;
 
+      orangeVelocityX += (targetX - orangeX) * 0.018;
+      orangeVelocityY += (targetY - orangeY) * 0.018;
+      orangeVelocityX *= 0.82;
+      orangeVelocityY *= 0.82;
+      orangeX += orangeVelocityX;
+      orangeY += orangeVelocityY;
+
+      const orangeSquash = clamp(
+        Math.abs(orangeVelocityX) * 0.55 + Math.abs(orangeVelocityY) * 0.35,
+        0,
+        0.035,
+      );
+
       scene.style.setProperty("--yak-purple-lean", `${purpleX * -8}deg`);
       scene.style.setProperty("--yak-purple-stretch", String(1 - purpleY * 0.04));
       scene.style.setProperty("--yak-purple-face-x", `${purpleX * 10}px`);
@@ -148,6 +171,20 @@ export default function LoginCharacters() {
       scene.style.setProperty("--yak-black-face-y", `${blackY * 2.5}px`);
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
+
+      scene.style.setProperty("--yak-orange-shift-x", `${orangeX * 6}px`);
+      scene.style.setProperty(
+        "--yak-orange-scale-x",
+        String(1 + Math.abs(orangeX) * 0.028 + orangeSquash),
+      );
+      scene.style.setProperty(
+        "--yak-orange-scale-y",
+        String(1 - Math.abs(orangeX) * 0.014 - orangeY * 0.028 - orangeSquash * 0.65),
+      );
+      scene.style.setProperty("--yak-orange-face-x", `${orangeX * 9}px`);
+      scene.style.setProperty("--yak-orange-face-y", `${orangeY * 4}px`);
+      scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 3}px`);
+      scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 1.5}px`);
 
       frame = window.requestAnimationFrame(animate);
     };
