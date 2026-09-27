@@ -2,6 +2,9 @@ import { useEffect, useRef } from "react";
 
 const FACE_X_RANGE = 9;
 const FACE_Y_RANGE = 5;
+const FACE_FOLLOW_RESPONSE = 9;
+const FRAME_DELTA_LIMIT_SECONDS = 0.05;
+const FACE_SETTLE_EPSILON = 0.01;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -21,25 +24,51 @@ export default function OrangeCharacter() {
     let targetY = 0;
     let currentX = 0;
     let currentY = 0;
+    let previousFrameTime: number | null = null;
     let frameId: number | null = null;
 
-    const render = () => {
-      if (reduceMotion) {
-        currentX = targetX;
-        currentY = targetY;
-      } else {
-        currentX += (targetX - currentX) * 0.12;
-        currentY += (targetY - currentY) * 0.12;
-      }
-
+    const applyFaceTransform = () => {
       face.setAttribute(
         "transform",
         `translate(${currentX.toFixed(2)} ${currentY.toFixed(2)})`,
       );
+    };
+
+    const render = (frameTime: number) => {
+      if (reduceMotion) {
+        currentX = targetX;
+        currentY = targetY;
+      } else {
+        const deltaSeconds =
+          previousFrameTime === null
+            ? 1 / 60
+            : Math.min((frameTime - previousFrameTime) / 1000, FRAME_DELTA_LIMIT_SECONDS);
+        const follow = 1 - Math.exp(-FACE_FOLLOW_RESPONSE * deltaSeconds);
+
+        currentX += (targetX - currentX) * follow;
+        currentY += (targetY - currentY) * follow;
+      }
+
+      previousFrameTime = frameTime;
 
       const settled =
-        Math.abs(targetX - currentX) < 0.01 && Math.abs(targetY - currentY) < 0.01;
-      frameId = settled ? null : window.requestAnimationFrame(render);
+        Math.abs(targetX - currentX) < FACE_SETTLE_EPSILON &&
+        Math.abs(targetY - currentY) < FACE_SETTLE_EPSILON;
+
+      if (settled) {
+        currentX = targetX;
+        currentY = targetY;
+      }
+
+      applyFaceTransform();
+
+      if (settled) {
+        previousFrameTime = null;
+        frameId = null;
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(render);
     };
 
     const scheduleRender = () => {
