@@ -138,10 +138,7 @@
 }
 
 .yak-login-character--purple__password-face-pose {
-  transform: translate(
-      var(--yak-purple-password-face-x),
-      var(--yak-purple-password-face-y)
-    )
+  transform: translate(var(--yak-purple-password-face-x), var(--yak-purple-password-face-y))
     rotate(var(--yak-purple-password-face-rotate));
 }
 
