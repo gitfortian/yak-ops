@@ -32,6 +32,11 @@ import {
   updateDataSource,
 } from "@/service/datasource";
 import {
+  listUserPreferences,
+  recordUserPreferenceUsage,
+  type UserPreferenceRecord,
+} from "@/service/preference";
+import {
   COMMON_DB_OPTIONS,
   JDBC_DEFAULT_PORTS,
   normalizeDataSourceType,
@@ -90,6 +95,48 @@ interface ParsedJdbcUrl {
 }
 
 const DEFAULT_HOST = "127.0.0.1";
+const DATASOURCE_CREATE_TYPE_SCENE = "DATASOURCE_CREATE_TYPE" as const;
+const FREQUENT_TYPE_LIMIT = 3;
+
+const preferenceTimestamp = (value?: string | null) => {
+  if (!value) return 0;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const upsertPreference = (
+  preferences: UserPreferenceRecord[],
+  nextPreference: UserPreferenceRecord,
+) => {
+  const exists = preferences.some((preference) => preference.itemKey === nextPreference.itemKey);
+  if (!exists) return [...preferences, nextPreference];
+  return preferences.map((preference) =>
+    preference.itemKey === nextPreference.itemKey ? nextPreference : preference,
+  );
+};
+
+const frequentDataSourceOptions = (preferences: UserPreferenceRecord[]) => {
+  const usedValues = new Set<string>();
+  const ranked = [...preferences]
+    .filter((preference) => preference.useCount > 0)
+    .sort(
+      (left, right) =>
+        right.useCount - left.useCount ||
+        preferenceTimestamp(right.lastUsedTime) - preferenceTimestamp(left.lastUsedTime),
+    )
+    .flatMap((preference) => {
+      const value = normalizeDataSourceType(preference.itemKey);
+      const option = COMMON_DB_OPTIONS.find((candidate) => candidate.value === value);
+      if (!option || usedValues.has(option.value)) return [];
+      usedValues.add(option.value);
+      return [option];
+    });
+
+  return [
+    ...ranked,
+    ...COMMON_DB_OPTIONS.filter((option) => !usedValues.has(option.value)),
+  ].slice(0, FREQUENT_TYPE_LIMIT);
+};
 
 const defaultPort = (dbType: string) =>
   String(JDBC_DEFAULT_PORTS[normalizeDataSourceType(dbType)] || "");
@@ -239,6 +286,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
   const [createStep, setCreateStep] = useState<CreateStep>("select");
   const [createSearch, setCreateSearch] = useState("");
   const [createCategory, setCreateCategory] = useState<CreateCategory>("ALL");
+  const [frequentTypePreferences, setFrequentTypePreferences] = useState<UserPreferenceRecord[]>([]);
   const [propertyKeyOptions, setPropertyKeyOptions] = useState<string[]>([]);
   const [propertyKeysLoading, setPropertyKeysLoading] = useState(false);
   const editing = Boolean(record?.id);
@@ -268,8 +316,24 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     if (!record?.id) {
       setCreateSearch("");
       setCreateCategory("ALL");
+      setFrequentTypePreferences([]);
     }
   }, [open, record]);
+
+  useEffect(() => {
+    if (!open || editing || createStep !== "select") return;
+
+    let active = true;
+    void listUserPreferences(DATASOURCE_CREATE_TYPE_SCENE)
+      .then((preferences) => {
+        if (active) setFrequentTypePreferences(preferences);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [createStep, editing, open]);
 
   useEffect(() => {
     if (
@@ -478,6 +542,11 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
 
   const handleSelectType = (dbType: string) => {
     const normalizedType = normalizeDataSourceType(dbType);
+    void recordUserPreferenceUsage(DATASOURCE_CREATE_TYPE_SCENE, normalizedType)
+      .then((preference) => {
+        setFrequentTypePreferences((current) => upsertPreference(current, preference));
+      })
+      .catch(() => undefined);
     setValues((current) =>
       current.dbType === normalizedType
         ? current
@@ -974,6 +1043,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       option.value.toLowerCase().includes(normalizedSearch);
     return matchesCategory && matchesSearch;
   });
+  const frequentOptions = frequentDataSourceOptions(frequentTypePreferences);
 
   const configContent = (
     <div className="space-y-3.5">
@@ -1069,6 +1139,25 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       {!editing && createStep === "select" ? (
         <div className="flex h-[420px] flex-col">
           <section className="shrink-0">
+            <div className="mb-2.5 text-[13px] font-medium text-[#344054]">
+              {intl.formatMessage({ id: "pages.datasource.wizard.commonTypes" })}
+            </div>
+            <div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
+              {frequentOptions.map((option) => (
+                <button
+                  key={"frequent-" + option.value}
+                  type="button"
+                  className="flex h-10 cursor-pointer items-center gap-2.5 rounded-[var(--yak-radius-control-small)] border border-[#e1e5eb] bg-[#fafbfc] px-3 text-left text-[13px] text-[#343841] outline-none transition-[border-color,background-color] hover:border-[#cfd4dc] hover:bg-[var(--yak-color-hover)] focus-visible:border-[var(--yak-color-primary)]"
+                  onClick={() => handleSelectType(option.value)}
+                >
+                  <DatabaseIcons dbType={option.value} width="18" height="18" />
+                  <span className="min-w-0 truncate">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-4 shrink-0">
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
