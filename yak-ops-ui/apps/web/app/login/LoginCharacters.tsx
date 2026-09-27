@@ -1,10 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import "./login-characters.css";
 import type { LoginFocusState, LoginResultState } from "./login-interaction";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+type OrangeExpression = "happy" | "curious" | "worried" | "blink";
+type OrangeBaseExpression = Exclude<OrangeExpression, "blink">;
+
+function resolveOrangeExpression(
+  x: number,
+  y: number,
+  current: OrangeBaseExpression,
+): OrangeBaseExpression {
+  if (current === "worried" && y > 0.32) return "worried";
+  if (current === "curious" && Math.abs(x) > 0.58 && y < 0.28) return "curious";
+  if (y > 0.48) return "worried";
+  if (Math.abs(x) > 0.72 && y < 0.18) return "curious";
+  return "happy";
 }
 
 function PurpleCharacter() {
@@ -198,24 +213,66 @@ function OrangeCharacter() {
                   <g className="yak-login-character--orange__result-eyes">
                     <g className="yak-login-character--orange__focus-eyes">
                       <g className="yak-login-character--orange__eyes">
-                        <circle cx="190" cy="456" r="6.6" fill="#171717" />
-                        <circle cx="270" cy="456" r="6.6" fill="#171717" />
+                        <g className="yak-login-character--orange__eyes-open">
+                          <circle cx="190" cy="462" r="6.9" fill="#171717" />
+                          <circle cx="270" cy="462" r="6.9" fill="#171717" />
+                        </g>
+                        <g className="yak-login-character--orange__eyes-blink">
+                          <path
+                            d="M181 463Q190 454 199 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M261 463Q270 454 279 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                        </g>
                       </g>
                     </g>
                   </g>
                   <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d="M210 483H251C249 501 241 510 230.5 510C220 510 212 501 210 483Z"
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
+                    d="M210 489H251C249 507 241 516 230.5 516C220 516 212 507 210 489Z"
+                    fill="#171717"
+                  />
+                  <ellipse
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--curious"
+                    cx="231"
+                    cy="495"
+                    rx="5.8"
+                    ry="4.8"
                     fill="#171717"
                   />
                   <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--worried"
+                    d="M211 505Q231 486 251 505"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--blink"
+                    d="M214 493Q231 504 248 493"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M204 479H257C254 503 244 515 230.5 515C217 515 207 503 204 479Z"
+                    d="M204 485H257C254 509 244 521 230.5 521C217 521 207 509 204 485Z"
                     fill="#171717"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M208 501Q230.5 480 253 501"
+                    d="M208 507Q230.5 486 253 507"
                     fill="none"
                     stroke="#171717"
                     strokeWidth="4"
@@ -246,6 +303,9 @@ export default function LoginCharacters({
   const focusStateRef = useRef(focusState);
   const resultStateRef = useRef(resultState);
   const passwordVisibleRef = useRef(passwordVisible);
+  const orangeBaseExpressionRef = useRef<OrangeBaseExpression>("happy");
+  const orangeBlinkingRef = useRef(false);
+  const [orangeExpression, setOrangeExpression] = useState<OrangeExpression>("happy");
 
   useEffect(() => {
     focusStateRef.current = focusState;
@@ -258,6 +318,30 @@ export default function LoginCharacters({
   useEffect(() => {
     passwordVisibleRef.current = passwordVisible;
   }, [passwordVisible]);
+
+  useEffect(() => {
+    if (focusState !== "idle" || resultState !== "idle") {
+      orangeBlinkingRef.current = false;
+      orangeBaseExpressionRef.current = "happy";
+      setOrangeExpression("happy");
+      return;
+    }
+
+    let blinkEndTimer = 0;
+    const blinkTimer = window.setInterval(() => {
+      orangeBlinkingRef.current = true;
+      setOrangeExpression("blink");
+      blinkEndTimer = window.setTimeout(() => {
+        orangeBlinkingRef.current = false;
+        setOrangeExpression(orangeBaseExpressionRef.current);
+      }, 180);
+    }, 4600);
+
+    return () => {
+      window.clearInterval(blinkTimer);
+      window.clearTimeout(blinkEndTimer);
+    };
+  }, [focusState, resultState]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -318,10 +402,10 @@ export default function LoginCharacters({
       blackX += (interactionTargetX - blackX) * 0.042;
       blackY += (interactionTargetY - blackY) * 0.042;
 
-      orangeVelocityX += (interactionTargetX - orangeX) * 0.018;
-      orangeVelocityY += (interactionTargetY - orangeY) * 0.018;
-      orangeVelocityX *= 0.82;
-      orangeVelocityY *= 0.82;
+      orangeVelocityX += (interactionTargetX - orangeX) * 0.014;
+      orangeVelocityY += (interactionTargetY - orangeY) * 0.014;
+      orangeVelocityX *= 0.76;
+      orangeVelocityY *= 0.76;
       orangeX += orangeVelocityX;
       orangeY += orangeVelocityY;
 
@@ -333,9 +417,9 @@ export default function LoginCharacters({
       yellowY += yellowVelocityY;
 
       const orangeSquash = clamp(
-        Math.abs(orangeVelocityX) * 0.55 + Math.abs(orangeVelocityY) * 0.35,
+        Math.abs(orangeVelocityX) * 0.35 + Math.abs(orangeVelocityY) * 0.22,
         0,
-        0.035,
+        0.018,
       );
 
       scene.style.setProperty("--yak-purple-lean", `${purpleX * -8}deg`);
@@ -352,15 +436,27 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
-      scene.style.setProperty("--yak-orange-bend", `${orangeX * -5.5}deg`);
+      scene.style.setProperty("--yak-orange-bend", `${orangeX * -1.8}deg`);
       scene.style.setProperty(
         "--yak-orange-scale-y",
-        String(1 - Math.abs(orangeX) * 0.01 - orangeY * 0.028 - orangeSquash * 0.65),
+        String(1 - orangeY * 0.012 - orangeSquash * 0.35),
       );
-      scene.style.setProperty("--yak-orange-face-x", `${orangeX * 9}px`);
-      scene.style.setProperty("--yak-orange-face-y", `${orangeY * 4}px`);
-      scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 3}px`);
-      scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 1.5}px`);
+      scene.style.setProperty("--yak-orange-face-x", `${orangeX * 34}px`);
+      scene.style.setProperty("--yak-orange-face-y", `${orangeY * 14}px`);
+      scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 6}px`);
+      scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 3}px`);
+
+      if (activeFocus === "idle" && activeResult === "idle" && !orangeBlinkingRef.current) {
+        const nextExpression = resolveOrangeExpression(
+          orangeX,
+          orangeY,
+          orangeBaseExpressionRef.current,
+        );
+        if (nextExpression !== orangeBaseExpressionRef.current) {
+          orangeBaseExpressionRef.current = nextExpression;
+          setOrangeExpression(nextExpression);
+        }
+      }
 
       scene.style.setProperty("--yak-yellow-bend", `${yellowX * -6.5}deg`);
       scene.style.setProperty("--yak-yellow-stretch", String(1 - yellowY * 0.026));
@@ -399,11 +495,15 @@ export default function LoginCharacters({
       : resultState === "failure"
         ? "is-login-failure"
         : "";
+  const orangeExpressionClass =
+    focusState === "idle" && resultState === "idle"
+      ? `is-orange-${orangeExpression}`
+      : "is-orange-happy";
 
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${focusClass} ${visibilityClass} ${resultClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
+      className={`yak-login-characters ${focusClass} ${visibilityClass} ${resultClass} ${orangeExpressionClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
       aria-hidden="true"
     >
       <svg
