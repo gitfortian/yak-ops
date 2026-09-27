@@ -16,8 +16,9 @@ function PurpleCharacter() {
             <g className="yak-login-character--purple__body">
             <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
             <g className="yak-login-character--purple__face">
-              <g className="yak-login-character--purple__eyes">
-                <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
+              <g className="yak-login-character--purple__focus-eyes">
+                <g className="yak-login-character--purple__eyes">
+                  <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
                 <circle
                   className="yak-login-character--purple__pupil"
                   cx="269"
@@ -26,13 +27,14 @@ function PurpleCharacter() {
                   fill="#171717"
                 />
                 <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
-                <circle
-                  className="yak-login-character--purple__pupil"
-                  cx="337"
-                  cy="142"
-                  r="3.5"
-                  fill="#171717"
-                />
+                  <circle
+                    className="yak-login-character--purple__pupil"
+                    cx="337"
+                    cy="142"
+                    r="3.5"
+                    fill="#171717"
+                  />
+                </g>
               </g>
               <path
                 d="M292 172Q303 177 314 172"
@@ -59,8 +61,9 @@ function BlackCharacter() {
             <g className="yak-login-character--black__body">
             <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
             <g className="yak-login-character--black__face">
-              <g className="yak-login-character--black__eyes">
-                <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
+              <g className="yak-login-character--black__focus-eyes">
+                <g className="yak-login-character--black__eyes">
+                  <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
                 <circle
                   className="yak-login-character--black__pupil"
                   cx="378"
@@ -69,13 +72,14 @@ function BlackCharacter() {
                   fill="#171717"
                 />
                 <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
-                <circle
-                  className="yak-login-character--black__pupil"
-                  cx="426"
-                  cy="276"
-                  r="3.2"
-                  fill="#171717"
-                />
+                  <circle
+                    className="yak-login-character--black__pupil"
+                    cx="426"
+                    cy="276"
+                    r="3.2"
+                    fill="#171717"
+                  />
+                </g>
               </g>
             </g>
             </g>
@@ -98,9 +102,11 @@ function YellowCharacter() {
               fill="#F3D30B"
             />
             <g className="yak-login-character--yellow__face">
-              <g className="yak-login-character--yellow__eyes">
-                <circle cx="492" cy="373" r="4.2" fill="#171717" />
-                <circle cx="535" cy="373" r="4.2" fill="#171717" />
+              <g className="yak-login-character--yellow__focus-eyes">
+                <g className="yak-login-character--yellow__eyes">
+                  <circle cx="492" cy="373" r="4.2" fill="#171717" />
+                  <circle cx="535" cy="373" r="4.2" fill="#171717" />
+                </g>
               </g>
               <path
                 d="M488 410H539"
@@ -127,9 +133,11 @@ function OrangeCharacter() {
             <g className="yak-login-character--orange__body">
             <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
             <g className="yak-login-character--orange__face">
-              <g className="yak-login-character--orange__eyes">
-                <circle cx="192" cy="451" r="4.2" fill="#171717" />
-                <circle cx="252" cy="451" r="4.2" fill="#171717" />
+              <g className="yak-login-character--orange__focus-eyes">
+                <g className="yak-login-character--orange__eyes">
+                  <circle cx="192" cy="451" r="4.2" fill="#171717" />
+                  <circle cx="252" cy="451" r="4.2" fill="#171717" />
+                </g>
               </g>
               <path
                 d="M211 483Q222 488 233 483"
@@ -153,6 +161,11 @@ interface LoginCharactersProps {
 
 export default function LoginCharacters({ focusState }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
+  const focusStateRef = useRef(focusState);
+
+  useEffect(() => {
+    focusStateRef.current = focusState;
+  }, [focusState]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -183,21 +196,27 @@ export default function LoginCharacters({ focusState }: LoginCharactersProps) {
     };
 
     const animate = () => {
-      purpleX += (targetX - purpleX) * 0.075;
-      purpleY += (targetY - purpleY) * 0.075;
+      const activeFocus = focusStateRef.current;
+      const interactionTargetX =
+        activeFocus === "userName" ? 1 : activeFocus === "userPassword" ? -0.82 : targetX;
+      const interactionTargetY =
+        activeFocus === "userName" ? 0.08 : activeFocus === "userPassword" ? 0.28 : targetY;
 
-      blackX += (targetX - blackX) * 0.042;
-      blackY += (targetY - blackY) * 0.042;
+      purpleX += (interactionTargetX - purpleX) * 0.075;
+      purpleY += (interactionTargetY - purpleY) * 0.075;
 
-      orangeVelocityX += (targetX - orangeX) * 0.018;
-      orangeVelocityY += (targetY - orangeY) * 0.018;
+      blackX += (interactionTargetX - blackX) * 0.042;
+      blackY += (interactionTargetY - blackY) * 0.042;
+
+      orangeVelocityX += (interactionTargetX - orangeX) * 0.018;
+      orangeVelocityY += (interactionTargetY - orangeY) * 0.018;
       orangeVelocityX *= 0.82;
       orangeVelocityY *= 0.82;
       orangeX += orangeVelocityX;
       orangeY += orangeVelocityY;
 
-      yellowVelocityX += (targetX - yellowX) * 0.028;
-      yellowVelocityY += (targetY - yellowY) * 0.028;
+      yellowVelocityX += (interactionTargetX - yellowX) * 0.028;
+      yellowVelocityY += (interactionTargetY - yellowY) * 0.028;
       yellowVelocityX *= 0.76;
       yellowVelocityY *= 0.76;
       yellowX += yellowVelocityX;
