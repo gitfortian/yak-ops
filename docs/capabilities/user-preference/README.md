@@ -58,6 +58,11 @@ Favorite body:
 }
 ```
 
+Current action ownership is explicit:
+- `PRODUCT_MENU` supports the favorite endpoint.
+- `DATASOURCE_CREATE_TYPE` supports the use endpoint.
+- both scenes support the query endpoint.
+
 The caller never submits `userId`. Boot reads the authenticated identity and passes it to the User Preference Service.
 
 ## Persistence
