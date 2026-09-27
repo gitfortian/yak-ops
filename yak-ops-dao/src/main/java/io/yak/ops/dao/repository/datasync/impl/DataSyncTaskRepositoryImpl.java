@@ -37,8 +37,7 @@ public class DataSyncTaskRepositoryImpl extends BaseRepositoryImpl<DataSyncTaskM
     public PageData<DataSyncTaskEntity> queryPage(String workspaceId, DataSyncTaskPageQuery query) {
         DataSyncTaskPageQuery condition =
                 query == null ? new DataSyncTaskPageQuery(1, 10, null, null, null, null) : query;
-        Page<DataSyncTaskEntity> page =
-                Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
+        Page<DataSyncTaskEntity> page = Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
         IPage<DataSyncTaskEntity> result = taskMapper.selectPage(
                 page,
                 queryWrapper(workspaceId, condition)

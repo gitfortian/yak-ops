@@ -22,8 +22,7 @@ import org.springframework.util.StringUtils;
  * @since 2026-09-27
  */
 @Repository
-public class DataSyncInstanceRepositoryImpl
-        extends BaseRepositoryImpl<DataSyncInstanceMapper, DataSyncInstanceEntity>
+public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncInstanceMapper, DataSyncInstanceEntity>
         implements DataSyncInstanceRepository {
 
     @Resource
@@ -38,8 +37,7 @@ public class DataSyncInstanceRepositoryImpl
     public PageData<DataSyncInstanceEntity> queryPage(String workspaceId, DataSyncInstancePageQuery query) {
         DataSyncInstancePageQuery condition =
                 query == null ? new DataSyncInstancePageQuery(1, 10, null, null, null, null, null, null) : query;
-        Page<DataSyncInstanceEntity> page =
-                Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
+        Page<DataSyncInstanceEntity> page = Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
         IPage<DataSyncInstanceEntity> result = instanceMapper.selectPage(
                 page,
                 queryWrapper(workspaceId, condition)
@@ -65,10 +63,7 @@ public class DataSyncInstanceRepositoryImpl
                 .like(StringUtils.hasText(query.keyword()), DataSyncInstanceEntity::getTaskName, query.keyword())
                 .eq(query.status() != null, DataSyncInstanceEntity::getStatus, query.status())
                 .eq(query.triggerType() != null, DataSyncInstanceEntity::getTriggerType, query.triggerType())
-                .ge(
-                        query.startTimeStart() != null,
-                        DataSyncInstanceEntity::getStartTime,
-                        query.startTimeStart())
+                .ge(query.startTimeStart() != null, DataSyncInstanceEntity::getStartTime, query.startTimeStart())
                 .le(query.startTimeEnd() != null, DataSyncInstanceEntity::getStartTime, query.startTimeEnd());
     }
 }
