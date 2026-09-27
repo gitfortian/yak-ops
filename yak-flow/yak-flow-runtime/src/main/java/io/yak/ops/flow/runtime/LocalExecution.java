@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -53,7 +54,8 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final BlockingQueue<LocalCheckpoint> completedCheckpoints = new LinkedBlockingQueue<>();
     private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
     private final Set<Long> automaticCheckpointIds = ConcurrentHashMap.newKeySet();
-    private final CountDownLatch workersFinished = new CountDownLatch(2);
+    private final AtomicInteger workersRemaining = new AtomicInteger(2);
+    private final CountDownLatch executionFinished = new CountDownLatch(1);
 
     private volatile Throwable failure;
     private volatile LocalCheckpoint latestCheckpoint;
@@ -162,7 +164,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
      * @throws InterruptedException 当前等待线程被中断
      */
     public ExecutionStatus await() throws InterruptedException {
-        workersFinished.await();
+        executionFinished.await();
         return status.get();
     }
 
@@ -178,7 +180,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must not be negative");
         }
-        if (!workersFinished.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+        if (!executionFinished.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new IllegalStateException("execution did not finish within timeout");
         }
         return status.get();
@@ -364,12 +366,12 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     private void workerFinished() {
-        workersFinished.countDown();
-        if (workersFinished.getCount() != 0) {
+        if (workersRemaining.decrementAndGet() != 0) {
             return;
         }
         if (status.compareAndSet(ExecutionStatus.RUNNING, ExecutionStatus.SUCCEEDED)) {
             completePendingCheckpoints(new IllegalStateException("execution completed before checkpoint"));
         }
+        executionFinished.countDown();
     }
 }
