@@ -305,7 +305,10 @@ export function LoginScene({ action, focusedField }: LoginSceneProps) {
     let timeout = 0;
     const frame = window.requestAnimationFrame(() => {
       root.classList.add(className);
-      timeout = window.setTimeout(() => root.classList.remove(className), ACTION_DURATION[action.type]);
+      timeout = window.setTimeout(
+        () => root.classList.remove(className),
+        ACTION_DURATION[action.type],
+      );
     });
 
     return () => {
