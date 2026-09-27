@@ -1,12 +1,7 @@
 import { useEffect, useRef } from "react";
 
-const FACE_ORIGIN_X = 79;
-const FACE_ORIGIN_Y = 54;
-const FACE_MAX_LEFT = 7;
-const FACE_MAX_RIGHT = 28;
-const FACE_MAX_UP = 4;
-const FACE_MAX_DOWN = 14;
-const FACE_TRACK_DISTANCE = 150;
+const FACE_X_RANGE = 9;
+const FACE_Y_RANGE = 5;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -54,37 +49,17 @@ export default function OrangeCharacter() {
     const handlePointerMove = (event: PointerEvent) => {
       if (event.pointerType && event.pointerType !== "mouse" && event.pointerType !== "pen") return;
 
-      const matrix = svg.getScreenCTM();
-      if (!matrix) return;
+      const trackingArea = svg.parentElement;
+      if (!trackingArea) return;
 
-      const pointer = svg.createSVGPoint();
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
-      const localPointer = pointer.matrixTransform(matrix.inverse());
+      const rect = trackingArea.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
 
-      const deltaX = localPointer.x - FACE_ORIGIN_X;
-      const deltaY = localPointer.y - FACE_ORIGIN_Y;
-      const distance = Math.hypot(deltaX, deltaY);
-      if (distance < 0.01) {
-        targetX = 0;
-        targetY = 0;
-        scheduleRender();
-        return;
-      }
+      const normalizedX = clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
+      const normalizedY = clamp(((event.clientY - rect.top) / rect.height) * 2 - 1, -1, 1);
 
-      const strength = clamp(distance / FACE_TRACK_DISTANCE, 0, 1);
-      const directionX = deltaX / distance;
-      const directionY = deltaY / distance;
-
-      const horizontalLimit = directionX < 0 ? FACE_MAX_LEFT : FACE_MAX_RIGHT;
-      const horizontal = directionX * horizontalLimit * strength;
-
-      const leftEdgeDrop = clamp(-horizontal / FACE_MAX_LEFT, 0, 1) * 7;
-      const sideDrop = Math.pow(Math.abs(horizontal) / FACE_MAX_RIGHT, 2) * 2;
-      const vertical = directionY * 8 * strength + leftEdgeDrop + sideDrop;
-
-      targetX = horizontal;
-      targetY = clamp(vertical, -FACE_MAX_UP, FACE_MAX_DOWN);
+      targetX = normalizedX * FACE_X_RANGE;
+      targetY = normalizedY * FACE_Y_RANGE;
       scheduleRender();
     };
 
