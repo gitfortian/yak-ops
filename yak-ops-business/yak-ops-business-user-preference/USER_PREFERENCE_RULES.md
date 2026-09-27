@@ -44,8 +44,11 @@ userId + scene + itemKey
 The unique key is `user_id + scene + item_key`.
 
 Explicit favorites and usage signals share the same row but remain independent:
+- `PRODUCT_MENU` supports explicit favorite mutation.
+- `DATASOURCE_CREATE_TYPE` supports usage recording.
 - changing `favorite` must not reset usage counters.
 - recording usage must not change favorite state or favorite order.
+- unsupported scene/action combinations fail fast instead of silently creating meaningless preference data.
 
 ## Must
 
