@@ -103,6 +103,8 @@ Oracle
 → jdbcUrl / username / password
 ```
 
+Create Wizard 的数据源类型选择顶部使用 User Preference `DATASOURCE_CREATE_TYPE` 展示最多 3 个常用类型；排序由用户使用次数和最近使用时间决定，不足 3 个时从当前支持类型补足。选择 Provider 时异步记录一次 usage；偏好失败不阻塞 Datasource 创建。
+
 MySQL / PostgreSQL 由前端维护 Host / Port / Database 输入、JDBC Preview 和轻量 Key/Value 高级参数；Oracle 直接输入完整 `jdbc:oracle:` URL，不拆连接地址，也不展示高级参数。HTTP Contract 统一使用 `connectionParams` 对象；前端不把连接参数序列化成 JSON 字符串。结构化 JDBC URL 生成、Driver Class、Provider 差异、Normalize 和 Connection Test 仍由后端 JDBC Plugin 负责；Oracle 原生 JDBC URL 由 Provider 校验后直接使用。SSH 与动态 Driver Manager 不属于当前前端能力。
 
 ## Web Root Ownership
