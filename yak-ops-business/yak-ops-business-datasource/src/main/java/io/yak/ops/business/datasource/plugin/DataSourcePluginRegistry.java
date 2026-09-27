@@ -117,28 +117,18 @@ public class DataSourcePluginRegistry {
         return catalogOperation(pluginType, connectionJson, timeoutSeconds, DataSourceCatalog::listDatabases);
     }
 
-    public List<String> catalogSchemas(
-            String pluginType, String connectionJson, int timeoutSeconds, String database) {
-        return catalogOperation(
-                pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listSchemas(database));
+    public List<String> catalogSchemas(String pluginType, String connectionJson, int timeoutSeconds, String database) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listSchemas(database));
     }
 
     public List<DataSourceTable> catalogTables(
-            String pluginType,
-            String connectionJson,
-            int timeoutSeconds,
-            DataSourceCatalogQuery query) {
-        return catalogOperation(
-                pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listTables(query));
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceCatalogQuery query) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listTables(query));
     }
 
     public List<DataSourceColumn> catalogColumns(
-            String pluginType,
-            String connectionJson,
-            int timeoutSeconds,
-            DataSourceTablePath tablePath) {
-        return catalogOperation(
-                pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listColumns(tablePath));
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceTablePath tablePath) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listColumns(tablePath));
     }
 
     public String maskConnectionJson(String pluginType, String connectionJson) {
@@ -150,10 +140,7 @@ public class DataSourcePluginRegistry {
     }
 
     private <T> T catalogOperation(
-            String pluginType,
-            String connectionJson,
-            int timeoutSeconds,
-            Function<DataSourceCatalog, T> action) {
+            String pluginType, String connectionJson, int timeoutSeconds, Function<DataSourceCatalog, T> action) {
         DataSourcePlugin plugin = get(pluginType);
         requireCapability(plugin, DataSourceCapability.CATALOG_METADATA, DataSourceErrorCode.CATALOG_QUERY_FAILED);
         DataSourceConnection connection = parseConnection(plugin.descriptor().type(), connectionJson);
