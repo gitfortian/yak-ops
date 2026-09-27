@@ -4,7 +4,8 @@ Status: Active
 
 Scope:
 - Current Yak Ops Datasource product architecture
-- YakFlow staged data-sync capability
+- Data Sync staged product task/instance architecture
+- YakFlow staged data-sync execution capability
 - Workspace business ownership boundary
 - Supporting user/login/security capability
 - User-scoped preference capability
@@ -15,7 +16,7 @@ Depends On:
 
 ## Principle
 
-Yak Ops currently exposes Datasource as its user-facing product, with Workspace as the shared business ownership boundary. YakFlow is an active staged data-sync capability inside the same repository; its first stage establishes only the batch/stream-neutral API contract before runtime and connector implementation.
+Yak Ops currently exposes Datasource as its user-facing product, with Workspace as the shared business ownership boundary. Data Sync is now a staged product capability that owns task definitions and task instances, while YakFlow remains the execution capability underneath it.
 
 User/Login/Security is a supporting platform capability required to access the product. Workspace is separate from Security: authentication answers who the user is, while Workspace answers which business data boundary is active. User Preference is also separate: it persists what the authenticated user prefers across logout, browsers and devices.
 
@@ -51,7 +52,7 @@ Owns shared database persistence infrastructure:
 - the single Flyway configuration and schema history for all Yak Ops modules
 - all versioned SQL under `yak-ops-dao/src/main/resources/db/migration/yak-ops`
 
-Concrete Security user persistence, Workspace persistence, User Preference persistence and Datasource persistence are owned here.
+Concrete Security user persistence, Workspace persistence, User Preference persistence, Datasource persistence and Data Sync task/instance persistence are owned here.
 
 BusinessImpl may use DAO-owned Entity/Repository internally. Entity and DAO Model do not cross the Business boundary into Boot.
 
@@ -139,6 +140,16 @@ Datasource may use DAO persistence and the stable Datasource Plugin API only beh
 
 Datasource does not own Controller, ControllerAdvice, connection-pool assembly or MyBatis runtime configuration. Boot exposes Datasource HTTP APIs and supplies application infrastructure.
 
+### `yak-ops-business/yak-ops-business-data-sync`
+
+Owns Workspace-scoped Data Sync product definitions and execution-instance persistence contracts through the single stable `DataSyncService` boundary.
+
+The current phase supports only `OFFLINE` task definitions. A task definition describes source/target datasource IDs, table locations and YakFlow runtime tuning. An instance is a historical execution record with its own task-version reference, trigger type, status, row counters and a sanitized definition snapshot.
+
+Data Sync depends on Datasource only through the stable `DataSourceService` boundary to validate referenced datasource resources. It does not access Datasource DAO or plugin internals. The current phase does not start YakFlow, schedule jobs, cancel executions or expose HTTP endpoints.
+
+The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
+
 ### `yak-ops-plugins/yak-ops-plugin-datasource`
 
 Owns Datasource provider contracts and implementations.
@@ -218,7 +229,7 @@ Boot owns protocol entry and application assembly.
 
 YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; CDC remains a later connector stage.
 
-Security, Workspace, User Preference and Datasource own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
+Security, Workspace, User Preference, Datasource and Data Sync own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
 
 ## Refactor Rule
 

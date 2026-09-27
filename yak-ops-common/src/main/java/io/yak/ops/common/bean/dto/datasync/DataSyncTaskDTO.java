@@ -1,0 +1,70 @@
+package io.yak.ops.common.bean.dto.datasync;
+
+import io.yak.ops.common.enums.datasync.DataSyncType;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+/**
+ * 数据同步任务定义的创建与编辑请求。
+ *
+ * @author weifuwan
+ * @since 2026-09-27
+ */
+@Data
+public class DataSyncTaskDTO {
+
+    /** 同一 Workspace 内唯一的任务名称。 */
+    @NotBlank(message = "任务名称不能为空")
+    @Size(max = 128, message = "任务名称不能超过 128 个字符")
+    private String name;
+
+    /** 当前阶段只支持 OFFLINE。 */
+    @NotNull(message = "同步类型不能为空")
+    private DataSyncType syncType = DataSyncType.OFFLINE;
+
+    /** 来源数据源 ID。 */
+    @NotBlank(message = "来源数据源不能为空")
+    private String sourceDataSourceId;
+
+    /** 来源数据库名称，无该层级时为空。 */
+    @Size(max = 128, message = "来源数据库名称不能超过 128 个字符")
+    private String sourceDatabase;
+
+    /** 来源 Schema 名称，无该层级时为空。 */
+    @Size(max = 128, message = "来源 Schema 名称不能超过 128 个字符")
+    private String sourceSchema;
+
+    /** 来源表名称。 */
+    @NotBlank(message = "来源表不能为空")
+    @Size(max = 128, message = "来源表名称不能超过 128 个字符")
+    private String sourceTable;
+
+    /** 目标数据源 ID。 */
+    @NotBlank(message = "目标数据源不能为空")
+    private String targetDataSourceId;
+
+    /** 目标数据库名称，无该层级时为空。 */
+    @Size(max = 128, message = "目标数据库名称不能超过 128 个字符")
+    private String targetDatabase;
+
+    /** 目标 Schema 名称，无该层级时为空。 */
+    @Size(max = 128, message = "目标 Schema 名称不能超过 128 个字符")
+    private String targetSchema;
+
+    /** 目标表名称。 */
+    @NotBlank(message = "目标表不能为空")
+    @Size(max = 128, message = "目标表名称不能超过 128 个字符")
+    private String targetTable;
+
+    /** YakFlow 运行参数。 */
+    @Valid
+    @NotNull(message = "运行参数不能为空")
+    private DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+
+    /** 用户维护的任务备注。 */
+    @Size(max = 500, message = "任务备注不能超过 500 个字符")
+    private String remark;
+}
