@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import "./login-characters.css";
 import type { LoginFocusState, LoginResultState } from "./login-interaction";
@@ -55,6 +55,118 @@ function buildOrangeBodyPath(x: number, y: number, activity: number) {
     "Z",
   ].join(" ");
 }
+function lerp(start: number, end: number, progress: number) {
+  return start + (end - start) * progress;
+}
+
+function smoothstep(value: number) {
+  const progress = clamp(value, 0, 1);
+  return progress * progress * (3 - 2 * progress);
+}
+
+function quadraticBezier(start: number, control: number, end: number, progress: number) {
+  const inverse = 1 - progress;
+  return inverse * inverse * start + 2 * inverse * progress * control + progress * progress * end;
+}
+
+function buildOrangeShapePath(
+  leftX: number,
+  rightX: number,
+  topX: number,
+  topY: number,
+  bottomY: number,
+  bottomRound: number,
+) {
+  const width = rightX - leftX;
+  const sideY = topY + (bottomY - topY) * 0.42;
+
+  return [
+    `M${svgPoint(leftX)} ${svgPoint(bottomY)}`,
+    `C${svgPoint(leftX)} ${svgPoint(sideY)}`,
+    `${svgPoint(leftX + width * 0.22)} ${svgPoint(topY)}`,
+    `${svgPoint(topX)} ${svgPoint(topY)}`,
+    `C${svgPoint(rightX - width * 0.197)} ${svgPoint(topY)}`,
+    `${svgPoint(rightX)} ${svgPoint(sideY)}`,
+    `${svgPoint(rightX)} ${svgPoint(bottomY)}`,
+    `C${svgPoint(rightX)} ${svgPoint(bottomY + bottomRound)}`,
+    `${svgPoint(leftX)} ${svgPoint(bottomY + bottomRound)}`,
+    `${svgPoint(leftX)} ${svgPoint(bottomY)}`,
+    "Z",
+  ].join(" ");
+}
+
+function buildOrangeEntrancePath(progress: number) {
+  const value = clamp(progress, 0, 1);
+
+  if (value <= 0.42) {
+    const phase = smoothstep(value / 0.42);
+    const centerX = quadraticBezier(92, 124, 232, phase);
+    const centerY = quadraticBezier(520, 320, 520, phase);
+    const width = lerp(30, 84, phase);
+    const height = lerp(54, 34, phase);
+    const topX = centerX + Math.sin(phase * Math.PI) * 6;
+    const topY = centerY - height / 2;
+    const bottomY = centerY + height / 2;
+
+    return buildOrangeShapePath(
+      centerX - width / 2,
+      centerX + width / 2,
+      topX,
+      topY,
+      bottomY,
+      lerp(10, 3, phase),
+    );
+  }
+
+  if (value <= 0.54) {
+    const phase = smoothstep((value - 0.42) / 0.12);
+    const centerX = lerp(232, 244, phase);
+    const width = lerp(84, 160, phase);
+    const topY = lerp(503, 530, phase);
+    const bottomY = lerp(537, 550, phase);
+
+    return buildOrangeShapePath(
+      centerX - width / 2,
+      centerX + width / 2,
+      lerp(232, 244, phase),
+      topY,
+      bottomY,
+      lerp(3, 0, phase),
+    );
+  }
+
+  if (value <= 0.7) {
+    const phase = smoothstep((value - 0.54) / 0.16);
+    const bounce = Math.sin(phase * Math.PI) * 30;
+    const width = lerp(160, 220, phase);
+    const height = lerp(20, 85, phase);
+    const bottomY = 550 - bounce;
+
+    return buildOrangeShapePath(
+      244 - width / 2,
+      244 + width / 2,
+      244,
+      bottomY - height,
+      bottomY,
+      Math.sin(phase * Math.PI) * 8,
+    );
+  }
+
+  const phase = smoothstep((value - 0.7) / 0.3);
+  const leftX = lerp(134, 65, phase);
+  const rightX = lerp(354, 415, phase);
+  const topY = lerp(465, 392, phase) - Math.sin(phase * Math.PI) * 7;
+
+  return buildOrangeShapePath(leftX, rightX, 244, topY, 550, 0);
+}
+
+function getOrangeEntranceFaceOpacity(progress: number) {
+  return smoothstep((progress - 0.74) / 0.16);
+}
+
+const ORANGE_ENTRY_DURATION_MS = 1050;
+const ORANGE_ENTRY_START_PATH = buildOrangeEntrancePath(0);
+const ORANGE_FINAL_BODY_PATH = buildOrangeBodyPath(0, 0, 0);
 
 function PurpleCharacter() {
   return (
@@ -239,84 +351,71 @@ function OrangeCharacter() {
   return (
     <g data-character="orange" className="yak-login-character yak-login-character--orange">
       <g className="yak-login-character--orange__entry">
-        <g className="yak-login-character--orange__entry-blob" aria-hidden="true">
-          <path
-            d="M177 505C181 486 204 476 229 478C252 480 267 491 265 504C263 515 250 520 236 516C225 513 218 506 207 510C195 515 182 515 177 505Z"
-            fill="#FF7D2A"
-          />
-        </g>
-
-        <g className="yak-login-character--orange__morph">
-          <g className="yak-login-character--orange__breathe">
-            <g className="yak-login-character--orange__result">
-              <g className="yak-login-character--orange__focus">
-                <g className="yak-login-character--orange__body">
-                  <path
-                    data-orange-body-path
-                    d="M65 550C65 458 142 392 244 392C346 392 415 458 415 550Z"
-                    fill="#FF7D2A"
-                  />
-                  <g className="yak-login-character--orange__face">
-                    <g className="yak-login-character--orange__result-eyes">
-                      <g className="yak-login-character--orange__focus-eyes">
-                        <g className="yak-login-character--orange__eyes">
-                          <g className="yak-login-character--orange__eyes-open">
-                            <circle cx="190" cy="462" r="6.9" fill="#171717" />
-                            <circle cx="270" cy="462" r="6.9" fill="#171717" />
-                          </g>
-                          <g className="yak-login-character--orange__eyes-blink">
-                            <path
-                              d="M181 463Q190 454 199 463"
-                              fill="none"
-                              stroke="#171717"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                            />
-                            <path
-                              d="M261 463Q270 454 279 463"
-                              fill="none"
-                              stroke="#171717"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                            />
-                          </g>
+        <g className="yak-login-character--orange__breathe">
+          <g className="yak-login-character--orange__result">
+            <g className="yak-login-character--orange__focus">
+              <g className="yak-login-character--orange__body">
+                <path data-orange-body-path d={ORANGE_ENTRY_START_PATH} fill="#FF7D2A" />
+                <g className="yak-login-character--orange__face">
+                  <g className="yak-login-character--orange__result-eyes">
+                    <g className="yak-login-character--orange__focus-eyes">
+                      <g className="yak-login-character--orange__eyes">
+                        <g className="yak-login-character--orange__eyes-open">
+                          <circle cx="190" cy="462" r="6.9" fill="#171717" />
+                          <circle cx="270" cy="462" r="6.9" fill="#171717" />
+                        </g>
+                        <g className="yak-login-character--orange__eyes-blink">
+                          <path
+                            d="M181 463Q190 454 199 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M261 463Q270 454 279 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
                         </g>
                       </g>
                     </g>
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                      d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
-                      fill="#171717"
-                    />
-                    <circle
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
-                      cx="231"
-                      cy="496"
-                      r="6"
-                      fill="#171717"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
-                      d="M214 494Q231 504 248 494"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
-                      fill="#171717"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--failure"
-                      d="M208 507Q230.5 486 253 507"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
                   </g>
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
+                    d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
+                    fill="#171717"
+                  />
+                  <circle
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
+                    cx="231"
+                    cy="496"
+                    r="6"
+                    fill="#171717"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
+                    d="M214 494Q231 504 248 494"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--success"
+                    d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
+                    fill="#171717"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--failure"
+                    d="M208 507Q230.5 486 253 507"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
                 </g>
               </g>
             </g>
@@ -343,6 +442,17 @@ export default function LoginCharacters({
   const resultStateRef = useRef(resultState);
   const passwordVisibleRef = useRef(passwordVisible);
   const [orangeBlinking, setOrangeBlinking] = useState(false);
+
+  useLayoutEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
+    if (!orangeBodyPath) return;
+
+    orangeBodyPath.setAttribute("d", ORANGE_FINAL_BODY_PATH);
+    scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
+  }, []);
 
   useEffect(() => {
     focusStateRef.current = focusState;
@@ -397,6 +507,7 @@ export default function LoginCharacters({
     let yellowFaceX = 0;
     let yellowFaceY = 0;
     let frame = 0;
+    const orangeEntryStartedAt = performance.now();
 
     const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
     const yellowBodyPath = scene.querySelector<SVGPathElement>("[data-yellow-body-path]");
@@ -411,6 +522,12 @@ export default function LoginCharacters({
     };
 
     const animate = () => {
+      const orangeEntryProgress = clamp(
+        (performance.now() - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS,
+        0,
+        1,
+      );
+      const orangeEntryComplete = orangeEntryProgress >= 1;
       const activeFocus = focusStateRef.current;
       const activeResult = resultStateRef.current;
       const passwordPeek = activeFocus === "userPassword" && passwordVisibleRef.current;
@@ -441,14 +558,17 @@ export default function LoginCharacters({
       blackX += (interactionTargetX - blackX) * 0.042;
       blackY += (interactionTargetY - blackY) * 0.042;
 
-      orangeVelocityX += (interactionTargetX - orangeX) * 0.014;
-      orangeVelocityY += (interactionTargetY - orangeY) * 0.014;
+      const orangeTargetX = orangeEntryComplete ? interactionTargetX : 0;
+      const orangeTargetY = orangeEntryComplete ? interactionTargetY : 0;
+
+      orangeVelocityX += (orangeTargetX - orangeX) * 0.014;
+      orangeVelocityY += (orangeTargetY - orangeY) * 0.014;
       orangeVelocityX *= 0.76;
       orangeVelocityY *= 0.76;
       orangeX += orangeVelocityX;
       orangeY += orangeVelocityY;
-      orangeBodyX += (interactionTargetX - orangeBodyX) * 0.045;
-      orangeBodyY += (interactionTargetY - orangeBodyY) * 0.04;
+      orangeBodyX += (orangeTargetX - orangeBodyX) * 0.045;
+      orangeBodyY += (orangeTargetY - orangeBodyY) * 0.04;
 
       yellowBodyX += (interactionTargetX - yellowBodyX) * 0.055;
       yellowBodyY += (interactionTargetY - yellowBodyY) * 0.05;
@@ -475,10 +595,20 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
-      orangeBodyPath.setAttribute(
-        "d",
-        buildOrangeBodyPath(orangeBodyX, orangeBodyY, orangeActivity),
-      );
+      if (orangeEntryComplete) {
+        orangeBodyPath.setAttribute(
+          "d",
+          buildOrangeBodyPath(orangeBodyX, orangeBodyY, orangeActivity),
+        );
+        scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
+      } else {
+        orangeBodyPath.setAttribute("d", buildOrangeEntrancePath(orangeEntryProgress));
+        scene.style.setProperty(
+          "--yak-orange-entry-face-opacity",
+          String(getOrangeEntranceFaceOpacity(orangeEntryProgress)),
+        );
+      }
+
       scene.style.setProperty("--yak-orange-face-x", `${orangeX * 34}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeY * 14}px`);
       scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 6}px`);
