@@ -151,10 +151,7 @@ function PurpleMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <path
-                  d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z"
-                  fill="#6128F5"
-                />
+                <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
                 <Face
                   whiteEyes
                   eyeColor="#FFFFFF"
@@ -184,10 +181,7 @@ function BlackMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <path
-                  d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z"
-                  fill="#191A20"
-                />
+                <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
                 <Face
                   whiteEyes
                   neutralMouth="none"
@@ -218,10 +212,7 @@ function OrangeMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <path
-                  d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z"
-                  fill="#FF7D2A"
-                />
+                <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
                 <Face
                   eyeColor="#171717"
                   pupilColor="#171717"
