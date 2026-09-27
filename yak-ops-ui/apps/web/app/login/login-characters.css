@@ -5,6 +5,9 @@
   --yak-purple-face-y: 0px;
   --yak-purple-pupil-x: 0px;
   --yak-purple-pupil-y: 0px;
+  --yak-purple-password-face-x: 0px;
+  --yak-purple-password-face-y: 0px;
+  --yak-purple-password-face-rotate: 0deg;
   --yak-black-lean: 0deg;
   --yak-black-stretch: 1;
   --yak-black-face-x: 0px;
@@ -53,6 +56,7 @@
 .yak-login-character--purple__breathe,
 .yak-login-character--purple__body,
 .yak-login-character--purple__face,
+.yak-login-character--purple__password-face-pose,
 .yak-login-character--purple__pupil,
 .yak-login-character--black__breathe,
 .yak-login-character--black__body,
@@ -92,6 +96,7 @@
 }
 
 .yak-login-character--purple__face,
+.yak-login-character--purple__password-face-pose,
 .yak-login-character--purple__focus-eyes,
 .yak-login-character--purple__eyes,
 .yak-login-character--purple__pupil,
@@ -130,6 +135,11 @@
 
 .yak-login-character--purple__face {
   transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
+}
+
+.yak-login-character--purple__password-face-pose {
+  transform: translate(var(--yak-purple-password-face-x), var(--yak-purple-password-face-y))
+    rotate(var(--yak-purple-password-face-rotate));
 }
 
 .yak-login-character--purple__pupil {
@@ -278,7 +288,7 @@
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--purple__focus {
-  transform: skewX(2deg) scaleY(0.975);
+  transform: scaleY(0.99);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--black__focus {
@@ -293,19 +303,17 @@
   transform: scaleY(0.985);
 }
 
-.yak-login-characters.is-password-focus .yak-login-character--purple__focus-eyes,
 .yak-login-characters.is-password-focus .yak-login-character--black__focus-eyes,
 .yak-login-characters.is-password-focus .yak-login-character--yellow__focus-eyes {
   transform: scaleY(0.12);
 }
 
-.yak-login-characters.is-password-focus .yak-login-character--purple__pupil,
 .yak-login-characters.is-password-focus .yak-login-character--black__pupil {
   opacity: 0;
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
-  transform: skewX(-5deg) scaleY(1.055);
+  transform: scaleY(1);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
@@ -320,15 +328,12 @@
   transform: scaleY(1.015);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--purple__focus-eyes,
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus-eyes,
 .yak-login-characters.is-password-focus.is-password-visible
   .yak-login-character--yellow__focus-eyes {
   transform: scaleX(1.08) scaleY(1.12);
 }
 
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__pupil,
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__pupil {
   opacity: 1;
 }
@@ -679,6 +684,7 @@
   .yak-login-character--yellow__focus-eyes,
   .yak-login-character--purple__body,
   .yak-login-character--purple__face,
+  .yak-login-character--purple__password-face-pose,
   .yak-login-character--purple__pupil,
   .yak-login-character--black__body,
   .yak-login-character--black__face,
