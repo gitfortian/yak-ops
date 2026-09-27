@@ -2,6 +2,7 @@ package io.yak.ops.plugin.database.jdbc.oracle;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -37,6 +38,11 @@ public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     @Override
     protected String buildJdbcUrl(String host, int port, String database, JsonNode connectionJson) {
         return "jdbc:oracle:thin:@//" + host + ":" + port + "/" + database;
+    }
+
+    @Override
+    public List<String> connectionPropertyKeys() {
+        return List.of();
     }
 
     @Override
