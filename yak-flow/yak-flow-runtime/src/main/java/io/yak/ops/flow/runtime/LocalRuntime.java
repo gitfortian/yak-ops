@@ -31,8 +31,7 @@ public final class LocalRuntime {
         Objects.requireNonNull(sink, "sink must not be null");
         Objects.requireNonNull(schema, "schema must not be null");
 
-        LocalExecution<SplitT> execution =
-                new LocalExecution<>(source, sink, schema, DEFAULT_CHANNEL_CAPACITY);
+        LocalExecution<SplitT> execution = new LocalExecution<>(source, sink, schema, DEFAULT_CHANNEL_CAPACITY);
         execution.start();
         return execution;
     }

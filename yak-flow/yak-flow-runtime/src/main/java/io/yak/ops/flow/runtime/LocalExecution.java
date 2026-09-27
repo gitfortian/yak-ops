@@ -105,8 +105,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
      */
     public CompletableFuture<LocalCheckpoint> checkpoint() {
         if (status.get() != ExecutionStatus.RUNNING) {
-            return CompletableFuture.failedFuture(
-                    new IllegalStateException("checkpoint requires a running execution"));
+            return CompletableFuture.failedFuture(new IllegalStateException("checkpoint requires a running execution"));
         }
 
         long checkpointId = checkpointSequence.incrementAndGet();
@@ -114,8 +113,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         checkpointFutures.put(checkpointId, future);
         checkpointRequests.add(new CheckpointRequest(checkpointId));
 
-        if (status.get() != ExecutionStatus.RUNNING
-                && checkpointFutures.remove(checkpointId, future)) {
+        if (status.get() != ExecutionStatus.RUNNING && checkpointFutures.remove(checkpointId, future)) {
             future.completeExceptionally(new IllegalStateException("execution finished before checkpoint"));
         }
         return future;
@@ -206,8 +204,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             CheckpointState enumeratorState = enumerator.snapshotState(request.checkpointId());
             CheckpointState readerState = reader == null ? null : reader.snapshotState(request.checkpointId());
             String splitId = split == null ? null : split.splitId();
-            channel.put(new CheckpointBarrierMessage(
-                    request.checkpointId(), enumeratorState, readerState, splitId));
+            channel.put(new CheckpointBarrierMessage(request.checkpointId(), enumeratorState, readerState, splitId));
         }
     }
 
@@ -229,7 +226,8 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                     writer.flush();
                     return;
                 }
-                throw new IllegalStateException("unsupported channel message: " + message.getClass().getName());
+                throw new IllegalStateException(
+                        "unsupported channel message: " + message.getClass().getName());
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
