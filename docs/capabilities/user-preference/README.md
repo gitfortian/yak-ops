@@ -103,4 +103,22 @@ first-level list updates immediately
 
 The database stores only product ids and preference state. Product label, route and icon remain frontend Registry metadata.
 
-Datasource frequent-type UI is a separate follow-up capability and must consume `DATASOURCE_CREATE_TYPE` rather than duplicating preference storage.
+Datasource Create Wizard consumes `DATASOURCE_CREATE_TYPE`:
+
+```text
+GET DATASOURCE_CREATE_TYPE preferences
+        ↓
+useCount DESC + lastUsedTime DESC
+        ↓
+supported datasource registry
+        ↓
+Top 3 frequent datasource types
+
+select datasource type
+        ↓
+POST use
+        ↓
+use_count + 1 / last_used_time refresh
+```
+
+The frequent-type UI treats preference reads and usage writes as non-blocking personalization. If preference access fails, datasource creation still falls back to the product-supported type order.
