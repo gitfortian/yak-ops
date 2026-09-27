@@ -22,6 +22,33 @@ function resolveOrangeExpression(
   return "happy";
 }
 
+function svgPoint(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function buildYellowBodyPath(x: number, y: number) {
+  const bend = clamp(x, -1, 1) * 30;
+  const vertical = clamp(y, -1, 1);
+
+  const topY = 318 + vertical * 10;
+  const shoulderY = 352 + vertical * 5;
+  const rightShoulderY = 349 + vertical * 6;
+  const rightSideY = 404 + vertical * 3;
+
+  return [
+    "M450 550",
+    "V407",
+    `C${svgPoint(450 + bend * 0.08)} ${svgPoint(shoulderY)}`,
+    `${svgPoint(481 + bend * 0.55)} ${svgPoint(topY)}`,
+    `${svgPoint(524 + bend)} ${svgPoint(topY)}`,
+    `C${svgPoint(565 + bend)} ${svgPoint(topY)}`,
+    `${svgPoint(590 + bend * 0.65)} ${svgPoint(rightShoulderY)}`,
+    `${svgPoint(590 + bend * 0.3)} ${svgPoint(rightSideY)}`,
+    `C${svgPoint(590 + bend * 0.12)} 456 590 505 590 550`,
+    "Z",
+  ].join(" ");
+}
+
 function PurpleCharacter() {
   return (
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
@@ -155,7 +182,8 @@ function YellowCharacter() {
             <g className="yak-login-character--yellow__focus">
               <g className="yak-login-character--yellow__body">
                 <path
-                  d="M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404V550Z"
+                  data-yellow-body-path
+                  d="M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404C590 456 590 505 590 550Z"
                   fill="#F3D30B"
                 />
                 <g className="yak-login-character--yellow__face">
@@ -357,11 +385,14 @@ export default function LoginCharacters({
     let orangeY = 0;
     let orangeVelocityX = 0;
     let orangeVelocityY = 0;
-    let yellowX = 0;
-    let yellowY = 0;
-    let yellowVelocityX = 0;
-    let yellowVelocityY = 0;
+    let yellowBodyX = 0;
+    let yellowBodyY = 0;
+    let yellowFaceX = 0;
+    let yellowFaceY = 0;
     let frame = 0;
+
+    const yellowBodyPath = scene.querySelector<SVGPathElement>("[data-yellow-body-path]");
+    if (!yellowBodyPath) return;
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = scene.getBoundingClientRect();
@@ -409,12 +440,10 @@ export default function LoginCharacters({
       orangeX += orangeVelocityX;
       orangeY += orangeVelocityY;
 
-      yellowVelocityX += (interactionTargetX - yellowX) * 0.028;
-      yellowVelocityY += (interactionTargetY - yellowY) * 0.028;
-      yellowVelocityX *= 0.76;
-      yellowVelocityY *= 0.76;
-      yellowX += yellowVelocityX;
-      yellowY += yellowVelocityY;
+      yellowBodyX += (interactionTargetX - yellowBodyX) * 0.055;
+      yellowBodyY += (interactionTargetY - yellowBodyY) * 0.05;
+      yellowFaceX += (interactionTargetX - yellowFaceX) * 0.095;
+      yellowFaceY += (interactionTargetY - yellowFaceY) * 0.085;
 
       const orangeSquash = clamp(
         Math.abs(orangeVelocityX) * 0.35 + Math.abs(orangeVelocityY) * 0.22,
@@ -458,12 +487,11 @@ export default function LoginCharacters({
         }
       }
 
-      scene.style.setProperty("--yak-yellow-bend", `${yellowX * -6.5}deg`);
-      scene.style.setProperty("--yak-yellow-stretch", String(1 - yellowY * 0.026));
-      scene.style.setProperty("--yak-yellow-face-x", `${yellowX * 8}px`);
-      scene.style.setProperty("--yak-yellow-face-y", `${yellowY * 3.5}px`);
-      scene.style.setProperty("--yak-yellow-eye-x", `${yellowX * 3.6}px`);
-      scene.style.setProperty("--yak-yellow-eye-y", `${yellowY * 1.8}px`);
+      yellowBodyPath.setAttribute("d", buildYellowBodyPath(yellowBodyX, yellowBodyY));
+      scene.style.setProperty("--yak-yellow-face-x", `${yellowFaceX * 10}px`);
+      scene.style.setProperty("--yak-yellow-face-y", `${yellowFaceY * 4}px`);
+      scene.style.setProperty("--yak-yellow-eye-x", `${yellowFaceX * 4}px`);
+      scene.style.setProperty("--yak-yellow-eye-y", `${yellowFaceY * 2}px`);
 
       frame = window.requestAnimationFrame(animate);
     };
