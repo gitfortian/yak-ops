@@ -28,9 +28,9 @@ DataSyncService
       ↓
 Task / Instance persistence
 
-future OfflineSyncExecutor
+OfflineSyncExecutor
       ↓
-YakFlow
+YakFlow Local Runtime
 ```
 
 This capability explicitly uses `DataSyncService / DataSyncServiceImpl` naming.
@@ -113,9 +113,42 @@ Field mapping rules:
 - Numeric widening is limited to integer → integer/decimal and decimal → decimal.
 - String ↔ numeric and other implicit Transform are rejected.
 
+## Offline Execution Lifecycle
+
+Phase 3 enables manual execution of saved OFFLINE tasks.
+
+Lifecycle:
+
+```text
+run task
+   ↓
+PENDING
+   ↓
+RUNNING
+   ├── SUCCEEDED
+   ├── FAILED
+   └── CANCELED
+```
+
+Must:
+- Persist a sanitized definition snapshot before execution starts.
+- Resolve runtime datasource credentials by datasource ID only after the instance exists.
+- Keep at most one PENDING / RUNNING instance per task in the current single-node product.
+- Register each active LocalExecution in the in-process execution registry before transitioning the instance to RUNNING.
+- Allow PENDING and RUNNING instances to be canceled.
+- Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Runtime is not process-recoverable.
+- Revalidate current Catalog field compatibility when a task is started.
+- Keep historical instances after task deletion; active instances block task deletion.
+
+Must Not:
+- Persist runtime DataSourceConnection or credentials into definitionSnapshot.
+- Expose DataSourceService.resolveRuntimeConnection through Boot.
+- Claim distributed execution or restart recovery.
+- Add scheduler / retry policy in Phase 3.
+
 ## Current Phase
 
-Phase 2 implements:
+Phase 3 implements:
 - task create/update/delete/detail/page.
 - instance detail/page query.
 - persistence contracts.
@@ -123,10 +156,15 @@ Phase 2 implements:
 - task HTTP CRUD / page endpoints.
 - backend automatic field mapping preview and save-time validation.
 - offline task editor frontend.
-
-Phase 2 does not implement:
-- instance creation.
-- run/cancel/retry.
-- scheduler.
+- manual instance creation and run.
+- PENDING / RUNNING / SUCCEEDED / FAILED / CANCELED lifecycle.
+- in-process LocalExecution registry and cancel.
 - startup LOST recovery.
-- YakFlow execution registry.
+- instance list / detail product contract.
+
+Phase 3 does not implement:
+- scheduler.
+- retry policy.
+- distributed workers.
+- process-level execution recovery.
+- read/write row metrics refinement.

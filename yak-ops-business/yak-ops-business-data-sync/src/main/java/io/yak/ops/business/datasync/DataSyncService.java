@@ -27,9 +27,13 @@ public interface DataSyncService {
 
     DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto);
 
+    DataSyncInstanceVO runTask(String id);
+
     boolean deleteTask(String id);
 
     DataSyncInstanceVO queryInstance(String id);
 
     PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto);
+
+    DataSyncInstanceVO cancelInstance(String id);
 }

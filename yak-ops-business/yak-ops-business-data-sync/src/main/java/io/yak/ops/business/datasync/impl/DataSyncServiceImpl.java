@@ -4,6 +4,8 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.business.datasync.execution.OfflineSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.OfflineSyncExecutor;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
@@ -11,14 +13,20 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
+import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.page.PagingData;
+import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
@@ -34,6 +42,8 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /**
@@ -53,6 +63,12 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Resource
     private DataSourceService dataSourceService;
+
+    @Resource
+    private OfflineSyncExecutor offlineSyncExecutor;
+
+    @Resource
+    private OfflineSyncExecutionRegistry executionRegistry;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -153,9 +169,42 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public synchronized DataSyncInstanceVO runTask(String id) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskEntity task = requireTask(workspaceId, id);
+        requireCompatibleMapping(toMappingPreview(task));
+        if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
+            throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
+        }
+
+        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task);
+        DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
+        instance.setWorkspaceId(workspaceId);
+        instance.setTaskId(task.getId());
+        instance.setTaskName(task.getName());
+        instance.setTaskVersion(task.getDefinitionVersion());
+        instance.setTriggerType(DataSyncTriggerType.MANUAL);
+        instance.setStatus(DataSyncInstanceStatus.PENDING);
+        instance.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
+        instance.setReadRows(0L);
+        instance.setWriteRows(0L);
+        instance.initCreate();
+        if (instanceRepository.add(instance) == null) {
+            throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
+        }
+
+        submitAfterCommit(workspaceId, instance.getId(), snapshot);
+        return toInstanceVO(instance, true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean deleteTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
+        if (instanceRepository.existsActiveByTask(workspaceId, entity.getId())) {
+            throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
+        }
         if (taskRepository.deleteById(workspaceId, entity.getId()) <= 0) {
             throw new DataSyncException(DataSyncErrorCode.DELETE_TASK_FAILED);
         }
@@ -165,7 +214,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     @Override
     public DataSyncInstanceVO queryInstance(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        return toInstanceVO(requireInstance(workspaceId, id));
+        return toInstanceVO(requireInstance(workspaceId, id), true);
     }
 
     @Override
@@ -190,7 +239,57 @@ public class DataSyncServiceImpl implements DataSyncService {
                 dto.getTriggerType(),
                 dto.getStartTimeStart(),
                 dto.getStartTimeEnd());
-        return PagingData.from(instanceRepository.queryPage(workspaceId, query).map(this::toInstanceVO));
+        return PagingData.from(instanceRepository.queryPage(workspaceId, query).map(value -> toInstanceVO(value, false)));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncInstanceVO cancelInstance(String id) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncInstanceEntity instance = requireInstance(workspaceId, id);
+        if (instance.getStatus() == null || instance.getStatus().isTerminal()) {
+            return toInstanceVO(instance, true);
+        }
+
+        if (instance.getStatus() == DataSyncInstanceStatus.PENDING) {
+            if (!instanceRepository.transitionStatus(
+                    workspaceId,
+                    id,
+                    DataSyncInstanceStatus.PENDING,
+                    DataSyncInstanceStatus.CANCELED,
+                    null,
+                    DateUtils.now(),
+                    null,
+                    null)) {
+                throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
+            }
+        } else if (instance.getStatus() == DataSyncInstanceStatus.RUNNING) {
+            if (!executionRegistry.cancel(id)) {
+                instanceRepository.transitionStatus(
+                        workspaceId,
+                        id,
+                        DataSyncInstanceStatus.RUNNING,
+                        DataSyncInstanceStatus.LOST,
+                        null,
+                        DateUtils.now(),
+                        DataSyncErrorCode.EXECUTION_LOST.getCode(),
+                        DataSyncErrorCode.EXECUTION_LOST.getMessage());
+            } else {
+                instanceRepository.transitionStatus(
+                        workspaceId,
+                        id,
+                        DataSyncInstanceStatus.RUNNING,
+                        DataSyncInstanceStatus.CANCELED,
+                        null,
+                        DateUtils.now(),
+                        null,
+                        null);
+            }
+        } else {
+            throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
+        }
+
+        return toInstanceVO(requireInstance(workspaceId, id), true);
     }
 
     private void applyDefinition(DataSyncTaskEntity entity, DataSyncTaskDTO dto) {
@@ -224,6 +323,68 @@ public class DataSyncServiceImpl implements DataSyncService {
         preview.setTargetSchema(dto.getTargetSchema());
         preview.setTargetTable(dto.getTargetTable());
         return preview;
+    }
+
+    private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskEntity task) {
+        DataSyncMappingPreviewDTO preview = new DataSyncMappingPreviewDTO();
+        preview.setSourceDataSourceId(task.getSourceDataSourceId());
+        preview.setSourceDatabase(task.getSourceDatabase());
+        preview.setSourceSchema(task.getSourceSchema());
+        preview.setSourceTable(task.getSourceTable());
+        preview.setTargetDataSourceId(task.getTargetDataSourceId());
+        preview.setTargetDatabase(task.getTargetDatabase());
+        preview.setTargetSchema(task.getTargetSchema());
+        preview.setTargetTable(task.getTargetTable());
+        return preview;
+    }
+
+    private DataSyncDefinitionSnapshotVO definitionSnapshot(DataSyncTaskEntity task) {
+        DataSourceVO source = dataSourceService.queryDataSource(task.getSourceDataSourceId());
+        DataSourceVO target = dataSourceService.queryDataSource(task.getTargetDataSourceId());
+
+        DataSyncDefinitionSnapshotVO snapshot = new DataSyncDefinitionSnapshotVO();
+        snapshot.setTaskId(task.getId());
+        snapshot.setTaskName(task.getName());
+        snapshot.setTaskVersion(task.getDefinitionVersion());
+        snapshot.setSource(endpointSnapshot(
+                source,
+                task.getSourceDatabase(),
+                task.getSourceSchema(),
+                task.getSourceTable()));
+        snapshot.setTarget(endpointSnapshot(
+                target,
+                task.getTargetDatabase(),
+                task.getTargetSchema(),
+                task.getTargetTable()));
+        snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
+        return snapshot;
+    }
+
+    private DataSyncEndpointSnapshotVO endpointSnapshot(
+            DataSourceVO dataSource, String database, String schema, String table) {
+        DataSyncEndpointSnapshotVO endpoint = new DataSyncEndpointSnapshotVO();
+        endpoint.setDataSourceId(dataSource.getId());
+        endpoint.setDataSourceName(dataSource.getName());
+        endpoint.setDataSourceType(dataSource.getDbType());
+        endpoint.setDatabase(database);
+        endpoint.setSchema(schema);
+        endpoint.setTable(table);
+        return endpoint;
+    }
+
+    private void submitAfterCommit(
+            String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
+        Runnable submit = () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            submit.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                submit.run();
+            }
+        });
     }
 
     private DataSourceTablePathDTO tablePath(String database, String schema, String table) {
@@ -442,7 +603,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         return target;
     }
 
-    private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source) {
+    private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {
         DataSyncInstanceVO target = new DataSyncInstanceVO();
         target.setId(source.getId());
         target.setTaskId(source.getTaskId());
@@ -457,6 +618,10 @@ public class DataSyncServiceImpl implements DataSyncService {
         target.setFinishTime(source.getFinishTime());
         target.setErrorCode(source.getErrorCode());
         target.setErrorMessage(source.getErrorMessage());
+        if (includeSnapshot && StringUtils.hasText(source.getDefinitionSnapshot())) {
+            target.setDefinitionSnapshot(
+                    JSONUtils.parseObject(source.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class));
+        }
         target.setCreateTime(source.getCreateTime());
         target.setUpdateTime(source.getUpdateTime());
         return target;
