@@ -33,7 +33,8 @@ Filter
 Create Wizard:
 
 ```text
-选择数据源类型
+常用数据源 Top 3 + 全部数据源
+→ 选择数据源类型并记录用户使用偏好
 → 配置连接信息
 → 测试连接 / 完成
 ```
@@ -93,7 +94,7 @@ PostgreSQL 的 `POSTGRESQL` / `POSTGRES` 只作为兼容输入别名；进入前
 - connection test
 - save
 
-Create / Edit 统一使用 Yak UI `Modal`。Create 第一步只选择当前支持的数据源类型，提供轻量分类与搜索，点击数据源 Item 直接进入配置步骤；Edit 跳过类型选择，直接进入同一份配置表单。Create / Edit 共用字段渲染、校验、连接测试和保存逻辑。
+Create / Edit 统一使用 Yak UI `Modal`。Create 第一步顶部展示最多 3 个“常用数据源”，下方继续提供全部支持类型、轻量分类与搜索；点击任意数据源 Item 直接进入配置步骤。常用区通过 User Preference 的 `DATASOURCE_CREATE_TYPE` 场景按 `useCount DESC, lastUsedTime DESC` 排序，冷启动时用当前产品支持类型补足最多 3 个位置。Edit 跳过类型选择，直接进入同一份配置表单。Create / Edit 共用字段渲染、校验、连接测试和保存逻辑。
 
 连接字段按 Provider 使用固定模式，不引入动态表单：
 
@@ -126,7 +127,9 @@ PostgreSQL 表单遵循 Database connection target：不新增 Schema 字段，�
 - 列表行操作只保留“编辑｜删除”文字操作，中间使用轻量 Divider；操作组在操作列内居中对齐；列表不提供单行 Connection Test，连接测试保留在新增 / 编辑表单内。
 - Table 启用受控 `rowSelection`；表头和底部 Checkbox 都只全选当前页，跨页已选 ID 保留；筛选条件变化清空选择，单次最多选择 100 条。
 - Table `footer` 左侧承载“批量删除 / 批量测试连通性”，右侧继续使用 Yak UI Pagination；批量删除必须二次确认，批量连接测试直接执行并反馈成功 / 失败数量。
-- 新增使用 Yak UI `Modal` 两步 Wizard；Modal Header / Footer 固定，只允许 Body 滚动。第一步选择区使用固定高度，数据少时允许自然留白；提供“全部 / 关系型数据库”分类和搜索。Datasource Item 使用紧凑单行结构，只展示 Icon + 名称，不展示说明文案。第二步配置表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form：Label 左对齐、Control 右侧占满，Input / Select / PasswordInput 统一使用 `small`，字段纵向间距保持紧凑，分组只使用轻量边框与标题。MySQL / PostgreSQL 使用 Host + Port + Database 结构化输入并实时展示 JDBC Preview，高级参数使用轻量 Key/Value 列表；Oracle 只展示完整 JDBC URL + 用户名 / 密码 / 认证选项，不展示 JDBC Preview、Host / Port / Database、版本或高级参数。当前只展示 `MYSQL / ORACLE / POSTGRE_SQL`，不引入动态 Provider UI。
+- 新增使用 Yak UI `Modal` 两步 Wizard；Modal Header / Footer 固定，只允许 Body 滚动。第一步选择区使用固定高度，顶部展示最多 3 个常用数据源，下方提供“全部 / 关系型数据库”分类和搜索。Datasource Item 使用紧凑单行结构，只展示 Icon + 名称，不展示说明文案。第二步配置表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form：Label 左对齐、Control 右侧占满，Input / Select / PasswordInput 统一使用 `small`，字段纵向间距保持紧凑，分组只使用轻量边框与标题。MySQL / PostgreSQL 使用 Host + Port + Database 结构化输入并实时展示 JDBC Preview，高级参数使用轻量 Key/Value 列表；Oracle 只展示完整 JDBC URL + 用户名 / 密码 / 认证选项，不展示 JDBC Preview、Host / Port / Database、版本或高级参数。当前只展示 `MYSQL / ORACLE / POSTGRE_SQL`，不引入动态 Provider UI。
+- 常用数据源只消费 `service/preference` 的 `DATASOURCE_CREATE_TYPE`；User Preference 是用户级能力，请求必须省略 Workspace Header。选择 Provider 时记录一次 usage，不阻塞进入配置步骤；偏好接口失败时 Create Wizard 仍必须可用。
+- 常用数据源排序以服务端 `useCount` 为主、`lastUsedTime` 为次，并只映射到当前 `COMMON_DB_OPTIONS` 中真实支持的类型；不足 3 个时从产品支持类型顺序补足，禁止把未知历史 itemKey 渲染成入口。
 - Edit 使用与 Create 相同的 Yak UI `Modal` 和配置内容；不展示可修改的数据库类型控件，通过标题明确当前 Provider，且编辑时禁止修改 `dbType`。
 - Create / Edit 的必填标识与错误信息统一使用 Yak UI `FieldLabel required` / `FieldRequiredMark` / `FieldError`；Datasource 只持有字段规则和 i18n message，不在页面重复手写红色星号或错误文本样式。
 - Create / Update / Connection Test 共用同一个 `connectionParams` Contract；MySQL / PostgreSQL 使用 `host / port / database / username / password / properties`，Oracle 使用 `jdbcUrl / username / password`。字段必填规则由当前 Provider 模式决定；`dbType` 由外层请求字段负责 Provider 路由，不重复塞进连接对象。
