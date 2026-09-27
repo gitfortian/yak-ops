@@ -53,6 +53,16 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
      */
     void restore(CheckpointState state) throws Exception;
 
+    /**
+     * Sink 已完成对应 checkpoint barrier 的 flush 后由 Runtime 回调。
+     *
+     * <p>Source 可以在这里提交外部 offset 或确认上游批次；默认实现无操作。</p>
+     *
+     * @param checkpointId 已完成的检查点标识
+     * @throws Exception 完成确认失败
+     */
+    default void notifyCheckpointComplete(long checkpointId) throws Exception {}
+
     @Override
     void close() throws Exception;
 }

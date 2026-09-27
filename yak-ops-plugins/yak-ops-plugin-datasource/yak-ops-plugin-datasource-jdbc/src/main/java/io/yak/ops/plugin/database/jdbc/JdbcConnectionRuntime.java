@@ -31,12 +31,40 @@ public final class JdbcConnectionRuntime implements JdbcConnectionProvider {
 
     @Override
     public Connection open(DataSourceConnection connection, int timeoutSeconds) throws Exception {
+        AbstractJdbcDataSourcePlugin plugin = pluginFor(connection);
+        JdbcConnectionProperties jdbcConnection = plugin.requireJdbcConnection(connection);
+        return plugin.openJdbcConnection(jdbcConnection, Math.max(1, timeoutSeconds));
+    }
+
+    /**
+     * 为非 JDBC 协议客户端解析真实数据库网络端点，并复用 Datasource 的 SSH 隧道生命周期。
+     *
+     * @param connection 已规范化 JDBC 连接
+     * @param timeoutSeconds SSH 建连超时秒数
+     * @return 可关闭的数据库端点
+     * @throws Exception 端点或 SSH 建立失败
+     */
+    public JdbcEndpoint openEndpoint(DataSourceConnection connection, int timeoutSeconds) throws Exception {
+        AbstractJdbcDataSourcePlugin plugin = pluginFor(connection);
+        JdbcConnectionProperties jdbcConnection = plugin.requireJdbcConnection(connection);
+        if (jdbcConnection.host() == null || jdbcConnection.host().isBlank() || jdbcConnection.port() <= 0) {
+            throw new IllegalArgumentException("当前连接缺少结构化 host/port，无法用于 CDC 网络端点");
+        }
+
+        if (!jdbcConnection.sshTunnel().enabled()) {
+            return new JdbcEndpoint(jdbcConnection.host(), jdbcConnection.port(), null);
+        }
+
+        SshTunnel tunnel = SshTunnel.open(
+                jdbcConnection.sshTunnel(), jdbcConnection.host(), jdbcConnection.port(), Math.max(1, timeoutSeconds));
+        return new JdbcEndpoint("127.0.0.1", tunnel.localPort(), tunnel);
+    }
+
+    private AbstractJdbcDataSourcePlugin pluginFor(DataSourceConnection connection) {
         Objects.requireNonNull(connection, "connection must not be null");
-        AbstractJdbcDataSourcePlugin plugin = plugins.stream()
+        return plugins.stream()
                 .filter(candidate -> candidate.descriptor().matchesType(connection.type()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("暂不支持 JDBC 数据源类型：" + connection.type()));
-        JdbcConnectionProperties jdbcConnection = plugin.requireJdbcConnection(connection);
-        return plugin.openJdbcConnection(jdbcConnection, Math.max(1, timeoutSeconds));
     }
 }

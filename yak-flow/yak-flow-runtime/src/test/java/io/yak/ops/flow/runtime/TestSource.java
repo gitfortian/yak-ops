@@ -8,6 +8,7 @@ import io.yak.ops.flow.api.source.SourceReader;
 import io.yak.ops.flow.api.source.SourceSplitEnumerator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Local Runtime 测试使用的可配置 Source，可模拟有界数据和持续无界数据。
@@ -20,6 +21,7 @@ final class TestSource implements Source<TestSplit> {
     private final Boundedness boundedness;
     private final int boundedRows;
     private final long pollDelayMillis;
+    private final AtomicLong completedCheckpointId = new AtomicLong();
 
     TestSource(Boundedness boundedness, int boundedRows, long pollDelayMillis) {
         this.boundedness = boundedness;
@@ -39,7 +41,11 @@ final class TestSource implements Source<TestSplit> {
 
     @Override
     public SourceReader<TestSplit> createReader() {
-        return new TestSourceReader(boundedness, boundedRows, pollDelayMillis);
+        return new TestSourceReader(boundedness, boundedRows, pollDelayMillis, completedCheckpointId);
+    }
+
+    long completedCheckpointId() {
+        return completedCheckpointId.get();
     }
 
     /**
@@ -88,12 +94,18 @@ final class TestSource implements Source<TestSplit> {
         private final Boundedness boundedness;
         private final int boundedRows;
         private final long pollDelayMillis;
+        private final AtomicLong completedCheckpointId;
         private int emitted;
 
-        private TestSourceReader(Boundedness boundedness, int boundedRows, long pollDelayMillis) {
+        private TestSourceReader(
+                Boundedness boundedness,
+                int boundedRows,
+                long pollDelayMillis,
+                AtomicLong completedCheckpointId) {
             this.boundedness = boundedness;
             this.boundedRows = boundedRows;
             this.pollDelayMillis = pollDelayMillis;
+            this.completedCheckpointId = completedCheckpointId;
         }
 
         @Override
@@ -124,6 +136,11 @@ final class TestSource implements Source<TestSplit> {
         @Override
         public void restore(io.yak.ops.flow.api.checkpoint.CheckpointState state) {
             emitted = Math.toIntExact(((TestCheckpointState) state).position());
+        }
+
+        @Override
+        public void notifyCheckpointComplete(long checkpointId) {
+            completedCheckpointId.set(checkpointId);
         }
 
         @Override

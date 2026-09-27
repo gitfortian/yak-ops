@@ -39,4 +39,15 @@ public interface JdbcDialect {
         String placeholders = schema.columns().stream().map(ignored -> "?").collect(Collectors.joining(", "));
         return "INSERT INTO " + qualifiedTable(table) + " (" + columns + ") VALUES (" + placeholders + ")";
     }
+
+    default String deleteSql(DataSourceTablePath table, YakTableSchema schema) {
+        if (schema.primaryKeys().isEmpty()) {
+            throw new IllegalArgumentException("DELETE changelog requires primary key");
+        }
+        String predicate = schema.primaryKeys().stream()
+                .map(primaryKey -> quoteIdentifier(primaryKey) + " = ?")
+                .collect(Collectors.joining(" AND "));
+        return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate;
+    }
 }
+

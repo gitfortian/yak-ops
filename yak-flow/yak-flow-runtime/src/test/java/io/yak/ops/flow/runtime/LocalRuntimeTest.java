@@ -49,6 +49,7 @@ class LocalRuntimeTest {
         assertEquals("reader", readerState.owner());
         assertEquals(readerState.position(), sink.lastFlushRowCount());
         assertEquals(checkpoint, execution.latestCheckpoint().orElseThrow());
+        assertEquals(checkpoint.checkpointId(), source.completedCheckpointId());
 
         execution.cancel();
 

@@ -4,6 +4,7 @@ import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.api.sink.Sink;
 import io.yak.ops.flow.api.source.Source;
 import io.yak.ops.flow.api.source.SourceSplit;
+import java.time.Duration;
 import java.util.Objects;
 
 /**
@@ -15,6 +16,21 @@ import java.util.Objects;
 public final class LocalRuntime {
 
     private static final int DEFAULT_CHANNEL_CAPACITY = 64;
+    private static final Duration DEFAULT_STREAM_CHECKPOINT_INTERVAL = Duration.ofSeconds(10);
+
+    private final Duration streamCheckpointInterval;
+
+    public LocalRuntime() {
+        this(DEFAULT_STREAM_CHECKPOINT_INTERVAL);
+    }
+
+    public LocalRuntime(Duration streamCheckpointInterval) {
+        this.streamCheckpointInterval =
+                Objects.requireNonNull(streamCheckpointInterval, "streamCheckpointInterval must not be null");
+        if (streamCheckpointInterval.isNegative()) {
+            throw new IllegalArgumentException("streamCheckpointInterval must not be negative");
+        }
+    }
 
     /**
      * 启动一次本地执行。
@@ -31,7 +47,8 @@ public final class LocalRuntime {
         Objects.requireNonNull(sink, "sink must not be null");
         Objects.requireNonNull(schema, "schema must not be null");
 
-        LocalExecution<SplitT> execution = new LocalExecution<>(source, sink, schema, DEFAULT_CHANNEL_CAPACITY);
+        LocalExecution<SplitT> execution =
+                new LocalExecution<>(source, sink, schema, DEFAULT_CHANNEL_CAPACITY, streamCheckpointInterval);
         execution.start();
         return execution;
     }
