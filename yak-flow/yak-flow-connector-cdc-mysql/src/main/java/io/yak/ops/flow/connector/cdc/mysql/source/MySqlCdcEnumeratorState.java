@@ -1,4 +1,4 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.source;
 
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
 

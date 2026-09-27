@@ -1,4 +1,4 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.debezium;
 
 import io.debezium.embedded.Connect;
 import io.debezium.engine.DebeziumEngine;
@@ -7,6 +7,8 @@ import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.source.SourceReader;
+import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSplit;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionRuntime;
 import io.yak.ops.plugin.database.jdbc.JdbcEndpoint;
 import java.util.ArrayDeque;
@@ -27,7 +29,7 @@ import org.apache.kafka.connect.source.SourceRecord;
  * @author weifuwan
  * @since 2026-09-27
  */
-final class MySqlCdcSourceReader implements SourceReader<MySqlCdcSplit> {
+public final class MySqlCdcSourceReader implements SourceReader<MySqlCdcSplit> {
 
     private static final long POLL_TIMEOUT_MILLIS = 100L;
 
@@ -46,7 +48,7 @@ final class MySqlCdcSourceReader implements SourceReader<MySqlCdcSplit> {
     private volatile Throwable engineFailure;
     private volatile boolean closing;
 
-    MySqlCdcSourceReader(MySqlCdcSourceConfig config, JdbcConnectionRuntime connectionRuntime) {
+    public MySqlCdcSourceReader(MySqlCdcSourceConfig config, JdbcConnectionRuntime connectionRuntime) {
         this.config = config;
         this.connectionRuntime = connectionRuntime;
         this.converter = new DebeziumRecordConverter(config.schema());

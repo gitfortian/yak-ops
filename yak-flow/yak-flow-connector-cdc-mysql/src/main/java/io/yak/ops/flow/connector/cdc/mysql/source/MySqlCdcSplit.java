@@ -1,4 +1,4 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.source;
 
 import io.yak.ops.flow.api.source.SourceSplit;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
