@@ -99,14 +99,32 @@ Repository queries must always scope Task / Instance product access by `workspac
 
 Task deletion does not imply deleting historical instances.
 
+## Offline Task Editor Contract
+
+Phase 2 publishes task CRUD and mapping-preview HTTP contracts for the offline task editor.
+
+Field mapping rules:
+- Mapping is automatic by case-insensitive same-name field matching.
+- The editor is read-only for mappings; no rename, expression or Transform exists.
+- Backend mapping preview is the source of truth.
+- Task create/update must repeat the same backend compatibility validation; frontend state cannot bypass it.
+- String / binary target capacity must not be smaller when both sides expose size metadata.
+- DECIMAL target precision / scale must not be smaller when metadata is available.
+- Numeric widening is limited to integer → integer/decimal and decimal → decimal.
+- String ↔ numeric and other implicit Transform are rejected.
+
 ## Current Phase
 
-Phase 1 implements:
+Phase 2 implements:
 - task create/update/delete/detail/page.
 - instance detail/page query.
 - persistence contracts.
+- Datasource Catalog reads through DataSourceService.
+- task HTTP CRUD / page endpoints.
+- backend automatic field mapping preview and save-time validation.
+- offline task editor frontend.
 
-Phase 1 does not implement:
+Phase 2 does not implement:
 - instance creation.
 - run/cancel/retry.
 - scheduler.

@@ -4,11 +4,16 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -22,6 +27,11 @@ import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import jakarta.annotation.Resource;
+import java.sql.Types;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,6 +62,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         String name = normalizeRequired(dto.getName(), "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, null);
         validateDatasourceReferences(dto);
+        requireCompatibleMapping(toMappingPreview(dto));
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
         entity.setWorkspaceId(workspaceId);
@@ -76,6 +87,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         String name = normalizeRequired(dto.getName(), "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, id);
         validateDatasourceReferences(dto);
+        requireCompatibleMapping(toMappingPreview(dto));
 
         entity.setName(name);
         entity.setSyncType(requireOffline(dto.getSyncType()));
@@ -111,6 +123,32 @@ public class DataSyncServiceImpl implements DataSyncService {
                 normalizeNullable(dto.getSourceDataSourceId()),
                 normalizeNullable(dto.getTargetDataSourceId()));
         return PagingData.from(taskRepository.queryPage(workspaceId, query).map(this::toTaskVO));
+    }
+
+    @Override
+    public DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto) {
+        requireMappingPreview(dto);
+        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
+                dto.getSourceDataSourceId(),
+                tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable()));
+        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
+                dto.getTargetDataSourceId(),
+                tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable()));
+
+        Map<String, DataSourceCatalogColumnVO> targetByName = new LinkedHashMap<>();
+        for (DataSourceCatalogColumnVO column : targetColumns) {
+            if (column.getName() != null) {
+                targetByName.put(column.getName().toLowerCase(Locale.ROOT), column);
+            }
+        }
+
+        DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+        result.setMappings(sourceColumns.stream()
+                .map(source -> toFieldMapping(source, targetByName.get(lower(source.getName()))))
+                .toList());
+        result.setCompatible(!sourceColumns.isEmpty()
+                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
+        return result;
     }
 
     @Override
@@ -166,6 +204,143 @@ public class DataSyncServiceImpl implements DataSyncService {
         entity.setTargetTable(normalizeRequired(dto.getTargetTable(), "目标表不能为空"));
         entity.setRuntimeConfig(JSONUtils.toJson(requireRuntimeConfig(dto.getRuntimeConfig())));
         entity.setRemark(normalizeNullable(dto.getRemark()));
+    }
+
+    private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
+        DataSyncMappingPreviewVO preview = previewMapping(dto);
+        if (!preview.isCompatible()) {
+            throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
+        }
+    }
+
+    private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskDTO dto) {
+        DataSyncMappingPreviewDTO preview = new DataSyncMappingPreviewDTO();
+        preview.setSourceDataSourceId(dto.getSourceDataSourceId());
+        preview.setSourceDatabase(dto.getSourceDatabase());
+        preview.setSourceSchema(dto.getSourceSchema());
+        preview.setSourceTable(dto.getSourceTable());
+        preview.setTargetDataSourceId(dto.getTargetDataSourceId());
+        preview.setTargetDatabase(dto.getTargetDatabase());
+        preview.setTargetSchema(dto.getTargetSchema());
+        preview.setTargetTable(dto.getTargetTable());
+        return preview;
+    }
+
+    private DataSourceTablePathDTO tablePath(String database, String schema, String table) {
+        DataSourceTablePathDTO path = new DataSourceTablePathDTO();
+        path.setDatabase(normalizeNullable(database));
+        path.setSchema(normalizeNullable(schema));
+        path.setTable(normalizeRequired(table, "表名称不能为空"));
+        return path;
+    }
+
+    private DataSyncFieldMappingVO toFieldMapping(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
+        DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
+        mapping.setSourceName(source.getName());
+        mapping.setSourceType(source.getTypeName());
+        mapping.setTargetName(target == null ? null : target.getName());
+        mapping.setTargetType(target == null ? null : target.getTypeName());
+        mapping.setCompatible(target != null && compatibleType(source, target));
+        if (target == null) {
+            mapping.setMessage("目标表缺少同名字段");
+        } else if (!mapping.isCompatible()) {
+            mapping.setMessage("字段类型或容量不兼容");
+        }
+        return mapping;
+    }
+
+    private boolean compatibleType(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
+        if (source.getJdbcType() == null || target.getJdbcType() == null) return false;
+        int sourceType = source.getJdbcType();
+        int targetType = target.getJdbcType();
+
+        boolean familyCompatible = sourceType == targetType
+                || (isBoolean(sourceType) && isBoolean(targetType))
+                || (isInteger(sourceType) && (isInteger(targetType) || isDecimal(targetType)))
+                || (isDecimal(sourceType) && isDecimal(targetType))
+                || (isString(sourceType) && isString(targetType))
+                || (isBinary(sourceType) && isBinary(targetType))
+                || (isDate(sourceType) && isDate(targetType))
+                || (isTime(sourceType) && isTime(targetType))
+                || (isTimestamp(sourceType) && isTimestamp(targetType));
+        if (!familyCompatible) return false;
+
+        if ((isString(sourceType) || isBinary(sourceType))
+                && positive(source.getSize())
+                && positive(target.getSize())
+                && source.getSize() > target.getSize()) {
+            return false;
+        }
+        if (isDecimal(sourceType) && isDecimal(targetType)) {
+            if (positive(source.getSize()) && positive(target.getSize()) && source.getSize() > target.getSize()) {
+                return false;
+            }
+            if (source.getScale() != null && target.getScale() != null && source.getScale() > target.getScale()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isBoolean(int type) {
+        return type == Types.BOOLEAN || type == Types.BIT;
+    }
+
+    private boolean isInteger(int type) {
+        return type == Types.TINYINT || type == Types.SMALLINT || type == Types.INTEGER || type == Types.BIGINT;
+    }
+
+    private boolean isDecimal(int type) {
+        return type == Types.REAL
+                || type == Types.FLOAT
+                || type == Types.DOUBLE
+                || type == Types.NUMERIC
+                || type == Types.DECIMAL;
+    }
+
+    private boolean isString(int type) {
+        return type == Types.CHAR
+                || type == Types.VARCHAR
+                || type == Types.LONGVARCHAR
+                || type == Types.NCHAR
+                || type == Types.NVARCHAR
+                || type == Types.LONGNVARCHAR
+                || type == Types.CLOB
+                || type == Types.NCLOB;
+    }
+
+    private boolean isBinary(int type) {
+        return type == Types.BINARY || type == Types.VARBINARY || type == Types.LONGVARBINARY || type == Types.BLOB;
+    }
+
+    private boolean isDate(int type) {
+        return type == Types.DATE;
+    }
+
+    private boolean isTime(int type) {
+        return type == Types.TIME || type == Types.TIME_WITH_TIMEZONE;
+    }
+
+    private boolean isTimestamp(int type) {
+        return type == Types.TIMESTAMP || type == Types.TIMESTAMP_WITH_TIMEZONE;
+    }
+
+    private boolean positive(Integer value) {
+        return value != null && value > 0;
+    }
+
+    private String lower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    private void requireMappingPreview(DataSyncMappingPreviewDTO dto) {
+        if (dto == null
+                || !StringUtils.hasText(dto.getSourceDataSourceId())
+                || !StringUtils.hasText(dto.getSourceTable())
+                || !StringUtils.hasText(dto.getTargetDataSourceId())
+                || !StringUtils.hasText(dto.getTargetTable())) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射参数不完整");
+        }
     }
 
     private void validateDatasourceReferences(DataSyncTaskDTO dto) {

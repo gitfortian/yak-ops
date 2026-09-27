@@ -3,6 +3,10 @@ import HttpUtils from "@/service/http/HttpUtils";
 import type {
   DataSourceBatchConnectTestResult,
   DataSourceConnectTestPayload,
+  DataSourceCatalogColumn,
+  DataSourceCatalogQuery,
+  DataSourceCatalogTable,
+  DataSourceCatalogTablePath,
   DataSourceConnectionPropertyKeys,
   DataSourceId,
   DataSourcePageParams,
@@ -59,3 +63,29 @@ export const testDataSourceConnectionWithParams = (
   payload: DataSourceConnectTestPayload,
 ): Promise<boolean> =>
   HttpUtils.postData<boolean>(`${DATA_SOURCE_API_PREFIX}/connect-test-with-param`, payload);
+
+export const listDataSourceDatabases = (id: DataSourceId): Promise<string[]> =>
+  HttpUtils.getData<string[]>(`${DATA_SOURCE_API_PREFIX}/${id}/catalog/databases`);
+
+export const listDataSourceSchemas = (id: DataSourceId, database?: string): Promise<string[]> => {
+  const query = database ? `?database=${encodeURIComponent(database)}` : "";
+  return HttpUtils.getData<string[]>(`${DATA_SOURCE_API_PREFIX}/${id}/catalog/schemas${query}`);
+};
+
+export const listDataSourceTables = (
+  id: DataSourceId,
+  query: DataSourceCatalogQuery,
+): Promise<DataSourceCatalogTable[]> =>
+  HttpUtils.postData<DataSourceCatalogTable[]>(
+    `${DATA_SOURCE_API_PREFIX}/${id}/catalog/tables`,
+    query,
+  );
+
+export const listDataSourceColumns = (
+  id: DataSourceId,
+  path: DataSourceCatalogTablePath,
+): Promise<DataSourceCatalogColumn[]> =>
+  HttpUtils.postData<DataSourceCatalogColumn[]>(
+    `${DATA_SOURCE_API_PREFIX}/${id}/catalog/columns`,
+    path,
+  );

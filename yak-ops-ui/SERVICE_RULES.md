@@ -26,7 +26,10 @@ service/auth
 = login / logout / current user contract + endpoints
 
 service/datasource
-= Datasource contract + CRUD / connection
+= Datasource contract + CRUD / connection / read-only Catalog metadata
+
+service/data-sync
+= Data Sync task CRUD + mapping preview contract
 
 service/preference
 = User Preference contract used by current product favorites / frequent-item consumers

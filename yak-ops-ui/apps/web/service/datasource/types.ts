@@ -72,3 +72,36 @@ export interface DataSourceBatchConnectTestResult {
   dataSourceId: DataSourceId;
   connected: boolean;
 }
+
+export interface DataSourceCatalogQuery {
+  database?: string;
+  schema?: string;
+  keyword?: string;
+  limit?: number;
+}
+
+export interface DataSourceCatalogTablePath {
+  database?: string;
+  schema?: string;
+  table: string;
+}
+
+export interface DataSourceCatalogTable {
+  database?: string;
+  schema?: string;
+  name: string;
+  type?: string;
+  remarks?: string;
+}
+
+export interface DataSourceCatalogColumn {
+  name: string;
+  typeName?: string;
+  jdbcType?: number;
+  size?: number;
+  scale?: number;
+  nullable?: boolean;
+  ordinalPosition?: number;
+  primaryKey?: boolean;
+  remarks?: string;
+}

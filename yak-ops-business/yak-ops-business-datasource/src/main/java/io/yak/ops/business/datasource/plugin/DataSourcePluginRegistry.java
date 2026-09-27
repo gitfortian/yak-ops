@@ -4,6 +4,11 @@ import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.util.ObjectUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalog;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalogQuery;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTable;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
 import io.yak.ops.plugin.datasource.api.exception.DataSourcePluginException;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
@@ -16,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -107,12 +113,45 @@ public class DataSourcePluginRegistry {
         }
     }
 
+    public List<String> catalogDatabases(String pluginType, String connectionJson, int timeoutSeconds) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, DataSourceCatalog::listDatabases);
+    }
+
+    public List<String> catalogSchemas(String pluginType, String connectionJson, int timeoutSeconds, String database) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listSchemas(database));
+    }
+
+    public List<DataSourceTable> catalogTables(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceCatalogQuery query) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listTables(query));
+    }
+
+    public List<DataSourceColumn> catalogColumns(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceTablePath tablePath) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listColumns(tablePath));
+    }
+
     public String maskConnectionJson(String pluginType, String connectionJson) {
         return secretCodec.maskConnectionJson(get(pluginType).descriptor(), connectionJson);
     }
 
     public String maskSensitiveText(String value) {
         return secretCodec.maskSensitiveText(value);
+    }
+
+    private <T> T catalogOperation(
+            String pluginType, String connectionJson, int timeoutSeconds, Function<DataSourceCatalog, T> action) {
+        DataSourcePlugin plugin = get(pluginType);
+        requireCapability(plugin, DataSourceCapability.CATALOG_METADATA, DataSourceErrorCode.CATALOG_QUERY_FAILED);
+        DataSourceConnection connection = parseConnection(plugin.descriptor().type(), connectionJson);
+        try {
+            DataSourceCatalog catalog = plugin.createCatalog(connection, Math.max(1, timeoutSeconds));
+            return action.apply(catalog);
+        } catch (DataSourcePluginException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+        }
     }
 
     private DataSourcePlugin get(String pluginType) {
