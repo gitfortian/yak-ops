@@ -83,8 +83,24 @@ Favorite ordering is assigned when an item becomes a favorite. Removing a favori
 
 Usage recording uses an atomic upsert so repeated or concurrent usage events cannot lose increments.
 
-## Product Boundary
+## Product Consumers
 
-PR1 provides persistence and API only.
+Global Product Favorites consumes `PRODUCT_MENU`:
 
-Product-menu star UI and datasource frequent-type UI are separate follow-up capabilities and must consume this API rather than duplicating preference storage.
+```text
+navigation.ts Product Registry
+        +
+GET PRODUCT_MENU preferences
+        ↓
+ProductLauncher first-level favorites
+
+AllProductMenu star
+        ↓
+PUT favorite
+        ↓
+first-level list updates immediately
+```
+
+The database stores only product ids and preference state. Product label, route and icon remain frontend Registry metadata.
+
+Datasource frequent-type UI is a separate follow-up capability and must consume `DATASOURCE_CREATE_TYPE` rather than duplicating preference storage.
