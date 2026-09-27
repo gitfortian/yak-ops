@@ -38,9 +38,11 @@ export interface DataSourcePageParams {
 }
 
 export interface DataSourceConnectionParams {
-  host: string;
-  port: number;
-  database: string;
+  /** Provider-native JDBC URL. Oracle uses this field directly. */
+  jdbcUrl?: string;
+  host?: string;
+  port?: number;
+  database?: string;
   username: string;
   password: string;
   /** Provider-owned JDBC driver selection id. Only MySQL currently exposes this field. */
