@@ -78,13 +78,22 @@ function YellowCharacter() {
     <g data-character="yellow" className="yak-login-character yak-login-character--yellow">
       <g className="yak-login-character--yellow__breathe">
         <g className="yak-login-character--yellow__body">
-          <path d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z" fill="#F3D30B" />
+          <path
+            d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
+            fill="#F3D30B"
+          />
           <g className="yak-login-character--yellow__face">
             <g className="yak-login-character--yellow__eyes">
               <circle cx="492" cy="373" r="4.2" fill="#171717" />
               <circle cx="535" cy="373" r="4.2" fill="#171717" />
             </g>
-            <path d="M488 410H539" fill="none" stroke="#171717" strokeWidth="3" strokeLinecap="round" />
+            <path
+              d="M488 410H539"
+              fill="none"
+              stroke="#171717"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
           </g>
         </g>
       </g>
