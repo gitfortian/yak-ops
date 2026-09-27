@@ -1,6 +1,7 @@
 package io.yak.ops.flow.connector.cdc.mysql;
 
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -16,8 +17,8 @@ record MySqlCdcCheckpointState(Map<String, Object> sourcePartition, Map<String, 
         implements CheckpointState {
 
     MySqlCdcCheckpointState {
-        sourcePartition = Map.copyOf(new LinkedHashMap<>(sourcePartition));
-        sourceOffset = Map.copyOf(new LinkedHashMap<>(sourceOffset));
+        sourcePartition = Collections.unmodifiableMap(new LinkedHashMap<>(sourcePartition));
+        sourceOffset = Collections.unmodifiableMap(new LinkedHashMap<>(sourceOffset));
     }
 
     static MySqlCdcCheckpointState empty() {

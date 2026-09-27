@@ -47,7 +47,7 @@ class MySqlDebeziumEngineConfigTest {
                 "user-cdc",
                 54001L);
 
-        var properties = MySqlDebeziumEngineConfig.build(config, new JdbcEndpoint("127.0.0.1", 3306, null));
+        var properties = MySqlDebeziumEngineConfig.build(config, JdbcEndpoint.direct("127.0.0.1", 3306));
 
         assertEquals("initial", properties.getProperty("snapshot.mode"));
         assertEquals("127.0.0.1", properties.getProperty("database.hostname"));

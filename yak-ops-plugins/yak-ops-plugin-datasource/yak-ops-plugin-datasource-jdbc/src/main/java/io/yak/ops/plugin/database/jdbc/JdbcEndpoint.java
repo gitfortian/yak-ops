@@ -18,6 +18,10 @@ public final class JdbcEndpoint implements AutoCloseable {
         this.resource = resource;
     }
 
+    public static JdbcEndpoint direct(String host, int port) {
+        return new JdbcEndpoint(host, port, null);
+    }
+
     public String host() {
         return host;
     }

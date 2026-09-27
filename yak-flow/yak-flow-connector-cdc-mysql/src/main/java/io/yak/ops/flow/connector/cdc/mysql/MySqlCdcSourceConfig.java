@@ -53,7 +53,10 @@ public record MySqlCdcSourceConfig(
         if (schema.primaryKeys().isEmpty()) {
             throw new IllegalArgumentException("Phase 4 MySQL CDC requires primary key");
         }
-        if (databaseName() == null || databaseName().isBlank()) {
+        String database = table.database() != null && !table.database().isBlank()
+                ? table.database()
+                : connection.database();
+        if (database == null || database.isBlank()) {
             throw new IllegalArgumentException("MySQL CDC requires database name");
         }
     }
