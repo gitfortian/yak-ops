@@ -36,6 +36,8 @@
 .yak-login-character--purple__entry,
 .yak-login-character--black__entry,
 .yak-login-character--orange__entry,
+.yak-login-character--orange__entry-blob,
+.yak-login-character--orange__morph,
 .yak-login-character--yellow__entry,
 .yak-login-character--purple__focus,
 .yak-login-character--black__focus,
@@ -110,7 +112,23 @@
 }
 
 .yak-login-character--orange__entry {
-  animation: yak-orange-enter 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: yak-orange-arc-enter 1.9s linear both;
+}
+
+.yak-login-character--orange__entry-blob {
+  opacity: 0;
+  transform-origin: center;
+  animation: yak-orange-blob-impact 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.yak-login-character--orange__morph {
+  opacity: 1;
+  transform-origin: center bottom;
+  animation: yak-orange-character-morph 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.yak-login-character--orange__face {
+  animation: yak-orange-face-arrive 1.9s ease both;
 }
 
 .yak-login-character--yellow__entry {
@@ -150,7 +168,7 @@
 }
 
 .yak-login-character--orange__breathe {
-  animation: yak-orange-breathe 4.8s ease-in-out 1.55s infinite;
+  animation: yak-orange-breathe 4.8s ease-in-out 2.05s infinite;
 }
 
 .yak-login-character--orange__body {
@@ -547,33 +565,147 @@
   }
 }
 
-@keyframes yak-orange-enter {
+@keyframes yak-orange-arc-enter {
   0% {
-    transform: translateX(-145px) translateY(-8px) rotate(-10deg) scaleX(0.3) scaleY(0.28);
+    transform: translate(-235px, -72px) rotate(-12deg);
   }
 
-  28% {
-    transform: translateX(-112px) translateY(-12px) rotate(-7deg) scaleX(0.42) scaleY(0.36);
+  16% {
+    transform: translate(-188px, -154px) rotate(-7deg);
   }
 
-  50% {
-    transform: translateX(-24px) rotate(-2deg) scaleX(0.82) scaleY(1.12);
+  32% {
+    transform: translate(-96px, -112px) rotate(-2deg);
   }
 
-  64% {
-    transform: translateX(0) rotate(0deg) scaleX(1.09) scaleY(0.88);
+  46% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  52% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  61% {
+    transform: translate(0, -28px) rotate(1deg);
+  }
+
+  70% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  79% {
+    transform: translate(0, -8px) rotate(0deg);
+  }
+
+  88%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes yak-orange-blob-impact {
+  0% {
+    opacity: 1;
+    transform: scaleX(0.94) scaleY(1.02) rotate(-6deg);
+  }
+
+  16% {
+    opacity: 1;
+    transform: scaleX(1.04) scaleY(0.96) rotate(-2deg);
+  }
+
+  32% {
+    opacity: 1;
+    transform: scaleX(0.98) scaleY(1.04) rotate(2deg);
+  }
+
+  46% {
+    opacity: 1;
+    transform: scaleX(1.04) scaleY(0.96) rotate(0deg);
+  }
+
+  52% {
+    opacity: 1;
+    transform: scaleX(1.34) scaleY(0.66) rotate(0deg);
+  }
+
+  61% {
+    opacity: 1;
+    transform: scaleX(0.9) scaleY(1.18) rotate(1deg);
+  }
+
+  69% {
+    opacity: 0.78;
+    transform: scaleX(1.06) scaleY(0.94) rotate(0deg);
   }
 
   77% {
-    transform: scaleX(0.955) scaleY(1.065);
+    opacity: 0.24;
+    transform: scaleX(1.18) scaleY(0.82) rotate(0deg);
+  }
+
+  84%,
+  100% {
+    opacity: 0;
+    transform: scaleX(1.24) scaleY(0.78) rotate(0deg);
+  }
+}
+
+@keyframes yak-orange-character-morph {
+  0%,
+  43% {
+    opacity: 0;
+    transform: scaleX(0.22) scaleY(0.12);
+  }
+
+  50% {
+    opacity: 0.18;
+    transform: scaleX(0.46) scaleY(0.22);
+  }
+
+  58% {
+    opacity: 0.56;
+    transform: scaleX(0.62) scaleY(0.68);
+  }
+
+  69% {
+    opacity: 0.88;
+    transform: scaleX(0.84) scaleY(1.08);
+  }
+
+  79% {
+    opacity: 1;
+    transform: scaleX(1.05) scaleY(0.93);
   }
 
   89% {
-    transform: scaleX(1.02) scaleY(0.982);
+    opacity: 1;
+    transform: scaleX(0.985) scaleY(1.025);
   }
 
   100% {
-    transform: translateX(0) translateY(0) rotate(0deg) scaleX(1) scaleY(1);
+    opacity: 1;
+    transform: scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes yak-orange-face-arrive {
+  0%,
+  61% {
+    opacity: 0;
+  }
+
+  72% {
+    opacity: 0.35;
+  }
+
+  84% {
+    opacity: 0.82;
+  }
+
+  100% {
+    opacity: 1;
   }
 }
 
@@ -663,6 +795,8 @@
   .yak-login-character--purple__entry,
   .yak-login-character--black__entry,
   .yak-login-character--orange__entry,
+  .yak-login-character--orange__entry-blob,
+  .yak-login-character--orange__morph,
   .yak-login-character--yellow__entry,
   .yak-login-character--purple__result,
   .yak-login-character--black__result,
@@ -678,6 +812,8 @@
   .yak-login-character--purple__entry,
   .yak-login-character--black__entry,
   .yak-login-character--orange__entry,
+  .yak-login-character--orange__entry-blob,
+  .yak-login-character--orange__morph,
   .yak-login-character--yellow__entry,
   .yak-login-character--purple__result,
   .yak-login-character--black__result,
