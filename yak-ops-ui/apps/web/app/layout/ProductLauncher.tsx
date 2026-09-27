@@ -19,10 +19,7 @@ type ProductLauncherProps = {
   onClose: () => void;
 };
 
-const upsertPreference = (
-  preferences: UserPreferenceRecord[],
-  nextPreference: UserPreferenceRecord,
-) => {
+const upsertPreference = (preferences: UserPreferenceRecord[], nextPreference: UserPreferenceRecord) => {
   const exists = preferences.some((preference) => preference.itemKey === nextPreference.itemKey);
   if (!exists) return [...preferences, nextPreference];
   return preferences.map((preference) =>
@@ -35,7 +32,9 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
   const [firstLevelVisible, setFirstLevelVisible] = useState(open);
   const [preferences, setPreferences] = useState<UserPreferenceRecord[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [favoriteMutatingIds, setFavoriteMutatingIds] = useState<Set<string>>(() => new Set());
+  const [favoriteMutatingIds, setFavoriteMutatingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (open) {
@@ -82,7 +81,10 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
     const previousPreference = preferences.find((preference) => preference.itemKey === productId);
     const nextFavorite = !Boolean(previousPreference?.favorite);
     const nextSortOrder = nextFavorite
-      ? Math.max(0, ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder)) + 1
+      ? Math.max(
+          0,
+          ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder),
+        ) + 1
       : 0;
     const optimisticPreference: UserPreferenceRecord = {
       scene: PRODUCT_MENU_SCENE,
@@ -192,7 +194,9 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
               })
             ) : (
               <div className="px-2 py-3 text-[11px] leading-5 text-white/35">
-                {favoritesLoading ? "正在加载常用产品…" : "暂无常用产品，可在全部产品中标星添加"}
+                {favoritesLoading
+                  ? "正在加载常用产品…"
+                  : "暂无常用产品，可在全部产品中标星添加"}
               </div>
             )}
           </div>
