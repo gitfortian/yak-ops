@@ -245,8 +245,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             CheckpointState enumeratorState = enumerator.snapshotState(request.checkpointId());
             CheckpointState readerState = reader == null ? null : reader.snapshotState(request.checkpointId());
             String splitId = split == null ? null : split.splitId();
-            channel.put(new CheckpointBarrierMessage(
-                    request.checkpointId(), enumeratorState, readerState, splitId));
+            channel.put(new CheckpointBarrierMessage(request.checkpointId(), enumeratorState, readerState, splitId));
         }
     }
 
