@@ -1,11 +1,4 @@
-import {
-  forwardRef,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import SceneCopy from "./SceneCopy";
 
@@ -18,14 +11,7 @@ const BASE_LAYOUT = {
 /** ===================== Types ===================== */
 type Pt = { x: number; y: number };
 
-export type ActionType =
-  | "BLINK"
-  | "SMILE"
-  | "SURPRISE"
-  | "TILT"
-  | "SHAKE"
-  | "BOW"
-  | "THANKS";
+export type ActionType = "BLINK" | "SMILE" | "SURPRISE" | "TILT" | "SHAKE" | "BOW" | "THANKS";
 
 type GlobalAction = { type: ActionType; nonce: number };
 type Expression = "idle" | "smile" | "surprise";
@@ -133,10 +119,7 @@ const BASE_SPECS: Record<Variant, CharacterSpec> = {
 };
 
 /** ===================== Base Entry Config ===================== */
-const BASE_ENTRY: Record<
-  Variant,
-  { mode: EntryMode; delayMs: number; dist?: number }
-> = {
+const BASE_ENTRY: Record<Variant, { mode: EntryMode; delayMs: number; dist?: number }> = {
   orange: { mode: "bottomBounce", delayMs: 0, dist: 220 },
   blue: { mode: "bottomBounce", delayMs: 80, dist: 240 },
   black: { mode: "topDrop", delayMs: 160, dist: 220 },
@@ -253,7 +236,7 @@ function getScaledLayout(scale: number) {
 
 function computeLayout(
   layout: ReturnType<typeof getScaledLayout>,
-  specs: Record<Variant, CharacterSpec>
+  specs: Record<Variant, CharacterSpec>,
 ) {
   const absL = layout.absLeft;
   const absB = layout.absBottom;
@@ -272,7 +255,7 @@ function computeLayout(
       absL.orange + specs.orange.w,
       absL.blue + specs.blue.w,
       absL.black + specs.black.w,
-      absL.yellow + specs.yellow.w
+      absL.yellow + specs.yellow.w,
     ) - minLeft;
 
   const minBottom = Math.min(...(Object.values(absB) as number[]));
@@ -288,7 +271,7 @@ function computeLayout(
     relBottom.orange + specs.orange.h,
     relBottom.blue + specs.blue.h,
     relBottom.black + specs.black.h,
-    relBottom.yellow + specs.yellow.h
+    relBottom.yellow + specs.yellow.h,
   );
 
   return { relLeft, groupW, relBottom, groupH };
@@ -400,13 +383,9 @@ function Character(props: {
     const cL = getCenter(eyeLeftRef.current);
     const cR = getCenter(eyeRightRef.current);
 
-    const left = cL
-      ? vecToPupilOffset(cL, lookTarget, spec.pupilMaxR)
-      : { x: 0, y: 0 };
+    const left = cL ? vecToPupilOffset(cL, lookTarget, spec.pupilMaxR) : { x: 0, y: 0 };
 
-    const right = cR
-      ? vecToPupilOffset(cR, lookTarget, spec.pupilMaxR)
-      : { x: 0, y: 0 };
+    const right = cR ? vecToPupilOffset(cR, lookTarget, spec.pupilMaxR) : { x: 0, y: 0 };
 
     targetLeftRef.current = {
       x: clamp(left.x, -spec.pupilMaxR, spec.pupilMaxR),
@@ -456,12 +435,15 @@ function Character(props: {
 
         setBlink(true);
 
-        reopenTimer = window.setTimeout(() => {
-          if (disposed) return;
+        reopenTimer = window.setTimeout(
+          () => {
+            if (disposed) return;
 
-          setBlink(false);
-          loop();
-        }, 120 + Math.random() * 50);
+            setBlink(false);
+            loop();
+          },
+          120 + Math.random() * 50,
+        );
       }, wait);
     };
 
@@ -514,13 +496,7 @@ function Character(props: {
   /** ===== Idle breathing ===== */
   const idlePhase =
     ((bootT +
-      (variant === "orange"
-        ? 0
-        : variant === "blue"
-        ? 280
-        : variant === "black"
-        ? 540
-        : 820)) %
+      (variant === "orange" ? 0 : variant === "blue" ? 280 : variant === "black" ? 540 : 820)) %
       2200) /
     2200;
 
@@ -557,17 +533,13 @@ function Character(props: {
     runAction(() => {
       setExpression("surprise");
       setBlink(false);
-      timersRef.current.push(
-        window.setTimeout(() => setExpression("idle"), 900)
-      );
+      timersRef.current.push(window.setTimeout(() => setExpression("idle"), 900));
     });
 
   const doSmile = () =>
     runAction(() => {
       setExpression("smile");
-      timersRef.current.push(
-        window.setTimeout(() => setExpression("idle"), 1200)
-      );
+      timersRef.current.push(window.setTimeout(() => setExpression("idle"), 1200));
     });
 
   useEffect(() => {
@@ -593,12 +565,8 @@ function Character(props: {
   const doTilt = (amp: number) =>
     runAction(() => {
       setTilt(-10 * spec.tiltMul * amp);
-      timersRef.current.push(
-        window.setTimeout(() => setTilt(10 * spec.tiltMul * amp), 160)
-      );
-      timersRef.current.push(
-        window.setTimeout(() => setTilt(-6 * spec.tiltMul * amp), 320)
-      );
+      timersRef.current.push(window.setTimeout(() => setTilt(10 * spec.tiltMul * amp), 160));
+      timersRef.current.push(window.setTimeout(() => setTilt(-6 * spec.tiltMul * amp), 320));
       timersRef.current.push(window.setTimeout(() => setTilt(0), 520));
     });
 
@@ -631,9 +599,7 @@ function Character(props: {
 
       timersRef.current.push(window.setTimeout(() => setBlink(false), 140));
       timersRef.current.push(window.setTimeout(() => setBow(0), 520));
-      timersRef.current.push(
-        window.setTimeout(() => setExpression("idle"), 900)
-      );
+      timersRef.current.push(window.setTimeout(() => setExpression("idle"), 900));
     });
 
   useEffect(() => {
@@ -714,8 +680,7 @@ function Character(props: {
     willChange: "transform",
   };
 
-  const mouthColor =
-    variant === "black" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)";
+  const mouthColor = variant === "black" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)";
 
   const mouthNode = (() => {
     if (expression === "surprise") {
@@ -750,10 +715,7 @@ function Character(props: {
             borderBottomRightRadius: 999,
             borderTopLeftRadius: Math.max(8, Math.round(10 * scale)),
             borderTopRightRadius: Math.max(8, Math.round(10 * scale)),
-            border: `${Math.max(
-              2,
-              Math.round(3 * scale)
-            )}px solid ${mouthColor}`,
+            border: `${Math.max(2, Math.round(3 * scale))}px solid ${mouthColor}`,
             borderTop: "0px solid transparent",
             background: "transparent",
             transition: "all 180ms ease",
@@ -789,12 +751,10 @@ function Character(props: {
     gap: spec.eyeGap,
     pointerEvents: "none",
     transform: `translateX(${faceShiftX}px)`,
-    transition:
-      "transform 160ms linear, top 220ms cubic-bezier(0.16, 1, 0.3, 1)",
+    transition: "transform 160ms linear, top 220ms cubic-bezier(0.16, 1, 0.3, 1)",
   };
 
-  const transition =
-    "transform 620ms cubic-bezier(0.16, 1, 0.3, 1), border-radius 420ms ease";
+  const transition = "transform 620ms cubic-bezier(0.16, 1, 0.3, 1), border-radius 420ms ease";
 
   const shadowBlur = Math.max(10, Math.round(18 * scale));
   const transformOrigin = shouldFocusPeek ? "50% 100%" : "50% 85%";
@@ -820,9 +780,7 @@ function Character(props: {
       height: spec.h * 2,
       borderRadius: 999,
       background: spec.bg,
-      boxShadow: `0 ${Math.round(
-        10 * scale
-      )}px ${shadowBlur}px rgba(0,0,0,0.10)`,
+      boxShadow: `0 ${Math.round(10 * scale)}px ${shadowBlur}px rgba(0,0,0,0.10)`,
     };
 
     return (
@@ -908,186 +866,162 @@ export const CharactersScene = forwardRef<
     stageRect: { left: number; top: number; width: number; height: number };
     focusedField: FocusedField;
   }
->(
-  (
-    {
-      mouse,
-      action,
-      globalTilt,
-      bootT,
-      stageW,
-      stageH,
-      stageRect,
-      focusedField,
-    },
-    ref
-  ) => {
-    const responsiveScale = useMemo(
-      () => getResponsiveScale(stageW, stageH),
-      [stageW, stageH]
-    );
+>(({ mouse, action, globalTilt, bootT, stageW, stageH, stageRect, focusedField }, ref) => {
+  const responsiveScale = useMemo(() => getResponsiveScale(stageW, stageH), [stageW, stageH]);
 
-    const specs = useMemo(
-      () => getScaledSpecs(responsiveScale),
-      [responsiveScale]
-    );
+  const specs = useMemo(() => getScaledSpecs(responsiveScale), [responsiveScale]);
 
-    const layout = useMemo(
-      () => getScaledLayout(responsiveScale),
-      [responsiveScale]
-    );
+  const layout = useMemo(() => getScaledLayout(responsiveScale), [responsiveScale]);
 
-    const { relLeft, groupW, relBottom, groupH } = useMemo(
-      () => computeLayout(layout, specs),
-      [layout, specs]
-    );
+  const { relLeft, groupW, relBottom, groupH } = useMemo(
+    () => computeLayout(layout, specs),
+    [layout, specs],
+  );
 
-    const baseLeft = Math.max(0, (stageW - groupW) / 2);
-    const baseBottom = Math.max(0, (stageH - groupH) / 2 - stageH * 0.1);
+  const baseLeft = Math.max(0, (stageW - groupW) / 2);
+  const baseBottom = Math.max(0, (stageH - groupH) / 2 - stageH * 0.1);
 
-    const sceneLookMode: "track" | "peekRight" = useMemo(() => {
-      if (focusedField) return "peekRight";
+  const sceneLookMode: "track" | "peekRight" = useMemo(() => {
+    if (focusedField) return "peekRight";
 
-      const stageRight = stageRect.left + stageRect.width;
-      const nearFormArea = mouse.x > stageRight - 30;
+    const stageRight = stageRect.left + stageRect.width;
+    const nearFormArea = mouse.x > stageRight - 30;
 
-      return nearFormArea ? "peekRight" : "track";
-    }, [focusedField, mouse.x, stageRect]);
+    return nearFormArea ? "peekRight" : "track";
+  }, [focusedField, mouse.x, stageRect]);
 
-    const blueFocusPeek = !!focusedField;
+  const blueFocusPeek = !!focusedField;
 
-    return (
-      <div
-        ref={ref}
-        style={{
-          width: "100%",
-          height: "100vh",
-          background: `
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: "100%",
+        height: "100vh",
+        background: `
             radial-gradient(circle at 18% 16%, rgba(90, 151, 200, 0.10) 0%, rgba(90, 151, 200, 0.05) 20%, rgba(90, 151, 200, 0) 42%),
             radial-gradient(circle at 78% 12%, rgba(87, 169, 200, 0.08) 0%, rgba(87, 169, 200, 0.03) 18%, rgba(87, 169, 200, 0) 36%),
             linear-gradient(180deg, #F8FAFC 0%, #F2F6FA 100%)
           `,
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          border: "1px solid rgba(255,255,255,0.58)",
-          boxShadow: `
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        border: "1px solid rgba(255,255,255,0.58)",
+        boxShadow: `
             0 18px 50px rgba(15, 23, 42, 0.08),
             inset 0 1px 0 rgba(255,255,255,0.6)
           `,
-          position: "relative",
-          overflow: "hidden",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
         }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-          }}
-        />
+      />
 
-        <div className="scene-overlay scene-overlay-top" />
-        <div className="scene-overlay scene-overlay-floor" />
+      <div className="scene-overlay scene-overlay-top" />
+      <div className="scene-overlay scene-overlay-floor" />
 
-        <div className="scene-glow scene-glow-left" />
-        <div className="scene-glow scene-glow-right" />
+      <div className="scene-glow scene-glow-left" />
+      <div className="scene-glow scene-glow-right" />
 
-        <div className="scene-bubbles">
-          <span className="bubble bubble-1" />
-          <span className="bubble bubble-2" />
-          <span className="bubble bubble-3" />
-          <span className="bubble bubble-4" />
-          <span className="bubble bubble-5" />
-          <span className="bubble bubble-6" />
-          <span className="bubble bubble-7" />
-        </div>
-
-        <div className="scene-sparkles">
-          <span className="spark spark-1" />
-          <span className="spark spark-2" />
-          <span className="spark spark-3" />
-          <span className="spark spark-4" />
-        </div>
-
-        <SceneCopy />
-
-        <Character
-          variant="orange"
-          spec={specs.orange}
-          scale={responsiveScale}
-          mouse={mouse}
-          action={action}
-          globalTilt={globalTilt}
-          bootT={bootT}
-          stageRect={stageRect}
-          sceneLookMode={sceneLookMode}
-          style={{
-            position: "absolute",
-            left: baseLeft + relLeft.orange,
-            bottom: baseBottom + relBottom.orange,
-            zIndex: 30,
-          }}
-        />
-
-        <Character
-          variant="blue"
-          spec={specs.blue}
-          scale={responsiveScale}
-          mouse={mouse}
-          action={action}
-          globalTilt={globalTilt}
-          bootT={bootT}
-          stageRect={stageRect}
-          sceneLookMode={sceneLookMode}
-          focusedField={focusedField}
-          focusPeek={blueFocusPeek}
-          style={{
-            position: "absolute",
-            left: baseLeft + relLeft.blue,
-            bottom: baseBottom + relBottom.blue,
-            zIndex: 10,
-          }}
-        />
-
-        <Character
-          variant="black"
-          spec={specs.black}
-          scale={responsiveScale}
-          mouse={mouse}
-          action={action}
-          globalTilt={globalTilt}
-          bootT={bootT}
-          stageRect={stageRect}
-          sceneLookMode={sceneLookMode}
-          style={{
-            position: "absolute",
-            left: baseLeft + relLeft.black,
-            bottom: baseBottom + relBottom.black,
-            zIndex: 12,
-          }}
-        />
-
-        <Character
-          variant="yellow"
-          spec={specs.yellow}
-          scale={responsiveScale}
-          mouse={mouse}
-          action={action}
-          globalTilt={globalTilt}
-          bootT={bootT}
-          stageRect={stageRect}
-          sceneLookMode={sceneLookMode}
-          style={{
-            position: "absolute",
-            left: baseLeft + relLeft.yellow,
-            bottom: baseBottom + relBottom.yellow,
-            zIndex: 11,
-          }}
-        />
+      <div className="scene-bubbles">
+        <span className="bubble bubble-1" />
+        <span className="bubble bubble-2" />
+        <span className="bubble bubble-3" />
+        <span className="bubble bubble-4" />
+        <span className="bubble bubble-5" />
+        <span className="bubble bubble-6" />
+        <span className="bubble bubble-7" />
       </div>
-    );
-  }
-);
+
+      <div className="scene-sparkles">
+        <span className="spark spark-1" />
+        <span className="spark spark-2" />
+        <span className="spark spark-3" />
+        <span className="spark spark-4" />
+      </div>
+
+      <SceneCopy />
+
+      <Character
+        variant="orange"
+        spec={specs.orange}
+        scale={responsiveScale}
+        mouse={mouse}
+        action={action}
+        globalTilt={globalTilt}
+        bootT={bootT}
+        stageRect={stageRect}
+        sceneLookMode={sceneLookMode}
+        style={{
+          position: "absolute",
+          left: baseLeft + relLeft.orange,
+          bottom: baseBottom + relBottom.orange,
+          zIndex: 30,
+        }}
+      />
+
+      <Character
+        variant="blue"
+        spec={specs.blue}
+        scale={responsiveScale}
+        mouse={mouse}
+        action={action}
+        globalTilt={globalTilt}
+        bootT={bootT}
+        stageRect={stageRect}
+        sceneLookMode={sceneLookMode}
+        focusedField={focusedField}
+        focusPeek={blueFocusPeek}
+        style={{
+          position: "absolute",
+          left: baseLeft + relLeft.blue,
+          bottom: baseBottom + relBottom.blue,
+          zIndex: 10,
+        }}
+      />
+
+      <Character
+        variant="black"
+        spec={specs.black}
+        scale={responsiveScale}
+        mouse={mouse}
+        action={action}
+        globalTilt={globalTilt}
+        bootT={bootT}
+        stageRect={stageRect}
+        sceneLookMode={sceneLookMode}
+        style={{
+          position: "absolute",
+          left: baseLeft + relLeft.black,
+          bottom: baseBottom + relBottom.black,
+          zIndex: 12,
+        }}
+      />
+
+      <Character
+        variant="yellow"
+        spec={specs.yellow}
+        scale={responsiveScale}
+        mouse={mouse}
+        action={action}
+        globalTilt={globalTilt}
+        bootT={bootT}
+        stageRect={stageRect}
+        sceneLookMode={sceneLookMode}
+        style={{
+          position: "absolute",
+          left: baseLeft + relLeft.yellow,
+          bottom: baseBottom + relBottom.yellow,
+          zIndex: 11,
+        }}
+      />
+    </div>
+  );
+});
 
 CharactersScene.displayName = "CharactersScene";
-
