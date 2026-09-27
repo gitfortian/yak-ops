@@ -4,6 +4,7 @@ Status: Active
 
 Scope:
 - Current Yak Ops Datasource product architecture
+- YakFlow staged data-sync capability
 - Workspace business ownership boundary
 - Supporting user/login/security capability
 - User-scoped preference capability
@@ -14,7 +15,7 @@ Depends On:
 
 ## Principle
 
-Yak Ops is currently a Datasource product with Workspace as the shared business ownership boundary.
+Yak Ops currently exposes Datasource as its user-facing product, with Workspace as the shared business ownership boundary. YakFlow is an active staged data-sync capability inside the same repository; its first stage establishes only the batch/stream-neutral API contract before runtime and connector implementation.
 
 User/Login/Security is a supporting platform capability required to access the product. Workspace is separate from Security: authentication answers who the user is, while Workspace answers which business data boundary is active. User Preference is also separate: it persists what the authenticated user prefers across logout, browsers and devices.
 
@@ -63,6 +64,14 @@ Reserved minimal extension boundary.
 ### `yak-ops-core`
 
 Reserved empty module.
+
+### `yak-flow/yak-flow-api`
+
+Owns the stable YakFlow batch/stream-neutral data plane contracts: row changelog semantics, common row/schema types, boundedness, Source/Split/Reader/Enumerator contracts, Sink/Writer contracts and opaque checkpoint state.
+
+The API has no Spring, Debezium, JDBC or Yak Ops business dependency. Batch and streaming are not separate APIs: a Source declares `BOUNDED` or `CONTINUOUS_UNBOUNDED`, while CDC changes are represented by `RowKind` on `YakRow`.
+
+Current scope intentionally excludes runtime scheduling, Transform, Debezium integration, JDBC implementation, distributed execution and exactly-once coordination. Detailed constraints are defined in `yak-flow/YAK_FLOW_RULES.md`.
 
 ### `yak-ops-business`
 
@@ -182,6 +191,8 @@ Boot
 ```
 
 Boot owns protocol entry and application assembly.
+
+YakFlow API is an implementation-independent contract boundary. Future YakFlow runtime and connector modules depend on this API rather than introducing separate batch and CDC protocols.
 
 Security, Workspace, User Preference and Datasource own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
 
