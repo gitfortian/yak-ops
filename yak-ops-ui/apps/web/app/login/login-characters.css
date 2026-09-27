@@ -5,23 +5,37 @@
   --yak-purple-face-y: 0px;
   --yak-purple-pupil-x: 0px;
   --yak-purple-pupil-y: 0px;
+  --yak-black-lean: 0deg;
+  --yak-black-stretch: 1;
+  --yak-black-face-x: 0px;
+  --yak-black-face-y: 0px;
+  --yak-black-pupil-x: 0px;
+  --yak-black-pupil-y: 0px;
 }
 
 .yak-login-character--purple__breathe,
 .yak-login-character--purple__body,
 .yak-login-character--purple__face,
-.yak-login-character--purple__pupil {
+.yak-login-character--purple__pupil,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body,
+.yak-login-character--black__face,
+.yak-login-character--black__pupil {
   transform-box: fill-box;
   will-change: transform;
 }
 
 .yak-login-character--purple__breathe,
-.yak-login-character--purple__body {
+.yak-login-character--purple__body,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body {
   transform-origin: center bottom;
 }
 
 .yak-login-character--purple__face,
-.yak-login-character--purple__pupil {
+.yak-login-character--purple__pupil,
+.yak-login-character--black__face,
+.yak-login-character--black__pupil {
   transform-origin: center;
 }
 
@@ -41,6 +55,22 @@
   transform: translate(var(--yak-purple-pupil-x), var(--yak-purple-pupil-y));
 }
 
+.yak-login-character--black__breathe {
+  animation: yak-black-breathe 5.4s ease-in-out 0.7s infinite;
+}
+
+.yak-login-character--black__body {
+  transform: skewX(var(--yak-black-lean)) scaleY(var(--yak-black-stretch));
+}
+
+.yak-login-character--black__face {
+  transform: translate(var(--yak-black-face-x), var(--yak-black-face-y));
+}
+
+.yak-login-character--black__pupil {
+  transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
+}
+
 @keyframes yak-purple-breathe {
   0%,
   100% {
@@ -52,14 +82,29 @@
   }
 }
 
+@keyframes yak-black-breathe {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+
+  50% {
+    transform: scaleY(1.006) translateY(-1px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .yak-login-character--purple__breathe {
+  .yak-login-character--purple__breathe,
+  .yak-login-character--black__breathe {
     animation: none;
   }
 
   .yak-login-character--purple__body,
   .yak-login-character--purple__face,
-  .yak-login-character--purple__pupil {
+  .yak-login-character--purple__pupil,
+  .yak-login-character--black__body,
+  .yak-login-character--black__face,
+  .yak-login-character--black__pupil {
     transform: none;
   }
 }
