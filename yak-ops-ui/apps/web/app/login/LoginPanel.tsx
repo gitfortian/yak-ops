@@ -155,6 +155,8 @@ export default function LoginPanel({
         onLoginResultChange("failure");
         await waitForMotion(LOGIN_FAILURE_MOTION_MS);
         onLoginResultChange("idle");
+      } else {
+        onLoginResultChange("idle");
       }
       // Global request handling surfaces HTTP, business and network failures once.
     } finally {
