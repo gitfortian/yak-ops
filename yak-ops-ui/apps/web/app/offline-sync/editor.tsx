@@ -237,8 +237,7 @@ function TableSection({
     [catalog.tables],
   );
   const requiresSchema = !boundSchema && catalog.schemas.length > 0;
-  const tableDisabled =
-    !dataSourceId || catalog.loading || (requiresSchema && !schema);
+  const tableDisabled = !dataSourceId || catalog.loading || (requiresSchema && !schema);
 
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white">
@@ -349,12 +348,8 @@ export function OfflineSyncEditorPage() {
     form.targetSchema,
   );
 
-  const selectedSourceDataSource = dataSources.find(
-    (item) => item.id === form.sourceDataSourceId,
-  );
-  const selectedTargetDataSource = dataSources.find(
-    (item) => item.id === form.targetDataSourceId,
-  );
+  const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
+  const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
 
   useEffect(() => {
     void listDataSources({ pageNo: 1, pageSize: 200 }).then((result) =>
