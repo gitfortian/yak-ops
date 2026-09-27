@@ -18,6 +18,14 @@
   --yak-orange-face-y: 0px;
   --yak-orange-eye-x: 0px;
   --yak-orange-eye-y: 0px;
+  --yak-yellow-shift-x: 0px;
+  --yak-yellow-lift-y: 0px;
+  --yak-yellow-lean: 0deg;
+  --yak-yellow-stretch: 1;
+  --yak-yellow-face-x: 0px;
+  --yak-yellow-face-y: 0px;
+  --yak-yellow-eye-x: 0px;
+  --yak-yellow-eye-y: 0px;
 }
 
 .yak-login-character--purple__breathe,
@@ -113,6 +121,41 @@
   transform: translate(var(--yak-orange-eye-x), var(--yak-orange-eye-y));
 }
 
+.yak-login-character--yellow__breathe,
+.yak-login-character--yellow__body,
+.yak-login-character--yellow__face,
+.yak-login-character--yellow__eyes {
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+.yak-login-character--yellow__breathe,
+.yak-login-character--yellow__body {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--yellow__face,
+.yak-login-character--yellow__eyes {
+  transform-origin: center;
+}
+
+.yak-login-character--yellow__breathe {
+  animation: yak-yellow-breathe 4.2s ease-in-out 0.55s infinite;
+}
+
+.yak-login-character--yellow__body {
+  transform: translateX(var(--yak-yellow-shift-x)) translateY(var(--yak-yellow-lift-y))
+    rotate(var(--yak-yellow-lean)) scaleY(var(--yak-yellow-stretch));
+}
+
+.yak-login-character--yellow__face {
+  transform: translate(var(--yak-yellow-face-x), var(--yak-yellow-face-y));
+}
+
+.yak-login-character--yellow__eyes {
+  transform: translate(var(--yak-yellow-eye-x), var(--yak-yellow-eye-y));
+}
+
 @keyframes yak-purple-breathe {
   0%,
   100% {
@@ -150,10 +193,26 @@
   }
 }
 
+@keyframes yak-yellow-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+
+  48% {
+    transform: translateY(-2px) scaleY(1.012);
+  }
+
+  68% {
+    transform: translateY(1px) scaleY(0.996);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .yak-login-character--purple__breathe,
   .yak-login-character--black__breathe,
-  .yak-login-character--orange__breathe {
+  .yak-login-character--orange__breathe,
+  .yak-login-character--yellow__breathe {
     animation: none;
   }
 
@@ -165,7 +224,10 @@
   .yak-login-character--black__pupil,
   .yak-login-character--orange__body,
   .yak-login-character--orange__face,
-  .yak-login-character--orange__eyes {
+  .yak-login-character--orange__eyes,
+  .yak-login-character--yellow__body,
+  .yak-login-character--yellow__face,
+  .yak-login-character--yellow__eyes {
     transform: none;
   }
 }
