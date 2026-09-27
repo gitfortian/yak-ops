@@ -76,9 +76,7 @@ export function OfflineSyncPage() {
   const dataSourceItems = useMemo(
     () =>
       Object.fromEntries(
-        dataSources.flatMap((item) =>
-          item.id ? [[item.id, item.name || item.id] as const] : [],
-        ),
+        dataSources.flatMap((item) => (item.id ? [[item.id, item.name || item.id] as const] : [])),
       ),
     [dataSources],
   );
