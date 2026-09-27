@@ -68,6 +68,8 @@ Yak UI sets pointer dismissal to opt-in: `maskClosable` defaults to `false`, so 
 
 The Yak UI Modal owns the shared visual shell and exposes the product-facing `open + onClose` contract.
 
+Exit motion stays subtle: the popup fades while moving only about `4px` upward over roughly `180ms`, while the backdrop fades out over roughly `200ms`. The popup uses `will-change: opacity, transform` so browsers can composite the exit more smoothly without introducing scale or spring motion.
+
 ## Boundary
 
 Modal owns:
