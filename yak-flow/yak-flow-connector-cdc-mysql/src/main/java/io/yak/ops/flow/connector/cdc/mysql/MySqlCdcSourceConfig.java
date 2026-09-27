@@ -42,7 +42,8 @@ public record MySqlCdcSourceConfig(
         Objects.requireNonNull(schema, "schema must not be null");
         Objects.requireNonNull(stateDirectory, "stateDirectory must not be null");
         Objects.requireNonNull(name, "name must not be null");
-        if (!"MYSQL".equals(connection.type())) throw new IllegalArgumentException("MySQL CDC only accepts MYSQL connection");
+        if (!"MYSQL".equals(connection.type()))
+            throw new IllegalArgumentException("MySQL CDC only accepts MYSQL connection");
         if (name.isBlank()) throw new IllegalArgumentException("name must not be blank");
         if (serverId < 1 || serverId > 4_294_967_295L) {
             throw new IllegalArgumentException("serverId must be between 1 and 4294967295");
@@ -53,9 +54,8 @@ public record MySqlCdcSourceConfig(
         if (schema.primaryKeys().isEmpty()) {
             throw new IllegalArgumentException("Phase 4 MySQL CDC requires primary key");
         }
-        String database = table.database() != null && !table.database().isBlank()
-                ? table.database()
-                : connection.database();
+        String database =
+                table.database() != null && !table.database().isBlank() ? table.database() : connection.database();
         if (database == null || database.isBlank()) {
             throw new IllegalArgumentException("MySQL CDC requires database name");
         }

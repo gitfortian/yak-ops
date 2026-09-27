@@ -25,12 +25,17 @@ final class MySqlDebeziumEngineConfig {
         properties.setProperty("name", config.name());
         properties.setProperty("connector.class", "io.debezium.connector.mysql.MySqlConnector");
         properties.setProperty("offset.storage", "org.apache.kafka.connect.storage.FileOffsetBackingStore");
-        properties.setProperty("offset.storage.file.filename", offsets.toAbsolutePath().toString());
+        properties.setProperty(
+                "offset.storage.file.filename", offsets.toAbsolutePath().toString());
         properties.setProperty("offset.flush.interval.ms", "0");
         properties.setProperty("database.hostname", endpoint.host());
         properties.setProperty("database.port", String.valueOf(endpoint.port()));
         properties.setProperty("database.user", config.connection().username());
-        properties.setProperty("database.password", config.connection().password() == null ? "" : config.connection().password());
+        properties.setProperty(
+                "database.password",
+                config.connection().password() == null
+                        ? ""
+                        : config.connection().password());
         properties.setProperty("database.server.id", String.valueOf(config.serverId()));
         properties.setProperty("topic.prefix", topicPrefix(config.name()));
         properties.setProperty(
@@ -42,7 +47,8 @@ final class MySqlDebeziumEngineConfig {
         properties.setProperty("time.precision.mode", "connect");
         properties.setProperty("decimal.handling.mode", "precise");
         properties.setProperty("heartbeat.interval.ms", "10000");
-        properties.setProperty("schema.history.internal", "io.debezium.storage.file.history.FileSchemaHistory");
+        properties.setProperty(
+                "schema.history.internal", "io.debezium.storage.file.history.FileSchemaHistory");
         properties.setProperty(
                 "schema.history.internal.file.filename", schemaHistory.toAbsolutePath().toString());
         properties.setProperty("schema.history.internal.store.only.captured.tables.ddl", "true");

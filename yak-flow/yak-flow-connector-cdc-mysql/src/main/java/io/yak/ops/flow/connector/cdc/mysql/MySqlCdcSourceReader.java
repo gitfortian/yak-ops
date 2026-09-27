@@ -64,7 +64,8 @@ final class MySqlCdcSourceReader implements SourceReader<MySqlCdcSplit> {
                 .using(MySqlDebeziumEngineConfig.build(config, endpoint))
                 .notifying(this::handleBatch)
                 .build();
-        engineThread = Thread.ofVirtual().name("yak-flow-mysql-cdc-" + config.name()).start(this::runEngine);
+        engineThread =
+                Thread.ofVirtual().name("yak-flow-mysql-cdc-" + config.name()).start(this::runEngine);
     }
 
     @Override
