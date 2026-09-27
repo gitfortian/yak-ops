@@ -466,6 +466,12 @@ public class DataSourceServiceImpl implements DataSourceService {
         target.setId(source.getId());
         target.setName(source.getName());
         target.setDbType(source.getDbType());
+        if (source.getDbType() != null && StringUtils.hasText(source.getConnectionParams())) {
+            DataSourceConnection connection =
+                    pluginRegistry.parseConnection(source.getDbType(), source.getConnectionParams());
+            target.setDatabase(connection.database());
+            target.setSchema(connection.schema());
+        }
         target.setJdbcUrl(pluginRegistry.maskSensitiveText(source.getJdbcUrl()));
         target.setEnvironment(
                 source.getEnvironment() == null ? null : source.getEnvironment().name());

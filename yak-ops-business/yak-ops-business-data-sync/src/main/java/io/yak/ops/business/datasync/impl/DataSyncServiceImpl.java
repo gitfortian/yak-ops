@@ -77,14 +77,14 @@ public class DataSyncServiceImpl implements DataSyncService {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         String name = normalizeRequired(dto.getName(), "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, null);
-        validateDatasourceReferences(dto);
-        requireCompatibleMapping(toMappingPreview(dto));
+        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(dto));
+        requireCompatibleMapping(resolvedScope);
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
         entity.setWorkspaceId(workspaceId);
         entity.setName(name);
         entity.setSyncType(requireOffline(dto.getSyncType()));
-        applyDefinition(entity, dto);
+        applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(1);
         entity.initCreate();
 
@@ -102,12 +102,12 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
         String name = normalizeRequired(dto.getName(), "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, id);
-        validateDatasourceReferences(dto);
-        requireCompatibleMapping(toMappingPreview(dto));
+        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(dto));
+        requireCompatibleMapping(resolvedScope);
 
         entity.setName(name);
         entity.setSyncType(requireOffline(dto.getSyncType()));
-        applyDefinition(entity, dto);
+        applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(Math.max(1, entity.getDefinitionVersion()) + 1);
         entity.initUpdate();
 
@@ -143,7 +143,10 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Override
     public DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto) {
-        requireMappingPreview(dto);
+        return previewResolvedMapping(resolveMappingScope(dto));
+    }
+
+    private DataSyncMappingPreviewVO previewResolvedMapping(DataSyncMappingPreviewDTO dto) {
         List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
                 dto.getSourceDataSourceId(),
                 tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable()));
@@ -172,12 +175,13 @@ public class DataSyncServiceImpl implements DataSyncService {
     public synchronized DataSyncInstanceVO runTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
-        requireCompatibleMapping(toMappingPreview(task));
+        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(task));
+        requireCompatibleMapping(resolvedScope);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
 
-        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task);
+        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, resolvedScope);
         DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
         instance.setWorkspaceId(workspaceId);
         instance.setTaskId(task.getId());
@@ -293,21 +297,22 @@ public class DataSyncServiceImpl implements DataSyncService {
         return toInstanceVO(requireInstance(workspaceId, id), true);
     }
 
-    private void applyDefinition(DataSyncTaskEntity entity, DataSyncTaskDTO dto) {
+    private void applyDefinition(
+            DataSyncTaskEntity entity, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
         entity.setSourceDataSourceId(dto.getSourceDataSourceId().trim());
-        entity.setSourceDatabase(normalizeNullable(dto.getSourceDatabase()));
-        entity.setSourceSchema(normalizeNullable(dto.getSourceSchema()));
+        entity.setSourceDatabase(resolvedScope.getSourceDatabase());
+        entity.setSourceSchema(resolvedScope.getSourceSchema());
         entity.setSourceTable(normalizeRequired(dto.getSourceTable(), "来源表不能为空"));
         entity.setTargetDataSourceId(dto.getTargetDataSourceId().trim());
-        entity.setTargetDatabase(normalizeNullable(dto.getTargetDatabase()));
-        entity.setTargetSchema(normalizeNullable(dto.getTargetSchema()));
+        entity.setTargetDatabase(resolvedScope.getTargetDatabase());
+        entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(normalizeRequired(dto.getTargetTable(), "目标表不能为空"));
         entity.setRuntimeConfig(JSONUtils.toJson(requireRuntimeConfig(dto.getRuntimeConfig())));
         entity.setRemark(normalizeNullable(dto.getRemark()));
     }
 
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
-        DataSyncMappingPreviewVO preview = previewMapping(dto);
+        DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
         if (!preview.isCompatible()) {
             throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
         }
@@ -339,7 +344,8 @@ public class DataSyncServiceImpl implements DataSyncService {
         return preview;
     }
 
-    private DataSyncDefinitionSnapshotVO definitionSnapshot(DataSyncTaskEntity task) {
+    private DataSyncDefinitionSnapshotVO definitionSnapshot(
+            DataSyncTaskEntity task, DataSyncMappingPreviewDTO resolvedScope) {
         DataSourceVO source = dataSourceService.queryDataSource(task.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(task.getTargetDataSourceId());
 
@@ -347,10 +353,10 @@ public class DataSyncServiceImpl implements DataSyncService {
         snapshot.setTaskId(task.getId());
         snapshot.setTaskName(task.getName());
         snapshot.setTaskVersion(task.getDefinitionVersion());
-        snapshot.setSource(
-                endpointSnapshot(source, task.getSourceDatabase(), task.getSourceSchema(), task.getSourceTable()));
-        snapshot.setTarget(
-                endpointSnapshot(target, task.getTargetDatabase(), task.getTargetSchema(), task.getTargetTable()));
+        snapshot.setSource(endpointSnapshot(
+                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
+        snapshot.setTarget(endpointSnapshot(
+                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable()));
         snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
         return snapshot;
     }
@@ -488,6 +494,27 @@ public class DataSyncServiceImpl implements DataSyncService {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
+    private DataSyncMappingPreviewDTO resolveMappingScope(DataSyncMappingPreviewDTO dto) {
+        requireMappingPreview(dto);
+        DataSourceVO source = dataSourceService.queryDataSource(dto.getSourceDataSourceId());
+        DataSourceVO target = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
+
+        DataSyncMappingPreviewDTO resolved = new DataSyncMappingPreviewDTO();
+        resolved.setSourceDataSourceId(dto.getSourceDataSourceId());
+        resolved.setSourceDatabase(scopeValue(source.getDatabase(), dto.getSourceDatabase()));
+        resolved.setSourceSchema(scopeValue(source.getSchema(), dto.getSourceSchema()));
+        resolved.setSourceTable(dto.getSourceTable());
+        resolved.setTargetDataSourceId(dto.getTargetDataSourceId());
+        resolved.setTargetDatabase(scopeValue(target.getDatabase(), dto.getTargetDatabase()));
+        resolved.setTargetSchema(scopeValue(target.getSchema(), dto.getTargetSchema()));
+        resolved.setTargetTable(dto.getTargetTable());
+        return resolved;
+    }
+
+    private String scopeValue(String boundValue, String requestedValue) {
+        return StringUtils.hasText(boundValue) ? boundValue.trim() : normalizeNullable(requestedValue);
+    }
+
     private void requireMappingPreview(DataSyncMappingPreviewDTO dto) {
         if (dto == null
                 || !StringUtils.hasText(dto.getSourceDataSourceId())
@@ -496,11 +523,6 @@ public class DataSyncServiceImpl implements DataSyncService {
                 || !StringUtils.hasText(dto.getTargetTable())) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射参数不完整");
         }
-    }
-
-    private void validateDatasourceReferences(DataSyncTaskDTO dto) {
-        dataSourceService.queryDataSource(dto.getSourceDataSourceId());
-        dataSourceService.queryDataSource(dto.getTargetDataSourceId());
     }
 
     private DataSyncType requireOffline(DataSyncType syncType) {

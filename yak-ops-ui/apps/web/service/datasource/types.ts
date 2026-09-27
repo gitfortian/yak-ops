@@ -13,6 +13,8 @@ export interface DataSourceRecord {
   id?: DataSourceId;
   name?: string;
   dbType?: string;
+  database?: string;
+  schema?: string;
   jdbcUrl?: string;
   environment?: string;
   environmentName?: string;

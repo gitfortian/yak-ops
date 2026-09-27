@@ -22,7 +22,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
-  listDataSourceDatabases,
   listDataSources,
   listDataSourceSchemas,
   listDataSourceTables,
@@ -56,7 +55,6 @@ interface EditorForm {
 }
 
 interface CatalogOptions {
-  databases: string[];
   schemas: string[];
   tables: DataSourceCatalogTable[];
   loading: boolean;
@@ -105,14 +103,12 @@ const selectedTableKey = (
     : undefined;
 
 function useCatalogOptions(dataSourceId: string, database: string, schema: string): CatalogOptions {
-  const [databases, setDatabases] = useState<string[]>([]);
   const [schemas, setSchemas] = useState<string[]>([]);
   const [tables, setTables] = useState<DataSourceCatalogTable[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!dataSourceId) {
-      setDatabases([]);
       setSchemas([]);
       setTables([]);
       return;
@@ -120,7 +116,6 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
     let active = true;
     setLoading(true);
     void Promise.all([
-      listDataSourceDatabases(dataSourceId),
       listDataSourceSchemas(dataSourceId, database || undefined),
       listDataSourceTables(dataSourceId, {
         database: database || undefined,
@@ -128,9 +123,8 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
         limit: 500,
       }),
     ])
-      .then(([databaseOptions, schemaOptions, tableOptions]) => {
+      .then(([schemaOptions, tableOptions]) => {
         if (!active) return;
-        setDatabases(databaseOptions || []);
         setSchemas(schemaOptions || []);
         setTables(tableOptions || []);
       })
@@ -142,7 +136,7 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
     };
   }, [dataSourceId, database, schema]);
 
-  return { databases, schemas, tables, loading };
+  return { schemas, tables, loading };
 }
 
 interface CatalogSectionProps {
@@ -154,7 +148,6 @@ interface CatalogSectionProps {
   table: string;
   catalog: CatalogOptions;
   onDataSourceChange: (value: string) => void;
-  onDatabaseChange: (value: string) => void;
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
 }
@@ -168,11 +161,18 @@ function CatalogSection({
   table,
   catalog,
   onDataSourceChange,
-  onDatabaseChange,
   onSchemaChange,
   onTableChange,
 }: CatalogSectionProps) {
   const tableValue = selectedTableKey(catalog.tables, database, schema, table);
+  const selectedDataSource = dataSources.find((item) => item.id === dataSourceId);
+  const scopeText = [
+    selectedDataSource?.dbType,
+    selectedDataSource?.database,
+    selectedDataSource?.schema,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const dataSourceItems = useMemo(
     () =>
       Object.fromEntries(
@@ -191,54 +191,38 @@ function CatalogSection({
         {title}
       </h2>
       <div className="space-y-3 p-4">
-        <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel required>数据源</FieldLabel>
-          <Select
-            size="small"
-            items={dataSourceItems}
-            value={dataSourceId || undefined}
-            onValueChange={(value) => onDataSourceChange(String(value || ""))}
-          >
-            <SelectTrigger variant="outlined">
-              <SelectValue placeholder="请选择数据源" />
-            </SelectTrigger>
-            <SelectContent>
-              {dataSources.map((item) =>
-                item.id ? (
-                  <SelectItem key={item.id} value={item.id}>
-                    <SelectItemText>{item.name || item.id}</SelectItemText>
-                    <SelectItemIndicator />
-                  </SelectItem>
-                ) : null,
-              )}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        {catalog.databases.length > 0 ? (
-          <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-            <FieldLabel>数据库</FieldLabel>
+        <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+          <FieldLabel required className="pt-1.5">
+            数据源
+          </FieldLabel>
+          <div className="space-y-1">
             <Select
               size="small"
-              value={database || undefined}
-              onValueChange={(value) => onDatabaseChange(String(value || ""))}
+              items={dataSourceItems}
+              value={dataSourceId || undefined}
+              onValueChange={(value) => onDataSourceChange(String(value || ""))}
             >
               <SelectTrigger variant="outlined">
-                <SelectValue placeholder="默认数据库" />
+                <SelectValue placeholder="请选择数据源" />
               </SelectTrigger>
               <SelectContent>
-                {catalog.databases.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    <SelectItemText>{item}</SelectItemText>
-                    <SelectItemIndicator />
-                  </SelectItem>
-                ))}
+                {dataSources.map((item) =>
+                  item.id ? (
+                    <SelectItem key={item.id} value={item.id}>
+                      <SelectItemText>{item.name || item.id}</SelectItemText>
+                      <SelectItemIndicator />
+                    </SelectItem>
+                  ) : null,
+                )}
               </SelectContent>
             </Select>
-          </Field>
-        ) : null}
+            {scopeText ? (
+              <div className="px-1 text-xs text-[#98a2b3]">连接范围：{scopeText}</div>
+            ) : null}
+          </div>
+        </Field>
 
-        {catalog.schemas.length > 0 ? (
+        {!selectedDataSource?.schema && catalog.schemas.length > 0 ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel>Schema</FieldLabel>
             <Select
@@ -336,6 +320,21 @@ export function OfflineSyncEditorPage() {
       setDataSources(result?.bizData || []),
     );
   }, []);
+
+  useEffect(() => {
+    if (dataSources.length === 0) return;
+    setForm((current) => {
+      const source = dataSources.find((item) => item.id === current.sourceDataSourceId);
+      const target = dataSources.find((item) => item.id === current.targetDataSourceId);
+      return {
+        ...current,
+        sourceDatabase: source?.database || current.sourceDatabase,
+        sourceSchema: source?.schema || current.sourceSchema,
+        targetDatabase: target?.database || current.targetDatabase,
+        targetSchema: target?.schema || current.targetSchema,
+      };
+    });
+  }, [dataSources]);
 
   useEffect(() => {
     if (!id) return;
@@ -581,31 +580,24 @@ export function OfflineSyncEditorPage() {
               schema={form.sourceSchema}
               table={form.sourceTable}
               catalog={sourceCatalog}
-              onDataSourceChange={(value) =>
+              onDataSourceChange={(value) => {
+                const selected = dataSources.find((item) => item.id === value);
                 setForm((current) => ({
                   ...current,
                   sourceDataSourceId: value,
-                  sourceDatabase: "",
-                  sourceSchema: "",
+                  sourceDatabase: selected?.database || "",
+                  sourceSchema: selected?.schema || "",
                   sourceTable: "",
-                }))
-              }
-              onDatabaseChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  sourceDatabase: value,
-                  sourceSchema: "",
-                  sourceTable: "",
-                }))
-              }
+                }));
+              }}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, sourceSchema: value, sourceTable: "" }))
               }
               onTableChange={(table) =>
                 setForm((current) => ({
                   ...current,
-                  sourceDatabase: table.database || current.sourceDatabase,
-                  sourceSchema: table.schema || "",
+                  sourceDatabase: current.sourceDatabase || table.database || "",
+                  sourceSchema: current.sourceSchema || table.schema || "",
                   sourceTable: table.name,
                 }))
               }
@@ -621,31 +613,24 @@ export function OfflineSyncEditorPage() {
               schema={form.targetSchema}
               table={form.targetTable}
               catalog={targetCatalog}
-              onDataSourceChange={(value) =>
+              onDataSourceChange={(value) => {
+                const selected = dataSources.find((item) => item.id === value);
                 setForm((current) => ({
                   ...current,
                   targetDataSourceId: value,
-                  targetDatabase: "",
-                  targetSchema: "",
+                  targetDatabase: selected?.database || "",
+                  targetSchema: selected?.schema || "",
                   targetTable: "",
-                }))
-              }
-              onDatabaseChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  targetDatabase: value,
-                  targetSchema: "",
-                  targetTable: "",
-                }))
-              }
+                }));
+              }}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
               }
               onTableChange={(table) =>
                 setForm((current) => ({
                   ...current,
-                  targetDatabase: table.database || current.targetDatabase,
-                  targetSchema: table.schema || "",
+                  targetDatabase: current.targetDatabase || table.database || "",
+                  targetSchema: current.targetSchema || table.schema || "",
                   targetTable: table.name,
                 }))
               }
