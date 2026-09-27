@@ -69,7 +69,7 @@
   background: radial-gradient(
     circle,
     rgba(255, 255, 255, 0.32) 0%,
-    rgba(255, 255, 255, 0.10) 36%,
+    rgba(255, 255, 255, 0.1) 36%,
     rgba(255, 255, 255, 0) 70%
   );
   animation: glowFloatRight 12s ease-in-out infinite;
@@ -109,7 +109,7 @@
   height: 10px;
   left: 22%;
   top: 62%;
-  background: rgba(90, 151, 200, 0.20);
+  background: rgba(90, 151, 200, 0.2);
   animation-duration: 14s;
   animation-delay: 1.5s;
 }
