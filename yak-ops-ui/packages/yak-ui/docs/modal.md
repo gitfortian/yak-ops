@@ -35,6 +35,7 @@ Core props:
 - `onClose`: called when the close button, Escape key or outside press requests close.
 - `title`: accessible modal title.
 - `width`: number or CSS width value; defaults to `640`.
+- `maskClosable`: whether pressing outside the popup may close the modal; defaults to `false`.
 - `footer`: optional fixed footer content.
 - `className / headerClassName / bodyClassName / footerClassName`: layout escape hatches only.
 - `style`: popup-level style escape hatch when a real layout requirement cannot be expressed by `width`.
@@ -61,7 +62,9 @@ Core props:
 
 ## Interaction
 
-Base UI Dialog owns focus trapping, focus restoration, Escape handling and outside-press behavior.
+Base UI Dialog owns focus trapping, focus restoration, Escape handling and outside-press mechanics.
+
+Yak UI sets pointer dismissal to opt-in: `maskClosable` defaults to `false`, so pressing the backdrop or other outside area does not close the modal. Product code may explicitly set `maskClosable={true}` when outside-press dismissal is appropriate. The close button and Escape key continue to request close regardless of `maskClosable`.
 
 The Yak UI Modal owns the shared visual shell and exposes the product-facing `open + onClose` contract.
 
