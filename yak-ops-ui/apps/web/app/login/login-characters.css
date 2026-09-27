@@ -11,16 +11,13 @@
   --yak-black-face-y: 0px;
   --yak-black-pupil-x: 0px;
   --yak-black-pupil-y: 0px;
-  --yak-orange-shift-x: 0px;
-  --yak-orange-scale-x: 1;
+  --yak-orange-bend: 0deg;
   --yak-orange-scale-y: 1;
   --yak-orange-face-x: 0px;
   --yak-orange-face-y: 0px;
   --yak-orange-eye-x: 0px;
   --yak-orange-eye-y: 0px;
-  --yak-yellow-shift-x: 0px;
-  --yak-yellow-lift-y: 0px;
-  --yak-yellow-lean: 0deg;
+  --yak-yellow-bend: 0deg;
   --yak-yellow-stretch: 1;
   --yak-yellow-face-x: 0px;
   --yak-yellow-face-y: 0px;
@@ -31,6 +28,13 @@
 .yak-login-characters__svg {
   overflow: visible;
 }
+
+/*
+ * Ground Anchor Contract:
+ * once a character has landed, grounded motion keeps the bottom edge fixed.
+ * Steady-state body/focus/result motion uses bottom-anchored skew/scale only.
+ * Translation is reserved for entrance choreography and the final success exit.
+ */
 
 .yak-login-character--purple__entry,
 .yak-login-character--black__entry,
@@ -153,8 +157,7 @@
 }
 
 .yak-login-character--orange__body {
-  transform: translateX(var(--yak-orange-shift-x)) scaleX(var(--yak-orange-scale-x))
-    scaleY(var(--yak-orange-scale-y));
+  transform: skewX(var(--yak-orange-bend)) scaleY(var(--yak-orange-scale-y));
 }
 
 .yak-login-character--orange__face {
@@ -170,8 +173,7 @@
 }
 
 .yak-login-character--yellow__body {
-  transform: translateX(var(--yak-yellow-shift-x)) translateY(var(--yak-yellow-lift-y))
-    rotate(var(--yak-yellow-lean)) scaleY(var(--yak-yellow-stretch));
+  transform: skewX(var(--yak-yellow-bend)) scaleY(var(--yak-yellow-stretch));
 }
 
 .yak-login-character--yellow__face {
@@ -203,35 +205,35 @@
 }
 
 .yak-login-characters.is-user-focus .yak-login-character--purple__focus {
-  transform: translateX(6px) scaleY(1.025);
+  transform: skewX(-2.5deg) scaleY(1.025);
 }
 
 .yak-login-characters.is-user-focus .yak-login-character--black__focus {
-  transform: translateX(4px) scaleY(1.016);
+  transform: skewX(-1.75deg) scaleY(1.016);
 }
 
 .yak-login-characters.is-user-focus .yak-login-character--orange__focus {
-  transform: translateX(7px) scaleX(1.018) scaleY(1.012);
+  transform: skewX(-3deg) scaleY(1.012);
 }
 
 .yak-login-characters.is-user-focus .yak-login-character--yellow__focus {
-  transform: translateX(6px) scaleY(1.018);
+  transform: skewX(-3.5deg) scaleY(1.018);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--purple__focus {
-  transform: translateX(-5px) scaleY(0.975);
+  transform: skewX(2deg) scaleY(0.975);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--black__focus {
-  transform: translateX(-3px) scaleY(0.97);
+  transform: skewX(1.5deg) scaleY(0.97);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--orange__focus {
-  transform: translateX(-5px) scaleX(1.018) scaleY(0.96);
+  transform: skewX(2.5deg) scaleY(0.96);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--yellow__focus {
-  transform: translateX(-4px) scaleY(0.97);
+  transform: skewX(3deg) scaleY(0.97);
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--purple__focus-eyes,
@@ -247,19 +249,19 @@
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
-  transform: translateX(12px) skewX(-5deg) scaleY(1.055);
+  transform: skewX(-5deg) scaleY(1.055);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
-  transform: translateX(8px) skewX(-3deg) scaleY(1.035);
+  transform: skewX(-3deg) scaleY(1.035);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--orange__focus {
-  transform: translateX(12px) scaleX(1.045) scaleY(1.035);
+  transform: skewX(-5.5deg) scaleY(1.035);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--yellow__focus {
-  transform: translateX(10px) rotate(-3deg) scaleY(1.045);
+  transform: skewX(-6deg) scaleY(1.045);
 }
 
 .yak-login-characters.is-password-focus.is-password-visible
@@ -386,59 +388,60 @@
 @keyframes yak-login-result-failure {
   0%,
   100% {
-    transform: translateX(0) translateY(0) scaleX(1) scaleY(1);
+    transform: skewX(0deg) scaleY(1);
   }
 
   16% {
-    transform: translateX(-9px) translateY(5px) scaleX(1.03) scaleY(0.92);
+    transform: skewX(5deg) scaleY(0.92);
   }
 
   32% {
-    transform: translateX(9px) translateY(9px) scaleX(1.06) scaleY(0.86);
+    transform: skewX(-5deg) scaleY(0.86);
   }
 
   48% {
-    transform: translateX(-7px) translateY(6px) scaleX(1.04) scaleY(0.9);
+    transform: skewX(4deg) scaleY(0.9);
   }
 
   64% {
-    transform: translateX(6px) translateY(3px) scaleX(1.02) scaleY(0.95);
+    transform: skewX(-3deg) scaleY(0.95);
   }
 
   80% {
-    transform: translateX(-3px) translateY(1px) scaleX(1.01) scaleY(0.98);
+    transform: skewX(1.5deg) scaleY(0.98);
   }
 }
 
 @keyframes yak-login-result-success {
   0% {
     opacity: 1;
-    transform: translateY(0) scaleX(1) scaleY(1);
+    transform: scaleY(1);
   }
 
   22% {
     opacity: 1;
-    transform: translateY(-20px) scaleX(0.97) scaleY(1.08);
+    transform: scaleY(1.08);
   }
 
   40% {
     opacity: 1;
-    transform: translateY(4px) scaleX(1.05) scaleY(0.92);
+    transform: scaleY(0.92);
   }
 
   55% {
     opacity: 1;
-    transform: translateY(-8px) scaleX(0.99) scaleY(1.035);
+    transform: scaleY(1.035);
   }
 
-  68% {
+  68%,
+  72% {
     opacity: 1;
-    transform: translateY(0) scaleX(1) scaleY(1);
+    transform: translateY(0) scaleY(1);
   }
 
   100% {
     opacity: 0;
-    transform: translateY(260px) scaleX(0.9) scaleY(0.62);
+    transform: translateY(260px) scaleY(0.62);
   }
 }
 
@@ -565,52 +568,52 @@
 @keyframes yak-purple-breathe {
   0%,
   100% {
-    transform: scaleY(1) translateY(0);
+    transform: scaleY(1);
   }
 
   50% {
-    transform: scaleY(1.014) translateY(-2px);
+    transform: scaleY(1.014);
   }
 }
 
 @keyframes yak-black-breathe {
   0%,
   100% {
-    transform: scaleY(1) translateY(0);
+    transform: scaleY(1);
   }
 
   50% {
-    transform: scaleY(1.006) translateY(-1px);
+    transform: scaleY(1.006);
   }
 }
 
 @keyframes yak-orange-breathe {
   0%,
   100% {
-    transform: scaleX(1) scaleY(1) translateY(0);
+    transform: scaleY(1);
   }
 
   42% {
-    transform: scaleX(1.012) scaleY(0.992) translateY(1px);
+    transform: scaleY(0.992);
   }
 
   68% {
-    transform: scaleX(0.996) scaleY(1.014) translateY(-2px);
+    transform: scaleY(1.014);
   }
 }
 
 @keyframes yak-yellow-breathe {
   0%,
   100% {
-    transform: translateY(0) scaleY(1);
+    transform: scaleY(1);
   }
 
   48% {
-    transform: translateY(-2px) scaleY(1.012);
+    transform: scaleY(1.012);
   }
 
   68% {
-    transform: translateY(1px) scaleY(0.996);
+    transform: scaleY(0.996);
   }
 }
 
