@@ -17,8 +17,7 @@ import org.springframework.stereotype.Repository;
  * @since 2026-09-27
  */
 @Repository
-public class UserPreferenceEntityRepositoryImpl
-        extends BaseRepositoryImpl<UserPreferenceMapper, UserPreferenceEntity>
+public class UserPreferenceEntityRepositoryImpl extends BaseRepositoryImpl<UserPreferenceMapper, UserPreferenceEntity>
         implements UserPreferenceEntityRepository {
 
     @Resource
