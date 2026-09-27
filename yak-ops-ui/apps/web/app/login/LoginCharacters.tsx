@@ -168,7 +168,6 @@ const ORANGE_ENTRY_DURATION_MS = 1050;
 const ORANGE_ENTRY_START_PATH = buildOrangeEntrancePath(0);
 const ORANGE_FINAL_BODY_PATH = buildOrangeBodyPath(0, 0, 0);
 
-
 function PurpleCharacter() {
   return (
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
@@ -353,79 +352,75 @@ function OrangeCharacter() {
     <g data-character="orange" className="yak-login-character yak-login-character--orange">
       <g className="yak-login-character--orange__entry">
         <g className="yak-login-character--orange__breathe">
-            <g className="yak-login-character--orange__result">
-              <g className="yak-login-character--orange__focus">
-                <g className="yak-login-character--orange__body">
-                  <path
-                    data-orange-body-path
-                    d={ORANGE_ENTRY_START_PATH}
-                    fill="#FF7D2A"
-                  />
-                  <g className="yak-login-character--orange__face">
-                    <g className="yak-login-character--orange__result-eyes">
-                      <g className="yak-login-character--orange__focus-eyes">
-                        <g className="yak-login-character--orange__eyes">
-                          <g className="yak-login-character--orange__eyes-open">
-                            <circle cx="190" cy="462" r="6.9" fill="#171717" />
-                            <circle cx="270" cy="462" r="6.9" fill="#171717" />
-                          </g>
-                          <g className="yak-login-character--orange__eyes-blink">
-                            <path
-                              d="M181 463Q190 454 199 463"
-                              fill="none"
-                              stroke="#171717"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                            />
-                            <path
-                              d="M261 463Q270 454 279 463"
-                              fill="none"
-                              stroke="#171717"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                            />
-                          </g>
+          <g className="yak-login-character--orange__result">
+            <g className="yak-login-character--orange__focus">
+              <g className="yak-login-character--orange__body">
+                <path data-orange-body-path d={ORANGE_ENTRY_START_PATH} fill="#FF7D2A" />
+                <g className="yak-login-character--orange__face">
+                  <g className="yak-login-character--orange__result-eyes">
+                    <g className="yak-login-character--orange__focus-eyes">
+                      <g className="yak-login-character--orange__eyes">
+                        <g className="yak-login-character--orange__eyes-open">
+                          <circle cx="190" cy="462" r="6.9" fill="#171717" />
+                          <circle cx="270" cy="462" r="6.9" fill="#171717" />
+                        </g>
+                        <g className="yak-login-character--orange__eyes-blink">
+                          <path
+                            d="M181 463Q190 454 199 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M261 463Q270 454 279 463"
+                            fill="none"
+                            stroke="#171717"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
                         </g>
                       </g>
                     </g>
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                      d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
-                      fill="#171717"
-                    />
-                    <circle
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
-                      cx="231"
-                      cy="496"
-                      r="6"
-                      fill="#171717"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
-                      d="M214 494Q231 504 248 494"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
-                      fill="#171717"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--failure"
-                      d="M208 507Q230.5 486 253 507"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
                   </g>
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
+                    d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
+                    fill="#171717"
+                  />
+                  <circle
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
+                    cx="231"
+                    cy="496"
+                    r="6"
+                    fill="#171717"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
+                    d="M214 494Q231 504 248 494"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--success"
+                    d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
+                    fill="#171717"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--failure"
+                    d="M208 507Q230.5 486 253 507"
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
                 </g>
               </g>
             </g>
           </g>
+        </g>
       </g>
     </g>
   );
