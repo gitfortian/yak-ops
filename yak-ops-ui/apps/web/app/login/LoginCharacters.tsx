@@ -40,13 +40,7 @@ function YellowCharacter() {
       <g>
         <circle cx="492" cy="373" r="4.2" fill="#171717" />
         <circle cx="535" cy="373" r="4.2" fill="#171717" />
-        <path
-          d="M488 410H539"
-          fill="none"
-          stroke="#171717"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
+        <path d="M488 410H539" fill="none" stroke="#171717" strokeWidth="3" strokeLinecap="round" />
       </g>
     </g>
   );
