@@ -18,6 +18,7 @@ const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
   onFocusStateChange: (state: LoginFocusState) => void;
+  onPasswordVisibilityChange: (visible: boolean) => void;
 }
 
 interface LoginValues {
@@ -92,7 +93,11 @@ function WeChatQrHelp() {
   );
 }
 
-export default function LoginPanel({ onAuthenticated, onFocusStateChange }: LoginPanelProps) {
+export default function LoginPanel({
+  onAuthenticated,
+  onFocusStateChange,
+  onPasswordVisibilityChange,
+}: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
     userName: "",
     userPassword: "",
@@ -178,6 +183,7 @@ export default function LoginPanel({ onAuthenticated, onFocusStateChange }: Logi
           placeholder="请输入密码"
           showPasswordLabel="显示密码"
           hidePasswordLabel="隐藏密码"
+          onVisibilityChange={onPasswordVisibilityChange}
           value={values.userPassword}
           aria-invalid={Boolean(errors.userPassword) || undefined}
           aria-describedby={errors.userPassword ? "login-password-error" : undefined}

@@ -157,15 +157,21 @@ function OrangeCharacter() {
 
 interface LoginCharactersProps {
   focusState: LoginFocusState;
+  passwordVisible: boolean;
 }
 
-export default function LoginCharacters({ focusState }: LoginCharactersProps) {
+export default function LoginCharacters({ focusState, passwordVisible }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const focusStateRef = useRef(focusState);
+  const passwordVisibleRef = useRef(passwordVisible);
 
   useEffect(() => {
     focusStateRef.current = focusState;
   }, [focusState]);
+
+  useEffect(() => {
+    passwordVisibleRef.current = passwordVisible;
+  }, [passwordVisible]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -197,10 +203,23 @@ export default function LoginCharacters({ focusState }: LoginCharactersProps) {
 
     const animate = () => {
       const activeFocus = focusStateRef.current;
+      const passwordPeek = activeFocus === "userPassword" && passwordVisibleRef.current;
       const interactionTargetX =
-        activeFocus === "userName" ? 1 : activeFocus === "userPassword" ? -0.82 : targetX;
+        activeFocus === "userName"
+          ? 1
+          : passwordPeek
+            ? 1.12
+            : activeFocus === "userPassword"
+              ? -0.82
+              : targetX;
       const interactionTargetY =
-        activeFocus === "userName" ? 0.08 : activeFocus === "userPassword" ? 0.28 : targetY;
+        activeFocus === "userName"
+          ? 0.08
+          : passwordPeek
+            ? 0.02
+            : activeFocus === "userPassword"
+              ? 0.28
+              : targetY;
 
       purpleX += (interactionTargetX - purpleX) * 0.075;
       purpleY += (interactionTargetY - purpleY) * 0.075;
@@ -283,11 +302,13 @@ export default function LoginCharacters({ focusState }: LoginCharactersProps) {
       : focusState === "userPassword"
         ? "is-password-focus"
         : "";
+  const visibilityClass =
+    focusState === "userPassword" && passwordVisible ? "is-password-visible" : "";
 
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${focusClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
+      className={`yak-login-characters ${focusClass} ${visibilityClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
       aria-hidden="true"
     >
       <svg
