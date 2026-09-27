@@ -108,8 +108,25 @@ Responsibilities:
 
 - `index.tsx`: filters, paging, list loading, controlled selection, batch operations, delete confirmation and drawer state.
 - `table.tsx`: table rendering, row selection, row actions and batch footer composition.
-- `form.tsx`: create, edit and connection test.
+- `form.tsx`: create, edit, connection test and frequent datasource-type presentation.
 - `service/datasource`: CRUD, batch operations and connection-test HTTP Contract.
+- `service/preference`: user-scoped `DATASOURCE_CREATE_TYPE` usage signals used by the create wizard.
+
+## Create Type Selection
+
+Create step one renders up to three frequent datasource types above the complete supported datasource list.
+
+Ranking:
+
+```text
+DATASOURCE_CREATE_TYPE preferences
+→ useCount DESC
+→ lastUsedTime DESC
+→ current supported datasource registry
+→ Top 3
+```
+
+When fewer than three user usage records map to currently supported datasource types, the remaining slots are filled from the current product type order. Selecting a datasource type records one usage event asynchronously and never blocks navigation into connection configuration. This preference is user-scoped and does not use the active Workspace as an ownership key.
 
 ## Connection Form
 
