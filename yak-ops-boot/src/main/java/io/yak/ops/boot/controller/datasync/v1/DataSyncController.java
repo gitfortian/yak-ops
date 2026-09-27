@@ -82,8 +82,7 @@ public class DataSyncController {
 
     @Operation(summary = "分页查询同步实例")
     @PostMapping("/instances/page")
-    public Result<PagingData<DataSyncInstanceVO>> instancePage(
-            @Valid @RequestBody DataSyncInstanceQueryDTO dto) {
+    public Result<PagingData<DataSyncInstanceVO>> instancePage(@Valid @RequestBody DataSyncInstanceQueryDTO dto) {
         return Result.success(dataSyncService.queryInstancePage(dto));
     }
 
