@@ -74,7 +74,10 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        run: npm run format:check
+        run: |
+          npm run format
+          git diff -- apps/web/app/login/login-characters.css
+          git diff --exit-code
 
       - name: Frontend lint
         run: npm run lint
