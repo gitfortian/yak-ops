@@ -7,6 +7,7 @@ import { Input, type InputProps } from "./Input";
 export type PasswordInputProps = Omit<InputProps, "type"> & {
   showPasswordLabel?: string;
   hidePasswordLabel?: string;
+  onVisibilityChange?: (visible: boolean) => void;
 };
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
@@ -15,6 +16,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
       className,
       showPasswordLabel = "Show password",
       hidePasswordLabel = "Hide password",
+      onVisibilityChange,
       ...props
     },
     ref,
@@ -36,7 +38,14 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           aria-label={visible ? hidePasswordLabel : showPasswordLabel}
           aria-pressed={visible}
           className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 text-[var(--yak-components-input-icon)]"
-          onClick={() => setVisible((current) => !current)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() =>
+            setVisible((current) => {
+              const next = !current;
+              onVisibilityChange?.(next);
+              return next;
+            })
+          }
         >
           {visible ? (
             <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none">
