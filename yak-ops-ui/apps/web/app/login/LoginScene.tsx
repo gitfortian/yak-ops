@@ -769,7 +769,7 @@ function Character(props: {
       transform: bodyTransform,
       transformOrigin,
       transition,
-      ...(style || {}),
+      ...style,
     };
 
     const circle: CSSProperties = {
@@ -823,7 +823,7 @@ function Character(props: {
     transformOrigin,
     transition,
     willChange: "transform",
-    ...(style || {}),
+    ...style,
   };
 
   return (
