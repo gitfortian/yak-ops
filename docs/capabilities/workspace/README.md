@@ -75,6 +75,8 @@ Membership access is shared by all Workspace members. Member mutation introduces
 8. A supplied Workspace header is accepted only when the current authenticated User is a member of that Workspace.
 9. Workspace selection endpoints do not require an existing Workspace context.
 10. `app_name` is a Security application-isolation key, not a Workspace identifier.
+11. Workspace selection preference is scoped by authenticated User. Logging out clears only the active runtime Workspace header state; it must not delete that User's last valid Workspace preference.
+12. On login, the frontend restores the current User's preferred Workspace only when it is still present in that User's membership list; otherwise it falls back to the first available Workspace and rewrites the preference.
 
 ## HTTP Contract
 
@@ -136,6 +138,22 @@ PR3 — Workspace Switcher + Datasource Integration:
 - HTTP client injects `X-Workspace-Id`
 - auth/workspace-global requests explicitly omit Workspace header
 - workspace-scoped product outlet remounts on Workspace switch
+
+Frontend persistence contract:
+
+```text
+active runtime key
+yak-ops.current-workspace-id
+  → read only by HTTP client
+  → cleared on logout
+
+per-user preference key
+yak-ops.current-workspace-id.user.<userId>
+  → restored after login
+  → retained across logout
+```
+
+The active runtime key and the per-user preference key are intentionally separate so another account cannot inherit the previous account's Workspace selection while the same account can still resume its last Workspace after signing in again.
 
 ## Not In V1
 
