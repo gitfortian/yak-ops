@@ -11,8 +11,6 @@
   --yak-black-face-y: 0px;
   --yak-black-pupil-x: 0px;
   --yak-black-pupil-y: 0px;
-  --yak-orange-bend: 0deg;
-  --yak-orange-scale-y: 1;
   --yak-orange-face-x: 0px;
   --yak-orange-face-y: 0px;
   --yak-orange-eye-x: 0px;
@@ -30,8 +28,9 @@
 /*
  * Ground Anchor Contract:
  * once a character has landed, grounded motion keeps the bottom edge fixed.
- * Steady-state body/focus/result motion uses bottom-anchored skew/scale only.
- * Translation is reserved for entrance choreography and the final success exit.
+ * Steady-state grounded motion keeps the bottom edge fixed through anchored
+ * skew/scale or direct SVG path deformation. Translation is reserved for
+ * entrance choreography and the final success exit.
  */
 
 .yak-login-character--purple__entry,
@@ -155,7 +154,7 @@
 }
 
 .yak-login-character--orange__body {
-  transform: skewX(var(--yak-orange-bend)) scaleY(var(--yak-orange-scale-y));
+  transform: none;
 }
 
 .yak-login-character--orange__face {
