@@ -5,7 +5,7 @@ Scope:
 
 Purpose:
 - Route a task to the minimum required contracts and rules.
-- Keep Datasource as the only active product domain.
+- Keep Datasource as the current user-facing product domain while YakFlow is built as a staged data-sync capability.
 - Prevent removed architecture from becoming new context.
 
 Engineering Model:
@@ -52,6 +52,9 @@ yak-ops-spi/**
 
 yak-ops-plugins/yak-ops-plugin-datasource/**
 → yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN_RULES.md
+
+yak-flow/**
+→ yak-flow/YAK_FLOW_RULES.md
 ```
 
 ## Frontend Context
@@ -74,7 +77,7 @@ Frontend architecture is currently in migration toward `app / pages / features /
 ```text
 Task
 → docs/README.md
-→ docs/capabilities/datasource/README.md
+→ target capability README under docs/capabilities/
 → Target Capability when one exists
 → Target Code
 → Nearest Rules
@@ -86,7 +89,7 @@ If no Capability Contract exists, inspect current code first and write the minim
 
 Must:
 - Read current code and direct dependencies before changing structure.
-- Treat Datasource as the only active product domain.
+- Treat Datasource as the current user-facing product domain and YakFlow as the active staged data-sync capability.
 - Treat User/Login/Security as supporting platform capability, not a second product domain.
 - Reuse existing utilities before adding abstractions.
 - Solve only the current task.

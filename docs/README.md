@@ -6,6 +6,7 @@
 
 ```text
 Datasource
+YakFlow（分阶段建设中）
 ```
 
 Supporting platform capability:
@@ -28,6 +29,7 @@ How to prove        → Explicit Verification
 ## Current Knowledge Map
 
 - [Datasource](./capabilities/datasource/README.md)
+- [YakFlow](./capabilities/yak-flow/README.md)
 - Security rules: [yak-ops-security/SECURITY_RULES.md](../yak-ops-security/SECURITY_RULES.md)
 
 Security is a supporting platform capability, not a second product domain.
@@ -56,6 +58,7 @@ Task
 - [Core Rules](../yak-ops-core/CORE_RULES.md)
 - [SPI Rules](../yak-ops-spi/SPI_RULES.md)
 - [Datasource Plugin Rules](../yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN_RULES.md)
+- [YakFlow Rules](../yak-flow/YAK_FLOW_RULES.md)
 - [Frontend Architecture](../yak-ops-ui/ARCHITECTURE.md)
 - [Frontend Rules](../yak-ops-ui/FRONTEND_RULES.md)
 - [Frontend Service Rules](../yak-ops-ui/SERVICE_RULES.md)
