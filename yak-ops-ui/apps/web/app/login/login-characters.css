@@ -36,6 +36,16 @@
 .yak-login-character--black__entry,
 .yak-login-character--orange__entry,
 .yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes,
+.yak-login-character--purple__eyes,
+.yak-login-character--black__eyes,
 .yak-login-character--purple__breathe,
 .yak-login-character--purple__body,
 .yak-login-character--purple__face,
@@ -60,6 +70,10 @@
 .yak-login-character--black__entry,
 .yak-login-character--orange__entry,
 .yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus,
 .yak-login-character--purple__breathe,
 .yak-login-character--purple__body,
 .yak-login-character--black__breathe,
@@ -72,8 +86,12 @@
 }
 
 .yak-login-character--purple__face,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--purple__eyes,
 .yak-login-character--purple__pupil,
 .yak-login-character--black__face,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--black__eyes,
 .yak-login-character--black__pupil,
 .yak-login-character--orange__face,
 .yak-login-character--orange__eyes,
@@ -162,6 +180,70 @@
 
 .yak-login-character--yellow__eyes {
   transform: translate(var(--yak-yellow-eye-x), var(--yak-yellow-eye-y));
+}
+
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus {
+  transition: transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes {
+  transform-origin: center;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character--purple__pupil,
+.yak-login-character--black__pupil {
+  transition: opacity 160ms ease;
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--purple__focus {
+  transform: translateX(6px) scaleY(1.025);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--black__focus {
+  transform: translateX(4px) scaleY(1.016);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--orange__focus {
+  transform: translateX(7px) scaleX(1.018) scaleY(1.012);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--yellow__focus {
+  transform: translateX(6px) scaleY(1.018);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__focus {
+  transform: translateX(-5px) scaleY(0.975);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--black__focus {
+  transform: translateX(-3px) scaleY(0.97);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--orange__focus {
+  transform: translateX(-5px) scaleX(1.018) scaleY(0.96);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--yellow__focus {
+  transform: translateX(-4px) scaleY(0.97);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--black__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--orange__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--yellow__focus-eyes {
+  transform: scaleY(0.12);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__pupil,
+.yak-login-characters.is-password-focus .yak-login-character--black__pupil {
+  opacity: 0;
 }
 
 @keyframes yak-purple-enter {
@@ -352,6 +434,14 @@
   .yak-login-character--black__entry,
   .yak-login-character--orange__entry,
   .yak-login-character--yellow__entry,
+  .yak-login-character--purple__focus,
+  .yak-login-character--black__focus,
+  .yak-login-character--orange__focus,
+  .yak-login-character--yellow__focus,
+  .yak-login-character--purple__focus-eyes,
+  .yak-login-character--black__focus-eyes,
+  .yak-login-character--orange__focus-eyes,
+  .yak-login-character--yellow__focus-eyes,
   .yak-login-character--purple__body,
   .yak-login-character--purple__face,
   .yak-login-character--purple__pupil,
@@ -365,5 +455,16 @@
   .yak-login-character--yellow__face,
   .yak-login-character--yellow__eyes {
     transform: none;
+  }
+
+  .yak-login-character--purple__focus,
+  .yak-login-character--black__focus,
+  .yak-login-character--orange__focus,
+  .yak-login-character--yellow__focus,
+  .yak-login-character--purple__focus-eyes,
+  .yak-login-character--black__focus-eyes,
+  .yak-login-character--orange__focus-eyes,
+  .yak-login-character--yellow__focus-eyes {
+    transition: none;
   }
 }
