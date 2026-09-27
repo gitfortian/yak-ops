@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import "./login-characters.css";
+import type { LoginFocusState } from "./login-interaction";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -11,25 +12,28 @@ function PurpleCharacter() {
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
       <g className="yak-login-character--purple__entry">
         <g className="yak-login-character--purple__breathe">
-          <g className="yak-login-character--purple__body">
+          <g className="yak-login-character--purple__focus">
+            <g className="yak-login-character--purple__body">
             <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
             <g className="yak-login-character--purple__face">
-              <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
-              <circle
-                className="yak-login-character--purple__pupil"
-                cx="269"
-                cy="142"
-                r="3.5"
-                fill="#171717"
-              />
-              <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
-              <circle
-                className="yak-login-character--purple__pupil"
-                cx="337"
-                cy="142"
-                r="3.5"
-                fill="#171717"
-              />
+              <g className="yak-login-character--purple__eyes">
+                <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
+                <circle
+                  className="yak-login-character--purple__pupil"
+                  cx="269"
+                  cy="142"
+                  r="3.5"
+                  fill="#171717"
+                />
+                <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
+                <circle
+                  className="yak-login-character--purple__pupil"
+                  cx="337"
+                  cy="142"
+                  r="3.5"
+                  fill="#171717"
+                />
+              </g>
               <path
                 d="M292 172Q303 177 314 172"
                 fill="none"
@@ -37,6 +41,7 @@ function PurpleCharacter() {
                 strokeWidth="3"
                 strokeLinecap="round"
               />
+            </g>
             </g>
           </g>
         </g>
@@ -50,25 +55,29 @@ function BlackCharacter() {
     <g data-character="black" className="yak-login-character yak-login-character--black">
       <g className="yak-login-character--black__entry">
         <g className="yak-login-character--black__breathe">
-          <g className="yak-login-character--black__body">
+          <g className="yak-login-character--black__focus">
+            <g className="yak-login-character--black__body">
             <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
             <g className="yak-login-character--black__face">
-              <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
-              <circle
-                className="yak-login-character--black__pupil"
-                cx="378"
-                cy="276"
-                r="3.2"
-                fill="#171717"
-              />
-              <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
-              <circle
-                className="yak-login-character--black__pupil"
-                cx="426"
-                cy="276"
-                r="3.2"
-                fill="#171717"
-              />
+              <g className="yak-login-character--black__eyes">
+                <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
+                <circle
+                  className="yak-login-character--black__pupil"
+                  cx="378"
+                  cy="276"
+                  r="3.2"
+                  fill="#171717"
+                />
+                <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
+                <circle
+                  className="yak-login-character--black__pupil"
+                  cx="426"
+                  cy="276"
+                  r="3.2"
+                  fill="#171717"
+                />
+              </g>
+            </g>
             </g>
           </g>
         </g>
@@ -82,7 +91,8 @@ function YellowCharacter() {
     <g data-character="yellow" className="yak-login-character yak-login-character--yellow">
       <g className="yak-login-character--yellow__entry">
         <g className="yak-login-character--yellow__breathe">
-          <g className="yak-login-character--yellow__body">
+          <g className="yak-login-character--yellow__focus">
+            <g className="yak-login-character--yellow__body">
             <path
               d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
               fill="#F3D30B"
@@ -100,6 +110,7 @@ function YellowCharacter() {
                 strokeLinecap="round"
               />
             </g>
+            </g>
           </g>
         </g>
       </g>
@@ -112,7 +123,8 @@ function OrangeCharacter() {
     <g data-character="orange" className="yak-login-character yak-login-character--orange">
       <g className="yak-login-character--orange__entry">
         <g className="yak-login-character--orange__breathe">
-          <g className="yak-login-character--orange__body">
+          <g className="yak-login-character--orange__focus">
+            <g className="yak-login-character--orange__body">
             <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
             <g className="yak-login-character--orange__face">
               <g className="yak-login-character--orange__eyes">
@@ -127,6 +139,7 @@ function OrangeCharacter() {
                 strokeLinecap="round"
               />
             </g>
+            </g>
           </g>
         </g>
       </g>
@@ -134,7 +147,11 @@ function OrangeCharacter() {
   );
 }
 
-export default function LoginCharacters() {
+interface LoginCharactersProps {
+  focusState: LoginFocusState;
+}
+
+export default function LoginCharacters({ focusState }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -241,10 +258,17 @@ export default function LoginCharacters() {
     };
   }, []);
 
+  const focusClass =
+    focusState === "userName"
+      ? "is-user-focus"
+      : focusState === "userPassword"
+        ? "is-password-focus"
+        : "";
+
   return (
     <div
       ref={sceneRef}
-      className="yak-login-characters flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]"
+      className={`yak-login-characters ${focusClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
       aria-hidden="true"
     >
       <svg
