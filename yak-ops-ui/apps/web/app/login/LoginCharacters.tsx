@@ -63,8 +63,7 @@ function resolvePurpleBowGeometry(direction: number, bow: number) {
     "Z",
   ].join(" ");
 
-  const faceRotate =
-    (Math.atan2(rightTopY - leftTopY, rightTopX - leftTopX) * 180) / Math.PI;
+  const faceRotate = (Math.atan2(rightTopY - leftTopY, rightTopX - leftTopX) * 180) / Math.PI;
 
   return {
     bodyPath,
@@ -686,14 +685,8 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-purple-face-y", `${purplePointerFaceY}px`);
       scene.style.setProperty("--yak-purple-pupil-x", `${purplePointerPupilX}px`);
       scene.style.setProperty("--yak-purple-pupil-y", `${purplePointerPupilY}px`);
-      scene.style.setProperty(
-        "--yak-purple-password-face-x",
-        `${purpleBowGeometry.faceX}px`,
-      );
-      scene.style.setProperty(
-        "--yak-purple-password-face-y",
-        `${purpleBowGeometry.faceY}px`,
-      );
+      scene.style.setProperty("--yak-purple-password-face-x", `${purpleBowGeometry.faceX}px`);
+      scene.style.setProperty("--yak-purple-password-face-y", `${purpleBowGeometry.faceY}px`);
       scene.style.setProperty(
         "--yak-purple-password-face-rotate",
         `${purpleBowGeometry.faceRotate}deg`,
