@@ -94,7 +94,7 @@ Other providers must not be packaged, registered, or pulled in through runtime d
 
 ## Connection Property Key Discovery
 
-高级参数候选 Key 由 Provider 提供，前端不得复制 MySQL / Oracle / PostgreSQL JDBC 参数目录。
+高级参数候选 Key 由 Provider 提供，前端不得复制 MySQL / PostgreSQL JDBC 参数目录。Oracle 当前不暴露高级参数候选项。
 
 Runtime path:
 
@@ -114,6 +114,7 @@ Must:
 - Driver 元数据读取失败时可以回退到 Provider 已知属性，不能为了打开高级参数下拉框建立真实数据库连接。
 - Property Keys 只是推荐候选项，不是严格白名单；未知属性继续遵循 Provider 现有 pass-through / validation 规则。
 - `POSTGRESQL` / `POSTGRES` 等 alias 必须由 Registry 路由到同一个 canonical Provider 后再查询候选项。
+- Oracle Provider 的 `connectionPropertyKeys()` 固定返回空列表；Oracle 连接扩展信息由原生 JDBC URL 自己承载，不向当前产品暴露高级参数编辑能力。
 
 Must Not:
 - 把 property value、默认凭证、连接实例或敏感信息返回给前端。
@@ -174,6 +175,23 @@ Must Not:
 - 依赖 DriverManager 的全局注册顺序选择 MySQL Driver。
 - 在 Business / Boot / Common 层判断 `MYSQL_5` / `MYSQL_8`。
 - 为了版本隔离复制 MySQL Provider 的 Connection Test / Catalog / SSH 业务流程。
+
+## Oracle Connection Contract
+
+Oracle 使用 Raw JDBC URL 模式，不把 Host / Port / Database 强制拆成产品字段。
+
+Must:
+- canonical type 固定为 `ORACLE`，默认 Driver 为 `oracle.jdbc.OracleDriver`。
+- Create / Update / Connection Test 优先直接消费 `jdbcUrl`，并要求 URL 以 `jdbc:oracle:` 开头。
+- Provider 不重新解析、重建或规范化用户提交的 Oracle JDBC URL；SID、Service Name、RAC / DESCRIPTION 等连接语义由 Oracle JDBC URL 自己表达。
+- 结构化 `host / port / database` 只作为历史连接兼容回退；缺少显式 `jdbcUrl` 时仍可生成 `jdbc:oracle:thin:@//host:port/database`。
+- `connectionPropertyKeys()` 返回空列表，当前产品不暴露 Oracle 高级参数 UI。
+- 历史连接已有 `properties` 时 Provider 继续保持兼容解析，避免编辑旧数据时无意破坏已有连接语义。
+
+Must Not:
+- 为了统一 MySQL / PostgreSQL 表单而强制 Oracle 使用 Host / Port / Database。
+- 把 Oracle JDBC URL 拆解成 SID / Service Name / RAC 等前端字段。
+- 在 Frontend / Business 层拼接 Oracle JDBC URL 或维护 Oracle property catalog。
 
 ## PostgreSQL Connection Contract
 

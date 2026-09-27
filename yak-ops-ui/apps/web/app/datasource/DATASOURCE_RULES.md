@@ -95,25 +95,23 @@ PostgreSQL 的 `POSTGRESQL` / `POSTGRES` 只作为兼容输入别名；进入前
 
 Create / Edit 统一使用 Yak UI `Modal`。Create 第一步只选择当前支持的数据源类型，提供轻量分类与搜索，点击数据源 Item 直接进入配置步骤；Edit 跳过类型选择，直接进入同一份配置表单。Create / Edit 共用字段渲染、校验、连接测试和保存逻辑。
 
-结构化连接字段：
+连接字段按 Provider 使用固定模式，不引入动态表单：
 
 ```text
-name
-dbType
-host
-port
-database
-username
-password
-properties
-remark
+MySQL / PostgreSQL
+→ host / port / database / username / password / properties
+
+Oracle
+→ jdbcUrl / username / password
 ```
+
+公共字段仍包含 `name / dbType / remark`。
 
 UI 中的访问身份当前固定为“用户名和密码”，认证选项当前固定为“无认证”，版本当前固定为“自动选择”；这三个选择只表达当前产品能力边界，不进入后端连接 Contract。
 
 Create 默认使用 `DEVELOP` environment；Edit 沿用后端详情中的 environment。Environment 不作为当前 UI 产品字段。
 
-前端只维护当前三种 JDBC Provider 的 Host / Port / Database 输入、JDBC Preview 和轻量 Key/Value 高级参数；高级参数编辑器保持 Provider-neutral，不维护 MySQL / Oracle / PostgreSQL 参数提示清单、枚举值或校验规则。HTTP 层直接提交结构化 `connectionParams` 对象，不允许在 App / Service 层手动 `JSON.stringify`。真正的 JDBC URL 生成、属性 Normalize / Validate、driver、Provider 差异和 Connection Test 仍由后端 JDBC Plugin 负责。
+MySQL / PostgreSQL 使用 Host / Port / Database 结构化输入并展示 JDBC Preview；Oracle 直接输入完整 `jdbc:oracle:` URL，不拆 Host / Port / Database，也不展示高级参数。MySQL / PostgreSQL 的高级参数编辑器保持 Provider-neutral，不维护 Vendor JDBC 参数提示清单、枚举值或校验规则。HTTP 层直接提交 `connectionParams` 对象，不允许在 App / Service 层手动 `JSON.stringify`。结构化 JDBC URL 生成、属性 Normalize / Validate、driver、Provider 差异和 Connection Test 仍由后端 JDBC Plugin 负责；Oracle 的原生 JDBC URL 由 Provider 校验后直接使用。
 
 高级参数 Key 候选项通过 `service/datasource` 调用 `connection-property-keys` 接口动态获取。推荐 Key 使用 Yak UI `Combobox` 搜索 / 多选；一次选中多个 Key 后拆成独立的 Key / Value 行。已选择的推荐 Key 在行内继续使用可搜索 Combobox 编辑；自定义 Key 通过“自定义属性”创建并保留普通 Input。候选项只是推荐值，不是前端白名单。
 
@@ -128,10 +126,12 @@ PostgreSQL 表单遵循 Database connection target：不新增 Schema 字段，�
 - 列表行操作只保留“编辑｜删除”文字操作，中间使用轻量 Divider；操作组在操作列内居中对齐；列表不提供单行 Connection Test，连接测试保留在新增 / 编辑表单内。
 - Table 启用受控 `rowSelection`；表头和底部 Checkbox 都只全选当前页，跨页已选 ID 保留；筛选条件变化清空选择，单次最多选择 100 条。
 - Table `footer` 左侧承载“批量删除 / 批量测试连通性”，右侧继续使用 Yak UI Pagination；批量删除必须二次确认，批量连接测试直接执行并反馈成功 / 失败数量。
-- 新增使用 Yak UI `Modal` 两步 Wizard；Modal Header / Footer 固定，只允许 Body 滚动。第一步选择区使用固定高度，数据少时允许自然留白；提供“全部 / 关系型数据库”分类和搜索。Datasource Item 使用紧凑单行结构，只展示 Icon + 名称，不展示说明文案。第二步配置表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form：Label 左对齐、Control 右侧占满，Input / Select / PasswordInput 统一使用 `small`，字段纵向间距保持紧凑，分组只使用轻量边框与标题。连接配置使用 Host + Port + Database 结构化输入并实时展示 JDBC Preview；高级参数使用轻量 Key/Value 列表。当前只展示 `MYSQL / ORACLE / POSTGRE_SQL`，不引入动态 Provider UI。
+- 新增使用 Yak UI `Modal` 两步 Wizard；Modal Header / Footer 固定，只允许 Body 滚动。第一步选择区使用固定高度，数据少时允许自然留白；提供“全部 / 关系型数据库”分类和搜索。Datasource Item 使用紧凑单行结构，只展示 Icon + 名称，不展示说明文案。第二步配置表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form：Label 左对齐、Control 右侧占满，Input / Select / PasswordInput 统一使用 `small`，字段纵向间距保持紧凑，分组只使用轻量边框与标题。MySQL / PostgreSQL 使用 Host + Port + Database 结构化输入并实时展示 JDBC Preview，高级参数使用轻量 Key/Value 列表；Oracle 只展示完整 JDBC URL + 用户名 / 密码 / 认证选项，不展示 JDBC Preview、Host / Port / Database、版本或高级参数。当前只展示 `MYSQL / ORACLE / POSTGRE_SQL`，不引入动态 Provider UI。
 - Edit 使用与 Create 相同的 Yak UI `Modal` 和配置内容；不展示可修改的数据库类型控件，通过标题明确当前 Provider，且编辑时禁止修改 `dbType`。
 - Create / Edit 的必填标识与错误信息统一使用 Yak UI `FieldLabel required` / `FieldRequiredMark` / `FieldError`；Datasource 只持有字段规则和 i18n message，不在页面重复手写红色星号或错误文本样式。
-- Create / Update / Connection Test 共用同一个结构化 `connectionParams` Contract：`host / port / database / username / password / properties`；`dbType` 由外层请求字段负责 Provider 路由，不重复塞进连接对象。
+- Create / Update / Connection Test 共用同一个 `connectionParams` Contract；MySQL / PostgreSQL 使用 `host / port / database / username / password / properties`，Oracle 使用 `jdbcUrl / username / password`。字段必填规则由当前 Provider 模式决定；`dbType` 由外层请求字段负责 Provider 路由，不重复塞进连接对象。
+- Oracle Create / Edit 必须直接提交完整 `jdbc:oracle:` URL；前端只校验非空和 Vendor 前缀，不解析 SID / Service Name / RAC DESCRIPTION，也不得重新拼接或规范化 Oracle JDBC URL。
+- Oracle 不请求、不展示 `connection-property-keys` 和高级参数编辑器；已有历史 Oracle 连接中的 `properties` 可在编辑保存时透明保留，但不暴露为当前产品能力。
 - PostgreSQL Create / Edit 必须使用默认端口 `5432`、`jdbc:postgresql://host:port/database` Preview，并且请求体中不得出现顶层 `schema` 字段。
 - 高级参数 Key 候选项必须从后端 Provider discovery 接口获取，前端禁止维护 Vendor property 常量列表。
 - 推荐 Key 选择支持搜索和多选，多选结果必须拆成独立 Key / Value 行；同一 Key 只能存在一次，重复判断大小写不敏感。

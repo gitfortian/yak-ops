@@ -93,21 +93,17 @@ App 只通过 `app/datasource/types.ts` 重新导出这些 Contract。
 - Oracle
 - PostgreSQL
 
-表单使用结构化 JDBC 连接输入：
+表单按 Provider 使用固定连接模式：
 
 ```text
-name
-dbType
-host
-port
-database
-username
-password
-properties
-remark
+MySQL / PostgreSQL
+→ host / port / database / username / password / properties
+
+Oracle
+→ jdbcUrl / username / password
 ```
 
-前端只负责当前 MySQL / Oracle / PostgreSQL 的 Host / Port / Database 输入、JDBC Preview 和轻量 Key/Value 高级参数。HTTP Contract 使用结构化 `connectionParams` 对象；前端不把连接参数序列化成 JSON 字符串。JDBC URL 生成、Driver Class、Provider 差异、Normalize 和 Connection Test 仍由后端 JDBC Plugin 负责；SSH 与动态 Driver Manager 不属于当前前端能力。
+MySQL / PostgreSQL 由前端维护 Host / Port / Database 输入、JDBC Preview 和轻量 Key/Value 高级参数；Oracle 直接输入完整 `jdbc:oracle:` URL，不拆连接地址，也不展示高级参数。HTTP Contract 统一使用 `connectionParams` 对象；前端不把连接参数序列化成 JSON 字符串。结构化 JDBC URL 生成、Driver Class、Provider 差异、Normalize 和 Connection Test 仍由后端 JDBC Plugin 负责；Oracle 原生 JDBC URL 由 Provider 校验后直接使用。SSH 与动态 Driver Manager 不属于当前前端能力。
 
 ## Web Root Ownership
 
