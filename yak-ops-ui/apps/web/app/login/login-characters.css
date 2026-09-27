@@ -182,7 +182,6 @@
   transform: translate(var(--yak-yellow-eye-x), var(--yak-yellow-eye-y));
 }
 
-
 .yak-login-character--purple__focus,
 .yak-login-character--black__focus,
 .yak-login-character--orange__focus,
