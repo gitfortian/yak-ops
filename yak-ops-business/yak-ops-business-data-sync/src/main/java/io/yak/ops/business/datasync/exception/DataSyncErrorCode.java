@@ -20,7 +20,8 @@ public enum DataSyncErrorCode implements ErrorCode {
     CREATE_TASK_FAILED(42005, "创建同步任务失败"),
     UPDATE_TASK_FAILED(42006, "更新同步任务失败"),
     DELETE_TASK_FAILED(42007, "删除同步任务失败"),
-    INVALID_QUERY(42008, "同步查询参数不合法");
+    INVALID_QUERY(42008, "同步查询参数不合法"),
+    FIELD_MAPPING_INCOMPATIBLE(42009, "来源与目标表字段不兼容");
 
     private final Integer code;
     private final String message;

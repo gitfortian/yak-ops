@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Phase 1 — Task + Instance Persistence Contract
+Status: Phase 2 — Datasource Catalog + Offline Task Editor
 
 ## Goal
 
@@ -18,7 +18,7 @@ YakFlow Local Runtime
 JdbcSource -> JdbcSink
 ```
 
-Phase 1 establishes only the task-definition and execution-instance persistence contract. It does not start YakFlow.
+Phase 1 established task-definition and instance persistence. Phase 2 adds Datasource Catalog reads, backend same-name field compatibility validation and the offline task editor. It still does not start YakFlow.
 
 ## Task Definition
 
@@ -68,6 +68,31 @@ Instance persistence owns:
 
 The definition snapshot must not contain datasource connection JSON, passwords, SSH private keys, tokens or other credentials.
 
+## Phase 2 — Offline Task Editor
+
+The editable product path is:
+
+```text
+choose source datasource/table
+        ↓
+choose target datasource/table
+        ↓
+backend same-name field mapping preview
+        ↓
+compatible?
+        ↓ yes
+save OFFLINE task definition
+```
+
+The editor contains only:
+- basic information.
+- source datasource/table.
+- target datasource/table.
+- read-only automatic field mapping result.
+- YakFlow runtime tuning.
+
+No filter SQL, split key, pre/post SQL, resource group or Transform is introduced in this phase.
+
 ## Phase 1 Boundary
 
 Phase 1 provides:
@@ -78,12 +103,10 @@ Phase 1 provides:
 - `DataSyncService` task CRUD and task/instance query contract.
 - task persistence implementation.
 
-Phase 1 does not provide:
+Phase 2 now provides task HTTP CRUD, frontend task list/editor, Datasource Catalog browsing and field mapping validation.
 
-- HTTP Controller.
-- frontend pages.
-- datasource Catalog browsing.
-- field mapping validation.
+It still does not provide:
+
 - YakFlow execution.
 - run / cancel / retry.
 - scheduler.

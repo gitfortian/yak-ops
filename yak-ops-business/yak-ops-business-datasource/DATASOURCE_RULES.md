@@ -18,10 +18,10 @@ Owns:
 - Datasource connection testing
 - Datasource batch delete / batch connection testing
 - Datasource connection-property key discovery
+- Workspace-scoped Catalog database / Schema / table / column reads for product consumers
 - Internal Datasource Plugin discovery, connection parsing and secret handling
 
 Does Not Own:
-- Catalog HTTP / Business capability
 - SQL execution
 - SQL audit / observability
 - duplicate Domain models around DAO Entity
@@ -98,7 +98,7 @@ Controller 只负责 HTTP mapping、`@Valid` 和统一 Result 包装。DTO parsi
 
 高级参数候选接口只返回 Provider 推荐的属性名，不返回 value、校验规则、控件类型或动态表单结构；它不需要读取 Workspace 数据，也不得绕过 `DataSourcePluginRegistry` 直接访问具体 JDBC Provider。
 
-当前产品不发布 Catalog、Plugin Config HTTP schema、运行时插件安装或 Driver Upload API。
+当前产品发布只读 Catalog API（数据库 / Schema / 表 / 字段），供离线同步编辑器等 Workspace-scoped 产品能力使用。Catalog 只能读取已保存数据源，不接收连接凭证。当前仍不发布 Plugin Config HTTP schema、运行时插件安装或 Driver Upload API。
 
 本模块只提供 Datasource capability，不创建 `controller` package，也不依赖 Boot。
 

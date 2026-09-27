@@ -131,10 +131,11 @@ Owns only the current Workspace-scoped Datasource product behavior:
 - datasource CRUD, paging and detail inside the active Workspace
 - datasource connection testing
 - internal datasource plugin discovery, connection parsing and secret handling
+- read-only Catalog metadata access for saved Workspace datasources
 
 Datasource exposes exactly one public Service Layer entry: `DataSourceService`. Plugin discovery and secret handling are internal mechanisms behind `DataSourceServiceImpl`.
 
-The module intentionally does not own Catalog HTTP/Business APIs, SQL execution, SQL audit, a duplicate Domain layer or a Gateway adapter layer.
+The module exposes Catalog metadata through the existing DataSourceService boundary; it still does not own SQL execution, SQL audit, a duplicate Domain layer or a Gateway adapter layer.
 
 Datasource may use DAO persistence and the stable Datasource Plugin API only behind `DataSourceServiceImpl`. Datasource is a Workspace Resource: Service reads the trusted active Workspace from `WorkspaceContext`, while DAO queries scope resource access by `workspace_id + resource id/query`.
 
@@ -146,7 +147,7 @@ Owns Workspace-scoped Data Sync product definitions and execution-instance persi
 
 The current phase supports only `OFFLINE` task definitions. A task definition describes source/target datasource IDs, table locations and YakFlow runtime tuning. An instance is a historical execution record with its own task-version reference, trigger type, status, row counters and a sanitized definition snapshot.
 
-Data Sync depends on Datasource only through the stable `DataSourceService` boundary to validate referenced datasource resources. It does not access Datasource DAO or plugin internals. The current phase does not start YakFlow, schedule jobs, cancel executions or expose HTTP endpoints.
+Data Sync depends on Datasource only through the stable `DataSourceService` boundary to validate referenced datasource resources. It does not access Datasource DAO or plugin internals. The current phase exposes task CRUD and mapping-preview HTTP endpoints plus the offline task editor, but it does not start YakFlow, schedule jobs or cancel executions.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
 
