@@ -35,6 +35,7 @@ assets/
 
 ```text
 app/datasource
+app/offline-sync
 app/management
 ├── users
 └── workspaces
@@ -82,6 +83,7 @@ app/layout/
 ## Must
 
 - Domain UI / state / presentation 放在 `app/<domain>`。
+- 离线同步任务列表与编辑器收口在 `app/offline-sync`；PR2 只允许配置和保存 Task，不显示可点击的运行/停止入口。
 - Management Center 的用户与工作空间页面收口在 `app/management/users` 与 `app/management/workspaces`，后端调用分别进入 `service/user` 与 `service/workspace`。
 - Domain backend Contract / calls 放在 `service/<domain>`。
 - 依赖方向保持 `app → service → http`。

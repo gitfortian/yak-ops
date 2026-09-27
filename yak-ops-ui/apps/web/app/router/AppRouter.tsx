@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 
 import { DataSourcePage } from "@/app/datasource";
 import LoginPage from "@/app/login";
+import { OfflineSyncEditorPage, OfflineSyncPage } from "@/app/offline-sync";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -16,9 +17,14 @@ import {
 const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
   "/data-source",
+  "/offline-sync",
+  "/offline-sync/new",
   "/management/users",
   "/management/workspaces",
 ]);
+
+const isAuthenticatedPath = (pathname: string) =>
+  AUTHENTICATED_PATHS.has(pathname) || pathname.startsWith("/offline-sync/");
 
 const resolveReturnTo = (requested: string | null) => {
   if (!requested) return DEFAULT_AUTHENTICATED_PATH;
@@ -27,7 +33,7 @@ const resolveReturnTo = (requested: string | null) => {
     const destination = new URL(requested, window.location.origin);
     if (
       destination.origin !== window.location.origin ||
-      !AUTHENTICATED_PATHS.has(destination.pathname)
+      !isAuthenticatedPath(destination.pathname)
     ) {
       return DEFAULT_AUTHENTICATED_PATH;
     }
@@ -100,6 +106,9 @@ export default function AppRouter() {
           }
         >
           <Route path="/data-source" element={<DataSourcePage />} />
+          <Route path="/offline-sync" element={<OfflineSyncPage />} />
+          <Route path="/offline-sync/new" element={<OfflineSyncEditorPage />} />
+          <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
         </Route>
 
         <Route

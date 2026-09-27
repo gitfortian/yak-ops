@@ -192,7 +192,7 @@ Hard boundary:
 
 ### `yak-ops-ui`
 
-Owns the browser product. Only Datasource is currently visible in product navigation.
+Owns the browser product. Data Integration currently exposes Datasource Management and Offline Sync Task Definition. Offline Sync can configure and persist tasks, but execution / instance lifecycle UI remains a later phase.
 
 ### `yak-ops-dist`
 

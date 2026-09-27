@@ -1,4 +1,4 @@
-import { Database, LayoutGrid, Settings, Users, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, Database, LayoutGrid, Settings, Users, type LucideIcon } from "lucide-react";
 
 export type ProductNavigationItem = {
   label: string;
@@ -27,6 +27,11 @@ export const DATA_INTEGRATION_NAVIGATION: ProductNavigationItem[] = [
     label: "数据源管理",
     path: "/data-source",
     icon: Database,
+  },
+  {
+    label: "离线同步",
+    path: "/offline-sync",
+    icon: ArrowRightLeft,
   },
 ];
 
