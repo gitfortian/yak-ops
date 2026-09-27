@@ -132,10 +132,10 @@ const frequentDataSourceOptions = (preferences: UserPreferenceRecord[]) => {
       return [option];
     });
 
-  return [
-    ...ranked,
-    ...COMMON_DB_OPTIONS.filter((option) => !usedValues.has(option.value)),
-  ].slice(0, FREQUENT_TYPE_LIMIT);
+  return [...ranked, ...COMMON_DB_OPTIONS.filter((option) => !usedValues.has(option.value))].slice(
+    0,
+    FREQUENT_TYPE_LIMIT,
+  );
 };
 
 const defaultPort = (dbType: string) =>
@@ -286,7 +286,9 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
   const [createStep, setCreateStep] = useState<CreateStep>("select");
   const [createSearch, setCreateSearch] = useState("");
   const [createCategory, setCreateCategory] = useState<CreateCategory>("ALL");
-  const [frequentTypePreferences, setFrequentTypePreferences] = useState<UserPreferenceRecord[]>([]);
+  const [frequentTypePreferences, setFrequentTypePreferences] = useState<UserPreferenceRecord[]>(
+    [],
+  );
   const [propertyKeyOptions, setPropertyKeyOptions] = useState<string[]>([]);
   const [propertyKeysLoading, setPropertyKeysLoading] = useState(false);
   const editing = Boolean(record?.id);
