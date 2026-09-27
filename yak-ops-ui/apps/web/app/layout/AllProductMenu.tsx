@@ -1,13 +1,23 @@
+import { Star } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ALL_PRODUCT_GROUPS } from "./navigation";
 
 type AllProductMenuProps = {
   open: boolean;
+  favoriteProductIds: ReadonlySet<string>;
+  favoriteMutatingIds: ReadonlySet<string>;
   onNavigate: () => void;
+  onToggleFavorite: (productId: string) => void;
 };
 
-export default function AllProductMenu({ open, onNavigate }: AllProductMenuProps) {
+export default function AllProductMenu({
+  open,
+  favoriteProductIds,
+  favoriteMutatingIds,
+  onNavigate,
+  onToggleFavorite,
+}: AllProductMenuProps) {
   return (
     <section
       id="all-product-menu"
@@ -30,21 +40,45 @@ export default function AllProductMenu({ open, onNavigate }: AllProductMenuProps
               <div className="flex min-w-0 flex-1 flex-wrap content-start gap-x-5">
                 {group.products.map((product) => {
                   const Icon = product.icon;
+                  const favorite = favoriteProductIds.has(product.id);
+                  const mutating = favoriteMutatingIds.has(product.id);
 
                   return (
-                    <Link
+                    <div
                       key={product.id}
-                      to={product.path}
-                      tabIndex={open ? 0 : -1}
-                      className="group my-0.5 flex h-8 w-60 cursor-pointer items-center rounded px-2 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-[#f4f4f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                      onClick={onNavigate}
+                      className="group my-0.5 flex h-8 w-60 items-center rounded px-2 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-[#f4f4f4]"
                     >
-                      <Icon
-                        className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-[#f4f4f4]"
-                        strokeWidth={1.8}
-                      />
-                      <span className="ml-2 min-w-0 flex-1 truncate">{product.label}</span>
-                    </Link>
+                      <Link
+                        to={product.path}
+                        tabIndex={open ? 0 : -1}
+                        className="flex h-full min-w-0 flex-1 cursor-pointer items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                        onClick={onNavigate}
+                      >
+                        <Icon
+                          className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-[#f4f4f4]"
+                          strokeWidth={1.8}
+                        />
+                        <span className="ml-2 min-w-0 flex-1 truncate">{product.label}</span>
+                      </Link>
+
+                      <button
+                        type="button"
+                        aria-label={favorite ? `取消收藏${product.label}` : `收藏${product.label}`}
+                        aria-pressed={favorite}
+                        disabled={mutating}
+                        tabIndex={open ? 0 : -1}
+                        className={[
+                          "ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded transition-[background-color,color,opacity]",
+                          "hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-default disabled:opacity-45",
+                          favorite
+                            ? "text-[#f5a623] opacity-100"
+                            : "text-white/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                        ].join(" ")}
+                        onClick={() => onToggleFavorite(product.id)}
+                      >
+                        <Star className="h-3.5 w-3.5" fill={favorite ? "currentColor" : "none"} strokeWidth={1.8} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
