@@ -1,9 +1,9 @@
 package io.yak.ops.flow.connector.cdc.mysql;
 
 import io.debezium.embedded.Connect;
-import io.debezium.engine.format.ChangeEventFormat;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
+import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.source.SourceReader;
