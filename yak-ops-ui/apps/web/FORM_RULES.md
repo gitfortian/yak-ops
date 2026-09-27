@@ -135,6 +135,28 @@ Keep the default top-offset Modal for:
 
 Do not choose `centered` only for visual preference; content height and interaction stability decide the placement.
 
+## Select Value / Label
+
+Product forms must separate stored domain values from user-visible labels.
+
+When a Select stores an ID, enum code, composite key or other domain value whose visible text differs:
+
+- pass the value-to-label mapping through `Select.items`.
+- keep controlled `value` and `onValueChange` on the domain value.
+- let `SelectValue` render the visible label.
+- never display resource IDs or internal composite keys in the closed trigger when a human-readable label exists.
+- do not duplicate `options.find(...)` label lookup inside `SelectTrigger`.
+
+Typical examples:
+
+```text
+Datasource: value = datasourceId, label = datasourceName
+Workspace:  value = workspaceId,  label = workspaceName
+Table:      value = stable tableKey, label = schema.table
+```
+
+A Select may omit `items` only when `value === label` by design, such as a simple database or Schema name list.
+
 ## Selection / Search Modal
 
 A modal whose main job is selecting records may contain Table or search results, but its form controls still follow this contract:

@@ -24,6 +24,9 @@ Must:
 - Poll only while visible instance data contains PENDING / RUNNING records.
 - Display readRows / writeRows from the persisted Instance; frontend must not estimate progress.
 - The editor may offer Save and Save & Run. Save & Run must persist the Task first, then call the normal manual run API and navigate to the created Instance.
+- Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
+- Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`.
+- Database / Schema Select may omit `items` only when the domain value is intentionally identical to the visible label.
 
 Must Not:
 

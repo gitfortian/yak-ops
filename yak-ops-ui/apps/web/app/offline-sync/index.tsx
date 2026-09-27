@@ -73,6 +73,15 @@ export function OfflineSyncPage() {
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
     [dataSources],
   );
+  const dataSourceItems = useMemo(
+    () =>
+      Object.fromEntries(
+        dataSources.flatMap((item) =>
+          item.id ? [[item.id, item.name || item.id] as const] : [],
+        ),
+      ),
+    [dataSources],
+  );
 
   useEffect(() => {
     void listDataSources({ pageNo: 1, pageSize: 200 }).then((result) =>
@@ -361,6 +370,7 @@ export function OfflineSyncPage() {
             <FieldLabel required>来源数据源</FieldLabel>
             <Select
               size="small"
+              items={dataSourceItems}
               value={draft.sourceDataSourceId || undefined}
               onValueChange={(value) =>
                 setDraft((current) => ({
@@ -389,6 +399,7 @@ export function OfflineSyncPage() {
             <FieldLabel required>目标数据源</FieldLabel>
             <Select
               size="small"
+              items={dataSourceItems}
               value={draft.targetDataSourceId || undefined}
               onValueChange={(value) =>
                 setDraft((current) => ({
