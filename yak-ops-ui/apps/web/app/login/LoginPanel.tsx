@@ -11,19 +11,31 @@ import { useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
-import type { LoginFocusState } from "./login-interaction";
+import {
+  LOGIN_FAILURE_MOTION_MS,
+  LOGIN_SUCCESS_MOTION_MS,
+  type LoginFocusState,
+  type LoginResultState,
+} from "./login-interaction";
 
 const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
   onFocusStateChange: (state: LoginFocusState) => void;
+  onLoginResultChange: (state: LoginResultState) => void;
   onPasswordVisibilityChange: (visible: boolean) => void;
 }
 
 interface LoginValues {
   userName: string;
   userPassword: string;
+}
+
+function waitForMotion(duration: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, duration);
+  });
 }
 
 function ValidationMessage({ id, children }: { id: string; children: string }) {
@@ -96,6 +108,7 @@ function WeChatQrHelp() {
 export default function LoginPanel({
   onAuthenticated,
   onFocusStateChange,
+  onLoginResultChange,
   onPasswordVisibilityChange,
 }: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
@@ -114,12 +127,20 @@ export default function LoginPanel({
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    let loginSucceeded = false;
+
     try {
       setLoading(true);
+      onLoginResultChange("idle");
+
       await login({
         userName: values.userName.trim(),
         pw: values.userPassword,
       });
+
+      loginSucceeded = true;
+      onLoginResultChange("success");
+      await waitForMotion(LOGIN_SUCCESS_MOTION_MS);
       await onAuthenticated();
 
       notifyOnce("login-success", {
@@ -130,6 +151,11 @@ export default function LoginPanel({
         duration: 2,
       });
     } catch {
+      if (!loginSucceeded) {
+        onLoginResultChange("failure");
+        await waitForMotion(LOGIN_FAILURE_MOTION_MS);
+        onLoginResultChange("idle");
+      }
       // Global request handling surfaces HTTP, business and network failures once.
     } finally {
       setLoading(false);
