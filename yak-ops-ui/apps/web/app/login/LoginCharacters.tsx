@@ -233,43 +233,43 @@ function PurpleCharacter() {
                 <g className="yak-login-character--purple__face">
                   <g className="yak-login-character--purple__password-face-pose">
                     <g className="yak-login-character--purple__result-eyes">
-                    <g className="yak-login-character--purple__focus-eyes">
-                      <g className="yak-login-character--purple__eyes">
-                        <circle cx="274" cy="145" r="5.5" fill="#FFFFFF" />
-                        <circle
-                          className="yak-login-character--purple__pupil"
-                          cx="274"
-                          cy="145"
-                          r="2.3"
-                          fill="#171717"
-                        />
-                        <circle cx="335" cy="145" r="5.5" fill="#FFFFFF" />
-                        <circle
-                          className="yak-login-character--purple__pupil"
-                          cx="335"
-                          cy="145"
-                          r="2.3"
-                          fill="#171717"
-                        />
+                      <g className="yak-login-character--purple__focus-eyes">
+                        <g className="yak-login-character--purple__eyes">
+                          <circle cx="274" cy="145" r="5.5" fill="#FFFFFF" />
+                          <circle
+                            className="yak-login-character--purple__pupil"
+                            cx="274"
+                            cy="145"
+                            r="2.3"
+                            fill="#171717"
+                          />
+                          <circle cx="335" cy="145" r="5.5" fill="#FFFFFF" />
+                          <circle
+                            className="yak-login-character--purple__pupil"
+                            cx="335"
+                            cy="145"
+                            r="2.3"
+                            fill="#171717"
+                          />
+                        </g>
                       </g>
                     </g>
-                  </g>
-                  <ellipse
-                    className="yak-login-character__mouth yak-login-character__mouth--default"
-                    cx="304.5"
-                    cy="174"
-                    rx="7.5"
-                    ry="4.2"
-                    fill="#171717"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M292 169Q304.5 187 317 169"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
+                    <ellipse
+                      className="yak-login-character__mouth yak-login-character__mouth--default"
+                      cx="304.5"
+                      cy="174"
+                      rx="7.5"
+                      ry="4.2"
+                      fill="#171717"
+                    />
+                    <path
+                      className="yak-login-character__mouth yak-login-character__mouth--success"
+                      d="M292 169Q304.5 187 317 169"
+                      fill="none"
+                      stroke="#171717"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--failure"
                       d="M292 181Q304.5 168 317 181"
@@ -616,8 +616,7 @@ export default function LoginCharacters({
                 ? 0.28
                 : targetY;
 
-      const purplePasswordActive =
-        activeResult === "idle" && activeFocus === "userPassword";
+      const purplePasswordActive = activeResult === "idle" && activeFocus === "userPassword";
       const purpleInteractionTargetX = purplePasswordActive ? 0 : interactionTargetX;
       const purpleInteractionTargetY = purplePasswordActive ? 0 : interactionTargetY;
       const purplePasswordBowTarget = purplePasswordActive ? 1 : 0;
@@ -630,8 +629,7 @@ export default function LoginCharacters({
       purpleX += (purpleInteractionTargetX - purpleX) * 0.075;
       purpleY += (purpleInteractionTargetY - purpleY) * 0.075;
       purplePasswordBow += (purplePasswordBowTarget - purplePasswordBow) * 0.085;
-      purplePasswordDirection +=
-        (purplePasswordDirectionTarget - purplePasswordDirection) * 0.075;
+      purplePasswordDirection += (purplePasswordDirectionTarget - purplePasswordDirection) * 0.075;
 
       blackX += (interactionTargetX - blackX) * 0.042;
       blackY += (interactionTargetY - blackY) * 0.042;
@@ -659,11 +657,9 @@ export default function LoginCharacters({
         1,
       );
 
-      const purplePasswordPoseX =
-        purplePasswordDirection * purplePasswordBow * 62;
+      const purplePasswordPoseX = purplePasswordDirection * purplePasswordBow * 62;
       const purplePasswordPoseY = purplePasswordBow * 30;
-      const purplePasswordPoseRotate =
-        purplePasswordDirection * purplePasswordBow * 12;
+      const purplePasswordPoseRotate = purplePasswordDirection * purplePasswordBow * 12;
 
       purpleBodyPath.setAttribute(
         "d",
@@ -675,14 +671,8 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-purple-face-y", `${purpleY * 5}px`);
       scene.style.setProperty("--yak-purple-pupil-x", `${purpleX * 4}px`);
       scene.style.setProperty("--yak-purple-pupil-y", `${purpleY * 2.5}px`);
-      scene.style.setProperty(
-        "--yak-purple-password-face-x",
-        `${purplePasswordPoseX}px`,
-      );
-      scene.style.setProperty(
-        "--yak-purple-password-face-y",
-        `${purplePasswordPoseY}px`,
-      );
+      scene.style.setProperty("--yak-purple-password-face-x", `${purplePasswordPoseX}px`);
+      scene.style.setProperty("--yak-purple-password-face-y", `${purplePasswordPoseY}px`);
       scene.style.setProperty(
         "--yak-purple-password-face-rotate",
         `${purplePasswordPoseRotate}deg`,
