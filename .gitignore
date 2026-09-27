@@ -2,6 +2,8 @@
 *.jar
 !/jdbc-drivers/
 !/jdbc-drivers/*.jar
+!/yak-ops-dist/src/main/jdbc-drivers-builtin/mysql/5/mysql-connector-java-5.1.49.jar
+!/yak-ops-dist/src/main/jdbc-drivers-builtin/mysql/8/mysql-connector-j-8.4.0.jar
 *.zip
 *.tar.gz
 
