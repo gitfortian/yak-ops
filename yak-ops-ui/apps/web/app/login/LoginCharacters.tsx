@@ -312,12 +312,12 @@ export default function LoginCharacters({
         activeResult !== "idle"
           ? 0
           : activeFocus === "userName"
-          ? 0.08
-          : passwordPeek
-            ? 0.02
-            : activeFocus === "userPassword"
-              ? 0.28
-              : targetY;
+            ? 0.08
+            : passwordPeek
+              ? 0.02
+              : activeFocus === "userPassword"
+                ? 0.28
+                : targetY;
 
       purpleX += (interactionTargetX - purpleX) * 0.075;
       purpleY += (interactionTargetY - purpleY) * 0.075;
