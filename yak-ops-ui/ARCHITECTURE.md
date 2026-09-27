@@ -147,7 +147,10 @@ Ownership:
 - `AllProductMenu` is absolutely anchored to the track with `left: 100%`, so its left edge always touches the first-level panel's right edge. It clips from 765px to 0 width on close, uses background `#1c1e21`, opens in 240ms and closes in 170ms.
 - A full Launcher close is staggered rather than hard-sequenced: the second level starts collapsing immediately, then the shared launcher track starts sliding 36ms later. Because both levels share the same moving coordinate system, no gap may appear between them during close.
 - Product/category rows use subtle `#282b2e` hover feedback and brighter text/icon color; neither first nor second level adds an outer shadow.
-- `navigation.ts` owns real product entries and category grouping; current products are `数据集成` and `管理中心`.
+- `navigation.ts` owns the complete product Registry and category grouping; current products are `数据集成` and `管理中心`. Registry metadata never comes from User Preference persistence.
+- ProductLauncher owns Global Product Favorites runtime state. When opened it reads the current user's `PRODUCT_MENU` preferences through `service/preference`; the first-level product area renders only favorite Registry entries in server `sortOrder`.
+- AllProductMenu always renders the complete Registry and owns the star interaction surface. Star changes are persisted through User Preference and reflected in the first-level list immediately; browser state is not the cross-device source of truth.
+- User Preference requests are user-scoped and explicitly omit `X-Workspace-Id`.
 - Launcher closes from the TopBar X trigger, Escape and route change.
 - While Launcher is open, a transparent blank-area interaction layer sits below the menu panels and above page content. A single blank-area click closes the whole Launcher; the visual close still staggers the second level ahead of the first level.
 - Product pages rendered inside `AppLayout` fill the available container; they do not subtract shell dimensions from `100vh / 100dvh`.
@@ -163,6 +166,16 @@ service/datasource/
 ├── index.ts
 └── types.ts
 ```
+
+Global Product Favorites 使用：
+
+```text
+service/preference/
+├── index.ts
+└── types.ts
+```
+
+Preference Service 只承载后端 User Preference HTTP Contract；Product Registry 和 Launcher 展示逻辑仍属于 `app/layout`。
 
 不按 CRUD endpoint 机械拆文件。
 
