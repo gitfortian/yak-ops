@@ -14,9 +14,7 @@ const WITHOUT_WORKSPACE_HEADER = {
   workspaceHeader: "omit" as const,
 };
 
-export const listUserPreferences = (
-  scene: UserPreferenceScene,
-): Promise<UserPreferenceRecord[]> =>
+export const listUserPreferences = (scene: UserPreferenceScene): Promise<UserPreferenceRecord[]> =>
   HttpUtils.getData<UserPreferenceRecord[]>(
     `${USER_PREFERENCE_API_PREFIX}?scene=${encodeURIComponent(scene)}`,
     WITHOUT_WORKSPACE_HEADER,
