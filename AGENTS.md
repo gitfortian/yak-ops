@@ -35,6 +35,9 @@ yak-ops-security/**
 yak-ops-business/yak-ops-business-datasource/**
 → yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md
 
+yak-ops-business/yak-ops-business-data-sync/**
+→ yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md
+
 yak-ops-common/**
 → yak-ops-common/COMMON_RULES.md
 
@@ -89,7 +92,7 @@ If no Capability Contract exists, inspect current code first and write the minim
 
 Must:
 - Read current code and direct dependencies before changing structure.
-- Treat Datasource as the current user-facing product domain and YakFlow as the active staged data-sync capability.
+- Treat Datasource as the current user-facing product domain, Data Sync as the staged product layer being added on top, and YakFlow as the execution capability.
 - Treat User/Login/Security as supporting platform capability, not a second product domain.
 - Reuse existing utilities before adding abstractions.
 - Solve only the current task.

@@ -8,10 +8,12 @@ Depends On:
 
 Owns:
 - Datasource shared DTO / VO
+- Data Sync shared DTO / VO and persistence enums
 - Workspace shared DTO / VO, role enum and request WorkspaceContext
 - User Preference shared DTO / VO and scene enum
 - cross-domain stable constants
 - Datasource enums
+- Data Sync task type, trigger type and instance status enums
 - Security user/login shared HTTP DTO / VO contracts
 - unified Result / ErrorCode / PageData contracts
 - cross-domain business exception base under `io.yak.ops.common.exception`

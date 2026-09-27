@@ -19,6 +19,7 @@ Owns:
 - Workspace persistence through DAO-owned Workspace / WorkspaceMember Entity, Mapper and Repository
 - User Preference persistence through DAO-owned Entity / Mapper / Repository
 - Datasource persistence through DAO-owned Entity / Mapper / Repository and mapper XML
+- Data Sync persistence through DAO-owned Task / Instance Entity, Mapper and Repository
 
 ## Flyway
 

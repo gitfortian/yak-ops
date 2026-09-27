@@ -20,6 +20,7 @@
     <modules>
         <module>yak-ops-business-workspace</module>
         <module>yak-ops-business-datasource</module>
+        <module>yak-ops-business-data-sync</module>
         <module>yak-ops-business-user-preference</module>
     </modules>
 </project>

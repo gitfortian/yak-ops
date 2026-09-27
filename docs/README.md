@@ -6,7 +6,8 @@
 
 ```text
 Datasource
-YakFlow（分阶段建设中）
+Data Sync（任务定义 / 实例持久化阶段）
+YakFlow（执行能力，分阶段建设中）
 ```
 
 Supporting platform capability:
@@ -29,6 +30,7 @@ How to prove        → Explicit Verification
 ## Current Knowledge Map
 
 - [Datasource](./capabilities/datasource/README.md)
+- [Data Sync](./capabilities/data-sync/README.md)
 - [YakFlow](./capabilities/yak-flow/README.md)
 - Security rules: [yak-ops-security/SECURITY_RULES.md](../yak-ops-security/SECURITY_RULES.md)
 
@@ -52,6 +54,7 @@ Task
 - [Controller Rules](../CONTROLLER_RULES.md)
 - [Security Rules](../yak-ops-security/SECURITY_RULES.md)
 - [Datasource Rules](../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md)
+- [Data Sync Rules](../yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md)
 - [Common Rules](../yak-ops-common/COMMON_RULES.md)
 - [DAO Rules](../yak-ops-dao/DAO_RULES.md)
 - [Flyway Rules](../yak-ops-dao/FLYWAY_RULES.md)

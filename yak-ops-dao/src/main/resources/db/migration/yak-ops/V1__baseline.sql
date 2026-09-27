@@ -1,5 +1,5 @@
 -- Yak Ops first stable schema baseline.
--- Current product scope contains user/login persistence, workspace membership, user preferences and datasource management persistence.
+-- Current product scope contains user/login persistence, workspace membership, user preferences, datasource management and data sync task/instance persistence.
 -- This baseline is for rebuildable early-stage databases. Once released to a shared environment it becomes immutable.
 
 CREATE TABLE yak_security_user (
@@ -109,3 +109,61 @@ CREATE TABLE yak_ops_data_source (
   DEFAULT CHARACTER SET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='数据源管理表';
+
+CREATE TABLE yak_ops_data_sync_task (
+    id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
+    workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID，是同步任务业务归属与隔离边界',
+    name VARCHAR(128) NOT NULL COMMENT '同步任务名称，在同一工作空间内唯一',
+    sync_type TINYINT UNSIGNED NOT NULL COMMENT '同步类型：1 离线同步',
+    source_data_source_id VARCHAR(64) NOT NULL COMMENT '来源数据源ID，仅保存资源引用，不保存连接凭证',
+    source_database VARCHAR(128) NULL COMMENT '来源数据库名称，无该层级时为空',
+    source_schema VARCHAR(128) NULL COMMENT '来源Schema名称，无该层级时为空',
+    source_table VARCHAR(128) NOT NULL COMMENT '来源表名称',
+    target_data_source_id VARCHAR(64) NOT NULL COMMENT '目标数据源ID，仅保存资源引用，不保存连接凭证',
+    target_database VARCHAR(128) NULL COMMENT '目标数据库名称，无该层级时为空',
+    target_schema VARCHAR(128) NULL COMMENT '目标Schema名称，无该层级时为空',
+    target_table VARCHAR(128) NOT NULL COMMENT '目标表名称',
+    runtime_config LONGTEXT NOT NULL COMMENT 'YakFlow运行参数JSON，不包含数据源连接凭证',
+    definition_version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '任务定义版本，从1开始，定义修改后递增',
+    remark VARCHAR(500) NULL COMMENT '同步任务备注',
+    create_time DATETIME(3) NOT NULL COMMENT '创建时间',
+    update_time DATETIME(3) NOT NULL COMMENT '更新时间',
+    create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
+    update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ops_data_sync_task_workspace_name (workspace_id, name),
+    KEY idx_ops_data_sync_task_workspace_type_update (workspace_id, sync_type, update_time),
+    KEY idx_ops_data_sync_task_workspace_source (workspace_id, source_data_source_id),
+    KEY idx_ops_data_sync_task_workspace_target (workspace_id, target_data_source_id)
+) ENGINE=InnoDB
+  DEFAULT CHARACTER SET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='数据同步任务定义表';
+
+CREATE TABLE yak_ops_data_sync_instance (
+    id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
+    workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID，是同步实例业务归属与隔离边界',
+    task_id VARCHAR(64) NOT NULL COMMENT '来源同步任务ID，不使用数据库物理外键',
+    task_name VARCHAR(128) NOT NULL COMMENT '实例启动时的任务名称快照',
+    task_version INT UNSIGNED NOT NULL COMMENT '实例启动时采用的任务定义版本',
+    trigger_type TINYINT UNSIGNED NOT NULL COMMENT '触发方式：1 手动，2 调度，3 重试',
+    status TINYINT UNSIGNED NOT NULL COMMENT '实例状态：1 等待，2 运行中，3 成功，4 失败，5 已取消，6 丢失',
+    definition_snapshot LONGTEXT NOT NULL COMMENT '实例启动时的脱敏任务定义快照，禁止包含密码、连接参数、SSH私钥或Token',
+    read_rows BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '累计读取行数',
+    write_rows BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '累计写入行数',
+    start_time DATETIME(3) NULL COMMENT '实例实际开始时间',
+    finish_time DATETIME(3) NULL COMMENT '实例进入终态的完成时间',
+    error_code INT UNSIGNED NULL COMMENT '失败时的结构化错误码',
+    error_message VARCHAR(1000) NULL COMMENT '失败时的脱敏错误信息',
+    create_time DATETIME(3) NOT NULL COMMENT '实例创建时间',
+    update_time DATETIME(3) NOT NULL COMMENT '实例更新时间',
+    create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
+    update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
+    PRIMARY KEY (id),
+    KEY idx_ops_data_sync_instance_workspace_task_create (workspace_id, task_id, create_time),
+    KEY idx_ops_data_sync_instance_workspace_status_create (workspace_id, status, create_time),
+    KEY idx_ops_data_sync_instance_workspace_create (workspace_id, create_time)
+) ENGINE=InnoDB
+  DEFAULT CHARACTER SET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='数据同步任务实例表';
