@@ -11,11 +11,13 @@ import { useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
+import type { LoginFocusState } from "./login-interaction";
 
 const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
+  onFocusStateChange: (state: LoginFocusState) => void;
 }
 
 interface LoginValues {
@@ -90,7 +92,10 @@ function WeChatQrHelp() {
   );
 }
 
-export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
+export default function LoginPanel({
+  onAuthenticated,
+  onFocusStateChange,
+}: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
     userName: "",
     userPassword: "",
@@ -143,11 +148,12 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
           size="large"
           variant="outlined"
           autoComplete="username"
-          autoFocus
           placeholder="请输入用户名"
           value={values.userName}
           aria-invalid={Boolean(errors.userName) || undefined}
           aria-describedby={errors.userName ? "login-username-error" : undefined}
+          onFocus={() => onFocusStateChange("userName")}
+          onBlur={() => onFocusStateChange("idle")}
           onChange={(event) => {
             setValues((current) => ({ ...current, userName: event.target.value }));
             if (errors.userName) {
@@ -178,6 +184,8 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
           value={values.userPassword}
           aria-invalid={Boolean(errors.userPassword) || undefined}
           aria-describedby={errors.userPassword ? "login-password-error" : undefined}
+          onFocus={() => onFocusStateChange("userPassword")}
+          onBlur={() => onFocusStateChange("idle")}
           onChange={(event) => {
             setValues((current) => ({ ...current, userPassword: event.target.value }));
             if (errors.userPassword) {
