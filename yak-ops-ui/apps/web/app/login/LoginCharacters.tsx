@@ -7,21 +7,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-type OrangeExpression = "happy" | "curious" | "worried" | "blink";
-type OrangeBaseExpression = Exclude<OrangeExpression, "blink">;
-
-function resolveOrangeExpression(
-  x: number,
-  y: number,
-  current: OrangeBaseExpression,
-): OrangeBaseExpression {
-  if (current === "worried" && y > 0.32) return "worried";
-  if (current === "curious" && Math.abs(x) > 0.58 && y < 0.28) return "curious";
-  if (y > 0.48) return "worried";
-  if (Math.abs(x) > 0.72 && y < 0.18) return "curious";
-  return "happy";
-}
-
 function svgPoint(value: number) {
   return Number(value.toFixed(2));
 }
@@ -269,29 +254,12 @@ function OrangeCharacter() {
                     d="M210 489H251C249 507 241 516 230.5 516C220 516 212 507 210 489Z"
                     fill="#171717"
                   />
-                  <ellipse
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--curious"
+                  <circle
+                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
                     cx="231"
-                    cy="495"
-                    rx="5.8"
-                    ry="4.8"
+                    cy="496"
+                    r="6"
                     fill="#171717"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--worried"
-                    d="M211 505Q231 486 251 505"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--blink"
-                    d="M214 493Q231 504 248 493"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
@@ -331,9 +299,7 @@ export default function LoginCharacters({
   const focusStateRef = useRef(focusState);
   const resultStateRef = useRef(resultState);
   const passwordVisibleRef = useRef(passwordVisible);
-  const orangeBaseExpressionRef = useRef<OrangeBaseExpression>("happy");
-  const orangeBlinkingRef = useRef(false);
-  const [orangeExpression, setOrangeExpression] = useState<OrangeExpression>("happy");
+  const [orangeBlinking, setOrangeBlinking] = useState(false);
 
   useEffect(() => {
     focusStateRef.current = focusState;
@@ -349,19 +315,15 @@ export default function LoginCharacters({
 
   useEffect(() => {
     if (focusState !== "idle" || resultState !== "idle") {
-      orangeBlinkingRef.current = false;
-      orangeBaseExpressionRef.current = "happy";
-      setOrangeExpression("happy");
+      setOrangeBlinking(false);
       return;
     }
 
     let blinkEndTimer = 0;
     const blinkTimer = window.setInterval(() => {
-      orangeBlinkingRef.current = true;
-      setOrangeExpression("blink");
+      setOrangeBlinking(true);
       blinkEndTimer = window.setTimeout(() => {
-        orangeBlinkingRef.current = false;
-        setOrangeExpression(orangeBaseExpressionRef.current);
+        setOrangeBlinking(false);
       }, 180);
     }, 4600);
 
@@ -475,18 +437,6 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 6}px`);
       scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 3}px`);
 
-      if (activeFocus === "idle" && activeResult === "idle" && !orangeBlinkingRef.current) {
-        const nextExpression = resolveOrangeExpression(
-          orangeX,
-          orangeY,
-          orangeBaseExpressionRef.current,
-        );
-        if (nextExpression !== orangeBaseExpressionRef.current) {
-          orangeBaseExpressionRef.current = nextExpression;
-          setOrangeExpression(nextExpression);
-        }
-      }
-
       yellowBodyPath.setAttribute("d", buildYellowBodyPath(yellowBodyX, yellowBodyY));
       scene.style.setProperty("--yak-yellow-face-x", `${yellowFaceX * 10}px`);
       scene.style.setProperty("--yak-yellow-face-y", `${yellowFaceY * 4}px`);
@@ -524,8 +474,8 @@ export default function LoginCharacters({
         ? "is-login-failure"
         : "";
   const orangeExpressionClass =
-    focusState === "idle" && resultState === "idle"
-      ? `is-orange-${orangeExpression}`
+    focusState === "idle" && resultState === "idle" && orangeBlinking
+      ? "is-orange-blink"
       : "is-orange-happy";
 
   return (
