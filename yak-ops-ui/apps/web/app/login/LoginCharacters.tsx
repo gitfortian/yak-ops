@@ -1,19 +1,43 @@
+import { useEffect, useRef } from "react";
+
+import "./login-characters.css";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function PurpleCharacter() {
   return (
-    <g data-character="purple">
-      <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
-      <g>
-        <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
-        <circle cx="269" cy="142" r="3.5" fill="#171717" />
-        <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
-        <circle cx="337" cy="142" r="3.5" fill="#171717" />
-        <path
-          d="M292 172Q303 177 314 172"
-          fill="none"
-          stroke="#171717"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
+    <g data-character="purple" className="yak-login-character yak-login-character--purple">
+      <g className="yak-login-character--purple__breathe">
+        <g className="yak-login-character--purple__body">
+          <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
+          <g className="yak-login-character--purple__face">
+            <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
+            <circle
+              className="yak-login-character--purple__pupil"
+              cx="269"
+              cy="142"
+              r="3.5"
+              fill="#171717"
+            />
+            <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
+            <circle
+              className="yak-login-character--purple__pupil"
+              cx="337"
+              cy="142"
+              r="3.5"
+              fill="#171717"
+            />
+            <path
+              d="M292 172Q303 177 314 172"
+              fill="none"
+              stroke="#171717"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </g>
+        </g>
       </g>
     </g>
   );
@@ -66,9 +90,53 @@ function OrangeCharacter() {
 }
 
 export default function LoginCharacters() {
+  const sceneRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let frame = 0;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const rect = scene.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      targetX = clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width / 2), -1, 1);
+      targetY = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2), -1, 1);
+    };
+
+    const animate = () => {
+      currentX += (targetX - currentX) * 0.075;
+      currentY += (targetY - currentY) * 0.075;
+
+      scene.style.setProperty("--yak-purple-lean", `${currentX * -8}deg`);
+      scene.style.setProperty("--yak-purple-stretch", String(1 - currentY * 0.04));
+      scene.style.setProperty("--yak-purple-face-x", `${currentX * 10}px`);
+      scene.style.setProperty("--yak-purple-face-y", `${currentY * 5}px`);
+      scene.style.setProperty("--yak-purple-pupil-x", `${currentX * 4}px`);
+      scene.style.setProperty("--yak-purple-pupil-y", `${currentY * 2.5}px`);
+
+      frame = window.requestAnimationFrame(animate);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    frame = window.requestAnimationFrame(animate);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
     <div
-      className="flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]"
+      ref={sceneRef}
+      className="yak-login-characters flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]"
       aria-hidden="true"
     >
       <svg
