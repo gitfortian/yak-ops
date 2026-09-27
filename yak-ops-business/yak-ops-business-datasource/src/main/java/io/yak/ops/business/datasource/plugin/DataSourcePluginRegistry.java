@@ -148,11 +148,9 @@ public class DataSourcePluginRegistry {
             DataSourceCatalog catalog = plugin.createCatalog(connection, Math.max(1, timeoutSeconds));
             return action.apply(catalog);
         } catch (DataSourcePluginException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
         }
     }
 
