@@ -139,40 +139,20 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
   return { schemas, tables, loading };
 }
 
-interface CatalogSectionProps {
+interface DataSourceEndpointCardProps {
   title: string;
   dataSources: DataSourceRecord[];
   dataSourceId: string;
-  database: string;
-  schema: string;
-  table: string;
-  catalog: CatalogOptions;
   onDataSourceChange: (value: string) => void;
-  onSchemaChange: (value: string) => void;
-  onTableChange: (table: DataSourceCatalogTable) => void;
 }
 
-function CatalogSection({
+function DataSourceEndpointCard({
   title,
   dataSources,
   dataSourceId,
-  database,
-  schema,
-  table,
-  catalog,
   onDataSourceChange,
-  onSchemaChange,
-  onTableChange,
-}: CatalogSectionProps) {
-  const tableValue = selectedTableKey(catalog.tables, database, schema, table);
+}: DataSourceEndpointCardProps) {
   const selectedDataSource = dataSources.find((item) => item.id === dataSourceId);
-  const scopeText = [
-    selectedDataSource?.dbType,
-    selectedDataSource?.database,
-    selectedDataSource?.schema,
-  ]
-    .filter(Boolean)
-    .join(" · ");
   const dataSourceItems = useMemo(
     () =>
       Object.fromEntries(
@@ -180,18 +160,20 @@ function CatalogSection({
       ),
     [dataSources],
   );
-  const tableItems = useMemo(
-    () => Object.fromEntries(catalog.tables.map((item) => [tableKey(item), tableLabel(item)])),
-    [catalog.tables],
-  );
+  const scopeText = [selectedDataSource?.database, selectedDataSource?.schema]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white">
-      <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-        {title}
-      </h2>
-      <div className="space-y-3 p-4">
-        <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="text-sm font-semibold text-[#344054]">{title}</div>
+      <div className="mt-4 space-y-3">
+        <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
+          <FieldLabel>类型</FieldLabel>
+          <div className="text-[13px] text-[#344054]">{selectedDataSource?.dbType || "-"}</div>
+        </Field>
+
+        <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-start !gap-3">
           <FieldLabel required className="pt-1.5">
             数据源
           </FieldLabel>
@@ -221,8 +203,50 @@ function CatalogSection({
             ) : null}
           </div>
         </Field>
+      </div>
+    </div>
+  );
+}
 
-        {!selectedDataSource?.schema && catalog.schemas.length > 0 ? (
+interface TableSectionProps {
+  title: string;
+  dataSourceId: string;
+  boundSchema?: string;
+  database: string;
+  schema: string;
+  table: string;
+  catalog: CatalogOptions;
+  onSchemaChange: (value: string) => void;
+  onTableChange: (table: DataSourceCatalogTable) => void;
+}
+
+function TableSection({
+  title,
+  dataSourceId,
+  boundSchema,
+  database,
+  schema,
+  table,
+  catalog,
+  onSchemaChange,
+  onTableChange,
+}: TableSectionProps) {
+  const tableValue = selectedTableKey(catalog.tables, database, schema, table);
+  const tableItems = useMemo(
+    () => Object.fromEntries(catalog.tables.map((item) => [tableKey(item), tableLabel(item)])),
+    [catalog.tables],
+  );
+  const requiresSchema = !boundSchema && catalog.schemas.length > 0;
+  const tableDisabled =
+    !dataSourceId || catalog.loading || (requiresSchema && !schema);
+
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white">
+      <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+        {title}
+      </h2>
+      <div className="space-y-3 p-4">
+        {requiresSchema ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel>Schema</FieldLabel>
             <Select
@@ -250,7 +274,7 @@ function CatalogSection({
           <Select
             size="small"
             items={tableItems}
-            disabled={!dataSourceId || catalog.loading}
+            disabled={tableDisabled}
             value={tableValue}
             onValueChange={(value) => {
               const selected = catalog.tables.find((item) => tableKey(item) === value);
@@ -258,7 +282,17 @@ function CatalogSection({
             }}
           >
             <SelectTrigger variant="outlined">
-              <SelectValue placeholder={catalog.loading ? "正在读取 Catalog..." : "请选择表"} />
+              <SelectValue
+                placeholder={
+                  !dataSourceId
+                    ? "请先选择数据源"
+                    : requiresSchema && !schema
+                      ? "请先选择 Schema"
+                      : catalog.loading
+                        ? "正在读取 Catalog..."
+                        : "请选择表"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {catalog.tables.map((item) => (
@@ -313,6 +347,13 @@ export function OfflineSyncEditorPage() {
     form.targetDataSourceId,
     form.targetDatabase,
     form.targetSchema,
+  );
+
+  const selectedSourceDataSource = dataSources.find(
+    (item) => item.id === form.sourceDataSourceId,
+  );
+  const selectedTargetDataSource = dataSources.find(
+    (item) => item.id === form.targetDataSourceId,
   );
 
   useEffect(() => {
@@ -571,25 +612,53 @@ export function OfflineSyncEditorPage() {
             </div>
           </section>
 
+          <section id="datasource" className="rounded-lg border border-[#e6e8eb] bg-white">
+            <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+              数据源
+            </h2>
+            <div className="grid grid-cols-2 gap-3 p-4 max-lg:grid-cols-1">
+              <DataSourceEndpointCard
+                title="来源"
+                dataSources={dataSources}
+                dataSourceId={form.sourceDataSourceId}
+                onDataSourceChange={(value) => {
+                  const selected = dataSources.find((item) => item.id === value);
+                  setForm((current) => ({
+                    ...current,
+                    sourceDataSourceId: value,
+                    sourceDatabase: selected?.database || "",
+                    sourceSchema: selected?.schema || "",
+                    sourceTable: "",
+                  }));
+                }}
+              />
+              <DataSourceEndpointCard
+                title="去向"
+                dataSources={dataSources}
+                dataSourceId={form.targetDataSourceId}
+                onDataSourceChange={(value) => {
+                  const selected = dataSources.find((item) => item.id === value);
+                  setForm((current) => ({
+                    ...current,
+                    targetDataSourceId: value,
+                    targetDatabase: selected?.database || "",
+                    targetSchema: selected?.schema || "",
+                    targetTable: "",
+                  }));
+                }}
+              />
+            </div>
+          </section>
+
           <div id="source">
-            <CatalogSection
+            <TableSection
               title="数据来源"
-              dataSources={dataSources}
               dataSourceId={form.sourceDataSourceId}
+              boundSchema={selectedSourceDataSource?.schema}
               database={form.sourceDatabase}
               schema={form.sourceSchema}
               table={form.sourceTable}
               catalog={sourceCatalog}
-              onDataSourceChange={(value) => {
-                const selected = dataSources.find((item) => item.id === value);
-                setForm((current) => ({
-                  ...current,
-                  sourceDataSourceId: value,
-                  sourceDatabase: selected?.database || "",
-                  sourceSchema: selected?.schema || "",
-                  sourceTable: "",
-                }));
-              }}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, sourceSchema: value, sourceTable: "" }))
               }
@@ -605,24 +674,14 @@ export function OfflineSyncEditorPage() {
           </div>
 
           <div id="target">
-            <CatalogSection
+            <TableSection
               title="数据去向"
-              dataSources={dataSources}
               dataSourceId={form.targetDataSourceId}
+              boundSchema={selectedTargetDataSource?.schema}
               database={form.targetDatabase}
               schema={form.targetSchema}
               table={form.targetTable}
               catalog={targetCatalog}
-              onDataSourceChange={(value) => {
-                const selected = dataSources.find((item) => item.id === value);
-                setForm((current) => ({
-                  ...current,
-                  targetDataSourceId: value,
-                  targetDatabase: selected?.database || "",
-                  targetSchema: selected?.schema || "",
-                  targetTable: "",
-                }));
-              }}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
               }
@@ -712,6 +771,7 @@ export function OfflineSyncEditorPage() {
         <aside className="sticky top-4 hidden h-fit w-40 shrink-0 space-y-1 self-start lg:block">
           {[
             ["basic", "基本信息"],
+            ["datasource", "数据源"],
             ["source", "数据来源"],
             ["target", "数据去向"],
             ["mapping", "字段映射"],

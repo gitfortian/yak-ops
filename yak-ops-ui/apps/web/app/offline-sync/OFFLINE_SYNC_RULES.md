@@ -12,6 +12,9 @@ The offline product configures task definitions and exposes manual execution ins
 Must:
 
 - Reuse saved Datasource resources; never ask for database credentials.
+- Keep resource selection and table configuration as separate editor layers: the `数据源` section owns source/target Datasource selectors; `数据来源` and `数据去向` own only Schema (when needed) and table selection.
+- Render source and target Datasource cards side by side on wide screens and stack them on smaller screens.
+- Do not repeat Datasource Select inside `数据来源` or `数据去向`.
 - Treat the saved Datasource connection as the database scope authority. The editor must not expose a second Database selector that can override a bound Datasource database.
 - Use Datasource Catalog API for Schema / table discovery inside that Datasource scope.
 - Show the bound database / schema as read-only scope context under the Datasource Select.
