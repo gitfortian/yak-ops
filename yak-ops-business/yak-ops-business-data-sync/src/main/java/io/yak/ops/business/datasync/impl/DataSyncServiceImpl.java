@@ -146,8 +146,8 @@ public class DataSyncServiceImpl implements DataSyncService {
         result.setMappings(sourceColumns.stream()
                 .map(source -> toFieldMapping(source, targetByName.get(lower(source.getName()))))
                 .toList());
-        result.setCompatible(
-                !sourceColumns.isEmpty() && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
+        result.setCompatible(!sourceColumns.isEmpty()
+                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
         return result;
     }
 
@@ -234,8 +234,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         return path;
     }
 
-    private DataSyncFieldMappingVO toFieldMapping(
-            DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
+    private DataSyncFieldMappingVO toFieldMapping(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
         DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
         mapping.setSourceName(source.getName());
         mapping.setSourceType(source.getTypeName());
@@ -273,14 +272,10 @@ public class DataSyncServiceImpl implements DataSyncService {
             return false;
         }
         if (isDecimal(sourceType) && isDecimal(targetType)) {
-            if (positive(source.getSize())
-                    && positive(target.getSize())
-                    && source.getSize() > target.getSize()) {
+            if (positive(source.getSize()) && positive(target.getSize()) && source.getSize() > target.getSize()) {
                 return false;
             }
-            if (source.getScale() != null
-                    && target.getScale() != null
-                    && source.getScale() > target.getScale()) {
+            if (source.getScale() != null && target.getScale() != null && source.getScale() > target.getScale()) {
                 return false;
             }
         }
@@ -315,10 +310,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private boolean isBinary(int type) {
-        return type == Types.BINARY
-                || type == Types.VARBINARY
-                || type == Types.LONGVARBINARY
-                || type == Types.BLOB;
+        return type == Types.BINARY || type == Types.VARBINARY || type == Types.LONGVARBINARY || type == Types.BLOB;
     }
 
     private boolean isDate(int type) {
