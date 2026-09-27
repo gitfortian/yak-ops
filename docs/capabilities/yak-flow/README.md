@@ -1,6 +1,6 @@
 # YakFlow Capability
 
-Status: Phase 2 — Local Runtime
+Status: Phase 3 — JDBC Batch Connector
 
 ## Goal
 
@@ -81,11 +81,37 @@ The runtime supports:
 
 The barrier establishes ordering only. Phase 2 does not claim exactly-once delivery and does not persist checkpoints across process restart.
 
+## Phase 3 — JDBC Batch Connector
+
+Phase 3 adds the first real database path:
+
+```text
+MySQL bounded table read
+        ↓
+      YakRow
+        ↓
+   Local Runtime
+        ↓
+JDBC batch INSERT
+        ↓
+MySQL / PostgreSQL / Oracle
+```
+
+The connector:
+
+- consumes the existing normalized `DataSourceConnection` contract instead of defining duplicate host/port/user/password configuration.
+- reuses Datasource JDBC runtime behavior for Driver loading, MySQL Driver isolation and SSH tunneling.
+- maps Datasource Catalog columns to `YakTableSchema`.
+- reads a table as a bounded Source with forward-only JDBC cursor batches.
+- writes `INSERT` rows with JDBC batch commit.
+- provides MySQL, PostgreSQL and Oracle identifier/table dialects.
+- requires the target table to exist.
+
+The current Local Runtime is still single Source Task / single Sink Task, so the first JDBC Source uses one bounded table split. Parallel table chunking belongs to a later runtime/connector phase where it produces real execution concurrency.
+
 ## Explicit Non-Goals
 
 The current phase does not implement:
-
-- JDBC Source/Sink.
 - Debezium or MySQL CDC.
 - Transform.
 - distributed execution.
@@ -98,11 +124,11 @@ Those capabilities must build on this contract rather than changing batch and CD
 ## Dependency Boundary
 
 ```text
-yak-flow-runtime ------+
-                        |
-future JDBC connector --+--> yak-flow-api
-                        |
-future CDC connector ---+
+yak-flow-runtime --------+
+                          |
+jdbc batch connector -----+--> yak-flow-api
+                          |
+future CDC connector -----+
 ```
 
 `yak-flow-api` itself stays implementation independent and JDK-only.

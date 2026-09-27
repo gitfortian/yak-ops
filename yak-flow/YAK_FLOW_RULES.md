@@ -86,6 +86,29 @@ Must Not:
 
 Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
 
+## JDBC Batch Connector
+
+The current bounded JDBC connector owns synchronization behavior, not datasource configuration ownership.
+
+Must:
+- Consume normalized `DataSourceConnection` and `DataSourceTablePath` from the Datasource plugin API.
+- Reuse Datasource JDBC runtime behavior for Driver loading and SSH tunneling.
+- Keep table/column identifiers quoted through a database dialect; never concatenate raw user SQL.
+- Read only declared schema columns and preserve column order into `YakRow`.
+- Use bounded cursor batches instead of loading an entire table into memory.
+- Commit Sink writes in explicit JDBC batches.
+- Roll back uncommitted Sink data on write/flush failure.
+- Keep current acceptance coverage on MySQL Source and MySQL/PostgreSQL/Oracle Sink.
+
+Must Not:
+- Duplicate datasource host/port/username/password configuration models inside YakFlow.
+- Add custom SQL, Transform or arbitrary SQL execution in Phase 3.
+- Auto-create target tables in Phase 3.
+- Claim snapshot restart consistency from the current row-count checkpoint state.
+- Add synthetic split parallelism while Local Runtime still has one Source Task.
+
+Target tables must exist before execution. Auto-create DDL and schema evolution require their own explicit design.
+
 ## Checkpoint Boundary
 
 `CheckpointState` is an opaque connector/runtime contract.
@@ -97,11 +120,11 @@ The current phase still does not define durable checkpoint serialization, restar
 ## Dependency Direction
 
 ```text
-yak-flow-runtime --+
-                   |
-jdbc connector ----+--> yak-flow-api
-                   |
-cdc connector -----+
+yak-flow-runtime --------+
+                         |
+jdbc batch connector -----+--> yak-flow-api
+                         |
+cdc connector ------------+
 ```
 
 `yak-flow-api` depends only on the JDK.
