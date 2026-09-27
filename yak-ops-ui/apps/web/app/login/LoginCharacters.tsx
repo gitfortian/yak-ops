@@ -299,7 +299,6 @@ export default function LoginCharacters({
   const focusStateRef = useRef(focusState);
   const resultStateRef = useRef(resultState);
   const passwordVisibleRef = useRef(passwordVisible);
-  const orangeBlinkingRef = useRef(false);
   const [orangeBlinking, setOrangeBlinking] = useState(false);
 
   useEffect(() => {
@@ -316,17 +315,14 @@ export default function LoginCharacters({
 
   useEffect(() => {
     if (focusState !== "idle" || resultState !== "idle") {
-      orangeBlinkingRef.current = false;
       setOrangeBlinking(false);
       return;
     }
 
     let blinkEndTimer = 0;
     const blinkTimer = window.setInterval(() => {
-      orangeBlinkingRef.current = true;
       setOrangeBlinking(true);
       blinkEndTimer = window.setTimeout(() => {
-        orangeBlinkingRef.current = false;
         setOrangeBlinking(false);
       }, 180);
     }, 4600);
