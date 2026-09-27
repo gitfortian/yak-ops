@@ -54,7 +54,7 @@
             </includes>
         </fileSet>
         <fileSet>
-            <directory>${project.build.directory}/jdbc-drivers-builtin</directory>
+            <directory>src/main/jdbc-drivers-builtin</directory>
             <outputDirectory>jdbc-drivers-builtin</outputDirectory>
             <includes>
                 <include>**/*</include>
