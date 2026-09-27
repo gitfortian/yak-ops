@@ -40,17 +40,18 @@ final class MySqlDebeziumEngineConfig {
         properties.setProperty("topic.prefix", topicPrefix(config.name()));
         properties.setProperty(
                 "table.include.list",
-                Pattern.quote(config.databaseName()) + "\\." + Pattern.quote(config.table().table()));
+                Pattern.quote(config.databaseName()) + "\\."
+                        + Pattern.quote(config.table().table()));
         properties.setProperty("snapshot.mode", "initial");
         properties.setProperty("include.schema.changes", "false");
         properties.setProperty("tombstones.on.delete", "false");
         properties.setProperty("time.precision.mode", "connect");
         properties.setProperty("decimal.handling.mode", "precise");
         properties.setProperty("heartbeat.interval.ms", "10000");
+        properties.setProperty("schema.history.internal", "io.debezium.storage.file.history.FileSchemaHistory");
         properties.setProperty(
-                "schema.history.internal", "io.debezium.storage.file.history.FileSchemaHistory");
-        properties.setProperty(
-                "schema.history.internal.file.filename", schemaHistory.toAbsolutePath().toString());
+                "schema.history.internal.file.filename",
+                schemaHistory.toAbsolutePath().toString());
         properties.setProperty("schema.history.internal.store.only.captured.tables.ddl", "true");
         return properties;
     }
