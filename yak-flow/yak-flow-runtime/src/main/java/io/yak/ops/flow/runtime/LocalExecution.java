@@ -47,6 +47,8 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final AtomicBoolean cancellationRequested = new AtomicBoolean();
     private final AtomicBoolean automaticCheckpointPending = new AtomicBoolean();
     private final AtomicLong checkpointSequence = new AtomicLong();
+    private final AtomicLong readRows = new AtomicLong();
+    private final AtomicLong writeRows = new AtomicLong();
     private final BlockingQueue<CheckpointRequest> checkpointRequests = new LinkedBlockingQueue<>();
     private final BlockingQueue<LocalCheckpoint> completedCheckpoints = new LinkedBlockingQueue<>();
     private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
@@ -109,6 +111,15 @@ public final class LocalExecution<SplitT extends SourceSplit> {
      */
     public Optional<LocalCheckpoint> latestCheckpoint() {
         return Optional.ofNullable(latestCheckpoint);
+    }
+
+    /**
+     * 返回当前执行指标快照。
+     *
+     * @return 当前累计读取和写入行数
+     */
+    public ExecutionMetrics metrics() {
+        return new ExecutionMetrics(readRows.get(), writeRows.get());
     }
 
     /**
@@ -217,6 +228,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                 List<YakRow> rows = reader.poll();
                 if (!rows.isEmpty()) {
                     channel.put(new RowBatchMessage(rows));
+                    readRows.addAndGet(rows.size());
                 }
 
                 processCheckpointRequests(enumerator, reader, split);
@@ -285,6 +297,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                 ChannelMessage message = channel.take();
                 if (message instanceof RowBatchMessage rowBatch) {
                     writer.write(rowBatch.rows());
+                    writeRows.addAndGet(rowBatch.rows().size());
                     continue;
                 }
                 if (message instanceof CheckpointBarrierMessage barrier) {

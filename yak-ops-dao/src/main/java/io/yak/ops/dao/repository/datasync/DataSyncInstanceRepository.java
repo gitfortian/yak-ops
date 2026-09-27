@@ -21,6 +21,8 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
 
     boolean existsActiveByTask(String workspaceId, String taskId);
 
+    boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows);
+
     boolean transitionStatus(
             String workspaceId,
             String id,

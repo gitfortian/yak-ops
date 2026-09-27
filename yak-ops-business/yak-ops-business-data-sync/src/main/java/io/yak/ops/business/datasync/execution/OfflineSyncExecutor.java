@@ -18,6 +18,7 @@ import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
+import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalRuntime;
@@ -42,6 +43,7 @@ public class OfflineSyncExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(OfflineSyncExecutor.class);
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
+    private static final long METRICS_FLUSH_INTERVAL_MILLIS = 500L;
 
     @Resource
     private DataSyncInstanceRepository instanceRepository;
@@ -133,7 +135,12 @@ public class OfflineSyncExecutor {
                     snapshot.getTaskId(),
                     instanceId);
 
+            while (execution.status() == ExecutionStatus.RUNNING) {
+                persistMetrics(workspaceId, instanceId, execution.metrics());
+                Thread.sleep(METRICS_FLUSH_INTERVAL_MILLIS);
+            }
             ExecutionStatus status = execution.await();
+            persistMetrics(workspaceId, instanceId, execution.metrics());
             if (status == ExecutionStatus.SUCCEEDED) {
                 transitionTerminal(workspaceId, instanceId, DataSyncInstanceStatus.SUCCEEDED, null, null);
                 LOG.info(
@@ -176,6 +183,10 @@ public class OfflineSyncExecutor {
             }
             WorkspaceContext.clear();
         }
+    }
+
+    private void persistMetrics(String workspaceId, String instanceId, ExecutionMetrics metrics) {
+        instanceRepository.updateMetrics(workspaceId, instanceId, metrics.readRows(), metrics.writeRows());
     }
 
     private void failPendingOrRunning(String workspaceId, String instanceId, Throwable throwable) {
