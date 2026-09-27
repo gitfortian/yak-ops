@@ -15,49 +15,49 @@ function PurpleCharacter() {
           <g className="yak-login-character--purple__result">
             <g className="yak-login-character--purple__focus">
               <g className="yak-login-character--purple__body">
-                <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
+                <path d="M212 550V102H404V550Z" fill="#6128F5" />
                 <g className="yak-login-character--purple__face">
                   <g className="yak-login-character--purple__result-eyes">
                     <g className="yak-login-character--purple__focus-eyes">
                       <g className="yak-login-character--purple__eyes">
-                        <circle cx="269" cy="142" r="8.5" fill="#FFFFFF" />
+                        <circle cx="274" cy="145" r="5.5" fill="#FFFFFF" />
                         <circle
                           className="yak-login-character--purple__pupil"
-                          cx="269"
-                          cy="142"
-                          r="3.5"
+                          cx="274"
+                          cy="145"
+                          r="2.3"
                           fill="#171717"
                         />
-                        <circle cx="337" cy="142" r="8.5" fill="#FFFFFF" />
+                        <circle cx="335" cy="145" r="5.5" fill="#FFFFFF" />
                         <circle
                           className="yak-login-character--purple__pupil"
-                          cx="337"
-                          cy="142"
-                          r="3.5"
+                          cx="335"
+                          cy="145"
+                          r="2.3"
                           fill="#171717"
                         />
                       </g>
                     </g>
                   </g>
-                  <path
+                  <ellipse
                     className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d="M292 172Q303 177 314 172"
+                    cx="304.5"
+                    cy="174"
+                    rx="7.5"
+                    ry="4.2"
+                    fill="#171717"
+                  />
+                  <path
+                    className="yak-login-character__mouth yak-login-character__mouth--success"
+                    d="M292 169Q304.5 187 317 169"
                     fill="none"
                     stroke="#171717"
                     strokeWidth="3"
                     strokeLinecap="round"
                   />
                   <path
-                    className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M288 168Q303 190 318 168"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
-                  <path
                     className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M290 181Q303 166 316 181"
+                    d="M292 181Q304.5 168 317 181"
                     fill="none"
                     stroke="#171717"
                     strokeWidth="3"
@@ -81,25 +81,25 @@ function BlackCharacter() {
           <g className="yak-login-character--black__result">
             <g className="yak-login-character--black__focus">
               <g className="yak-login-character--black__body">
-                <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
+                <path d="M342 550V242H464V550Z" fill="#191A20" />
                 <g className="yak-login-character--black__face">
                   <g className="yak-login-character--black__result-eyes">
                     <g className="yak-login-character--black__focus-eyes">
                       <g className="yak-login-character--black__eyes">
-                        <circle cx="378" cy="276" r="7.5" fill="#FFFFFF" />
+                        <circle cx="379" cy="278" r="8.5" fill="#FFFFFF" />
                         <circle
                           className="yak-login-character--black__pupil"
-                          cx="378"
-                          cy="276"
-                          r="3.2"
+                          cx="379"
+                          cy="278"
+                          r="3.4"
                           fill="#171717"
                         />
-                        <circle cx="426" cy="276" r="7.5" fill="#FFFFFF" />
+                        <circle cx="428" cy="278" r="8.5" fill="#FFFFFF" />
                         <circle
                           className="yak-login-character--black__pupil"
-                          cx="426"
-                          cy="276"
-                          r="3.2"
+                          cx="428"
+                          cy="278"
+                          r="3.4"
                           fill="#171717"
                         />
                       </g>
@@ -107,7 +107,7 @@ function BlackCharacter() {
                   </g>
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M389 307Q402 323 415 307"
+                    d="M391 309Q403.5 324 416 309"
                     fill="none"
                     stroke="#FFFFFF"
                     strokeWidth="3"
@@ -115,7 +115,7 @@ function BlackCharacter() {
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M390 319Q402 306 414 319"
+                    d="M391 320Q403.5 307 416 320"
                     fill="none"
                     stroke="#FFFFFF"
                     strokeWidth="3"
@@ -140,40 +140,39 @@ function YellowCharacter() {
             <g className="yak-login-character--yellow__focus">
               <g className="yak-login-character--yellow__body">
                 <path
-                  d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
+                  d="M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404V550Z"
                   fill="#F3D30B"
                 />
                 <g className="yak-login-character--yellow__face">
                   <g className="yak-login-character--yellow__result-eyes">
                     <g className="yak-login-character--yellow__focus-eyes">
                       <g className="yak-login-character--yellow__eyes">
-                        <circle cx="492" cy="373" r="4.2" fill="#171717" />
-                        <circle cx="535" cy="373" r="4.2" fill="#171717" />
+                        <circle cx="532" cy="376" r="5.4" fill="#171717" />
                       </g>
                     </g>
                   </g>
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d="M488 410H539"
+                    d="M563 411H625"
                     fill="none"
                     stroke="#171717"
-                    strokeWidth="3"
+                    strokeWidth="4"
                     strokeLinecap="round"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M491 405Q514 428 537 405"
+                    d="M562 406Q592 424 625 408"
                     fill="none"
                     stroke="#171717"
-                    strokeWidth="3.5"
+                    strokeWidth="4"
                     strokeLinecap="round"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M493 419Q514 399 535 419"
+                    d="M562 417Q592 401 625 416"
                     fill="none"
                     stroke="#171717"
-                    strokeWidth="3"
+                    strokeWidth="4"
                     strokeLinecap="round"
                   />
                 </g>
@@ -194,38 +193,32 @@ function OrangeCharacter() {
           <g className="yak-login-character--orange__result">
             <g className="yak-login-character--orange__focus">
               <g className="yak-login-character--orange__body">
-                <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
+                <path d="M65 550C65 458 142 392 244 392C346 392 415 458 415 550Z" fill="#FF7D2A" />
                 <g className="yak-login-character--orange__face">
                   <g className="yak-login-character--orange__result-eyes">
                     <g className="yak-login-character--orange__focus-eyes">
                       <g className="yak-login-character--orange__eyes">
-                        <circle cx="192" cy="451" r="4.2" fill="#171717" />
-                        <circle cx="252" cy="451" r="4.2" fill="#171717" />
+                        <circle cx="190" cy="456" r="6.6" fill="#171717" />
+                        <circle cx="270" cy="456" r="6.6" fill="#171717" />
                       </g>
                     </g>
                   </g>
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d="M211 483Q222 488 233 483"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="3"
-                    strokeLinecap="round"
+                    d="M210 483H251C249 501 241 510 230.5 510C220 510 212 501 210 483Z"
+                    fill="#171717"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M206 479Q222 500 238 479"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
+                    d="M204 479H257C254 503 244 515 230.5 515C217 515 207 503 204 479Z"
+                    fill="#171717"
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M208 493Q222 478 236 493"
+                    d="M208 501Q230.5 480 253 501"
                     fill="none"
                     stroke="#171717"
-                    strokeWidth="3"
+                    strokeWidth="4"
                     strokeLinecap="round"
                   />
                 </g>
@@ -426,8 +419,8 @@ export default function LoginCharacters({
         xmlns="http://www.w3.org/2000/svg"
       >
         <PurpleCharacter />
-        <YellowCharacter />
         <BlackCharacter />
+        <YellowCharacter />
         <OrangeCharacter />
       </svg>
     </div>
