@@ -251,7 +251,7 @@ function OrangeCharacter() {
                   </g>
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                    d="M210 489H251C249 507 241 516 230.5 516C220 516 212 507 210 489Z"
+                    d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
                     fill="#171717"
                   />
                   <circle
@@ -271,7 +271,7 @@ function OrangeCharacter() {
                   />
                   <path
                     className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M204 485H257C254 509 244 521 230.5 521C217 521 207 509 204 485Z"
+                    d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
                     fill="#171717"
                   />
                   <path
