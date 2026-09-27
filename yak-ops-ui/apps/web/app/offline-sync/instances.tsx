@@ -156,6 +156,20 @@ export function OfflineSyncInstances({ taskId }: OfflineSyncInstancesProps) {
       render: (_value, record) => (record.triggerType === "MANUAL" ? "手动" : record.triggerType),
     },
     {
+      key: "readRows",
+      title: "读取",
+      width: 100,
+      align: "right",
+      render: (_value, record) => (record.readRows ?? 0).toLocaleString(),
+    },
+    {
+      key: "writeRows",
+      title: "写入",
+      width: 100,
+      align: "right",
+      render: (_value, record) => (record.writeRows ?? 0).toLocaleString(),
+    },
+    {
       key: "startTime",
       title: "开始时间",
       width: 180,
@@ -252,7 +266,7 @@ export function OfflineSyncInstances({ taskId }: OfflineSyncInstancesProps) {
           loading={loading}
           bordered
           size="medium"
-          scroll={{ x: 1040 }}
+          scroll={{ x: 1240 }}
           emptyText={taskId ? "这个任务还没有运行实例" : "还没有同步实例"}
           pagination={
             total > 0
