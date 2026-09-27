@@ -41,8 +41,11 @@ function Face({
   leftEyeX,
   rightEyeX,
   eyeY,
+  eyeRadius,
+  pupilRadius,
   mouthY,
   mouthWidth,
+  neutralMouth = "smile",
   whiteEyes = false,
 }: {
   eyeColor: string;
@@ -50,11 +53,18 @@ function Face({
   leftEyeX: number;
   rightEyeX: number;
   eyeY: number;
+  eyeRadius: number;
+  pupilRadius: number;
   mouthY: number;
   mouthWidth: number;
+  neutralMouth?: "smile" | "line" | "none";
   whiteEyes?: boolean;
 }) {
   const centerX = (leftEyeX + rightEyeX) / 2;
+  const neutralPath =
+    neutralMouth === "line"
+      ? `M ${centerX - mouthWidth / 2} ${mouthY} H ${centerX + mouthWidth / 2}`
+      : `M ${centerX - mouthWidth / 2} ${mouthY} Q ${centerX} ${mouthY + 5} ${centerX + mouthWidth / 2} ${mouthY}`;
 
   return (
     <g className="yak-mascot__face">
@@ -62,22 +72,22 @@ function Face({
         {whiteEyes ? (
           <>
             <g className="yak-mascot__eye">
-              <circle cx={leftEyeX} cy={eyeY} r="12" fill={eyeColor} />
+              <circle cx={leftEyeX} cy={eyeY} r={eyeRadius} fill={eyeColor} />
               <circle
                 className="yak-mascot__pupil"
                 cx={leftEyeX}
                 cy={eyeY}
-                r="4.5"
+                r={pupilRadius}
                 fill={pupilColor}
               />
             </g>
             <g className="yak-mascot__eye">
-              <circle cx={rightEyeX} cy={eyeY} r="12" fill={eyeColor} />
+              <circle cx={rightEyeX} cy={eyeY} r={eyeRadius} fill={eyeColor} />
               <circle
                 className="yak-mascot__pupil"
                 cx={rightEyeX}
                 cy={eyeY}
-                r="4.5"
+                r={pupilRadius}
                 fill={pupilColor}
               />
             </g>
@@ -88,31 +98,33 @@ function Face({
               className="yak-mascot__eye yak-mascot__dot-eye"
               cx={leftEyeX}
               cy={eyeY}
-              r="6"
+              r={eyeRadius}
               fill={pupilColor}
             />
             <circle
               className="yak-mascot__eye yak-mascot__dot-eye"
               cx={rightEyeX}
               cy={eyeY}
-              r="6"
+              r={eyeRadius}
               fill={pupilColor}
             />
           </>
         )}
       </g>
 
-      <path
-        className="yak-mascot__mouth yak-mascot__mouth--neutral"
-        d={`M ${centerX - mouthWidth / 2} ${mouthY} Q ${centerX} ${mouthY + 7} ${centerX + mouthWidth / 2} ${mouthY}`}
-        fill="none"
-        stroke={pupilColor}
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      {neutralMouth !== "none" ? (
+        <path
+          className="yak-mascot__mouth yak-mascot__mouth--neutral"
+          d={neutralPath}
+          fill="none"
+          stroke={pupilColor}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      ) : null}
       <path
         className="yak-mascot__mouth yak-mascot__mouth--smile"
-        d={`M ${centerX - mouthWidth / 2} ${mouthY - 2} Q ${centerX} ${mouthY + 18} ${centerX + mouthWidth / 2} ${mouthY - 2}`}
+        d={`M ${centerX - mouthWidth / 2} ${mouthY - 2} Q ${centerX} ${mouthY + 16} ${centerX + mouthWidth / 2} ${mouthY - 2}`}
         fill="none"
         stroke={pupilColor}
         strokeWidth="3.5"
@@ -139,16 +151,18 @@ function PurpleMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <rect x="218" y="126" width="158" height="404" rx="22" fill="#5B3BFF" />
+                <path d="M212 550V112Q212 102 222 102H394Q404 102 404 112V550Z" fill="#6128F5" />
                 <Face
                   whiteEyes
                   eyeColor="#FFFFFF"
                   pupilColor="#171717"
-                  leftEyeX={267}
-                  rightEyeX={327}
-                  eyeY={186}
-                  mouthY={224}
-                  mouthWidth={30}
+                  leftEyeX={269}
+                  rightEyeX={337}
+                  eyeY={142}
+                  eyeRadius={8.5}
+                  pupilRadius={3.5}
+                  mouthY={172}
+                  mouthWidth={22}
                 />
               </g>
             </g>
@@ -167,16 +181,19 @@ function BlackMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <rect x="362" y="244" width="108" height="286" rx="18" fill="#181A20" />
+                <path d="M342 550V250Q342 242 350 242H456Q464 242 464 250V550Z" fill="#191A20" />
                 <Face
                   whiteEyes
+                  neutralMouth="none"
                   eyeColor="#FFFFFF"
                   pupilColor="#171717"
-                  leftEyeX={393}
-                  rightEyeX={439}
-                  eyeY={293}
-                  mouthY={329}
-                  mouthWidth={26}
+                  leftEyeX={378}
+                  rightEyeX={426}
+                  eyeY={276}
+                  eyeRadius={7.5}
+                  pupilRadius={3.2}
+                  mouthY={308}
+                  mouthWidth={22}
                 />
               </g>
             </g>
@@ -195,18 +212,17 @@ function OrangeMascot() {
           <g className="yak-mascot__action">
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
-                <path
-                  d="M82 530V441C82 345 153 294 238 294C323 294 349 360 349 441V530Z"
-                  fill="#FF8B2B"
-                />
+                <path d="M72 550C72 457 144 388 242 388C340 388 410 457 410 550Z" fill="#FF7D2A" />
                 <Face
                   eyeColor="#171717"
                   pupilColor="#171717"
-                  leftEyeX={173}
-                  rightEyeX={238}
-                  eyeY={406}
-                  mouthY={449}
-                  mouthWidth={34}
+                  leftEyeX={192}
+                  rightEyeX={252}
+                  eyeY={451}
+                  eyeRadius={4.2}
+                  pupilRadius={4.2}
+                  mouthY={483}
+                  mouthWidth={22}
                 />
               </g>
             </g>
@@ -226,17 +242,20 @@ function YellowMascot() {
             <g className="yak-mascot__state">
               <g className="yak-mascot__mouse">
                 <path
-                  d="M416 530V412C416 332 466 291 526 291C586 291 620 347 620 412V530Z"
-                  fill="#FFD33D"
+                  d="M450 550V405C450 345 483 310 525 310C570 310 598 349 598 405V550Z"
+                  fill="#F3D30B"
                 />
                 <Face
+                  neutralMouth="line"
                   eyeColor="#171717"
                   pupilColor="#171717"
-                  leftEyeX={479}
+                  leftEyeX={492}
                   rightEyeX={535}
-                  eyeY={391}
-                  mouthY={430}
-                  mouthWidth={30}
+                  eyeY={373}
+                  eyeRadius={4.2}
+                  pupilRadius={4.2}
+                  mouthY={410}
+                  mouthWidth={52}
                 />
               </g>
             </g>
@@ -327,16 +346,12 @@ export function LoginScene({ action, focusedField }: LoginSceneProps) {
 
   return (
     <div ref={rootRef} className={`yak-login-scene ${focusClass}`} aria-hidden="true">
-      <div className="yak-login-scene__glow" />
-      <div className="yak-login-scene__floor" />
-
       <svg
         className="yak-login-scene__svg"
-        viewBox="0 0 720 620"
+        viewBox="0 0 720 580"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <ellipse cx="353" cy="541" rx="258" ry="24" fill="rgba(37, 40, 50, 0.055)" />
         <PurpleMascot />
         <BlackMascot />
         <OrangeMascot />
