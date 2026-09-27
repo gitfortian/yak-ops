@@ -1,0 +1,65 @@
+.yak-login-characters {
+  --yak-purple-lean: 0deg;
+  --yak-purple-stretch: 1;
+  --yak-purple-face-x: 0px;
+  --yak-purple-face-y: 0px;
+  --yak-purple-pupil-x: 0px;
+  --yak-purple-pupil-y: 0px;
+}
+
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body,
+.yak-login-character--purple__face,
+.yak-login-character--purple__pupil {
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--purple__face,
+.yak-login-character--purple__pupil {
+  transform-origin: center;
+}
+
+.yak-login-character--purple__breathe {
+  animation: yak-purple-breathe 4.4s ease-in-out infinite;
+}
+
+.yak-login-character--purple__body {
+  transform: skewX(var(--yak-purple-lean)) scaleY(var(--yak-purple-stretch));
+}
+
+.yak-login-character--purple__face {
+  transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
+}
+
+.yak-login-character--purple__pupil {
+  transform: translate(var(--yak-purple-pupil-x), var(--yak-purple-pupil-y));
+}
+
+@keyframes yak-purple-breathe {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+
+  50% {
+    transform: scaleY(1.014) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yak-login-character--purple__breathe {
+    animation: none;
+  }
+
+  .yak-login-character--purple__body,
+  .yak-login-character--purple__face,
+  .yak-login-character--purple__pupil {
+    transform: none;
+  }
+}
