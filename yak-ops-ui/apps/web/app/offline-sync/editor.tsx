@@ -86,6 +86,9 @@ const EMPTY_FORM: EditorForm = {
 const tableKey = (table: DataSourceCatalogTable) =>
   [table.database || "", table.schema || "", table.name].join("|");
 
+const tableLabel = (table: DataSourceCatalogTable) =>
+  [table.schema, table.name].filter(Boolean).join(".") || table.name;
+
 const selectedTableKey = (
   tables: DataSourceCatalogTable[],
   database: string,
@@ -170,6 +173,17 @@ function CatalogSection({
   onTableChange,
 }: CatalogSectionProps) {
   const tableValue = selectedTableKey(catalog.tables, database, schema, table);
+  const dataSourceItems = useMemo(
+    () =>
+      Object.fromEntries(
+        dataSources.flatMap((item) => (item.id ? [[item.id, item.name || item.id] as const] : [])),
+      ),
+    [dataSources],
+  );
+  const tableItems = useMemo(
+    () => Object.fromEntries(catalog.tables.map((item) => [tableKey(item), tableLabel(item)])),
+    [catalog.tables],
+  );
 
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white">
@@ -181,6 +195,7 @@ function CatalogSection({
           <FieldLabel required>数据源</FieldLabel>
           <Select
             size="small"
+            items={dataSourceItems}
             value={dataSourceId || undefined}
             onValueChange={(value) => onDataSourceChange(String(value || ""))}
           >
@@ -250,6 +265,7 @@ function CatalogSection({
           <FieldLabel required>表</FieldLabel>
           <Select
             size="small"
+            items={tableItems}
             disabled={!dataSourceId || catalog.loading}
             value={tableValue}
             onValueChange={(value) => {
@@ -263,9 +279,7 @@ function CatalogSection({
             <SelectContent>
               {catalog.tables.map((item) => (
                 <SelectItem key={tableKey(item)} value={tableKey(item)}>
-                  <SelectItemText>
-                    {[item.schema, item.name].filter(Boolean).join(".")}
-                  </SelectItemText>
+                  <SelectItemText>{tableLabel(item)}</SelectItemText>
                   <SelectItemIndicator />
                 </SelectItem>
               ))}
