@@ -140,6 +140,40 @@ Key rules:
 
 Recovery semantics are at-least-once. If the process stops after the Sink commit but before Debezium persists the acknowledged offset, records can be replayed; CHANGELOG mode is designed to tolerate that replay for primary-key tables.
 
+## MySQL CDC Verification
+
+MySQL CDC now has both unit and real protocol verification.
+
+Package ownership is intentionally shallow:
+
+```text
+mysql/
+├── source/     # YakFlow Source lifecycle
+└── debezium/   # Debezium Engine / Connect implementation
+```
+
+The integration test starts a real MySQL 8.4 container with row-based binlog enabled and verifies:
+
+```text
+initial snapshot
+      ↓
+target rows
+      ↓
+source INSERT / UPDATE / DELETE
+      ↓
+target converges
+      ↓
+YakFlow checkpoint
+      ↓
+Debezium offset file
+      ↓
+stop / restart with same state directory
+      ↓
+new binlog change continues syncing
+```
+
+This test is part of Maven verification and does not use a developer-owned database.
+
 ## Explicit Non-Goals
 
 The current phase does not implement:

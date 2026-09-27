@@ -86,6 +86,64 @@ Must Not:
 
 Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
 
+## Package Organization
+
+YakFlow package structure follows execution responsibility rather than file count.
+
+Must:
+- Keep connector package depth shallow; the connector namespace plus one responsibility subpackage is the default.
+- Create a responsibility subpackage only when a real group exists, normally at least two closely related classes.
+- Keep one capability family together: Source / Split / Enumerator belong together unless an external runtime boundary gives a clearer ownership split.
+- Isolate third-party runtime details in a dedicated package when they have their own types and lifecycle, for example `debezium`.
+- Mirror production responsibility packages in unit tests.
+- Put real external-system end-to-end tests under an `integration` test package.
+- Prefer names that express ownership such as `source`, `sink`, `dialect`, `debezium`; avoid generic dumping grounds.
+
+Must Not:
+- Put every class in the connector root package once multiple responsibilities exist.
+- Create one package per class.
+- Create empty future packages before code exists.
+- Use generic `util`, `helper`, `manager` or `common` packages to avoid deciding ownership.
+- Split a tightly related class family across packages only for visual symmetry.
+
+Current MySQL CDC layout:
+
+```text
+mysql/
+├── source/
+│   ├── MySqlCdcSource
+│   ├── MySqlCdcSourceConfig
+│   ├── MySqlCdcSplit
+│   ├── MySqlCdcSplitEnumerator
+│   └── MySqlCdcEnumeratorState
+└── debezium/
+    ├── MySqlCdcSourceReader
+    ├── MySqlDebeziumEngineConfig
+    ├── DebeziumRecordConverter
+    ├── DebeziumBatch
+    └── MySqlCdcCheckpointState
+```
+
+The split is intentional: `source` owns YakFlow Source semantics, while `debezium` owns all Debezium / Kafka Connect implementation details.
+
+## Integration Test Boundary
+
+Connector integration tests may use Testcontainers when a protocol cannot be validated faithfully with an in-memory substitute.
+
+Must:
+- Use an isolated container owned by the test; never depend on a developer or shared external database.
+- Configure the real source protocol required by the connector, such as MySQL row-based binlog for CDC.
+- Use bounded polling timeouts; no unbounded sleeps or hanging waits.
+- Cover the important lifecycle boundary, not only connection success.
+- Keep unit tests for conversion and config logic even when an integration test exists.
+
+The MySQL CDC integration baseline covers:
+- initial snapshot.
+- binlog INSERT / UPDATE / DELETE.
+- downstream checkpoint completion.
+- persisted offset file creation.
+- stop and restart with the same connector state directory.
+
 ## JDBC Batch Connector
 
 The current bounded JDBC connector owns synchronization behavior, not datasource configuration ownership.
