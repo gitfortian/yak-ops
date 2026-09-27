@@ -27,6 +27,9 @@ service/auth
 
 service/datasource
 = Datasource contract + CRUD / connection
+
+service/preference
+= User Preference contract used by current product favorites / frequent-item consumers
 ```
 
 Backend request / response Contract 与对应 Service 放在一起。
@@ -97,6 +100,7 @@ Must Not:
 - 原生 `fetch` 只允许存在于唯一 transport owner。
 - HttpUtils 只负责 HTTP、统一 Result、JSON、网络错误和 transport 行为。
 - Domain Service 负责 endpoint、参数、响应 Contract 和数据适配。
+- User Preference 是 user-scoped capability；`service/preference` 请求必须显式省略 Workspace Header，不能把当前 Workspace 变成偏好归属条件。
 - 同一个 Domain 的轻量 endpoint 优先保持在一个 Service entry 中。
 - 稳定 backend Contract 可以独立放在 `types.ts`。
 - UI 只拿业务 data，不解析后端统一 Result。
