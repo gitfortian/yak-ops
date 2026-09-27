@@ -11,6 +11,33 @@ function svgPoint(value: number) {
   return Number(value.toFixed(2));
 }
 
+function resolveOrangeFacePose(x: number, y: number, pointerPoseEnabled: boolean) {
+  if (!pointerPoseEnabled) {
+    return {
+      faceX: x * 34,
+      faceY: y * 14,
+      eyeX: x * 6,
+      eyeY: y * 3,
+      eyeScale: 1,
+      mouthRotate: 0,
+    };
+  }
+
+  const horizontal = clamp(x, -1, 1);
+  const vertical = clamp(y, -1, 1);
+  const edgeLift =
+    Math.abs(horizontal) * (5 + Math.max(0, -vertical) * 6);
+
+  return {
+    faceX: horizontal * 48,
+    faceY: vertical * 19 - edgeLift,
+    eyeX: horizontal * 3,
+    eyeY: vertical * 1.5,
+    eyeScale: 1 - Math.max(-horizontal, 0) * 0.22,
+    mouthRotate: horizontal * 7,
+  };
+}
+
 function buildYellowBodyPath(x: number, y: number) {
   const bend = clamp(x, -1, 1) * 30;
   const vertical = clamp(y, -1, 1);
@@ -360,62 +387,66 @@ function OrangeCharacter() {
                   <g className="yak-login-character--orange__result-eyes">
                     <g className="yak-login-character--orange__focus-eyes">
                       <g className="yak-login-character--orange__eyes">
-                        <g className="yak-login-character--orange__eyes-open">
-                          <circle cx="190" cy="462" r="6.9" fill="#171717" />
-                          <circle cx="270" cy="462" r="6.9" fill="#171717" />
-                        </g>
-                        <g className="yak-login-character--orange__eyes-blink">
-                          <path
-                            d="M181 463Q190 454 199 463"
-                            fill="none"
-                            stroke="#171717"
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M261 463Q270 454 279 463"
-                            fill="none"
-                            stroke="#171717"
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                          />
+                        <g className="yak-login-character--orange__eye-pose">
+                          <g className="yak-login-character--orange__eyes-open">
+                            <circle cx="190" cy="462" r="6.9" fill="#171717" />
+                            <circle cx="270" cy="462" r="6.9" fill="#171717" />
+                          </g>
+                          <g className="yak-login-character--orange__eyes-blink">
+                            <path
+                              d="M181 463Q190 454 199 463"
+                              fill="none"
+                              stroke="#171717"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M261 463Q270 454 279 463"
+                              fill="none"
+                              stroke="#171717"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
+                          </g>
                         </g>
                       </g>
                     </g>
                   </g>
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                    d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
-                    fill="#171717"
-                  />
-                  <circle
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
-                    cx="231"
-                    cy="496"
-                    r="6"
-                    fill="#171717"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
-                    d="M214 494Q231 504 248 494"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
-                    fill="#171717"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M208 507Q230.5 486 253 507"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
+                  <g className="yak-login-character--orange__mouth-pose">
+                    <path
+                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
+                      d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
+                      fill="#171717"
+                    />
+                    <circle
+                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
+                      cx="231"
+                      cy="496"
+                      r="6"
+                      fill="#171717"
+                    />
+                    <path
+                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
+                      d="M214 494Q231 504 248 494"
+                      fill="none"
+                      stroke="#171717"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      className="yak-login-character__mouth yak-login-character__mouth--success"
+                      d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
+                      fill="#171717"
+                    />
+                    <path
+                      className="yak-login-character__mouth yak-login-character__mouth--failure"
+                      d="M208 507Q230.5 486 253 507"
+                      fill="none"
+                      stroke="#171717"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                  </g>
                 </g>
               </g>
             </g>
@@ -609,10 +640,23 @@ export default function LoginCharacters({
         );
       }
 
-      scene.style.setProperty("--yak-orange-face-x", `${orangeX * 34}px`);
-      scene.style.setProperty("--yak-orange-face-y", `${orangeY * 14}px`);
-      scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 6}px`);
-      scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 3}px`);
+      const orangePointerPoseEnabled =
+        orangeEntryComplete && activeFocus === "idle" && activeResult === "idle";
+      const orangeFacePose = resolveOrangeFacePose(
+        orangeX,
+        orangeY,
+        orangePointerPoseEnabled,
+      );
+
+      scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX}px`);
+      scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY}px`);
+      scene.style.setProperty("--yak-orange-eye-x", `${orangeFacePose.eyeX}px`);
+      scene.style.setProperty("--yak-orange-eye-y", `${orangeFacePose.eyeY}px`);
+      scene.style.setProperty("--yak-orange-eye-scale", String(orangeFacePose.eyeScale));
+      scene.style.setProperty(
+        "--yak-orange-mouth-rotate",
+        `${orangeFacePose.mouthRotate}deg`,
+      );
 
       yellowBodyPath.setAttribute("d", buildYellowBodyPath(yellowBodyX, yellowBodyY));
       scene.style.setProperty("--yak-yellow-face-x", `${yellowFaceX * 10}px`);
