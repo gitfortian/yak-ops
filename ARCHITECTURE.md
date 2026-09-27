@@ -147,7 +147,7 @@ Owns Workspace-scoped Data Sync product definitions and execution-instance persi
 
 The current phase supports only `OFFLINE` task definitions. A task definition describes source/target datasource IDs, table locations and YakFlow runtime tuning. An instance is a historical execution record with its own task-version reference, trigger type, status, row counters and a sanitized definition snapshot.
 
-Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current phase can manually run OFFLINE tasks through YakFlow Local Runtime, persist instance lifecycle, cancel active local executions and mark stale process-local executions LOST on startup. Scheduling and distributed execution remain out of scope.
+Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current phase can manually run OFFLINE tasks through YakFlow Local Runtime, persist instance lifecycle and Runtime row metrics, cancel active local executions and mark stale process-local executions LOST on startup. Scheduling and distributed execution remain out of scope.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
 

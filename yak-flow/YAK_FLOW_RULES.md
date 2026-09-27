@@ -86,6 +86,12 @@ Must Not:
 
 Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
 
+Local Runtime metrics:
+- `readRows` counts rows after a Source batch has successfully entered the Runtime channel.
+- `writeRows` counts rows after `SinkWriter.write` returns successfully.
+- Metrics are monotonic in one execution and are observation data, not a transaction-commit proof.
+- A successful bounded execution must finish with final metrics persisted by the product layer.
+
 ## Package Organization
 
 YakFlow package structure follows execution responsibility rather than file count.
@@ -136,6 +142,12 @@ Must:
 - Use bounded polling timeouts; no unbounded sleeps or hanging waits.
 - Cover the important lifecycle boundary, not only connection success.
 - Keep unit tests for conversion and config logic even when an integration test exists.
+
+The JDBC batch acceptance baseline uses real Testcontainers databases and covers:
+- MySQL Source -> MySQL Sink.
+- MySQL Source -> PostgreSQL Sink.
+- MySQL Source -> Oracle Sink.
+- final YakFlow read/write metrics matching transferred rows.
 
 The MySQL CDC integration baseline covers:
 - initial snapshot.

@@ -146,9 +146,24 @@ Must Not:
 - Claim distributed execution or restart recovery.
 - Add scheduler / retry policy in Phase 3.
 
+## Metrics + Acceptance
+
+Phase 4 closes the first offline-sync milestone with observable row metrics and real cross-database acceptance.
+
+Metrics:
+- `readRows` and `writeRows` are copied from YakFlow `ExecutionMetrics` into the Instance while RUNNING.
+- Active metrics are flushed approximately every 500ms and once again after Runtime termination.
+- Metrics must never decrease within one Instance.
+- Final successful Instance metrics must match the Runtime final snapshot.
+
+Acceptance:
+- CI must execute backend tests; `verify -DskipTests` is forbidden.
+- Real Testcontainers coverage must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
+- H2 compatibility tests remain useful unit/integration coverage but are not the final cross-database acceptance proof.
+
 ## Current Phase
 
-Phase 3 implements:
+Phase 4 implements:
 - task create/update/delete/detail/page.
 - instance detail/page query.
 - persistence contracts.
@@ -161,10 +176,12 @@ Phase 3 implements:
 - in-process LocalExecution registry and cancel.
 - startup LOST recovery.
 - instance list / detail product contract.
+- Runtime read/write row metrics persisted into Instance.
+- real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
+- save-and-run product flow.
 
-Phase 3 does not implement:
+Phase 4 does not implement:
 - scheduler.
 - retry policy.
 - distributed workers.
 - process-level execution recovery.
-- read/write row metrics refinement.

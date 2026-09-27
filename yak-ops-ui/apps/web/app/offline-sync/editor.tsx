@@ -33,6 +33,7 @@ import {
   createDataSyncTask,
   getDataSyncTask,
   previewDataSyncMapping,
+  runDataSyncTask,
   updateDataSyncTask,
   type DataSyncFieldMapping,
   type DataSyncMappingPreview,
@@ -471,7 +472,7 @@ export function OfflineSyncEditorPage() {
     !sourceCatalog.loading &&
     !targetCatalog.loading;
 
-  const save = async () => {
+  const save = async (runAfterSave = false) => {
     if (!canSave || saving) return;
     setSaving(true);
     try {
@@ -479,6 +480,12 @@ export function OfflineSyncEditorPage() {
         editing && id
           ? await updateDataSyncTask(id, payload())
           : await createDataSyncTask(payload());
+      if (runAfterSave) {
+        const instance = await runDataSyncTask(saved.id);
+        toast.success("同步任务已保存并启动");
+        navigate(`/offline-sync/instances/${instance.id}`, { replace: true });
+        return;
+      }
       toast.success(editing ? "同步任务已保存" : "同步任务已创建");
       navigate(`/offline-sync/${saved.id}`, { replace: true });
     } finally {
@@ -502,14 +509,17 @@ export function OfflineSyncEditorPage() {
             <Button size="small" disabled={saving} onClick={() => navigate("/offline-sync")}>
               取消
             </Button>
+            <Button size="small" loading={saving} disabled={!canSave} onClick={() => void save()}>
+              保存
+            </Button>
             <Button
               size="small"
               variant="primary"
               loading={saving}
               disabled={!canSave}
-              onClick={() => void save()}
+              onClick={() => void save(true)}
             >
-              保存
+              保存并运行
             </Button>
           </>
         }

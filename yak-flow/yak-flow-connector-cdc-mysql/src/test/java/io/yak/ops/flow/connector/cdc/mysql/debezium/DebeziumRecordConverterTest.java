@@ -23,6 +23,7 @@ class DebeziumRecordConverterTest {
             List.of("id"));
     private static final Schema ROW_SCHEMA = SchemaBuilder.struct()
             .name("test.inventory.Value")
+            .optional()
             .field("id", Schema.INT64_SCHEMA)
             .field("name", Schema.OPTIONAL_STRING_SCHEMA)
             .build();

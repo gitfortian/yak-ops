@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -47,11 +48,14 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final AtomicBoolean cancellationRequested = new AtomicBoolean();
     private final AtomicBoolean automaticCheckpointPending = new AtomicBoolean();
     private final AtomicLong checkpointSequence = new AtomicLong();
+    private final AtomicLong readRows = new AtomicLong();
+    private final AtomicLong writeRows = new AtomicLong();
     private final BlockingQueue<CheckpointRequest> checkpointRequests = new LinkedBlockingQueue<>();
     private final BlockingQueue<LocalCheckpoint> completedCheckpoints = new LinkedBlockingQueue<>();
     private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
     private final Set<Long> automaticCheckpointIds = ConcurrentHashMap.newKeySet();
-    private final CountDownLatch workersFinished = new CountDownLatch(2);
+    private final AtomicInteger workersRemaining = new AtomicInteger(2);
+    private final CountDownLatch executionFinished = new CountDownLatch(1);
 
     private volatile Throwable failure;
     private volatile LocalCheckpoint latestCheckpoint;
@@ -112,6 +116,15 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     /**
+     * 返回当前执行指标快照。
+     *
+     * @return 当前累计读取和写入行数
+     */
+    public ExecutionMetrics metrics() {
+        return new ExecutionMetrics(readRows.get(), writeRows.get());
+    }
+
+    /**
      * 请求一次异步检查点。Source 在线程内生成状态并把 barrier 放入 Channel，Sink flush 后再由 Source 完成外部 offset 确认。
      *
      * @return 检查点完成 Future
@@ -151,7 +164,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
      * @throws InterruptedException 当前等待线程被中断
      */
     public ExecutionStatus await() throws InterruptedException {
-        workersFinished.await();
+        executionFinished.await();
         return status.get();
     }
 
@@ -167,7 +180,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must not be negative");
         }
-        if (!workersFinished.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+        if (!executionFinished.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new IllegalStateException("execution did not finish within timeout");
         }
         return status.get();
@@ -217,6 +230,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                 List<YakRow> rows = reader.poll();
                 if (!rows.isEmpty()) {
                     channel.put(new RowBatchMessage(rows));
+                    readRows.addAndGet(rows.size());
                 }
 
                 processCheckpointRequests(enumerator, reader, split);
@@ -285,6 +299,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                 ChannelMessage message = channel.take();
                 if (message instanceof RowBatchMessage rowBatch) {
                     writer.write(rowBatch.rows());
+                    writeRows.addAndGet(rowBatch.rows().size());
                     continue;
                 }
                 if (message instanceof CheckpointBarrierMessage barrier) {
@@ -351,12 +366,12 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     private void workerFinished() {
-        workersFinished.countDown();
-        if (workersFinished.getCount() != 0) {
+        if (workersRemaining.decrementAndGet() != 0) {
             return;
         }
         if (status.compareAndSet(ExecutionStatus.RUNNING, ExecutionStatus.SUCCEEDED)) {
             completePendingCheckpoints(new IllegalStateException("execution completed before checkpoint"));
         }
+        executionFinished.countDown();
     }
 }

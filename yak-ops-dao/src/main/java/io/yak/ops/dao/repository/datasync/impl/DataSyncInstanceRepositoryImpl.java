@@ -72,6 +72,23 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
     }
 
     @Override
+    public boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows) {
+        if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(id) || readRows < 0 || writeRows < 0) {
+            return false;
+        }
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setReadRows(readRows);
+        update.setWriteRows(writeRows);
+        update.initUpdate();
+        return instanceMapper.update(
+                        update,
+                        Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(DataSyncInstanceEntity::getId, id))
+                > 0;
+    }
+
+    @Override
     public boolean transitionStatus(
             String workspaceId,
             String id,

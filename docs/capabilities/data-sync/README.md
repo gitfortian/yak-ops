@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Phase 3 — Offline Execution + Instance Lifecycle
+Status: Phase 4 — Offline Metrics + Acceptance
 
 ## Goal
 
@@ -126,6 +126,33 @@ PENDING / RUNNING from previous process
 
 This is deliberate: Local Runtime has no process restart recovery.
 
+## Phase 4 — Metrics + Acceptance
+
+YakFlow exposes a lightweight execution metrics snapshot:
+
+```text
+Source batch enters channel
+        ↓
+readRows + N
+
+SinkWriter.write succeeds
+        ↓
+writeRows + N
+```
+
+OfflineSyncExecutor persists the latest values while the instance is RUNNING and performs a final metrics flush after Runtime termination.
+
+The first offline milestone acceptance is no longer H2-only. CI runs real database containers:
+
+```text
+MySQL Source
+├── MySQL Sink
+├── PostgreSQL Sink
+└── Oracle Sink
+```
+
+Each acceptance path verifies target rows and final YakFlow metrics.
+
 ## Phase 1 Boundary
 
 Phase 1 provides:
@@ -136,7 +163,7 @@ Phase 1 provides:
 - `DataSyncService` task CRUD and task/instance query contract.
 - task persistence implementation.
 
-Phase 3 now provides manual run, cancel, instance page/detail, LocalExecution registry and startup LOST recovery.
+Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
 
 It still does not provide:
 
@@ -144,6 +171,5 @@ It still does not provide:
 - retry policy.
 - distributed execution.
 - process restart recovery.
-- final read/write row metrics.
 
 Those belong to later PRs.

@@ -30,6 +30,7 @@ class LocalRuntimeTest {
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(5)));
         assertEquals(5, sink.rows().size());
+        assertEquals(new ExecutionMetrics(5, 5), execution.metrics());
         assertTrue(sink.rows().stream().allMatch(row -> row.rowKind() == RowKind.INSERT));
         assertEquals(1, sink.flushCount());
         assertFalse(execution.failure().isPresent());
@@ -54,6 +55,9 @@ class LocalRuntimeTest {
         execution.cancel();
 
         assertEquals(ExecutionStatus.CANCELED, execution.await(Duration.ofSeconds(5)));
+        assertTrue(execution.metrics().readRows() >= 5);
+        assertTrue(execution.metrics().writeRows() >= 5);
+        assertTrue(execution.metrics().writeRows() <= execution.metrics().readRows());
         assertTrue(sink.flushCount() >= 1);
         assertFalse(execution.failure().isPresent());
     }

@@ -5,7 +5,7 @@ Scope:
 - `yak-ops-ui/apps/web/app/offline-sync/**`
 - `yak-ops-ui/apps/web/service/data-sync/**`
 
-## Phase 3 Boundary
+## Phase 4 Boundary
 
 The offline product configures task definitions and exposes manual execution instance lifecycle.
 
@@ -22,6 +22,8 @@ Must:
 - A manual run creates a new Instance and navigates to its detail page.
 - PENDING / RUNNING instances expose Stop; terminal instances expose Detail.
 - Poll only while visible instance data contains PENDING / RUNNING records.
+- Display readRows / writeRows from the persisted Instance; frontend must not estimate progress.
+- The editor may offer Save and Save & Run. Save & Run must persist the Task first, then call the normal manual run API and navigate to the created Instance.
 
 Must Not:
 
