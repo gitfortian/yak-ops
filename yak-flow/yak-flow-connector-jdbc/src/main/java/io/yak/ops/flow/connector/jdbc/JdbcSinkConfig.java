@@ -39,8 +39,7 @@ public record JdbcSinkConfig(
     }
 
     public static JdbcSinkConfig defaults(DataSourceConnection connection, DataSourceTablePath table) {
-        return new JdbcSinkConfig(
-                connection, table, DEFAULT_BATCH_SIZE, DEFAULT_TIMEOUT_SECONDS, JdbcWriteMode.INSERT);
+        return new JdbcSinkConfig(connection, table, DEFAULT_BATCH_SIZE, DEFAULT_TIMEOUT_SECONDS, JdbcWriteMode.INSERT);
     }
 
     public static JdbcSinkConfig changelogDefaults(DataSourceConnection connection, DataSourceTablePath table) {

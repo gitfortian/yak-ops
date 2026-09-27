@@ -50,4 +50,3 @@ public interface JdbcDialect {
         return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate;
     }
 }
-

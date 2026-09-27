@@ -172,11 +172,7 @@ final class JdbcSinkWriter implements SinkWriter {
     private void deleteByPrimaryKey(YakRow row) throws Exception {
         for (int parameterIndex = 0; parameterIndex < primaryKeyIndexes.size(); parameterIndex++) {
             int rowIndex = primaryKeyIndexes.get(parameterIndex);
-            bind(
-                    deleteStatement,
-                    parameterIndex + 1,
-                    schema.column(rowIndex).dataType(),
-                    row.value(rowIndex));
+            bind(deleteStatement, parameterIndex + 1, schema.column(rowIndex).dataType(), row.value(rowIndex));
         }
         deleteStatement.executeUpdate();
     }
