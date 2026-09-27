@@ -71,6 +71,11 @@ export default {
   "pages.datasource.form.dbType": "数据库类型",
   "pages.datasource.form.dbTypeRequired": "请选择数据库类型",
   "pages.datasource.form.jdbcPreview": "JDBC 连接预览",
+  "pages.datasource.form.jdbcUrl": "JDBC URL",
+  "pages.datasource.form.jdbcUrlRequired": "请输入 JDBC URL",
+  "pages.datasource.form.jdbcUrlInvalid": "Oracle JDBC URL 必须以 jdbc:oracle: 开头",
+  "pages.datasource.form.oracleJdbcUrlPlaceholder":
+    "jdbc:oracle:thin:@host:1521:SID 或 jdbc:oracle:thin:@//host:1521/service_name",
   "pages.datasource.form.connectionAddress": "连接地址",
   "pages.datasource.form.hostPlaceholder": "主机地址 / IP",
   "pages.datasource.form.hostRequired": "请输入主机地址",
