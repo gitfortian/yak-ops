@@ -533,6 +533,8 @@ export default function LoginCharacters({
     let orangeVelocityY = 0;
     let orangeBodyX = 0;
     let orangeBodyY = 0;
+    let orangeEyeScale = 1;
+    let orangeMouthRotate = 0;
     let yellowBodyX = 0;
     let yellowBodyY = 0;
     let yellowFaceX = 0;
@@ -650,13 +652,13 @@ export default function LoginCharacters({
 
       scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY}px`);
+      orangeEyeScale += (orangeFacePose.eyeScale - orangeEyeScale) * 0.18;
+      orangeMouthRotate += (orangeFacePose.mouthRotate - orangeMouthRotate) * 0.16;
+
       scene.style.setProperty("--yak-orange-eye-x", `${orangeFacePose.eyeX}px`);
       scene.style.setProperty("--yak-orange-eye-y", `${orangeFacePose.eyeY}px`);
-      scene.style.setProperty("--yak-orange-eye-scale", String(orangeFacePose.eyeScale));
-      scene.style.setProperty(
-        "--yak-orange-mouth-rotate",
-        `${orangeFacePose.mouthRotate}deg`,
-      );
+      scene.style.setProperty("--yak-orange-eye-scale", String(orangeEyeScale));
+      scene.style.setProperty("--yak-orange-mouth-rotate", `${orangeMouthRotate}deg`);
 
       yellowBodyPath.setAttribute("d", buildYellowBodyPath(yellowBodyX, yellowBodyY));
       scene.style.setProperty("--yak-yellow-face-x", `${yellowFaceX * 10}px`);
