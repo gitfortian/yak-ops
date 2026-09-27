@@ -160,10 +160,7 @@ interface LoginCharactersProps {
   passwordVisible: boolean;
 }
 
-export default function LoginCharacters({
-  focusState,
-  passwordVisible,
-}: LoginCharactersProps) {
+export default function LoginCharacters({ focusState, passwordVisible }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const focusStateRef = useRef(focusState);
   const passwordVisibleRef = useRef(passwordVisible);
