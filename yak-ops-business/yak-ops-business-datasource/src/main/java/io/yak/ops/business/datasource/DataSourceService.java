@@ -12,6 +12,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.List;
 
 /**
@@ -63,6 +64,13 @@ public interface DataSourceService {
 
     /** 查询已保存数据源指定表的字段元数据。 */
     List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
+
+    /**
+     * 为可信内部执行能力解析已保存数据源的真实运行时连接。
+     *
+     * <p>返回值包含敏感凭证，禁止发布为 HTTP API、序列化或记录。</p>
+     */
+    DataSourceConnection resolveRuntimeConnection(String id);
 
     /** 删除指定数据源。 */
     boolean deleteDataSource(String id);

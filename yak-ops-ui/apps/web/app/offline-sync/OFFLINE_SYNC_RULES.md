@@ -5,9 +5,9 @@ Scope:
 - `yak-ops-ui/apps/web/app/offline-sync/**`
 - `yak-ops-ui/apps/web/service/data-sync/**`
 
-## Phase 2 Boundary
+## Phase 3 Boundary
 
-The offline editor configures and persists task definitions only.
+The offline product configures task definitions and exposes manual execution instance lifecycle.
 
 Must:
 
@@ -18,9 +18,13 @@ Must:
 - Disable save while the current mapping is incompatible.
 - Keep runtime tuning limited to fetch size, read batch size, write batch size and timeout.
 - Use existing Yak UI primitives.
+- Keep Task Definition and Task Instance as separate Tabs.
+- A manual run creates a new Instance and navigates to its detail page.
+- PENDING / RUNNING instances expose Stop; terminal instances expose Detail.
+- Poll only while visible instance data contains PENDING / RUNNING records.
 
 Must Not:
 
-- Add run / stop / retry controls before execution lifecycle exists.
+- Add scheduler / retry policy before their backend lifecycle exists.
 - Add filter SQL, split key, pre/post SQL, resource group or Transform.
 - Reimplement JDBC type compatibility in frontend code.

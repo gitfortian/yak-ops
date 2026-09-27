@@ -145,6 +145,17 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     /**
+     * 一直等待 Source 与 Sink 两个本地工作线程退出。
+     *
+     * @return 终止后的执行状态
+     * @throws InterruptedException 当前等待线程被中断
+     */
+    public ExecutionStatus await() throws InterruptedException {
+        workersFinished.await();
+        return status.get();
+    }
+
+    /**
      * 等待 Source 与 Sink 两个本地工作线程都退出。
      *
      * @param timeout 最长等待时间

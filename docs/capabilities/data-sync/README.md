@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Phase 2 — Datasource Catalog + Offline Task Editor
+Status: Phase 3 — Offline Execution + Instance Lifecycle
 
 ## Goal
 
@@ -18,7 +18,7 @@ YakFlow Local Runtime
 JdbcSource -> JdbcSink
 ```
 
-Phase 1 established task-definition and instance persistence. Phase 2 adds Datasource Catalog reads, backend same-name field compatibility validation and the offline task editor. It still does not start YakFlow.
+Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Runtime and persists the execution lifecycle.
 
 ## Task Definition
 
@@ -93,6 +93,39 @@ The editor contains only:
 
 No filter SQL, split key, pre/post SQL, resource group or Transform is introduced in this phase.
 
+## Phase 3 — Offline Execution
+
+Manual run path:
+
+```text
+saved Task
+    ↓
+create Instance(PENDING)
+    ↓
+sanitized definition snapshot
+    ↓
+resolve Datasource runtime connections
+    ↓
+JdbcSource -> LocalRuntime -> JdbcSink
+    ↓
+RUNNING
+    ├── SUCCEEDED
+    ├── FAILED
+    └── CANCELED
+```
+
+The current runtime is intentionally single-node. The in-process execution registry exists only to map a running instance to its LocalExecution for cancellation.
+
+On application startup:
+
+```text
+PENDING / RUNNING from previous process
+              ↓
+             LOST
+```
+
+This is deliberate: Local Runtime has no process restart recovery.
+
 ## Phase 1 Boundary
 
 Phase 1 provides:
@@ -103,13 +136,14 @@ Phase 1 provides:
 - `DataSyncService` task CRUD and task/instance query contract.
 - task persistence implementation.
 
-Phase 2 now provides task HTTP CRUD, frontend task list/editor, Datasource Catalog browsing and field mapping validation.
+Phase 3 now provides manual run, cancel, instance page/detail, LocalExecution registry and startup LOST recovery.
 
 It still does not provide:
 
-- YakFlow execution.
-- run / cancel / retry.
 - scheduler.
-- execution recovery.
+- retry policy.
+- distributed execution.
+- process restart recovery.
+- final read/write row metrics.
 
 Those belong to later PRs.

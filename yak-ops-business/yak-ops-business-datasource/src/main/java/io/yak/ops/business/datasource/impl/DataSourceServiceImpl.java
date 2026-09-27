@@ -29,6 +29,7 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalogQuery;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTable;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -191,6 +192,12 @@ public class DataSourceServiceImpl implements DataSourceService {
                 .stream()
                 .map(this::toCatalogColumnVO)
                 .toList();
+    }
+
+    @Override
+    public DataSourceConnection resolveRuntimeConnection(String id) {
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        return pluginRegistry.parseConnection(entity.getDbType(), entity.getConnectionParams());
     }
 
     @Override

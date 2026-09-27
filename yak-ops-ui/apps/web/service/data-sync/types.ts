@@ -85,3 +85,64 @@ export interface DataSyncMappingPreview {
   compatible: boolean;
   mappings: DataSyncFieldMapping[];
 }
+
+export type DataSyncInstanceStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "CANCELED"
+  | "LOST"
+  | string;
+
+export interface DataSyncEndpointSnapshot {
+  dataSourceId: string;
+  dataSourceName?: string;
+  dataSourceType?: string;
+  database?: string;
+  schema?: string;
+  table: string;
+}
+
+export interface DataSyncDefinitionSnapshot {
+  taskId: string;
+  taskName: string;
+  taskVersion: number;
+  source: DataSyncEndpointSnapshot;
+  target: DataSyncEndpointSnapshot;
+  runtimeConfig: DataSyncRuntimeConfig;
+}
+
+export interface DataSyncInstanceRecord {
+  id: string;
+  taskId: string;
+  taskName: string;
+  taskVersion: number;
+  triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | string;
+  status: DataSyncInstanceStatus;
+  readRows: number;
+  writeRows: number;
+  startTime?: string;
+  finishTime?: string;
+  errorCode?: number;
+  errorMessage?: string;
+  definitionSnapshot?: DataSyncDefinitionSnapshot;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface DataSyncInstancePageParams {
+  pageNo: number;
+  pageSize: number;
+  taskId?: string;
+  keyword?: string;
+  status?: DataSyncInstanceStatus;
+  triggerType?: string;
+  startTimeStart?: string;
+  startTimeEnd?: string;
+}
+
+export interface DataSyncInstancePageResult {
+  bizData: DataSyncInstanceRecord[];
+  pagination: PaginationInfo;
+}

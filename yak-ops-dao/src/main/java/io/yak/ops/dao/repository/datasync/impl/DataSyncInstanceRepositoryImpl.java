@@ -4,13 +4,17 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.page.PageData;
+import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.mapper.datasync.DataSyncInstanceMapper;
 import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.impl.BaseRepositoryImpl;
 import jakarta.annotation.Resource;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -53,6 +57,66 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
         return Optional.ofNullable(instanceMapper.selectOne(Wrappers.<DataSyncInstanceEntity>lambdaQuery()
                 .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
                 .eq(DataSyncInstanceEntity::getId, id)));
+    }
+
+    @Override
+    public boolean existsActiveByTask(String workspaceId, String taskId) {
+        if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(taskId)) return false;
+        Long count = instanceMapper.selectCount(Wrappers.<DataSyncInstanceEntity>lambdaQuery()
+                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                .eq(DataSyncInstanceEntity::getTaskId, taskId)
+                .in(
+                        DataSyncInstanceEntity::getStatus,
+                        List.of(DataSyncInstanceStatus.PENDING, DataSyncInstanceStatus.RUNNING)));
+        return count != null && count > 0;
+    }
+
+    @Override
+    public boolean transitionStatus(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            DataSyncInstanceStatus targetStatus,
+            LocalDateTime startTime,
+            LocalDateTime finishTime,
+            Integer errorCode,
+            String errorMessage) {
+        if (!StringUtils.hasText(workspaceId)
+                || !StringUtils.hasText(id)
+                || expectedStatus == null
+                || targetStatus == null) {
+            return false;
+        }
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(targetStatus);
+        update.setStartTime(startTime);
+        update.setFinishTime(finishTime);
+        update.setErrorCode(errorCode);
+        update.setErrorMessage(errorMessage);
+        update.initUpdate();
+        int affected = instanceMapper.update(
+                update,
+                Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                        .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                        .eq(DataSyncInstanceEntity::getId, id)
+                        .eq(DataSyncInstanceEntity::getStatus, expectedStatus));
+        return affected > 0;
+    }
+
+    @Override
+    public int markActiveAsLost(LocalDateTime finishTime, Integer errorCode, String errorMessage) {
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(DataSyncInstanceStatus.LOST);
+        update.setFinishTime(finishTime == null ? DateUtils.now() : finishTime);
+        update.setErrorCode(errorCode);
+        update.setErrorMessage(errorMessage);
+        update.initUpdate();
+        return instanceMapper.update(
+                update,
+                Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                        .in(
+                                DataSyncInstanceEntity::getStatus,
+                                List.of(DataSyncInstanceStatus.PENDING, DataSyncInstanceStatus.RUNNING)));
     }
 
     private LambdaQueryWrapper<DataSyncInstanceEntity> queryWrapper(
