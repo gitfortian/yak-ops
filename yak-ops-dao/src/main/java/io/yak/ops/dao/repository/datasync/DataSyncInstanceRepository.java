@@ -1,8 +1,10 @@
 package io.yak.ops.dao.repository.datasync;
 
+import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.repository.BaseRepository;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
@@ -16,4 +18,21 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
     PageData<DataSyncInstanceEntity> queryPage(String workspaceId, DataSyncInstancePageQuery query);
 
     Optional<DataSyncInstanceEntity> queryById(String workspaceId, String id);
+
+    boolean existsActiveByTask(String workspaceId, String taskId);
+
+    boolean transitionStatus(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            DataSyncInstanceStatus targetStatus,
+            LocalDateTime startTime,
+            LocalDateTime finishTime,
+            Integer errorCode,
+            String errorMessage);
+
+    /**
+     * 应用启动恢复专用：把所有 Workspace 中遗留的 PENDING / RUNNING 实例统一标记为 LOST。
+     */
+    int markActiveAsLost(LocalDateTime finishTime, Integer errorCode, String errorMessage);
 }

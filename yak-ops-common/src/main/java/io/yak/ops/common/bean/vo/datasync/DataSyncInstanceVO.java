@@ -36,6 +36,9 @@ public class DataSyncInstanceVO {
 
     private String errorMessage;
 
+    /** 详情查询时返回的脱敏任务定义快照；分页列表中为空。 */
+    private DataSyncDefinitionSnapshotVO definitionSnapshot;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
