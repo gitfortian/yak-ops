@@ -1,9 +1,6 @@
 package io.yak.ops.common.bean.dto.datasource;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.util.Map;
 import lombok.Data;
 
@@ -18,18 +15,16 @@ import lombok.Data;
 @Data
 public class DataSourceConnectionDTO {
 
-    /** 数据库主机名或 IP。 */
-    @NotBlank(message = "数据库主机不能为空")
+    /** Provider 原生 JDBC URL；Oracle 直接使用该字段，结构化数据源可为空。 */
+    private String jdbcUrl;
+
+    /** 数据库主机名或 IP；结构化连接模式使用。 */
     private String host;
 
-    /** 数据库端口。 */
-    @NotNull(message = "数据库端口不能为空")
-    @Min(value = 1, message = "数据库端口必须大于 0")
-    @Max(value = 65535, message = "数据库端口不能超过 65535")
+    /** 数据库端口；结构化连接模式使用。 */
     private Integer port;
 
-    /** 默认数据库或服务名。 */
-    @NotBlank(message = "数据库名称不能为空")
+    /** 默认数据库或服务名；结构化连接模式使用。 */
     private String database;
 
     /** 数据库登录用户名。 */
