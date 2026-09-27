@@ -377,7 +377,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     if (isOracle) {
       if (!values.jdbcUrl.trim())
         next.jdbcUrl = intl.formatMessage({ id: "pages.datasource.form.jdbcUrlRequired" });
-      else if (!values.jdbcUrl.trim().toLowerCase().startsWith("jdbc:oracle:"))
+      else if (!values.jdbcUrl.trim().startsWith("jdbc:oracle:"))
         next.jdbcUrl = intl.formatMessage({ id: "pages.datasource.form.jdbcUrlInvalid" });
     } else {
       if (!values.host.trim())
