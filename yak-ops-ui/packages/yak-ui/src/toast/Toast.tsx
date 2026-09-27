@@ -83,11 +83,7 @@ function ToastStatusIcon({ tone }: { tone: ToastTone }) {
   }
 
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      className={cn("size-5 shrink-0", toneClass[tone])}
-    >
+    <svg aria-hidden="true" viewBox="0 0 20 20" className={cn("size-5 shrink-0", toneClass[tone])}>
       <circle cx="10" cy="10" r="8" fill="currentColor" />
       {tone === "success" ? (
         <path
@@ -161,7 +157,10 @@ function ToastHost() {
               <div className="relative h-full overflow-hidden rounded-xl border border-[var(--yak-components-toast-border)] bg-[var(--yak-components-toast-bg)] shadow-[var(--yak-components-toast-shadow)] backdrop-blur-[5px]">
                 <div
                   aria-hidden="true"
-                  className={cn("pointer-events-none absolute -inset-px opacity-100", toneHaloClass[tone])}
+                  className={cn(
+                    "pointer-events-none absolute -inset-px opacity-100",
+                    toneHaloClass[tone],
+                  )}
                 />
                 <BaseToast.Content className="relative flex items-start gap-2.5 overflow-hidden p-3 transition-opacity duration-200 data-behind:opacity-0 data-expanded:opacity-100 motion-reduce:transition-none">
                   <div className="flex shrink-0 items-center justify-center pt-0.5">
