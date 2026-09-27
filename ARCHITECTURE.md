@@ -73,6 +73,14 @@ The API has no Spring, Debezium, JDBC or Yak Ops business dependency. Batch and 
 
 Current scope intentionally excludes runtime scheduling, Transform, Debezium integration, JDBC implementation, distributed execution and exactly-once coordination. Detailed constraints are defined in `yak-flow/YAK_FLOW_RULES.md`.
 
+### `yak-flow/yak-flow-runtime`
+
+Owns the first single-node YakFlow execution runtime. It connects one Source and one Sink through a bounded in-memory row channel, runs source and sink work independently, supports cancellation and coordinates source checkpoints with a channel barrier.
+
+The checkpoint barrier is an ordering boundary, not an exactly-once claim: Source state is captured before the barrier enters the channel, Sink flushes every preceding row before the checkpoint completes, and the runtime keeps the completed checkpoint in memory for the active execution. Durable checkpoint storage and restore-after-process-restart are not part of this phase.
+
+The Local Runtime depends on `yak-flow-api` only. It does not depend on Spring, Yak Ops Business/DAO, JDBC or Debezium, and it does not introduce distributed scheduling, worker discovery or resource management.
+
 ### `yak-ops-business`
 
 Owns the application Service Layer. Stable capabilities expose one public Service Layer interface and keep Spring implementation, transactions, validation and DAO/Plugin orchestration in `impl`.
@@ -192,7 +200,7 @@ Boot
 
 Boot owns protocol entry and application assembly.
 
-YakFlow API is an implementation-independent contract boundary. Future YakFlow runtime and connector modules depend on this API rather than introducing separate batch and CDC protocols.
+YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model; future connector modules depend on the API rather than introducing separate batch and CDC protocols.
 
 Security, Workspace, User Preference and Datasource own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
 

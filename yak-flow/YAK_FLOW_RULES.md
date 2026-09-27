@@ -15,7 +15,7 @@ Depends On:
 
 YakFlow is a batch/stream unified data synchronization capability.
 
-Phase 1 product target:
+Current first-milestone product target:
 
 ```text
 Batch:
@@ -65,22 +65,39 @@ Batch sources normally emit `INSERT`. CDC sources may emit any supported change 
 
 The core type system describes portable logical values only. Database-specific native types and conversion rules belong to connectors.
 
+## Local Runtime
+
+The current runtime is deliberately single-node and local.
+
+Must:
+- Keep one bounded in-memory channel between Source work and Sink work.
+- Allow bounded jobs to finish naturally.
+- Keep continuous unbounded jobs alive until cancel or failure.
+- Use channel ordering for checkpoint barriers: Source state first, barrier second, Sink flush before checkpoint completion.
+- Interrupt blocked local workers on cancel/failure so execution cannot remain stuck on channel operations.
+- Treat checkpoint completion as an ordering/durability observation only; it is not an exactly-once contract.
+
+Must Not:
+- Add a distributed scheduler, Worker registry, ResourceManager or remote RPC layer.
+- Add persistent Job/Attempt tables in this phase.
+- Persist opaque `CheckpointState` with Java serialization merely to obtain a file checkpoint.
+- Introduce connector-specific logic into the runtime.
+- Let an unbounded Source report natural job success only because it is temporarily idle.
+
+Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
+
 ## Checkpoint Boundary
 
 `CheckpointState` is an opaque connector/runtime contract.
 
-Phase 1 does not define:
-- persistence format.
-- checkpoint storage.
-- checkpoint coordination.
-- transaction commit protocol.
+The API keeps connector state opaque. The Local Runtime coordinates in-process checkpoint barriers and keeps only the latest completed checkpoint for the active execution.
 
-Those belong to Runtime work and must not leak Debezium offset structures into the public API.
+The current phase still does not define durable checkpoint serialization, restart recovery or a transaction commit protocol. Those concerns must not leak Debezium offset structures into the public API.
 
 ## Dependency Direction
 
 ```text
-runtime -----------+
+yak-flow-runtime --+
                    |
 jdbc connector ----+--> yak-flow-api
                    |

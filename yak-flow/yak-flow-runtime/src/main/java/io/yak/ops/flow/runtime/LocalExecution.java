@@ -1,0 +1,300 @@
+package io.yak.ops.flow.runtime;
+
+import io.yak.ops.flow.api.checkpoint.CheckpointState;
+import io.yak.ops.flow.api.row.YakRow;
+import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.api.sink.Sink;
+import io.yak.ops.flow.api.sink.SinkWriter;
+import io.yak.ops.flow.api.source.Boundedness;
+import io.yak.ops.flow.api.source.Source;
+import io.yak.ops.flow.api.source.SourceReader;
+import io.yak.ops.flow.api.source.SourceSplit;
+import io.yak.ops.flow.api.source.SourceSplitEnumerator;
+import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * 一次 YakFlow 本地执行，负责 Source/Sink 工作线程、取消、状态以及 barrier 检查点生命周期。
+ *
+ * @param <SplitT> Source 分片类型
+ * @author weifuwan
+ * @since 2026-09-27
+ */
+public final class LocalExecution<SplitT extends SourceSplit> {
+
+    private static final long IDLE_SLEEP_MILLIS = 5L;
+
+    private final Source<SplitT> source;
+    private final Sink sink;
+    private final YakTableSchema schema;
+    private final RowChannel channel;
+    private final AtomicReference<ExecutionStatus> status = new AtomicReference<>(ExecutionStatus.CREATED);
+    private final AtomicBoolean cancellationRequested = new AtomicBoolean();
+    private final AtomicLong checkpointSequence = new AtomicLong();
+    private final BlockingQueue<CheckpointRequest> checkpointRequests = new LinkedBlockingQueue<>();
+    private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
+    private final CountDownLatch workersFinished = new CountDownLatch(2);
+
+    private volatile Throwable failure;
+    private volatile LocalCheckpoint latestCheckpoint;
+    private volatile Thread sourceThread;
+    private volatile Thread sinkThread;
+
+    LocalExecution(Source<SplitT> source, Sink sink, YakTableSchema schema, int channelCapacity) {
+        this.source = source;
+        this.sink = sink;
+        this.schema = schema;
+        this.channel = new RowChannel(channelCapacity);
+    }
+
+    void start() {
+        if (!status.compareAndSet(ExecutionStatus.CREATED, ExecutionStatus.RUNNING)) {
+            throw new IllegalStateException("execution has already been started");
+        }
+
+        sourceThread = Thread.ofVirtual().name("yak-flow-source").unstarted(this::runSource);
+        sinkThread = Thread.ofVirtual().name("yak-flow-sink").unstarted(this::runSink);
+        sinkThread.start();
+        sourceThread.start();
+    }
+
+    /**
+     * 返回当前执行状态。
+     *
+     * @return 执行状态
+     */
+    public ExecutionStatus status() {
+        return status.get();
+    }
+
+    /**
+     * 返回失败原因；只有 FAILED 状态存在该值。
+     *
+     * @return 失败原因
+     */
+    public Optional<Throwable> failure() {
+        return Optional.ofNullable(failure);
+    }
+
+    /**
+     * 返回当前执行最近一次成功完成的检查点。
+     *
+     * @return 最近检查点
+     */
+    public Optional<LocalCheckpoint> latestCheckpoint() {
+        return Optional.ofNullable(latestCheckpoint);
+    }
+
+    /**
+     * 请求一次异步检查点。Source 在线程内生成状态并把 barrier 放入 Channel，Sink 消费 barrier 前先处理并 flush 所有前序数据。
+     *
+     * @return 检查点完成 Future
+     */
+    public CompletableFuture<LocalCheckpoint> checkpoint() {
+        if (status.get() != ExecutionStatus.RUNNING) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("checkpoint requires a running execution"));
+        }
+
+        long checkpointId = checkpointSequence.incrementAndGet();
+        CompletableFuture<LocalCheckpoint> future = new CompletableFuture<>();
+        checkpointFutures.put(checkpointId, future);
+        checkpointRequests.add(new CheckpointRequest(checkpointId));
+
+        if (status.get() != ExecutionStatus.RUNNING
+                && checkpointFutures.remove(checkpointId, future)) {
+            future.completeExceptionally(new IllegalStateException("execution finished before checkpoint"));
+        }
+        return future;
+    }
+
+    /**
+     * 显式取消当前执行。该操作会中断阻塞在 Channel 或 Reader 中的本地工作线程。
+     */
+    public void cancel() {
+        if (!status.compareAndSet(ExecutionStatus.RUNNING, ExecutionStatus.CANCELED)) {
+            return;
+        }
+        cancellationRequested.set(true);
+        interruptWorkers();
+        completePendingCheckpoints(new CancellationException("execution canceled"));
+    }
+
+    /**
+     * 等待 Source 与 Sink 两个本地工作线程都退出。
+     *
+     * @param timeout 最长等待时间
+     * @return 终止后的执行状态
+     * @throws InterruptedException 当前等待线程被中断
+     */
+    public ExecutionStatus await(Duration timeout) throws InterruptedException {
+        Objects.requireNonNull(timeout, "timeout must not be null");
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("timeout must not be negative");
+        }
+        if (!workersFinished.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            throw new IllegalStateException("execution did not finish within timeout");
+        }
+        return status.get();
+    }
+
+    private void runSource() {
+        try (SourceSplitEnumerator<SplitT> enumerator = source.createEnumerator()) {
+            enumerator.start();
+            while (!cancellationRequested.get()) {
+                processCheckpointRequests(enumerator, null, null);
+
+                Optional<SplitT> nextSplit = enumerator.nextSplit();
+                if (nextSplit.isPresent()) {
+                    runSplit(enumerator, nextSplit.get());
+                    continue;
+                }
+
+                if (enumerator.isFinished() && source.boundedness() == Boundedness.BOUNDED) {
+                    processCheckpointRequests(enumerator, null, null);
+                    channel.put(EndOfInputMessage.INSTANCE);
+                    return;
+                }
+                Thread.sleep(IDLE_SLEEP_MILLIS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!cancellationRequested.get()) {
+                fail(e);
+            }
+        } catch (Exception e) {
+            fail(e);
+        } finally {
+            workerFinished();
+        }
+    }
+
+    private void runSplit(SourceSplitEnumerator<SplitT> enumerator, SplitT split) throws Exception {
+        try (SourceReader<SplitT> reader = source.createReader()) {
+            reader.open(split);
+            while (!cancellationRequested.get() && !reader.isFinished()) {
+                List<YakRow> rows = reader.poll();
+                if (!rows.isEmpty()) {
+                    channel.put(new RowBatchMessage(rows));
+                }
+                processCheckpointRequests(enumerator, reader, split);
+                if (rows.isEmpty()) {
+                    Thread.sleep(IDLE_SLEEP_MILLIS);
+                }
+            }
+            processCheckpointRequests(enumerator, reader, split);
+        }
+    }
+
+    private void processCheckpointRequests(
+            SourceSplitEnumerator<SplitT> enumerator, SourceReader<SplitT> reader, SplitT split) throws Exception {
+        CheckpointRequest request;
+        while ((request = checkpointRequests.poll()) != null) {
+            CheckpointState enumeratorState = enumerator.snapshotState(request.checkpointId());
+            CheckpointState readerState = reader == null ? null : reader.snapshotState(request.checkpointId());
+            String splitId = split == null ? null : split.splitId();
+            channel.put(new CheckpointBarrierMessage(
+                    request.checkpointId(), enumeratorState, readerState, splitId));
+        }
+    }
+
+    private void runSink() {
+        try (SinkWriter writer = sink.createWriter(schema)) {
+            writer.open();
+            while (!cancellationRequested.get()) {
+                ChannelMessage message = channel.take();
+                if (message instanceof RowBatchMessage rowBatch) {
+                    writer.write(rowBatch.rows());
+                    continue;
+                }
+                if (message instanceof CheckpointBarrierMessage barrier) {
+                    writer.flush();
+                    completeCheckpoint(barrier);
+                    continue;
+                }
+                if (message == EndOfInputMessage.INSTANCE) {
+                    writer.flush();
+                    return;
+                }
+                throw new IllegalStateException("unsupported channel message: " + message.getClass().getName());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!cancellationRequested.get()) {
+                fail(e);
+            }
+        } catch (Exception e) {
+            fail(e);
+        } finally {
+            workerFinished();
+        }
+    }
+
+    private void completeCheckpoint(CheckpointBarrierMessage barrier) {
+        LocalCheckpoint checkpoint = new LocalCheckpoint(
+                barrier.checkpointId(),
+                barrier.enumeratorState(),
+                barrier.readerState(),
+                barrier.splitId(),
+                System.currentTimeMillis());
+        latestCheckpoint = checkpoint;
+
+        CompletableFuture<LocalCheckpoint> future = checkpointFutures.remove(barrier.checkpointId());
+        if (future != null) {
+            future.complete(checkpoint);
+        }
+    }
+
+    private void fail(Throwable cause) {
+        if (!status.compareAndSet(ExecutionStatus.RUNNING, ExecutionStatus.FAILED)) {
+            return;
+        }
+        failure = cause;
+        cancellationRequested.set(true);
+        interruptWorkers();
+        completePendingCheckpoints(cause);
+    }
+
+    private void interruptWorkers() {
+        Thread current = Thread.currentThread();
+        Thread currentSourceThread = sourceThread;
+        Thread currentSinkThread = sinkThread;
+        if (currentSourceThread != null && currentSourceThread != current) {
+            currentSourceThread.interrupt();
+        }
+        if (currentSinkThread != null && currentSinkThread != current) {
+            currentSinkThread.interrupt();
+        }
+    }
+
+    private void completePendingCheckpoints(Throwable cause) {
+        checkpointFutures.forEach((checkpointId, future) -> {
+            if (checkpointFutures.remove(checkpointId, future)) {
+                future.completeExceptionally(cause);
+            }
+        });
+    }
+
+    private void workerFinished() {
+        workersFinished.countDown();
+        if (workersFinished.getCount() != 0) {
+            return;
+        }
+        if (status.compareAndSet(ExecutionStatus.RUNNING, ExecutionStatus.SUCCEEDED)) {
+            completePendingCheckpoints(new IllegalStateException("execution completed before checkpoint"));
+        }
+    }
+}
