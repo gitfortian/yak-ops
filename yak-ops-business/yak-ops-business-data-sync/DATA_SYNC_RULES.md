@@ -41,6 +41,8 @@ Must:
 - Be Workspace-scoped.
 - Keep task name unique inside one Workspace.
 - Persist datasource references by datasource ID, not by copying credentials.
+- Treat the current Datasource-bound database as authoritative. Task / mapping requests cannot override a bound database.
+- Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
 - Keep `definitionVersion` starting at 1 and increment it on every successful task-definition update.
 - Persist YakFlow tuning in `runtimeConfig`; it may contain batch/fetch/timeout settings only.
 - Support only `OFFLINE` task type in the current phase.
@@ -107,6 +109,7 @@ Field mapping rules:
 - Mapping is automatic by case-insensitive same-name field matching.
 - The editor is read-only for mappings; no rename, expression or Transform exists.
 - Backend mapping preview is the source of truth.
+- Backend must canonicalize database / Schema scope from the referenced Datasource before Catalog lookup and before task persistence; frontend values are hints only for unbound scope levels.
 - Task create/update must repeat the same backend compatibility validation; frontend state cannot bypass it.
 - String / binary target capacity must not be smaller when both sides expose size metadata.
 - DECIMAL target precision / scale must not be smaller when metadata is available.

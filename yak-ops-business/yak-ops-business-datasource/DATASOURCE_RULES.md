@@ -19,6 +19,7 @@ Owns:
 - Datasource batch delete / batch connection testing
 - Datasource connection-property key discovery
 - Workspace-scoped Catalog database / Schema / table / column reads for product consumers
+- Safe Datasource scope metadata (`database`, `schema`) in DataSourceVO; credentials remain private
 - Internal Datasource Plugin discovery, connection parsing and secret handling
 
 Does Not Own:

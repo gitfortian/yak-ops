@@ -91,6 +91,17 @@ The editor contains only:
 - read-only automatic field mapping result.
 - YakFlow runtime tuning.
 
+Datasource scope rule:
+
+```text
+Datasource
+   ↓ owns bound database / optional bound schema
+Offline Sync
+   ↓ selects only table, plus Schema only when Datasource leaves it unbound
+```
+
+A bound database is displayed as read-only context and cannot be overridden by a Task. Backend task persistence and mapping preview canonicalize scope from Datasource again, so API callers cannot bypass the UI rule.
+
 No filter SQL, split key, pre/post SQL, resource group or Transform is introduced in this phase.
 
 ## Phase 3 — Offline Execution
