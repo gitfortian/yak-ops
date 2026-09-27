@@ -90,7 +90,7 @@ export function ComboboxContent({
           )}
         >
           {emptyText ? (
-            <BaseCombobox.Empty className="px-3 py-5 text-center text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-muted-text)]">
+            <BaseCombobox.Empty className="px-3 py-5 text-center text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-muted-text)] empty:p-0">
               {emptyText}
             </BaseCombobox.Empty>
           ) : null}
@@ -165,7 +165,7 @@ export function ComboboxEmptyState({ className, ...props }: ComboboxEmptyProps) 
     <BaseCombobox.Empty
       {...props}
       className={cn(
-        "px-3 py-5 text-center text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-muted-text)]",
+        "px-3 py-5 text-center text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-muted-text)] empty:p-0",
         className,
       )}
     />
