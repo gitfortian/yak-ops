@@ -1,15 +1,26 @@
+import { useState } from "react";
+
+import LoginCharacters from "./LoginCharacters";
 import LoginPanel from "./LoginPanel";
-import OrangeCharacter from "./OrangeCharacter";
+import type { LoginFocusState, LoginResultState } from "./login-interaction";
 
 interface LoginPageProps {
   onAuthenticated: () => Promise<void>;
 }
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const [focusState, setFocusState] = useState<LoginFocusState>("idle");
+  const [resultState, setResultState] = useState<LoginResultState>("idle");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
   return (
     <main className="min-h-screen bg-white md:grid md:grid-cols-[7fr_5fr]">
-      <section className="hidden min-h-screen overflow-hidden bg-[#f4f3f7] md:flex md:items-end md:justify-center md:px-12 md:pb-[18vh]">
-        <OrangeCharacter />
+      <section className="hidden min-h-screen overflow-hidden md:block">
+        <LoginCharacters
+          focusState={focusState}
+          resultState={resultState}
+          passwordVisible={passwordVisible}
+        />
       </section>
 
       <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-14">
@@ -21,7 +32,12 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
             <p className="mt-2.5 text-[14px] text-[#64748b]">Please enter your details</p>
           </div>
 
-          <LoginPanel onAuthenticated={onAuthenticated} />
+          <LoginPanel
+            onAuthenticated={onAuthenticated}
+            onFocusStateChange={setFocusState}
+            onLoginResultChange={setResultState}
+            onPasswordVisibilityChange={setPasswordVisible}
+          />
         </div>
       </section>
     </main>

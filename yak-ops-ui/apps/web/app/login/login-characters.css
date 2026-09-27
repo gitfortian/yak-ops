@@ -1,0 +1,712 @@
+.yak-login-characters {
+  --yak-purple-lean: 0deg;
+  --yak-purple-stretch: 1;
+  --yak-purple-face-x: 0px;
+  --yak-purple-face-y: 0px;
+  --yak-purple-pupil-x: 0px;
+  --yak-purple-pupil-y: 0px;
+  --yak-black-lean: 0deg;
+  --yak-black-stretch: 1;
+  --yak-black-face-x: 0px;
+  --yak-black-face-y: 0px;
+  --yak-black-pupil-x: 0px;
+  --yak-black-pupil-y: 0px;
+  --yak-orange-bend: 0deg;
+  --yak-orange-scale-y: 1;
+  --yak-orange-face-x: 0px;
+  --yak-orange-face-y: 0px;
+  --yak-orange-eye-x: 0px;
+  --yak-orange-eye-y: 0px;
+  --yak-yellow-face-x: 0px;
+  --yak-yellow-face-y: 0px;
+  --yak-yellow-eye-x: 0px;
+  --yak-yellow-eye-y: 0px;
+}
+
+.yak-login-characters__svg {
+  overflow: visible;
+}
+
+/*
+ * Ground Anchor Contract:
+ * once a character has landed, grounded motion keeps the bottom edge fixed.
+ * Steady-state body/focus/result motion uses bottom-anchored skew/scale only.
+ * Translation is reserved for entrance choreography and the final success exit.
+ */
+
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes,
+.yak-login-character--purple__eyes,
+.yak-login-character--black__eyes,
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body,
+.yak-login-character--purple__face,
+.yak-login-character--purple__pupil,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body,
+.yak-login-character--black__face,
+.yak-login-character--black__pupil,
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body,
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes,
+.yak-login-character--yellow__breathe,
+.yak-login-character--yellow__body,
+.yak-login-character--yellow__face,
+.yak-login-character--yellow__eyes {
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus,
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body,
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body,
+.yak-login-character--yellow__breathe,
+.yak-login-character--yellow__body {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--purple__face,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--purple__eyes,
+.yak-login-character--purple__pupil,
+.yak-login-character--black__face,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--black__eyes,
+.yak-login-character--black__pupil,
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes,
+.yak-login-character--yellow__face,
+.yak-login-character--yellow__eyes {
+  transform-origin: center;
+}
+
+.yak-login-character--purple__entry {
+  animation: yak-purple-enter 1.28s cubic-bezier(0.22, 1, 0.36, 1) 100ms both;
+}
+
+.yak-login-character--black__entry {
+  animation: yak-black-enter 1.46s cubic-bezier(0.22, 1, 0.36, 1) 30ms both;
+}
+
+.yak-login-character--orange__entry {
+  animation: yak-orange-enter 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.yak-login-character--yellow__entry {
+  animation: yak-yellow-enter 1.34s cubic-bezier(0.22, 1, 0.36, 1) 190ms both;
+}
+
+.yak-login-character--purple__breathe {
+  animation: yak-purple-breathe 4.4s ease-in-out 1.45s infinite;
+}
+
+.yak-login-character--purple__body {
+  transform: skewX(var(--yak-purple-lean)) scaleY(var(--yak-purple-stretch));
+}
+
+.yak-login-character--purple__face {
+  transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
+}
+
+.yak-login-character--purple__pupil {
+  transform: translate(var(--yak-purple-pupil-x), var(--yak-purple-pupil-y));
+}
+
+.yak-login-character--black__breathe {
+  animation: yak-black-breathe 5.4s ease-in-out 1.7s infinite;
+}
+
+.yak-login-character--black__body {
+  transform: skewX(var(--yak-black-lean)) scaleY(var(--yak-black-stretch));
+}
+
+.yak-login-character--black__face {
+  transform: translate(var(--yak-black-face-x), var(--yak-black-face-y));
+}
+
+.yak-login-character--black__pupil {
+  transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
+}
+
+.yak-login-character--orange__breathe {
+  animation: yak-orange-breathe 4.8s ease-in-out 1.55s infinite;
+}
+
+.yak-login-character--orange__body {
+  transform: skewX(var(--yak-orange-bend)) scaleY(var(--yak-orange-scale-y));
+}
+
+.yak-login-character--orange__face {
+  transform: translate(var(--yak-orange-face-x), var(--yak-orange-face-y));
+}
+
+.yak-login-character--orange__eyes {
+  transform: translate(var(--yak-orange-eye-x), var(--yak-orange-eye-y));
+}
+
+.yak-login-character--orange__eyes-open,
+.yak-login-character--orange__eyes-blink,
+.yak-login-character--orange__mouth {
+  transition: opacity 140ms ease;
+}
+
+.yak-login-character--orange__eyes-blink,
+.yak-login-character--orange__mouth--curious,
+.yak-login-character--orange__mouth--worried,
+.yak-login-character--orange__mouth--blink {
+  opacity: 0;
+}
+
+.yak-login-characters.is-orange-curious .yak-login-character--orange__mouth--happy,
+.yak-login-characters.is-orange-worried .yak-login-character--orange__mouth--happy,
+.yak-login-characters.is-orange-blink .yak-login-character--orange__mouth--happy {
+  opacity: 0;
+}
+
+.yak-login-characters.is-orange-curious .yak-login-character--orange__mouth--curious,
+.yak-login-characters.is-orange-worried .yak-login-character--orange__mouth--worried,
+.yak-login-characters.is-orange-blink .yak-login-character--orange__mouth--blink {
+  opacity: 1;
+}
+
+.yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-open {
+  opacity: 0;
+}
+
+.yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-blink {
+  opacity: 1;
+}
+
+.yak-login-character--yellow__breathe {
+  animation: yak-yellow-breathe 4.2s ease-in-out 1.6s infinite;
+}
+
+.yak-login-character--yellow__body {
+  transform: none;
+}
+
+.yak-login-character--yellow__face {
+  transform: translate(var(--yak-yellow-face-x), var(--yak-yellow-face-y));
+}
+
+.yak-login-character--yellow__eyes {
+  transform: translate(var(--yak-yellow-eye-x), var(--yak-yellow-eye-y));
+}
+
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--yellow__focus {
+  transition: transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes {
+  transform-origin: center;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character--purple__pupil,
+.yak-login-character--black__pupil {
+  transition: opacity 160ms ease;
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--purple__focus {
+  transform: skewX(-2.5deg) scaleY(1.025);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--black__focus {
+  transform: skewX(-1.75deg) scaleY(1.016);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--orange__focus {
+  transform: skewX(-1.5deg) scaleY(1.008);
+}
+
+.yak-login-characters.is-user-focus .yak-login-character--yellow__focus {
+  transform: scaleY(1.008);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__focus {
+  transform: skewX(2deg) scaleY(0.975);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--black__focus {
+  transform: skewX(1.5deg) scaleY(0.97);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--orange__focus {
+  transform: skewX(1.5deg) scaleY(0.972);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--yellow__focus {
+  transform: scaleY(0.985);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--black__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--orange__focus-eyes,
+.yak-login-characters.is-password-focus .yak-login-character--yellow__focus-eyes {
+  transform: scaleY(0.12);
+}
+
+.yak-login-characters.is-password-focus .yak-login-character--purple__pupil,
+.yak-login-characters.is-password-focus .yak-login-character--black__pupil {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
+  transform: skewX(-5deg) scaleY(1.055);
+}
+
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
+  transform: skewX(-3deg) scaleY(1.035);
+}
+
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--orange__focus {
+  transform: skewX(-2.5deg) scaleY(1.02);
+}
+
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--yellow__focus {
+  transform: scaleY(1.015);
+}
+
+.yak-login-characters.is-password-focus.is-password-visible
+  .yak-login-character--purple__focus-eyes,
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus-eyes,
+.yak-login-characters.is-password-focus.is-password-visible
+  .yak-login-character--orange__focus-eyes,
+.yak-login-characters.is-password-focus.is-password-visible
+  .yak-login-character--yellow__focus-eyes {
+  transform: scaleX(1.08) scaleY(1.12);
+}
+
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__pupil,
+.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__pupil {
+  opacity: 1;
+}
+
+.yak-login-character--purple__result,
+.yak-login-character--black__result,
+.yak-login-character--orange__result,
+.yak-login-character--yellow__result,
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes,
+.yak-login-character__mouth {
+  transform-box: fill-box;
+  will-change: transform, opacity;
+}
+
+.yak-login-character--purple__result,
+.yak-login-character--black__result,
+.yak-login-character--orange__result,
+.yak-login-character--yellow__result {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes,
+.yak-login-character__mouth {
+  transform-origin: center;
+}
+
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character__mouth {
+  transition: opacity 160ms ease;
+}
+
+.yak-login-character__mouth--success,
+.yak-login-character__mouth--failure {
+  opacity: 0;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character__mouth--default,
+.yak-login-characters.is-login-success .yak-login-character__mouth--default {
+  opacity: 0;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character__mouth--failure,
+.yak-login-characters.is-login-success .yak-login-character__mouth--success {
+  opacity: 1;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character--purple__result-eyes,
+.yak-login-characters.is-login-failure .yak-login-character--black__result-eyes,
+.yak-login-characters.is-login-failure .yak-login-character--orange__result-eyes,
+.yak-login-characters.is-login-failure .yak-login-character--yellow__result-eyes {
+  transform: scaleY(0.18);
+}
+
+.yak-login-characters.is-login-success .yak-login-character--purple__result-eyes,
+.yak-login-characters.is-login-success .yak-login-character--black__result-eyes,
+.yak-login-characters.is-login-success .yak-login-character--orange__result-eyes,
+.yak-login-characters.is-login-success .yak-login-character--yellow__result-eyes {
+  transform: scaleY(0.55);
+}
+
+.yak-login-characters.is-login-failure .yak-login-character--purple__result,
+.yak-login-characters.is-login-failure .yak-login-character--black__result,
+.yak-login-characters.is-login-failure .yak-login-character--orange__result,
+.yak-login-characters.is-login-failure .yak-login-character--yellow__result {
+  animation: yak-login-result-failure 620ms ease-in-out;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character--black__result {
+  animation-delay: 20ms;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character--orange__result {
+  animation-delay: 35ms;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character--yellow__result {
+  animation-delay: 50ms;
+}
+
+.yak-login-characters.is-login-success .yak-login-character--purple__result,
+.yak-login-characters.is-login-success .yak-login-character--black__result,
+.yak-login-characters.is-login-success .yak-login-character--orange__result,
+.yak-login-characters.is-login-success .yak-login-character--yellow__result {
+  animation: yak-login-result-success 820ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.yak-login-characters.is-login-success .yak-login-character--black__result {
+  animation-delay: 50ms;
+}
+
+.yak-login-characters.is-login-success .yak-login-character--orange__result {
+  animation-delay: 80ms;
+}
+
+.yak-login-characters.is-login-success .yak-login-character--yellow__result {
+  animation-delay: 110ms;
+}
+
+@keyframes yak-login-result-failure {
+  0%,
+  100% {
+    transform: skewX(0deg) scaleY(1);
+  }
+
+  16% {
+    transform: skewX(5deg) scaleY(0.92);
+  }
+
+  32% {
+    transform: skewX(-5deg) scaleY(0.86);
+  }
+
+  48% {
+    transform: skewX(4deg) scaleY(0.9);
+  }
+
+  64% {
+    transform: skewX(-3deg) scaleY(0.95);
+  }
+
+  80% {
+    transform: skewX(1.5deg) scaleY(0.98);
+  }
+}
+
+@keyframes yak-login-result-success {
+  0% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  22% {
+    opacity: 1;
+    transform: scaleY(1.08);
+  }
+
+  40% {
+    opacity: 1;
+    transform: scaleY(0.92);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scaleY(1.035);
+  }
+
+  68%,
+  72% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(260px) scaleY(0.62);
+  }
+}
+
+@keyframes yak-purple-enter {
+  0% {
+    transform: scaleX(1.04) scaleY(0.44);
+  }
+
+  44% {
+    transform: scaleX(0.98) scaleY(1.08);
+  }
+
+  62% {
+    transform: scaleX(1.025) scaleY(0.965);
+  }
+
+  78% {
+    transform: scaleX(0.992) scaleY(1.028);
+  }
+
+  90% {
+    transform: scaleX(1.006) scaleY(0.992);
+  }
+
+  100% {
+    transform: scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes yak-black-enter {
+  0% {
+    transform: translateY(-360px) rotate(-8deg) scaleX(0.92) scaleY(0.96);
+  }
+
+  30% {
+    transform: translateY(-82px) rotate(-3deg) scaleX(0.98) scaleY(1.02);
+  }
+
+  44% {
+    transform: translateY(0) rotate(0deg) scaleX(1.18) scaleY(0.74);
+  }
+
+  58% {
+    transform: translateY(-22px) scaleX(0.95) scaleY(1.1);
+  }
+
+  70% {
+    transform: translateY(0) scaleX(1.055) scaleY(0.92);
+  }
+
+  82% {
+    transform: translateY(-6px) scaleX(0.985) scaleY(1.035);
+  }
+
+  92% {
+    transform: translateY(0) scaleX(1.01) scaleY(0.985);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg) scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes yak-orange-enter {
+  0% {
+    transform: translateX(-145px) translateY(-8px) rotate(-10deg) scaleX(0.3) scaleY(0.28);
+  }
+
+  28% {
+    transform: translateX(-112px) translateY(-12px) rotate(-7deg) scaleX(0.42) scaleY(0.36);
+  }
+
+  50% {
+    transform: translateX(-24px) rotate(-2deg) scaleX(0.82) scaleY(1.12);
+  }
+
+  64% {
+    transform: translateX(0) rotate(0deg) scaleX(1.09) scaleY(0.88);
+  }
+
+  77% {
+    transform: scaleX(0.955) scaleY(1.065);
+  }
+
+  89% {
+    transform: scaleX(1.02) scaleY(0.982);
+  }
+
+  100% {
+    transform: translateX(0) translateY(0) rotate(0deg) scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes yak-yellow-enter {
+  0% {
+    transform: translateX(34px) rotate(7deg) scaleX(0.86) scaleY(0.42);
+  }
+
+  34% {
+    transform: translateX(24px) rotate(5deg) scaleX(0.9) scaleY(0.48);
+  }
+
+  56% {
+    transform: translateX(4px) rotate(1deg) scaleX(0.96) scaleY(1.12);
+  }
+
+  70% {
+    transform: translateX(0) rotate(0deg) scaleX(1.045) scaleY(0.92);
+  }
+
+  84% {
+    transform: scaleX(0.985) scaleY(1.045);
+  }
+
+  94% {
+    transform: scaleX(1.008) scaleY(0.99);
+  }
+
+  100% {
+    transform: translateX(0) rotate(0deg) scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes yak-purple-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(1.014);
+  }
+}
+
+@keyframes yak-black-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(1.006);
+  }
+}
+
+@keyframes yak-orange-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  42% {
+    transform: scaleY(0.992);
+  }
+
+  68% {
+    transform: scaleY(1.014);
+  }
+}
+
+@keyframes yak-yellow-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  48% {
+    transform: scaleY(1.012);
+  }
+
+  68% {
+    transform: scaleY(0.996);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yak-login-character--purple__entry,
+  .yak-login-character--black__entry,
+  .yak-login-character--orange__entry,
+  .yak-login-character--yellow__entry,
+  .yak-login-character--purple__result,
+  .yak-login-character--black__result,
+  .yak-login-character--orange__result,
+  .yak-login-character--yellow__result,
+  .yak-login-character--purple__breathe,
+  .yak-login-character--black__breathe,
+  .yak-login-character--orange__breathe,
+  .yak-login-character--yellow__breathe {
+    animation: none;
+  }
+
+  .yak-login-character--purple__entry,
+  .yak-login-character--black__entry,
+  .yak-login-character--orange__entry,
+  .yak-login-character--yellow__entry,
+  .yak-login-character--purple__result,
+  .yak-login-character--black__result,
+  .yak-login-character--orange__result,
+  .yak-login-character--yellow__result,
+  .yak-login-character--purple__result-eyes,
+  .yak-login-character--black__result-eyes,
+  .yak-login-character--orange__result-eyes,
+  .yak-login-character--yellow__result-eyes,
+  .yak-login-character--purple__focus,
+  .yak-login-character--black__focus,
+  .yak-login-character--orange__focus,
+  .yak-login-character--yellow__focus,
+  .yak-login-character--purple__focus-eyes,
+  .yak-login-character--black__focus-eyes,
+  .yak-login-character--orange__focus-eyes,
+  .yak-login-character--yellow__focus-eyes,
+  .yak-login-character--purple__body,
+  .yak-login-character--purple__face,
+  .yak-login-character--purple__pupil,
+  .yak-login-character--black__body,
+  .yak-login-character--black__face,
+  .yak-login-character--black__pupil,
+  .yak-login-character--orange__body,
+  .yak-login-character--orange__face,
+  .yak-login-character--orange__eyes,
+  .yak-login-character--yellow__body,
+  .yak-login-character--yellow__face,
+  .yak-login-character--yellow__eyes {
+    transform: none;
+  }
+
+  .yak-login-character--purple__focus,
+  .yak-login-character--black__focus,
+  .yak-login-character--orange__focus,
+  .yak-login-character--yellow__focus,
+  .yak-login-character--purple__focus-eyes,
+  .yak-login-character--black__focus-eyes,
+  .yak-login-character--orange__focus-eyes,
+  .yak-login-character--yellow__focus-eyes {
+    transition: none;
+  }
+}

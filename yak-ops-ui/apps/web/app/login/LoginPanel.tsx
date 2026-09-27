@@ -11,16 +11,31 @@ import { useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
+import {
+  LOGIN_FAILURE_MOTION_MS,
+  LOGIN_SUCCESS_MOTION_MS,
+  type LoginFocusState,
+  type LoginResultState,
+} from "./login-interaction";
 
 const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
+  onFocusStateChange: (state: LoginFocusState) => void;
+  onLoginResultChange: (state: LoginResultState) => void;
+  onPasswordVisibilityChange: (visible: boolean) => void;
 }
 
 interface LoginValues {
   userName: string;
   userPassword: string;
+}
+
+function waitForMotion(duration: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, duration);
+  });
 }
 
 function ValidationMessage({ id, children }: { id: string; children: string }) {
@@ -90,7 +105,12 @@ function WeChatQrHelp() {
   );
 }
 
-export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
+export default function LoginPanel({
+  onAuthenticated,
+  onFocusStateChange,
+  onLoginResultChange,
+  onPasswordVisibilityChange,
+}: LoginPanelProps) {
   const [values, setValues] = useState<LoginValues>({
     userName: "",
     userPassword: "",
@@ -107,14 +127,20 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    let loginSucceeded = false;
+
     try {
       setLoading(true);
+      onLoginResultChange("idle");
 
       await login({
         userName: values.userName.trim(),
         pw: values.userPassword,
       });
 
+      loginSucceeded = true;
+      onLoginResultChange("success");
+      await waitForMotion(LOGIN_SUCCESS_MOTION_MS);
       await onAuthenticated();
 
       notifyOnce("login-success", {
@@ -125,6 +151,13 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
         duration: 2,
       });
     } catch {
+      if (!loginSucceeded) {
+        onLoginResultChange("failure");
+        await waitForMotion(LOGIN_FAILURE_MOTION_MS);
+        onLoginResultChange("idle");
+      } else {
+        onLoginResultChange("idle");
+      }
       // Global request handling surfaces HTTP, business and network failures once.
     } finally {
       setLoading(false);
@@ -149,6 +182,8 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
           value={values.userName}
           aria-invalid={Boolean(errors.userName) || undefined}
           aria-describedby={errors.userName ? "login-username-error" : undefined}
+          onFocus={() => onFocusStateChange("userName")}
+          onBlur={() => onFocusStateChange("idle")}
           onChange={(event) => {
             setValues((current) => ({ ...current, userName: event.target.value }));
             if (errors.userName) {
@@ -176,9 +211,12 @@ export default function LoginPanel({ onAuthenticated }: LoginPanelProps) {
           placeholder="请输入密码"
           showPasswordLabel="显示密码"
           hidePasswordLabel="隐藏密码"
+          onVisibilityChange={onPasswordVisibilityChange}
           value={values.userPassword}
           aria-invalid={Boolean(errors.userPassword) || undefined}
           aria-describedby={errors.userPassword ? "login-password-error" : undefined}
+          onFocus={() => onFocusStateChange("userPassword")}
+          onBlur={() => onFocusStateChange("idle")}
           onChange={(event) => {
             setValues((current) => ({ ...current, userPassword: event.target.value }));
             if (errors.userPassword) {
