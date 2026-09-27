@@ -68,8 +68,9 @@ public final class JdbcSchemaMapper {
             case Types.TIME -> YakDataType.TIME;
             case Types.TIMESTAMP -> YakDataType.TIMESTAMP;
             case Types.TIMESTAMP_WITH_TIMEZONE -> YakDataType.TIMESTAMP_WITH_TIME_ZONE;
-            default -> throw new IllegalArgumentException(
-                    "暂不支持 JDBC 字段类型：" + column.typeName() + " (" + column.jdbcType() + ")");
+            default ->
+                throw new IllegalArgumentException(
+                        "暂不支持 JDBC 字段类型：" + column.typeName() + " (" + column.jdbcType() + ")");
         };
     }
 

@@ -24,9 +24,10 @@ public interface JdbcDialect {
                 .collect(Collectors.joining(", "));
         String orderBy = schema.primaryKeys().isEmpty()
                 ? ""
-                : " ORDER BY " + schema.primaryKeys().stream()
-                        .map(this::quoteIdentifier)
-                        .collect(Collectors.joining(", "));
+                : " ORDER BY "
+                        + schema.primaryKeys().stream()
+                                .map(this::quoteIdentifier)
+                                .collect(Collectors.joining(", "));
         return "SELECT " + columns + " FROM " + qualifiedTable(table) + orderBy;
     }
 
