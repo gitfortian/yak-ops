@@ -37,30 +37,40 @@ function resolveOrangeFacePose(x: number, y: number, pointerPoseEnabled: boolean
   };
 }
 
-function buildPurpleBodyPath(direction: number, bow: number) {
+function resolvePurpleBowGeometry(direction: number, bow: number) {
   const normalizedDirection = clamp(direction, -1, 1);
   const normalizedBow = clamp(bow, 0, 1);
-  const topShift = normalizedDirection * 72 * normalizedBow;
-  const middleShift = normalizedDirection * 34 * normalizedBow;
-  const topDrop = normalizedBow * 34;
-  const topTilt = normalizedDirection * 14 * normalizedBow;
+
+  const topShift = normalizedDirection * 140 * normalizedBow;
+  const middleShift = topShift * 0.55;
+  const lowerShift = topShift * 0.12;
+  const topTiltY = normalizedDirection * 36 * normalizedBow;
 
   const leftTopX = 212 + topShift;
   const rightTopX = 404 + topShift;
-  const leftTopY = 102 + topDrop - topTilt * 0.5;
-  const rightTopY = 102 + topDrop + topTilt * 0.5;
+  const leftTopY = 102 - topTiltY * 0.5;
+  const rightTopY = 102 + topTiltY * 0.5;
 
-  return [
+  const bodyPath = [
     "M212 550",
-    `C${svgPoint(212 + middleShift * 0.08)} 430`,
-    `${svgPoint(212 + middleShift * 0.52)} 252`,
+    `C${svgPoint(212 + lowerShift * 0.2)} 430`,
+    `${svgPoint(212 + middleShift * 0.45)} 260`,
     `${svgPoint(leftTopX)} ${svgPoint(leftTopY)}`,
     `L${svgPoint(rightTopX)} ${svgPoint(rightTopY)}`,
-    `C${svgPoint(404 + middleShift * 0.9)} 252`,
-    `${svgPoint(404 + middleShift * 0.16)} 430`,
+    `C${svgPoint(404 + middleShift * 0.95)} 260`,
+    `${svgPoint(404 + lowerShift * 0.3)} 430`,
     "404 550",
     "Z",
   ].join(" ");
+
+  const faceRotate = (Math.atan2(rightTopY - leftTopY, rightTopX - leftTopX) * 180) / Math.PI;
+
+  return {
+    bodyPath,
+    faceX: topShift,
+    faceY: (leftTopY + rightTopY) / 2 - 102,
+    faceRotate,
+  };
 }
 
 function buildYellowBodyPath(x: number, y: number) {
@@ -219,7 +229,7 @@ function getOrangeEntranceFaceOpacity(progress: number) {
 const ORANGE_ENTRY_DURATION_MS = 1050;
 const ORANGE_ENTRY_START_PATH = buildOrangeEntrancePath(0);
 const ORANGE_FINAL_BODY_PATH = buildOrangeBodyPath(0, 0, 0);
-const PURPLE_DEFAULT_BODY_PATH = buildPurpleBodyPath(0, 0);
+const PURPLE_DEFAULT_BODY_PATH = resolvePurpleBowGeometry(0, 0).bodyPath;
 
 function PurpleCharacter() {
   return (
@@ -623,13 +633,13 @@ export default function LoginCharacters({
       const purplePasswordDirectionTarget = purplePasswordActive
         ? passwordVisibleRef.current
           ? -1
-          : 0.58
+          : 0.82
         : 0;
 
       purpleX += (purpleInteractionTargetX - purpleX) * 0.075;
       purpleY += (purpleInteractionTargetY - purpleY) * 0.075;
-      purplePasswordBow += (purplePasswordBowTarget - purplePasswordBow) * 0.085;
-      purplePasswordDirection += (purplePasswordDirectionTarget - purplePasswordDirection) * 0.075;
+      purplePasswordBow += (purplePasswordBowTarget - purplePasswordBow) * 0.1;
+      purplePasswordDirection += (purplePasswordDirectionTarget - purplePasswordDirection) * 0.09;
 
       blackX += (interactionTargetX - blackX) * 0.042;
       blackY += (interactionTargetY - blackY) * 0.042;
@@ -657,25 +667,29 @@ export default function LoginCharacters({
         1,
       );
 
-      const purplePasswordPoseX = purplePasswordDirection * purplePasswordBow * 62;
-      const purplePasswordPoseY = purplePasswordBow * 30;
-      const purplePasswordPoseRotate = purplePasswordDirection * purplePasswordBow * 12;
-
-      purpleBodyPath.setAttribute(
-        "d",
-        buildPurpleBodyPath(purplePasswordDirection, purplePasswordBow),
+      const purpleBowGeometry = resolvePurpleBowGeometry(
+        purplePasswordDirection,
+        purplePasswordBow,
       );
-      scene.style.setProperty("--yak-purple-lean", `${purpleX * -8}deg`);
-      scene.style.setProperty("--yak-purple-stretch", String(1 - purpleY * 0.04));
-      scene.style.setProperty("--yak-purple-face-x", `${purpleX * 10}px`);
-      scene.style.setProperty("--yak-purple-face-y", `${purpleY * 5}px`);
-      scene.style.setProperty("--yak-purple-pupil-x", `${purpleX * 4}px`);
-      scene.style.setProperty("--yak-purple-pupil-y", `${purpleY * 2.5}px`);
-      scene.style.setProperty("--yak-purple-password-face-x", `${purplePasswordPoseX}px`);
-      scene.style.setProperty("--yak-purple-password-face-y", `${purplePasswordPoseY}px`);
+      const purplePointerLean = purplePasswordActive ? 0 : purpleX * -8;
+      const purplePointerStretch = purplePasswordActive ? 1 : 1 - purpleY * 0.04;
+      const purplePointerFaceX = purplePasswordActive ? 0 : purpleX * 10;
+      const purplePointerFaceY = purplePasswordActive ? 0 : purpleY * 5;
+      const purplePointerPupilX = purplePasswordActive ? 0 : purpleX * 4;
+      const purplePointerPupilY = purplePasswordActive ? 0 : purpleY * 2.5;
+
+      purpleBodyPath.setAttribute("d", purpleBowGeometry.bodyPath);
+      scene.style.setProperty("--yak-purple-lean", `${purplePointerLean}deg`);
+      scene.style.setProperty("--yak-purple-stretch", String(purplePointerStretch));
+      scene.style.setProperty("--yak-purple-face-x", `${purplePointerFaceX}px`);
+      scene.style.setProperty("--yak-purple-face-y", `${purplePointerFaceY}px`);
+      scene.style.setProperty("--yak-purple-pupil-x", `${purplePointerPupilX}px`);
+      scene.style.setProperty("--yak-purple-pupil-y", `${purplePointerPupilY}px`);
+      scene.style.setProperty("--yak-purple-password-face-x", `${purpleBowGeometry.faceX}px`);
+      scene.style.setProperty("--yak-purple-password-face-y", `${purpleBowGeometry.faceY}px`);
       scene.style.setProperty(
         "--yak-purple-password-face-rotate",
-        `${purplePasswordPoseRotate}deg`,
+        `${purpleBowGeometry.faceRotate}deg`,
       );
 
       scene.style.setProperty("--yak-black-lean", `${blackX * -4.5}deg`);
