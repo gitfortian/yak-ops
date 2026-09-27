@@ -76,7 +76,11 @@ export default function AllProductMenu({
                         ].join(" ")}
                         onClick={() => onToggleFavorite(product.id)}
                       >
-                        <Star className="h-3.5 w-3.5" fill={favorite ? "currentColor" : "none"} strokeWidth={1.8} />
+                        <Star
+                          className="h-3.5 w-3.5"
+                          fill={favorite ? "currentColor" : "none"}
+                          strokeWidth={1.8}
+                        />
                       </button>
                     </div>
                   );
