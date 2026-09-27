@@ -9,6 +9,7 @@ Depends On:
 Owns:
 - Datasource shared DTO / VO
 - Workspace shared DTO / VO, role enum and request WorkspaceContext
+- User Preference shared DTO / VO and scene enum
 - cross-domain stable constants
 - Datasource enums
 - Security user/login shared HTTP DTO / VO contracts

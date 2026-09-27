@@ -17,6 +17,7 @@ Owns:
 - Concrete database access after a domain is explicitly migrated here
 - Security user persistence through `UserEntity`, `UserMapper` and `UserRepository`
 - Workspace persistence through DAO-owned Workspace / WorkspaceMember Entity, Mapper and Repository
+- User Preference persistence through DAO-owned Entity / Mapper / Repository
 - Datasource persistence through DAO-owned Entity / Mapper / Repository and mapper XML
 
 ## Flyway
