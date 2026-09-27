@@ -137,6 +137,11 @@ public final class IsolatedJdbcDriverRuntime {
             return Path.of(home, "jdbc-drivers-builtin");
         }
 
+        Path sourceDirectory = Path.of("yak-ops-dist", "src", "main", "jdbc-drivers-builtin");
+        if (Files.isDirectory(sourceDirectory)) {
+            return sourceDirectory;
+        }
+
         Path buildDirectory = Path.of("yak-ops-dist", "target", "jdbc-drivers-builtin");
         if (Files.isDirectory(buildDirectory)) {
             return buildDirectory;
