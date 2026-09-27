@@ -288,7 +288,7 @@
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--purple__focus {
-  transform: scaleY(0.99);
+  transform: none;
 }
 
 .yak-login-characters.is-password-focus .yak-login-character--black__focus {
@@ -313,7 +313,7 @@
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
-  transform: scaleY(1);
+  transform: none;
 }
 
 .yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
