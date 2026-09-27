@@ -1,4 +1,4 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.debezium;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

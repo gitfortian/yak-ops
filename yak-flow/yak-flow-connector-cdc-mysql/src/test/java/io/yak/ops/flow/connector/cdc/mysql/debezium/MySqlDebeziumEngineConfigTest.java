@@ -1,10 +1,11 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.debezium;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.JdbcEndpoint;
 import io.yak.ops.plugin.database.jdbc.SshTunnelConfig;

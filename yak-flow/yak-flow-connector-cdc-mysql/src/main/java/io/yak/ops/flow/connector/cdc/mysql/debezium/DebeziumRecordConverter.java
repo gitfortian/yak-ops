@@ -1,4 +1,4 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.debezium;
 
 import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;

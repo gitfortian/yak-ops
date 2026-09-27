@@ -1,5 +1,6 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.debezium;
 
+import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.plugin.database.jdbc.JdbcEndpoint;
 import java.nio.file.Files;
 import java.nio.file.Path;

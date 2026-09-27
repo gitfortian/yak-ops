@@ -1,9 +1,10 @@
-package io.yak.ops.flow.connector.cdc.mysql;
+package io.yak.ops.flow.connector.cdc.mysql.source;
 
 import io.yak.ops.flow.api.source.Boundedness;
 import io.yak.ops.flow.api.source.Source;
 import io.yak.ops.flow.api.source.SourceReader;
 import io.yak.ops.flow.api.source.SourceSplitEnumerator;
+import io.yak.ops.flow.connector.cdc.mysql.debezium.MySqlCdcSourceReader;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionRuntime;
 import java.util.Objects;
 
