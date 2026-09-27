@@ -87,7 +87,15 @@ Owns YakFlow bounded JDBC table transfer. The first acceptance path is MySQL Sou
 
 The connector reuses the normalized `DataSourceConnection` and JDBC connection runtime from the existing Datasource plugin boundary. It owns synchronization-specific SQL generation, row reading, logical type conversion, bounded Source lifecycle and batched Sink writes. Datasource plugins continue to own connection parsing, Driver selection, SSH tunneling and Catalog discovery.
 
-Phase 3 intentionally requires the target table to exist. Auto-create DDL, schema evolution and CDC changelog writes are not part of this module stage.
+Phase 3 intentionally requires the target table to exist. Auto-create DDL and schema evolution are not part of this module stage. Phase 4 extends the same JDBC Sink with an explicit changelog mode for idempotent CDC application by primary key.
+
+### `yak-flow/yak-flow-connector-cdc-mysql`
+
+Owns MySQL continuous change capture for YakFlow. Debezium is strictly an implementation detail inside this connector: Debezium Engine, Kafka Connect SourceRecord, source offsets and schema-history storage never cross the connector boundary.
+
+The connector performs Debezium `snapshot.mode=initial` followed by binlog streaming and converts `READ / CREATE / UPDATE / DELETE` events into the existing `YakRow + RowKind` contract. It uses file-backed Debezium offset and schema-history state under a caller-owned state directory.
+
+Checkpoint completion is downstream-aware. The Local Runtime captures Source state, places a barrier into the row channel, flushes the Sink, and only then invokes `SourceReader.notifyCheckpointComplete`. The MySQL CDC Reader uses that callback to acknowledge Debezium records, so a crash before downstream flush does not advance the persisted Debezium offset. This provides at-least-once recovery semantics; it does not claim exactly-once.
 
 ### `yak-ops-business`
 

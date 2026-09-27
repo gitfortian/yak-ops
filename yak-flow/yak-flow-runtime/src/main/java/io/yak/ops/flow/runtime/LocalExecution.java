@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -41,23 +42,34 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final Sink sink;
     private final YakTableSchema schema;
     private final RowChannel channel;
+    private final long autoCheckpointIntervalNanos;
     private final AtomicReference<ExecutionStatus> status = new AtomicReference<>(ExecutionStatus.CREATED);
     private final AtomicBoolean cancellationRequested = new AtomicBoolean();
+    private final AtomicBoolean automaticCheckpointPending = new AtomicBoolean();
     private final AtomicLong checkpointSequence = new AtomicLong();
     private final BlockingQueue<CheckpointRequest> checkpointRequests = new LinkedBlockingQueue<>();
+    private final BlockingQueue<LocalCheckpoint> completedCheckpoints = new LinkedBlockingQueue<>();
     private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
+    private final Set<Long> automaticCheckpointIds = ConcurrentHashMap.newKeySet();
     private final CountDownLatch workersFinished = new CountDownLatch(2);
 
     private volatile Throwable failure;
     private volatile LocalCheckpoint latestCheckpoint;
     private volatile Thread sourceThread;
     private volatile Thread sinkThread;
+    private long nextAutoCheckpointNanos;
 
-    LocalExecution(Source<SplitT> source, Sink sink, YakTableSchema schema, int channelCapacity) {
+    LocalExecution(
+            Source<SplitT> source,
+            Sink sink,
+            YakTableSchema schema,
+            int channelCapacity,
+            Duration streamCheckpointInterval) {
         this.source = source;
         this.sink = sink;
         this.schema = schema;
         this.channel = new RowChannel(channelCapacity);
+        this.autoCheckpointIntervalNanos = streamCheckpointInterval.toNanos();
     }
 
     void start() {
@@ -65,6 +77,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             throw new IllegalStateException("execution has already been started");
         }
 
+        nextAutoCheckpointNanos = System.nanoTime() + autoCheckpointIntervalNanos;
         sourceThread = Thread.ofVirtual().name("yak-flow-source").unstarted(this::runSource);
         sinkThread = Thread.ofVirtual().name("yak-flow-sink").unstarted(this::runSink);
         sinkThread.start();
@@ -99,7 +112,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     /**
-     * 请求一次异步检查点。Source 在线程内生成状态并把 barrier 放入 Channel，Sink 消费 barrier 前先处理并 flush 所有前序数据。
+     * 请求一次异步检查点。Source 在线程内生成状态并把 barrier 放入 Channel，Sink flush 后再由 Source 完成外部 offset 确认。
      *
      * @return 检查点完成 Future
      */
@@ -111,7 +124,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         long checkpointId = checkpointSequence.incrementAndGet();
         CompletableFuture<LocalCheckpoint> future = new CompletableFuture<>();
         checkpointFutures.put(checkpointId, future);
-        checkpointRequests.add(new CheckpointRequest(checkpointId));
+        checkpointRequests.add(new CheckpointRequest(checkpointId, false));
 
         if (status.get() != ExecutionStatus.RUNNING && checkpointFutures.remove(checkpointId, future)) {
             future.completeExceptionally(new IllegalStateException("execution finished before checkpoint"));
@@ -153,6 +166,8 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         try (SourceSplitEnumerator<SplitT> enumerator = source.createEnumerator()) {
             enumerator.start();
             while (!cancellationRequested.get()) {
+                processCompletedCheckpoints(null);
+                maybeRequestAutomaticCheckpoint();
                 processCheckpointRequests(enumerator, null, null);
 
                 Optional<SplitT> nextSplit = enumerator.nextSplit();
@@ -162,6 +177,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
                 }
 
                 if (enumerator.isFinished() && source.boundedness() == Boundedness.BOUNDED) {
+                    processCompletedCheckpoints(null);
                     processCheckpointRequests(enumerator, null, null);
                     channel.put(EndOfInputMessage.INSTANCE);
                     return;
@@ -184,17 +200,42 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         try (SourceReader<SplitT> reader = source.createReader()) {
             reader.open(split);
             while (!cancellationRequested.get() && !reader.isFinished()) {
+                processCompletedCheckpoints(reader);
+                maybeRequestAutomaticCheckpoint();
+
                 List<YakRow> rows = reader.poll();
                 if (!rows.isEmpty()) {
                     channel.put(new RowBatchMessage(rows));
                 }
+
                 processCheckpointRequests(enumerator, reader, split);
+                processCompletedCheckpoints(reader);
                 if (rows.isEmpty()) {
                     Thread.sleep(IDLE_SLEEP_MILLIS);
                 }
             }
             processCheckpointRequests(enumerator, reader, split);
+            processCompletedCheckpoints(reader);
         }
+    }
+
+    private void maybeRequestAutomaticCheckpoint() {
+        if (source.boundedness() != Boundedness.CONTINUOUS_UNBOUNDED
+                || autoCheckpointIntervalNanos <= 0
+                || automaticCheckpointPending.get()) {
+            return;
+        }
+
+        long now = System.nanoTime();
+        if (now < nextAutoCheckpointNanos) {
+            return;
+        }
+
+        long checkpointId = checkpointSequence.incrementAndGet();
+        automaticCheckpointIds.add(checkpointId);
+        automaticCheckpointPending.set(true);
+        checkpointRequests.add(new CheckpointRequest(checkpointId, true));
+        nextAutoCheckpointNanos = now + autoCheckpointIntervalNanos;
     }
 
     private void processCheckpointRequests(
@@ -205,6 +246,24 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             CheckpointState readerState = reader == null ? null : reader.snapshotState(request.checkpointId());
             String splitId = split == null ? null : split.splitId();
             channel.put(new CheckpointBarrierMessage(request.checkpointId(), enumeratorState, readerState, splitId));
+        }
+    }
+
+    private void processCompletedCheckpoints(SourceReader<SplitT> reader) throws Exception {
+        LocalCheckpoint checkpoint;
+        while ((checkpoint = completedCheckpoints.poll()) != null) {
+            if (reader != null && checkpoint.readerState() != null) {
+                reader.notifyCheckpointComplete(checkpoint.checkpointId());
+            }
+            latestCheckpoint = checkpoint;
+
+            CompletableFuture<LocalCheckpoint> future = checkpointFutures.remove(checkpoint.checkpointId());
+            if (future != null) {
+                future.complete(checkpoint);
+            }
+            if (automaticCheckpointIds.remove(checkpoint.checkpointId())) {
+                automaticCheckpointPending.set(false);
+            }
         }
     }
 
@@ -242,18 +301,12 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     private void completeCheckpoint(CheckpointBarrierMessage barrier) {
-        LocalCheckpoint checkpoint = new LocalCheckpoint(
+        completedCheckpoints.add(new LocalCheckpoint(
                 barrier.checkpointId(),
                 barrier.enumeratorState(),
                 barrier.readerState(),
                 barrier.splitId(),
-                System.currentTimeMillis());
-        latestCheckpoint = checkpoint;
-
-        CompletableFuture<LocalCheckpoint> future = checkpointFutures.remove(barrier.checkpointId());
-        if (future != null) {
-            future.complete(checkpoint);
-        }
+                System.currentTimeMillis()));
     }
 
     private void fail(Throwable cause) {

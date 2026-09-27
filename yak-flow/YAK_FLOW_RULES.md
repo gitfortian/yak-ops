@@ -109,6 +109,28 @@ Must Not:
 
 Target tables must exist before execution. Auto-create DDL and schema evolution require their own explicit design.
 
+## MySQL CDC Connector
+
+MySQL CDC uses Debezium Engine as a connector-private protocol implementation.
+
+Must:
+- Pin Debezium to a stable Final release in the Yak Ops BOM.
+- Keep Debezium Engine, SourceRecord, RecordCommitter and schema-history implementation types inside `yak-flow-connector-cdc-mysql`.
+- Use the same `YakRow + RowKind` contract as bounded sources.
+- Use `snapshot.mode=initial` for the Phase 4 full-snapshot-then-binlog path.
+- Persist Debezium offsets and internal schema history under a caller-owned state directory.
+- Acknowledge Debezium records only from `notifyCheckpointComplete`, after the Sink barrier flush succeeds.
+- Require a primary key for Phase 4 CDC.
+- Keep recovery semantics explicitly at-least-once.
+- Allow SSH-backed Datasource connections through the existing Datasource JDBC endpoint runtime rather than implementing SSH inside YakFlow.
+
+Must Not:
+- Import Debezium or Kafka Connect types into `yak-flow-api` or `yak-flow-runtime`.
+- Mark Debezium records processed when they merely enter the YakFlow row channel.
+- Claim exactly-once after a process crash.
+- Implement Transform, schema evolution or DDL propagation in Phase 4.
+- Add Kafka as a mandatory runtime dependency or external service.
+
 ## Checkpoint Boundary
 
 `CheckpointState` is an opaque connector/runtime contract.
@@ -124,7 +146,7 @@ yak-flow-runtime --------+
                          |
 jdbc batch connector -----+--> yak-flow-api
                          |
-cdc connector ------------+
+mysql cdc connector -------+
 ```
 
 `yak-flow-api` depends only on the JDK.
