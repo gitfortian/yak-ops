@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import LoginPanel from "./LoginPanel";
-import {
-  CharactersScene,
-  type ActionType,
-  type FocusedField,
-} from "./LoginScene";
+import { CharactersScene, type ActionType, type FocusedField } from "./LoginScene";
 import "./login.css";
 
 interface LoginPageProps {
