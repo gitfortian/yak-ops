@@ -25,8 +25,7 @@ function resolveOrangeFacePose(x: number, y: number, pointerPoseEnabled: boolean
 
   const horizontal = clamp(x, -1, 1);
   const vertical = clamp(y, -1, 1);
-  const edgeLift =
-    Math.abs(horizontal) * (5 + Math.max(0, -vertical) * 6);
+  const edgeLift = Math.abs(horizontal) * (5 + Math.max(0, -vertical) * 6);
 
   return {
     faceX: horizontal * 48,
@@ -644,11 +643,7 @@ export default function LoginCharacters({
 
       const orangePointerPoseEnabled =
         orangeEntryComplete && activeFocus === "idle" && activeResult === "idle";
-      const orangeFacePose = resolveOrangeFacePose(
-        orangeX,
-        orangeY,
-        orangePointerPoseEnabled,
-      );
+      const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY, orangePointerPoseEnabled);
 
       scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY}px`);
