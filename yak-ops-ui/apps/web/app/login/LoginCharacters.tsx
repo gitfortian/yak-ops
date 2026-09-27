@@ -34,6 +34,30 @@ function buildYellowBodyPath(x: number, y: number) {
   ].join(" ");
 }
 
+function buildOrangeBodyPath(x: number, y: number, activity: number) {
+  const horizontal = clamp(x, -1, 1);
+  const vertical = clamp(y, -1, 1);
+  const motion = clamp(activity, 0, 1);
+
+  const pointerLift = Math.max(0, -vertical) * 14;
+  const motionLift = motion * 8;
+  const sideLift = Math.abs(horizontal) * 5;
+  const crownX = 244 + horizontal * 18;
+  const crownY = 392 - pointerLift - motionLift - sideLift;
+  const leftLift =
+    Math.max(-horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
+  const rightLift =
+    Math.max(horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
+
+  return [
+    "M65 550",
+    `C65 458 ${svgPoint(142 + horizontal * 6)} ${svgPoint(392 - leftLift)}`,
+    `${svgPoint(crownX)} ${svgPoint(crownY)}`,
+    `C${svgPoint(346 + horizontal * 6)} ${svgPoint(392 - rightLift)} 415 458 415 550`,
+    "Z",
+  ].join(" ");
+}
+
 function PurpleCharacter() {
   return (
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
@@ -221,7 +245,11 @@ function OrangeCharacter() {
           <g className="yak-login-character--orange__result">
             <g className="yak-login-character--orange__focus">
               <g className="yak-login-character--orange__body">
-                <path d="M65 550C65 458 142 392 244 392C346 392 415 458 415 550Z" fill="#FF7D2A" />
+                <path
+                  data-orange-body-path
+                  d="M65 550C65 458 142 392 244 392C346 392 415 458 415 550Z"
+                  fill="#FF7D2A"
+                />
                 <g className="yak-login-character--orange__face">
                   <g className="yak-login-character--orange__result-eyes">
                     <g className="yak-login-character--orange__focus-eyes">
@@ -355,14 +383,17 @@ export default function LoginCharacters({
     let orangeY = 0;
     let orangeVelocityX = 0;
     let orangeVelocityY = 0;
+    let orangeBodyX = 0;
+    let orangeBodyY = 0;
     let yellowBodyX = 0;
     let yellowBodyY = 0;
     let yellowFaceX = 0;
     let yellowFaceY = 0;
     let frame = 0;
 
+    const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
     const yellowBodyPath = scene.querySelector<SVGPathElement>("[data-yellow-body-path]");
-    if (!yellowBodyPath) return;
+    if (!orangeBodyPath || !yellowBodyPath) return;
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = scene.getBoundingClientRect();
@@ -409,16 +440,18 @@ export default function LoginCharacters({
       orangeVelocityY *= 0.76;
       orangeX += orangeVelocityX;
       orangeY += orangeVelocityY;
+      orangeBodyX += (interactionTargetX - orangeBodyX) * 0.045;
+      orangeBodyY += (interactionTargetY - orangeBodyY) * 0.04;
 
       yellowBodyX += (interactionTargetX - yellowBodyX) * 0.055;
       yellowBodyY += (interactionTargetY - yellowBodyY) * 0.05;
       yellowFaceX += (interactionTargetX - yellowFaceX) * 0.095;
       yellowFaceY += (interactionTargetY - yellowFaceY) * 0.085;
 
-      const orangeSquash = clamp(
-        Math.abs(orangeVelocityX) * 0.35 + Math.abs(orangeVelocityY) * 0.22,
+      const orangeActivity = clamp(
+        Math.abs(orangeVelocityX) * 6 + Math.abs(orangeVelocityY) * 5,
         0,
-        0.018,
+        1,
       );
 
       scene.style.setProperty("--yak-purple-lean", `${purpleX * -8}deg`);
@@ -435,10 +468,9 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
-      scene.style.setProperty("--yak-orange-bend", `${orangeX * -1.8}deg`);
-      scene.style.setProperty(
-        "--yak-orange-scale-y",
-        String(1 - orangeY * 0.012 - orangeSquash * 0.35),
+      orangeBodyPath.setAttribute(
+        "d",
+        buildOrangeBodyPath(orangeBodyX, orangeBodyY, orangeActivity),
       );
       scene.style.setProperty("--yak-orange-face-x", `${orangeX * 34}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeY * 14}px`);
