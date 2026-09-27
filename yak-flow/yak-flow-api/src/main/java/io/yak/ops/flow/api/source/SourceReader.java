@@ -22,7 +22,7 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
     void open(SplitT split) throws Exception;
 
     /**
-     * 读取下一批数据。返回空列表表示当前没有可用数据，是否真正结束由 isFinished 判断。
+     * 读取下一批数据。返回空列表表示当前没有可用数据，是否真正结束由 isFinished 判断。持续无界 Reader 必须周期性返回，不能永久阻塞，确保运行时可以处理取消与检查点请求。
      *
      * @return 下一批 YakRow
      * @throws Exception 读取失败

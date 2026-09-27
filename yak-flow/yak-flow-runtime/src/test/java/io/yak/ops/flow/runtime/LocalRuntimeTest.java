@@ -1,0 +1,67 @@
+package io.yak.ops.flow.runtime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.yak.ops.flow.api.row.RowKind;
+import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.api.source.Boundedness;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+
+class LocalRuntimeTest {
+
+    private static final YakTableSchema SCHEMA =
+            new YakTableSchema(
+                    List.of(new YakColumn("id", YakDataType.BIGINT, false, null, null, null)),
+                    List.of("id"));
+
+    @Test
+    void shouldRunBoundedSourceToCompletion() throws Exception {
+        TestSource source = new TestSource(Boundedness.BOUNDED, 5, 0);
+        TestSink sink = new TestSink();
+
+        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA);
+
+        assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(5)));
+        assertEquals(5, sink.rows().size());
+        assertTrue(sink.rows().stream().allMatch(row -> row.rowKind() == RowKind.INSERT));
+        assertEquals(1, sink.flushCount());
+        assertFalse(execution.failure().isPresent());
+    }
+
+    @Test
+    void shouldCheckpointAndCancelContinuousSource() throws Exception {
+        TestSource source = new TestSource(Boundedness.CONTINUOUS_UNBOUNDED, Integer.MAX_VALUE, 1);
+        TestSink sink = new TestSink();
+        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA);
+
+        waitForRows(sink, 5, Duration.ofSeconds(5));
+        LocalCheckpoint checkpoint = execution.checkpoint().get(5, TimeUnit.SECONDS);
+
+        TestCheckpointState readerState = (TestCheckpointState) checkpoint.readerStateOptional().orElseThrow();
+        assertEquals("test-split", checkpoint.splitIdOptional().orElseThrow());
+        assertEquals("reader", readerState.owner());
+        assertEquals(readerState.position(), sink.lastFlushRowCount());
+        assertEquals(checkpoint, execution.latestCheckpoint().orElseThrow());
+
+        execution.cancel();
+
+        assertEquals(ExecutionStatus.CANCELED, execution.await(Duration.ofSeconds(5)));
+        assertTrue(sink.flushCount() >= 1);
+        assertFalse(execution.failure().isPresent());
+    }
+
+    private static void waitForRows(TestSink sink, int minimumRows, Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (sink.rows().size() < minimumRows && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertTrue(sink.rows().size() >= minimumRows);
+    }
+}

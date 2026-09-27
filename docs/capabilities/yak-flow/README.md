@@ -1,6 +1,6 @@
 # YakFlow Capability
 
-Status: Phase 1 — Core API
+Status: Phase 2 — Local Runtime
 
 ## Goal
 
@@ -56,11 +56,35 @@ This phase establishes only `yak-flow-api`:
 - `Boundedness`.
 - opaque `CheckpointState`.
 
+## Phase 2 — Local Runtime
+
+Phase 2 adds a minimal single-node execution path:
+
+```text
+Source Task
+    |
+    v
+bounded Row Channel
+    |
+    v
+Sink Task
+```
+
+The runtime supports:
+
+- bounded Source execution that naturally reaches `SUCCEEDED`.
+- continuous unbounded Source execution that stays running until cancel/failure.
+- explicit cancellation.
+- runtime status and failure observation.
+- checkpoint barrier: capture Source state, enqueue a barrier after already-produced rows, flush Sink when the barrier is consumed, then complete the checkpoint.
+- active-execution in-memory latest checkpoint.
+
+The barrier establishes ordering only. Phase 2 does not claim exactly-once delivery and does not persist checkpoints across process restart.
+
 ## Explicit Non-Goals
 
-Phase 1 does not implement:
+The current phase does not implement:
 
-- Local Runtime or scheduling.
 - JDBC Source/Sink.
 - Debezium or MySQL CDC.
 - Transform.
@@ -74,7 +98,7 @@ Those capabilities must build on this contract rather than changing batch and CD
 ## Dependency Boundary
 
 ```text
-future runtime ---------+
+yak-flow-runtime ------+
                         |
 future JDBC connector --+--> yak-flow-api
                         |
