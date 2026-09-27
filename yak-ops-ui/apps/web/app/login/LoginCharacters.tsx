@@ -352,23 +352,17 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
-      scene.style.setProperty("--yak-orange-shift-x", `${orangeX * 6}px`);
-      scene.style.setProperty(
-        "--yak-orange-scale-x",
-        String(1 + Math.abs(orangeX) * 0.028 + orangeSquash),
-      );
+      scene.style.setProperty("--yak-orange-bend", `${orangeX * -5.5}deg`);
       scene.style.setProperty(
         "--yak-orange-scale-y",
-        String(1 - Math.abs(orangeX) * 0.014 - orangeY * 0.028 - orangeSquash * 0.65),
+        String(1 - Math.abs(orangeX) * 0.01 - orangeY * 0.028 - orangeSquash * 0.65),
       );
       scene.style.setProperty("--yak-orange-face-x", `${orangeX * 9}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeY * 4}px`);
       scene.style.setProperty("--yak-orange-eye-x", `${orangeX * 3}px`);
       scene.style.setProperty("--yak-orange-eye-y", `${orangeY * 1.5}px`);
 
-      scene.style.setProperty("--yak-yellow-shift-x", `${yellowX * 7}px`);
-      scene.style.setProperty("--yak-yellow-lift-y", `${yellowY * 3}px`);
-      scene.style.setProperty("--yak-yellow-lean", `${yellowX * 5.5}deg`);
+      scene.style.setProperty("--yak-yellow-bend", `${yellowX * -6.5}deg`);
       scene.style.setProperty("--yak-yellow-stretch", String(1 - yellowY * 0.026));
       scene.style.setProperty("--yak-yellow-face-x", `${yellowX * 8}px`);
       scene.style.setProperty("--yak-yellow-face-y", `${yellowY * 3.5}px`);
