@@ -1,154 +1,151 @@
-import { Activity, Database } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import LoginPanel from "./LoginPanel";
+import { CharactersScene, type ActionType, type FocusedField } from "./LoginScene";
 import "./login.css";
 
 interface LoginPageProps {
   onAuthenticated: () => Promise<void>;
 }
 
-function DataFlowVisual() {
-  return (
-    <div
-      className="relative mt-12 h-[286px] w-full max-w-[620px] overflow-hidden rounded-[20px] border border-[#e2e6ec] bg-white/70"
-      aria-hidden="true"
-    >
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(37,40,50,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(37,40,50,0.035)_1px,transparent_1px)] bg-[size:28px_28px]" />
+type Pt = { x: number; y: number };
 
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 620 286" fill="none">
-        <path d="M132 74C206 74 216 142 284 142" stroke="#D9DDE3" strokeWidth="1.5" />
-        <path d="M132 214C206 214 216 154 284 154" stroke="#D9DDE3" strokeWidth="1.5" />
-        <path d="M354 148C424 148 442 86 500 86" stroke="#D9DDE3" strokeWidth="1.5" />
-        <path d="M354 148C424 148 442 206 500 206" stroke="#D9DDE3" strokeWidth="1.5" />
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
-        <circle r="4" fill="var(--yak-color-primary)" className="yak-login-motion">
-          <animateMotion
-            dur="5.4s"
-            repeatCount="indefinite"
-            path="M132 74C206 74 216 142 284 142"
-          />
-        </circle>
-        <circle r="4" fill="var(--yak-color-primary)" className="yak-login-motion">
-          <animateMotion
-            begin="1.8s"
-            dur="5.4s"
-            repeatCount="indefinite"
-            path="M132 214C206 214 216 154 284 154"
-          />
-        </circle>
-        <circle r="4" fill="var(--yak-color-primary)" className="yak-login-motion">
-          <animateMotion
-            begin="0.9s"
-            dur="5.4s"
-            repeatCount="indefinite"
-            path="M354 148C424 148 442 86 500 86"
-          />
-        </circle>
-        <circle r="4" fill="var(--yak-color-primary)" className="yak-login-motion">
-          <animateMotion
-            begin="2.7s"
-            dur="5.4s"
-            repeatCount="indefinite"
-            path="M354 148C424 148 442 206 500 206"
-          />
-        </circle>
-      </svg>
-
-      <div className="absolute left-[36px] top-[45px] flex w-[112px] items-center gap-2 rounded-[10px] border border-[#e2e6ec] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(31,35,41,0.04)]">
-        <Database size={16} className="text-[var(--yak-color-primary)]" />
-        <span className="text-[13px] font-medium text-[#343841]">MySQL</span>
-      </div>
-
-      <div className="absolute bottom-[43px] left-[36px] flex w-[112px] items-center gap-2 rounded-[10px] border border-[#e2e6ec] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(31,35,41,0.04)]">
-        <Database size={16} className="text-[var(--yak-color-primary)]" />
-        <span className="text-[13px] font-medium text-[#343841]">PostgreSQL</span>
-      </div>
-
-      <div className="absolute left-1/2 top-1/2 flex w-[144px] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-[14px] border border-[#d9e1ff] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(0,51,255,0.08)]">
-        <div className="yak-login-flow-core flex size-9 items-center justify-center rounded-[10px] bg-[var(--yak-color-primary)] text-white">
-          <Activity size={18} />
-        </div>
-        <span className="mt-2 text-[13px] font-semibold text-[#252832]">Yak Ops</span>
-        <span className="mt-0.5 text-[11px] text-[#8f949e]">Batch · CDC</span>
-      </div>
-
-      <div className="absolute right-[34px] top-[57px] flex w-[102px] items-center gap-2 rounded-[10px] border border-[#e2e6ec] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(31,35,41,0.04)]">
-        <Database size={16} className="text-[#667085]" />
-        <span className="text-[13px] font-medium text-[#343841]">Oracle</span>
-      </div>
-
-      <div className="absolute bottom-[55px] right-[34px] flex w-[102px] items-center gap-2 rounded-[10px] border border-[#e2e6ec] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(31,35,41,0.04)]">
-        <Database size={16} className="text-[#667085]" />
-        <span className="text-[13px] font-medium text-[#343841]">MySQL</span>
-      </div>
-    </div>
-  );
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const bootStartRef = useRef(0);
+  const mouseTargetRef = useRef<Pt>({ x: 0, y: 0 });
+  const tiltTargetRef = useRef(0);
+
+  const [mouse, setMouse] = useState<Pt>({ x: 0, y: 0 });
+  const [action, setAction] = useState<{ type: ActionType; nonce: number }>({
+    type: "BLINK",
+    nonce: 0,
+  });
+  const [globalTilt, setGlobalTilt] = useState(0);
+  const [bootT, setBootT] = useState(0);
+  const [focusedField, setFocusedField] = useState<FocusedField>(null);
+  const [stageRect, setStageRect] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
+
+  useEffect(() => {
+    bootStartRef.current = performance.now();
+    let frame = 0;
+
+    const tick = () => {
+      setBootT(performance.now() - bootStartRef.current);
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      mouseTargetRef.current = { x: event.clientX, y: event.clientY };
+
+      const rect = stageRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const centerX = rect.left + rect.width / 2;
+      const distanceX = (event.clientX - centerX) / (rect.width / 2);
+      tiltTargetRef.current = clamp(distanceX, -1, 1) * 6;
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: true });
+    let frame = 0;
+
+    const animate = () => {
+      setMouse((current) => ({
+        x: lerp(current.x, mouseTargetRef.current.x, 0.22),
+        y: lerp(current.y, mouseTargetRef.current.y, 0.22),
+      }));
+      setGlobalTilt((current) => lerp(current, tiltTargetRef.current, 0.14));
+      frame = requestAnimationFrame(animate);
+    };
+
+    frame = requestAnimationFrame(animate);
+
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    const element = stageRef.current;
+    if (!element) return;
+
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      setStageRect({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  const fire = (type: ActionType) => {
+    setAction({ type, nonce: Date.now() });
+  };
+
   return (
-    <main className="min-h-screen bg-[#f7f8fa] text-[#252832] lg:grid lg:grid-cols-[minmax(0,1.08fr)_minmax(440px,0.92fr)]">
-      <section className="relative hidden min-h-screen overflow-hidden border-r border-[#e7e9ed] bg-[#f7f8fa] lg:flex lg:flex-col">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_18%,rgba(0,51,255,0.08),transparent_30%)]" />
-
-        <header className="relative z-10 flex h-20 shrink-0 items-center px-10 xl:px-14">
-          <img
-            src="/logo1.png"
-            alt="Yak Ops"
-            className="h-8 w-auto select-none object-contain"
-            draggable={false}
-          />
-        </header>
-
-        <div className="relative z-10 flex flex-1 items-center px-10 py-10 xl:px-14">
-          <div className="yak-login-enter w-full max-w-[680px]">
-            <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--yak-color-primary)]">
-              Data operations workspace
-            </p>
-            <h1 className="max-w-[650px] text-[46px] font-semibold leading-[1.08] tracking-[-0.035em] text-[#252832] xl:text-[52px]">
-              Build, move, and operate data with confidence.
-            </h1>
-            <p className="mt-5 max-w-[560px] text-[15px] leading-7 text-[#667085]">
-              从数据源连接、离线同步到 CDC，让数据流转和日常运维保持在一个清晰的工作空间里。
-            </p>
-
-            <DataFlowVisual />
-          </div>
-        </div>
-
-        <footer className="relative z-10 flex h-16 shrink-0 items-center px-10 text-[12px] text-[#98a2b3] xl:px-14">
-          Yak Ops · One workspace for your data
-        </footer>
+    <main className="min-h-screen bg-white md:grid md:grid-cols-[7fr_5fr]">
+      <section className="hidden min-h-screen overflow-hidden md:block">
+        <CharactersScene
+          ref={stageRef}
+          mouse={mouse}
+          action={action}
+          globalTilt={globalTilt}
+          bootT={bootT}
+          stageW={stageRect.width}
+          stageH={stageRect.height}
+          stageRect={stageRect}
+          focusedField={focusedField}
+        />
       </section>
 
-      <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-12 xl:px-16">
-        <header className="absolute left-6 top-6 sm:left-10 lg:hidden">
-          <img
-            src="/logo1.png"
-            alt="Yak Ops"
-            className="h-8 w-auto select-none object-contain"
-            draggable={false}
-          />
-        </header>
-
-        <div className="yak-login-enter yak-login-enter-delayed w-full max-w-[400px]">
-          <div className="mb-8">
-            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--yak-color-primary)]">
-              Yak Ops
-            </p>
-            <h2 className="text-[30px] font-semibold leading-tight tracking-[-0.025em] text-[#252832]">
-              Welcome to Yak Ops
-            </h2>
-            <p className="mt-2 text-[14px] leading-6 text-[#667085]">
-              登录你的工作空间，继续管理数据连接与数据任务。
-            </p>
+      <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-14">
+        <div className="w-full max-w-[380px]">
+          <div className="mb-8 text-center">
+            <h1 className="m-0 text-[32px] font-bold leading-[1.15] tracking-[-0.025em] text-[#0f172a]">
+              Welcome back!
+            </h1>
+            <p className="mt-2.5 text-[14px] text-[#64748b]">Please enter your details</p>
           </div>
 
-          <LoginPanel onAuthenticated={onAuthenticated} />
-
-          <p className="mt-10 text-center text-[11px] text-[#b0b4bc] lg:hidden">
-            Yak Ops · Data operations workspace
-          </p>
+          <LoginPanel
+            onAuthenticated={onAuthenticated}
+            onFire={fire}
+            onFieldFocusChange={setFocusedField}
+          />
         </div>
       </section>
     </main>
