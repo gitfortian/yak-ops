@@ -81,7 +81,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
     if (favoriteMutatingIds.has(productId)) return;
 
     const previousPreference = preferences.find((preference) => preference.itemKey === productId);
-    const nextFavorite = !Boolean(previousPreference?.favorite);
+    const nextFavorite = !previousPreference?.favorite;
     const nextSortOrder = nextFavorite
       ? Math.max(0, ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder)) +
         1
