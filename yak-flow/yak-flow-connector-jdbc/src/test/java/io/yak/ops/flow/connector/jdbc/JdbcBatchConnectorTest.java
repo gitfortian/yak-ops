@@ -183,6 +183,41 @@ class JdbcBatchConnectorTest {
     }
 
     @Test
+    void shouldAppendWithoutClearingExistingTarget() throws Exception {
+        TestDataSourceConnection sourceConnection =
+                connection("MYSQL", "jdbc:h2:mem:append_source;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        TestDataSourceConnection targetConnection =
+                connection("MYSQL", "jdbc:h2:mem:append_target;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        createSource(sourceConnection);
+        createTarget(targetConnection);
+        insertStaleTargetRow(targetConnection);
+
+        runSync(sourceConnection, targetConnection, JdbcSaveMode.APPEND);
+
+        try (var connection = DIRECT_CONNECTION.open(targetConnection, 5);
+                var statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM target_table")) {
+            assertEquals(true, resultSet.next());
+            assertEquals(4L, resultSet.getLong(1));
+        }
+    }
+
+    @Test
+    void shouldOverwriteExistingMysqlTarget() throws Exception {
+        runOverwrite("MYSQL", "MySQL");
+    }
+
+    @Test
+    void shouldOverwriteExistingPostgresqlTarget() throws Exception {
+        runOverwrite("POSTGRE_SQL", "PostgreSQL");
+    }
+
+    @Test
+    void shouldOverwriteExistingOracleTarget() throws Exception {
+        runOverwrite("ORACLE", "Oracle");
+    }
+
+    @Test
     void shouldSyncMysqlSourceToMysqlSink() throws Exception {
         runSync("MYSQL", "MySQL");
     }
@@ -195,6 +230,48 @@ class JdbcBatchConnectorTest {
     @Test
     void shouldSyncMysqlSourceToOracleSink() throws Exception {
         runSync("ORACLE", "Oracle");
+    }
+
+    private void runOverwrite(String targetType, String h2Mode) throws Exception {
+        String suffix = targetType.toLowerCase();
+        TestDataSourceConnection sourceConnection = connection(
+                "MYSQL", "jdbc:h2:mem:overwrite_source_" + suffix + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        TestDataSourceConnection targetConnection = connection(
+                targetType,
+                "jdbc:h2:mem:overwrite_target_" + suffix + ";MODE=" + h2Mode + ";DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        createSource(sourceConnection);
+        createTarget(targetConnection);
+        insertStaleTargetRow(targetConnection);
+
+        runSync(sourceConnection, targetConnection, JdbcSaveMode.OVERWRITE);
+
+        try (var connection = DIRECT_CONNECTION.open(targetConnection, 5);
+                var statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(
+                        "SELECT id, name, amount FROM target_table ORDER BY id")) {
+            assertRow(resultSet, 1L, "yak", new BigDecimal("10.25"));
+            assertRow(resultSet, 2L, "flow", new BigDecimal("20.50"));
+            assertRow(resultSet, 3L, "batch", new BigDecimal("30.75"));
+            assertFalse(resultSet.next());
+        }
+    }
+
+    private void runSync(
+            TestDataSourceConnection sourceConnection,
+            TestDataSourceConnection targetConnection,
+            JdbcSaveMode saveMode)
+            throws Exception {
+        YakTableSchema schema = sourceSchema();
+        DataSourceTablePath sourceTable = new DataSourceTablePath(null, null, "source_table");
+        DataSourceTablePath targetTable = new DataSourceTablePath(null, null, "target_table");
+        JdbcSource source = new JdbcSource(
+                new JdbcSourceConfig(sourceConnection, sourceTable, schema, 2, 2, 5), DIRECT_CONNECTION);
+        JdbcSink sink =
+                new JdbcSink(new JdbcSinkConfig(targetConnection, targetTable, 2, 5, saveMode), DIRECT_CONNECTION);
+
+        assertEquals(
+                ExecutionStatus.SUCCEEDED,
+                new LocalExecutionEngine().start(source, sink, schema).await(Duration.ofSeconds(5)));
     }
 
     private void runSync(String targetType, String h2Mode) throws Exception {
@@ -212,14 +289,7 @@ class JdbcBatchConnectorTest {
         DataSourceTablePath sourceTable = new DataSourceTablePath(null, null, "source_table");
         DataSourceTablePath targetTable = new DataSourceTablePath(null, null, "target_table");
 
-        JdbcSource source = new JdbcSource(
-                new JdbcSourceConfig(sourceConnection, sourceTable, schema, 2, 2, 5), DIRECT_CONNECTION);
-        JdbcSink sink =
-                new JdbcSink(new JdbcSinkConfig(targetConnection, targetTable, 2, 5), DIRECT_CONNECTION);
-
-        assertEquals(
-                ExecutionStatus.SUCCEEDED,
-                new LocalExecutionEngine().start(source, sink, schema).await(Duration.ofSeconds(5)));
+        runSync(sourceConnection, targetConnection, JdbcSaveMode.APPEND);
 
         try (var connection = DIRECT_CONNECTION.open(targetConnection, 5);
                 var statement = connection.createStatement();
@@ -276,6 +346,13 @@ class JdbcBatchConnectorTest {
                 var statement = opened.createStatement()) {
             statement.execute(
                     "CREATE TABLE target_table (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL, amount DECIMAL(10,2))");
+        }
+    }
+
+    private void insertStaleTargetRow(TestDataSourceConnection connection) throws Exception {
+        try (var opened = DIRECT_CONNECTION.open(connection, 5);
+                var statement = opened.createStatement()) {
+            statement.execute("INSERT INTO target_table VALUES (999, 'stale', 999.99)");
         }
     }
 
