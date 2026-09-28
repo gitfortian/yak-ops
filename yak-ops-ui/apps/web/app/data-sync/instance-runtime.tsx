@@ -1,4 +1,5 @@
 import {
+  Alert,
   Badge,
   Button,
   Input,
@@ -387,6 +388,10 @@ export function DataSyncInstanceDetailPage({
       />
 
       <div className="space-y-4 px-6 pb-8 pt-5 max-md:px-4">
+        {realtime && isActive(record) ? (
+          <Alert>停止后将从最近 Checkpoint 续跑，少量未确认事件可能重复消费。</Alert>
+        ) : null}
+
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5">
           <div className="flex flex-wrap items-center gap-3">
             <Badge tone={meta.tone}>{meta.label}</Badge>
