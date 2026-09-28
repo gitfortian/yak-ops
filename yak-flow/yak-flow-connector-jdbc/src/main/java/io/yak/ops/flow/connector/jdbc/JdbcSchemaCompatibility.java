@@ -40,8 +40,7 @@ public final class JdbcSchemaCompatibility {
         }
     }
 
-    private static boolean sameTypeCompatible(
-            YakDataType dataType, DataSourceColumn source, DataSourceColumn target) {
+    private static boolean sameTypeCompatible(YakDataType dataType, DataSourceColumn source, DataSourceColumn target) {
         if (dataType == YakDataType.STRING || dataType == YakDataType.BINARY) {
             return capacityCompatible(source.size(), target.size());
         }
