@@ -1,3 +1,5 @@
+export type DataSyncWriteMode = "APPEND" | "OVERWRITE" | "UPSERT";
+
 export interface PaginationInfo {
   pageNo: number;
   pageSize: number;
