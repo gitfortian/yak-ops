@@ -13,12 +13,12 @@ Task Definition
       ↓
 Task Instance
       ↓
-YakFlow Local Runtime
+YakFlow Local Execution Engine
       ↓
 JdbcSource -> JdbcSink
 ```
 
-Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Runtime and persists the execution lifecycle.
+Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle.
 
 ## Task Definition
 
@@ -119,7 +119,7 @@ OfflineSyncExecutionPlanner
     ↓
 ExecutionPlan(JdbcSource / JdbcSink / sourceSchema)
     ↓
-LocalRuntime
+LocalExecutionEngine
     ↓
 RUNNING
     ├── SUCCEEDED
@@ -139,7 +139,7 @@ PENDING / RUNNING from previous process
              LOST
 ```
 
-This is deliberate: Local Runtime has no process restart recovery.
+This is deliberate: Local Execution Engine has no process restart recovery.
 
 ## Phase 4 — Metrics + Acceptance
 
