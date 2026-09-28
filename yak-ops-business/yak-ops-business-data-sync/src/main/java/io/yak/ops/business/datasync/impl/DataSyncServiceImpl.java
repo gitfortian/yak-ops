@@ -388,8 +388,8 @@ public class DataSyncServiceImpl implements DataSyncService {
 
         Map<String, DataSourceCatalogColumnVO> sourceByName = DataSyncCatalogColumns.indexByName(sourceColumns);
         if (targetPrimaryKeys.stream()
-                .anyMatch(primaryKey ->
-                        DataSyncCatalogColumns.findByName(sourceByName, primaryKey.getName()) == null)) {
+                .anyMatch(
+                        primaryKey -> DataSyncCatalogColumns.findByName(sourceByName, primaryKey.getName()) == null)) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求来源包含目标表全部主键字段");
         }
     }
@@ -555,7 +555,6 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (syncType == DataSyncType.REALTIME && resolved != DataSyncWriteMode.APPEND) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 当前固定使用 APPEND 写入方式");
         }
-
     }
 
     private DataSyncWriteMode taskWriteMode(DataSyncTaskEntity task) {
