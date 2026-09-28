@@ -229,8 +229,8 @@ class DataSyncTaskLifecycleContractTest {
         task.setTargetDatabase("target_db");
         task.setTargetTable("target_table");
         task.setRuntimeConfig(
-                "{"fetchSize":500,"readBatchSize":500,"writeBatchSize":500,"splitSize":null,"
-                        + ""sourceParallelism":1,"timeoutSeconds":30}");
+                "{\"fetchSize\":500,\"readBatchSize\":500,\"writeBatchSize\":500,\"splitSize\":null,"
+                        + "\"sourceParallelism\":1,\"timeoutSeconds\":30}");
         task.setDefinitionVersion(version);
         return task;
     }
