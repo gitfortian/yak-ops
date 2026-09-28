@@ -5,13 +5,6 @@ import {
   Input,
   Modal,
   PageHeader,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectTrigger,
-  SelectValue,
   Table,
   Tabs,
   TabsList,
@@ -32,6 +25,7 @@ import {
   type DataSyncTaskRecord,
 } from "@/service/data-sync";
 
+import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import { OfflineSyncInstances } from "./instances";
 
 const PAGE_SIZE = 20;
@@ -59,6 +53,7 @@ export function OfflineSyncPage() {
 
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
@@ -73,19 +68,35 @@ export function OfflineSyncPage() {
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
     [dataSources],
   );
-  const dataSourceItems = useMemo(
+  const dataSourceOptions = useMemo(
     () =>
-      Object.fromEntries(
-        dataSources.flatMap((item) => (item.id ? [[item.id, item.name || item.id] as const] : [])),
+      dataSources.flatMap((item) =>
+        item.id
+          ? [
+              {
+                value: item.id,
+                label: item.name || item.id,
+                searchText: [item.dbType, item.database, item.schema].filter(Boolean).join(" "),
+              },
+            ]
+          : [],
       ),
     [dataSources],
   );
 
-  useEffect(() => {
-    void listDataSources({ pageNo: 1, pageSize: 200 }).then((result) =>
-      setDataSources(result?.bizData || []),
-    );
+  const loadDataSources = useCallback(async () => {
+    setDataSourcesLoading(true);
+    try {
+      const result = await listDataSources({ pageNo: 1, pageSize: 200 });
+      setDataSources(result?.bizData || []);
+    } finally {
+      setDataSourcesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDataSources();
+  }, [loadDataSources]);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -366,60 +377,56 @@ export function OfflineSyncPage() {
 
           <Field className="grid grid-cols-[110px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel required>来源数据源</FieldLabel>
-            <Select
-              size="small"
-              items={dataSourceItems}
-              value={draft.sourceDataSourceId || undefined}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  sourceDataSourceId: String(value || ""),
-                }))
+            <DataSyncSearchableSelect
+              value={draft.sourceDataSourceId || null}
+              options={dataSourceOptions}
+              placeholder="请选择来源数据源"
+              searchPlaceholder="搜索来源数据源"
+              emptyText="暂无数据源"
+              refreshing={dataSourcesLoading}
+              onRefresh={loadDataSources}
+              footer={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                  onClick={() => navigate("/data-source?create=1")}
+                >
+                  <Plus size={14} />
+                  新增数据源
+                </Button>
               }
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择来源数据源" />
-              </SelectTrigger>
-              <SelectContent>
-                {dataSources.map((item) =>
-                  item.id ? (
-                    <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{item.name || item.id}</SelectItemText>
-                      <SelectItemIndicator />
-                    </SelectItem>
-                  ) : null,
-                )}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) =>
+                setDraft((current) => ({ ...current, sourceDataSourceId: value }))
+              }
+            />
           </Field>
 
           <Field className="grid grid-cols-[110px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel required>目标数据源</FieldLabel>
-            <Select
-              size="small"
-              items={dataSourceItems}
-              value={draft.targetDataSourceId || undefined}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  targetDataSourceId: String(value || ""),
-                }))
+            <DataSyncSearchableSelect
+              value={draft.targetDataSourceId || null}
+              options={dataSourceOptions}
+              placeholder="请选择目标数据源"
+              searchPlaceholder="搜索目标数据源"
+              emptyText="暂无数据源"
+              refreshing={dataSourcesLoading}
+              onRefresh={loadDataSources}
+              footer={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                  onClick={() => navigate("/data-source?create=1")}
+                >
+                  <Plus size={14} />
+                  新增数据源
+                </Button>
               }
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择目标数据源" />
-              </SelectTrigger>
-              <SelectContent>
-                {dataSources.map((item) =>
-                  item.id ? (
-                    <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{item.name || item.id}</SelectItemText>
-                      <SelectItemIndicator />
-                    </SelectItem>
-                  ) : null,
-                )}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) =>
+                setDraft((current) => ({ ...current, targetDataSourceId: value }))
+              }
+            />
           </Field>
         </div>
       </Modal>
