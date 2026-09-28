@@ -21,7 +21,7 @@ public class DataSyncTaskDTO {
     @Size(max = 128, message = "任务名称不能超过 128 个字符")
     private String name;
 
-    /** 当前阶段只支持 OFFLINE。 */
+    /** 同步任务类型，支持 OFFLINE 与 REALTIME。 */
     @NotNull(message = "同步类型不能为空")
     private DataSyncType syncType = DataSyncType.OFFLINE;
 
@@ -59,10 +59,13 @@ public class DataSyncTaskDTO {
     @Size(max = 128, message = "目标表名称不能超过 128 个字符")
     private String targetTable;
 
-    /** YakFlow 运行参数。 */
+    /** OFFLINE 任务使用的 YakFlow 运行参数；REALTIME 任务忽略该字段。 */
     @Valid
-    @NotNull(message = "运行参数不能为空")
     private DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+
+    /** REALTIME 任务使用的 YakFlow CDC 运行参数；OFFLINE 任务忽略该字段。 */
+    @Valid
+    private DataSyncRealtimeConfigDTO realtimeConfig = new DataSyncRealtimeConfigDTO();
 
     /** 用户维护的任务备注。 */
     @Size(max = 500, message = "任务备注不能超过 500 个字符")
