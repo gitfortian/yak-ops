@@ -36,6 +36,10 @@ public interface JdbcDialect {
         return "TRUNCATE TABLE " + qualifiedTable(table);
     }
 
+    default String upsertSql(DataSourceTablePath table, YakTableSchema schema) {
+        throw new UnsupportedOperationException("UPSERT is not supported by this JDBC dialect");
+    }
+
     default String insertSql(DataSourceTablePath table, YakTableSchema schema) {
         String columns = schema.columns().stream()
                 .map(YakColumn::name)
