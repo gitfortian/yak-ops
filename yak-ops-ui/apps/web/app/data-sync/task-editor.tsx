@@ -410,6 +410,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     void getDataSyncTask(id)
       .then((task) => {
         if (!active) return;
+        if (task.syncType !== syncType) {
+          toast.error("任务类型与当前页面不匹配");
+          navigate(basePath, { replace: true });
+          return;
+        }
         setForm({
           name: task.name,
           remark: task.remark || "",
@@ -431,7 +436,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [basePath, id, navigate, syncType]);
 
   const mappingPayload = useMemo(
     () =>
