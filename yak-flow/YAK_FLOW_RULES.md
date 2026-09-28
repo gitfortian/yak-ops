@@ -175,7 +175,10 @@ Must:
 - Read only declared schema columns and preserve column order into `YakRow`.
 - Use bounded cursor batches instead of loading an entire table into memory.
 - Allow an explicit integer single-primary-key split contract with inclusive lower/upper bounds and a requested split count.
-- Generate numeric range splits without gaps, overlaps or empty ranges; explicit split planning is independent from Source Reader parallelism.
+- Generate numeric range splits without gaps, overlaps or empty ranges; split planning is independent from Source Reader parallelism.
+- When `splitSize` is configured, detect a single integer primary key, query `MIN / MAX / COUNT(*)`, and derive the requested range split count from the target rows per split.
+- Fall back to one whole-table split when no eligible integer single primary key exists or the table row count does not exceed `splitSize`.
+- Reject dynamic plans above 10,000 splits instead of allocating an unbounded split list; callers must increase `splitSize`.
 - Treat each JDBC split as an independent read transaction; V1 does not claim one database-consistent snapshot across multiple splits.
 - Commit Sink writes in explicit JDBC batches.
 - Roll back uncommitted Sink data on write/flush failure.
@@ -191,7 +194,7 @@ Must Not:
 - Auto-create target tables in Phase 3.
 - Claim snapshot restart consistency from the current row-count checkpoint state.
 - Claim or simulate Source parallelism while Local Runtime still has one Source Task; multiple JDBC splits are consumed serially until the runtime adds real parallel Readers.
-- Auto-discover split bounds, row counts, skew or sampling policy in the explicit numeric-range split phase.
+- Add skew detection or sampling policy in the dynamic range split phase.
 - Duplicate JDBC type-family or conversion compatibility rules in Data Sync Business.
 
 Target tables must exist before execution. Auto-create DDL and schema evolution require their own explicit design.
