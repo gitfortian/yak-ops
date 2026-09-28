@@ -22,12 +22,18 @@ public class DataSyncDefinitionSnapshotVO {
     /** 实例启动时采用的任务定义版本。 */
     private Integer taskVersion;
 
+    /** 实例启动时固化的同步类型：OFFLINE 或 REALTIME。 */
+    private String syncType;
+
     /** 实例启动时固化的来源数据源与表路径，不包含连接凭证。 */
     private DataSyncEndpointSnapshotVO source;
 
     /** 实例启动时固化的目标数据源与表路径，不包含连接凭证。 */
     private DataSyncEndpointSnapshotVO target;
 
-    /** 实例启动时固化的 YakFlow 运行参数。 */
+    /** OFFLINE 实例启动时固化的 YakFlow 运行参数；REALTIME 实例为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;
+
+    /** REALTIME 实例启动时固化的 CDC / Checkpoint 参数；OFFLINE 实例为空。 */
+    private DataSyncRealtimeConfigVO realtimeConfig;
 }
