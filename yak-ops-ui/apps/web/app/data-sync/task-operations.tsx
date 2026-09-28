@@ -6,7 +6,7 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useActiveTaskInstances } from "@/app/data-sync/task-lifecycle";
 import {
@@ -147,18 +147,16 @@ export function DataSyncTaskOperations({
             >
               {activeInstance ? "停止" : realtime ? "启动" : "运行"}
             </Button>
-            <Fragment>
-              <span className="h-3 w-px bg-[#e4e7ec]" />
-              <Button
-                variant="ghost"
-                size="small"
-                disabled={Boolean(actionKey)}
-                className="px-1 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
-                onClick={() => onOpenInstances(record.id)}
-              >
-                实例
-              </Button>
-            </Fragment>
+            <span className="h-3 w-px bg-[#e4e7ec]" />
+            <Button
+              variant="ghost"
+              size="small"
+              disabled={Boolean(actionKey)}
+              className="px-1 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
+              onClick={() => onOpenInstances(record.id)}
+            >
+              实例
+            </Button>
           </div>
         );
       },
