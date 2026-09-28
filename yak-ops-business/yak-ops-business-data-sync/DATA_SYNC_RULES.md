@@ -83,6 +83,8 @@ RETRY
 
 Phase 1 only defines persistence. Runtime state transitions are introduced with execution work.
 
+Each Instance must persist its own `syncType` snapshot in addition to task ID/name/version. Historical Instance filtering must not depend on the current Task row because Tasks may be deleted.
+
 The instance `definitionSnapshot` is immutable execution input captured when an instance starts. It may include task name, datasource IDs/names/types, table locations, runtime config and future field mappings.
 
 It must never contain:
@@ -104,6 +106,7 @@ yak_ops_data_sync_instance
 No database physical foreign keys.
 
 Repository queries must always scope Task / Instance product access by `workspace_id`.
+Instance page queries may additionally filter by persisted `sync_type` so OFFLINE and REALTIME product surfaces never mix historical execution records.
 
 Task deletion does not imply deleting historical instances.
 
@@ -261,7 +264,7 @@ Acceptance:
 
 ## Current Phase
 
-The offline milestone remains Phase 4 and fully executable. Realtime Phase 3 adds durable CDC state ownership and single-node lifecycle recovery semantics.
+The offline milestone remains Phase 4 and fully executable. Realtime Phase 5 adds persisted Instance runtime UI on top of the existing single-node lifecycle.
 
 Phase 4 implements:
 - task create/update/delete/detail/page.
@@ -280,7 +283,7 @@ Phase 4 implements:
 - real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
 - save-and-run product flow.
 
-Realtime Phase 3 additionally implements:
+Realtime Phase 5 additionally implements:
 - `REALTIME` task type persistence and query.
 - dedicated realtime runtime config DTO / VO.
 - MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
@@ -295,8 +298,10 @@ Realtime Phase 3 additionally implements:
 - stable Debezium engine identity across Instances.
 - controlled MySQL CDC serverId allocation/release.
 - manual rerun continuation from persisted Debezium offsets after stop/failure/process restart.
+- persisted Instance `syncType` for historical OFFLINE / REALTIME filtering.
+- REALTIME Instance list/detail frontend, active polling, Stop action and persisted event counters.
 
-Phase 4 / Realtime Phase 3 do not implement:
+Phase 4 / Realtime Phase 5 do not implement:
 - automatic restart of a LOST Instance.
 - distributed state ownership or fencing.
 - exactly-once transaction coordination.
