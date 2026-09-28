@@ -54,7 +54,7 @@ Current write-mode rollout is staged:
 ```text
 APPEND      executable; preserves existing target data
 OVERWRITE   executable; commits TRUNCATE TABLE before the INSERT load
-UPSERT      contract only; execution remains disabled until native dialect upsert support lands
+UPSERT      executable; updates/inserts by target primary key using native JDBC dialect SQL
 ```
 
 REALTIME tasks currently persist APPEND for the shared Task contract while runtime writes continue through `JdbcWriteMode.CHANGELOG`.
@@ -215,7 +215,7 @@ save OFFLINE task definition
 The editor contains only:
 - basic information.
 - source datasource/table.
-- target datasource/table.
+- target datasource/table plus OFFLINE write mode.
 - read-only automatic field mapping result.
 - YakFlow runtime tuning.
 
@@ -244,9 +244,16 @@ OVERWRITE
   TRUNCATE TABLE target
   ↓ commit
   INSERT batches
+
+UPSERT
+  target primary key
+  ↓
+  MySQL ON DUPLICATE KEY UPDATE
+  PostgreSQL ON CONFLICT DO UPDATE
+  Oracle MERGE INTO
 ```
 
-OVERWRITE is not an atomic table replacement. If the load fails after TRUNCATE commits, previous target rows are not restored.
+UPSERT requires the target table to have a primary key and the Source mapping to contain every target primary-key field. OVERWRITE is not an atomic table replacement. If the load fails after TRUNCATE commits, previous target rows are not restored.
 
 ## Phase 3 — Offline Execution
 
