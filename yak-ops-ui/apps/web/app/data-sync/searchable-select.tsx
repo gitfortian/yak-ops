@@ -89,11 +89,11 @@ export function DataSyncSearchableSelect({
                   size="small"
                   aria-label="刷新选项"
                   title="刷新"
-                  className="w-7 px-0"
+                  className="w-8 px-0"
                   onClick={() => void onRefresh()}
                 >
                   <RefreshCw
-                    size={14}
+                    size={16}
                     className={refreshing ? "animate-spin motion-reduce:animate-none" : undefined}
                   />
                 </Button>
