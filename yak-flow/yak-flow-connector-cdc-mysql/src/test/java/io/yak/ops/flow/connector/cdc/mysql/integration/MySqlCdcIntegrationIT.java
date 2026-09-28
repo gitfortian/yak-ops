@@ -3,7 +3,7 @@ package io.yak.ops.flow.connector.cdc.mysql.integration;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSource;
 import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
@@ -55,8 +55,8 @@ class MySqlCdcIntegrationIT {
                     "--binlog-row-image=FULL");
     private static final YakTableSchema SCHEMA = new YakTableSchema(
             List.of(
-                    new YakColumn("id", YakDataType.BIGINT, false, null, null, null),
-                    new YakColumn("name", YakDataType.STRING, true, 100, null, null)),
+                    new YakColumn("id", YakTypes.BIGINT, false, null),
+                    new YakColumn("name", YakTypes.STRING, true, 100)),
             List.of("id"));
     private static final JdbcConnectionProvider DIRECT_CONNECTION = (connection, timeoutSeconds) -> {
         Class.forName(connection.driverClassName());
