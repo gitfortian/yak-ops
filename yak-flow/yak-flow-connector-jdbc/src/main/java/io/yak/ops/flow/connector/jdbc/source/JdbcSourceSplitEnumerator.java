@@ -30,8 +30,7 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
     private List<JdbcSourceSplit> splits;
     private int nextSplitIndex;
 
-    JdbcSourceSplitEnumerator(
-            JdbcSourceConfig config, JdbcConnectionProvider connectionProvider, JdbcDialect dialect) {
+    JdbcSourceSplitEnumerator(JdbcSourceConfig config, JdbcConnectionProvider connectionProvider, JdbcDialect dialect) {
         this.config = config;
         this.connectionProvider = connectionProvider;
         this.dialect = dialect;
@@ -104,9 +103,7 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
                     if (rowCount % config.splitSize() != 0) splitCount++;
                     if (splitCount > MAX_DYNAMIC_SPLIT_COUNT) {
                         throw new IllegalArgumentException(
-                                "dynamic JDBC split count exceeds "
-                                        + MAX_DYNAMIC_SPLIT_COUNT
-                                        + "; increase splitSize");
+                                "dynamic JDBC split count exceeds " + MAX_DYNAMIC_SPLIT_COUNT + "; increase splitSize");
                     }
                     return createSplits(
                             new JdbcNumericSplitConfig(splitColumn.get(), lowerBound, upperBound, (int) splitCount));
@@ -125,7 +122,8 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
         List<JdbcSourceSplit> result = new ArrayList<>();
         BigInteger currentLowerBound = lowerBound;
         while (currentLowerBound.compareTo(upperBound) <= 0) {
-            BigInteger currentUpperBound = currentLowerBound.add(rangeSize).subtract(ONE).min(upperBound);
+            BigInteger currentUpperBound =
+                    currentLowerBound.add(rangeSize).subtract(ONE).min(upperBound);
             result.add(new JdbcSourceSplit(
                     config.table(),
                     splitConfig.column(),

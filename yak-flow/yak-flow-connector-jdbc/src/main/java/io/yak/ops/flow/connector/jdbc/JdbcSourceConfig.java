@@ -41,7 +41,8 @@ public record JdbcSourceConfig(
         if (readBatchSize <= 0) throw new IllegalArgumentException("readBatchSize must be greater than 0");
         if (timeoutSeconds <= 0) throw new IllegalArgumentException("timeoutSeconds must be greater than 0");
         if (splitConfig != null && splitSize != null) {
-            throw new IllegalArgumentException("explicit splitConfig and dynamic splitSize cannot be configured together");
+            throw new IllegalArgumentException(
+                    "explicit splitConfig and dynamic splitSize cannot be configured together");
         }
         if (splitSize != null && splitSize <= 0) {
             throw new IllegalArgumentException("splitSize must be greater than 0");

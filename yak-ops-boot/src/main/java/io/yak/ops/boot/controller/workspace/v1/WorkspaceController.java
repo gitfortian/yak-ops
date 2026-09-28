@@ -2,8 +2,6 @@ package io.yak.ops.boot.controller.workspace.v1;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.yak.ops.workspace.WorkspaceService;
-import io.yak.ops.workspace.constant.WorkspaceConstants;
 import io.yak.ops.common.bean.dto.workspace.WorkspaceDTO;
 import io.yak.ops.common.bean.dto.workspace.WorkspaceMemberCreateDTO;
 import io.yak.ops.common.bean.dto.workspace.WorkspaceMemberRoleDTO;
@@ -12,6 +10,8 @@ import io.yak.ops.common.bean.vo.workspace.WorkspaceVO;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
 import io.yak.ops.security.service.UserService;
+import io.yak.ops.workspace.WorkspaceService;
+import io.yak.ops.workspace.constant.WorkspaceConstants;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;

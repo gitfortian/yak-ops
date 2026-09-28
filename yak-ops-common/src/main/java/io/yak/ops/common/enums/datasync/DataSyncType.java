@@ -15,7 +15,10 @@ import lombok.RequiredArgsConstructor;
 public enum DataSyncType {
 
     /** 有界离线同步任务。 */
-    OFFLINE(1, "离线同步");
+    OFFLINE(1, "离线同步"),
+
+    /** MySQL CDC 持续实时同步任务。 */
+    REALTIME(2, "实时同步");
 
     @EnumValue
     private final Integer value;

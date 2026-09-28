@@ -20,8 +20,7 @@ public final class YakTypes {
     public static final YakDataType DATE = new YakBasicType(YakTypeKind.DATE);
     public static final YakDataType TIME = new YakBasicType(YakTypeKind.TIME);
     public static final YakDataType TIMESTAMP = new YakBasicType(YakTypeKind.TIMESTAMP);
-    public static final YakDataType TIMESTAMP_WITH_TIME_ZONE =
-            new YakBasicType(YakTypeKind.TIMESTAMP_WITH_TIME_ZONE);
+    public static final YakDataType TIMESTAMP_WITH_TIME_ZONE = new YakBasicType(YakTypeKind.TIMESTAMP_WITH_TIME_ZONE);
 
     private YakTypes() {}
 

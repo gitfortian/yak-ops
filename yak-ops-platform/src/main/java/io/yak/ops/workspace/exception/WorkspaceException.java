@@ -1,7 +1,7 @@
 package io.yak.ops.workspace.exception;
 
-import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 
 /**
  * Workspace 领域业务异常。

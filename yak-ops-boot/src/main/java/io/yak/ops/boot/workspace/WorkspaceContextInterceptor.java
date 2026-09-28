@@ -1,12 +1,12 @@
 package io.yak.ops.boot.workspace;
 
+import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.security.authentication.AuthenticationManager;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.constant.WorkspaceConstants;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import io.yak.ops.workspace.exception.WorkspaceException;
-import io.yak.ops.common.context.WorkspaceContext;
-import io.yak.ops.common.util.StringUtils;
-import io.yak.ops.security.authentication.AuthenticationManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;

@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Phase 4 — Offline Metrics + Acceptance
+Status: Offline Phase 4 + Realtime Phase 1 Task Contract
 
 ## Goal
 
@@ -18,7 +18,7 @@ YakFlow Local Execution Engine
 JdbcSource -> JdbcSink
 ```
 
-Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle.
+Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle. The realtime milestone now starts by extending the same Task contract before any new execution wiring is introduced.
 
 ## Task Definition
 
@@ -26,11 +26,16 @@ A task answers:
 
 > What should be synchronized from which datasource/table to which target datasource/table?
 
-Current task type:
+Current task types:
 
 ```text
 OFFLINE
+REALTIME
 ```
+
+Both types reuse the same Task table and source/target table identity. The persisted `runtime_config` JSON is type-specific rather than a shared configuration schema:
+- OFFLINE -> `DataSyncRuntimeConfig`
+- REALTIME -> `DataSyncRealtimeConfig`
 
 A task persists:
 
@@ -42,6 +47,32 @@ A task persists:
 - user-facing name and remark.
 
 Datasource credentials never belong to the task table.
+
+## Realtime Phase 1 — Task Contract
+
+Realtime Phase 1 intentionally stops at the product definition boundary:
+
+```text
+REALTIME Task
+   ↓
+MySQL Source table with primary key
+   ↓
+same-name compatible field mapping
+   ↓
+MySQL / PostgreSQL / Oracle Target
+```
+
+Realtime config currently contains:
+
+- checkpoint interval.
+- CDC queue capacity.
+- CDC poll batch size.
+- JDBC changelog write batch size.
+- connection / statement timeout.
+
+Execution-only values such as Debezium state directory, offsets, schema history and MySQL replication `serverId` are not Task fields.
+
+A REALTIME task can be created, updated, queried and filtered by `syncType`, but it cannot be run yet. The existing `runTask` path rejects REALTIME so it cannot accidentally enter `OfflineSyncExecutor`. Realtime planner/executor wiring, checkpoint ownership and frontend pages are separate follow-up phases.
 
 ## Task Instance
 
@@ -184,8 +215,13 @@ Phase 1 provides:
 
 Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
 
+Realtime Phase 1 now provides the reusable Task contract and save-time Source/Target/primary-key validation only.
+
 It still does not provide:
 
+- realtime planner / executor integration.
+- realtime checkpoint/state-directory product ownership.
+- realtime frontend.
 - scheduler.
 - retry policy.
 - distributed execution.

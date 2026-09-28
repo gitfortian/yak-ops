@@ -65,20 +65,14 @@ public final class LocalExecutionEngine {
         Objects.requireNonNull(sink, "sink must not be null");
         Objects.requireNonNull(schema, "schema must not be null");
         if (sourceParallelism <= 0 || sourceParallelism > MAX_SOURCE_PARALLELISM) {
-            throw new IllegalArgumentException(
-                    "sourceParallelism must be between 1 and " + MAX_SOURCE_PARALLELISM);
+            throw new IllegalArgumentException("sourceParallelism must be between 1 and " + MAX_SOURCE_PARALLELISM);
         }
         if (sourceParallelism > 1 && source.boundedness() != Boundedness.BOUNDED) {
             throw new IllegalArgumentException("parallel Source Readers currently require a bounded Source");
         }
 
         LocalExecution<SplitT> execution = new LocalExecution<>(
-                source,
-                sink,
-                schema,
-                DEFAULT_CHANNEL_CAPACITY,
-                streamCheckpointInterval,
-                sourceParallelism);
+                source, sink, schema, DEFAULT_CHANNEL_CAPACITY, streamCheckpointInterval, sourceParallelism);
         execution.start();
         return execution;
     }

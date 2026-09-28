@@ -1,7 +1,5 @@
 package io.yak.ops.preference.impl;
 
-import io.yak.ops.preference.UserPreferenceService;
-import io.yak.ops.preference.constant.UserPreferenceConstants;
 import io.yak.ops.common.bean.dto.preference.UserPreferenceFavoriteDTO;
 import io.yak.ops.common.bean.vo.preference.UserPreferenceVO;
 import io.yak.ops.common.enums.preference.UserPreferenceScene;
@@ -10,6 +8,8 @@ import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.preference.UserPreferenceEntity;
 import io.yak.ops.dao.repository.preference.UserPreferenceEntityRepository;
+import io.yak.ops.preference.UserPreferenceService;
+import io.yak.ops.preference.constant.UserPreferenceConstants;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.List;

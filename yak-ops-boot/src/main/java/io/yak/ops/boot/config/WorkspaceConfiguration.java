@@ -1,8 +1,8 @@
 package io.yak.ops.boot.config;
 
 import io.yak.ops.boot.workspace.WorkspaceContextInterceptor;
-import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.security.authentication.AuthenticationManager;
+import io.yak.ops.workspace.WorkspaceService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

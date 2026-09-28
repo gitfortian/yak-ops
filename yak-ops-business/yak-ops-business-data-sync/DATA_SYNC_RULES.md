@@ -48,8 +48,11 @@ Must:
 - Treat the current Datasource-bound database as authoritative. Task / mapping requests cannot override a bound database.
 - Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
 - Keep `definitionVersion` starting at 1 and increment it on every successful task-definition update.
-- Persist YakFlow tuning in `runtimeConfig`; it may contain batch/fetch/timeout settings, optional JDBC `splitSize`, and bounded Source `sourceParallelism` only.
-- Support only `OFFLINE` task type in the current phase.
+- Persist one type-specific YakFlow config JSON in `runtime_config`; `OFFLINE` uses batch/fetch/split tuning while `REALTIME` uses CDC/checkpoint/write tuning.
+- Support `OFFLINE` and `REALTIME` task definitions.
+- Keep `REALTIME` Source limited to MySQL CDC in the current milestone.
+- Keep `REALTIME` Target limited to MySQL / PostgreSQL / Oracle JDBC sinks in the current milestone.
+- Require a primary key on the `REALTIME` Source table. Same-name mapping compatibility guarantees those key fields also exist on the Target.
 
 Must Not:
 - Persist datasource password, `connection_params`, `original_json`, SSH private key, token or other secret in a task.
@@ -104,6 +107,36 @@ No database physical foreign keys.
 Repository queries must always scope Task / Instance product access by `workspace_id`.
 
 Task deletion does not imply deleting historical instances.
+
+## Realtime Task Definition Contract
+
+The first realtime product contract reuses the existing Task model rather than creating a second realtime task table or service.
+
+Persisted type-specific config:
+
+```text
+OFFLINE
+  -> DataSyncRuntimeConfig
+
+REALTIME
+  -> DataSyncRealtimeConfig
+```
+
+Realtime config owns only product/runtime tuning:
+
+- `checkpointIntervalSeconds`
+- `queueCapacity`
+- `pollBatchSize`
+- `writeBatchSize`
+- `timeoutSeconds`
+
+It must not expose Debezium offsets, schema-history files, state directories or MySQL `serverId`; those belong to realtime execution/runtime ownership.
+
+PR1 contract boundary:
+- create/update/detail/page may persist and return `REALTIME` tasks.
+- realtime save-time validation must resolve Datasource/Catalog again on the backend.
+- `runTask` must reject `REALTIME` until the realtime planner/executor lifecycle is introduced.
+- no realtime Instance, checkpoint ownership or frontend route is introduced by this contract PR.
 
 ## Offline Task Editor Contract
 
@@ -174,6 +207,8 @@ Acceptance:
 
 ## Current Phase
 
+The offline milestone remains Phase 4 and fully executable. Realtime Phase 1 adds the task-definition contract only.
+
 Phase 4 implements:
 - task create/update/delete/detail/page.
 - instance detail/page query.
@@ -191,7 +226,17 @@ Phase 4 implements:
 - real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
 - save-and-run product flow.
 
-Phase 4 does not implement:
+Realtime Phase 1 additionally implements:
+- `REALTIME` task type persistence and query.
+- dedicated realtime runtime config DTO / VO.
+- MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
+- Source primary-key validation.
+- explicit execution guard so REALTIME cannot enter the offline executor.
+
+Phase 4 / Realtime Phase 1 do not implement:
+- realtime planner / executor wiring.
+- realtime checkpoint/state-directory ownership.
+- realtime frontend.
 - scheduler.
 - retry policy.
 - distributed workers.
