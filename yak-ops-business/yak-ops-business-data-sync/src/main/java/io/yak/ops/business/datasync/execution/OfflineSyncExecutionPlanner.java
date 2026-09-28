@@ -69,7 +69,7 @@ public class OfflineSyncExecutionPlanner {
                         runtimeConfig.getTimeoutSeconds(),
                         JdbcWriteMode.INSERT),
                 targetWriteSchema);
-        return new OfflineSyncExecutionPlan(source, sink, sourceSchema);
+        return new OfflineSyncExecutionPlan(source, sink, sourceSchema, runtimeConfig.getSourceParallelism());
     }
 
     private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {
