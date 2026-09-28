@@ -39,7 +39,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
  * @author weifuwan
  * @since 2026-09-27
  */
-class OfflineSyncJdbcAcceptanceTest {
+class OfflineSyncJdbcAcceptanceIT {
 
     private static final String MYSQL_DATABASE = "yakflow";
     private static final String ORACLE_PASSWORD = "yakoracle";

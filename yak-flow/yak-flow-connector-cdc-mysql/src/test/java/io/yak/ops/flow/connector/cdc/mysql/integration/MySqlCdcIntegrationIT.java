@@ -38,7 +38,7 @@ import org.testcontainers.containers.MySQLContainer;
  * @author weifuwan
  * @since 2026-09-27
  */
-class MySqlCdcIntegrationTest {
+class MySqlCdcIntegrationIT {
 
     private static final String DATABASE = "yakflow";
     private static final String ROOT_PASSWORD = "yak-root";

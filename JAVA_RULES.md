@@ -59,14 +59,15 @@ Ownership:
 
 - `Backend format` runs Spotless check directly so formatting failures are visible as their own CI step.
 - `Backend compile` proves the selected backend Maven reactor compiles with Java 21.
-- `Backend verify` runs the Maven verification lifecycle; Spotless check is also bound to this lifecycle as a repository-level invariant.
+- `Backend verify` runs the Maven verification lifecycle for ordinary backend tests; Spotless check is also bound to this lifecycle as a repository-level invariant.
+- Real-database JDBC and MySQL CDC acceptance tests use `*IT` naming and run in the separate conditional `Backend Acceptance` workflow instead of the default backend verification path.
 - `yak-ops-bom` remains outside the explicit formatter command because it does not inherit the Yak Ops root formatter plugin.
 - `yak-ops-ui` and `yak-ops-dist` remain outside the backend verification reactor because frontend and distribution have separate build ownership.
 
 Local backend verification:
 
 ```bash
-bash mvnw -DskipTests -pl '!yak-ops-ui,!yak-ops-dist' verify
+bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify
 ```
 
 The explicit formatter command remains useful for fast local feedback, while `verify` is the final Maven lifecycle gate.
@@ -361,7 +362,10 @@ compile-sensitive change
 → relevant Maven compile command
 
 backend lifecycle verification
-→ bash mvnw -DskipTests -pl '!yak-ops-ui,!yak-ops-dist' verify
+→ bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify
+
+real-database connector acceptance
+→ use the capability-specific `*IT` command documented in `yak-flow/YAK_FLOW_RULES.md`
 
 behavior change
 → capability-specific manual or automated verification

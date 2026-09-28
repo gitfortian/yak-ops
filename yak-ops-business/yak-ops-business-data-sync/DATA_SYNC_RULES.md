@@ -160,8 +160,10 @@ Metrics:
 - Final successful Instance metrics must match the Runtime final snapshot.
 
 Acceptance:
-- CI must execute backend tests; `verify -DskipTests` is forbidden.
-- Real Testcontainers coverage must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
+- Default Backend Quality must execute ordinary backend tests; skipping tests in the final backend verify gate is forbidden.
+- Real Testcontainers coverage belongs to the conditional Backend Acceptance workflow and must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle when the JDBC boundary changes.
+- MySQL CDC acceptance runs when CDC or its shared JDBC / Runtime / Datasource boundaries change.
+- Manual dispatch and the weekly full sweep execute both heavy acceptance suites as a dependency-filter safety net.
 - H2 compatibility tests remain useful unit/integration coverage but are not the final cross-database acceptance proof.
 
 ## Current Phase

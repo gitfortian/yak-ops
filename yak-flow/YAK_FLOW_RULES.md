@@ -143,6 +143,14 @@ Must:
 - Cover the important lifecycle boundary, not only connection success.
 - Keep unit tests for conversion and config logic even when an integration test exists.
 
+Execution boundary:
+- Real-database acceptance classes use the `*IT` suffix so default Surefire discovery does not start Docker during ordinary `Backend verify`.
+- `.github/workflows/backend-acceptance.yml` owns real-database acceptance execution.
+- Pull requests and pushes run JDBC / MySQL CDC acceptance only when their dependency paths change.
+- Manual dispatch and the weekly full sweep run both acceptance suites as a dependency-filter safety net.
+- Local JDBC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-jdbc -am -Dtest=OfflineSyncJdbcAcceptanceIT -Dsurefire.failIfNoSpecifiedTests=false test`.
+- Local MySQL CDC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-cdc-mysql -am -Dtest=MySqlCdcIntegrationIT -Dsurefire.failIfNoSpecifiedTests=false test`.
+
 The JDBC batch acceptance baseline uses real Testcontainers databases and covers:
 - MySQL Source -> MySQL Sink.
 - MySQL Source -> PostgreSQL Sink.
