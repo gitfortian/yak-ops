@@ -2,8 +2,8 @@ package io.yak.ops.boot.controller.preference.v1;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.yak.ops.business.preference.UserPreferenceService;
-import io.yak.ops.business.preference.constant.UserPreferenceConstants;
+import io.yak.ops.preference.UserPreferenceService;
+import io.yak.ops.preference.constant.UserPreferenceConstants;
 import io.yak.ops.common.bean.dto.preference.UserPreferenceFavoriteDTO;
 import io.yak.ops.common.bean.vo.preference.UserPreferenceVO;
 import io.yak.ops.common.enums.preference.UserPreferenceScene;
