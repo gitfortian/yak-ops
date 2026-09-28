@@ -6,6 +6,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
+import io.yak.ops.common.util.ObjectUtils;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
@@ -16,7 +17,6 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.util.List;
-import io.yak.ops.common.util.ObjectUtils;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,10 +31,12 @@ public class OfflineSyncExecutionPlanner {
     @Resource
     private DataSourceService dataSourceService;
 
-    public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
+    OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
-        DataSyncEndpointSnapshotVO sourceEndpoint = ObjectUtils.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
-        DataSyncEndpointSnapshotVO targetEndpoint = ObjectUtils.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
+        DataSyncEndpointSnapshotVO sourceEndpoint =
+                ObjectUtils.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
+        DataSyncEndpointSnapshotVO targetEndpoint =
+                ObjectUtils.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
         DataSyncRuntimeConfigVO runtimeConfig =
                 ObjectUtils.requireNonNull(snapshot.getRuntimeConfig(), "runtime config must not be null");
 
