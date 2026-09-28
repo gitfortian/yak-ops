@@ -116,7 +116,7 @@ const selectedTableKey = (
       (table.schema || "") === schema,
   )
     ? [database, schema, tableName].join("|")
-    : undefined;
+    : null;
 
 function useCatalogOptions(dataSourceId: string, database: string, schema: string): CatalogOptions {
   const [schemas, setSchemas] = useState<string[]>([]);

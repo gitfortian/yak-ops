@@ -143,6 +143,7 @@ When a Select stores an ID, enum code, composite key or other domain value whose
 
 - pass the value-to-label mapping through `Select.items`.
 - keep controlled `value` and `onValueChange` on the domain value.
+- when controlled Select options load asynchronously, use `null` for “当前暂无匹配值”; do not let `value` fall back to `undefined`, otherwise the Select can initialize as uncontrolled and fail to hydrate the later value.
 - let `SelectValue` render the visible label.
 - never display resource IDs or internal composite keys in the closed trigger when a human-readable label exists.
 - do not duplicate `options.find(...)` label lookup inside `SelectTrigger`.
