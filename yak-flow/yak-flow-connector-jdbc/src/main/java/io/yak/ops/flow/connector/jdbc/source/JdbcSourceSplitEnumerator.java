@@ -83,11 +83,11 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
         Optional<String> splitColumn = JdbcNumericSplitConfig.eligibleColumn(config.schema());
         if (splitColumn.isEmpty()) return wholeTableSplit();
 
-        try (Connection connection = connectionProvider.open(config.connection(), config.timeoutSeconds());
-                var statement = connection.prepareStatement(
-                        dialect.splitStatisticsSql(config.table(), splitColumn.get()))) {
+        try (Connection connection = connectionProvider.open(config.connection(), config.timeoutSeconds())) {
             connection.setReadOnly(true);
-            statement.setQueryTimeout(config.timeoutSeconds());
+            try (var statement =
+                    connection.prepareStatement(dialect.splitStatisticsSql(config.table(), splitColumn.get()))) {
+                statement.setQueryTimeout(config.timeoutSeconds());
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (!resultSet.next()) {
                     throw new IllegalStateException("JDBC split statistics query returned no row");
