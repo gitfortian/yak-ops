@@ -40,7 +40,7 @@ public final class JdbcSource implements Source<JdbcSourceSplit> {
 
     @Override
     public SourceSplitEnumerator<JdbcSourceSplit> createEnumerator() {
-        return new JdbcSourceSplitEnumerator(config.table());
+        return new JdbcSourceSplitEnumerator(config);
     }
 
     @Override
