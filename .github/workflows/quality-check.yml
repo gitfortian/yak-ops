@@ -74,10 +74,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        run: |
-          npm run format
-          git diff -- apps packages scripts
-          git diff --exit-code -- apps packages scripts
+        run: npm run format:check
 
       - name: Frontend lint
         run: npm run lint
