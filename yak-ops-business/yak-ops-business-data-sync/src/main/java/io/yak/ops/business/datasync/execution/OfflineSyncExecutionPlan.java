@@ -10,7 +10,9 @@ import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
  * @param source 已解析运行时连接与读取参数的 JDBC Source
  * @param sink 已解析运行时连接与写入参数的 JDBC Sink
  * @param sourceSchema Source 产出的逻辑字段结构
+ * @param sourceParallelism bounded Source Reader 并行度
  * @author weifuwan
  * @since 2026-09-28
  */
-record OfflineSyncExecutionPlan(JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema) {}
+record OfflineSyncExecutionPlan(
+        JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema, int sourceParallelism) {}

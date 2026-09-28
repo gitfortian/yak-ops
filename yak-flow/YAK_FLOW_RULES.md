@@ -71,9 +71,12 @@ The current runtime is deliberately single-node and local.
 
 Must:
 - Keep one bounded in-memory channel between Source work and Sink work.
+- Allow bounded Source executions to run 1-16 parallel Readers while keeping split assignment serialized through one Enumerator.
+- Keep one Sink Writer in Local Runtime; parallel Source Readers converge into the same bounded Row Channel before serial Sink writes.
 - Allow bounded jobs to finish naturally.
 - Keep continuous unbounded jobs alive until cancel or failure.
 - Use channel ordering for checkpoint barriers: Source state first, barrier second, Sink flush before checkpoint completion.
+- Keep checkpoint coordination on the single-Reader execution path; bounded executions with source parallelism greater than 1 reject checkpoint requests until multi-Reader checkpoint state aggregation is designed.
 - Interrupt blocked local workers on cancel/failure so execution cannot remain stuck on channel operations.
 - Treat checkpoint completion as an ordering/durability observation only; it is not an exactly-once contract.
 
@@ -193,7 +196,6 @@ Must Not:
 - Add custom SQL, Transform or arbitrary SQL execution in Phase 3.
 - Auto-create target tables in Phase 3.
 - Claim snapshot restart consistency from the current row-count checkpoint state.
-- Claim or simulate Source parallelism while Local Runtime still has one Source Task; multiple JDBC splits are consumed serially until the runtime adds real parallel Readers.
 - Add skew detection or sampling policy in the dynamic range split phase.
 - Duplicate JDBC type-family or conversion compatibility rules in Data Sync Business.
 

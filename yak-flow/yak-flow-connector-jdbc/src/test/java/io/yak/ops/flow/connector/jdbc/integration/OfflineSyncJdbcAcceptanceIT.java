@@ -131,7 +131,7 @@ class OfflineSyncJdbcAcceptanceIT {
                 DIRECT_CONNECTION);
         JdbcSink sink =
                 new JdbcSink(new JdbcSinkConfig(target, targetTable, 2, 10), DIRECT_CONNECTION);
-        LocalExecution<?> execution = new LocalRuntime().start(source, sink, SCHEMA);
+        LocalExecution<?> execution = new LocalRuntime().start(source, sink, SCHEMA, 3);
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(30)));
         assertEquals(new ExecutionMetrics(3, 3), execution.metrics());

@@ -61,18 +61,27 @@ This phase establishes only `yak-flow-api`:
 Phase 2 adds a minimal single-node execution path:
 
 ```text
-Source Task
-    |
-    v
+Bounded Source:
+Enumerator
+    ↓
+1..16 Source Readers
+    ↓
 bounded Row Channel
-    |
-    v
-Sink Task
+    ↓
+1 Sink Writer
+
+Continuous Source:
+1 Source Reader
+    ↓
+bounded Row Channel
+    ↓
+1 Sink Writer
 ```
 
 The runtime supports:
 
 - bounded Source execution that naturally reaches `SUCCEEDED`.
+- configurable bounded Source Reader parallelism from 1 to 16; split assignment remains serialized through one Enumerator and Sink writing remains single-threaded.
 - continuous unbounded Source execution that stays running until cancel/failure.
 - explicit cancellation.
 - runtime status and failure observation.
@@ -80,6 +89,8 @@ The runtime supports:
 - active-execution in-memory latest checkpoint.
 
 The barrier establishes ordering only. Phase 2 does not claim exactly-once delivery and does not persist checkpoints across process restart.
+
+Checkpoint coordination currently remains on the single-Reader path. A bounded execution with Source parallelism greater than 1 rejects explicit checkpoint requests rather than pretending multiple Reader states form one consistent checkpoint. Continuous CDC keeps the existing single-Reader checkpoint path.
 
 ## Phase 3 — JDBC Batch Connector
 
@@ -108,7 +119,7 @@ The connector:
 - provides MySQL, PostgreSQL and Oracle identifier/table dialects.
 - requires the target table to exist.
 
-The current Local Runtime is still single Source Task / single Sink Task. Without split configuration the JDBC Source produces one whole-table split. With explicit numeric range configuration it may produce multiple non-overlapping splits, but the current Source Task consumes them serially; this phase does not claim parallel reads.
+The Local Runtime can now consume bounded JDBC splits with multiple local Source Readers. The Enumerator remains single-threaded for deterministic split assignment, each Reader owns an independent JDBC connection, and all Reader batches converge into one bounded Row Channel consumed by one Sink Writer.
 
 Example:
 

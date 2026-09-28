@@ -65,7 +65,8 @@ public class OfflineSyncExecutor {
         WorkspaceContext.bind(workspaceId);
         try {
             OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
-            execution = new LocalRuntime().start(plan.source(), plan.sink(), plan.sourceSchema());
+            execution = new LocalRuntime()
+                    .start(plan.source(), plan.sink(), plan.sourceSchema(), plan.sourceParallelism());
             executionRegistry.register(instanceId, execution);
 
             LocalDateTime startTime = DateUtils.now();

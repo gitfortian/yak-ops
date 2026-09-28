@@ -11,6 +11,7 @@ import io.yak.ops.flow.api.source.SourceReader;
 import io.yak.ops.flow.api.source.SourceSplit;
 import io.yak.ops.flow.api.source.SourceSplitEnumerator;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -44,6 +45,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final YakTableSchema schema;
     private final RowChannel channel;
     private final long autoCheckpointIntervalNanos;
+    private final int sourceParallelism;
     private final AtomicReference<ExecutionStatus> status = new AtomicReference<>(ExecutionStatus.CREATED);
     private final AtomicBoolean cancellationRequested = new AtomicBoolean();
     private final AtomicBoolean automaticCheckpointPending = new AtomicBoolean();
@@ -54,6 +56,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     private final BlockingQueue<LocalCheckpoint> completedCheckpoints = new LinkedBlockingQueue<>();
     private final ConcurrentMap<Long, CompletableFuture<LocalCheckpoint>> checkpointFutures = new ConcurrentHashMap<>();
     private final Set<Long> automaticCheckpointIds = ConcurrentHashMap.newKeySet();
+    private final Set<Thread> sourceWorkerThreads = ConcurrentHashMap.newKeySet();
     private final AtomicInteger workersRemaining = new AtomicInteger(2);
     private final CountDownLatch executionFinished = new CountDownLatch(1);
 
@@ -68,12 +71,14 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             Sink sink,
             YakTableSchema schema,
             int channelCapacity,
-            Duration streamCheckpointInterval) {
+            Duration streamCheckpointInterval,
+            int sourceParallelism) {
         this.source = source;
         this.sink = sink;
         this.schema = schema;
         this.channel = new RowChannel(channelCapacity);
         this.autoCheckpointIntervalNanos = streamCheckpointInterval.toNanos();
+        this.sourceParallelism = sourceParallelism;
     }
 
     void start() {
@@ -82,7 +87,9 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         }
 
         nextAutoCheckpointNanos = System.nanoTime() + autoCheckpointIntervalNanos;
-        sourceThread = Thread.ofVirtual().name("yak-flow-source").unstarted(this::runSource);
+        sourceThread = Thread.ofVirtual()
+                .name("yak-flow-source")
+                .unstarted(sourceParallelism > 1 ? this::runParallelBoundedSource : this::runSource);
         sinkThread = Thread.ofVirtual().name("yak-flow-sink").unstarted(this::runSink);
         sinkThread.start();
         sourceThread.start();
@@ -130,6 +137,10 @@ public final class LocalExecution<SplitT extends SourceSplit> {
      * @return 检查点完成 Future
      */
     public CompletableFuture<LocalCheckpoint> checkpoint() {
+        if (sourceParallelism > 1) {
+            return CompletableFuture.failedFuture(
+                    new UnsupportedOperationException("parallel bounded Source checkpoint is not supported yet"));
+        }
         if (status.get() != ExecutionStatus.RUNNING) {
             return CompletableFuture.failedFuture(new IllegalStateException("checkpoint requires a running execution"));
         }
@@ -158,7 +169,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     /**
-     * 一直等待 Source 与 Sink 两个本地工作线程退出。
+     * 一直等待本地执行全部工作线程退出。
      *
      * @return 终止后的执行状态
      * @throws InterruptedException 当前等待线程被中断
@@ -169,7 +180,7 @@ public final class LocalExecution<SplitT extends SourceSplit> {
     }
 
     /**
-     * 等待 Source 与 Sink 两个本地工作线程都退出。
+     * 等待本地执行全部工作线程退出。
      *
      * @param timeout 最长等待时间
      * @return 终止后的执行状态
@@ -217,6 +228,80 @@ public final class LocalExecution<SplitT extends SourceSplit> {
             fail(e);
         } finally {
             workerFinished();
+        }
+    }
+
+    private void runParallelBoundedSource() {
+        try (SourceSplitEnumerator<SplitT> enumerator = source.createEnumerator()) {
+            enumerator.start();
+            Object splitAssignmentLock = new Object();
+            List<Thread> readers = new ArrayList<>(sourceParallelism);
+            for (int index = 0; index < sourceParallelism && !cancellationRequested.get(); index++) {
+                Thread readerThread = Thread.ofVirtual()
+                        .name("yak-flow-source-reader-" + index)
+                        .unstarted(() -> runParallelSourceReader(enumerator, splitAssignmentLock));
+                readers.add(readerThread);
+                sourceWorkerThreads.add(readerThread);
+                readerThread.start();
+            }
+            for (Thread reader : readers) {
+                reader.join();
+            }
+            if (!cancellationRequested.get() && status.get() == ExecutionStatus.RUNNING) {
+                channel.put(EndOfInputMessage.INSTANCE);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!cancellationRequested.get()) {
+                fail(e);
+            }
+        } catch (Exception e) {
+            fail(e);
+        } finally {
+            workerFinished();
+        }
+    }
+
+    private void runParallelSourceReader(SourceSplitEnumerator<SplitT> enumerator, Object splitAssignmentLock) {
+        try {
+            while (!cancellationRequested.get()) {
+                Optional<SplitT> nextSplit;
+                boolean finished;
+                synchronized (splitAssignmentLock) {
+                    nextSplit = enumerator.nextSplit();
+                    finished = enumerator.isFinished();
+                }
+                if (nextSplit.isPresent()) {
+                    runParallelSplit(nextSplit.get());
+                    continue;
+                }
+                if (finished) return;
+                Thread.sleep(IDLE_SLEEP_MILLIS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!cancellationRequested.get()) {
+                fail(e);
+            }
+        } catch (Exception e) {
+            fail(e);
+        } finally {
+            sourceWorkerThreads.remove(Thread.currentThread());
+        }
+    }
+
+    private void runParallelSplit(SplitT split) throws Exception {
+        try (SourceReader<SplitT> reader = source.createReader()) {
+            reader.open(split);
+            while (!cancellationRequested.get() && !reader.isFinished()) {
+                List<YakRow> rows = reader.poll();
+                if (!rows.isEmpty()) {
+                    channel.put(new RowBatchMessage(rows));
+                    readRows.addAndGet(rows.size());
+                } else {
+                    Thread.sleep(IDLE_SLEEP_MILLIS);
+                }
+            }
         }
     }
 
@@ -352,6 +437,11 @@ public final class LocalExecution<SplitT extends SourceSplit> {
         if (currentSourceThread != null && currentSourceThread != current) {
             currentSourceThread.interrupt();
         }
+        sourceWorkerThreads.forEach(thread -> {
+            if (thread != current) {
+                thread.interrupt();
+            }
+        });
         if (currentSinkThread != null && currentSinkThread != current) {
             currentSinkThread.interrupt();
         }
