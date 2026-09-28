@@ -10,6 +10,7 @@ import io.yak.ops.business.datasync.execution.OfflineSyncExecutor;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncRealtimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
@@ -20,6 +21,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -45,6 +47,7 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -58,6 +61,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 public class DataSyncServiceImpl implements DataSyncService {
+
+    private static final Set<String> REALTIME_TARGET_TYPES = Set.of("MYSQL", "POSTGRE_SQL", "ORACLE");
 
     @Resource
     private DataSyncTaskRepository taskRepository;
@@ -82,14 +87,16 @@ public class DataSyncServiceImpl implements DataSyncService {
         String name = StringUtils.trimToNull(dto.getName());
         if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, null);
+        DataSyncType syncType = requireSyncType(dto.getSyncType());
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
+        validateTaskDefinition(syncType, dto, resolvedScope);
         requireCompatibleMapping(resolvedScope);
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
         entity.setWorkspaceId(workspaceId);
         entity.setName(name);
-        entity.setSyncType(requireOffline(dto.getSyncType()));
+        entity.setSyncType(syncType);
         applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(1);
         entity.initCreate();
@@ -109,12 +116,14 @@ public class DataSyncServiceImpl implements DataSyncService {
         String name = StringUtils.trimToNull(dto.getName());
         if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, id);
+        DataSyncType syncType = requireSyncType(dto.getSyncType());
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
+        validateTaskDefinition(syncType, dto, resolvedScope);
         requireCompatibleMapping(resolvedScope);
 
         entity.setName(name);
-        entity.setSyncType(requireOffline(dto.getSyncType()));
+        entity.setSyncType(syncType);
         applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(Math.max(1, entity.getDefinitionVersion()) + 1);
         entity.initUpdate();
@@ -180,6 +189,9 @@ public class DataSyncServiceImpl implements DataSyncService {
     public synchronized DataSyncInstanceVO runTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
+        if (task.getSyncType() != DataSyncType.OFFLINE) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 任务执行将在实时执行阶段开放");
+        }
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
         requireCompatibleMapping(resolvedScope);
@@ -313,8 +325,47 @@ public class DataSyncServiceImpl implements DataSyncService {
         entity.setTargetDatabase(resolvedScope.getTargetDatabase());
         entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(dto.getTargetTable().trim());
-        entity.setRuntimeConfig(JSONUtils.toJson(dto.getRuntimeConfig()));
+        entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
         entity.setRemark(StringUtils.trimToNull(dto.getRemark()));
+    }
+
+    private void validateTaskDefinition(
+            DataSyncType syncType, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
+        if (syncType == DataSyncType.OFFLINE) {
+            if (dto.getRuntimeConfig() == null) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 运行参数不能为空");
+            }
+            return;
+        }
+        if (dto.getRealtimeConfig() == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 运行参数不能为空");
+        }
+
+        DataSourceVO source = dataSourceService.queryDataSource(dto.getSourceDataSourceId());
+        DataSourceVO target = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
+        if (!"MYSQL".equals(source.getDbType())) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源数据源仅支持 MYSQL");
+        }
+        if (!REALTIME_TARGET_TYPES.contains(target.getDbType())) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.INVALID_TASK, "实时同步目标数据源仅支持 MYSQL / POSTGRE_SQL / ORACLE");
+        }
+
+        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
+                dto.getSourceDataSourceId(),
+                tablePath(
+                        resolvedScope.getSourceDatabase(),
+                        resolvedScope.getSourceSchema(),
+                        resolvedScope.getSourceTable()));
+        if (sourceColumns.stream().noneMatch(column -> Boolean.TRUE.equals(column.getPrimaryKey()))) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
+        }
+    }
+
+    private String runtimeConfigJson(DataSyncType syncType, DataSyncTaskDTO dto) {
+        return syncType == DataSyncType.REALTIME
+                ? JSONUtils.toJson(dto.getRealtimeConfig())
+                : JSONUtils.toJson(dto.getRuntimeConfig());
     }
 
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
@@ -423,9 +474,9 @@ public class DataSyncServiceImpl implements DataSyncService {
         return bound != null ? bound : StringUtils.trimToNull(requestedValue);
     }
 
-    private DataSyncType requireOffline(DataSyncType syncType) {
-        if (syncType != DataSyncType.OFFLINE) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "当前阶段只支持 OFFLINE");
+    private DataSyncType requireSyncType(DataSyncType syncType) {
+        if (syncType == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步类型不能为空");
         }
         return syncType;
     }
@@ -452,15 +503,23 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
         DataSyncTaskVO target = BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "runtimeConfig");
-        target.setSyncType(
-                source.getSyncType() == null ? null : source.getSyncType().name());
-        target.setRuntimeConfig(toRuntimeConfigVO(source.getRuntimeConfig()));
+        target.setSyncType(source.getSyncType() == null ? null : source.getSyncType().name());
+        if (source.getSyncType() == DataSyncType.REALTIME) {
+            target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
+        } else {
+            target.setRuntimeConfig(toRuntimeConfigVO(source.getRuntimeConfig()));
+        }
         return target;
     }
 
     private DataSyncRuntimeConfigVO toRuntimeConfigVO(String json) {
         DataSyncRuntimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRuntimeConfigDTO.class);
         return BeanCopyUtils.copy(source, DataSyncRuntimeConfigVO.class);
+    }
+
+    private DataSyncRealtimeConfigVO toRealtimeConfigVO(String json) {
+        DataSyncRealtimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
+        return BeanCopyUtils.copy(source, DataSyncRealtimeConfigVO.class);
     }
 
     private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {
