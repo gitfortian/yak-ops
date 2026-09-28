@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Offline Phase 4 + Realtime Phase 3 State Ownership
+Status: Offline Phase 4 + Realtime Phase 5 Instance Runtime UI
 
 ## Goal
 
@@ -171,6 +171,7 @@ Task
 Instance persistence owns:
 
 - task ID / task name / task definition version.
+- sync type snapshot (OFFLINE / REALTIME).
 - trigger type.
 - execution status.
 - sanitized definition snapshot.
@@ -296,14 +297,29 @@ Phase 1 provides:
 
 Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
 
-Realtime Phase 3 now provides the reusable Task contract, save/run validation, MySQL CDC execution planner, JDBC CHANGELOG sink wiring, process-local runtime lifecycle, cancel/metrics integration, task/version-scoped durable CDC state and controlled serverId leases.
+Realtime Phase 5 additionally provides the runtime product surface:
+
+```text
+REALTIME Task
+  ↓ Start / Save & Start
+Instance(PENDING/RUNNING)
+  ↓
+Instance Tab + Detail
+  ├── persisted read/write event counters
+  ├── active polling
+  └── Stop
+```
+
+Instance rows now persist `syncType`, so REALTIME pagination is filtered in the backend and remains valid even after the originating Task is deleted. The UI labels `readRows/writeRows` as change events because UPDATE currently emits UPDATE_BEFORE + UPDATE_AFTER.
+
+Checkpoint time is deliberately not displayed because the current Instance contract does not persist a trustworthy last-checkpoint timestamp.
 
 It still does not provide:
 
 - automatic restart of LOST Instances.
 - distributed state ownership / fencing.
 - exactly-once transaction coordination.
-- realtime frontend.
+- persisted last-checkpoint timestamp / checkpoint history UI.
 - scheduler.
 - retry policy.
 - distributed execution.
