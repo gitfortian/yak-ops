@@ -18,7 +18,7 @@ public class DataSyncTaskVO {
     /** 同一 Workspace 内的任务名称。 */
     private String name;
 
-    /** 数据同步类型；当前产品阶段为 OFFLINE。 */
+    /** 数据同步类型：OFFLINE 或 REALTIME。 */
     private String syncType;
 
     /** 来源数据源 ID。 */
@@ -45,8 +45,11 @@ public class DataSyncTaskVO {
     /** 目标物理表名称。 */
     private String targetTable;
 
-    /** YakFlow 离线执行使用的读取、写入和超时参数。 */
+    /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;
+
+    /** REALTIME 任务的 CDC、Checkpoint 和写入参数；OFFLINE 任务为空。 */
+    private DataSyncRealtimeConfigVO realtimeConfig;
 
     /** 当前任务定义版本，从 1 开始，任务定义每次成功修改后递增。 */
     private Integer definitionVersion;
