@@ -1,4 +1,5 @@
 import {
+  Alert,
   Badge,
   Button,
   Field,
@@ -397,6 +398,9 @@ function OfflineRuntimeFields({ config, onChange, onSplitSizeChange }: OfflineRu
           onChange={(event) => onSplitSizeChange(event.target.value)}
         />
       </Field>
+      {config.splitSize ? (
+        <Alert>启用 Split 后不保证整表同一时点快照，源表持续变更时可能存在数据差异。</Alert>
+      ) : null}
     </>
   );
 }
@@ -783,6 +787,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
       <div className="flex gap-5 px-6 pb-8 pt-5 max-md:px-4">
         <main className="min-w-0 flex-1 space-y-4">
+          {realtime && editing ? (
+            <Alert>保存修改会生成新版本；新版本首次启动会重新全量同步。</Alert>
+          ) : null}
+
           {realtime ? (
             <div className="rounded-lg border border-[#b2ccff] bg-[#f5f8ff] px-4 py-3 text-xs leading-5 text-[#344054]">
               首次启动会先同步来源表当前全量数据，随后持续消费 MySQL
@@ -885,7 +893,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   sourceTable: table.name,
                 }))
               }
-            />
+            >
+              {realtime ? (
+                <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
+              ) : null}
+            </TableSection>
           </div>
 
           <div id="target">
@@ -937,15 +949,13 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                         )}
                       </SelectContent>
                     </Select>
-                    <div
-                      className={
-                        form.writeMode === "OVERWRITE"
-                          ? "px-1 text-xs text-[#b54708]"
-                          : "px-1 text-xs text-[#98a2b3]"
-                      }
-                    >
-                      {WRITE_MODE_DESCRIPTION[form.writeMode]}
-                    </div>
+                    {form.writeMode === "OVERWRITE" ? (
+                      <Alert>覆盖写入会先清空目标表，同步失败时原数据不会自动恢复。</Alert>
+                    ) : (
+                      <div className="px-1 text-xs text-[#98a2b3]">
+                        {WRITE_MODE_DESCRIPTION[form.writeMode]}
+                      </div>
+                    )}
                   </div>
                 </Field>
               ) : null}

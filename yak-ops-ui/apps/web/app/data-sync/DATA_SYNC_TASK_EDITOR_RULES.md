@@ -42,6 +42,7 @@ Mode-specific:
 - Send `runtimeConfig` only for OFFLINE.
 - Send `realtimeConfig` only for REALTIME.
 - Keep REALTIME first-run semantics visible: initial snapshot followed by MySQL Binlog.
+- Use Yak UI `Alert` only for persistent risk / prerequisite semantics owned by the current mode: destructive OFFLINE OVERWRITE, configured OFFLINE Split snapshot caveat, REALTIME CDC prerequisites, and REALTIME edit-to-new-version snapshot behavior. Keep ordinary explanatory copy as normal supporting text.
 - Keep all Datasource values as IDs and render human-readable names through `Select.items`.
 - Keep the backend mapping preview as source of truth.
 

@@ -23,6 +23,8 @@ Must:
   - `writeBatchSize`
   - `timeoutSeconds`
 - Explain that first start performs the initial snapshot and then continuously consumes MySQL Binlog.
+- When editing an existing REALTIME Task, show a Yak UI `Alert` that saving creates a new Task version and that version's first start performs a fresh initial snapshot.
+- In the REALTIME source section, show a Yak UI `Alert` that ROW Binlog and CDC account permissions are required; ordinary Datasource connection-test success does not prove CDC readiness.
 - Expose Save and Save & Start.
 - After Save & Start, navigate to the created REALTIME Instance detail.
 - Keep Start / Edit / Instance / Delete actions on the task list.
@@ -30,6 +32,7 @@ Must:
 - Query Instance page with `syncType = REALTIME`; never filter mixed OFFLINE/REALTIME results only in frontend memory.
 - Poll Instance list/detail every 2 seconds only while PENDING/RUNNING data is visible.
 - PENDING/RUNNING Instances expose Stop.
+- On active REALTIME Instance detail, show a Yak UI `Alert` that restart continues from the latest completed Checkpoint and a small set of unconfirmed events may be consumed again.
 - Display persisted `readRows/writeRows` as `读取事件/写入事件`; do not rename them to business row counts.
 - Explain that UPDATE produces UPDATE_BEFORE + UPDATE_AFTER events in current YakFlow metrics.
 - Display REALTIME snapshot runtime parameters from `realtimeConfig`.
