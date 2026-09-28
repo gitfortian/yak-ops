@@ -5,6 +5,7 @@ import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.api.sink.SinkWriter;
+import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
@@ -70,6 +71,7 @@ final class JdbcSinkWriter implements SinkWriter {
 
         connection = connectionProvider.open(config.connection(), config.timeoutSeconds());
         connection.setAutoCommit(false);
+        applySaveMode();
         insertStatement = connection.prepareStatement(dialect.insertSql(config.table(), schema));
         insertStatement.setQueryTimeout(config.timeoutSeconds());
         if (config.writeMode() == JdbcWriteMode.CHANGELOG) {
@@ -132,6 +134,18 @@ final class JdbcSinkWriter implements SinkWriter {
             if (failure == null) failure = exception;
         }
         if (failure != null) throw failure;
+    }
+
+    private void applySaveMode() throws Exception {
+        if (config.saveMode() == JdbcSaveMode.APPEND) return;
+        try (var statement = connection.createStatement()) {
+            statement.setQueryTimeout(config.timeoutSeconds());
+            statement.execute(dialect.truncateSql(config.table()));
+            connection.commit();
+        } catch (Exception exception) {
+            rollbackQuietly();
+            throw exception;
+        }
     }
 
     private void writeInsertBatch(List<YakRow> rows) throws Exception {
