@@ -7,6 +7,7 @@ import {
   OfflineSyncInstanceDetailPage,
   OfflineSyncPage,
 } from "@/app/offline-sync";
+import { RealtimeSyncEditorPage, RealtimeSyncPage } from "@/app/realtime-sync";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -23,12 +24,16 @@ const AUTHENTICATED_PATHS = new Set([
   "/data-source",
   "/offline-sync",
   "/offline-sync/new",
+  "/realtime-sync",
+  "/realtime-sync/new",
   "/management/users",
   "/management/workspaces",
 ]);
 
 const isAuthenticatedPath = (pathname: string) =>
-  AUTHENTICATED_PATHS.has(pathname) || pathname.startsWith("/offline-sync/");
+  AUTHENTICATED_PATHS.has(pathname) ||
+  pathname.startsWith("/offline-sync/") ||
+  pathname.startsWith("/realtime-sync/");
 
 const resolveReturnTo = (requested: string | null) => {
   if (!requested) return DEFAULT_AUTHENTICATED_PATH;
@@ -114,6 +119,9 @@ export default function AppRouter() {
           <Route path="/offline-sync/new" element={<OfflineSyncEditorPage />} />
           <Route path="/offline-sync/instances/:id" element={<OfflineSyncInstanceDetailPage />} />
           <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
+          <Route path="/realtime-sync" element={<RealtimeSyncPage />} />
+          <Route path="/realtime-sync/new" element={<RealtimeSyncEditorPage />} />
+          <Route path="/realtime-sync/:id" element={<RealtimeSyncEditorPage />} />
         </Route>
 
         <Route

@@ -138,12 +138,14 @@ export function OfflineSyncInstanceDetailPage() {
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-4 gap-3 text-xs max-lg:grid-cols-2">
-                <div>Fetch Size：{snapshot.runtimeConfig.fetchSize}</div>
-                <div>读取批次：{snapshot.runtimeConfig.readBatchSize}</div>
-                <div>写入批次：{snapshot.runtimeConfig.writeBatchSize}</div>
-                <div>超时：{snapshot.runtimeConfig.timeoutSeconds}s</div>
-              </div>
+              {snapshot.runtimeConfig ? (
+                <div className="mt-5 grid grid-cols-4 gap-3 text-xs max-lg:grid-cols-2">
+                  <div>Fetch Size：{snapshot.runtimeConfig.fetchSize}</div>
+                  <div>读取批次：{snapshot.runtimeConfig.readBatchSize}</div>
+                  <div>写入批次：{snapshot.runtimeConfig.writeBatchSize}</div>
+                  <div>超时：{snapshot.runtimeConfig.timeoutSeconds}s</div>
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}

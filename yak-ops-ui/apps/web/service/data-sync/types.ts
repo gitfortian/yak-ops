@@ -5,6 +5,8 @@ export interface PaginationInfo {
   pages?: number;
 }
 
+export type DataSyncType = "OFFLINE" | "REALTIME";
+
 export interface DataSyncRuntimeConfig {
   fetchSize: number;
   readBatchSize: number;
@@ -14,10 +16,18 @@ export interface DataSyncRuntimeConfig {
   timeoutSeconds: number;
 }
 
+export interface DataSyncRealtimeConfig {
+  checkpointIntervalSeconds: number;
+  queueCapacity: number;
+  pollBatchSize: number;
+  writeBatchSize: number;
+  timeoutSeconds: number;
+}
+
 export interface DataSyncTaskRecord {
   id: string;
   name: string;
-  syncType: "OFFLINE" | string;
+  syncType: DataSyncType | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -26,7 +36,8 @@ export interface DataSyncTaskRecord {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  runtimeConfig: DataSyncRuntimeConfig;
+  runtimeConfig?: DataSyncRuntimeConfig;
+  realtimeConfig?: DataSyncRealtimeConfig;
   definitionVersion: number;
   remark?: string;
   createTime?: string;
@@ -37,7 +48,7 @@ export interface DataSyncTaskPageParams {
   pageNo: number;
   pageSize: number;
   keyword?: string;
-  syncType?: "OFFLINE";
+  syncType?: DataSyncType;
   sourceDataSourceId?: string;
   targetDataSourceId?: string;
 }
@@ -47,9 +58,8 @@ export interface DataSyncTaskPageResult {
   pagination: PaginationInfo;
 }
 
-export interface DataSyncTaskSavePayload {
+interface DataSyncTaskSaveBase {
   name: string;
-  syncType: "OFFLINE";
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -58,21 +68,33 @@ export interface DataSyncTaskSavePayload {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  runtimeConfig: DataSyncRuntimeConfig;
   remark?: string;
 }
 
-export type DataSyncMappingPreviewPayload = Pick<
-  DataSyncTaskSavePayload,
-  | "sourceDataSourceId"
-  | "sourceDatabase"
-  | "sourceSchema"
-  | "sourceTable"
-  | "targetDataSourceId"
-  | "targetDatabase"
-  | "targetSchema"
-  | "targetTable"
->;
+export interface OfflineDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
+  syncType: "OFFLINE";
+  runtimeConfig: DataSyncRuntimeConfig;
+}
+
+export interface RealtimeDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
+  syncType: "REALTIME";
+  realtimeConfig: DataSyncRealtimeConfig;
+}
+
+export type DataSyncTaskSavePayload =
+  | OfflineDataSyncTaskSavePayload
+  | RealtimeDataSyncTaskSavePayload;
+
+export interface DataSyncMappingPreviewPayload {
+  sourceDataSourceId: string;
+  sourceDatabase?: string;
+  sourceSchema?: string;
+  sourceTable: string;
+  targetDataSourceId: string;
+  targetDatabase?: string;
+  targetSchema?: string;
+  targetTable: string;
+}
 
 export interface DataSyncFieldMapping {
   sourceName: string;
@@ -110,9 +132,11 @@ export interface DataSyncDefinitionSnapshot {
   taskId: string;
   taskName: string;
   taskVersion: number;
+  syncType?: DataSyncType | string;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
-  runtimeConfig: DataSyncRuntimeConfig;
+  runtimeConfig?: DataSyncRuntimeConfig;
+  realtimeConfig?: DataSyncRealtimeConfig;
 }
 
 export interface DataSyncInstanceRecord {

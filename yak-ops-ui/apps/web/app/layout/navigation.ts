@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowRightLeft,
   Database,
   LayoutGrid,
@@ -39,6 +40,11 @@ export const DATA_INTEGRATION_NAVIGATION: ProductNavigationItem[] = [
     label: "离线同步",
     path: "/offline-sync",
     icon: ArrowRightLeft,
+  },
+  {
+    label: "实时同步",
+    path: "/realtime-sync",
+    icon: Activity,
   },
 ];
 
