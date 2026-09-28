@@ -1,6 +1,6 @@
 # YakFlow Capability
 
-Status: Phase 4 — MySQL CDC Connector
+Status: Phase 4 — MySQL CDC Cross-Database Acceptance
 
 ## Goal
 
@@ -189,7 +189,9 @@ mysql/
 └── debezium/   # Debezium Engine / Connect implementation
 ```
 
-The integration test starts a real MySQL 8.4 container with row-based binlog enabled and verifies:
+The acceptance test starts a real MySQL 8.4 source with row-based binlog plus real MySQL, PostgreSQL and Oracle targets.
+
+Each target runs the same lifecycle:
 
 ```text
 initial snapshot
@@ -198,18 +200,24 @@ target rows
       ↓
 source INSERT / UPDATE / DELETE
       ↓
-target converges
+target converges through JDBC CHANGELOG
       ↓
 YakFlow checkpoint
       ↓
 Debezium offset file
       ↓
-stop / restart with same state directory
+cancel
       ↓
-new binlog change continues syncing
+source receives one new INSERT
+      ↓
+restart with the same state directory
+      ↓
+target converges
+      ↓
+second execution metrics = 1 read / 1 write event
 ```
 
-This test is part of Maven verification and does not use a developer-owned database.
+The final metrics assertion proves restart continuation comes from the persisted offset rather than a fresh initial snapshot. The `*IT` acceptance test is executed by `.github/workflows/backend-acceptance.yml`, not by ordinary Backend verify, and never uses a developer-owned database.
 
 ## Explicit Non-Goals
 
