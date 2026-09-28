@@ -6,8 +6,10 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
+import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.util.ObjectUtils;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
@@ -66,9 +68,25 @@ public class OfflineSyncExecutionPlanner {
                         tablePathValue(targetEndpoint),
                         runtimeConfig.getWriteBatchSize(),
                         runtimeConfig.getTimeoutSeconds(),
+                        saveMode(snapshot.getWriteMode()),
                         JdbcWriteMode.INSERT),
                 targetWriteSchema);
         return new OfflineSyncExecutionPlan(source, sink, sourceSchema, runtimeConfig.getSourceParallelism());
+    }
+
+    static JdbcSaveMode saveMode(String writeMode) {
+        if (writeMode == null || writeMode.isBlank()) return JdbcSaveMode.APPEND;
+        DataSyncWriteMode resolved;
+        try {
+            resolved = DataSyncWriteMode.valueOf(writeMode);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("unsupported offline write mode: " + writeMode, exception);
+        }
+        return switch (resolved) {
+            case APPEND -> JdbcSaveMode.APPEND;
+            case OVERWRITE -> JdbcSaveMode.OVERWRITE;
+            case UPSERT -> throw new IllegalArgumentException("UPSERT write mode is not implemented yet");
+        };
     }
 
     private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {
