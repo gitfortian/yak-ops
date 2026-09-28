@@ -65,14 +65,18 @@ final class JdbcSinkWriter implements SinkWriter {
 
     @Override
     public void open() throws Exception {
-        if (config.writeMode() == JdbcWriteMode.CHANGELOG && primaryKeyIndexes.isEmpty()) {
-            throw new IllegalArgumentException("JDBC CHANGELOG Sink requires primary key");
+        if ((config.writeMode() == JdbcWriteMode.CHANGELOG || config.writeMode() == JdbcWriteMode.UPSERT)
+                && primaryKeyIndexes.isEmpty()) {
+            throw new IllegalArgumentException("JDBC " + config.writeMode() + " Sink requires primary key");
         }
 
         connection = connectionProvider.open(config.connection(), config.timeoutSeconds());
         connection.setAutoCommit(false);
         applySaveMode();
-        insertStatement = connection.prepareStatement(dialect.insertSql(config.table(), schema));
+        String writeSql = config.writeMode() == JdbcWriteMode.UPSERT
+                ? dialect.upsertSql(config.table(), schema)
+                : dialect.insertSql(config.table(), schema);
+        insertStatement = connection.prepareStatement(writeSql);
         insertStatement.setQueryTimeout(config.timeoutSeconds());
         if (config.writeMode() == JdbcWriteMode.CHANGELOG) {
             deleteStatement = connection.prepareStatement(dialect.deleteSql(config.table(), schema));
@@ -83,8 +87,8 @@ final class JdbcSinkWriter implements SinkWriter {
     @Override
     public void write(List<YakRow> rows) throws Exception {
         try {
-            if (config.writeMode() == JdbcWriteMode.INSERT) {
-                writeInsertBatch(rows);
+            if (config.writeMode() != JdbcWriteMode.CHANGELOG) {
+                writeBoundedBatch(rows);
                 return;
             }
             writeChangelog(rows);
@@ -97,7 +101,7 @@ final class JdbcSinkWriter implements SinkWriter {
     @Override
     public void flush() throws Exception {
         try {
-            if (config.writeMode() == JdbcWriteMode.INSERT) {
+            if (config.writeMode() != JdbcWriteMode.CHANGELOG) {
                 executeInsertBatch();
                 return;
             }
@@ -148,10 +152,10 @@ final class JdbcSinkWriter implements SinkWriter {
         }
     }
 
-    private void writeInsertBatch(List<YakRow> rows) throws Exception {
+    private void writeBoundedBatch(List<YakRow> rows) throws Exception {
         for (YakRow row : rows) {
             if (row.rowKind() != RowKind.INSERT) {
-                throw new IllegalArgumentException("JDBC INSERT Sink only accepts INSERT RowKind");
+                throw new IllegalArgumentException("JDBC bounded Sink only accepts INSERT RowKind");
             }
             validateArity(row);
             bindFullRow(insertStatement, row);
