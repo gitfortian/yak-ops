@@ -196,8 +196,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
         if (task.getSyncType() == DataSyncType.REALTIME) {
-            validateRealtimeTopology(
-                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
         }
         requireCompatibleMapping(resolvedScope);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
