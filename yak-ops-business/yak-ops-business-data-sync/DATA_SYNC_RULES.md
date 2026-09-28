@@ -30,6 +30,10 @@ Task / Instance persistence
 
 OfflineSyncExecutor
       ↓
+OfflineSyncExecutionPlanner
+      ↓
+OfflineSyncExecutionPlan
+      ↓
 YakFlow Local Runtime
 ```
 
@@ -141,6 +145,9 @@ Must:
 - Allow PENDING and RUNNING instances to be canceled.
 - Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Runtime is not process-recoverable.
 - Revalidate current Catalog field compatibility when a task is started.
+- Build runtime Catalog schema, datasource connections and JDBC Source / Sink through `OfflineSyncExecutionPlanner`.
+- Keep `OfflineSyncExecutionPlan` in memory only; it may hold runtime connection objects indirectly and must never be persisted, serialized into an Instance or logged.
+- Keep `OfflineSyncExecutor` focused on execution lifecycle, metrics, cancellation and terminal-state persistence.
 - Keep historical instances after task deletion; active instances block task deletion.
 
 Must Not:
