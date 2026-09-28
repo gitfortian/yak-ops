@@ -460,8 +460,8 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {
-        DataSourceVO target = BeanCopyUtils.copy(
-                source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
+        DataSourceVO target =
+                BeanCopyUtils.copy(source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
         if (target == null) return null;
         if (source.getDbType() != null && StringUtils.hasText(source.getConnectionParams())) {
             DataSourceConnection connection =
