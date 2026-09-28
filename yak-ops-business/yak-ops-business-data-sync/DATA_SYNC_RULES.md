@@ -111,7 +111,8 @@ Must:
 - Support `OFFLINE` and `REALTIME` task definitions.
 - Keep `REALTIME` Source limited to MySQL CDC in the current milestone.
 - Keep `REALTIME` Target limited to MySQL / PostgreSQL / Oracle JDBC sinks in the current milestone.
-- Require a primary key on the `REALTIME` Source table. Same-name mapping compatibility guarantees those key fields also exist on the Target.
+- Require a primary key on the `REALTIME` Source table.
+- Require the REALTIME Target primary-key set to exactly match the Source primary-key set through case-insensitive same-name mapping; PK order may differ, but missing, extra or different PK fields are invalid.
 
 Must Not:
 - Persist datasource password, `connection_params`, `original_json`, SSH private key, token or other secret in a task.
@@ -281,7 +282,7 @@ RUNNING
 ```
 
 Must:
-- Revalidate current realtime Source/Target topology, Source primary key and field compatibility before creating execution input.
+- Revalidate current realtime Source/Target topology, Source primary key, exact Source/Target primary-key correspondence and field compatibility before creating execution input.
 - Persist `syncType`, the fixed APPEND `writeMode` and the type-specific config in the sanitized definition snapshot.
 - Resolve source/target runtime credentials only inside `RealtimeSyncExecutionPlanner` after the Instance exists.
 - Reuse `DataSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
