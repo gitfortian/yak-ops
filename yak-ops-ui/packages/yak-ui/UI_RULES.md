@@ -146,7 +146,7 @@ Yak UI Table uses an AntD-familiar core contract without becoming an AntD compat
 - `pagination` reuses Yak UI Pagination; Table does not implement a second pagination control.
 - When `pagination.total` is omitted, Table may paginate the supplied in-memory `dataSource`.
 - When `pagination.total` is provided, Table treats `dataSource` as the already-paged server result.
-- `loading` keeps the current table structure mounted and overlays a Spinner instead of replacing the table.
+- `loading` keeps the current table structure mounted instead of replacing it. The loading mask starts below the header and covers only the Table Body, so the header surface remains visually stable; first-load empty data reserves a stable body height without rendering Empty under the mask, and Pagination stays visible but disabled.
 - `rowSelection` is a generic controlled / uncontrolled selection contract implemented by injecting a selection column; Table Body does not hard-code Checkbox behavior.
 - `footer` is a generic left-side composition slot sharing the bottom row with Pagination; batch / CRUD semantics remain product-owned.
 - Select-all only affects selectable rows on the currently rendered page and preserves selected keys from other pages.

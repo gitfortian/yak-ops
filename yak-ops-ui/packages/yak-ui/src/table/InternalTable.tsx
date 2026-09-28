@@ -21,18 +21,21 @@ import type {
 } from "./interface";
 import { getTableColumnKey, resolveTableRowKey } from "./utils";
 
-const sizeClasses: Record<TableSize, { header: string; cell: string }> = {
+const sizeClasses: Record<TableSize, { header: string; cell: string; loadingTop: string }> = {
   small: {
     header: "h-8 px-3 text-xs",
     cell: "px-3 py-1.5 text-xs",
+    loadingTop: "top-8",
   },
   medium: {
     header: "h-10 px-3 text-xs",
     cell: "px-3 py-2.5 text-[13px]",
+    loadingTop: "top-10",
   },
   large: {
     header: "h-12 px-4 text-[13px]",
     cell: "px-4 py-3 text-sm",
+    loadingTop: "top-12",
   },
 };
 
@@ -174,7 +177,7 @@ export function InternalTable<RecordType extends object>({
     <div className={cn("flex min-w-0 flex-col", className)}>
       <div
         className={cn(
-          "relative overflow-x-auto bg-[var(--yak-components-table-bg)]",
+          "relative min-h-0 flex-1 overflow-x-auto bg-[var(--yak-components-table-bg)]",
           scroll?.y != null && "overflow-y-auto",
           bordered && "border border-[var(--yak-components-table-border-strong)]",
         )}
@@ -273,7 +276,11 @@ export function InternalTable<RecordType extends object>({
             {data.length === 0 ? (
               <tr>
                 <td colSpan={Math.max(mergedColumns.length, 1)}>
-                  <Empty className="min-h-48" description={emptyText ?? "No data"} />
+                  {loading ? (
+                    <div aria-hidden="true" className="min-h-48" />
+                  ) : (
+                    <Empty className="min-h-48" description={emptyText ?? "No data"} />
+                  )}
                 </td>
               </tr>
             ) : null}
@@ -281,7 +288,12 @@ export function InternalTable<RecordType extends object>({
         </table>
 
         {loading ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--yak-components-table-loading-bg)]">
+          <div
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-20 flex items-center justify-center bg-[var(--yak-components-table-loading-bg)]",
+              sizeClass.loadingTop,
+            )}
+          >
             <Spinner size="large" label="Loading table" />
           </div>
         ) : null}
