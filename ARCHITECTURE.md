@@ -86,7 +86,7 @@ The Local Runtime depends on `yak-flow-api` only. It does not depend on Spring, 
 
 Owns YakFlow bounded JDBC table transfer. The first acceptance path is MySQL Source to MySQL, PostgreSQL or Oracle Sink.
 
-The connector reuses the normalized `DataSourceConnection` and JDBC connection runtime from the existing Datasource plugin boundary. It owns synchronization-specific SQL generation, row reading, logical type conversion, bounded Source lifecycle and batched Sink writes. Datasource plugins continue to own connection parsing, Driver selection, SSH tunneling and Catalog discovery.
+The connector reuses the normalized `DataSourceConnection` and JDBC connection runtime from the existing Datasource plugin boundary. It owns synchronization-specific SQL generation, row reading, JDBC field compatibility, logical type conversion, bounded Source lifecycle and batched Sink writes. Datasource plugins continue to own connection parsing, Driver selection, SSH tunneling and Catalog discovery.
 
 Phase 3 intentionally requires the target table to exist. Auto-create DDL and schema evolution are not part of this module stage. Phase 4 extends the same JDBC Sink with an explicit changelog mode for idempotent CDC application by primary key.
 
