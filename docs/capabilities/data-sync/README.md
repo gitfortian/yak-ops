@@ -115,9 +115,11 @@ create Instance(PENDING)
     ↓
 sanitized definition snapshot
     ↓
-resolve Datasource runtime connections
+OfflineSyncExecutionPlanner
     ↓
-JdbcSource -> LocalRuntime -> JdbcSink
+ExecutionPlan(JdbcSource / JdbcSink / sourceSchema)
+    ↓
+LocalRuntime
     ↓
 RUNNING
     ├── SUCCEEDED
@@ -126,6 +128,8 @@ RUNNING
 ```
 
 The current runtime is intentionally single-node. The in-process execution registry exists only to map a running instance to its LocalExecution for cancellation.
+
+`OfflineSyncExecutionPlan` is an in-memory runtime object only. It is built after the Instance exists, may reference runtime datasource connections through JDBC connectors, and must never be persisted or exposed through product APIs.
 
 On application startup:
 
