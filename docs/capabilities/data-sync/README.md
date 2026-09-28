@@ -20,6 +20,12 @@ JdbcSource -> JdbcSink
 
 Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle. Realtime Phase 1 added the shared Task contract; Realtime Phase 2 now wires saved REALTIME tasks into the existing YakFlow Local Execution Engine.
 
+## Manual Product E2E
+
+Automated Acceptance proves Runtime / Connector behavior against real databases. Product-level human acceptance is documented separately in [Data Sync Manual E2E Playbook](../../e2e/data-sync/README.md).
+
+The Manual E2E layer starts from Source / Target DDL and seed data, walks through the Yak Ops UI, runs the Task, and verifies the final Target rows with SQL. It complements automated tests; it does not replace them.
+
 ## Task Definition
 
 A task answers:
