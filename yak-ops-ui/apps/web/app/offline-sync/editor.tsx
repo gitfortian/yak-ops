@@ -64,6 +64,7 @@ const EMPTY_RUNTIME: DataSyncRuntimeConfig = {
   fetchSize: 500,
   readBatchSize: 500,
   writeBatchSize: 500,
+  sourceParallelism: 1,
   timeoutSeconds: 30,
 };
 
@@ -751,6 +752,7 @@ export function OfflineSyncEditorPage() {
                     ["fetchSize", "Fetch Size"],
                     ["readBatchSize", "读取 Batch Size"],
                     ["writeBatchSize", "写入 Batch Size"],
+                    ["sourceParallelism", "Source 并行度"],
                     ["timeoutSeconds", "超时时间（秒）"],
                   ] as const
                 ).map(([key, label]) => (
@@ -762,6 +764,7 @@ export function OfflineSyncEditorPage() {
                     <Input
                       type="number"
                       min={1}
+                      max={key === "sourceParallelism" ? 16 : undefined}
                       size="small"
                       variant="outlined"
                       value={String(form.runtimeConfig[key])}
