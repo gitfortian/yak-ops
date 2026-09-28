@@ -45,8 +45,7 @@ public class OfflineSyncExecutionPlanner {
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
         YakTableSchema sourceSchema = OfflineSyncSchemaResolver.sourceSchema(sourceColumns);
-        YakTableSchema targetWriteSchema =
-                OfflineSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
+        YakTableSchema targetWriteSchema = OfflineSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
 
         DataSourceConnection sourceConnection =
                 dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId());
