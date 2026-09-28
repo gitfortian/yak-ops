@@ -12,7 +12,7 @@ import java.util.Objects;
  * @param batchSize 每次提交前最多累计的行数
  * @param timeoutSeconds 连接与语句超时秒数
  * @param saveMode 写入前对目标已有数据的处理方式
- * @param writeMode 行级写入语义：离线 INSERT 或 CDC CHANGELOG
+ * @param writeMode 行级写入语义：离线 INSERT / UPSERT 或 CDC CHANGELOG
  * @author weifuwan
  * @since 2026-09-27
  */
