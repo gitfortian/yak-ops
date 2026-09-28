@@ -25,7 +25,7 @@ public class DataSyncTaskEntity extends BaseEntity {
     /** 同一 Workspace 内唯一的任务名称。 */
     private String name;
 
-    /** 数据同步类型；当前只开放 OFFLINE。 */
+    /** 数据同步类型：OFFLINE 或 REALTIME。 */
     private DataSyncType syncType;
 
     /** 来源数据源 ID。 */
@@ -52,7 +52,7 @@ public class DataSyncTaskEntity extends BaseEntity {
     /** 目标表名称。 */
     private String targetTable;
 
-    /** YakFlow 运行参数 JSON，不包含数据源连接凭证。 */
+    /** 按 syncType 持久化的 YakFlow 运行参数 JSON，不包含数据源连接凭证。 */
     private String runtimeConfig;
 
     /** 当前任务定义版本，从 1 开始递增。 */
