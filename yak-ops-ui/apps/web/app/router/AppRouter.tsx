@@ -125,10 +125,7 @@ export default function AppRouter() {
           <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
           <Route path="/realtime-sync" element={<RealtimeSyncPage />} />
           <Route path="/realtime-sync/new" element={<RealtimeSyncEditorPage />} />
-          <Route
-            path="/realtime-sync/instances/:id"
-            element={<RealtimeSyncInstanceDetailPage />}
-          />
+          <Route path="/realtime-sync/instances/:id" element={<RealtimeSyncInstanceDetailPage />} />
           <Route path="/realtime-sync/:id" element={<RealtimeSyncEditorPage />} />
         </Route>
 
