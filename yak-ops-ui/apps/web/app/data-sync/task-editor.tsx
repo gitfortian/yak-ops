@@ -321,6 +321,97 @@ function TableSection({
   );
 }
 
+interface OfflineRuntimeFieldsProps {
+  config: DataSyncRuntimeConfig;
+  onChange: (key: keyof DataSyncRuntimeConfig, value: string) => void;
+  onSplitSizeChange: (value: string) => void;
+}
+
+function OfflineRuntimeFields({
+  config,
+  onChange,
+  onSplitSizeChange,
+}: OfflineRuntimeFieldsProps) {
+  return (
+    <>
+      {(
+        [
+          ["fetchSize", "Fetch Size"],
+          ["readBatchSize", "读取 Batch Size"],
+          ["writeBatchSize", "写入 Batch Size"],
+          ["sourceParallelism", "Source 并行度"],
+          ["timeoutSeconds", "超时时间（秒）"],
+        ] as const
+      ).map(([key, label]) => (
+        <Field
+          key={key}
+          className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
+        >
+          <FieldLabel>{label}</FieldLabel>
+          <Input
+            type="number"
+            min={1}
+            max={key === "sourceParallelism" ? 16 : undefined}
+            size="small"
+            variant="outlined"
+            value={String(config[key])}
+            onChange={(event) => onChange(key, event.target.value)}
+          />
+        </Field>
+      ))}
+      <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
+        <FieldLabel>Split Size</FieldLabel>
+        <Input
+          type="number"
+          min={1}
+          max={10000000}
+          size="small"
+          variant="outlined"
+          value={config.splitSize ? String(config.splitSize) : ""}
+          placeholder="留空则整表读取"
+          onChange={(event) => onSplitSizeChange(event.target.value)}
+        />
+      </Field>
+    </>
+  );
+}
+
+interface RealtimeRuntimeFieldsProps {
+  config: DataSyncRealtimeConfig;
+  onChange: (key: keyof DataSyncRealtimeConfig, value: string) => void;
+}
+
+function RealtimeRuntimeFields({ config, onChange }: RealtimeRuntimeFieldsProps) {
+  return (
+    <>
+      {(
+        [
+          ["checkpointIntervalSeconds", "Checkpoint 周期（秒）"],
+          ["queueCapacity", "CDC 队列容量"],
+          ["pollBatchSize", "CDC 读取批次"],
+          ["writeBatchSize", "写入 Batch Size"],
+          ["timeoutSeconds", "超时时间（秒）"],
+        ] as const
+      ).map(([key, label]) => (
+        <Field
+          key={key}
+          className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
+        >
+          <FieldLabel>{label}</FieldLabel>
+          <Input
+            type="number"
+            min={1}
+            size="small"
+            variant="outlined"
+            value={String(config[key])}
+            onChange={(event) => onChange(key, event.target.value)}
+          />
+        </Field>
+      ))}
+    </>
+  );
+}
+
 interface DataSyncTaskEditorPageProps {
   syncType: DataSyncType;
 }
@@ -368,19 +459,16 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     form.targetSchema,
   );
 
-  const sourceDataSources = useMemo(
-    () => (realtime ? dataSources.filter((item) => item.dbType === "MYSQL") : dataSources),
-    [dataSources, realtime],
-  );
-  const targetDataSources = useMemo(
-    () =>
-      realtime
-        ? dataSources.filter((item) =>
-            ["MYSQL", "POSTGRE_SQL", "ORACLE"].includes(item.dbType || ""),
-          )
-        : dataSources,
-    [dataSources, realtime],
-  );
+  const sourceDataSources = useMemo(() => {
+    if (!realtime) return dataSources;
+    return dataSources.filter((item) => item.dbType === "MYSQL");
+  }, [dataSources, realtime]);
+  const targetDataSources = useMemo(() => {
+    if (!realtime) return dataSources;
+    return dataSources.filter((item) =>
+      ["MYSQL", "POSTGRE_SQL", "ORACLE"].includes(item.dbType || ""),
+    );
+  }, [dataSources, realtime]);
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
 
@@ -573,9 +661,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetTable: form.targetTable,
       remark: form.remark.trim() || undefined,
     };
-    return realtime
-      ? { ...common, syncType: "REALTIME", realtimeConfig: form.realtimeConfig }
-      : { ...common, syncType: "OFFLINE", runtimeConfig: form.runtimeConfig };
+    if (realtime) {
+      return { ...common, syncType: "REALTIME", realtimeConfig: form.realtimeConfig };
+    }
+    return { ...common, syncType: "OFFLINE", runtimeConfig: form.runtimeConfig };
   };
 
   const canSave =
@@ -595,10 +684,13 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           : await createDataSyncTask(payload());
       if (runAfterSave) {
         const instance = await runDataSyncTask(saved.id);
-        toast.success(realtime ? "实时同步任务已保存并启动" : "同步任务已保存并启动");
-        navigate(realtime ? basePath : `/offline-sync/instances/${instance.id}`, {
-          replace: true,
-        });
+        if (realtime) {
+          toast.success("实时同步任务已保存并启动");
+          navigate(basePath, { replace: true });
+        } else {
+          toast.success("同步任务已保存并启动");
+          navigate(`/offline-sync/instances/${instance.id}`, { replace: true });
+        }
         return;
       }
       toast.success(editing ? "同步任务已保存" : "同步任务已创建");
@@ -608,6 +700,15 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     }
   };
 
+  const pageTitle = editing
+    ? form.name || (realtime ? "编辑实时同步任务" : "编辑离线同步任务")
+    : realtime
+      ? "新建实时同步任务"
+      : "新建离线同步任务";
+  const pageDescription = realtime
+    ? "MySQL CDC 单表实时同步 · 首次全量后持续消费 Binlog"
+    : "单表离线同步 · 自动同名字段映射";
+
   if (loading) {
     return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
   }
@@ -615,18 +716,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   return (
     <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
       <PageHeader
-        title={
-          editing
-            ? form.name || (realtime ? "编辑实时同步任务" : "编辑离线同步任务")
-            : realtime
-              ? "新建实时同步任务"
-              : "新建离线同步任务"
-        }
-        description={
-          realtime
-            ? "MySQL CDC 单表实时同步 · 首次全量后持续消费 Binlog"
-            : "单表离线同步 · 自动同名字段映射"
-        }
+        title={pageTitle}
+        description={pageDescription}
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
@@ -817,71 +908,15 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             </button>
             {runtimeOpen ? (
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[#eef0f3] p-4 max-lg:grid-cols-1">
-                {realtime
-                  ? (
-                      [
-                        ["checkpointIntervalSeconds", "Checkpoint 周期（秒）"],
-                        ["queueCapacity", "CDC 队列容量"],
-                        ["pollBatchSize", "CDC 读取批次"],
-                        ["writeBatchSize", "写入 Batch Size"],
-                        ["timeoutSeconds", "超时时间（秒）"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <Field
-                        key={key}
-                        className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
-                      >
-                        <FieldLabel>{label}</FieldLabel>
-                        <Input
-                          type="number"
-                          min={1}
-                          size="small"
-                          variant="outlined"
-                          value={String(form.realtimeConfig[key])}
-                          onChange={(event) => patchRealtime(key, event.target.value)}
-                        />
-                      </Field>
-                    ))
-                  : (
-                      [
-                        ["fetchSize", "Fetch Size"],
-                        ["readBatchSize", "读取 Batch Size"],
-                        ["writeBatchSize", "写入 Batch Size"],
-                        ["sourceParallelism", "Source 并行度"],
-                        ["timeoutSeconds", "超时时间（秒）"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <Field
-                        key={key}
-                        className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
-                      >
-                        <FieldLabel>{label}</FieldLabel>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={key === "sourceParallelism" ? 16 : undefined}
-                          size="small"
-                          variant="outlined"
-                          value={String(form.runtimeConfig[key])}
-                          onChange={(event) => patchRuntime(key, event.target.value)}
-                        />
-                      </Field>
-                    ))}
-                {!realtime ? (
-                  <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
-                    <FieldLabel>Split Size</FieldLabel>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10000000}
-                      size="small"
-                      variant="outlined"
-                      value={form.runtimeConfig.splitSize ? String(form.runtimeConfig.splitSize) : ""}
-                      placeholder="留空则整表读取"
-                      onChange={(event) => patchOptionalSplitSize(event.target.value)}
-                    />
-                  </Field>
-                ) : null}
+                {realtime ? (
+                  <RealtimeRuntimeFields config={form.realtimeConfig} onChange={patchRealtime} />
+                ) : (
+                  <OfflineRuntimeFields
+                    config={form.runtimeConfig}
+                    onChange={patchRuntime}
+                    onSplitSizeChange={patchOptionalSplitSize}
+                  />
+                )}
               </div>
             ) : null}
           </section>
