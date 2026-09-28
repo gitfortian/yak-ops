@@ -115,6 +115,7 @@ MySQL / PostgreSQL / Oracle
 The connector:
 
 - consumes the existing normalized `DataSourceConnection` contract instead of defining duplicate host/port/user/password configuration.
+- maps JDBC Catalog metadata into `YakColumn / YakDataType` first; compatibility rules operate only on the logical model, not raw JDBC type codes.
 - reuses Datasource JDBC runtime behavior for Driver loading, MySQL Driver isolation and SSH tunneling.
 - maps Datasource Catalog columns to `YakTableSchema`.
 - reads a table as a bounded Source with forward-only JDBC cursor batches.
