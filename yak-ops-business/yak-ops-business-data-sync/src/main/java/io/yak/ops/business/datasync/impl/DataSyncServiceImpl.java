@@ -514,9 +514,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (resolved != DataSyncWriteMode.APPEND) {
             throw new DataSyncException(
                     DataSyncErrorCode.INVALID_TASK,
-                    syncType == DataSyncType.REALTIME
-                            ? "REALTIME 当前固定使用 APPEND 写入方式"
-                            : "OFFLINE 当前阶段仅支持 APPEND 写入方式");
+                    syncType == DataSyncType.REALTIME ? "REALTIME 当前固定使用 APPEND 写入方式" : "OFFLINE 当前阶段仅支持 APPEND 写入方式");
         }
     }
 
