@@ -65,7 +65,7 @@ UPSERT      executable; updates/inserts by target primary key using native JDBC 
 
 REALTIME tasks currently persist APPEND for the shared Task contract while runtime writes continue through `JdbcWriteMode.CHANGELOG`.
 
-## Task Publication Lifecycle — Staged
+## Task Publication Lifecycle
 
 The next Task lifecycle milestone introduces an explicit publication gate shared by OFFLINE and REALTIME.
 
@@ -99,7 +99,7 @@ Core rules:
 - V1 keeps one current Task version; no separate draft/published versions or version-history table are introduced.
 - existing rows will be migrated as `PUBLISHED` to preserve current executability; new rows start `UNPUBLISHED`.
 
-This section is a staged contract only. The current implementation continues to use the pre-publication CRUD/run behavior until the backend and frontend lifecycle PRs land.
+The backend lifecycle contract is active: new Tasks start UNPUBLISHED, publish/unpublish are explicit commands, update/delete/run are status-gated, and executable-definition changes own version increments. Frontend action adoption remains the next PR.
 
 ## MySQL CDC Source Requirements
 
@@ -387,7 +387,7 @@ Each acceptance path verifies target rows and final YakFlow metrics.
 The current product surface includes:
 
 - Workspace-scoped OFFLINE / REALTIME Task CRUD.
-- The Task publication lifecycle is documented as the next staged contract but is not yet part of the current executable product surface.
+- Task publication lifecycle backend with UNPUBLISHED / PUBLISHED state, publish/unpublish commands and status-gated update/delete/run.
 - persisted Task Instance history with `syncType`, lifecycle status and sanitized definition snapshot.
 - shared Catalog-driven mapping validation.
 - OFFLINE manual execution, metrics, APPEND / OVERWRITE / UPSERT behavior and real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance.

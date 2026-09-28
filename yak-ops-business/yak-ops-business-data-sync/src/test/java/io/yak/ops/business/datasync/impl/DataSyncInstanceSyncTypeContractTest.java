@@ -12,6 +12,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
@@ -123,6 +124,7 @@ class DataSyncInstanceSyncTypeContractTest {
         task.setWorkspaceId("workspace-1");
         task.setName("realtime-task");
         task.setSyncType(DataSyncType.REALTIME);
+        task.setStatus(DataSyncTaskStatus.PUBLISHED);
         task.setSourceDataSourceId("source");
         task.setSourceDatabase("source_db");
         task.setSourceTable("source_table");

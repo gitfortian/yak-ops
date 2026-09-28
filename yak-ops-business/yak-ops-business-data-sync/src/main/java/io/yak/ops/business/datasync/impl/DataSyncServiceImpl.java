@@ -27,6 +27,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
+import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
@@ -49,6 +50,7 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -102,6 +104,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         entity.setWorkspaceId(workspaceId);
         entity.setName(name);
         entity.setSyncType(syncType);
+        entity.setStatus(DataSyncTaskStatus.UNPUBLISHED);
         applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(1);
         entity.initCreate();
@@ -118,19 +121,25 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
+        requireTaskStatus(entity, DataSyncTaskStatus.UNPUBLISHED, "已上线任务请先下线后再编辑");
         String name = StringUtils.trimToNull(dto.getName());
         if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, id);
         DataSyncType syncType = requireSyncType(dto.getSyncType());
+        if (entity.getSyncType() != syncType) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步类型创建后不允许修改");
+        }
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
         requireCompatibleMapping(resolvedScope);
 
+        boolean executableDefinitionChanged = executableDefinitionChanged(entity, dto, resolvedScope);
         entity.setName(name);
-        entity.setSyncType(syncType);
         applyDefinition(entity, dto, resolvedScope);
-        entity.setDefinitionVersion(Math.max(1, entity.getDefinitionVersion()) + 1);
+        if (executableDefinitionChanged) {
+            entity.setDefinitionVersion(Math.max(1, entity.getDefinitionVersion()) + 1);
+        }
         entity.initUpdate();
 
         if (taskRepository.update(workspaceId, entity) == null) {
@@ -158,6 +167,7 @@ public class DataSyncServiceImpl implements DataSyncService {
                 dto.getPageSize(),
                 StringUtils.trimToNull(dto.getKeyword()),
                 dto.getSyncType(),
+                dto.getStatus(),
                 StringUtils.trimToNull(dto.getSourceDataSourceId()),
                 StringUtils.trimToNull(dto.getTargetDataSourceId()));
         return PagingData.from(taskRepository.queryPage(workspaceId, query).map(this::toTaskVO));
@@ -191,20 +201,43 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO publishTask(String id) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskEntity task = requireTask(workspaceId, id);
+        requireTaskStatus(task, DataSyncTaskStatus.UNPUBLISHED, "任务已经上线");
+        validatePersistedTaskDefinition(task);
+        task.setStatus(DataSyncTaskStatus.PUBLISHED);
+        task.initUpdate();
+        if (taskRepository.update(workspaceId, task) == null) {
+            throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "上线任务失败");
+        }
+        return toTaskVO(task);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO unpublishTask(String id) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskEntity task = requireTask(workspaceId, id);
+        requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务已经下线");
+        if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
+            throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS, "请先停止当前运行实例再下线任务");
+        }
+        task.setStatus(DataSyncTaskStatus.UNPUBLISHED);
+        task.initUpdate();
+        if (taskRepository.update(workspaceId, task) == null) {
+            throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "下线任务失败");
+        }
+        return toTaskVO(task);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized DataSyncInstanceVO runTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
-        DataSyncMappingPreviewDTO resolvedScope =
-                resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
-        DataSyncWriteMode writeMode = taskWriteMode(task);
-        validateWriteMode(task.getSyncType(), writeMode);
-        if (task.getSyncType() == DataSyncType.REALTIME) {
-            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
-        } else {
-            validateOfflineUpsertTarget(
-                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
-        }
-        requireCompatibleMapping(resolvedScope);
+        requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务尚未上线");
+        DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
@@ -235,6 +268,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     public boolean deleteTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
+        requireTaskStatus(entity, DataSyncTaskStatus.UNPUBLISHED, "已上线任务请先下线后再删除");
         if (instanceRepository.existsActiveByTask(workspaceId, entity.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
@@ -325,6 +359,45 @@ public class DataSyncServiceImpl implements DataSyncService {
         }
 
         return toInstanceVO(requireInstance(workspaceId, id), true);
+    }
+
+    private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {
+        DataSyncMappingPreviewDTO resolvedScope =
+                resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
+        DataSyncWriteMode writeMode = taskWriteMode(task);
+        validateWriteMode(task.getSyncType(), writeMode);
+        if (task.getSyncType() == DataSyncType.REALTIME) {
+            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+        } else {
+            validateOfflineUpsertTarget(
+                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
+        }
+        requireCompatibleMapping(resolvedScope);
+        return resolvedScope;
+    }
+
+    private boolean executableDefinitionChanged(
+            DataSyncTaskEntity entity, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
+        return !Objects.equals(
+                        entity.getSourceDataSourceId(),
+                        dto.getSourceDataSourceId().trim())
+                || !Objects.equals(entity.getSourceDatabase(), resolvedScope.getSourceDatabase())
+                || !Objects.equals(entity.getSourceSchema(), resolvedScope.getSourceSchema())
+                || !Objects.equals(entity.getSourceTable(), dto.getSourceTable().trim())
+                || !Objects.equals(
+                        entity.getTargetDataSourceId(),
+                        dto.getTargetDataSourceId().trim())
+                || !Objects.equals(entity.getTargetDatabase(), resolvedScope.getTargetDatabase())
+                || !Objects.equals(entity.getTargetSchema(), resolvedScope.getTargetSchema())
+                || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
+                || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
+                || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto));
+    }
+
+    private boolean jsonEquals(String left, String right) {
+        if (Objects.equals(left, right)) return true;
+        if (StringUtils.isBlank(left) || StringUtils.isBlank(right)) return false;
+        return JSONUtils.readTree(left).equals(JSONUtils.readTree(right));
     }
 
     private void applyDefinition(
@@ -573,6 +646,16 @@ public class DataSyncServiceImpl implements DataSyncService {
         return task.getWriteMode() == null ? DataSyncWriteMode.APPEND : task.getWriteMode();
     }
 
+    private DataSyncTaskStatus taskStatus(DataSyncTaskEntity task) {
+        return task.getStatus() == null ? DataSyncTaskStatus.PUBLISHED : task.getStatus();
+    }
+
+    private void requireTaskStatus(DataSyncTaskEntity task, DataSyncTaskStatus expected, String detail) {
+        if (taskStatus(task) != expected) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK_STATUS, detail);
+        }
+    }
+
     private DataSyncTaskEntity requireTask(String workspaceId, String id) {
         if (StringUtils.isBlank(id)) throw new DataSyncException(DataSyncErrorCode.TASK_NOT_FOUND);
         return taskRepository
@@ -595,9 +678,10 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
         DataSyncTaskVO target =
-                BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "writeMode", "runtimeConfig");
+                BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "status", "writeMode", "runtimeConfig");
         target.setSyncType(
                 source.getSyncType() == null ? null : source.getSyncType().name());
+        target.setStatus(taskStatus(source).name());
         target.setWriteMode(taskWriteMode(source).name());
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));

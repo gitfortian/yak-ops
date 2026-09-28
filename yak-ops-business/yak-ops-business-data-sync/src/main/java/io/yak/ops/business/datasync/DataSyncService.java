@@ -27,6 +27,10 @@ public interface DataSyncService {
 
     DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto);
 
+    DataSyncTaskVO publishTask(String id);
+
+    DataSyncTaskVO unpublishTask(String id);
+
     DataSyncInstanceVO runTask(String id);
 
     boolean deleteTask(String id);

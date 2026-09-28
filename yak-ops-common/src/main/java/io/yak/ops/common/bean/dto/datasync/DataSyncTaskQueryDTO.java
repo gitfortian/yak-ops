@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.dto.datasync;
 
 import io.yak.ops.common.bean.dto.common.PageQueryDTO;
+import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -22,6 +23,9 @@ public class DataSyncTaskQueryDTO extends PageQueryDTO {
 
     /** 同步类型。 */
     private DataSyncType syncType;
+
+    /** 任务发布状态。 */
+    private DataSyncTaskStatus status;
 
     /** 来源数据源 ID。 */
     private String sourceDataSourceId;

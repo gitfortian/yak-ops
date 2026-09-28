@@ -120,9 +120,9 @@ Must Not:
 - Create a second datasource connection model inside Data Sync.
 - Start YakFlow as a side effect of create/update/query methods in Phase 1.
 
-## Task Publication Lifecycle — Staged
+## Task Publication Lifecycle
 
-PR1 defines the target publication contract. PR2/PR3 implement it.
+PR2 implements the backend publication contract. PR3 owns frontend status presentation and action adoption.
 
 Product wording is “上线 / 下线”, while persisted status values are deliberately `PUBLISHED / UNPUBLISHED` so they cannot be confused with `DataSyncType.OFFLINE`.
 
