@@ -1,5 +1,6 @@
 package io.yak.ops.flow.connector.cdc.mysql.integration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import io.yak.ops.flow.api.row.YakColumn;
@@ -17,6 +18,7 @@ import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import io.yak.ops.plugin.database.jdbc.SshTunnelConfig;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
@@ -26,25 +28,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.utility.DockerImageName;
 
 /**
- * 真实 MySQL + Binlog 的 CDC 集成测试，覆盖 initial snapshot、增删改、checkpoint 和状态目录复用重启。
+ * 真实 MySQL Binlog CDC 跨库验收，覆盖 MySQL -> MySQL / PostgreSQL / Oracle 的 snapshot、增删改、
+ * checkpoint、取消、持久化 offset 和重启续传。
  *
  * @author weifuwan
- * @since 2026-09-27
+ * @since 2026-09-28
  */
 class MySqlCdcIntegrationIT {
 
-    private static final String DATABASE = "yakflow";
+    private static final String MYSQL_DATABASE = "yakflow";
     private static final String ROOT_PASSWORD = "yak-root";
-    private static final long SERVER_ID = 54021L;
+    private static final String ORACLE_PASSWORD = "yakoracle";
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName(DATABASE)
+            .withDatabaseName(MYSQL_DATABASE)
             .withUsername("root")
             .withPassword(ROOT_PASSWORD)
             .withEnv("MYSQL_ROOT_HOST", "%")
@@ -53,6 +62,16 @@ class MySqlCdcIntegrationIT {
                     "--log-bin=mysql-bin",
                     "--binlog-format=ROW",
                     "--binlog-row-image=FULL");
+    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+            .withDatabaseName("yakflow")
+            .withUsername("yak")
+            .withPassword("yakpass");
+    private static final GenericContainer<?> ORACLE = new GenericContainer<>(
+                    DockerImageName.parse("gvenzl/oracle-free:23-slim-faststart"))
+            .withEnv("ORACLE_PASSWORD", ORACLE_PASSWORD)
+            .withExposedPorts(1521)
+            .waitingFor(Wait.forLogMessage(".*DATABASE IS READY TO USE!.*\\n", 1))
+            .withStartupTimeout(Duration.ofMinutes(6));
     private static final YakTableSchema SCHEMA = new YakTableSchema(
             List.of(
                     new YakColumn("id", YakTypes.BIGINT, false, null),
@@ -73,61 +92,80 @@ class MySqlCdcIntegrationIT {
     Path stateDirectory;
 
     @BeforeAll
-    static void startMySql() {
-        MYSQL.start();
+    static void startDatabases() {
+        Startables.deepStart(Stream.of(MYSQL, POSTGRES, ORACLE)).join();
     }
 
     @AfterAll
-    static void stopMySql() {
+    static void stopDatabases() {
+        ORACLE.stop();
+        POSTGRES.stop();
         MYSQL.stop();
     }
 
     @Test
-    void shouldSyncSnapshotBinlogAndReusePersistedOffsetAfterRestart() throws Exception {
-        resetTables();
-        JdbcConnectionProperties connection = connection();
+    void shouldSyncSnapshotBinlogAndResumeOffsetToMysql() throws Exception {
+        executeAcceptance(mysqlTarget(), 54021L);
+    }
+
+    @Test
+    void shouldSyncSnapshotBinlogAndResumeOffsetToPostgresql() throws Exception {
+        executeAcceptance(postgresTarget(), 54022L);
+    }
+
+    @Test
+    void shouldSyncSnapshotBinlogAndResumeOffsetToOracle() throws Exception {
+        executeAcceptance(oracleTarget(), 54023L);
+    }
+
+    private void executeAcceptance(Target target, long serverId) throws Exception {
+        resetSource();
+        resetTarget(target);
+
+        Path targetStateDirectory = stateDirectory.resolve(target.name());
+        JdbcConnectionProperties sourceConnection = sourceConnection();
         MySqlCdcSourceConfig sourceConfig = MySqlCdcSourceConfig.defaults(
-                connection,
-                new DataSourceTablePath(DATABASE, null, "source_user"),
+                sourceConnection,
+                new DataSourceTablePath(MYSQL_DATABASE, null, "source_user"),
                 SCHEMA,
-                stateDirectory,
-                "source-user-cdc",
-                SERVER_ID);
+                targetStateDirectory,
+                "source-user-cdc-" + target.name(),
+                serverId);
 
-        LocalExecution<?> firstExecution = startExecution(sourceConfig, connection);
+        LocalExecution<?> firstExecution = startExecution(sourceConfig, target);
         try {
-            awaitTarget(Map.of(1L, "alpha", 2L, "beta"));
+            awaitTarget(target, Map.of(1L, "alpha", 2L, "beta"));
 
-            execute("INSERT INTO source_user(id, name) VALUES (3, 'gamma')");
-            execute("UPDATE source_user SET name = 'alpha-v2' WHERE id = 1");
-            execute("DELETE FROM source_user WHERE id = 2");
+            executeSource("INSERT INTO source_user(id, name) VALUES (3, 'gamma')");
+            executeSource("UPDATE source_user SET name = 'alpha-v2' WHERE id = 1");
+            executeSource("DELETE FROM source_user WHERE id = 2");
 
-            awaitTarget(Map.of(1L, "alpha-v2", 3L, "gamma"));
-            firstExecution.checkpoint().get(15, TimeUnit.SECONDS);
-            awaitOffsetFile();
+            awaitTarget(target, Map.of(1L, "alpha-v2", 3L, "gamma"));
+            firstExecution.checkpoint().get(20, TimeUnit.SECONDS);
+            awaitOffsetFile(targetStateDirectory);
         } finally {
             stopExecution(firstExecution);
         }
 
-        execute("INSERT INTO source_user(id, name) VALUES (4, 'delta')");
+        executeSource("INSERT INTO source_user(id, name) VALUES (4, 'delta')");
 
-        LocalExecution<?> secondExecution = startExecution(sourceConfig, connection);
+        LocalExecution<?> secondExecution = startExecution(sourceConfig, target);
         try {
-            awaitTarget(Map.of(1L, "alpha-v2", 3L, "gamma", 4L, "delta"));
-            secondExecution.checkpoint().get(15, TimeUnit.SECONDS);
+            awaitTarget(target, Map.of(1L, "alpha-v2", 3L, "gamma", 4L, "delta"));
+            secondExecution.checkpoint().get(20, TimeUnit.SECONDS);
+            awaitOffsetFile(targetStateDirectory);
         } finally {
             stopExecution(secondExecution);
         }
     }
 
-    private LocalExecution<?> startExecution(
-            MySqlCdcSourceConfig sourceConfig, JdbcConnectionProperties connection) {
+    private LocalExecution<?> startExecution(MySqlCdcSourceConfig sourceConfig, Target target) {
         JdbcSink sink = new JdbcSink(
                 new JdbcSinkConfig(
-                        connection,
-                        new DataSourceTablePath(DATABASE, null, "target_user"),
+                        target.connection(),
+                        target.table(),
                         100,
-                        10,
+                        15,
                         JdbcWriteMode.CHANGELOG),
                 DIRECT_CONNECTION);
         return new LocalExecutionEngine(Duration.ofMillis(250))
@@ -138,10 +176,75 @@ class MySqlCdcIntegrationIT {
         if (execution.status() == ExecutionStatus.RUNNING) {
             execution.cancel();
         }
-        execution.await(Duration.ofSeconds(15));
+        assertEquals(ExecutionStatus.CANCELED, execution.await(Duration.ofSeconds(20)));
     }
 
-    private JdbcConnectionProperties connection() {
+    private void resetSource() throws Exception {
+        try (var connection = DIRECT_CONNECTION.open(sourceConnection(), 15);
+                var statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS source_user");
+            statement.execute("CREATE TABLE source_user (id BIGINT PRIMARY KEY, name VARCHAR(100))");
+            statement.execute("INSERT INTO source_user(id, name) VALUES (1, 'alpha'), (2, 'beta')");
+        }
+    }
+
+    private void resetTarget(Target target) throws Exception {
+        try (var connection = DIRECT_CONNECTION.open(target.connection(), 15);
+                var statement = connection.createStatement()) {
+            try {
+                statement.execute(target.dropSql());
+            } catch (Exception exception) {
+                if (!target.ignoreDropFailure()) throw exception;
+            }
+            statement.execute(target.createSql());
+        }
+    }
+
+    private void executeSource(String sql) throws Exception {
+        try (var connection = DIRECT_CONNECTION.open(sourceConnection(), 15);
+                var statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+
+    private void awaitTarget(Target target, Map<Long, String> expected) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(45).toNanos();
+        Map<Long, String> actual = Map.of();
+        while (System.nanoTime() < deadline) {
+            actual = readTarget(target);
+            if (actual.equals(expected)) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        fail(target.name() + " target rows did not converge, expected=" + expected + ", actual=" + actual);
+    }
+
+    private Map<Long, String> readTarget(Target target) throws Exception {
+        Map<Long, String> values = new LinkedHashMap<>();
+        try (var connection = DIRECT_CONNECTION.open(target.connection(), 15);
+                var statement = connection.createStatement();
+                var resultSet = statement.executeQuery(target.selectSql())) {
+            while (resultSet.next()) {
+                values.put(resultSet.getLong(1), resultSet.getString(2));
+            }
+        }
+        return values;
+    }
+
+    private void awaitOffsetFile(Path directory) throws Exception {
+        Path offsetFile = directory.resolve("offsets.dat");
+        long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (Files.isRegularFile(offsetFile) && Files.size(offsetFile) > 0) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        fail("Debezium offset file was not persisted after checkpoint: " + offsetFile);
+    }
+
+    private JdbcConnectionProperties sourceConnection() {
         return new JdbcConnectionProperties(
                 "MYSQL",
                 MYSQL.getHost(),
@@ -151,65 +254,84 @@ class MySqlCdcIntegrationIT {
                 "MYSQL_8",
                 MYSQL.getUsername(),
                 MYSQL.getPassword(),
-                DATABASE,
+                MYSQL_DATABASE,
                 null,
                 Map.of("useSSL", "false", "allowPublicKeyRetrieval", "true"),
                 SshTunnelConfig.disabled(),
                 "{}");
     }
 
-    private void resetTables() throws Exception {
-        try (var connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
-                var statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS target_user");
-            statement.execute("DROP TABLE IF EXISTS source_user");
-            statement.execute("CREATE TABLE source_user (id BIGINT PRIMARY KEY, name VARCHAR(100))");
-            statement.execute("CREATE TABLE target_user (id BIGINT PRIMARY KEY, name VARCHAR(100))");
-            statement.execute("INSERT INTO source_user(id, name) VALUES (1, 'alpha'), (2, 'beta')");
-        }
+    private Target mysqlTarget() {
+        return new Target(
+                "mysql",
+                sourceConnection(),
+                new DataSourceTablePath(MYSQL_DATABASE, null, "target_mysql"),
+                "DROP TABLE IF EXISTS target_mysql",
+                "CREATE TABLE target_mysql (id BIGINT PRIMARY KEY, name VARCHAR(100))",
+                "SELECT id, name FROM target_mysql ORDER BY id",
+                false);
     }
 
-    private void execute(String sql) throws Exception {
-        try (var connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
-                var statement = connection.createStatement()) {
-            statement.executeUpdate(sql);
-        }
+    private Target postgresTarget() {
+        return new Target(
+                "postgresql",
+                new TestConnection(
+                        "POSTGRE_SQL",
+                        POSTGRES.getJdbcUrl(),
+                        "org.postgresql.Driver",
+                        POSTGRES.getUsername(),
+                        POSTGRES.getPassword(),
+                        "yakflow"),
+                new DataSourceTablePath("yakflow", "public", "target_pg"),
+                "DROP TABLE IF EXISTS target_pg",
+                "CREATE TABLE target_pg (id BIGINT PRIMARY KEY, name VARCHAR(100))",
+                "SELECT id, name FROM target_pg ORDER BY id",
+                false);
     }
 
-    private void awaitTarget(Map<Long, String> expected) throws Exception {
-        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
-        Map<Long, String> actual = Map.of();
-        while (System.nanoTime() < deadline) {
-            actual = readTarget();
-            if (actual.equals(expected)) {
-                return;
-            }
-            Thread.sleep(100);
-        }
-        fail("target rows did not converge, expected=" + expected + ", actual=" + actual);
+    private Target oracleTarget() {
+        String jdbcUrl = "jdbc:oracle:thin:@//" + ORACLE.getHost() + ":" + ORACLE.getMappedPort(1521) + "/FREEPDB1";
+        return new Target(
+                "oracle",
+                new TestConnection("ORACLE", jdbcUrl, "oracle.jdbc.OracleDriver", "system", ORACLE_PASSWORD, null),
+                new DataSourceTablePath(null, null, "target_oracle"),
+                "DROP TABLE \"target_oracle\" PURGE",
+                "CREATE TABLE \"target_oracle\" (\"id\" NUMBER(19) PRIMARY KEY, \"name\" VARCHAR2(100))",
+                "SELECT \"id\", \"name\" FROM \"target_oracle\" ORDER BY \"id\"",
+                true);
     }
 
-    private Map<Long, String> readTarget() throws Exception {
-        Map<Long, String> values = new LinkedHashMap<>();
-        try (var connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
-                var statement = connection.createStatement();
-                var resultSet = statement.executeQuery("SELECT id, name FROM target_user ORDER BY id")) {
-            while (resultSet.next()) {
-                values.put(resultSet.getLong(1), resultSet.getString(2));
-            }
-        }
-        return values;
-    }
+    private record Target(
+            String name,
+            DataSourceConnection connection,
+            DataSourceTablePath table,
+            String dropSql,
+            String createSql,
+            String selectSql,
+            boolean ignoreDropFailure) {}
 
-    private void awaitOffsetFile() throws Exception {
-        Path offsetFile = stateDirectory.resolve("offsets.dat");
-        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-        while (System.nanoTime() < deadline) {
-            if (Files.isRegularFile(offsetFile) && Files.size(offsetFile) > 0) {
-                return;
-            }
-            Thread.sleep(100);
+    private record TestConnection(
+            String type,
+            String jdbcUrl,
+            String driverClassName,
+            String username,
+            String password,
+            String database)
+            implements DataSourceConnection {
+
+        @Override
+        public String schema() {
+            return null;
         }
-        fail("Debezium offset file was not persisted after checkpoint");
+
+        @Override
+        public Map<String, String> properties() {
+            return Map.of();
+        }
+
+        @Override
+        public String normalizedJson() {
+            return "{}";
+        }
     }
 }
