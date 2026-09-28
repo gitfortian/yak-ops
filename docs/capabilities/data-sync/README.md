@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Offline Phase 4 + Realtime Phase 5 Instance Runtime UI
+Status: Offline Phase 4 + Realtime Phase 6 Cross-Database Acceptance
 
 ## Goal
 
@@ -313,6 +313,28 @@ Instance Tab + Detail
 Instance rows now persist `syncType`, so REALTIME pagination is filtered in the backend and remains valid even after the originating Task is deleted. The UI labels `readRows/writeRows` as change events because UPDATE currently emits UPDATE_BEFORE + UPDATE_AFTER.
 
 Checkpoint time is deliberately not displayed because the current Instance contract does not persist a trustworthy last-checkpoint timestamp.
+
+## Realtime Phase 6 — Cross-Database Acceptance
+
+The realtime milestone is accepted against real target databases rather than only a MySQL sink:
+
+```text
+MySQL CDC Source
+├── MySQL Sink
+├── PostgreSQL Sink
+└── Oracle Sink
+```
+
+Every target path proves:
+- initial snapshot.
+- INSERT / UPDATE / DELETE changelog application.
+- checkpoint completion and persisted Debezium offset.
+- cancel.
+- state-directory reuse.
+- restart continuation.
+- exactly one read/write event after inserting one new source row post-checkpoint, proving the second run resumed from the saved offset instead of starting a fresh snapshot.
+
+The acceptance remains at-least-once; passing these tests does not create an exactly-once claim.
 
 It still does not provide:
 
