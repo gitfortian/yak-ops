@@ -37,8 +37,7 @@ public final class JdbcSchemaCompatibility {
             return capacityCompatible(source.length(), target.length());
         }
         if (kind == YakTypeKind.DECIMAL) {
-            return decimalCompatible(
-                    (YakDecimalType) source.dataType(), (YakDecimalType) target.dataType());
+            return decimalCompatible((YakDecimalType) source.dataType(), (YakDecimalType) target.dataType());
         }
         return true;
     }
