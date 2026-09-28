@@ -18,6 +18,7 @@ Depends On:
 - `/yak-ops-dao/ENTITY_RULES.md`
 - `/yak-ops-dao/FLYWAY_RULES.md`
 - `/docs/capabilities/data-sync/README.md`
+- `/docs/capabilities/data-sync/task-lifecycle.md`
 
 ## Business Boundary
 
@@ -102,7 +103,7 @@ Must:
 - Persist datasource references by datasource ID, not by copying credentials.
 - Treat the current Datasource-bound database as authoritative. Task / mapping requests cannot override a bound database.
 - Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
-- Keep `definitionVersion` starting at 1 and increment it on every successful task-definition update.
+- Keep `definitionVersion` starting at 1. The current implementation increments on every successful update; the staged Task Publication Lifecycle narrows this to executable-definition changes only, while metadata-only changes keep the same version.
 - Persist one type-specific YakFlow config JSON in `runtime_config`; `OFFLINE` uses batch/fetch/split tuning while `REALTIME` uses CDC/checkpoint/write tuning.
 - Persist target data semantics as first-class Task field `writeMode`; do not place APPEND / OVERWRITE / UPSERT inside `runtime_config`.
 - Keep `DataSyncWriteMode` persistence values stable: APPEND=1, OVERWRITE=2, UPSERT=3.
@@ -118,6 +119,47 @@ Must Not:
 - Persist datasource password, `connection_params`, `original_json`, SSH private key, token or other secret in a task.
 - Create a second datasource connection model inside Data Sync.
 - Start YakFlow as a side effect of create/update/query methods in Phase 1.
+
+## Task Publication Lifecycle — Staged
+
+PR1 defines the target publication contract. PR2/PR3 implement it.
+
+Product wording is “上线 / 下线”, while persisted status values are deliberately `PUBLISHED / UNPUBLISHED` so they cannot be confused with `DataSyncType.OFFLINE`.
+
+Target invariants:
+
+- New Tasks start `UNPUBLISHED` at `definitionVersion = 1`.
+- Only `UNPUBLISHED` Tasks may update executable definition.
+- `syncType` is immutable after create.
+- Publish and unpublish do not change `definitionVersion`.
+- Only `PUBLISHED` Tasks may create a new Instance.
+- Run/start never publishes implicitly.
+- Unpublish is rejected while a `PENDING` or `RUNNING` Instance exists; it never silently cancels execution.
+- Delete requires `UNPUBLISHED` and no active Instance.
+- Instance terminal transitions do not change Task publication status.
+
+Version ownership:
+
+- `name` / `remark` are metadata and do not increment `definitionVersion`.
+- Source/Target identity or scope, write mode and type-specific runtime config are executable definition and increment `definitionVersion` when their canonical persisted values change.
+- No-op updates do not increment the version.
+- V1 does not persist separate `draftVersion` or `publishedVersion`; a published Task cannot edit executable definition, so its current version is its published version.
+- REALTIME state remains scoped by `{taskId}/v{definitionVersion}`; any executable-definition version change gets a fresh CDC state scope, while metadata-only edits and publish/unpublish preserve state identity.
+
+Target commands:
+
+```text
+POST /tasks/{id}/publish
+POST /tasks/{id}/unpublish
+POST /tasks/{id}/run
+POST /instances/{id}/cancel
+```
+
+Publish must repeat the current Datasource/Catalog/topology/field compatibility validation before changing status. Run keeps its existing execution-time revalidation as a second protection boundary.
+
+Existing Task rows are backfilled as `PUBLISHED` when persistence is introduced so the lifecycle migration does not silently disable currently executable tasks. Newly created Tasks explicitly start `UNPUBLISHED`.
+
+The complete contract, including REALTIME CDC-state implications and the referenced-Datasource mutation caveat, is defined in `docs/capabilities/data-sync/task-lifecycle.md`.
 
 ## Task Instance
 
