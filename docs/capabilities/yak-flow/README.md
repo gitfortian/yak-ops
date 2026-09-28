@@ -92,7 +92,9 @@ The runtime supports:
 - checkpoint barrier: capture Source state, enqueue a barrier after already-produced rows, flush Sink when the barrier is consumed, then complete the checkpoint.
 - active-execution in-memory latest checkpoint.
 
-The barrier establishes ordering only. Phase 2 does not claim exactly-once delivery and does not persist checkpoints across process restart.
+The barrier establishes ordering only. Phase 2 does not claim exactly-once delivery and does not persist a generic YakFlow `CheckpointState` across process restart.
+
+Connector-specific durable state is a separate concern. The MySQL CDC connector persists Debezium offsets and schema history in its configured state directory; Data Sync may create a new LocalExecution that resumes from those connector-owned files. That is not generic Local Execution Engine restoration.
 
 Checkpoint coordination currently remains on the single-Reader path. A bounded execution with Source parallelism greater than 1 rejects explicit checkpoint requests rather than pretending multiple Reader states form one consistent checkpoint. Continuous CDC keeps the existing single-Reader checkpoint path.
 
@@ -181,6 +183,8 @@ Key rules:
 - JDBC Sink CHANGELOG mode treats INSERT and UPDATE_AFTER as idempotent replace-by-primary-key operations, and UPDATE_BEFORE / DELETE as primary-key deletes.
 
 Recovery semantics are at-least-once. If the process stops after the Sink commit but before Debezium persists the acknowledged offset, records can be replayed; CHANGELOG mode is designed to tolerate that replay for primary-key tables.
+
+A process restart never resurrects the old LocalExecution. A caller can instead construct a new MySQL CDC Source with the same stable connector state directory and engine identity, allowing Debezium to continue from its persisted offset.
 
 ## MySQL CDC Verification
 
