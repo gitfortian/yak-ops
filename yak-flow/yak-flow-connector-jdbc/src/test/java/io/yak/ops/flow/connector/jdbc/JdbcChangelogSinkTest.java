@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
@@ -22,8 +22,8 @@ class JdbcChangelogSinkTest {
     private static final String DRIVER = "org.h2.Driver";
     private static final YakTableSchema SCHEMA = new YakTableSchema(
             List.of(
-                    new YakColumn("id", YakDataType.BIGINT, false, null, null, null),
-                    new YakColumn("name", YakDataType.STRING, true, 100, null, null)),
+                    new YakColumn("id", YakTypes.BIGINT, false, null),
+                    new YakColumn("name", YakTypes.STRING, true, 100)),
             List.of("id"));
     private static final JdbcConnectionProvider DIRECT_CONNECTION = (connection, timeoutSeconds) -> {
         Class.forName(connection.driverClassName());
