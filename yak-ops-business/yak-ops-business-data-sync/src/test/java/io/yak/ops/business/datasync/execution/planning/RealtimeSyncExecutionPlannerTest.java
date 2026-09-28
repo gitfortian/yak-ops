@@ -1,10 +1,11 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
@@ -26,7 +27,7 @@ class RealtimeSyncExecutionPlannerTest {
     void shouldBuildMySqlCdcToJdbcChangelogPlan() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         injectDataSourceService(planner, dataSourceService());
-        injectStateManager(planner, new RealtimeSyncStateManager(java.nio.file.Path.of("target/test-realtime-state")));
+        injectStateManager(planner, new RealtimeSyncStateManager());
 
         RealtimeSyncExecutionPlan plan =
                 planner.plan("workspace-1", snapshot(DataSyncType.REALTIME.name()), 54021L);
@@ -44,7 +45,7 @@ class RealtimeSyncExecutionPlannerTest {
     void shouldRejectNonRealtimeSnapshot() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         injectDataSourceService(planner, dataSourceService());
-        injectStateManager(planner, new RealtimeSyncStateManager(java.nio.file.Path.of("target/test-realtime-state")));
+        injectStateManager(planner, new RealtimeSyncStateManager());
 
         assertThrows(
                 IllegalArgumentException.class,

@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSource;
@@ -15,5 +15,5 @@ import java.time.Duration;
  * @author weifuwan
  * @since 2026-09-28
  */
-record RealtimeSyncExecutionPlan(
+public record RealtimeSyncExecutionPlan(
         MySqlCdcSource source, JdbcSink sink, YakTableSchema sourceSchema, Duration checkpointInterval) {}

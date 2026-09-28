@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.realtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

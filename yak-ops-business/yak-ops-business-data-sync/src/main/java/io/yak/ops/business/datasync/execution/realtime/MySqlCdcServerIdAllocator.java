@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.realtime;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;

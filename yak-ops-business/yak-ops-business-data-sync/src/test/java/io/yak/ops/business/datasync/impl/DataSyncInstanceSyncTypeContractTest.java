@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.business.datasync.execution.RealtimeSyncExecutor;
+import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;

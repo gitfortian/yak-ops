@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
@@ -31,7 +31,7 @@ public class OfflineSyncExecutionPlanner {
     @Resource
     private DataSourceService dataSourceService;
 
-    OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
+    public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
         DataSyncEndpointSnapshotVO sourceEndpoint =
                 ObjectUtils.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
@@ -44,8 +44,8 @@ public class OfflineSyncExecutionPlanner {
                 dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
-        YakTableSchema sourceSchema = OfflineSyncSchemaResolver.sourceSchema(sourceColumns);
-        YakTableSchema targetWriteSchema = OfflineSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
+        YakTableSchema sourceSchema = DataSyncSchemaResolver.sourceSchema(sourceColumns);
+        YakTableSchema targetWriteSchema = DataSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
 
         DataSourceConnection sourceConnection =
                 dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId());

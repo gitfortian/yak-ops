@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -11,14 +11,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 将 Datasource Catalog 字段元数据整理为离线同步 Source Schema 与目标写入 Schema。
+ * 将 Datasource Catalog 字段元数据整理为 Data Sync Source Schema 与目标写入 Schema。
  *
  * @author weifuwan
  * @since 2026-09-27
  */
-final class OfflineSyncSchemaResolver {
+final class DataSyncSchemaResolver {
 
-    private OfflineSyncSchemaResolver() {}
+    private DataSyncSchemaResolver() {}
 
     static YakTableSchema sourceSchema(List<DataSourceCatalogColumnVO> sourceColumns) {
         return JdbcSchemaMapper.fromColumns(toColumns(sourceColumns, false));
@@ -27,7 +27,7 @@ final class OfflineSyncSchemaResolver {
     static YakTableSchema targetWriteSchema(
             List<DataSourceCatalogColumnVO> sourceColumns, List<DataSourceCatalogColumnVO> targetColumns) {
         List<DataSourceCatalogColumnVO> orderedSource = sourceColumns.stream()
-                .sorted(Comparator.comparingInt(OfflineSyncSchemaResolver::ordinal))
+                .sorted(Comparator.comparingInt(DataSyncSchemaResolver::ordinal))
                 .toList();
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
 
@@ -50,7 +50,7 @@ final class OfflineSyncSchemaResolver {
 
     private static List<DataSourceColumn> toColumns(List<DataSourceCatalogColumnVO> columns, boolean rewriteOrdinal) {
         List<DataSourceCatalogColumnVO> ordered = columns.stream()
-                .sorted(Comparator.comparingInt(OfflineSyncSchemaResolver::ordinal))
+                .sorted(Comparator.comparingInt(DataSyncSchemaResolver::ordinal))
                 .toList();
         List<DataSourceColumn> result = new ArrayList<>(ordered.size());
         for (int index = 0; index < ordered.size(); index++) {

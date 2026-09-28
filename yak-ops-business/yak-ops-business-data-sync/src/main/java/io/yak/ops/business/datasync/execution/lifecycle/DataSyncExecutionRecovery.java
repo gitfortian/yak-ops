@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.lifecycle;
 
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.common.util.DateUtils;

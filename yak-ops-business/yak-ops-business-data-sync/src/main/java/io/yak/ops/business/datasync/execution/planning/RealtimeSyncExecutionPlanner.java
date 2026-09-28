@@ -1,6 +1,7 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
@@ -40,7 +41,7 @@ public class RealtimeSyncExecutionPlanner {
     @Resource
     private RealtimeSyncStateManager stateManager;
 
-    RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
+    public RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
         ObjectUtils.requireNonNull(workspaceId, "workspace id must not be null");
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
         if (!DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
@@ -58,8 +59,8 @@ public class RealtimeSyncExecutionPlanner {
                 dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
-        YakTableSchema sourceSchema = OfflineSyncSchemaResolver.sourceSchema(sourceColumns);
-        YakTableSchema targetWriteSchema = OfflineSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
+        YakTableSchema sourceSchema = DataSyncSchemaResolver.sourceSchema(sourceColumns);
+        YakTableSchema targetWriteSchema = DataSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
 
         JdbcConnectionProperties sourceConnection =
                 requireMySqlConnection(dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId()));

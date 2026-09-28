@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.realtime;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -31,7 +31,7 @@ public class RealtimeSyncStateManager {
                 .normalize();
     }
 
-    Path stateDirectory(String workspaceId, String taskId, Integer taskVersion) {
+    public Path stateDirectory(String workspaceId, String taskId, Integer taskVersion) {
         String workspace = requireSegment(workspaceId, "workspaceId");
         String task = requireSegment(taskId, "taskId");
         int version = requireVersion(taskVersion);
@@ -47,14 +47,14 @@ public class RealtimeSyncStateManager {
         return directory;
     }
 
-    String engineName(String workspaceId, String taskId, Integer taskVersion) {
+    public String engineName(String workspaceId, String taskId, Integer taskVersion) {
         String workspace = requireSegment(workspaceId, "workspaceId");
         String task = requireSegment(taskId, "taskId");
         int version = requireVersion(taskVersion);
         return "yak-realtime-" + workspace + "-" + task + "-v" + version;
     }
 
-    String stateKey(String workspaceId, String taskId, Integer taskVersion) {
+    public String stateKey(String workspaceId, String taskId, Integer taskVersion) {
         return requireSegment(workspaceId, "workspaceId")
                 + "/"
                 + requireSegment(taskId, "taskId")

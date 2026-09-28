@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
@@ -14,4 +14,5 @@ import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
  * @author weifuwan
  * @since 2026-09-28
  */
-record OfflineSyncExecutionPlan(JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema, int sourceParallelism) {}
+public record OfflineSyncExecutionPlan(
+        JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema, int sourceParallelism) {}

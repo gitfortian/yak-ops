@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution;
+package io.yak.ops.business.datasync.execution.planning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -8,7 +8,7 @@ import java.sql.Types;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class OfflineSyncSchemaResolverTest {
+class DataSyncSchemaResolverTest {
 
     @Test
     void shouldKeepSourceValueOrderButUseTargetPhysicalColumnNames() {
@@ -18,9 +18,9 @@ class OfflineSyncSchemaResolverTest {
         DataSourceCatalogColumnVO targetName = column("NAME", Types.VARCHAR, 1);
         DataSourceCatalogColumnVO targetId = column("ID", Types.BIGINT, 2);
 
-        YakTableSchema sourceSchema = OfflineSyncSchemaResolver.sourceSchema(List.of(sourceId, sourceName));
+        YakTableSchema sourceSchema = DataSyncSchemaResolver.sourceSchema(List.of(sourceId, sourceName));
         YakTableSchema targetSchema =
-                OfflineSyncSchemaResolver.targetWriteSchema(List.of(sourceId, sourceName), List.of(targetName, targetId));
+                DataSyncSchemaResolver.targetWriteSchema(List.of(sourceId, sourceName), List.of(targetName, targetId));
 
         assertEquals(List.of("id", "name"), sourceSchema.columns().stream().map(value -> value.name()).toList());
         assertEquals(List.of("ID", "NAME"), targetSchema.columns().stream().map(value -> value.name()).toList());
