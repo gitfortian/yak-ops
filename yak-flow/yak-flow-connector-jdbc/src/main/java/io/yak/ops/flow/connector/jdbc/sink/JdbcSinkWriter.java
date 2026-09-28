@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * JDBC Sink Writer：离线模式保留 PreparedStatement batch，CDC 模式按主键顺序应用 changelog 并按批次提交事务。
+ * JDBC Sink Writer：bounded 模式执行 INSERT / UPSERT batch，CDC 模式按主键顺序应用 changelog 并按批次提交事务。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -35,7 +35,7 @@ final class JdbcSinkWriter implements SinkWriter {
     private final List<Integer> primaryKeyIndexes = new ArrayList<>();
 
     private Connection connection;
-    private PreparedStatement insertStatement;
+    private PreparedStatement writeStatement;
     private PreparedStatement deleteStatement;
     private int pendingRows;
 
@@ -65,15 +65,19 @@ final class JdbcSinkWriter implements SinkWriter {
 
     @Override
     public void open() throws Exception {
-        if (config.writeMode() == JdbcWriteMode.CHANGELOG && primaryKeyIndexes.isEmpty()) {
-            throw new IllegalArgumentException("JDBC CHANGELOG Sink requires primary key");
+        if ((config.writeMode() == JdbcWriteMode.CHANGELOG || config.writeMode() == JdbcWriteMode.UPSERT)
+                && primaryKeyIndexes.isEmpty()) {
+            throw new IllegalArgumentException("JDBC " + config.writeMode() + " Sink requires primary key");
         }
 
         connection = connectionProvider.open(config.connection(), config.timeoutSeconds());
         connection.setAutoCommit(false);
         applySaveMode();
-        insertStatement = connection.prepareStatement(dialect.insertSql(config.table(), schema));
-        insertStatement.setQueryTimeout(config.timeoutSeconds());
+        String writeSql = config.writeMode() == JdbcWriteMode.UPSERT
+                ? dialect.upsertSql(config.table(), schema)
+                : dialect.insertSql(config.table(), schema);
+        writeStatement = connection.prepareStatement(writeSql);
+        writeStatement.setQueryTimeout(config.timeoutSeconds());
         if (config.writeMode() == JdbcWriteMode.CHANGELOG) {
             deleteStatement = connection.prepareStatement(dialect.deleteSql(config.table(), schema));
             deleteStatement.setQueryTimeout(config.timeoutSeconds());
@@ -83,8 +87,8 @@ final class JdbcSinkWriter implements SinkWriter {
     @Override
     public void write(List<YakRow> rows) throws Exception {
         try {
-            if (config.writeMode() == JdbcWriteMode.INSERT) {
-                writeInsertBatch(rows);
+            if (config.writeMode() != JdbcWriteMode.CHANGELOG) {
+                writeBoundedBatch(rows);
                 return;
             }
             writeChangelog(rows);
@@ -97,8 +101,8 @@ final class JdbcSinkWriter implements SinkWriter {
     @Override
     public void flush() throws Exception {
         try {
-            if (config.writeMode() == JdbcWriteMode.INSERT) {
-                executeInsertBatch();
+            if (config.writeMode() != JdbcWriteMode.CHANGELOG) {
+                executeBoundedBatch();
                 return;
             }
             commitChangelog();
@@ -119,7 +123,7 @@ final class JdbcSinkWriter implements SinkWriter {
             }
         }
         try {
-            if (insertStatement != null) insertStatement.close();
+            if (writeStatement != null) writeStatement.close();
         } catch (Exception exception) {
             if (failure == null) failure = exception;
         }
@@ -148,17 +152,17 @@ final class JdbcSinkWriter implements SinkWriter {
         }
     }
 
-    private void writeInsertBatch(List<YakRow> rows) throws Exception {
+    private void writeBoundedBatch(List<YakRow> rows) throws Exception {
         for (YakRow row : rows) {
             if (row.rowKind() != RowKind.INSERT) {
-                throw new IllegalArgumentException("JDBC INSERT Sink only accepts INSERT RowKind");
+                throw new IllegalArgumentException("JDBC bounded Sink only accepts INSERT RowKind");
             }
             validateArity(row);
-            bindFullRow(insertStatement, row);
-            insertStatement.addBatch();
+            bindFullRow(writeStatement, row);
+            writeStatement.addBatch();
             pendingRows++;
             if (pendingRows >= config.batchSize()) {
-                executeInsertBatch();
+                executeBoundedBatch();
             }
         }
     }
@@ -179,8 +183,8 @@ final class JdbcSinkWriter implements SinkWriter {
 
     private void replaceByPrimaryKey(YakRow row) throws Exception {
         deleteByPrimaryKey(row);
-        bindFullRow(insertStatement, row);
-        insertStatement.executeUpdate();
+        bindFullRow(writeStatement, row);
+        writeStatement.executeUpdate();
     }
 
     private void deleteByPrimaryKey(YakRow row) throws Exception {
@@ -191,9 +195,9 @@ final class JdbcSinkWriter implements SinkWriter {
         deleteStatement.executeUpdate();
     }
 
-    private void executeInsertBatch() throws Exception {
+    private void executeBoundedBatch() throws Exception {
         if (pendingRows == 0) return;
-        insertStatement.executeBatch();
+        writeStatement.executeBatch();
         connection.commit();
         pendingRows = 0;
     }

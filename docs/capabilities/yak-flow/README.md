@@ -120,9 +120,10 @@ The connector:
 - maps Datasource Catalog columns to `YakTableSchema`.
 - reads a table as a bounded Source with forward-only JDBC cursor batches.
 - supports an optional explicit integer single-primary-key range split contract: split key + inclusive lower/upper bounds + requested split count.
-- writes `INSERT` rows with JDBC batch commit.
+- writes bounded INSERT / UPSERT rows with JDBC batch commit.
 - separates target save mode from row write mode: APPEND keeps existing rows, while OVERWRITE commits a dialect-quoted `TRUNCATE TABLE` before the INSERT load begins.
-- rejects OVERWRITE for CDC CHANGELOG writers.
+- supports native primary-key UPSERT for MySQL (`ON DUPLICATE KEY UPDATE`), PostgreSQL (`ON CONFLICT DO UPDATE`) and Oracle (`MERGE INTO`).
+- rejects OVERWRITE for UPSERT and CDC CHANGELOG writers.
 - provides MySQL, PostgreSQL and Oracle identifier/table dialects.
 - requires the target table to exist.
 

@@ -12,7 +12,7 @@ The offline product configures task definitions and exposes manual execution ins
 Must:
 
 - Reuse saved Datasource resources; never ask for database credentials.
-- Keep resource selection and table configuration as separate editor layers: the `数据源` section owns source/target Datasource selectors; `数据来源` and `数据去向` own only Schema (when needed) and table selection.
+- Keep resource selection and table configuration as separate editor layers: the `数据源` section owns source/target Datasource selectors; `数据来源` owns Schema/table selection; `数据去向` owns Schema/table selection plus OFFLINE write mode.
 - Render source and target Datasource cards side by side on wide screens and stack them on smaller screens.
 - Do not repeat Datasource Select inside `数据来源` or `数据去向`.
 - Treat the saved Datasource connection as the database scope authority. The editor must not expose a second Database selector that can override a bound Datasource database.
@@ -22,6 +22,8 @@ Must:
 - Display backend mapping preview as the source of truth.
 - Keep mapping read-only and same-name in this phase.
 - Disable save while the current mapping is incompatible.
+- Expose OFFLINE write mode under `数据去向`, never under runtime tuning. Options are APPEND / OVERWRITE / UPSERT with APPEND as the default.
+- Explain destructive OVERWRITE and primary-key-required UPSERT inline, while keeping backend Catalog validation as the source of truth.
 - Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
 - Use existing Yak UI primitives.
 - Keep Task Definition and Task Instance as separate Tabs.

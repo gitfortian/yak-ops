@@ -196,9 +196,13 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
-        validateWriteMode(task.getSyncType(), taskWriteMode(task));
+        DataSyncWriteMode writeMode = taskWriteMode(task);
+        validateWriteMode(task.getSyncType(), writeMode);
         if (task.getSyncType() == DataSyncType.REALTIME) {
             validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+        } else {
+            validateOfflineUpsertTarget(
+                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
         }
         requireCompatibleMapping(resolvedScope);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
@@ -345,6 +349,8 @@ public class DataSyncServiceImpl implements DataSyncService {
             if (dto.getRuntimeConfig() == null) {
                 throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 运行参数不能为空");
             }
+            validateOfflineUpsertTarget(
+                    dto.getSourceDataSourceId(), dto.getTargetDataSourceId(), resolvedScope, dto.getWriteMode());
             return;
         }
         if (dto.getRealtimeConfig() == null) {
@@ -352,6 +358,40 @@ public class DataSyncServiceImpl implements DataSyncService {
         }
 
         validateRealtimeTopology(dto.getSourceDataSourceId(), dto.getTargetDataSourceId(), resolvedScope);
+    }
+
+    private void validateOfflineUpsertTarget(
+            String sourceDataSourceId,
+            String targetDataSourceId,
+            DataSyncMappingPreviewDTO resolvedScope,
+            DataSyncWriteMode writeMode) {
+        if (writeMode != DataSyncWriteMode.UPSERT) return;
+
+        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
+                sourceDataSourceId,
+                tablePath(
+                        resolvedScope.getSourceDatabase(),
+                        resolvedScope.getSourceSchema(),
+                        resolvedScope.getSourceTable()));
+        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
+                targetDataSourceId,
+                tablePath(
+                        resolvedScope.getTargetDatabase(),
+                        resolvedScope.getTargetSchema(),
+                        resolvedScope.getTargetTable()));
+        List<DataSourceCatalogColumnVO> targetPrimaryKeys = targetColumns.stream()
+                .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
+                .toList();
+        if (targetPrimaryKeys.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求目标表存在主键");
+        }
+
+        Map<String, DataSourceCatalogColumnVO> sourceByName = DataSyncCatalogColumns.indexByName(sourceColumns);
+        if (targetPrimaryKeys.stream()
+                .anyMatch(
+                        primaryKey -> DataSyncCatalogColumns.findByName(sourceByName, primaryKey.getName()) == null)) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求来源包含目标表全部主键字段");
+        }
     }
 
     private void validateRealtimeTopology(
@@ -514,9 +554,6 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncWriteMode resolved = requireWriteMode(writeMode);
         if (syncType == DataSyncType.REALTIME && resolved != DataSyncWriteMode.APPEND) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 当前固定使用 APPEND 写入方式");
-        }
-        if (syncType == DataSyncType.OFFLINE && resolved == DataSyncWriteMode.UPSERT) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 当前阶段暂不支持 UPSERT 写入方式");
         }
     }
 

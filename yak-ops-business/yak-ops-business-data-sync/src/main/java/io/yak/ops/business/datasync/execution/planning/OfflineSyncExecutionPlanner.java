@@ -69,7 +69,7 @@ public class OfflineSyncExecutionPlanner {
                         runtimeConfig.getWriteBatchSize(),
                         runtimeConfig.getTimeoutSeconds(),
                         saveMode(snapshot.getWriteMode()),
-                        JdbcWriteMode.INSERT),
+                        writeMode(snapshot.getWriteMode())),
                 targetWriteSchema);
         return new OfflineSyncExecutionPlan(source, sink, sourceSchema, runtimeConfig.getSourceParallelism());
     }
@@ -83,10 +83,20 @@ public class OfflineSyncExecutionPlanner {
             throw new IllegalArgumentException("unsupported offline write mode: " + writeMode, exception);
         }
         return switch (resolved) {
-            case APPEND -> JdbcSaveMode.APPEND;
+            case APPEND, UPSERT -> JdbcSaveMode.APPEND;
             case OVERWRITE -> JdbcSaveMode.OVERWRITE;
-            case UPSERT -> throw new IllegalArgumentException("UPSERT write mode is not implemented yet");
         };
+    }
+
+    static JdbcWriteMode writeMode(String writeMode) {
+        if (writeMode == null || writeMode.isBlank()) return JdbcWriteMode.INSERT;
+        DataSyncWriteMode resolved;
+        try {
+            resolved = DataSyncWriteMode.valueOf(writeMode);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("unsupported offline write mode: " + writeMode, exception);
+        }
+        return resolved == DataSyncWriteMode.UPSERT ? JdbcWriteMode.UPSERT : JdbcWriteMode.INSERT;
     }
 
     private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {

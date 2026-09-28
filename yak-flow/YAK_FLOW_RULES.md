@@ -200,10 +200,12 @@ Must:
 - Fall back to one whole-table split when no eligible integer single primary key exists or the table row count does not exceed `splitSize`.
 - Reject dynamic plans above 10,000 splits instead of allocating an unbounded split list; callers must increase `splitSize`.
 - Treat each JDBC split as an independent read transaction; V1 does not claim one database-consistent snapshot across multiple splits.
-- Keep target pre-write handling separate from row write semantics: `JdbcSaveMode.APPEND / OVERWRITE` is independent from `JdbcWriteMode.INSERT / CHANGELOG`.
+- Keep target pre-write handling separate from row write semantics: `JdbcSaveMode.APPEND / OVERWRITE` is independent from `JdbcWriteMode.INSERT / UPSERT / CHANGELOG`.
 - APPEND preserves target rows before normal writes.
 - OVERWRITE executes dialect-owned `TRUNCATE TABLE` once when the bounded INSERT writer opens, commits that destructive pre-write action, then continues with normal INSERT batches.
-- Reject OVERWRITE with CHANGELOG; realtime CDC must never clear the target table.
+- UPSERT requires target primary keys and uses database-native SQL owned by each dialect: MySQL `ON DUPLICATE KEY UPDATE`, PostgreSQL `ON CONFLICT DO UPDATE`, Oracle `MERGE INTO`.
+- UPSERT updates only non-primary-key columns; a key-only schema may use a no-op/do-nothing matched path.
+- Reject OVERWRITE with UPSERT or CHANGELOG; realtime CDC must never clear the target table.
 - Do not silently fall back from TRUNCATE to DELETE when permissions, foreign keys or database rules reject overwrite.
 - Commit Sink writes in explicit JDBC batches.
 - Roll back uncommitted Sink data on write/flush failure.
