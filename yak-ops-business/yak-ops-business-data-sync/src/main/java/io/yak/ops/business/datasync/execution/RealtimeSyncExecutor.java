@@ -43,7 +43,7 @@ public class RealtimeSyncExecutor {
     private MySqlCdcServerIdAllocator serverIdAllocator;
 
     @Resource
-    private OfflineSyncExecutionRegistry executionRegistry;
+    private DataSyncExecutionRegistry executionRegistry;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
