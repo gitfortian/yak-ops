@@ -176,6 +176,7 @@ Must:
 - Use bounded cursor batches instead of loading an entire table into memory.
 - Allow an explicit integer single-primary-key split contract with inclusive lower/upper bounds and a requested split count.
 - Generate numeric range splits without gaps, overlaps or empty ranges; explicit split planning is independent from Source Reader parallelism.
+- Treat each JDBC split as an independent read transaction; V1 does not claim one database-consistent snapshot across multiple splits.
 - Commit Sink writes in explicit JDBC batches.
 - Roll back uncommitted Sink data on write/flush failure.
 - Own JDBC Catalog field compatibility used by Data Sync mapping preview and runtime execution.
