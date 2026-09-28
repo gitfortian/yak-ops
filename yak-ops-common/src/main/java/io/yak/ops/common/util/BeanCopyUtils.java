@@ -14,11 +14,15 @@ public final class BeanCopyUtils {
     private BeanCopyUtils() {}
 
     public static <T> T copy(Object source, Class<T> target) {
+        return copy(source, target, new String[0]);
+    }
+
+    public static <T> T copy(Object source, Class<T> target, String... ignoreProperties) {
         if (ObjectUtils.isNull(source)) return null;
         if (ObjectUtils.isNull(target)) throw new IllegalArgumentException("target must not be null");
         try {
             T result = target.getDeclaredConstructor().newInstance();
-            BeanUtils.copyProperties(source, result);
+            BeanUtils.copyProperties(source, result, ignoreProperties == null ? new String[0] : ignoreProperties);
             return result;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(

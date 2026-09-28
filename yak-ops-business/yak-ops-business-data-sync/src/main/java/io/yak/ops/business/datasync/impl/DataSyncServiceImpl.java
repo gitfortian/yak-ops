@@ -26,6 +26,7 @@ import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.page.PagingData;
+import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
@@ -319,29 +320,11 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskDTO dto) {
-        DataSyncMappingPreviewDTO preview = new DataSyncMappingPreviewDTO();
-        preview.setSourceDataSourceId(dto.getSourceDataSourceId());
-        preview.setSourceDatabase(dto.getSourceDatabase());
-        preview.setSourceSchema(dto.getSourceSchema());
-        preview.setSourceTable(dto.getSourceTable());
-        preview.setTargetDataSourceId(dto.getTargetDataSourceId());
-        preview.setTargetDatabase(dto.getTargetDatabase());
-        preview.setTargetSchema(dto.getTargetSchema());
-        preview.setTargetTable(dto.getTargetTable());
-        return preview;
+        return BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class);
     }
 
     private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskEntity task) {
-        DataSyncMappingPreviewDTO preview = new DataSyncMappingPreviewDTO();
-        preview.setSourceDataSourceId(task.getSourceDataSourceId());
-        preview.setSourceDatabase(task.getSourceDatabase());
-        preview.setSourceSchema(task.getSourceSchema());
-        preview.setSourceTable(task.getSourceTable());
-        preview.setTargetDataSourceId(task.getTargetDataSourceId());
-        preview.setTargetDatabase(task.getTargetDatabase());
-        preview.setTargetSchema(task.getTargetSchema());
-        preview.setTargetTable(task.getTargetTable());
-        return preview;
+        return BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class);
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
@@ -499,15 +482,11 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSourceVO source = dataSourceService.queryDataSource(dto.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
 
-        DataSyncMappingPreviewDTO resolved = new DataSyncMappingPreviewDTO();
-        resolved.setSourceDataSourceId(dto.getSourceDataSourceId());
+        DataSyncMappingPreviewDTO resolved = BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class);
         resolved.setSourceDatabase(scopeValue(source.getDatabase(), dto.getSourceDatabase()));
         resolved.setSourceSchema(scopeValue(source.getSchema(), dto.getSourceSchema()));
-        resolved.setSourceTable(dto.getSourceTable());
-        resolved.setTargetDataSourceId(dto.getTargetDataSourceId());
         resolved.setTargetDatabase(scopeValue(target.getDatabase(), dto.getTargetDatabase()));
         resolved.setTargetSchema(scopeValue(target.getSchema(), dto.getTargetSchema()));
-        resolved.setTargetTable(dto.getTargetTable());
         return resolved;
     }
 
@@ -588,58 +567,28 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
-        DataSyncTaskVO target = new DataSyncTaskVO();
-        target.setId(source.getId());
-        target.setName(source.getName());
+        DataSyncTaskVO target = BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "runtimeConfig");
         target.setSyncType(
                 source.getSyncType() == null ? null : source.getSyncType().name());
-        target.setSourceDataSourceId(source.getSourceDataSourceId());
-        target.setSourceDatabase(source.getSourceDatabase());
-        target.setSourceSchema(source.getSourceSchema());
-        target.setSourceTable(source.getSourceTable());
-        target.setTargetDataSourceId(source.getTargetDataSourceId());
-        target.setTargetDatabase(source.getTargetDatabase());
-        target.setTargetSchema(source.getTargetSchema());
-        target.setTargetTable(source.getTargetTable());
         target.setRuntimeConfig(toRuntimeConfigVO(source.getRuntimeConfig()));
-        target.setDefinitionVersion(source.getDefinitionVersion());
-        target.setRemark(source.getRemark());
-        target.setCreateTime(source.getCreateTime());
-        target.setUpdateTime(source.getUpdateTime());
         return target;
     }
 
     private DataSyncRuntimeConfigVO toRuntimeConfigVO(String json) {
         DataSyncRuntimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRuntimeConfigDTO.class);
-        DataSyncRuntimeConfigVO target = new DataSyncRuntimeConfigVO();
-        target.setFetchSize(source.getFetchSize());
-        target.setReadBatchSize(source.getReadBatchSize());
-        target.setWriteBatchSize(source.getWriteBatchSize());
-        target.setTimeoutSeconds(source.getTimeoutSeconds());
-        return target;
+        return BeanCopyUtils.copy(source, DataSyncRuntimeConfigVO.class);
     }
 
     private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {
-        DataSyncInstanceVO target = new DataSyncInstanceVO();
-        target.setId(source.getId());
-        target.setTaskId(source.getTaskId());
-        target.setTaskName(source.getTaskName());
-        target.setTaskVersion(source.getTaskVersion());
+        DataSyncInstanceVO target =
+                BeanCopyUtils.copy(source, DataSyncInstanceVO.class, "triggerType", "status", "definitionSnapshot");
         target.setTriggerType(
                 source.getTriggerType() == null ? null : source.getTriggerType().name());
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
-        target.setReadRows(source.getReadRows());
-        target.setWriteRows(source.getWriteRows());
-        target.setStartTime(source.getStartTime());
-        target.setFinishTime(source.getFinishTime());
-        target.setErrorCode(source.getErrorCode());
-        target.setErrorMessage(source.getErrorMessage());
         if (includeSnapshot && StringUtils.hasText(source.getDefinitionSnapshot())) {
             target.setDefinitionSnapshot(
                     JSONUtils.parseObject(source.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class));
         }
-        target.setCreateTime(source.getCreateTime());
-        target.setUpdateTime(source.getUpdateTime());
         return target;
     }
 }

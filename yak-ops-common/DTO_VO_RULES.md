@@ -260,9 +260,10 @@ Must Not:
 简单映射优先保持局部：
 
 - Entity → VO 的短小映射优先放在对应 Business / Service 私有方法。
-- 字段高度一致且已有安全 Bean copy 能力时可以复用现有工具。
+- Entity / Model / DTO → VO 或同结构 DTO 的纯 Projection，只要字段同名、类型兼容且无业务转换，必须优先使用 `BeanCopyUtils`。
+- 映射存在敏感字段或需要特殊处理的字段时，使用 `BeanCopyUtils.copy(source, Target.class, "fieldA", "fieldB")` 排除后，再显式完成脱敏、枚举转换、JSON 解析、派生字段、字段改名或多对象聚合。
+- DTO → Entity 涉及输入规范化、业务默认值、状态初始化、权限或安全语义时保持显式赋值，不能为了减少 setter 绕过 Business / Service 规则。
 - 没有真实复用价值时，不新增 `Assembler / Converter / Manager`。
-- DTO → Entity 不能绕过 Business / Service 的校验、默认值和规范化逻辑。
 
 ## Validation Boundary
 
