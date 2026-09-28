@@ -2,6 +2,7 @@ package io.yak.ops.business.datasync.impl;
 
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.DataSyncService;
+import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.OfflineSyncExecutionRegistry;
@@ -27,8 +28,10 @@ import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
+import io.yak.ops.common.util.CollectionUtils;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
@@ -37,15 +40,12 @@ import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import jakarta.annotation.Resource;
 import java.sql.Types;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.util.StringUtils;
 
 /**
  * 实现 Workspace-scoped Data Sync 任务定义持久化和任务/实例查询。
@@ -74,11 +74,13 @@ public class DataSyncServiceImpl implements DataSyncService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO createTask(DataSyncTaskDTO dto) {
-        requireTaskDto(dto);
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        String name = normalizeRequired(dto.getName(), "任务名称不能为空");
+        String name = StringUtils.trimToNull(dto.getName());
+        if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, null);
-        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(dto));
+        DataSyncMappingPreviewDTO resolvedScope =
+                resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         requireCompatibleMapping(resolvedScope);
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
@@ -98,12 +100,14 @@ public class DataSyncServiceImpl implements DataSyncService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO updateTask(String id, DataSyncTaskDTO dto) {
-        requireTaskDto(dto);
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
-        String name = normalizeRequired(dto.getName(), "任务名称不能为空");
+        String name = StringUtils.trimToNull(dto.getName());
+        if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, id);
-        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(dto));
+        DataSyncMappingPreviewDTO resolvedScope =
+                resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         requireCompatibleMapping(resolvedScope);
 
         entity.setName(name);
@@ -127,7 +131,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     @Override
     public PagingData<DataSyncTaskVO> queryTaskPage(DataSyncTaskQueryDTO dto) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
-        if (dto.getSorts() != null && !dto.getSorts().isEmpty()) {
+        if (CollectionUtils.isNotEmpty(dto.getSorts())) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, "任务分页暂不支持自定义排序");
         }
 
@@ -135,15 +139,16 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncTaskPageQuery query = new DataSyncTaskPageQuery(
                 dto.getPageNo(),
                 dto.getPageSize(),
-                normalizeNullable(dto.getKeyword()),
+                StringUtils.trimToNull(dto.getKeyword()),
                 dto.getSyncType(),
-                normalizeNullable(dto.getSourceDataSourceId()),
-                normalizeNullable(dto.getTargetDataSourceId()));
+                StringUtils.trimToNull(dto.getSourceDataSourceId()),
+                StringUtils.trimToNull(dto.getTargetDataSourceId()));
         return PagingData.from(taskRepository.queryPage(workspaceId, query).map(this::toTaskVO));
     }
 
     @Override
     public DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto) {
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射参数不完整");
         return previewResolvedMapping(resolveMappingScope(dto));
     }
 
@@ -155,16 +160,12 @@ public class DataSyncServiceImpl implements DataSyncService {
                 dto.getTargetDataSourceId(),
                 tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable()));
 
-        Map<String, DataSourceCatalogColumnVO> targetByName = new LinkedHashMap<>();
-        for (DataSourceCatalogColumnVO column : targetColumns) {
-            if (column.getName() != null) {
-                targetByName.put(column.getName().toLowerCase(Locale.ROOT), column);
-            }
-        }
+        Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
 
         DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
         result.setMappings(sourceColumns.stream()
-                .map(source -> toFieldMapping(source, targetByName.get(lower(source.getName()))))
+                .map(source ->
+                        toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
                 .toList());
         result.setCompatible(!sourceColumns.isEmpty()
                 && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
@@ -176,7 +177,8 @@ public class DataSyncServiceImpl implements DataSyncService {
     public synchronized DataSyncInstanceVO runTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
-        DataSyncMappingPreviewDTO resolvedScope = resolveMappingScope(toMappingPreview(task));
+        DataSyncMappingPreviewDTO resolvedScope =
+                resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
         requireCompatibleMapping(resolvedScope);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
@@ -225,7 +227,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     @Override
     public PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
-        if (dto.getSorts() != null && !dto.getSorts().isEmpty()) {
+        if (CollectionUtils.isNotEmpty(dto.getSorts())) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, "实例分页暂不支持自定义排序");
         }
         if (dto.getStartTimeStart() != null
@@ -238,8 +240,8 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncInstancePageQuery query = new DataSyncInstancePageQuery(
                 dto.getPageNo(),
                 dto.getPageSize(),
-                normalizeNullable(dto.getTaskId()),
-                normalizeNullable(dto.getKeyword()),
+                StringUtils.trimToNull(dto.getTaskId()),
+                StringUtils.trimToNull(dto.getKeyword()),
                 dto.getStatus(),
                 dto.getTriggerType(),
                 dto.getStartTimeStart(),
@@ -303,13 +305,13 @@ public class DataSyncServiceImpl implements DataSyncService {
         entity.setSourceDataSourceId(dto.getSourceDataSourceId().trim());
         entity.setSourceDatabase(resolvedScope.getSourceDatabase());
         entity.setSourceSchema(resolvedScope.getSourceSchema());
-        entity.setSourceTable(normalizeRequired(dto.getSourceTable(), "来源表不能为空"));
+        entity.setSourceTable(dto.getSourceTable().trim());
         entity.setTargetDataSourceId(dto.getTargetDataSourceId().trim());
         entity.setTargetDatabase(resolvedScope.getTargetDatabase());
         entity.setTargetSchema(resolvedScope.getTargetSchema());
-        entity.setTargetTable(normalizeRequired(dto.getTargetTable(), "目标表不能为空"));
-        entity.setRuntimeConfig(JSONUtils.toJson(requireRuntimeConfig(dto.getRuntimeConfig())));
-        entity.setRemark(normalizeNullable(dto.getRemark()));
+        entity.setTargetTable(dto.getTargetTable().trim());
+        entity.setRuntimeConfig(JSONUtils.toJson(dto.getRuntimeConfig()));
+        entity.setRemark(StringUtils.trimToNull(dto.getRemark()));
     }
 
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
@@ -317,14 +319,6 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (!preview.isCompatible()) {
             throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
         }
-    }
-
-    private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskDTO dto) {
-        return BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class);
-    }
-
-    private DataSyncMappingPreviewDTO toMappingPreview(DataSyncTaskEntity task) {
-        return BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class);
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
@@ -371,10 +365,13 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private DataSourceTablePathDTO tablePath(String database, String schema, String table) {
+        String tableName = StringUtils.trimToNull(table);
+        if (tableName == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "表名称不能为空");
+
         DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(normalizeNullable(database));
-        path.setSchema(normalizeNullable(schema));
-        path.setTable(normalizeRequired(table, "表名称不能为空"));
+        path.setDatabase(StringUtils.trimToNull(database));
+        path.setSchema(StringUtils.trimToNull(schema));
+        path.setTable(tableName);
         return path;
     }
 
@@ -473,12 +470,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         return value != null && value > 0;
     }
 
-    private String lower(String value) {
-        return value == null ? "" : value.toLowerCase(Locale.ROOT);
-    }
-
     private DataSyncMappingPreviewDTO resolveMappingScope(DataSyncMappingPreviewDTO dto) {
-        requireMappingPreview(dto);
         DataSourceVO source = dataSourceService.queryDataSource(dto.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
 
@@ -491,17 +483,8 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private String scopeValue(String boundValue, String requestedValue) {
-        return StringUtils.hasText(boundValue) ? boundValue.trim() : normalizeNullable(requestedValue);
-    }
-
-    private void requireMappingPreview(DataSyncMappingPreviewDTO dto) {
-        if (dto == null
-                || !StringUtils.hasText(dto.getSourceDataSourceId())
-                || !StringUtils.hasText(dto.getSourceTable())
-                || !StringUtils.hasText(dto.getTargetDataSourceId())
-                || !StringUtils.hasText(dto.getTargetTable())) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射参数不完整");
-        }
+        String bound = StringUtils.trimToNull(boundValue);
+        return bound != null ? bound : StringUtils.trimToNull(requestedValue);
     }
 
     private DataSyncType requireOffline(DataSyncType syncType) {
@@ -511,41 +494,15 @@ public class DataSyncServiceImpl implements DataSyncService {
         return syncType;
     }
 
-    private DataSyncRuntimeConfigDTO requireRuntimeConfig(DataSyncRuntimeConfigDTO config) {
-        if (config == null
-                || config.getFetchSize() == null
-                || config.getReadBatchSize() == null
-                || config.getWriteBatchSize() == null
-                || config.getTimeoutSeconds() == null
-                || config.getFetchSize() < 1
-                || config.getFetchSize() > 100000
-                || config.getReadBatchSize() < 1
-                || config.getReadBatchSize() > 100000
-                || config.getWriteBatchSize() < 1
-                || config.getWriteBatchSize() > 100000
-                || config.getTimeoutSeconds() < 1
-                || config.getTimeoutSeconds() > 600) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "运行参数超出允许范围");
-        }
-        return config;
-    }
-
-    private void requireTaskDto(DataSyncTaskDTO dto) {
-        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
-        if (!StringUtils.hasText(dto.getSourceDataSourceId()) || !StringUtils.hasText(dto.getTargetDataSourceId())) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "来源和目标数据源不能为空");
-        }
-    }
-
     private DataSyncTaskEntity requireTask(String workspaceId, String id) {
-        if (!StringUtils.hasText(id)) throw new DataSyncException(DataSyncErrorCode.TASK_NOT_FOUND);
+        if (StringUtils.isBlank(id)) throw new DataSyncException(DataSyncErrorCode.TASK_NOT_FOUND);
         return taskRepository
                 .queryById(workspaceId, id)
                 .orElseThrow(() -> new DataSyncException(DataSyncErrorCode.TASK_NOT_FOUND));
     }
 
     private DataSyncInstanceEntity requireInstance(String workspaceId, String id) {
-        if (!StringUtils.hasText(id)) throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_FOUND);
+        if (StringUtils.isBlank(id)) throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_FOUND);
         return instanceRepository
                 .queryById(workspaceId, id)
                 .orElseThrow(() -> new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_FOUND));
@@ -555,15 +512,6 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (taskRepository.existsByName(workspaceId, name, excludeId)) {
             throw new DataSyncException(DataSyncErrorCode.DUPLICATE_TASK_NAME);
         }
-    }
-
-    private String normalizeRequired(String value, String message) {
-        if (!StringUtils.hasText(value)) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, message);
-        return value.trim();
-    }
-
-    private String normalizeNullable(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
@@ -585,7 +533,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         target.setTriggerType(
                 source.getTriggerType() == null ? null : source.getTriggerType().name());
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
-        if (includeSnapshot && StringUtils.hasText(source.getDefinitionSnapshot())) {
+        if (includeSnapshot && StringUtils.isNotBlank(source.getDefinitionSnapshot())) {
             target.setDefinitionSnapshot(
                     JSONUtils.parseObject(source.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class));
         }
