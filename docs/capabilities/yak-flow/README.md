@@ -56,7 +56,7 @@ This phase establishes only `yak-flow-api`:
 - `Boundedness`.
 - opaque `CheckpointState`.
 
-## Phase 2 — Local Runtime
+## Phase 2 — Local Execution Engine
 
 Phase 2 adds a minimal single-node execution path:
 
@@ -101,7 +101,7 @@ MySQL bounded table read
         ↓
       YakRow
         ↓
-   Local Runtime
+   Local Execution Engine
         ↓
 JDBC batch INSERT
         ↓
@@ -119,7 +119,7 @@ The connector:
 - provides MySQL, PostgreSQL and Oracle identifier/table dialects.
 - requires the target table to exist.
 
-The Local Runtime can now consume bounded JDBC splits with multiple local Source Readers. The Enumerator remains single-threaded for deterministic split assignment, each Reader owns an independent JDBC connection, and all Reader batches converge into one bounded Row Channel consumed by one Sink Writer.
+The Local Execution Engine can now consume bounded JDBC splits with multiple local Source Readers. The Enumerator remains single-threaded for deterministic split assignment, each Reader owns an independent JDBC connection, and all Reader batches converge into one bounded Row Channel consumed by one Sink Writer.
 
 Example:
 
@@ -152,7 +152,7 @@ Debezium Engine
   ↓
 YakRow + RowKind
   ↓
-Local Runtime checkpoint barrier
+Local Execution Engine checkpoint barrier
   ↓
 JdbcSink CHANGELOG mode
   ↓
@@ -166,7 +166,7 @@ Key rules:
 - `snapshot.mode=initial` supplies the initial table contents and then transitions to binlog streaming.
 - Debezium offsets and schema history are stored in connector-owned files under the configured state directory.
 - Debezium records are acknowledged only after the YakFlow Sink checkpoint barrier has flushed downstream data.
-- Local Runtime automatically triggers checkpoints for continuous sources; the default interval is 10 seconds and callers can override it.
+- Local Execution Engine automatically triggers checkpoints for continuous sources; the default interval is 10 seconds and callers can override it.
 - CDC requires a primary key in Phase 4 so downstream INSERT/UPDATE/DELETE can be applied deterministically.
 - JDBC Sink CHANGELOG mode treats INSERT and UPDATE_AFTER as idempotent replace-by-primary-key operations, and UPDATE_BEFORE / DELETE as primary-key deletes.
 
