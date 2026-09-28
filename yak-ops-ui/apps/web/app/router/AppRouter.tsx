@@ -2,17 +2,23 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 
 import { DataSourcePage } from "@/app/datasource";
 import LoginPage from "@/app/login";
+import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import {
   OfflineSyncEditorPage,
   OfflineSyncInstanceDetailPage,
   OfflineSyncPage,
 } from "@/app/offline-sync";
 import {
+  OfflineTaskOperationsInstanceDetailPage,
+  OfflineTaskOperationsPage,
+  RealtimeTaskOperationsInstanceDetailPage,
+  RealtimeTaskOperationsPage,
+} from "@/app/operations";
+import {
   RealtimeSyncEditorPage,
   RealtimeSyncInstanceDetailPage,
   RealtimeSyncPage,
 } from "@/app/realtime-sync";
-import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { useAuth } from "@/hooks/use-auth";
 
 import AppLayout from "../layout/AppLayout";
@@ -21,6 +27,8 @@ import {
   DATA_INTEGRATION_PRODUCT_LABEL,
   MANAGEMENT_NAVIGATION,
   MANAGEMENT_PRODUCT_LABEL,
+  OPERATIONS_NAVIGATION,
+  OPERATIONS_PRODUCT_LABEL,
 } from "../layout/navigation";
 
 const DEFAULT_AUTHENTICATED_PATH = "/data-source";
@@ -30,6 +38,9 @@ const AUTHENTICATED_PATHS = new Set([
   "/offline-sync/new",
   "/realtime-sync",
   "/realtime-sync/new",
+  "/operations",
+  "/operations/offline-tasks",
+  "/operations/realtime-tasks",
   "/management/users",
   "/management/workspaces",
 ]);
@@ -37,7 +48,8 @@ const AUTHENTICATED_PATHS = new Set([
 const isAuthenticatedPath = (pathname: string) =>
   AUTHENTICATED_PATHS.has(pathname) ||
   pathname.startsWith("/offline-sync/") ||
-  pathname.startsWith("/realtime-sync/");
+  pathname.startsWith("/realtime-sync/") ||
+  pathname.startsWith("/operations/");
 
 const resolveReturnTo = (requested: string | null) => {
   if (!requested) return DEFAULT_AUTHENTICATED_PATH;
@@ -127,6 +139,32 @@ export default function AppRouter() {
           <Route path="/realtime-sync/new" element={<RealtimeSyncEditorPage />} />
           <Route path="/realtime-sync/instances/:id" element={<RealtimeSyncInstanceDetailPage />} />
           <Route path="/realtime-sync/:id" element={<RealtimeSyncEditorPage />} />
+        </Route>
+
+        <Route
+          element={
+            <AppLayout
+              productLabel={OPERATIONS_PRODUCT_LABEL}
+              productPath="/operations/offline-tasks"
+              navigation={OPERATIONS_NAVIGATION}
+              workspaceScoped
+            />
+          }
+        >
+          <Route
+            path="/operations"
+            element={<Navigate replace to="/operations/offline-tasks" />}
+          />
+          <Route path="/operations/offline-tasks" element={<OfflineTaskOperationsPage />} />
+          <Route
+            path="/operations/offline-tasks/instances/:id"
+            element={<OfflineTaskOperationsInstanceDetailPage />}
+          />
+          <Route path="/operations/realtime-tasks" element={<RealtimeTaskOperationsPage />} />
+          <Route
+            path="/operations/realtime-tasks/instances/:id"
+            element={<RealtimeTaskOperationsInstanceDetailPage />}
+          />
         </Route>
 
         <Route
