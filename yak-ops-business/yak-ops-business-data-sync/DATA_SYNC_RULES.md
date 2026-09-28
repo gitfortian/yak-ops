@@ -135,7 +135,8 @@ Realtime contract boundary:
 - create/update/detail/page persist and return `REALTIME` tasks.
 - realtime save-time validation resolves Datasource/Catalog again on the backend.
 - `runTask` may create and submit a REALTIME Instance through `RealtimeSyncExecutor`.
-- durable checkpoint/state-directory ownership, stable serverId allocation and frontend routes remain later stages.
+- realtime state ownership and serverId allocation stay inside the execution package and never become Task DTO fields.
+- frontend routes remain a later stage.
 
 ## Offline Task Editor Contract
 
@@ -223,15 +224,24 @@ Must:
 - Reuse the process-local execution registry so the existing cancel API works for both OFFLINE and REALTIME.
 - Persist Runtime counters while RUNNING.
 
-Current PR2 bootstrap only:
-- CDC state is placed under `java.io.tmpdir/yak-ops/realtime-sync/{instanceId}`.
-- MySQL replication `serverId` is temporarily derived from the Instance ID.
-- A process restart still marks active instances LOST and does not restore REALTIME execution.
+Realtime state ownership:
+- State root is `${yak.ops.home}/data/data-sync/realtime`; when `yak.ops.home` is absent the current working directory is the base.
+- State scope is `{workspaceId}/{taskId}/v{definitionVersion}`.
+- `offsets.dat` and `schema-history.dat` are connector-owned files inside that product-owned scope.
+- Debezium engine name must be stable for the same Workspace / Task / definitionVersion.
+- A later Instance for the same definitionVersion reuses the same state scope.
+- A changed definitionVersion uses a fresh state scope and restarts from snapshot.
+- Application restart marks old active Instances LOST, but does not delete REALTIME state.
+- A later manual run may continue from the latest completed Debezium offset through a new Instance.
+- `MySqlCdcServerIdAllocator` must keep active serverIds unique inside the current single-node process, prefer a stable ID derived from the state key, resolve collisions by probing, and release the lease when execution ends.
+- `DataSyncExecutionRecovery` owns startup LOST recovery for both OFFLINE and REALTIME.
+- `DataSyncExecutionRegistry` owns process-local cancel references for both OFFLINE and REALTIME.
 
 Must Not:
-- Claim durable checkpoint recovery or exactly-once.
-- Treat the temporary state directory as product-owned persistent state.
-- Treat the temporary instance-derived serverId as the final allocation contract.
+- Claim automatic Instance resurrection after process restart.
+- Claim exactly-once.
+- Persist state directory paths, Debezium offsets, schema history or serverId leases in Task/Instance definition JSON.
+- Delete REALTIME state merely because an Instance becomes CANCELED / FAILED / LOST.
 - Allow a continuous REALTIME execution to finish as SUCCEEDED; unexpected Source completion is FAILED.
 
 ## Metrics + Acceptance
@@ -251,7 +261,7 @@ Acceptance:
 
 ## Current Phase
 
-The offline milestone remains Phase 4 and fully executable. Realtime Phase 2 adds single-node manual execution wiring.
+The offline milestone remains Phase 4 and fully executable. Realtime Phase 3 adds durable CDC state ownership and single-node lifecycle recovery semantics.
 
 Phase 4 implements:
 - task create/update/delete/detail/page.
@@ -270,7 +280,7 @@ Phase 4 implements:
 - real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
 - save-and-run product flow.
 
-Realtime Phase 2 additionally implements:
+Realtime Phase 3 additionally implements:
 - `REALTIME` task type persistence and query.
 - dedicated realtime runtime config DTO / VO.
 - MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
@@ -278,13 +288,18 @@ Realtime Phase 2 additionally implements:
 - sanitized realtime definition snapshots.
 - `RealtimeSyncExecutionPlanner` with MySQL CDC Source + JDBC CHANGELOG Sink.
 - `RealtimeSyncExecutor` with RUNNING / FAILED / CANCELED lifecycle and Runtime counters.
-- shared active-execution registry / cancel semantics.
+- shared `DataSyncExecutionRegistry` cancel semantics.
+- centralized `DataSyncExecutionRecovery` startup LOST handling.
 - task-configured automatic checkpoint interval inside the Local Execution Engine.
+- durable task/version-scoped CDC state directories.
+- stable Debezium engine identity across Instances.
+- controlled MySQL CDC serverId allocation/release.
+- manual rerun continuation from persisted Debezium offsets after stop/failure/process restart.
 
-Phase 4 / Realtime Phase 2 do not implement:
-- durable realtime checkpoint/state-directory ownership.
-- stable MySQL replication serverId allocation.
-- realtime process restart recovery.
+Phase 4 / Realtime Phase 3 do not implement:
+- automatic restart of a LOST Instance.
+- distributed state ownership or fencing.
+- exactly-once transaction coordination.
 - realtime frontend.
 - scheduler.
 - retry policy.
