@@ -16,6 +16,7 @@ export interface DataSourceRecord {
   database?: string;
   schema?: string;
   jdbcUrl?: string;
+  displayJdbcUrl?: string;
   environment?: string;
   environmentName?: string;
   connStatus?: DataSourceConnectionStatus;

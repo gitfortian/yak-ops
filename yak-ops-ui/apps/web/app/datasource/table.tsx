@@ -136,16 +136,19 @@ const DataSourceTable = ({
       key: "connection",
       title: intl.formatMessage({ id: "pages.datasource.table.connection" }),
       minWidth: 360,
-      render: (_value, record) => (
-        <div className="min-w-0">
-          <div className="truncate text-[13px] text-[#4f5561]" title={record.jdbcUrl}>
-            {record.jdbcUrl || "-"}
+      render: (_value, record) => {
+        const jdbcUrl = record.displayJdbcUrl || record.jdbcUrl;
+        return (
+          <div className="min-w-0">
+            <div className="truncate text-[13px] text-[#4f5561]" title={jdbcUrl}>
+              {jdbcUrl || "-"}
+            </div>
+            <div className="mt-1.5">
+              <DataSourceStatus status={record.connStatus} />
+            </div>
           </div>
-          <div className="mt-1.5">
-            <DataSourceStatus status={record.connStatus} />
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "description",

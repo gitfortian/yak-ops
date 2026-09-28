@@ -13,6 +13,8 @@ import io.yak.ops.plugin.datasource.api.exception.DataSourcePluginException;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -278,6 +280,25 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         return connectionPropertyDriver(jdbcUrl).getPropertyInfo(jdbcUrl, properties);
     }
 
+    protected final String displayJdbcUrlWithQueryProperties(DataSourceConnection connection) {
+        JdbcConnectionProperties jdbcConnection = requireJdbcConnection(connection);
+        String jdbcUrl = jdbcConnection.jdbcUrl();
+        if (StringUtils.isBlank(jdbcUrl) || jdbcConnection.properties().isEmpty()) return jdbcUrl;
+
+        StringBuilder displayUrl = new StringBuilder(jdbcUrl);
+        String separator = jdbcUrl.contains("?") ? (jdbcUrl.endsWith("?") || jdbcUrl.endsWith("&") ? "" : "&") : "?";
+        for (Map.Entry<String, String> entry : jdbcConnection.properties().entrySet()) {
+            if (StringUtils.isBlank(entry.getKey())) continue;
+            displayUrl
+                    .append(separator)
+                    .append(encodeQueryComponent(entry.getKey()))
+                    .append("=")
+                    .append(encodeQueryComponent(entry.getValue()));
+            separator = "&";
+        }
+        return displayUrl.toString();
+    }
+
     protected boolean includeConnectionPropertyKey(String key) {
         String value = StringUtils.trimToNull(key);
         if (value == null) return false;
@@ -452,6 +473,11 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         }
         String sanitized = SensitiveUtils.mask(message);
         return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
+    }
+
+    private static String encodeQueryComponent(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8)
+                .replace("+", "%20");
     }
 
     private SshTunnelConfig parseSshTunnel(JsonNode root) {
