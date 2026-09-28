@@ -164,7 +164,8 @@ public class DataSyncServiceImpl implements DataSyncService {
 
         DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
         result.setMappings(sourceColumns.stream()
-                .map(source -> toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
+                .map(source ->
+                        toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
                 .toList());
         result.setCompatible(!sourceColumns.isEmpty()
                 && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
