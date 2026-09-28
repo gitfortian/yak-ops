@@ -114,7 +114,7 @@ CREATE TABLE yak_ops_data_sync_task (
     id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
     workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID，是同步任务业务归属与隔离边界',
     name VARCHAR(128) NOT NULL COMMENT '同步任务名称，在同一工作空间内唯一',
-    sync_type TINYINT UNSIGNED NOT NULL COMMENT '同步类型：1 离线同步',
+    sync_type TINYINT UNSIGNED NOT NULL COMMENT '同步类型：1 离线同步，2 实时同步',
     source_data_source_id VARCHAR(64) NOT NULL COMMENT '来源数据源ID，仅保存资源引用，不保存连接凭证',
     source_database VARCHAR(128) NULL COMMENT '来源数据库名称，无该层级时为空',
     source_schema VARCHAR(128) NULL COMMENT '来源Schema名称，无该层级时为空',
