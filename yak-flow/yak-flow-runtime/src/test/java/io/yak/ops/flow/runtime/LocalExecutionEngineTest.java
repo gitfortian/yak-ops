@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.api.source.Boundedness;
 import java.time.Duration;
@@ -19,7 +19,7 @@ class LocalExecutionEngineTest {
 
     private static final YakTableSchema SCHEMA =
             new YakTableSchema(
-                    List.of(new YakColumn("id", YakDataType.BIGINT, false, null, null, null)),
+                    List.of(new YakColumn("id", YakTypes.BIGINT, false, null)),
                     List.of("id"));
 
     @Test
