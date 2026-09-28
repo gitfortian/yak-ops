@@ -5,13 +5,6 @@ import {
   Input,
   Modal,
   PageHeader,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectTrigger,
-  SelectValue,
   Table,
   Tabs,
   TabsList,
@@ -32,6 +25,7 @@ import {
   type DataSyncTaskRecord,
 } from "@/service/data-sync";
 
+import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import { RealtimeSyncInstances } from "./instances";
 
 export { RealtimeSyncEditorPage } from "./editor";
@@ -62,6 +56,7 @@ export function RealtimeSyncPage() {
   const taskInstanceFilter = searchParams.get("taskId") || undefined;
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
@@ -80,21 +75,33 @@ export function RealtimeSyncPage() {
     () => dataSources.filter((item) => REALTIME_TARGET_TYPES.has(item.dbType || "")),
     [dataSources],
   );
-  const sourceItems = useMemo(
+  const sourceOptions = useMemo(
     () =>
-      Object.fromEntries(
-        sourceDataSources.flatMap((item) =>
-          item.id ? [[item.id, item.name || item.id] as const] : [],
-        ),
+      sourceDataSources.flatMap((item) =>
+        item.id
+          ? [
+              {
+                value: item.id,
+                label: item.name || item.id,
+                searchText: [item.dbType, item.database, item.schema].filter(Boolean).join(" "),
+              },
+            ]
+          : [],
       ),
     [sourceDataSources],
   );
-  const targetItems = useMemo(
+  const targetOptions = useMemo(
     () =>
-      Object.fromEntries(
-        targetDataSources.flatMap((item) =>
-          item.id ? [[item.id, item.name || item.id] as const] : [],
-        ),
+      targetDataSources.flatMap((item) =>
+        item.id
+          ? [
+              {
+                value: item.id,
+                label: item.name || item.id,
+                searchText: [item.dbType, item.database, item.schema].filter(Boolean).join(" "),
+              },
+            ]
+          : [],
       ),
     [targetDataSources],
   );
@@ -103,11 +110,19 @@ export function RealtimeSyncPage() {
     [dataSources],
   );
 
-  useEffect(() => {
-    void listDataSources({ pageNo: 1, pageSize: 200 }).then((result) =>
-      setDataSources(result?.bizData || []),
-    );
+  const loadDataSources = useCallback(async () => {
+    setDataSourcesLoading(true);
+    try {
+      const result = await listDataSources({ pageNo: 1, pageSize: 200 });
+      setDataSources(result?.bizData || []);
+    } finally {
+      setDataSourcesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDataSources();
+  }, [loadDataSources]);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -399,60 +414,56 @@ export function RealtimeSyncPage() {
 
           <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel required>来源数据源</FieldLabel>
-            <Select
-              size="small"
-              items={sourceItems}
-              value={draft.sourceDataSourceId || undefined}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  sourceDataSourceId: String(value || ""),
-                }))
+            <DataSyncSearchableSelect
+              value={draft.sourceDataSourceId || null}
+              options={sourceOptions}
+              placeholder="请选择 MySQL 数据源"
+              searchPlaceholder="搜索 MySQL 数据源"
+              emptyText="暂无可用 MySQL 数据源"
+              refreshing={dataSourcesLoading}
+              onRefresh={loadDataSources}
+              footer={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                  onClick={() => navigate("/data-source?create=1")}
+                >
+                  <Plus size={14} />
+                  新增数据源
+                </Button>
               }
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择 MySQL 数据源" />
-              </SelectTrigger>
-              <SelectContent>
-                {sourceDataSources.map((item) =>
-                  item.id ? (
-                    <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{item.name || item.id}</SelectItemText>
-                      <SelectItemIndicator />
-                    </SelectItem>
-                  ) : null,
-                )}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) =>
+                setDraft((current) => ({ ...current, sourceDataSourceId: value }))
+              }
+            />
           </Field>
 
           <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel required>目标数据源</FieldLabel>
-            <Select
-              size="small"
-              items={targetItems}
-              value={draft.targetDataSourceId || undefined}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  targetDataSourceId: String(value || ""),
-                }))
+            <DataSyncSearchableSelect
+              value={draft.targetDataSourceId || null}
+              options={targetOptions}
+              placeholder="请选择 MySQL / PostgreSQL / Oracle"
+              searchPlaceholder="搜索目标数据源"
+              emptyText="暂无可用目标数据源"
+              refreshing={dataSourcesLoading}
+              onRefresh={loadDataSources}
+              footer={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                  onClick={() => navigate("/data-source?create=1")}
+                >
+                  <Plus size={14} />
+                  新增数据源
+                </Button>
               }
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择 MySQL / PostgreSQL / Oracle" />
-              </SelectTrigger>
-              <SelectContent>
-                {targetDataSources.map((item) =>
-                  item.id ? (
-                    <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{item.name || item.id}</SelectItemText>
-                      <SelectItemIndicator />
-                    </SelectItem>
-                  ) : null,
-                )}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) =>
+                setDraft((current) => ({ ...current, targetDataSourceId: value }))
+              }
+            />
           </Field>
         </div>
       </Modal>

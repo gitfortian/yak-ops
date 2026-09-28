@@ -34,6 +34,9 @@ Must:
 - Explain that UPDATE produces UPDATE_BEFORE + UPDATE_AFTER events in current YakFlow metrics.
 - Display REALTIME snapshot runtime parameters from `realtimeConfig`.
 - Display CANCELED as `已停止` for realtime product wording.
+- Datasource / Schema / Table are dynamic resource Selects: their popup uses Yak UI Select Search composition with local keyword filtering and an explicit refresh action.
+- Datasource Select footer exposes “新增数据源” as a product-owned action and routes to Datasource create; source/target type restrictions still come from Realtime product rules.
+- Static lifecycle/status Selects stay simple and do not add search / refresh / footer without a real option-volume need.
 
 Must Not:
 
