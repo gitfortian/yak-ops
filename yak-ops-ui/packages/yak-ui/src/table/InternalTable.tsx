@@ -235,7 +235,7 @@ export function InternalTable<RecordType extends object>({
                   key={resolveTableRowKey(record, rowIndex, rowKey)}
                   data-selected={selected ? "true" : undefined}
                   className={cn(
-                    "border-b border-[var(--yak-components-table-border)] bg-[var(--yak-components-table-row-bg)] last:border-b-0",
+                    "border-b border-[var(--yak-components-table-border)] bg-[var(--yak-components-table-row-bg)]",
                     "data-[selected=true]:bg-[var(--yak-color-hover)]",
                     rowHoverable && "transition-colors hover:bg-[var(--yak-color-hover)]",
                     rowClassName,
