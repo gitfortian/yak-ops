@@ -11,6 +11,7 @@ import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
+import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalExecutionEngine;
@@ -152,6 +153,7 @@ class MySqlCdcIntegrationIT {
         LocalExecution<?> secondExecution = startExecution(sourceConfig, target);
         try {
             awaitTarget(target, Map.of(1L, "alpha-v2", 3L, "gamma", 4L, "delta"));
+            assertEquals(new ExecutionMetrics(1, 1), secondExecution.metrics());
             secondExecution.checkpoint().get(20, TimeUnit.SECONDS);
             awaitOffsetFile(targetStateDirectory);
         } finally {
