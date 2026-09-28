@@ -18,7 +18,7 @@ import {
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -40,11 +40,13 @@ import {
   type DataSyncRuntimeConfig,
   type DataSyncTaskSavePayload,
   type DataSyncType,
+  type DataSyncWriteMode,
 } from "@/service/data-sync";
 
 interface EditorForm {
   name: string;
   remark: string;
+  writeMode: DataSyncWriteMode;
   sourceDataSourceId: string;
   sourceDatabase: string;
   sourceSchema: string;
@@ -82,6 +84,7 @@ const EMPTY_REALTIME: DataSyncRealtimeConfig = {
 const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
+  writeMode: "APPEND",
   sourceDataSourceId: "",
   sourceDatabase: "",
   sourceSchema: "",
@@ -223,6 +226,7 @@ function DataSourceEndpointCard({
 
 interface TableSectionProps {
   title: string;
+  children?: ReactNode;
   dataSourceId: string;
   boundSchema?: string;
   database: string;
@@ -235,6 +239,7 @@ interface TableSectionProps {
 
 function TableSection({
   title,
+  children,
   dataSourceId,
   boundSchema,
   database,
@@ -316,10 +321,23 @@ function TableSection({
             </SelectContent>
           </Select>
         </Field>
+        {children}
       </div>
     </section>
   );
 }
+
+const WRITE_MODE_ITEMS: Record<DataSyncWriteMode, string> = {
+  APPEND: "追加写入",
+  OVERWRITE: "覆盖写入",
+  UPSERT: "更新写入",
+};
+
+const WRITE_MODE_DESCRIPTION: Record<DataSyncWriteMode, string> = {
+  APPEND: "保留目标已有数据，继续新增本次同步数据",
+  OVERWRITE: "运行前清空目标表，再写入本次全量数据",
+  UPSERT: "按目标主键更新已有数据，不存在则新增；要求目标表存在主键",
+};
 
 interface OfflineRuntimeFieldsProps {
   config: DataSyncRuntimeConfig;
@@ -498,6 +516,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         setForm({
           name: task.name,
           remark: task.remark || "",
+          writeMode:
+            task.writeMode === "OVERWRITE" || task.writeMode === "UPSERT"
+              ? task.writeMode
+              : "APPEND",
           sourceDataSourceId: task.sourceDataSourceId,
           sourceDatabase: task.sourceDatabase || "",
           sourceSchema: task.sourceSchema || "",
@@ -652,9 +674,19 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       remark: form.remark.trim() || undefined,
     };
     if (realtime) {
-      return { ...common, syncType: "REALTIME", realtimeConfig: form.realtimeConfig };
+      return {
+        ...common,
+        writeMode: "APPEND",
+        syncType: "REALTIME",
+        realtimeConfig: form.realtimeConfig,
+      };
     }
-    return { ...common, syncType: "OFFLINE", runtimeConfig: form.runtimeConfig };
+    return {
+      ...common,
+      writeMode: form.writeMode,
+      syncType: "OFFLINE",
+      runtimeConfig: form.runtimeConfig,
+    };
   };
 
   const canSave =
@@ -847,7 +879,48 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   targetTable: table.name,
                 }))
               }
-            />
+            >
+              {!realtime ? (
+                <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+                  <FieldLabel required className="pt-1.5">
+                    写入方式
+                  </FieldLabel>
+                  <div className="space-y-1">
+                    <Select
+                      size="small"
+                      items={WRITE_MODE_ITEMS}
+                      value={form.writeMode}
+                      onValueChange={(value) =>
+                        patch("writeMode", String(value || "APPEND") as DataSyncWriteMode)
+                      }
+                    >
+                      <SelectTrigger variant="outlined">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(WRITE_MODE_ITEMS) as [DataSyncWriteMode, string][]).map(
+                          ([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              <SelectItemText>{label}</SelectItemText>
+                              <SelectItemIndicator />
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <div
+                      className={
+                        form.writeMode === "OVERWRITE"
+                          ? "px-1 text-xs text-[#b54708]"
+                          : "px-1 text-xs text-[#98a2b3]"
+                      }
+                    >
+                      {WRITE_MODE_DESCRIPTION[form.writeMode]}
+                    </div>
+                  </div>
+                </Field>
+              ) : null}
+            </TableSection>
           </div>
 
           <section
