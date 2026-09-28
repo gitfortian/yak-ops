@@ -37,7 +37,7 @@ public class OfflineSyncExecutor {
     private OfflineSyncExecutionPlanner executionPlanner;
 
     @Resource
-    private OfflineSyncExecutionRegistry executionRegistry;
+    private DataSyncExecutionRegistry executionRegistry;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
