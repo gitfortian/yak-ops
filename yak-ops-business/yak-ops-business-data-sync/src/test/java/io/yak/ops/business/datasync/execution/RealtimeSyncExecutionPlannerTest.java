@@ -26,8 +26,10 @@ class RealtimeSyncExecutionPlannerTest {
     void shouldBuildMySqlCdcToJdbcChangelogPlan() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         injectDataSourceService(planner, dataSourceService());
+        injectStateManager(planner, new RealtimeSyncStateManager(java.nio.file.Path.of("target/test-realtime-state")));
 
-        RealtimeSyncExecutionPlan plan = planner.plan("123456789", snapshot(DataSyncType.REALTIME.name()));
+        RealtimeSyncExecutionPlan plan =
+                planner.plan("workspace-1", snapshot(DataSyncType.REALTIME.name()), 54021L);
 
         assertNotNull(plan.source());
         assertNotNull(plan.sink());
@@ -42,8 +44,11 @@ class RealtimeSyncExecutionPlannerTest {
     void shouldRejectNonRealtimeSnapshot() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         injectDataSourceService(planner, dataSourceService());
+        injectStateManager(planner, new RealtimeSyncStateManager(java.nio.file.Path.of("target/test-realtime-state")));
 
-        assertThrows(IllegalArgumentException.class, () -> planner.plan("123456789", snapshot(DataSyncType.OFFLINE.name())));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> planner.plan("workspace-1", snapshot(DataSyncType.OFFLINE.name()), 54021L));
     }
 
     private void injectDataSourceService(RealtimeSyncExecutionPlanner planner, DataSourceService service)
@@ -51,6 +56,13 @@ class RealtimeSyncExecutionPlannerTest {
         Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("dataSourceService");
         field.setAccessible(true);
         field.set(planner, service);
+    }
+
+    private void injectStateManager(RealtimeSyncExecutionPlanner planner, RealtimeSyncStateManager stateManager)
+            throws Exception {
+        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("stateManager");
+        field.setAccessible(true);
+        field.set(planner, stateManager);
     }
 
     private DataSourceService dataSourceService() {
