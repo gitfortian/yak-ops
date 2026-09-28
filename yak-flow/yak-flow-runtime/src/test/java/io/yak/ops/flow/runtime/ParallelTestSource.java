@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Local Runtime 并行 Source Reader 测试夹具，通过 barrier 证明多个 Reader 同时进入 split。
+ * Local Execution Engine 并行 Source Reader 测试夹具，通过 barrier 证明多个 Reader 同时进入 split。
  *
  * @author weifuwan
  * @since 2026-09-28
