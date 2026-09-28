@@ -126,7 +126,8 @@ class OfflineSyncJdbcAcceptanceIT {
                         SCHEMA,
                         2,
                         2,
-                        10),
+                        10,
+                        1L),
                 DIRECT_CONNECTION);
         JdbcSink sink =
                 new JdbcSink(new JdbcSinkConfig(target, targetTable, 2, 10), DIRECT_CONNECTION);
