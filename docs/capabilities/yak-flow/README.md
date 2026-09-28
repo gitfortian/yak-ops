@@ -122,6 +122,8 @@ Split 1: [5, 8]
 Split 2: [9, 10]
 ```
 
+Each range split opens its own JDBC read transaction. This V1 guarantees non-overlapping range predicates, not one database-consistent snapshot across all splits.
+
 Automatic `MIN/MAX/rowCount` discovery, split-size planning, skew detection and sampling belong to later split-planning phases.
 
 ## Phase 4 — MySQL CDC Connector
