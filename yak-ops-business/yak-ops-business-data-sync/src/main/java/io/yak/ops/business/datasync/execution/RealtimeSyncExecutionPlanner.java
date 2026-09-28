@@ -85,14 +85,12 @@ public class RealtimeSyncExecutionPlanner {
                         JdbcWriteMode.CHANGELOG),
                 targetWriteSchema);
         return new RealtimeSyncExecutionPlan(
-                source,
-                sink,
-                sourceSchema,
-                Duration.ofSeconds(realtimeConfig.getCheckpointIntervalSeconds()));
+                source, sink, sourceSchema, Duration.ofSeconds(realtimeConfig.getCheckpointIntervalSeconds()));
     }
 
     private JdbcConnectionProperties requireMySqlConnection(DataSourceConnection connection) {
-        if (!(connection instanceof JdbcConnectionProperties jdbcConnection) || !"MYSQL".equals(jdbcConnection.type())) {
+        if (!(connection instanceof JdbcConnectionProperties jdbcConnection)
+                || !"MYSQL".equals(jdbcConnection.type())) {
             throw new IllegalArgumentException("realtime sync source runtime connection must be MYSQL JDBC");
         }
         return jdbcConnection;
