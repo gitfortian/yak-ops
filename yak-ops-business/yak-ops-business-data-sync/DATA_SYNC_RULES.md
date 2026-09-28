@@ -48,7 +48,7 @@ Must:
 - Treat the current Datasource-bound database as authoritative. Task / mapping requests cannot override a bound database.
 - Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
 - Keep `definitionVersion` starting at 1 and increment it on every successful task-definition update.
-- Persist YakFlow tuning in `runtimeConfig`; it may contain batch/fetch/timeout settings only.
+- Persist YakFlow tuning in `runtimeConfig`; it may contain batch/fetch/timeout settings and optional JDBC `splitSize` only.
 - Support only `OFFLINE` task type in the current phase.
 
 Must Not:
