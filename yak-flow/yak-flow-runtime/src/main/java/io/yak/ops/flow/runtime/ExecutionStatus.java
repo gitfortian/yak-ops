@@ -1,7 +1,7 @@
 package io.yak.ops.flow.runtime;
 
 /**
- * 描述一次 Local Runtime 执行的生命周期状态。
+ * 描述一次 Local Execution Engine 执行的生命周期状态。
  *
  * @author weifuwan
  * @since 2026-09-27

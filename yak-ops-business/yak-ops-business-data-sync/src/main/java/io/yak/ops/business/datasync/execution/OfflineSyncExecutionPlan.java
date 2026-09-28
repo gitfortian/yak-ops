@@ -5,7 +5,7 @@ import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 
 /**
- * 一次离线同步可直接交给 YakFlow Local Runtime 的执行计划。
+ * 一次离线同步可直接交给 YakFlow Local Execution Engine 的执行计划。
  *
  * @param source 已解析运行时连接与读取参数的 JDBC Source
  * @param sink 已解析运行时连接与写入参数的 JDBC Sink

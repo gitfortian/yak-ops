@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
-class LocalRuntimeTest {
+class LocalExecutionEngineTest {
 
     private static final YakTableSchema SCHEMA =
             new YakTableSchema(
@@ -27,7 +27,7 @@ class LocalRuntimeTest {
         TestSource source = new TestSource(Boundedness.BOUNDED, 5, 0);
         TestSink sink = new TestSink();
 
-        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA);
+        LocalExecution<TestSplit> execution = new LocalExecutionEngine().start(source, sink, SCHEMA);
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(5)));
         assertEquals(5, sink.rows().size());
@@ -42,7 +42,7 @@ class LocalRuntimeTest {
         ParallelTestSource source = new ParallelTestSource(4, 4);
         TestSink sink = new TestSink();
 
-        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA, 4);
+        LocalExecution<TestSplit> execution = new LocalExecutionEngine().start(source, sink, SCHEMA, 4);
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(5)));
         assertEquals(4, sink.rows().size());
@@ -58,14 +58,14 @@ class LocalRuntimeTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new LocalRuntime().start(source, new TestSink(), SCHEMA, 2));
+                () -> new LocalExecutionEngine().start(source, new TestSink(), SCHEMA, 2));
     }
 
     @Test
     void shouldCheckpointAndCancelContinuousSource() throws Exception {
         TestSource source = new TestSource(Boundedness.CONTINUOUS_UNBOUNDED, Integer.MAX_VALUE, 1);
         TestSink sink = new TestSink();
-        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA);
+        LocalExecution<TestSplit> execution = new LocalExecutionEngine().start(source, sink, SCHEMA);
 
         waitForRows(sink, 5, Duration.ofSeconds(5));
         LocalCheckpoint checkpoint = execution.checkpoint().get(5, TimeUnit.SECONDS);

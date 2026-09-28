@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Local Runtime 完成的一次检查点切面，表示对应 Source 状态之前的数据已经被 Sink flush。
+ * Local Execution Engine 完成的一次检查点切面，表示对应 Source 状态之前的数据已经被 Sink flush。
  *
  * @param checkpointId 当前执行内单调递增的检查点标识
  * @param enumeratorState Source Enumerator 状态

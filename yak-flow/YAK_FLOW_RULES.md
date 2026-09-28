@@ -65,14 +65,14 @@ Batch sources normally emit `INSERT`. CDC sources may emit any supported change 
 
 The core type system describes portable logical values only. Database-specific native types and conversion rules belong to connectors.
 
-## Local Runtime
+## Local Execution Engine
 
 The current runtime is deliberately single-node and local.
 
 Must:
 - Keep one bounded in-memory channel between Source work and Sink work.
 - Allow bounded Source executions to run 1-16 parallel Readers while keeping split assignment serialized through one Enumerator.
-- Keep one Sink Writer in Local Runtime; parallel Source Readers converge into the same bounded Row Channel before serial Sink writes.
+- Keep one Sink Writer in Local Execution Engine; parallel Source Readers converge into the same bounded Row Channel before serial Sink writes.
 - Allow bounded jobs to finish naturally.
 - Keep continuous unbounded jobs alive until cancel or failure.
 - Use channel ordering for checkpoint barriers: Source state first, barrier second, Sink flush before checkpoint completion.
@@ -89,7 +89,7 @@ Must Not:
 
 Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
 
-Local Runtime metrics:
+Local Execution Engine metrics:
 - `readRows` counts rows after a Source batch has successfully entered the Runtime channel.
 - `writeRows` counts rows after `SinkWriter.write` returns successfully.
 - Metrics are monotonic in one execution and are observation data, not a transaction-commit proof.
@@ -227,7 +227,7 @@ Must Not:
 
 `CheckpointState` is an opaque connector/runtime contract.
 
-The API keeps connector state opaque. The Local Runtime coordinates in-process checkpoint barriers and keeps only the latest completed checkpoint for the active execution.
+The API keeps connector state opaque. The Local Execution Engine coordinates in-process checkpoint barriers and keeps only the latest completed checkpoint for the active execution.
 
 The current phase still does not define durable checkpoint serialization, restart recovery or a transaction commit protocol. Those concerns must not leak Debezium offset structures into the public API.
 

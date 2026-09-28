@@ -9,7 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Local Runtime 测试使用的内存 Sink，记录收到的数据和 flush 时的行数。
+ * Local Execution Engine 测试使用的内存 Sink，记录收到的数据和 flush 时的行数。
  *
  * @author weifuwan
  * @since 2026-09-27

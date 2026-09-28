@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Local Runtime Channel 中的一批行数据。
+ * Local Execution Engine Channel 中的一批行数据。
  *
  * @param rows 不为空的 YakRow 批次
  * @author weifuwan

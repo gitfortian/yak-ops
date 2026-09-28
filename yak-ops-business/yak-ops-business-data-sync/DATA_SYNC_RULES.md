@@ -34,7 +34,7 @@ OfflineSyncExecutionPlanner
       ↓
 OfflineSyncExecutionPlan
       ↓
-YakFlow Local Runtime
+YakFlow Local Execution Engine
 ```
 
 This capability explicitly uses `DataSyncService / DataSyncServiceImpl` naming.
@@ -143,7 +143,7 @@ Must:
 - Keep at most one PENDING / RUNNING instance per task in the current single-node product.
 - Register each active LocalExecution in the in-process execution registry before transitioning the instance to RUNNING.
 - Allow PENDING and RUNNING instances to be canceled.
-- Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Runtime is not process-recoverable.
+- Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Execution Engine is not process-recoverable.
 - Revalidate current Catalog field compatibility when a task is started.
 - Build runtime Catalog schema, datasource connections and JDBC Source / Sink through `OfflineSyncExecutionPlanner`.
 - Keep `OfflineSyncExecutionPlan` in memory only; it may hold runtime connection objects indirectly and must never be persisted, serialized into an Instance or logged.

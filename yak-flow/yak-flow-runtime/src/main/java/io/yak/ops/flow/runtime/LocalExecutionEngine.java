@@ -9,12 +9,12 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * YakFlow 单节点执行入口，把一个 Source 与一个 Sink 连接为本地批流统一执行。
+ * YakFlow 单节点执行引擎入口，把一个 Source 与一个 Sink 连接为本地批流统一执行。
  *
  * @author weifuwan
  * @since 2026-09-27
  */
-public final class LocalRuntime {
+public final class LocalExecutionEngine {
 
     private static final int DEFAULT_CHANNEL_CAPACITY = 64;
     private static final int DEFAULT_SOURCE_PARALLELISM = 1;
@@ -23,11 +23,11 @@ public final class LocalRuntime {
 
     private final Duration streamCheckpointInterval;
 
-    public LocalRuntime() {
+    public LocalExecutionEngine() {
         this(DEFAULT_STREAM_CHECKPOINT_INTERVAL);
     }
 
-    public LocalRuntime(Duration streamCheckpointInterval) {
+    public LocalExecutionEngine(Duration streamCheckpointInterval) {
         this.streamCheckpointInterval =
                 Objects.requireNonNull(streamCheckpointInterval, "streamCheckpointInterval must not be null");
         if (streamCheckpointInterval.isNegative()) {

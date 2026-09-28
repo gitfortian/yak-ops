@@ -12,7 +12,7 @@ import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
-import io.yak.ops.flow.runtime.LocalRuntime;
+import io.yak.ops.flow.runtime.LocalExecutionEngine;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import io.yak.ops.plugin.database.jdbc.SshTunnelConfig;
@@ -130,7 +130,7 @@ class MySqlCdcIntegrationIT {
                         10,
                         JdbcWriteMode.CHANGELOG),
                 DIRECT_CONNECTION);
-        return new LocalRuntime(Duration.ofMillis(250))
+        return new LocalExecutionEngine(Duration.ofMillis(250))
                 .start(new MySqlCdcSource(sourceConfig), sink, SCHEMA);
     }
 

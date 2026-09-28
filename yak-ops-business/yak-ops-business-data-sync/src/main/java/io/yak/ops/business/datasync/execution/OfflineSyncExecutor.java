@@ -10,7 +10,7 @@ import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
-import io.yak.ops.flow.runtime.LocalRuntime;
+import io.yak.ops.flow.runtime.LocalExecutionEngine;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 将持久化离线同步实例交给 YakFlow Local Runtime，并收口 RUNNING / SUCCESS / FAILURE / CANCEL 状态。
+ * 将持久化离线同步实例交给 YakFlow Local Execution Engine，并收口 RUNNING / SUCCESS / FAILURE / CANCEL 状态。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -41,7 +41,7 @@ public class OfflineSyncExecutor {
     private OfflineSyncExecutionRegistry executionRegistry;
 
     /**
-     * 单机 Local Runtime 无法跨进程恢复；应用启动时把上一进程遗留的活动实例统一标记为 LOST。
+     * 单机 Local Execution Engine 无法跨进程恢复；应用启动时把上一进程遗留的活动实例统一标记为 LOST。
      */
     @PostConstruct
     public void recoverLostExecutions() {
@@ -65,7 +65,7 @@ public class OfflineSyncExecutor {
         WorkspaceContext.bind(workspaceId);
         try {
             OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
-            execution = new LocalRuntime()
+            execution = new LocalExecutionEngine()
                     .start(plan.source(), plan.sink(), plan.sourceSchema(), plan.sourceParallelism());
             executionRegistry.register(instanceId, execution);
 
