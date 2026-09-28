@@ -1,11 +1,4 @@
-import {
-  Badge,
-  Button,
-  Input,
-  Table,
-  toast,
-  type TableColumns,
-} from "@yak-ops/yak-ui";
+import { Badge, Button, Input, Table, toast, type TableColumns } from "@yak-ops/yak-ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { useActiveTaskInstances } from "@/app/data-sync/task-lifecycle";
