@@ -26,8 +26,9 @@ public class RealtimeSyncStateManager {
     }
 
     RealtimeSyncStateManager(Path rootDirectory) {
-        this.rootDirectory =
-                Objects.requireNonNull(rootDirectory, "root directory must not be null").toAbsolutePath().normalize();
+        this.rootDirectory = Objects.requireNonNull(rootDirectory, "root directory must not be null")
+                .toAbsolutePath()
+                .normalize();
     }
 
     Path stateDirectory(String workspaceId, String taskId, Integer taskVersion) {
@@ -35,7 +36,11 @@ public class RealtimeSyncStateManager {
         String task = requireSegment(taskId, "taskId");
         int version = requireVersion(taskVersion);
 
-        Path directory = rootDirectory.resolve(workspace).resolve(task).resolve("v" + version).normalize();
+        Path directory = rootDirectory
+                .resolve(workspace)
+                .resolve(task)
+                .resolve("v" + version)
+                .normalize();
         if (!directory.startsWith(rootDirectory)) {
             throw new IllegalArgumentException("realtime state directory escaped configured root");
         }
