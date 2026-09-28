@@ -88,28 +88,29 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
             try (var statement =
                     connection.prepareStatement(dialect.splitStatisticsSql(config.table(), splitColumn.get()))) {
                 statement.setQueryTimeout(config.timeoutSeconds());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()) {
-                    throw new IllegalStateException("JDBC split statistics query returned no row");
-                }
-                long rowCount = resultSet.getLong(3);
-                if (rowCount <= config.splitSize()) return wholeTableSplit();
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (!resultSet.next()) {
+                        throw new IllegalStateException("JDBC split statistics query returned no row");
+                    }
+                    long rowCount = resultSet.getLong(3);
+                    if (rowCount <= config.splitSize()) return wholeTableSplit();
 
-                long lowerBound = resultSet.getLong(1);
-                if (resultSet.wasNull()) return wholeTableSplit();
-                long upperBound = resultSet.getLong(2);
-                if (resultSet.wasNull()) return wholeTableSplit();
+                    long lowerBound = resultSet.getLong(1);
+                    if (resultSet.wasNull()) return wholeTableSplit();
+                    long upperBound = resultSet.getLong(2);
+                    if (resultSet.wasNull()) return wholeTableSplit();
 
-                long splitCount = rowCount / config.splitSize();
-                if (rowCount % config.splitSize() != 0) splitCount++;
-                if (splitCount > MAX_DYNAMIC_SPLIT_COUNT) {
-                    throw new IllegalArgumentException(
-                            "dynamic JDBC split count exceeds "
-                                    + MAX_DYNAMIC_SPLIT_COUNT
-                                    + "; increase splitSize");
+                    long splitCount = rowCount / config.splitSize();
+                    if (rowCount % config.splitSize() != 0) splitCount++;
+                    if (splitCount > MAX_DYNAMIC_SPLIT_COUNT) {
+                        throw new IllegalArgumentException(
+                                "dynamic JDBC split count exceeds "
+                                        + MAX_DYNAMIC_SPLIT_COUNT
+                                        + "; increase splitSize");
+                    }
+                    return createSplits(
+                            new JdbcNumericSplitConfig(splitColumn.get(), lowerBound, upperBound, (int) splitCount));
                 }
-                return createSplits(
-                        new JdbcNumericSplitConfig(splitColumn.get(), lowerBound, upperBound, (int) splitCount));
             }
         }
     }
