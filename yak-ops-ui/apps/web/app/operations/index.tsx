@@ -1,17 +1,7 @@
-import {
-  Button,
-  PageHeader,
-  Tabs,
-  TabsList,
-  TabsPanel,
-  TabsTab,
-} from "@yak-ops/yak-ui";
+import { Button, PageHeader, Tabs, TabsList, TabsPanel, TabsTab } from "@yak-ops/yak-ui";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import {
-  DataSyncInstanceDetailPage,
-  DataSyncInstances,
-} from "@/app/data-sync/instance-runtime";
+import { DataSyncInstanceDetailPage, DataSyncInstances } from "@/app/data-sync/instance-runtime";
 import { DataSyncTaskOperations } from "@/app/data-sync/task-operations";
 import type { DataSyncType } from "@/service/data-sync";
 
@@ -22,12 +12,7 @@ interface TaskOperationsPageProps {
   basePath: string;
 }
 
-function TaskOperationsPage({
-  syncType,
-  title,
-  description,
-  basePath,
-}: TaskOperationsPageProps) {
+function TaskOperationsPage({ syncType, title, description, basePath }: TaskOperationsPageProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "instances" ? "instances" : "tasks";
