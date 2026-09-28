@@ -3,6 +3,8 @@ package io.yak.ops.flow.connector.jdbc;
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.api.row.YakTypeKind;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import java.sql.Types;
 import java.util.ArrayList;
@@ -34,10 +36,8 @@ public final class JdbcSchemaMapper {
 
         for (DataSourceColumn column : ordered) {
             YakDataType dataType = toYakType(column);
-            Integer length = isLengthType(dataType) ? column.size() : null;
-            Integer precision = dataType == YakDataType.DECIMAL ? column.size() : null;
-            Integer scale = dataType == YakDataType.DECIMAL ? column.scale() : null;
-            columns.add(new YakColumn(column.name(), dataType, column.nullable(), length, precision, scale));
+            Integer length = isLengthType(dataType.kind()) ? column.size() : null;
+            columns.add(new YakColumn(column.name(), dataType, column.nullable(), length));
             if (column.primaryKey()) {
                 primaryKeys.add(column.name());
             }
@@ -47,14 +47,15 @@ public final class JdbcSchemaMapper {
 
     static YakDataType toYakType(DataSourceColumn column) {
         return switch (column.jdbcType()) {
-            case Types.BOOLEAN, Types.BIT -> YakDataType.BOOLEAN;
-            case Types.TINYINT -> YakDataType.TINYINT;
-            case Types.SMALLINT -> YakDataType.SMALLINT;
-            case Types.INTEGER -> YakDataType.INTEGER;
-            case Types.BIGINT -> YakDataType.BIGINT;
-            case Types.REAL, Types.FLOAT -> YakDataType.FLOAT;
-            case Types.DOUBLE -> YakDataType.DOUBLE;
-            case Types.NUMERIC, Types.DECIMAL -> YakDataType.DECIMAL;
+            case Types.BOOLEAN, Types.BIT -> YakTypes.BOOLEAN;
+            case Types.TINYINT -> YakTypes.TINYINT;
+            case Types.SMALLINT -> YakTypes.SMALLINT;
+            case Types.INTEGER -> YakTypes.INTEGER;
+            case Types.BIGINT -> YakTypes.BIGINT;
+            case Types.REAL, Types.FLOAT -> YakTypes.FLOAT;
+            case Types.DOUBLE -> YakTypes.DOUBLE;
+            case Types.NUMERIC, Types.DECIMAL ->
+                YakTypes.decimal(knownPrecision(column.size()), knownScale(column.scale()));
             case Types.CHAR,
                     Types.VARCHAR,
                     Types.LONGVARCHAR,
@@ -62,19 +63,27 @@ public final class JdbcSchemaMapper {
                     Types.NVARCHAR,
                     Types.LONGNVARCHAR,
                     Types.CLOB,
-                    Types.NCLOB -> YakDataType.STRING;
-            case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> YakDataType.BINARY;
-            case Types.DATE -> YakDataType.DATE;
-            case Types.TIME -> YakDataType.TIME;
-            case Types.TIMESTAMP -> YakDataType.TIMESTAMP;
-            case Types.TIMESTAMP_WITH_TIMEZONE -> YakDataType.TIMESTAMP_WITH_TIME_ZONE;
+                    Types.NCLOB -> YakTypes.STRING;
+            case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> YakTypes.BINARY;
+            case Types.DATE -> YakTypes.DATE;
+            case Types.TIME -> YakTypes.TIME;
+            case Types.TIMESTAMP -> YakTypes.TIMESTAMP;
+            case Types.TIMESTAMP_WITH_TIMEZONE -> YakTypes.TIMESTAMP_WITH_TIME_ZONE;
             default ->
                 throw new IllegalArgumentException(
                         "暂不支持 JDBC 字段类型：" + column.typeName() + " (" + column.jdbcType() + ")");
         };
     }
 
-    private static boolean isLengthType(YakDataType dataType) {
-        return dataType == YakDataType.STRING || dataType == YakDataType.BINARY;
+    private static boolean isLengthType(YakTypeKind kind) {
+        return kind == YakTypeKind.STRING || kind == YakTypeKind.BINARY;
+    }
+
+    private static Integer knownPrecision(Integer precision) {
+        return precision != null && precision > 0 ? precision : null;
+    }
+
+    private static Integer knownScale(Integer scale) {
+        return scale != null && scale >= 0 ? scale : null;
     }
 }

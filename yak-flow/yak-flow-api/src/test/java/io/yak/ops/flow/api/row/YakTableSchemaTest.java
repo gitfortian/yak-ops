@@ -12,8 +12,8 @@ class YakTableSchemaTest {
     @Test
     void shouldKeepColumnOrderAndPrimaryKeysImmutable() {
         List<YakColumn> columns = new ArrayList<>();
-        columns.add(new YakColumn("id", YakDataType.BIGINT, false, null, null, null));
-        columns.add(new YakColumn("name", YakDataType.STRING, true, 128, null, null));
+        columns.add(new YakColumn("id", YakTypes.BIGINT, false, null));
+        columns.add(new YakColumn("name", YakTypes.STRING, true, 128));
         List<String> primaryKeys = new ArrayList<>(List.of("id"));
 
         YakTableSchema schema = new YakTableSchema(columns, primaryKeys);

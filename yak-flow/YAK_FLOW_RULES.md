@@ -65,6 +65,15 @@ Batch sources normally emit `INSERT`. CDC sources may emit any supported change 
 
 The core type system describes portable logical values only. Database-specific native types and conversion rules belong to connectors.
 
+Logical type contract:
+- `YakTypeKind` identifies the logical type family only.
+- `YakDataType` is the complete logical type contract used by `YakColumn`.
+- parameterized types own their parameters; `YakDecimalType` owns DECIMAL precision / scale.
+- `YakBasicType` represents types without extra parameters and must not represent DECIMAL.
+- `YakColumn` owns field metadata such as name, nullability and current String/Binary capacity.
+- unknown JDBC DECIMAL precision / scale may remain null rather than inventing metadata.
+- composite types such as ARRAY / MAP / ROW are not part of the current relational-database milestone.
+
 ## Local Execution Engine
 
 The current runtime is deliberately single-node and local.

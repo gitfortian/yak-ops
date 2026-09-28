@@ -3,7 +3,7 @@ package io.yak.ops.flow.connector.cdc.mysql.debezium;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
@@ -38,7 +38,7 @@ class MySqlDebeziumEngineConfigTest {
                 SshTunnelConfig.disabled(),
                 "{}");
         YakTableSchema schema = new YakTableSchema(
-                List.of(new YakColumn("id", YakDataType.BIGINT, false, null, null, null)),
+                List.of(new YakColumn("id", YakTypes.BIGINT, false, null)),
                 List.of("id"));
         MySqlCdcSourceConfig config = MySqlCdcSourceConfig.defaults(
                 connection,

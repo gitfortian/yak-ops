@@ -3,7 +3,7 @@ package io.yak.ops.flow.connector.jdbc.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
@@ -63,9 +63,9 @@ class OfflineSyncJdbcAcceptanceIT {
 
     private static final YakTableSchema SCHEMA = new YakTableSchema(
             List.of(
-                    new YakColumn("id", YakDataType.BIGINT, false, null, null, null),
-                    new YakColumn("name", YakDataType.STRING, false, 100, null, null),
-                    new YakColumn("amount", YakDataType.DECIMAL, true, null, 10, 2)),
+                    new YakColumn("id", YakTypes.BIGINT, false, null),
+                    new YakColumn("name", YakTypes.STRING, false, 100),
+                    new YakColumn("amount", YakTypes.decimal(10, 2), true, null)),
             List.of("id"));
 
     private static final JdbcConnectionProvider DIRECT_CONNECTION = (connection, timeoutSeconds) -> {

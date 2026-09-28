@@ -1,24 +1,17 @@
 package io.yak.ops.flow.api.row;
 
 /**
- * YakFlow 跨数据库传输使用的最小逻辑类型集合，不承载数据库厂商原生类型名称。
+ * YakFlow 跨连接器共享的逻辑类型契约；类型类别由 YakTypeKind 表达，参数化类型由具体实现承载自身属性。
  *
  * @author weifuwan
- * @since 2026-09-27
+ * @since 2026-09-28
  */
-public enum YakDataType {
-    BOOLEAN,
-    TINYINT,
-    SMALLINT,
-    INTEGER,
-    BIGINT,
-    FLOAT,
-    DOUBLE,
-    DECIMAL,
-    STRING,
-    BINARY,
-    DATE,
-    TIME,
-    TIMESTAMP,
-    TIMESTAMP_WITH_TIME_ZONE
+public interface YakDataType {
+
+    /**
+     * 返回逻辑类型类别。
+     *
+     * @return 类型类别
+     */
+    YakTypeKind kind();
 }

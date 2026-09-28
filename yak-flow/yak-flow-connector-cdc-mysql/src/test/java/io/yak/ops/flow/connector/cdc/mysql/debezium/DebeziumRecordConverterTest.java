@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +18,8 @@ class DebeziumRecordConverterTest {
 
     private static final YakTableSchema YAK_SCHEMA = new YakTableSchema(
             List.of(
-                    new YakColumn("id", YakDataType.BIGINT, false, null, null, null),
-                    new YakColumn("name", YakDataType.STRING, true, 100, null, null)),
+                    new YakColumn("id", YakTypes.BIGINT, false, null),
+                    new YakColumn("name", YakTypes.STRING, true, 100)),
             List.of("id"));
     private static final Schema ROW_SCHEMA = SchemaBuilder.struct()
             .name("test.inventory.Value")
