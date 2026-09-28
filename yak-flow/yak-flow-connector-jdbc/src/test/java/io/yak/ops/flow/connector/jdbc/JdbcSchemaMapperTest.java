@@ -1,6 +1,7 @@
 package io.yak.ops.flow.connector.jdbc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.flow.api.row.YakDecimalType;
 import io.yak.ops.flow.api.row.YakTypes;
@@ -28,5 +29,13 @@ class JdbcSchemaMapperTest {
         YakDecimalType amountType = (YakDecimalType) schema.column(2).dataType();
         assertEquals(10, amountType.precision());
         assertEquals(2, amountType.scale());
+    }
+
+    @Test
+    void shouldRejectUnsupportedJdbcTypeBeforeCompatibility() {
+        DataSourceColumn column =
+                new DataSourceColumn("time_tz", "TIME_WITH_TIME_ZONE", Types.TIME_WITH_TIMEZONE, null, null, true, 1, false, null);
+
+        assertThrows(IllegalArgumentException.class, () -> JdbcSchemaMapper.toYakColumn(column));
     }
 }

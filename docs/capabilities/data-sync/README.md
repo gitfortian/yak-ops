@@ -79,6 +79,10 @@ choose target datasource/table
         ↓
 backend same-name field mapping preview
         ↓
+Catalog field → YakColumn
+        ↓
+JDBC logical compatibility
+        ↓
 compatible?
         ↓ yes
 save OFFLINE task definition

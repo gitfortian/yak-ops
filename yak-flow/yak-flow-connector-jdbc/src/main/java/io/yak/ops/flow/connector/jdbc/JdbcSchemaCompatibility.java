@@ -1,11 +1,11 @@
 package io.yak.ops.flow.connector.jdbc;
 
-import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.api.row.YakDecimalType;
 import io.yak.ops.flow.api.row.YakTypeKind;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 
 /**
- * 定义 JDBC 字段在 YakFlow bounded JDBC 同步中的可写兼容边界。
+ * 定义 JDBC bounded 同步在 YakFlow 逻辑字段之间的可写兼容边界。
  *
  * @author weifuwan
  * @since 2026-09-28
@@ -14,68 +14,55 @@ public final class JdbcSchemaCompatibility {
 
     private JdbcSchemaCompatibility() {}
 
-    public static boolean isCompatible(DataSourceColumn source, DataSourceColumn target) {
+    public static boolean isCompatible(YakColumn source, YakColumn target) {
         if (source == null || target == null) return false;
 
-        YakDataType sourceType = resolveType(source);
-        YakDataType targetType = resolveType(target);
-        if (sourceType == null || targetType == null) return false;
-
-        YakTypeKind sourceKind = sourceType.kind();
-        YakTypeKind targetKind = targetType.kind();
+        YakTypeKind sourceKind = source.dataType().kind();
+        YakTypeKind targetKind = target.dataType().kind();
         if (sourceKind == targetKind) {
-            return sameTypeCompatible(sourceKind, source, target);
+            return sameTypeCompatible(source, target);
         }
         if (isInteger(sourceKind) && isInteger(targetKind)) {
             return integerRank(sourceKind) <= integerRank(targetKind);
         }
         if (isInteger(sourceKind) && targetKind == YakTypeKind.DECIMAL) {
-            return integerToDecimalCompatible(sourceKind, source, target);
+            return integerToDecimalCompatible(sourceKind, (YakDecimalType) target.dataType());
         }
         return sourceKind == YakTypeKind.FLOAT && targetKind == YakTypeKind.DOUBLE;
     }
 
-    private static YakDataType resolveType(DataSourceColumn column) {
-        try {
-            return JdbcSchemaMapper.toYakType(column);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
-    }
-
-    private static boolean sameTypeCompatible(
-            YakTypeKind kind, DataSourceColumn source, DataSourceColumn target) {
+    private static boolean sameTypeCompatible(YakColumn source, YakColumn target) {
+        YakTypeKind kind = source.dataType().kind();
         if (kind == YakTypeKind.STRING || kind == YakTypeKind.BINARY) {
-            return capacityCompatible(source.size(), target.size());
+            return capacityCompatible(source.length(), target.length());
         }
         if (kind == YakTypeKind.DECIMAL) {
-            return decimalCompatible(source, target);
+            return decimalCompatible(
+                    (YakDecimalType) source.dataType(), (YakDecimalType) target.dataType());
         }
         return true;
     }
 
-    private static boolean integerToDecimalCompatible(
-            YakTypeKind sourceKind, DataSourceColumn source, DataSourceColumn target) {
-        if (!positive(target.size())) return true;
+    private static boolean integerToDecimalCompatible(YakTypeKind sourceKind, YakDecimalType target) {
+        if (!positive(target.precision())) return true;
 
         int targetScale = knownScale(target.scale()) ? target.scale() : 0;
-        int targetIntegerDigits = target.size() - targetScale;
-        int sourceIntegerDigits = positive(source.size()) ? source.size() : integerDigits(sourceKind);
-        return targetIntegerDigits >= sourceIntegerDigits;
+        int targetIntegerDigits = target.precision() - targetScale;
+        return targetIntegerDigits >= integerDigits(sourceKind);
     }
 
-    private static boolean decimalCompatible(DataSourceColumn source, DataSourceColumn target) {
+    private static boolean decimalCompatible(YakDecimalType source, YakDecimalType target) {
         if (knownScale(source.scale()) && knownScale(target.scale()) && source.scale() > target.scale()) {
             return false;
         }
-        if (!positive(source.size()) || !positive(target.size())) return true;
+        if (!positive(source.precision()) || !positive(target.precision())) return true;
 
         if (knownScale(source.scale()) && knownScale(target.scale())) {
-            int sourceIntegerDigits = source.size() - source.scale();
-            int targetIntegerDigits = target.size() - target.scale();
+            int sourceIntegerDigits = source.precision() - source.scale();
+            int targetIntegerDigits = target.precision() - target.scale();
             return targetIntegerDigits >= sourceIntegerDigits;
         }
-        return target.size() >= source.size();
+        return target.precision() >= source.precision();
     }
 
     private static boolean capacityCompatible(Integer sourceSize, Integer targetSize) {

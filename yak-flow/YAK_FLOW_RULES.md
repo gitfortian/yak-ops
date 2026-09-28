@@ -195,6 +195,8 @@ Must:
 - Commit Sink writes in explicit JDBC batches.
 - Roll back uncommitted Sink data on write/flush failure.
 - Own JDBC Catalog field compatibility used by Data Sync mapping preview and runtime execution.
+- Convert JDBC metadata into `YakColumn` through `JdbcSchemaMapper` before compatibility evaluation.
+- Keep `JdbcSchemaCompatibility` dependent on YakFlow logical columns/types only; it must not interpret `java.sql.Types` or Datasource metadata directly.
 - Treat `JdbcSchemaMapper` logical type support as the compatibility baseline; a JDBC type that cannot map to YakFlow is incompatible.
 - Reject integer narrowing; allow integer widening and integer -> DECIMAL only when known target integer-digit capacity is sufficient.
 - Preserve known String / Binary capacity and DECIMAL integer/fraction capacity; allow FLOAT -> DOUBLE widening.
