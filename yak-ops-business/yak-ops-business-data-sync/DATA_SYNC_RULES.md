@@ -38,6 +38,62 @@ OfflineSyncExecutionPlan            RealtimeSyncExecutionPlan
 
 This capability explicitly uses `DataSyncService / DataSyncServiceImpl` naming.
 
+## Execution Package Organization
+
+Execution code is grouped by responsibility, not by OFFLINE / REALTIME duplication:
+
+```text
+io.yak.ops.business.datasync.execution
+├── executor
+│   ├── OfflineSyncExecutor
+│   └── RealtimeSyncExecutor
+├── planning
+│   ├── DataSyncSchemaResolver
+│   ├── OfflineSyncExecutionPlan
+│   ├── OfflineSyncExecutionPlanner
+│   ├── RealtimeSyncExecutionPlan
+│   └── RealtimeSyncExecutionPlanner
+├── lifecycle
+│   ├── DataSyncExecutionRegistry
+│   └── DataSyncExecutionRecovery
+└── realtime
+    ├── RealtimeSyncStateManager
+    └── MySqlCdcServerIdAllocator
+```
+
+Responsibilities:
+- `executor` owns Runtime submission, status transition, metrics flush and terminal-state handling.
+- `planning` owns Task snapshot -> YakFlow Source / Sink / schema execution-plan projection.
+- `lifecycle` owns OFFLINE / REALTIME shared process-level registry and startup recovery.
+- `realtime` owns REALTIME-only CDC state identity and MySQL replication resources.
+
+Dependency direction:
+
+```text
+DataSyncServiceImpl
+   ↓
+executor ─────→ planning
+   │              ↓
+   ├────────→ lifecycle
+   └────────→ realtime
+                  ↑
+          realtime planning only
+```
+
+Must:
+- Keep the `execution` root package free of concrete classes.
+- Keep OFFLINE and REALTIME executors together under `executor`.
+- Keep execution plans, planners and shared schema projection together under `planning`.
+- Keep shared process lifecycle classes under `lifecycle`.
+- Keep MySQL CDC state/serverId ownership under `realtime`.
+- Mirror responsibility packages in tests where package-private behavior is intentionally tested.
+
+Must Not:
+- Create one package per class.
+- Duplicate `offline/planning` and `realtime/planning` subtrees while each contains only one or two tightly related classes.
+- Let `lifecycle` or `realtime` depend back on `executor`.
+- Put Datasource credentials or YakFlow runtime objects into lifecycle persistence.
+
 ## Task Definition
 
 Must:
@@ -142,7 +198,7 @@ Realtime contract boundary:
 - create/update/detail/page persist and return `REALTIME` tasks.
 - realtime save-time validation resolves Datasource/Catalog again on the backend.
 - `runTask` may create and submit a REALTIME Instance through `RealtimeSyncExecutor`.
-- realtime state ownership and serverId allocation stay inside the execution package and never become Task DTO fields.
+- realtime state ownership and serverId allocation stay inside `execution.realtime` and never become Task DTO fields.
 - frontend routes remain a later stage.
 
 ## Offline Task Editor Contract
@@ -225,7 +281,7 @@ Must:
 - Revalidate current realtime Source/Target topology, Source primary key and field compatibility before creating execution input.
 - Persist `syncType`, the fixed APPEND `writeMode` and the type-specific config in the sanitized definition snapshot.
 - Resolve source/target runtime credentials only inside `RealtimeSyncExecutionPlanner` after the Instance exists.
-- Reuse `OfflineSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
+- Reuse `DataSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
 - Use `JdbcWriteMode.CHANGELOG` for INSERT/UPDATE/DELETE application.
 - Start the Local Execution Engine with the task's `checkpointIntervalSeconds`.
 - Reuse the process-local execution registry so the existing cancel API works for both OFFLINE and REALTIME.
