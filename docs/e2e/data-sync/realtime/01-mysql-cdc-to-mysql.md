@@ -37,7 +37,8 @@ This case does not prove restart continuation or exactly-once semantics.
   - Source bound to `yak_e2e_realtime_source`.
   - Target bound to `yak_e2e_realtime_target`.
 - Both Datasources pass connection validation.
-- The Source account has the privileges required by the MySQL CDC connector.
+- The Source account has the privileges required by the current Debezium MySQL connector contract: `SELECT`, `RELOAD`, `SHOW DATABASES`, `REPLICATION SLAVE`, and `REPLICATION CLIENT`.
+- Hosted MySQL variants may additionally require snapshot-lock privileges such as `LOCK TABLES`, depending on their locking model.
 - The Source MySQL instance has binary logging enabled for row-based CDC.
 
 Check the Source MySQL runtime:
@@ -57,6 +58,8 @@ binlog_row_image = FULL
 ```
 
 If the environment uses different valid CDC settings, record that deviation before executing the case.
+
+See the capability-level prerequisites in [MySQL CDC Source Requirements](../../../capabilities/data-sync/README.md#mysql-cdc-source-requirements).
 
 ## 1. Prepare Source
 
@@ -94,7 +97,7 @@ Expected Source rows:
 | 2 | Bob | 200.00 |
 | 3 | Carol | 300.75 |
 
-The primary key is required by the current REALTIME product contract.
+The primary key is required by the current REALTIME product contract. The Target table must expose the same primary-key field set under case-insensitive same-name mapping.
 
 ## 2. Prepare Target
 
@@ -190,7 +193,7 @@ balance    → balance
 updated_at → updated_at
 ```
 
-Do not continue if the mapping preview reports incompatibility or the Source primary key cannot be resolved.
+Do not continue if the mapping preview reports incompatibility, the Source primary key cannot be resolved, or the Target primary-key set differs from the Source primary-key set. The backend rejects missing, extra or different Target PK fields before execution.
 
 ### Runtime
 
@@ -422,7 +425,8 @@ This step verifies user-controlled stop only. It does not verify offset reuse on
 
 ## 10. Acceptance Checklist
 
-- [ ] Source MySQL CDC prerequisites are satisfied.
+- [ ] Source MySQL CDC prerequisites are satisfied, including binlog mode and CDC account privileges.
+- [ ] Source and Target primary-key field sets match exactly under case-insensitive same-name mapping.
 - [ ] Source contains exactly the three initial seed rows before Task start.
 - [ ] Target is empty before Task start.
 - [ ] REALTIME Task saves successfully.
