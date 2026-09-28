@@ -21,6 +21,7 @@ import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.page.PagingData;
+import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
@@ -459,13 +460,9 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {
-        if (source == null) {
-            return null;
-        }
-        DataSourceVO target = new DataSourceVO();
-        target.setId(source.getId());
-        target.setName(source.getName());
-        target.setDbType(source.getDbType());
+        DataSourceVO target =
+                BeanCopyUtils.copy(source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
+        if (target == null) return null;
         if (source.getDbType() != null && StringUtils.hasText(source.getConnectionParams())) {
             DataSourceConnection connection =
                     pluginRegistry.parseConnection(source.getDbType(), source.getConnectionParams());
@@ -479,9 +476,6 @@ public class DataSourceServiceImpl implements DataSourceService {
                 source.getEnvironment() == null ? null : source.getEnvironment().getDisplayName());
         target.setConnStatus(
                 source.getConnStatus() == null ? null : source.getConnStatus().name());
-        target.setRemark(source.getRemark());
-        target.setCreateTime(source.getCreateTime());
-        target.setUpdateTime(source.getUpdateTime());
         if (includeOriginalJson && source.getDbType() != null) {
             target.setOriginalJson(pluginRegistry.maskConnectionJson(source.getDbType(), source.getOriginalJson()));
         }

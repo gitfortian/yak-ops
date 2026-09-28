@@ -43,6 +43,8 @@ Boot owns HTTP. DAO owns persistence mechanics. Plugin implementations own provi
 - 对 Controller 返回公共 VO / `PagingData<VO>`，不返回 Entity、DAO Model、Repository Query 或 Plugin 实现对象。
 - DAO Entity 只允许存在于 BusinessImpl 与 DAO 的内部协作链路。
 - 简单 Entity → VO 转换优先留在对应 BusinessImpl 的私有方法；没有真实复用边界时不要新增 Converter / Assembler。
+- Entity / Model / DTO → VO 或同结构 DTO 的纯 Projection：同名、类型兼容且无业务转换的字段必须优先使用 `BeanCopyUtils`；只对派生字段、枚举转换、脱敏、JSON 解析、字段改名和多对象聚合保留显式赋值。
+- 涉及 normalize、默认值、状态初始化、权限、安全或领域校验的 DTO → Entity 写入不是 Projection，不得为了减少 setter 强行 Bean copy。
 - 事务边界放在 BusinessImpl 的业务方法。
 - 使用 Jakarta Validation；Controller 用 `@Valid`，需要方法级校验时 Impl 可用 `@Validated`。
 - 每个领域保持一套异常体系，具体业务原因使用稳定错误码。

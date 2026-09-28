@@ -7,6 +7,7 @@ import io.yak.ops.common.bean.dto.workspace.WorkspaceDTO;
 import io.yak.ops.common.bean.vo.workspace.WorkspaceMemberVO;
 import io.yak.ops.common.bean.vo.workspace.WorkspaceVO;
 import io.yak.ops.common.enums.workspace.WorkspaceRole;
+import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.workspace.WorkspaceEntity;
 import io.yak.ops.dao.entity.workspace.WorkspaceMemberEntity;
@@ -249,21 +250,14 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     }
 
     private WorkspaceVO toWorkspaceVO(WorkspaceEntity source, WorkspaceRole role) {
-        WorkspaceVO target = new WorkspaceVO();
-        target.setId(source.getId());
-        target.setName(source.getName());
-        target.setDescription(source.getDescription());
+        WorkspaceVO target = BeanCopyUtils.copy(source, WorkspaceVO.class);
         target.setRole(role);
         target.setRoleName(role == null ? null : role.getDisplayName());
-        target.setCreateTime(source.getCreateTime());
-        target.setUpdateTime(source.getUpdateTime());
         return target;
     }
 
     private WorkspaceMemberVO toWorkspaceMemberVO(WorkspaceMemberEntity source) {
-        WorkspaceMemberVO target = new WorkspaceMemberVO();
-        target.setUserId(source.getUserId());
-        target.setRole(source.getRole());
+        WorkspaceMemberVO target = BeanCopyUtils.copy(source, WorkspaceMemberVO.class);
         target.setRoleName(source.getRole() == null ? null : source.getRole().getDisplayName());
         target.setJoinedAt(source.getCreateTime());
         return target;

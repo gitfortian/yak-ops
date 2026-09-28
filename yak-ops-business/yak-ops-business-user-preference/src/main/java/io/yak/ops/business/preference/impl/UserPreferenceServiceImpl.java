@@ -5,6 +5,7 @@ import io.yak.ops.business.preference.constant.UserPreferenceConstants;
 import io.yak.ops.common.bean.dto.preference.UserPreferenceFavoriteDTO;
 import io.yak.ops.common.bean.vo.preference.UserPreferenceVO;
 import io.yak.ops.common.enums.preference.UserPreferenceScene;
+import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.preference.UserPreferenceEntity;
@@ -154,13 +155,8 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
     }
 
     private UserPreferenceVO toVO(UserPreferenceEntity source) {
-        UserPreferenceVO target = new UserPreferenceVO();
+        UserPreferenceVO target = BeanCopyUtils.copy(source, UserPreferenceVO.class, "scene");
         target.setScene(UserPreferenceScene.valueOf(source.getScene()));
-        target.setItemKey(source.getItemKey());
-        target.setFavorite(source.getFavorite());
-        target.setSortOrder(source.getSortOrder());
-        target.setUseCount(source.getUseCount());
-        target.setLastUsedTime(source.getLastUsedTime());
         return target;
     }
 }
