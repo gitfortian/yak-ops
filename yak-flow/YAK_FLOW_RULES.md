@@ -158,7 +158,7 @@ Must:
 Execution boundary:
 - Real-database acceptance classes use the `*IT` suffix so default Surefire discovery does not start Docker during ordinary `Backend verify`.
 - `.github/workflows/backend-acceptance.yml` owns real-database acceptance execution.
-- Pull requests and pushes run JDBC / MySQL CDC acceptance only when their dependency paths change.
+- Pull requests and pushes run JDBC / MySQL CDC cross-database acceptance only when their dependency paths change.
 - Manual dispatch and the weekly full sweep run both acceptance suites as a dependency-filter safety net.
 - Local JDBC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-jdbc -am -Dtest=OfflineSyncJdbcAcceptanceIT -Dsurefire.failIfNoSpecifiedTests=false test`.
 - Local MySQL CDC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-cdc-mysql -am -Dtest=MySqlCdcIntegrationIT -Dsurefire.failIfNoSpecifiedTests=false test`.
@@ -169,12 +169,20 @@ The JDBC batch acceptance baseline uses real Testcontainers databases and covers
 - MySQL Source -> Oracle Sink.
 - final YakFlow read/write metrics matching transferred rows.
 
-The MySQL CDC integration baseline covers:
+The MySQL CDC cross-database acceptance baseline runs the same lifecycle against:
+- MySQL Sink.
+- PostgreSQL Sink.
+- Oracle Sink.
+
+Every target path must cover:
 - initial snapshot.
 - binlog INSERT / UPDATE / DELETE.
+- JDBC CHANGELOG application on the real target database.
 - downstream checkpoint completion.
 - persisted offset file creation.
-- stop and restart with the same connector state directory.
+- cancel / stop.
+- restart with the same connector state directory.
+- continuation from the persisted offset without replaying the initial snapshot as a new logical start.
 
 ## JDBC Batch Connector
 

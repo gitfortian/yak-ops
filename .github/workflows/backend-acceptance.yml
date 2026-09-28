@@ -110,11 +110,11 @@ jobs:
           test
 
   mysql-cdc-acceptance:
-    name: MySQL CDC Acceptance
+    name: MySQL CDC Cross-Database Acceptance
     needs: detect-changes
     if: needs.detect-changes.outputs.cdc == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -127,7 +127,7 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Run MySQL CDC acceptance
+      - name: Run MySQL CDC cross-database acceptance
         run: >-
           bash mvnw -q
           -pl yak-flow/yak-flow-connector-cdc-mysql
