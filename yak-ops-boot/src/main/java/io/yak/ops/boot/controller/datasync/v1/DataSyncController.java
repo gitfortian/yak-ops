@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 对外提供离线同步任务定义与字段映射预览 HTTP 接口。
+ * 对外提供数据同步任务定义、实例与字段映射预览 HTTP 接口。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -38,25 +38,25 @@ public class DataSyncController {
     @Resource
     private DataSyncService dataSyncService;
 
-    @Operation(summary = "创建离线同步任务")
+    @Operation(summary = "创建数据同步任务")
     @PostMapping("/tasks")
     public Result<DataSyncTaskVO> createTask(@Valid @RequestBody DataSyncTaskDTO dto) {
         return Result.success(dataSyncService.createTask(dto));
     }
 
-    @Operation(summary = "编辑离线同步任务")
+    @Operation(summary = "编辑数据同步任务")
     @PutMapping("/tasks/{id}")
     public Result<DataSyncTaskVO> updateTask(@PathVariable("id") String id, @Valid @RequestBody DataSyncTaskDTO dto) {
         return Result.success(dataSyncService.updateTask(id, dto));
     }
 
-    @Operation(summary = "查询离线同步任务详情")
+    @Operation(summary = "查询数据同步任务详情")
     @GetMapping("/tasks/{id}")
     public Result<DataSyncTaskVO> taskDetail(@PathVariable("id") String id) {
         return Result.success(dataSyncService.queryTask(id));
     }
 
-    @Operation(summary = "分页查询离线同步任务")
+    @Operation(summary = "分页查询数据同步任务")
     @PostMapping("/tasks/page")
     public Result<PagingData<DataSyncTaskVO>> taskPage(@Valid @RequestBody DataSyncTaskQueryDTO dto) {
         return Result.success(dataSyncService.queryTaskPage(dto));
