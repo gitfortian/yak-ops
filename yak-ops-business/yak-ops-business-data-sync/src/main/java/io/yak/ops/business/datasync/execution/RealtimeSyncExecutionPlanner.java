@@ -40,8 +40,7 @@ public class RealtimeSyncExecutionPlanner {
     @Resource
     private RealtimeSyncStateManager stateManager;
 
-    RealtimeSyncExecutionPlan plan(
-            String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
+    RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
         ObjectUtils.requireNonNull(workspaceId, "workspace id must not be null");
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
         if (!DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
