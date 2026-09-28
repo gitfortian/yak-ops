@@ -1,5 +1,7 @@
 package io.yak.ops.flow.connector.jdbc;
 
+import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
@@ -14,6 +16,7 @@ import java.util.Objects;
  * @param fetchSize JDBC 游标 fetch size
  * @param readBatchSize 每次向 Runtime 输出的最大行数
  * @param timeoutSeconds 连接与查询超时秒数
+ * @param splitConfig 显式数值范围分片配置；为空时整表只生成一个 split
  * @author weifuwan
  * @since 2026-09-27
  */
@@ -23,7 +26,8 @@ public record JdbcSourceConfig(
         YakTableSchema schema,
         int fetchSize,
         int readBatchSize,
-        int timeoutSeconds) {
+        int timeoutSeconds,
+        JdbcNumericSplitConfig splitConfig) {
 
     private static final int DEFAULT_FETCH_SIZE = 500;
     private static final int DEFAULT_READ_BATCH_SIZE = 500;
@@ -36,11 +40,43 @@ public record JdbcSourceConfig(
         if (fetchSize <= 0) throw new IllegalArgumentException("fetchSize must be greater than 0");
         if (readBatchSize <= 0) throw new IllegalArgumentException("readBatchSize must be greater than 0");
         if (timeoutSeconds <= 0) throw new IllegalArgumentException("timeoutSeconds must be greater than 0");
+        validateSplitConfig(schema, splitConfig);
+    }
+
+    public JdbcSourceConfig(
+            DataSourceConnection connection,
+            DataSourceTablePath table,
+            YakTableSchema schema,
+            int fetchSize,
+            int readBatchSize,
+            int timeoutSeconds) {
+        this(connection, table, schema, fetchSize, readBatchSize, timeoutSeconds, null);
     }
 
     public static JdbcSourceConfig defaults(
             DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema) {
         return new JdbcSourceConfig(
-                connection, table, schema, DEFAULT_FETCH_SIZE, DEFAULT_READ_BATCH_SIZE, DEFAULT_TIMEOUT_SECONDS);
+                connection, table, schema, DEFAULT_FETCH_SIZE, DEFAULT_READ_BATCH_SIZE, DEFAULT_TIMEOUT_SECONDS, null);
+    }
+
+    private static void validateSplitConfig(YakTableSchema schema, JdbcNumericSplitConfig splitConfig) {
+        if (splitConfig == null) return;
+        if (schema.primaryKeys().size() != 1 || !schema.primaryKeys().getFirst().equals(splitConfig.column())) {
+            throw new IllegalArgumentException("numeric split column must be the single primary key");
+        }
+        YakColumn column = schema.columns().stream()
+                .filter(value -> value.name().equals(splitConfig.column()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("numeric split column not found in schema"));
+        if (!isIntegerType(column.dataType())) {
+            throw new IllegalArgumentException("numeric split column must use an integer YakDataType");
+        }
+    }
+
+    private static boolean isIntegerType(YakDataType dataType) {
+        return dataType == YakDataType.TINYINT
+                || dataType == YakDataType.SMALLINT
+                || dataType == YakDataType.INTEGER
+                || dataType == YakDataType.BIGINT;
     }
 }

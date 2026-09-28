@@ -42,6 +42,10 @@ final class JdbcSourceReader implements SourceReader<JdbcSourceSplit> {
         if (!config.table().equals(split.table())) {
             throw new IllegalArgumentException("JDBC Source split 与配置表不匹配");
         }
+        if (split.isRangeSplit()
+                && (config.splitConfig() == null || !config.splitConfig().column().equals(split.splitColumn()))) {
+            throw new IllegalArgumentException("JDBC Source split 与分片配置不匹配");
+        }
 
         connection = connectionProvider.open(config.connection(), config.timeoutSeconds());
         connection.setReadOnly(true);
@@ -50,10 +54,14 @@ final class JdbcSourceReader implements SourceReader<JdbcSourceSplit> {
             connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
         }
 
-        statement = connection.prepareStatement(
-                dialect.selectSql(split.table(), config.schema()),
-                ResultSet.TYPE_FORWARD_ONLY,
-                ResultSet.CONCUR_READ_ONLY);
+        String sql = split.isRangeSplit()
+                ? dialect.selectRangeSql(split.table(), config.schema(), split.splitColumn())
+                : dialect.selectSql(split.table(), config.schema());
+        statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        if (split.isRangeSplit()) {
+            statement.setLong(1, split.lowerBoundInclusive());
+            statement.setLong(2, split.upperBoundInclusive());
+        }
         statement.setFetchSize(config.fetchSize());
         statement.setQueryTimeout(config.timeoutSeconds());
         resultSet = statement.executeQuery();

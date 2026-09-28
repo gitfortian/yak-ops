@@ -103,11 +103,28 @@ The connector:
 - reuses Datasource JDBC runtime behavior for Driver loading, MySQL Driver isolation and SSH tunneling.
 - maps Datasource Catalog columns to `YakTableSchema`.
 - reads a table as a bounded Source with forward-only JDBC cursor batches.
+- supports an optional explicit integer single-primary-key range split contract: split key + inclusive lower/upper bounds + requested split count.
 - writes `INSERT` rows with JDBC batch commit.
 - provides MySQL, PostgreSQL and Oracle identifier/table dialects.
 - requires the target table to exist.
 
-The current Local Runtime is still single Source Task / single Sink Task, so the first JDBC Source uses one bounded table split. Parallel table chunking belongs to a later runtime/connector phase where it produces real execution concurrency.
+The current Local Runtime is still single Source Task / single Sink Task. Without split configuration the JDBC Source produces one whole-table split. With explicit numeric range configuration it may produce multiple non-overlapping splits, but the current Source Task consumes them serially; this phase does not claim parallel reads.
+
+Example:
+
+```text
+split key: id
+range:     1 .. 10
+count:     3
+
+Split 0: [1, 4]
+Split 1: [5, 8]
+Split 2: [9, 10]
+```
+
+Each range split opens its own JDBC read transaction. This V1 guarantees non-overlapping range predicates, not one database-consistent snapshot across all splits.
+
+Automatic `MIN/MAX/rowCount` discovery, split-size planning, skew detection and sampling belong to later split-planning phases.
 
 ## Phase 4 — MySQL CDC Connector
 
