@@ -37,6 +37,7 @@ final class MySqlDebeziumEngineConfig {
                 config.connection().password() == null
                         ? ""
                         : config.connection().password());
+        config.connection().properties().forEach((key, value) -> properties.setProperty("driver." + key, value));
         properties.setProperty("database.server.id", String.valueOf(config.serverId()));
         properties.setProperty("topic.prefix", topicPrefix(config.name()));
         properties.setProperty(
