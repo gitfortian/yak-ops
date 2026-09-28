@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.dto.datasync;
 
 import io.yak.ops.common.enums.datasync.DataSyncType;
+import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,10 @@ public class DataSyncTaskDTO {
     /** 同步任务类型，支持 OFFLINE 与 REALTIME。 */
     @NotNull(message = "同步类型不能为空")
     private DataSyncType syncType = DataSyncType.OFFLINE;
+
+    /** 离线同步目标数据写入方式；当前阶段仅开放 APPEND。 */
+    @NotNull(message = "写入方式不能为空")
+    private DataSyncWriteMode writeMode = DataSyncWriteMode.APPEND;
 
     /** 来源数据源 ID。 */
     @NotBlank(message = "来源数据源不能为空")

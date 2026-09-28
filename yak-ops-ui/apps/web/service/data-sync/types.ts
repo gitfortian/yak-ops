@@ -1,3 +1,5 @@
+export type DataSyncWriteMode = "APPEND" | "OVERWRITE" | "UPSERT";
+
 export interface PaginationInfo {
   pageNo: number;
   pageSize: number;
@@ -28,6 +30,7 @@ export interface DataSyncTaskRecord {
   id: string;
   name: string;
   syncType: DataSyncType | string;
+  writeMode: DataSyncWriteMode | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -60,6 +63,7 @@ export interface DataSyncTaskPageResult {
 
 interface DataSyncTaskSaveBase {
   name: string;
+  writeMode?: DataSyncWriteMode;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -133,6 +137,7 @@ export interface DataSyncDefinitionSnapshot {
   taskName: string;
   taskVersion: number;
   syncType?: DataSyncType | string;
+  writeMode?: DataSyncWriteMode | string;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;

@@ -25,6 +25,9 @@ public class DataSyncDefinitionSnapshotVO {
     /** 实例启动时固化的同步类型：OFFLINE 或 REALTIME。 */
     private String syncType;
 
+    /** 实例启动时固化的写入方式；REALTIME 当前固定为 APPEND。 */
+    private String writeMode;
+
     /** 实例启动时固化的来源数据源与表路径，不包含连接凭证。 */
     private DataSyncEndpointSnapshotVO source;
 

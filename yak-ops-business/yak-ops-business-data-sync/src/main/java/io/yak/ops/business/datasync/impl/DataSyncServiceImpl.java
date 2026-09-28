@@ -29,6 +29,7 @@ import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
+import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.CollectionUtils;
@@ -331,12 +332,14 @@ public class DataSyncServiceImpl implements DataSyncService {
         entity.setTargetDatabase(resolvedScope.getTargetDatabase());
         entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(dto.getTargetTable().trim());
+        entity.setWriteMode(requireWriteMode(dto.getWriteMode()));
         entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
         entity.setRemark(StringUtils.trimToNull(dto.getRemark()));
     }
 
     private void validateTaskDefinition(
             DataSyncType syncType, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
+        validateWriteMode(syncType, dto.getWriteMode());
         if (syncType == DataSyncType.OFFLINE) {
             if (dto.getRuntimeConfig() == null) {
                 throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 运行参数不能为空");
@@ -395,6 +398,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         snapshot.setTaskName(task.getName());
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
+        snapshot.setWriteMode(taskWriteMode(task).name());
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
         snapshot.setTarget(endpointSnapshot(
@@ -498,6 +502,26 @@ public class DataSyncServiceImpl implements DataSyncService {
         return syncType;
     }
 
+    private DataSyncWriteMode requireWriteMode(DataSyncWriteMode writeMode) {
+        if (writeMode == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "写入方式不能为空");
+        }
+        return writeMode;
+    }
+
+    private void validateWriteMode(DataSyncType syncType, DataSyncWriteMode writeMode) {
+        DataSyncWriteMode resolved = requireWriteMode(writeMode);
+        if (resolved != DataSyncWriteMode.APPEND) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.INVALID_TASK,
+                    syncType == DataSyncType.REALTIME ? "REALTIME 当前固定使用 APPEND 写入方式" : "OFFLINE 当前阶段仅支持 APPEND 写入方式");
+        }
+    }
+
+    private DataSyncWriteMode taskWriteMode(DataSyncTaskEntity task) {
+        return task.getWriteMode() == null ? DataSyncWriteMode.APPEND : task.getWriteMode();
+    }
+
     private DataSyncTaskEntity requireTask(String workspaceId, String id) {
         if (StringUtils.isBlank(id)) throw new DataSyncException(DataSyncErrorCode.TASK_NOT_FOUND);
         return taskRepository
@@ -519,9 +543,11 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
-        DataSyncTaskVO target = BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "runtimeConfig");
+        DataSyncTaskVO target =
+                BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "writeMode", "runtimeConfig");
         target.setSyncType(
                 source.getSyncType() == null ? null : source.getSyncType().name());
+        target.setWriteMode(taskWriteMode(source).name());
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
         } else {
