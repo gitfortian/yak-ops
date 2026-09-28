@@ -3,6 +3,7 @@ package io.yak.ops.flow.connector.jdbc;
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.api.row.YakTypeKind;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -43,9 +44,10 @@ public record JdbcNumericSplitConfig(String column, long lowerBound, long upperB
     }
 
     private static boolean isIntegerType(YakDataType dataType) {
-        return dataType == YakDataType.TINYINT
-                || dataType == YakDataType.SMALLINT
-                || dataType == YakDataType.INTEGER
-                || dataType == YakDataType.BIGINT;
+        YakTypeKind kind = dataType.kind();
+        return kind == YakTypeKind.TINYINT
+                || kind == YakTypeKind.SMALLINT
+                || kind == YakTypeKind.INTEGER
+                || kind == YakTypeKind.BIGINT;
     }
 }
