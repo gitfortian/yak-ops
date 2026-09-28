@@ -3,6 +3,7 @@ package io.yak.ops.common.bean.dto.datasync;
 import io.yak.ops.common.bean.dto.common.PageQueryDTO;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
+import io.yak.ops.common.enums.datasync.DataSyncType;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import lombok.Data;
@@ -24,6 +25,9 @@ public class DataSyncInstanceQueryDTO extends PageQueryDTO {
     /** 任务名称关键字。 */
     @Size(max = 256, message = "搜索关键词不能超过 256 个字符")
     private String keyword;
+
+    /** 实例同步类型。 */
+    private DataSyncType syncType;
 
     /** 实例状态。 */
     private DataSyncInstanceStatus status;
