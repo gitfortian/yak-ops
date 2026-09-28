@@ -62,7 +62,7 @@ public class DataSyncController {
         return Result.success(dataSyncService.queryTaskPage(dto));
     }
 
-    @Operation(summary = "手动运行离线同步任务")
+    @Operation(summary = "手动运行数据同步任务")
     @PostMapping("/tasks/{id}/run")
     public Result<DataSyncInstanceVO> runTask(@PathVariable("id") String id) {
         return Result.success(dataSyncService.runTask(id));
