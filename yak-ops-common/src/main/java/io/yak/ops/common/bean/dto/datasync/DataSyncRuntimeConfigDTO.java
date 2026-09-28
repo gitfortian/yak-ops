@@ -37,6 +37,12 @@ public class DataSyncRuntimeConfigDTO {
     @Max(value = 10000000, message = "Split Size 不能超过 10000000")
     private Long splitSize;
 
+    /** bounded Source Reader 并行度。 */
+    @NotNull(message = "Source 并行度不能为空")
+    @Min(value = 1, message = "Source 并行度必须大于 0")
+    @Max(value = 16, message = "Source 并行度不能超过 16")
+    private Integer sourceParallelism = 1;
+
     /** JDBC 连接与语句超时秒数。 */
     @NotNull(message = "超时时间不能为空")
     @Min(value = 1, message = "超时时间必须大于 0")
