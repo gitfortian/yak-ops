@@ -347,8 +347,7 @@ public class DataSyncServiceImpl implements DataSyncService {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源数据源仅支持 MYSQL");
         }
         if (!REALTIME_TARGET_TYPES.contains(target.getDbType())) {
-            throw new DataSyncException(
-                    DataSyncErrorCode.INVALID_TASK, "实时同步目标数据源仅支持 MYSQL / POSTGRE_SQL / ORACLE");
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标数据源仅支持 MYSQL / POSTGRE_SQL / ORACLE");
         }
 
         List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
@@ -503,7 +502,8 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
         DataSyncTaskVO target = BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "runtimeConfig");
-        target.setSyncType(source.getSyncType() == null ? null : source.getSyncType().name());
+        target.setSyncType(
+                source.getSyncType() == null ? null : source.getSyncType().name());
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
         } else {
