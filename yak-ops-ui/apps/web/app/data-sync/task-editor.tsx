@@ -327,11 +327,7 @@ interface OfflineRuntimeFieldsProps {
   onSplitSizeChange: (value: string) => void;
 }
 
-function OfflineRuntimeFields({
-  config,
-  onChange,
-  onSplitSizeChange,
-}: OfflineRuntimeFieldsProps) {
+function OfflineRuntimeFields({ config, onChange, onSplitSizeChange }: OfflineRuntimeFieldsProps) {
   return (
     <>
       {(
@@ -343,10 +339,7 @@ function OfflineRuntimeFields({
           ["timeoutSeconds", "超时时间（秒）"],
         ] as const
       ).map(([key, label]) => (
-        <Field
-          key={key}
-          className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
-        >
+        <Field key={key} className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel>{label}</FieldLabel>
           <Input
             type="number"
@@ -393,10 +386,7 @@ function RealtimeRuntimeFields({ config, onChange }: RealtimeRuntimeFieldsProps)
           ["timeoutSeconds", "超时时间（秒）"],
         ] as const
       ).map(([key, label]) => (
-        <Field
-          key={key}
-          className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3"
-        >
+        <Field key={key} className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel>{label}</FieldLabel>
           <Input
             type="number"
@@ -745,7 +735,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         <main className="min-w-0 flex-1 space-y-4">
           {realtime ? (
             <div className="rounded-lg border border-[#b2ccff] bg-[#f5f8ff] px-4 py-3 text-xs leading-5 text-[#344054]">
-              首次启动会先同步来源表当前全量数据，随后持续消费 MySQL Binlog；停止后再次启动同一任务版本会从已保存的 CDC 状态继续。
+              首次启动会先同步来源表当前全量数据，随后持续消费 MySQL
+              Binlog；停止后再次启动同一任务版本会从已保存的 CDC 状态继续。
             </div>
           ) : null}
 
