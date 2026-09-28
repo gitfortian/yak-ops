@@ -308,13 +308,16 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
 interface DataSyncInstanceDetailPageProps {
   syncType: DataSyncType;
   basePath: string;
+  listPath?: string;
 }
 
 export function DataSyncInstanceDetailPage({
   syncType,
   basePath,
+  listPath,
 }: DataSyncInstanceDetailPageProps) {
   const realtime = syncType === "REALTIME";
+  const resolvedListPath = listPath ?? `${basePath}?tab=instances`;
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [record, setRecord] = useState<DataSyncInstanceRecord>();
@@ -326,12 +329,12 @@ export function DataSyncInstanceDetailPage({
     const value = await getDataSyncInstance(id);
     if (value.syncType !== syncType) {
       toast.error("实例类型与当前页面不匹配");
-      navigate(`${basePath}?tab=instances`, { replace: true });
+      navigate(resolvedListPath, { replace: true });
       return;
     }
     setRecord(value);
     setLoading(false);
-  }, [basePath, id, navigate, syncType]);
+  }, [id, navigate, resolvedListPath, syncType]);
 
   useEffect(() => {
     void load();
@@ -383,7 +386,7 @@ export function DataSyncInstanceDetailPage({
                 停止
               </Button>
             ) : null}
-            <Button size="small" onClick={() => navigate(`${basePath}?tab=instances`)}>
+            <Button size="small" onClick={() => navigate(resolvedListPath)}>
               返回实例列表
             </Button>
           </>
