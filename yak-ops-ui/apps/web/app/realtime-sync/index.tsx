@@ -13,12 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
   Table,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { ArrowRight, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import {
@@ -28,7 +32,10 @@ import {
   type DataSyncTaskRecord,
 } from "@/service/data-sync";
 
+import { RealtimeSyncInstances } from "./instances";
+
 export { RealtimeSyncEditorPage } from "./editor";
+export { RealtimeSyncInstanceDetailPage } from "./instance-detail";
 
 const PAGE_SIZE = 20;
 const REALTIME_TARGET_TYPES = new Set(["MYSQL", "POSTGRE_SQL", "ORACLE"]);
@@ -50,6 +57,9 @@ const pathText = (database?: string, schema?: string, table?: string) =>
 
 export function RealtimeSyncPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "instances" ? "instances" : "tasks";
+  const taskInstanceFilter = searchParams.get("taskId") || undefined;
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -116,16 +126,18 @@ export function RealtimeSyncPage() {
   }, [keyword, pageNo]);
 
   useEffect(() => {
+    if (activeTab !== "tasks") return;
     const timer = window.setTimeout(() => void loadTasks(), keyword.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [keyword, loadTasks]);
+  }, [activeTab, keyword, loadTasks]);
 
   const startTask = async (record: DataSyncTaskRecord) => {
     if (runningId) return;
     setRunningId(record.id);
     try {
-      await runDataSyncTask(record.id);
+      const instance = await runDataSyncTask(record.id);
       toast.success("实时同步任务已启动");
+      navigate(`/realtime-sync/instances/${instance.id}`);
     } finally {
       setRunningId(undefined);
     }
@@ -201,7 +213,7 @@ export function RealtimeSyncPage() {
     {
       key: "actions",
       title: "操作",
-      width: 180,
+      width: 220,
       align: "center",
       render: (_value, record) => (
         <div className="flex items-center justify-center gap-1">
@@ -222,6 +234,15 @@ export function RealtimeSyncPage() {
             onClick={() => navigate(`/realtime-sync/${record.id}`)}
           >
             编辑
+          </Button>
+          <span className="h-3 w-px bg-[#e4e7ec]" />
+          <Button
+            variant="ghost"
+            size="small"
+            className="px-1 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
+            onClick={() => setSearchParams({ tab: "instances", taskId: record.id })}
+          >
+            实例
           </Button>
           <span className="h-3 w-px bg-[#e4e7ec]" />
           <Button
@@ -249,56 +270,89 @@ export function RealtimeSyncPage() {
 
         <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
           <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button
-                size="small"
-                variant="primary"
-                onClick={() => {
-                  setDraft(emptyDraft());
-                  setCreateOpen(true);
-                }}
-              >
-                <Plus size={14} />
-                新建实时同步任务
-              </Button>
-              <div className="w-[300px]">
-                <Input
-                  size="small"
-                  variant="outlined"
-                  value={keyword}
-                  placeholder="搜索任务名称或表名"
-                  onChange={(event) => {
-                    setKeyword(event.target.value);
-                    setPageNo(1);
-                  }}
-                />
-              </div>
-            </div>
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => {
+                if (value === "instances") setSearchParams({ tab: "instances" });
+                else setSearchParams({});
+              }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <TabsList>
+                <TabsTab value="tasks">任务定义</TabsTab>
+                <TabsTab value="instances">任务实例</TabsTab>
+              </TabsList>
 
-            <div className="mt-4 min-h-0 flex-1">
-              <Table<DataSyncTaskRecord>
-                className="min-h-full"
-                columns={columns}
-                dataSource={records}
-                rowKey="id"
-                loading={loading}
-                bordered
-                size="medium"
-                scroll={{ x: 1160 }}
-                emptyText="还没有实时同步任务"
-                pagination={
-                  total > 0
-                    ? {
-                        current: pageNo,
-                        pageSize: PAGE_SIZE,
-                        total,
-                        disabled: loading,
-                        onChange: (page) => setPageNo(page),
-                      }
-                    : false
-                }
-              />
-            </div>
+              <TabsPanel value="tasks" className="flex min-h-0 flex-1 flex-col pt-4">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Button
+                    size="small"
+                    variant="primary"
+                    onClick={() => {
+                      setDraft(emptyDraft());
+                      setCreateOpen(true);
+                    }}
+                  >
+                    <Plus size={14} />
+                    新建实时同步任务
+                  </Button>
+                  <div className="w-[300px]">
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      value={keyword}
+                      placeholder="搜索任务名称或表名"
+                      onChange={(event) => {
+                        setKeyword(event.target.value);
+                        setPageNo(1);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 min-h-0 flex-1">
+                  <Table<DataSyncTaskRecord>
+                    className="min-h-full"
+                    columns={columns}
+                    dataSource={records}
+                    rowKey="id"
+                    loading={loading}
+                    bordered
+                    size="medium"
+                    scroll={{ x: 1200 }}
+                    emptyText="还没有实时同步任务"
+                    pagination={
+                      total > 0
+                        ? {
+                            current: pageNo,
+                            pageSize: PAGE_SIZE,
+                            total,
+                            disabled: loading,
+                            onChange: (page) => setPageNo(page),
+                          }
+                        : false
+                    }
+                  />
+                </div>
+              </TabsPanel>
+
+              <TabsPanel value="instances" className="flex min-h-0 flex-1 flex-col pt-4">
+                {taskInstanceFilter ? (
+                  <div className="mb-3 flex items-center gap-2 text-xs text-[#667085]">
+                    <span>已按任务筛选：{taskInstanceFilter}</span>
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                      onClick={() => setSearchParams({ tab: "instances" })}
+                    >
+                      清除
+                    </Button>
+                  </div>
+                ) : null}
+                <RealtimeSyncInstances taskId={taskInstanceFilter} />
+              </TabsPanel>
+            </Tabs>
           </div>
         </div>
       </div>
