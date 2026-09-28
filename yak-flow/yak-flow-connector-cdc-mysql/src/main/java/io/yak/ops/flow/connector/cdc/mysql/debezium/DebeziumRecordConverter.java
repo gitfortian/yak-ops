@@ -88,7 +88,7 @@ final class DebeziumRecordConverter {
             return bytes;
         }
         if (value instanceof Date date) {
-            return switch (dataType) {
+            return switch (dataType.kind()) {
                 case DATE -> LocalDate.ofInstant(date.toInstant(), ZoneOffset.UTC);
                 case TIME -> LocalTime.ofInstant(date.toInstant(), ZoneOffset.UTC);
                 case TIMESTAMP -> LocalDateTime.ofInstant(date.toInstant(), ZoneOffset.UTC);
