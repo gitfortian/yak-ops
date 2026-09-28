@@ -31,9 +31,7 @@ final class PostgreSqlJdbcDialect implements JdbcDialect {
     public String upsertSql(DataSourceTablePath table, YakTableSchema schema) {
         requirePrimaryKey(schema);
         List<String> primaryKeys = schema.primaryKeys();
-        String conflictColumns = primaryKeys.stream()
-                .map(this::quoteIdentifier)
-                .collect(Collectors.joining(", "));
+        String conflictColumns = primaryKeys.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
         List<YakColumn> updateColumns = schema.columns().stream()
                 .filter(column -> !primaryKeys.contains(column.name()))
                 .toList();
@@ -46,11 +44,7 @@ final class PostgreSqlJdbcDialect implements JdbcDialect {
                     return name + " = EXCLUDED." + name;
                 })
                 .collect(Collectors.joining(", "));
-        return insertSql(table, schema)
-                + " ON CONFLICT ("
-                + conflictColumns
-                + ") DO UPDATE SET "
-                + updateClause;
+        return insertSql(table, schema) + " ON CONFLICT (" + conflictColumns + ") DO UPDATE SET " + updateClause;
     }
 
     private void requirePrimaryKey(YakTableSchema schema) {
