@@ -68,7 +68,9 @@ REALTIME Task
    ↓
 MySQL Source table with primary key
    ↓
-same-name compatible field mapping
+case-insensitive same-name field mapping
+   ↓
+Target primary-key set exactly matches Source primary-key set
    ↓
 MySQL / PostgreSQL / Oracle Target
 ```
@@ -80,6 +82,8 @@ Realtime config currently contains:
 - CDC poll batch size.
 - JDBC changelog write batch size.
 - connection / statement timeout.
+
+The REALTIME primary-key contract is strict: Source and Target must expose the same primary-key field set under case-insensitive same-name mapping. PK order may differ; missing, extra or different Target PK fields are rejected before execution.
 
 Execution-only values such as Debezium state directory, offsets, schema history and MySQL replication `serverId` are not Task fields.
 

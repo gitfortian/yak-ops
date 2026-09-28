@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 收口 Data Sync 对 Datasource Catalog 字段的同名索引和 YakFlow 字段投影。
@@ -30,6 +32,15 @@ public final class DataSyncCatalogColumns {
     public static DataSourceCatalogColumnVO findByName(
             Map<String, DataSourceCatalogColumnVO> columnsByName, String name) {
         return name == null ? null : columnsByName.get(name.toLowerCase(Locale.ROOT));
+    }
+
+    public static Set<String> primaryKeyNames(List<DataSourceCatalogColumnVO> columns) {
+        return columns.stream()
+                .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
+                .map(DataSourceCatalogColumnVO::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public static DataSourceColumn toColumn(DataSourceCatalogColumnVO column) {

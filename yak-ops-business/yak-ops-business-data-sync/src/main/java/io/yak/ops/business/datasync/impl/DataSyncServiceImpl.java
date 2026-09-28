@@ -411,8 +411,20 @@ public class DataSyncServiceImpl implements DataSyncService {
                         resolvedScope.getSourceDatabase(),
                         resolvedScope.getSourceSchema(),
                         resolvedScope.getSourceTable()));
-        if (sourceColumns.stream().noneMatch(column -> Boolean.TRUE.equals(column.getPrimaryKey()))) {
+        Set<String> sourcePrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(sourceColumns);
+        if (sourcePrimaryKeys.isEmpty()) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
+                targetDataSourceId,
+                tablePath(
+                        resolvedScope.getTargetDatabase(),
+                        resolvedScope.getTargetSchema(),
+                        resolvedScope.getTargetTable()));
+        Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
+        if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与来源表主键一致");
         }
     }
 

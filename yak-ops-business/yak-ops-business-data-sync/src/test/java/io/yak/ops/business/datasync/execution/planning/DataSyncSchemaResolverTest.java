@@ -2,13 +2,25 @@ package io.yak.ops.business.datasync.execution.planning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import java.sql.Types;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class DataSyncSchemaResolverTest {
+
+    @Test
+    void shouldNormalizeCompositePrimaryKeyNamesCaseInsensitively() {
+        DataSourceCatalogColumnVO tenantId = column("tenant_id", Types.BIGINT, 1);
+        DataSourceCatalogColumnVO id = column("ID", Types.BIGINT, 2);
+        tenantId.setPrimaryKey(true);
+        id.setPrimaryKey(true);
+
+        assertEquals(Set.of("tenant_id", "id"), DataSyncCatalogColumns.primaryKeyNames(List.of(id, tenantId)));
+    }
 
     @Test
     void shouldKeepSourceValueOrderButUseTargetPhysicalColumnNames() {

@@ -144,7 +144,7 @@ Datasource does not own Controller, ControllerAdvice, connection-pool assembly o
 
 Owns Workspace-scoped Data Sync product definitions and execution-instance persistence contracts through the single stable `DataSyncService` boundary.
 
-The current product contract supports both `OFFLINE` and `REALTIME` task definitions. Both reuse the same Workspace-scoped Task persistence and source/target table contract, while `runtime_config` is interpreted by `sync_type`: OFFLINE stores bounded JDBC tuning and REALTIME stores CDC/checkpoint/write tuning. REALTIME currently accepts only MySQL Source and MySQL/PostgreSQL/Oracle Target, and requires a Source primary key.
+The current product contract supports both `OFFLINE` and `REALTIME` task definitions. Both reuse the same Workspace-scoped Task persistence and source/target table contract, while `runtime_config` is interpreted by `sync_type`: OFFLINE stores bounded JDBC tuning and REALTIME stores CDC/checkpoint/write tuning. REALTIME currently accepts only MySQL Source and MySQL/PostgreSQL/Oracle Target, requires a Source primary key, and requires the Target primary-key field set to exactly match the Source primary-key field set under case-insensitive same-name mapping.
 
 Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current executable product path can manually run both OFFLINE and REALTIME tasks through YakFlow Local Execution Engine, persist the shared instance lifecycle and Runtime counters, cancel active local executions and mark stale process-local executions LOST on startup.
 

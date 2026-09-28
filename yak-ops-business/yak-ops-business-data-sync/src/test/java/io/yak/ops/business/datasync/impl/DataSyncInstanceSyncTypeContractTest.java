@@ -2,8 +2,11 @@ package io.yak.ops.business.datasync.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
+import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
@@ -36,7 +39,7 @@ class DataSyncInstanceSyncTypeContractTest {
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(task()));
         inject(service, "instanceRepository", instanceRepository(captured));
-        inject(service, "dataSourceService", dataSourceService());
+        inject(service, "dataSourceService", dataSourceService(List.of(primaryKeyColumn("id")), List.of(primaryKeyColumn("ID"))));
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
 
         WorkspaceContext.bind("workspace-1");
@@ -45,6 +48,26 @@ class DataSyncInstanceSyncTypeContractTest {
         DataSyncInstanceEntity instance = captured.get();
         assertNotNull(instance);
         assertEquals(DataSyncType.REALTIME, instance.getSyncType());
+    }
+
+    @Test
+    void shouldRejectRealtimeRunWhenTargetPrimaryKeyDoesNotMatchSource() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
+        inject(service, "taskRepository", taskRepository(task()));
+        inject(service, "instanceRepository", instanceRepository(captured));
+        inject(
+                service,
+                "dataSourceService",
+                dataSourceService(List.of(primaryKeyColumn("id")), List.of(primaryKeyColumn("name"))));
+        inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncException exception = assertThrows(DataSyncException.class, () -> service.runTask("task-1"));
+
+        assertEquals(DataSyncErrorCode.INVALID_TASK, exception.getErrorCode());
+        assertEquals("同步任务参数不合法：实时同步目标表主键必须与来源表主键一致", exception.getUserMessage());
+        assertEquals(null, captured.get());
     }
 
     private DataSyncTaskRepository taskRepository(DataSyncTaskEntity task) {
@@ -75,10 +98,10 @@ class DataSyncInstanceSyncTypeContractTest {
                 });
     }
 
-    private DataSourceService dataSourceService() {
+    private DataSourceService dataSourceService(
+            List<DataSourceCatalogColumnVO> sourceColumns, List<DataSourceCatalogColumnVO> targetColumns) {
         DataSourceVO source = dataSource("source", "source_db", "MYSQL");
         DataSourceVO target = dataSource("target", "target_db", "MYSQL");
-        List<DataSourceCatalogColumnVO> columns = List.of(primaryKeyColumn());
 
         return (DataSourceService) Proxy.newProxyInstance(
                 DataSourceService.class.getClassLoader(),
@@ -87,7 +110,9 @@ class DataSyncInstanceSyncTypeContractTest {
                     if ("queryDataSource".equals(method.getName())) {
                         return "source".equals(args[0]) ? source : target;
                     }
-                    if ("queryCatalogColumns".equals(method.getName())) return columns;
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceColumns : targetColumns;
+                    }
                     throw new UnsupportedOperationException(method.getName());
                 });
     }
@@ -120,9 +145,9 @@ class DataSyncInstanceSyncTypeContractTest {
         return value;
     }
 
-    private DataSourceCatalogColumnVO primaryKeyColumn() {
+    private DataSourceCatalogColumnVO primaryKeyColumn(String name) {
         DataSourceCatalogColumnVO column = new DataSourceCatalogColumnVO();
-        column.setName("id");
+        column.setName(name);
         column.setTypeName("BIGINT");
         column.setJdbcType(Types.BIGINT);
         column.setSize(19);
