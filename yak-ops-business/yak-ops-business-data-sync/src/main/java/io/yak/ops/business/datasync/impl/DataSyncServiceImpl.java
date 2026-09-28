@@ -38,8 +38,8 @@ import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
-import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import jakarta.annotation.Resource;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -381,15 +381,93 @@ public class DataSyncServiceImpl implements DataSyncService {
         mapping.setSourceType(source.getTypeName());
         mapping.setTargetName(target == null ? null : target.getName());
         mapping.setTargetType(target == null ? null : target.getTypeName());
-        mapping.setCompatible(target != null
-                && JdbcSchemaCompatibility.isCompatible(
-                        DataSyncCatalogColumns.toColumn(source), DataSyncCatalogColumns.toColumn(target)));
+        mapping.setCompatible(target != null && compatibleType(source, target));
         if (target == null) {
             mapping.setMessage("目标表缺少同名字段");
         } else if (!mapping.isCompatible()) {
             mapping.setMessage("字段类型或容量不兼容");
         }
         return mapping;
+    }
+
+    private boolean compatibleType(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
+        if (source.getJdbcType() == null || target.getJdbcType() == null) return false;
+        int sourceType = source.getJdbcType();
+        int targetType = target.getJdbcType();
+
+        boolean familyCompatible = sourceType == targetType
+                || (isBoolean(sourceType) && isBoolean(targetType))
+                || (isInteger(sourceType) && (isInteger(targetType) || isDecimal(targetType)))
+                || (isDecimal(sourceType) && isDecimal(targetType))
+                || (isString(sourceType) && isString(targetType))
+                || (isBinary(sourceType) && isBinary(targetType))
+                || (isDate(sourceType) && isDate(targetType))
+                || (isTime(sourceType) && isTime(targetType))
+                || (isTimestamp(sourceType) && isTimestamp(targetType));
+        if (!familyCompatible) return false;
+
+        if ((isString(sourceType) || isBinary(sourceType))
+                && positive(source.getSize())
+                && positive(target.getSize())
+                && source.getSize() > target.getSize()) {
+            return false;
+        }
+        if (isDecimal(sourceType) && isDecimal(targetType)) {
+            if (positive(source.getSize()) && positive(target.getSize()) && source.getSize() > target.getSize()) {
+                return false;
+            }
+            if (source.getScale() != null && target.getScale() != null && source.getScale() > target.getScale()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isBoolean(int type) {
+        return type == Types.BOOLEAN || type == Types.BIT;
+    }
+
+    private boolean isInteger(int type) {
+        return type == Types.TINYINT || type == Types.SMALLINT || type == Types.INTEGER || type == Types.BIGINT;
+    }
+
+    private boolean isDecimal(int type) {
+        return type == Types.REAL
+                || type == Types.FLOAT
+                || type == Types.DOUBLE
+                || type == Types.NUMERIC
+                || type == Types.DECIMAL;
+    }
+
+    private boolean isString(int type) {
+        return type == Types.CHAR
+                || type == Types.VARCHAR
+                || type == Types.LONGVARCHAR
+                || type == Types.NCHAR
+                || type == Types.NVARCHAR
+                || type == Types.LONGNVARCHAR
+                || type == Types.CLOB
+                || type == Types.NCLOB;
+    }
+
+    private boolean isBinary(int type) {
+        return type == Types.BINARY || type == Types.VARBINARY || type == Types.LONGVARBINARY || type == Types.BLOB;
+    }
+
+    private boolean isDate(int type) {
+        return type == Types.DATE;
+    }
+
+    private boolean isTime(int type) {
+        return type == Types.TIME || type == Types.TIME_WITH_TIMEZONE;
+    }
+
+    private boolean isTimestamp(int type) {
+        return type == Types.TIMESTAMP || type == Types.TIMESTAMP_WITH_TIMEZONE;
+    }
+
+    private boolean positive(Integer value) {
+        return value != null && value > 0;
     }
 
     private DataSyncMappingPreviewDTO resolveMappingScope(DataSyncMappingPreviewDTO dto) {

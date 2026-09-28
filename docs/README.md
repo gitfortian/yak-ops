@@ -13,7 +13,10 @@ YakFlow（执行能力，分阶段建设中）
 Supporting platform capability:
 
 ```text
-User / Login / Security
+Platform
+├── Security / User
+├── Workspace
+└── User Preference
 ```
 
 ## Engineering Context Model
@@ -32,9 +35,12 @@ How to prove        → Explicit Verification
 - [Datasource](./capabilities/datasource/README.md)
 - [Data Sync](./capabilities/data-sync/README.md)
 - [YakFlow](./capabilities/yak-flow/README.md)
-- Security rules: [yak-ops-security/SECURITY_RULES.md](../yak-ops-security/SECURITY_RULES.md)
+- [Workspace](./capabilities/workspace/README.md)
+- [User Preference](./capabilities/user-preference/README.md)
+- Platform rules: [yak-ops-platform/PLATFORM_RULES.md](../yak-ops-platform/PLATFORM_RULES.md)
+- Security rules: [yak-ops-platform/SECURITY_RULES.md](../yak-ops-platform/SECURITY_RULES.md)
 
-Security is a supporting platform capability, not a second product domain.
+Platform is a supporting capability, not a second product domain. Security, Workspace and User Preference remain separate capability boundaries inside one physical Maven module.
 
 ## Context Loading
 
@@ -52,7 +58,7 @@ Task
 - [Architecture](../ARCHITECTURE.md)
 - [Java Rules](../JAVA_RULES.md)
 - [Controller Rules](../CONTROLLER_RULES.md)
-- [Security Rules](../yak-ops-security/SECURITY_RULES.md)
+- [Security Rules](../yak-ops-platform/SECURITY_RULES.md)
 - [Datasource Rules](../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md)
 - [Data Sync Rules](../yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md)
 - [Common Rules](../yak-ops-common/COMMON_RULES.md)

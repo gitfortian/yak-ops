@@ -22,12 +22,12 @@ Resource
 
 User answers "who am I". Workspace answers "where am I working". Resource answers "what exists in this workspace".
 
-Security authentication and Workspace ownership are separate concerns. `yak_security_user.app_name` remains the Security application-isolation key and must not be reused as a Workspace ID.
+Security authentication and Workspace ownership remain separate capability concerns inside Platform. `yak_security_user.app_name` remains the Security application-isolation key and must not be reused as a Workspace ID.
 
 ## Current Owners
 
 Backend:
-- `yak-ops-business/yak-ops-business-workspace`
+- `yak-ops-platform/src/main/java/io/yak/ops/workspace`
 
 Persistence:
 - `yak-ops-dao/src/main/java/io/yak/ops/dao/**/workspace`
