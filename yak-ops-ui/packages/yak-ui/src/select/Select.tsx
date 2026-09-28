@@ -227,7 +227,7 @@ export function SelectSearch({
 
 export type SelectFooterProps = HTMLAttributes<HTMLDivElement>;
 
-export function SelectFooter({ className, ...props }: SelectFooterProps) {
+export function SelectFooter({ className, onKeyDown, ...props }: SelectFooterProps) {
   return (
     <div
       {...props}
@@ -235,6 +235,12 @@ export function SelectFooter({ className, ...props }: SelectFooterProps) {
         "flex min-h-10 items-center gap-2 border-t border-[var(--yak-components-select-border)] px-3 py-2",
         className,
       )}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (!event.defaultPrevented && event.key !== "Escape" && event.key !== "Tab") {
+          event.stopPropagation();
+        }
+      }}
     />
   );
 }
