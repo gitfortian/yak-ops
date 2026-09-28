@@ -14,4 +14,5 @@ import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
  * @author weifuwan
  * @since 2026-09-28
  */
-public record OfflineSyncExecutionPlan(JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema, int sourceParallelism) {}
+public record OfflineSyncExecutionPlan(
+        JdbcSource source, JdbcSink sink, YakTableSchema sourceSchema, int sourceParallelism) {}
