@@ -1,6 +1,6 @@
 # Data Sync Task Publication Lifecycle
 
-Status: Backend active — PR2 implements persistence, lifecycle commands and version enforcement. Frontend adoption remains PR3.
+Status: Active — PR2 implements persistence and backend lifecycle enforcement; PR3 implements OFFLINE / REALTIME frontend lifecycle adoption.
 
 ## Goal
 
@@ -333,9 +333,9 @@ After migration:
 - newly created Tasks explicitly start as `UNPUBLISHED`.
 - existing Tasks may be intentionally unpublished by the user after active Instances are stopped.
 
-## Frontend Target Contract
+## Frontend Contract
 
-PR3 will adopt these product rules:
+PR3 adopts these product rules:
 
 ```text
 UNPUBLISHED
@@ -354,11 +354,22 @@ PUBLISHED + active REALTIME
   → Unpublish unavailable until active execution ends
 ```
 
-The existing “Save & Run / Save & Start” flow must not bypass publication rules.
+The editor uses two explicit save paths:
 
-Create/update APIs never auto-publish, and run never auto-publishes.
+```text
+Save
+  → create/update UNPUBLISHED Task
+  → remain in editor
 
-Any future convenience action such as “Save and Publish” must explicitly compose the normal commands instead of creating a hidden lifecycle path.
+Save & Publish
+  → create/update UNPUBLISHED Task
+  → call publish command
+  → return to Task list
+```
+
+Run / Start stays a separate PUBLISHED Task action. The old “Save & Run / Save & Start” shortcut is removed so publication and execution remain visible product states.
+
+Create/update APIs never auto-publish, and run never auto-publishes. Save & Publish explicitly composes the normal save and publish commands rather than creating a hidden lifecycle path.
 
 ## Persistence
 
@@ -400,5 +411,5 @@ PR2 — Data Sync Task Lifecycle Backend
   → implemented: persistence + status enum + validation + publish/unpublish commands + version semantics
 
 PR3 — Offline / Realtime Task Lifecycle UI
-  → status presentation + action matrix + editor flow
+  → implemented: status presentation + filtering + active-instance action matrix + editor flow
 ```

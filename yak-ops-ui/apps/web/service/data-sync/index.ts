@@ -45,6 +45,12 @@ export const previewDataSyncMapping = (
     payload,
   );
 
+export const publishDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
+  HttpUtils.postData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/publish`);
+
+export const unpublishDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
+  HttpUtils.postData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/unpublish`);
+
 export const runDataSyncTask = (id: string): Promise<DataSyncInstanceRecord> =>
   HttpUtils.postData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/run`);
 

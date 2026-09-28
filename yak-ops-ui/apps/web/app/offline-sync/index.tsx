@@ -5,6 +5,13 @@ import {
   Input,
   Modal,
   PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
   Table,
   Tabs,
   TabsList,
@@ -19,13 +26,23 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import {
+  cancelDataSyncInstance,
   deleteDataSyncTask,
   listDataSyncTasks,
+  publishDataSyncTask,
   runDataSyncTask,
+  unpublishDataSyncTask,
   type DataSyncTaskRecord,
+  type DataSyncTaskStatus,
 } from "@/service/data-sync";
 
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
+import {
+  DATA_SYNC_TASK_STATUS_ITEMS,
+  DataSyncTaskLifecycleActions,
+  DataSyncTaskStatusBadge,
+  useActiveTaskInstances,
+} from "@/app/data-sync/task-lifecycle";
 import { OfflineSyncInstances } from "./instances";
 
 const PAGE_SIZE = 20;
@@ -58,11 +75,17 @@ export function OfflineSyncPage() {
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [runningId, setRunningId] = useState<string>();
+  const [taskStatus, setTaskStatus] = useState<DataSyncTaskStatus | "ALL">("ALL");
+  const [actionKey, setActionKey] = useState<string>();
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState<CreateDraft>(emptyDraft());
   const [pendingDelete, setPendingDelete] = useState<DataSyncTaskRecord>();
   const [deleting, setDeleting] = useState(false);
+
+  const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances(
+    "OFFLINE",
+    activeTab === "tasks",
+  );
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
@@ -106,13 +129,14 @@ export function OfflineSyncPage() {
         pageSize: PAGE_SIZE,
         keyword: keyword.trim() || undefined,
         syncType: "OFFLINE",
+        status: taskStatus === "ALL" ? undefined : taskStatus,
       });
       setRecords(result?.bizData || []);
       setTotal(result?.pagination?.total || 0);
     } finally {
       setLoading(false);
     }
-  }, [keyword, pageNo]);
+  }, [keyword, pageNo, taskStatus]);
 
   useEffect(() => {
     if (activeTab !== "tasks") return;
@@ -120,15 +144,52 @@ export function OfflineSyncPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, keyword, loadTasks]);
 
+  const publishTask = async (record: DataSyncTaskRecord) => {
+    if (actionKey) return;
+    setActionKey(`${record.id}:publish`);
+    try {
+      await publishDataSyncTask(record.id);
+      toast.success("同步任务已上线");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
+    }
+  };
+
+  const unpublishTask = async (record: DataSyncTaskRecord) => {
+    if (actionKey) return;
+    setActionKey(`${record.id}:unpublish`);
+    try {
+      await unpublishDataSyncTask(record.id);
+      toast.success("同步任务已下线");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
+    }
+  };
+
   const runTask = async (record: DataSyncTaskRecord) => {
-    if (runningId) return;
-    setRunningId(record.id);
+    if (actionKey) return;
+    setActionKey(`${record.id}:run`);
     try {
       const instance = await runDataSyncTask(record.id);
       toast.success("同步任务已启动");
       navigate(`/offline-sync/instances/${instance.id}`);
     } finally {
-      setRunningId(undefined);
+      setActionKey(undefined);
+    }
+  };
+
+  const stopTask = async (record: DataSyncTaskRecord) => {
+    const activeInstance = activeByTask.get(record.id);
+    if (!activeInstance || actionKey) return;
+    setActionKey(`${record.id}:stop`);
+    try {
+      await cancelDataSyncInstance(activeInstance.id);
+      toast.success("同步实例已停止");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
     }
   };
 
@@ -175,6 +236,12 @@ export function OfflineSyncPage() {
       },
     },
     {
+      key: "status",
+      title: "状态",
+      width: 100,
+      render: (_value, record) => <DataSyncTaskStatusBadge status={record.status} />,
+    },
+    {
       key: "updated",
       title: "更新时间",
       width: 170,
@@ -183,47 +250,22 @@ export function OfflineSyncPage() {
     {
       key: "actions",
       title: "操作",
-      width: 210,
+      width: 260,
       align: "center",
       render: (_value, record) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button
-            variant="ghost"
-            size="small"
-            loading={runningId === record.id}
-            className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
-            onClick={() => void runTask(record)}
-          >
-            运行
-          </Button>
-          <span className="h-3 w-px bg-[#e4e7ec]" />
-          <Button
-            variant="ghost"
-            size="small"
-            className="px-1 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
-            onClick={() => navigate(`/offline-sync/${record.id}`)}
-          >
-            编辑
-          </Button>
-          <span className="h-3 w-px bg-[#e4e7ec]" />
-          <Button
-            variant="ghost"
-            size="small"
-            className="px-1 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
-            onClick={() => setSearchParams({ tab: "instances", taskId: record.id })}
-          >
-            实例
-          </Button>
-          <span className="h-3 w-px bg-[#e4e7ec]" />
-          <Button
-            variant="ghost"
-            size="small"
-            className="px-1 text-xs font-normal text-[#667085] hover:text-[#d92d20]"
-            onClick={() => setPendingDelete(record)}
-          >
-            删除
-          </Button>
-        </div>
+        <DataSyncTaskLifecycleActions
+          record={record}
+          activeInstance={activeByTask.get(record.id)}
+          runLabel="运行"
+          actionKey={actionKey}
+          onPublish={(value) => void publishTask(value)}
+          onUnpublish={(value) => void unpublishTask(value)}
+          onRun={(value) => void runTask(value)}
+          onStop={() => void stopTask(record)}
+          onEdit={(value) => navigate(`/offline-sync/${value.id}`)}
+          onInstances={(value) => setSearchParams({ tab: "instances", taskId: value.id })}
+          onDelete={setPendingDelete}
+        />
       ),
     },
   ];
@@ -286,6 +328,35 @@ export function OfflineSyncPage() {
                       }}
                     />
                   </div>
+                  <div className="w-[150px]">
+                    <Select
+                      size="small"
+                      items={DATA_SYNC_TASK_STATUS_ITEMS}
+                      value={taskStatus}
+                      onValueChange={(value) => {
+                        setTaskStatus(String(value || "ALL") as DataSyncTaskStatus | "ALL");
+                        setPageNo(1);
+                      }}
+                    >
+                      <SelectTrigger variant="outlined">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">
+                          <SelectItemText>全部状态</SelectItemText>
+                          <SelectItemIndicator />
+                        </SelectItem>
+                        <SelectItem value="PUBLISHED">
+                          <SelectItemText>已上线</SelectItemText>
+                          <SelectItemIndicator />
+                        </SelectItem>
+                        <SelectItem value="UNPUBLISHED">
+                          <SelectItemText>已下线</SelectItemText>
+                          <SelectItemIndicator />
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="mt-4 min-h-0 flex-1">
@@ -297,7 +368,7 @@ export function OfflineSyncPage() {
                     loading={loading}
                     bordered
                     size="medium"
-                    scroll={{ x: 1120 }}
+                    scroll={{ x: 1220 }}
                     emptyText="还没有离线同步任务"
                     pagination={
                       total > 0

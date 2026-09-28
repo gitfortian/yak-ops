@@ -34,13 +34,14 @@ import {
   createDataSyncTask,
   getDataSyncTask,
   previewDataSyncMapping,
-  runDataSyncTask,
+  publishDataSyncTask,
   updateDataSyncTask,
   type DataSyncFieldMapping,
   type DataSyncMappingPreview,
   type DataSyncRealtimeConfig,
   type DataSyncRuntimeConfig,
   type DataSyncTaskSavePayload,
+  type DataSyncTaskStatus,
   type DataSyncType,
   type DataSyncWriteMode,
 } from "@/service/data-sync";
@@ -469,6 +470,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   }));
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
+  const [taskStatus, setTaskStatus] = useState<DataSyncTaskStatus>("UNPUBLISHED");
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [mappingLoading, setMappingLoading] = useState(false);
@@ -540,6 +542,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           navigate(basePath, { replace: true });
           return;
         }
+        setTaskStatus(task.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED");
         setForm({
           name: task.name,
           remark: task.remark || "",
@@ -716,14 +719,16 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     };
   };
 
+  const published = editing && taskStatus === "PUBLISHED";
   const canSave =
+    !published &&
     form.name.trim() &&
     mapping?.compatible &&
     !mappingLoading &&
     !sourceCatalog.loading &&
     !targetCatalog.loading;
 
-  const save = async (runAfterSave = false) => {
+  const save = async (publishAfterSave = false) => {
     if (!canSave || saving) return;
     setSaving(true);
     try {
@@ -731,13 +736,19 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         editing && id
           ? await updateDataSyncTask(id, payload())
           : await createDataSyncTask(payload());
-      if (runAfterSave) {
-        const instance = await runDataSyncTask(saved.id);
-        toast.success(realtime ? "实时同步任务已保存并启动" : "同步任务已保存并启动");
-        navigate(`${basePath}/instances/${instance.id}`, { replace: true });
+      if (publishAfterSave) {
+        try {
+          await publishDataSyncTask(saved.id);
+        } catch {
+          toast.warning("任务已保存，但上线失败，当前保持已下线");
+          navigate(`${basePath}/${saved.id}`, { replace: true });
+          return;
+        }
+        toast.success(realtime ? "实时同步任务已保存并上线" : "同步任务已保存并上线");
+        navigate(basePath, { replace: true });
         return;
       }
-      toast.success(editing ? "同步任务已保存" : "同步任务已创建");
+      toast.success(editing ? "同步任务已保存，当前仍为已下线" : "同步任务已创建，当前为已下线");
       navigate(`${basePath}/${saved.id}`, { replace: true });
     } finally {
       setSaving(false);
@@ -755,6 +766,27 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
   if (loading) {
     return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
+  }
+
+  if (published) {
+    return (
+      <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
+        <PageHeader
+          title={pageTitle}
+          description={pageDescription}
+          bordered
+          className="bg-white px-6 max-md:px-4"
+          extra={
+            <Button size="small" onClick={() => navigate(basePath)}>
+              返回任务列表
+            </Button>
+          }
+        />
+        <div className="px-6 pt-5 max-md:px-4">
+          <Alert>任务已上线，当前不可编辑。请先在任务列表下线，再修改任务定义。</Alert>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -779,7 +811,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               disabled={!canSave}
               onClick={() => void save(true)}
             >
-              {realtime ? "保存并启动" : "保存并运行"}
+              保存并上线
             </Button>
           </>
         }
@@ -787,9 +819,15 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
       <div className="flex gap-5 px-6 pb-8 pt-5 max-md:px-4">
         <main className="min-w-0 flex-1 space-y-4">
-          {realtime && editing ? (
-            <Alert>保存修改会生成新版本；新版本首次启动会重新全量同步。</Alert>
-          ) : null}
+          {editing ? (
+            <Alert>
+              {realtime
+                ? "当前任务已下线，可修改任务定义。执行配置变化会生成新版本，新版本上线后首次启动会重新全量同步；仅修改名称或备注不会增加版本。"
+                : "当前任务已下线，可修改任务定义。保存后仍需上线，任务才可以运行。"}
+            </Alert>
+          ) : (
+            <Alert>新建任务保存后默认处于已下线状态，需要上线后才可以运行或启动。</Alert>
+          )}
 
           {realtime ? (
             <div className="rounded-lg border border-[#b2ccff] bg-[#f5f8ff] px-4 py-3 text-xs leading-5 text-[#344054]">

@@ -32,13 +32,18 @@ Must:
 - PENDING / RUNNING instances expose Stop; terminal instances expose Detail.
 - Poll only while visible instance data contains PENDING / RUNNING records.
 - Display readRows / writeRows from the persisted Instance; frontend must not estimate progress.
-- The editor may offer Save and Save & Run. Save & Run must persist the Task first, then call the normal manual run API and navigate to the created Instance.
+- The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run remains a separate PUBLISHED Task action.
 - Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
 - Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`.
 - Schema Select may omit `items` when the domain value is intentionally identical to the visible label. Database is not editable in Offline Sync when Datasource already binds it.
 - Datasource / Schema / Table are dynamic resource Selects: their popup uses Yak UI Select Search composition with local keyword filtering and an explicit refresh action.
 - Datasource Select footer exposes “新增数据源” as a product-owned action and routes to Datasource create; Schema / Table do not invent create actions.
 - Static enum Selects such as OFFLINE write mode stay simple and do not add search / refresh / footer without a real option-volume need.
+- Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
+- UNPUBLISHED Task actions are 上线 / 编辑 / 实例 / 删除.
+- PUBLISHED idle Task actions are 运行 / 下线 / 实例.
+- PUBLISHED Task with a PENDING / RUNNING Instance exposes 停止 / 实例; 下线 is unavailable until the active Instance ends.
+- Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 
 Must Not:
 

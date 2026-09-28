@@ -9,6 +9,8 @@ export interface PaginationInfo {
 
 export type DataSyncType = "OFFLINE" | "REALTIME";
 
+export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
+
 export interface DataSyncRuntimeConfig {
   fetchSize: number;
   readBatchSize: number;
@@ -30,6 +32,7 @@ export interface DataSyncTaskRecord {
   id: string;
   name: string;
   syncType: DataSyncType | string;
+  status: DataSyncTaskStatus | string;
   writeMode: DataSyncWriteMode | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
@@ -52,6 +55,7 @@ export interface DataSyncTaskPageParams {
   pageSize: number;
   keyword?: string;
   syncType?: DataSyncType;
+  status?: DataSyncTaskStatus;
   sourceDataSourceId?: string;
   targetDataSourceId?: string;
 }
