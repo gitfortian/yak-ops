@@ -2,6 +2,7 @@ package io.yak.ops.flow.connector.jdbc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;
@@ -35,6 +36,22 @@ class JdbcChangelogSinkTest {
         }
         return DriverManager.getConnection(connection.jdbcUrl(), properties);
     };
+
+    @Test
+    void shouldRejectOverwriteWithChangelog() {
+        TestDataSourceConnection connection = new TestDataSourceConnection(
+                "MYSQL", "jdbc:h2:mem:cdc_invalid;MODE=MySQL;DB_CLOSE_DELAY=-1", DRIVER, "sa", "");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new JdbcSinkConfig(
+                        connection,
+                        new DataSourceTablePath(null, null, "target_table"),
+                        10,
+                        5,
+                        JdbcSaveMode.OVERWRITE,
+                        JdbcWriteMode.CHANGELOG));
+    }
 
     @Test
     void shouldApplyChangelogToMysql() throws Exception {
