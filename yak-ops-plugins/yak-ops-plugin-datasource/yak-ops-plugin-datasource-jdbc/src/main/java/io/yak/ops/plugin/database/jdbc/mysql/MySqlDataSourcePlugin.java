@@ -6,6 +6,7 @@ import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.mysql.enums.MySqlDriverId;
 import io.yak.ops.plugin.database.jdbc.runtime.IsolatedJdbcDriverRuntime;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.sql.Connection;
 import java.sql.DriverPropertyInfo;
 import java.util.Map;
@@ -42,6 +43,11 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     @Override
     public String type() {
         return "MYSQL";
+    }
+
+    @Override
+    public String displayJdbcUrl(DataSourceConnection connection) {
+        return displayJdbcUrlWithQueryProperties(connection);
     }
 
     @Override

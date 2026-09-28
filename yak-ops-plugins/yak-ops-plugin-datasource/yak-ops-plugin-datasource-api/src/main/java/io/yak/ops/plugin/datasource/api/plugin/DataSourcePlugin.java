@@ -53,6 +53,18 @@ public interface DataSourcePlugin {
         return List.of();
     }
 
+    /**
+     * 返回产品界面展示使用的 JDBC 地址。
+     *
+     * <p>默认保持规范化 JDBC URL 不变；Provider 可以把独立连接属性投影到展示地址，但不得因此改变运行时连接对象。
+     *
+     * @param connection 已解析的连接参数
+     * @return 产品界面展示使用的 JDBC 地址
+     */
+    default String displayJdbcUrl(DataSourceConnection connection) {
+        return connection.jdbcUrl();
+    }
+
     /** 判断 Provider 是否显式声明指定能力。 */
     default boolean supports(DataSourceCapability capability) {
         DataSourcePluginDescriptor value = descriptor();

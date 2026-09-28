@@ -94,6 +94,13 @@ public class DataSourcePluginRegistry {
         }
     }
 
+    public String displayJdbcUrl(String pluginType, String connectionJson) {
+        DataSourcePlugin plugin = get(pluginType);
+        String maskedConnectionJson = secretCodec.maskConnectionJson(plugin.descriptor(), connectionJson);
+        DataSourceConnection connection = parseConnection(plugin.descriptor().type(), maskedConnectionJson);
+        return secretCodec.maskSensitiveText(plugin.displayJdbcUrl(connection));
+    }
+
     public DataSourceConnection mergeStoredSecrets(String pluginType, String submittedJson, String storedJson) {
         DataSourcePlugin plugin = get(pluginType);
         String merged = secretCodec.mergeStoredSecrets(plugin.descriptor(), submittedJson, storedJson);

@@ -463,13 +463,15 @@ public class DataSourceServiceImpl implements DataSourceService {
         DataSourceVO target =
                 BeanCopyUtils.copy(source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
         if (target == null) return null;
+        target.setJdbcUrl(pluginRegistry.maskSensitiveText(source.getJdbcUrl()));
+        target.setDisplayJdbcUrl(target.getJdbcUrl());
         if (source.getDbType() != null && StringUtils.hasText(source.getConnectionParams())) {
             DataSourceConnection connection =
                     pluginRegistry.parseConnection(source.getDbType(), source.getConnectionParams());
             target.setDatabase(connection.database());
             target.setSchema(connection.schema());
+            target.setDisplayJdbcUrl(pluginRegistry.displayJdbcUrl(source.getDbType(), source.getConnectionParams()));
         }
-        target.setJdbcUrl(pluginRegistry.maskSensitiveText(source.getJdbcUrl()));
         target.setEnvironment(
                 source.getEnvironment() == null ? null : source.getEnvironment().name());
         target.setEnvironmentName(

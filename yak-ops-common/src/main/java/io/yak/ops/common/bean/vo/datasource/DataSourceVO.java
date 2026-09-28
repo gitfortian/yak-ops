@@ -27,8 +27,11 @@ public class DataSourceVO {
     /** 数据源连接已绑定的默认 Schema；未绑定时为空。 */
     private String schema;
 
-    /** 已遮罩敏感信息的连接地址。 */
+    /** 已遮罩敏感信息的基础连接地址。 */
     private String jdbcUrl;
+
+    /** 已遮罩敏感信息并包含可展示高级参数的连接地址，仅用于产品 UI。 */
+    private String displayJdbcUrl;
 
     /** 运行环境编码。 */
     private String environment;

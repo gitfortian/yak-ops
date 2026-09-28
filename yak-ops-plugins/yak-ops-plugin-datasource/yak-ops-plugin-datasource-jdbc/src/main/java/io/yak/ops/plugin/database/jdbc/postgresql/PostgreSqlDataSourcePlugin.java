@@ -3,6 +3,7 @@ package io.yak.ops.plugin.database.jdbc.postgresql;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,6 +30,11 @@ public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlug
     @Override
     public String type() {
         return "POSTGRE_SQL";
+    }
+
+    @Override
+    public String displayJdbcUrl(DataSourceConnection connection) {
+        return displayJdbcUrlWithQueryProperties(connection);
     }
 
     @Override
