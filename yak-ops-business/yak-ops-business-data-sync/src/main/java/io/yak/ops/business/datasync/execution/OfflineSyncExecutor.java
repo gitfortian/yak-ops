@@ -41,7 +41,7 @@ public class OfflineSyncExecutor {
     private OfflineSyncExecutionRegistry executionRegistry;
 
     /**
-     * 单机 Local Execution Engine 无法跨进程恢复；应用启动时把上一进程遗留的活动实例统一标记为 LOST。
+     * 单机 Local Execution Engine 无法跨进程恢复；应用启动时把上一进程遗留的离线/实时活动实例统一标记为 LOST。
      */
     @PostConstruct
     public void recoverLostExecutions() {
@@ -50,7 +50,7 @@ public class OfflineSyncExecutor {
                 DataSyncErrorCode.EXECUTION_LOST.getCode(),
                 DataSyncErrorCode.EXECUTION_LOST.getMessage());
         if (affected > 0) {
-            LOG.warn("应用启动发现遗留离线同步实例，已标记为 LOST，count={}", affected);
+            LOG.warn("应用启动发现遗留数据同步实例，已标记为 LOST，count={}", affected);
         }
     }
 
