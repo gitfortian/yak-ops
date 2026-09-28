@@ -11,7 +11,6 @@ import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalExecutionEngine;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
@@ -39,20 +38,6 @@ public class OfflineSyncExecutor {
 
     @Resource
     private OfflineSyncExecutionRegistry executionRegistry;
-
-    /**
-     * 单机 Local Execution Engine 无法跨进程恢复；应用启动时把上一进程遗留的离线/实时活动实例统一标记为 LOST。
-     */
-    @PostConstruct
-    public void recoverLostExecutions() {
-        int affected = instanceRepository.markActiveAsLost(
-                DateUtils.now(),
-                DataSyncErrorCode.EXECUTION_LOST.getCode(),
-                DataSyncErrorCode.EXECUTION_LOST.getMessage());
-        if (affected > 0) {
-            LOG.warn("应用启动发现遗留数据同步实例，已标记为 LOST，count={}", affected);
-        }
-    }
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
