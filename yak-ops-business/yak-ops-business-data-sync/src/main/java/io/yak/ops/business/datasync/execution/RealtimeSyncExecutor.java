@@ -37,7 +37,13 @@ public class RealtimeSyncExecutor {
     private RealtimeSyncExecutionPlanner executionPlanner;
 
     @Resource
-    private OfflineSyncExecutionRegistry executionRegistry;
+    private RealtimeSyncStateManager stateManager;
+
+    @Resource
+    private MySqlCdcServerIdAllocator serverIdAllocator;
+
+    @Resource
+    private DataSyncExecutionRegistry executionRegistry;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
@@ -47,9 +53,13 @@ public class RealtimeSyncExecutor {
 
     private void execute(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         LocalExecution<?> execution = null;
+        String stateKey = null;
+        Long serverId = null;
         WorkspaceContext.bind(workspaceId);
         try {
-            RealtimeSyncExecutionPlan plan = executionPlanner.plan(instanceId, snapshot);
+            stateKey = stateManager.stateKey(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion());
+            serverId = serverIdAllocator.allocate(stateKey);
+            RealtimeSyncExecutionPlan plan = executionPlanner.plan(workspaceId, snapshot, serverId);
             execution = new LocalExecutionEngine(plan.checkpointInterval())
                     .start(plan.source(), plan.sink(), plan.sourceSchema());
             executionRegistry.register(instanceId, execution);
@@ -125,6 +135,7 @@ public class RealtimeSyncExecutor {
             failPendingOrRunning(workspaceId, instanceId, exception);
         } finally {
             if (execution != null) executionRegistry.remove(instanceId, execution);
+            if (stateKey != null && serverId != null) serverIdAllocator.release(stateKey, serverId);
             WorkspaceContext.clear();
         }
     }

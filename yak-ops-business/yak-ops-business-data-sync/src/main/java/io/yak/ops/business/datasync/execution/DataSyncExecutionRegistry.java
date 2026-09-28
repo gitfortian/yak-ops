@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * @since 2026-09-27
  */
 @Component
-public class OfflineSyncExecutionRegistry {
+public class DataSyncExecutionRegistry {
 
     private final ConcurrentMap<String, LocalExecution<?>> executions = new ConcurrentHashMap<>();
 

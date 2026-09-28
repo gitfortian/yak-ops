@@ -148,9 +148,13 @@ The current product contract supports both `OFFLINE` and `REALTIME` task definit
 
 Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current executable product path can manually run both OFFLINE and REALTIME tasks through YakFlow Local Execution Engine, persist the shared instance lifecycle and Runtime counters, cancel active local executions and mark stale process-local executions LOST on startup.
 
-REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGELOG. `RealtimeSyncExecutionPlanner` resolves current Catalog schema and runtime connections after the Instance exists, while `RealtimeSyncExecutor` owns the process-local RUNNING/FAILED/CANCELED loop. The PR2 execution bootstrap uses an instance-scoped directory under `java.io.tmpdir` plus an instance-derived MySQL replication `serverId`; these are explicitly temporary mechanics, not durable checkpoint ownership or restart recovery. Scheduling and distributed execution remain out of scope.
+REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGELOG. `RealtimeSyncExecutionPlanner` resolves current Catalog schema and runtime connections after the Instance exists, while `RealtimeSyncExecutor` owns the process-local RUNNING/FAILED/CANCELED loop.
 
-The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
+Realtime CDC state is product-owned under `${yak.ops.home}/data/data-sync/realtime/{workspaceId}/{taskId}/v{definitionVersion}`. Debezium engine identity uses the same stable Workspace/Task/version scope, so a later Instance for the same definition reuses persisted offsets and schema history. A new definitionVersion gets a new state domain and therefore starts a fresh snapshot. MySQL replication `serverId` is allocated per active state domain by a single-node allocator and released when execution ends.
+
+LocalExecution itself is still process-local: after an application restart, old active Instances become LOST rather than being resurrected. A later manual run creates a new Instance and reuses the existing REALTIME state domain. Scheduling, distributed recovery and exactly-once coordination remain out of scope.
+
+The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only at execution time. Realtime state paths and MySQL serverId leases are runtime-owned and are not persisted inside the definition snapshot.
 
 ### `yak-ops-plugins/yak-ops-plugin-datasource`
 

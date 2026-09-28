@@ -5,7 +5,7 @@ import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
-import io.yak.ops.business.datasync.execution.OfflineSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.DataSyncExecutionRegistry;
 import io.yak.ops.business.datasync.execution.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
@@ -81,7 +81,7 @@ public class DataSyncServiceImpl implements DataSyncService {
     private RealtimeSyncExecutor realtimeSyncExecutor;
 
     @Resource
-    private OfflineSyncExecutionRegistry executionRegistry;
+    private DataSyncExecutionRegistry executionRegistry;
 
     @Override
     @Transactional(rollbackFor = Exception.class)

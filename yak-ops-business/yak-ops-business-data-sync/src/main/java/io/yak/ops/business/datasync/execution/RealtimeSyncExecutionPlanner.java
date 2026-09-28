@@ -18,18 +18,15 @@ import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.zip.CRC32;
 import org.springframework.stereotype.Component;
 
 /**
  * 将 REALTIME 实例定义快照解析为 MySQL CDC Source + JDBC Changelog Sink 执行计划。
  *
- * <p>当前阶段仅提供进程级执行引导：CDC state 目录位于系统临时目录，serverId 由 instanceId 临时派生。
- * 持久化 state ownership、稳定 serverId 分配与重启恢复由后续生命周期阶段收口。</p>
+ * <p>CDC state 目录与 Debezium engine identity 由 RealtimeSyncStateManager 按 Workspace / Task / definitionVersion
+ * 稳定分配；MySQL replication serverId 由执行生命周期显式传入。</p>
  *
  * @author weifuwan
  * @since 2026-09-28
@@ -40,8 +37,11 @@ public class RealtimeSyncExecutionPlanner {
     @Resource
     private DataSourceService dataSourceService;
 
-    RealtimeSyncExecutionPlan plan(String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
-        ObjectUtils.requireNonNull(instanceId, "instance id must not be null");
+    @Resource
+    private RealtimeSyncStateManager stateManager;
+
+    RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
+        ObjectUtils.requireNonNull(workspaceId, "workspace id must not be null");
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
         if (!DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
             throw new IllegalArgumentException("realtime planner requires REALTIME snapshot");
@@ -70,9 +70,9 @@ public class RealtimeSyncExecutionPlanner {
                 sourceConnection,
                 tablePathValue(sourceEndpoint),
                 sourceSchema,
-                temporaryStateDirectory(instanceId),
-                "yak-realtime-" + instanceId,
-                temporaryServerId(instanceId),
+                stateManager.stateDirectory(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
+                stateManager.engineName(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
+                serverId,
                 realtimeConfig.getQueueCapacity(),
                 realtimeConfig.getPollBatchSize(),
                 realtimeConfig.getTimeoutSeconds()));
@@ -94,17 +94,6 @@ public class RealtimeSyncExecutionPlanner {
             throw new IllegalArgumentException("realtime sync source runtime connection must be MYSQL JDBC");
         }
         return jdbcConnection;
-    }
-
-    private Path temporaryStateDirectory(String instanceId) {
-        return Path.of(System.getProperty("java.io.tmpdir", "."), "yak-ops", "realtime-sync", instanceId);
-    }
-
-    private long temporaryServerId(String instanceId) {
-        CRC32 checksum = new CRC32();
-        checksum.update(instanceId.getBytes(StandardCharsets.UTF_8));
-        long value = checksum.getValue();
-        return value == 0 ? 1 : value;
     }
 
     private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {

@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Offline Phase 4 + Realtime Phase 2 Execution
+Status: Offline Phase 4 + Realtime Phase 3 State Ownership
 
 ## Goal
 
@@ -103,11 +103,57 @@ The planner re-reads Source/Target Catalog metadata and runtime connections, bui
 
 The executor uses the same process-local Instance registry and cancel API as offline sync. Runtime `readRows/writeRows` are persisted while the job is RUNNING; for REALTIME these counters represent YakFlow change events rather than source-table business row cardinality.
 
-PR2 intentionally does not define durable realtime state ownership. The current bootstrap uses:
-- `java.io.tmpdir/yak-ops/realtime-sync/{instanceId}` for Debezium state.
-- an Instance-ID-derived temporary MySQL replication `serverId`.
+## Realtime Phase 3 — Lifecycle + Checkpoint State Ownership
 
-Those choices are execution scaffolding only. A process restart still marks active Instances LOST and no REALTIME restore is attempted.
+Realtime state is owned outside the Instance record:
+
+```text
+${yak.ops.home}/data/data-sync/realtime/
+  {workspaceId}/
+    {taskId}/
+      v{definitionVersion}/
+        offsets.dat
+        schema-history.dat
+```
+
+The identity rule is deliberate:
+
+```text
+same task + same definitionVersion
+        ↓
+same Debezium engine name
+same state directory
+        ↓
+new Instance continues from completed offset
+
+definitionVersion changes
+        ↓
+new state directory
+        ↓
+fresh initial snapshot
+```
+
+The state files remain connector-private. Data Sync owns only their directory lifecycle and stable identity; Task/Instance JSON never stores Debezium offset structures.
+
+MySQL replication `serverId` is now managed by a process-local allocator. It derives a preferred value from the stable realtime state key, probes on collision, and releases the lease after the execution ends.
+
+Application restart still does not resurrect the previous LocalExecution:
+
+```text
+old RUNNING/PENDING Instance
+        ↓ application restart
+       LOST
+
+same Task/version run again
+        ↓
+new Instance
+        ↓
+reuse existing CDC state
+        ↓
+continue from persisted offset
+```
+
+This is restart continuation through a new Instance, not automatic recovery of the old Instance and not an exactly-once claim.
 
 ## Task Instance
 
@@ -250,13 +296,13 @@ Phase 1 provides:
 
 Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
 
-Realtime Phase 2 now provides the reusable Task contract, save/run validation, MySQL CDC execution planner, JDBC CHANGELOG sink wiring, process-local runtime lifecycle and cancel/metrics integration.
+Realtime Phase 3 now provides the reusable Task contract, save/run validation, MySQL CDC execution planner, JDBC CHANGELOG sink wiring, process-local runtime lifecycle, cancel/metrics integration, task/version-scoped durable CDC state and controlled serverId leases.
 
 It still does not provide:
 
-- durable realtime checkpoint/state-directory product ownership.
-- stable MySQL replication serverId allocation.
-- realtime process restart recovery.
+- automatic restart of LOST Instances.
+- distributed state ownership / fencing.
+- exactly-once transaction coordination.
 - realtime frontend.
 - scheduler.
 - retry policy.
