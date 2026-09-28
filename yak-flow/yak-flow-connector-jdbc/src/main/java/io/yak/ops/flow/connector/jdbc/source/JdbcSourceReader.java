@@ -3,6 +3,7 @@ package io.yak.ops.flow.connector.jdbc.source;
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.source.SourceReader;
+import io.yak.ops.flow.connector.jdbc.JdbcNumericSplitConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
@@ -42,8 +43,7 @@ final class JdbcSourceReader implements SourceReader<JdbcSourceSplit> {
         if (!config.table().equals(split.table())) {
             throw new IllegalArgumentException("JDBC Source split 与配置表不匹配");
         }
-        if (split.isRangeSplit()
-                && (config.splitConfig() == null || !config.splitConfig().column().equals(split.splitColumn()))) {
+        if (split.isRangeSplit() && !matchesRangeSplit(split)) {
             throw new IllegalArgumentException("JDBC Source split 与分片配置不匹配");
         }
 
@@ -128,6 +128,16 @@ final class JdbcSourceReader implements SourceReader<JdbcSourceSplit> {
             if (failure == null) failure = exception;
         }
         if (failure != null) throw failure;
+    }
+
+    private boolean matchesRangeSplit(JdbcSourceSplit split) {
+        if (config.splitConfig() != null) {
+            return config.splitConfig().column().equals(split.splitColumn());
+        }
+        if (config.splitSize() == null) return false;
+        return JdbcNumericSplitConfig.eligibleColumn(config.schema())
+                .filter(split.splitColumn()::equals)
+                .isPresent();
     }
 
     private Object normalizeValue(Object value) {

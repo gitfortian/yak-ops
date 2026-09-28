@@ -59,7 +59,8 @@ public class OfflineSyncExecutionPlanner {
                 sourceSchema,
                 runtimeConfig.getFetchSize(),
                 runtimeConfig.getReadBatchSize(),
-                runtimeConfig.getTimeoutSeconds()));
+                runtimeConfig.getTimeoutSeconds(),
+                runtimeConfig.getSplitSize()));
         JdbcSink sink = new JdbcSink(
                 new JdbcSinkConfig(
                         targetConnection,

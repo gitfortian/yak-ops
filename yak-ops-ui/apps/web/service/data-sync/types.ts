@@ -9,6 +9,7 @@ export interface DataSyncRuntimeConfig {
   fetchSize: number;
   readBatchSize: number;
   writeBatchSize: number;
+  splitSize?: number;
   timeoutSeconds: number;
 }
 

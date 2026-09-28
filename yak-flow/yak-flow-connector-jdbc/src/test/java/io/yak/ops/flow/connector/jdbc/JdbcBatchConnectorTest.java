@@ -65,6 +65,67 @@ class JdbcBatchConnectorTest {
     }
 
     @Test
+    void shouldPlanDynamicNumericSplitsFromTableStatistics() throws Exception {
+        TestDataSourceConnection sourceConnection =
+                connection("MYSQL", "jdbc:h2:mem:dynamic_split;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        createRangeSource(sourceConnection);
+
+        JdbcSource source = new JdbcSource(
+                new JdbcSourceConfig(
+                        sourceConnection,
+                        new DataSourceTablePath(null, null, "source_table"),
+                        sourceSchema(),
+                        2,
+                        2,
+                        5,
+                        4L),
+                DIRECT_CONNECTION);
+
+        try (var enumerator = source.createEnumerator()) {
+            enumerator.start();
+            JdbcSourceSplit first = enumerator.nextSplit().orElseThrow();
+            JdbcSourceSplit second = enumerator.nextSplit().orElseThrow();
+            JdbcSourceSplit third = enumerator.nextSplit().orElseThrow();
+
+            assertRange(first, 1, 4);
+            assertRange(second, 5, 8);
+            assertRange(third, 9, 10);
+            assertFalse(enumerator.nextSplit().isPresent());
+        }
+    }
+
+    @Test
+    void shouldFallbackToWholeTableWhenDynamicSplitKeyIsUnavailable() throws Exception {
+        TestDataSourceConnection sourceConnection = connection(
+                "MYSQL", "jdbc:h2:mem:dynamic_fallback;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        try (var connection = DIRECT_CONNECTION.open(sourceConnection, 5);
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE source_table (code VARCHAR(32) PRIMARY KEY, name VARCHAR(100))");
+            statement.execute("INSERT INTO source_table VALUES ('a', 'yak')");
+        }
+        YakTableSchema schema = JdbcSchemaMapper.fromColumns(List.of(
+                new DataSourceColumn("code", "VARCHAR", Types.VARCHAR, 32, null, false, 1, true, null),
+                new DataSourceColumn("name", "VARCHAR", Types.VARCHAR, 100, null, true, 2, false, null)));
+        JdbcSource source = new JdbcSource(
+                new JdbcSourceConfig(
+                        sourceConnection,
+                        new DataSourceTablePath(null, null, "source_table"),
+                        schema,
+                        2,
+                        2,
+                        5,
+                        100L),
+                DIRECT_CONNECTION);
+
+        try (var enumerator = source.createEnumerator()) {
+            enumerator.start();
+            JdbcSourceSplit split = enumerator.nextSplit().orElseThrow();
+            assertFalse(split.isRangeSplit());
+            assertFalse(enumerator.nextSplit().isPresent());
+        }
+    }
+
+    @Test
     void shouldSyncAllRowsAcrossNumericRangeSplits() throws Exception {
         TestDataSourceConnection sourceConnection =
                 connection("MYSQL", "jdbc:h2:mem:range_source;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");

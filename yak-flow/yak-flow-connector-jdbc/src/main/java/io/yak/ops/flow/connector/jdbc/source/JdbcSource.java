@@ -12,7 +12,7 @@ import io.yak.ops.plugin.database.jdbc.JdbcConnectionRuntime;
 import java.util.Objects;
 
 /**
- * YakFlow bounded JDBC 表 Source；当前 Local Runtime 下一个表对应一个确定性 split。
+ * YakFlow bounded JDBC 表 Source；支持整表、显式数值范围和动态数值范围分片。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -40,7 +40,7 @@ public final class JdbcSource implements Source<JdbcSourceSplit> {
 
     @Override
     public SourceSplitEnumerator<JdbcSourceSplit> createEnumerator() {
-        return new JdbcSourceSplitEnumerator(config);
+        return new JdbcSourceSplitEnumerator(config, connectionProvider, dialect);
     }
 
     @Override

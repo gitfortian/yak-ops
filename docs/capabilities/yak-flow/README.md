@@ -124,7 +124,11 @@ Split 2: [9, 10]
 
 Each range split opens its own JDBC read transaction. This V1 guarantees non-overlapping range predicates, not one database-consistent snapshot across all splits.
 
-Automatic `MIN/MAX/rowCount` discovery, split-size planning, skew detection and sampling belong to later split-planning phases.
+When `splitSize` is configured, the Enumerator detects an eligible single integer primary key and queries `MIN / MAX / COUNT(*)`. It uses `ceil(rowCount / splitSize)` as the requested split count, then reuses the same non-overlapping range planner. `splitSize` is a target row count only: actual rows per split depend on key distribution.
+
+Tables without an eligible single integer primary key, or tables whose row count does not exceed `splitSize`, stay as one whole-table split. Dynamic planning refuses more than 10,000 splits and asks the caller to increase `splitSize`.
+
+Skew detection, distribution-factor analysis and sampling remain later phases.
 
 ## Phase 4 — MySQL CDC Connector
 

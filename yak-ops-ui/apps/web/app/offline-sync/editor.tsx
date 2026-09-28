@@ -499,6 +499,17 @@ export function OfflineSyncEditorPage() {
     }));
   };
 
+  const patchOptionalSplitSize = (value: string) => {
+    const parsed = Number(value);
+    setForm((current) => ({
+      ...current,
+      runtimeConfig: {
+        ...current.runtimeConfig,
+        splitSize: value.trim() && Number.isFinite(parsed) ? parsed : undefined,
+      },
+    }));
+  };
+
   const payload = (): DataSyncTaskSavePayload => ({
     name: form.name.trim(),
     syncType: "OFFLINE",
@@ -758,6 +769,19 @@ export function OfflineSyncEditorPage() {
                     />
                   </Field>
                 ))}
+                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
+                  <FieldLabel>Split Size</FieldLabel>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10000000}
+                    size="small"
+                    variant="outlined"
+                    value={form.runtimeConfig.splitSize ? String(form.runtimeConfig.splitSize) : ""}
+                    placeholder="留空则整表读取"
+                    onChange={(event) => patchOptionalSplitSize(event.target.value)}
+                  />
+                </Field>
               </div>
             ) : null}
           </section>

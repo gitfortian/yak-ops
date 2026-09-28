@@ -22,10 +22,14 @@ public interface JdbcDialect {
     }
 
     default String selectRangeSql(DataSourceTablePath table, YakTableSchema schema, String splitColumn) {
-        if (splitColumn == null || splitColumn.isBlank()) {
-            throw new IllegalArgumentException("splitColumn must not be blank");
-        }
+        requireSplitColumn(splitColumn);
         return selectSql(table, schema, splitColumn);
+    }
+
+    default String splitStatisticsSql(DataSourceTablePath table, String splitColumn) {
+        requireSplitColumn(splitColumn);
+        String column = quoteIdentifier(splitColumn);
+        return "SELECT MIN(" + column + "), MAX(" + column + "), COUNT(*) FROM " + qualifiedTable(table);
     }
 
     default String insertSql(DataSourceTablePath table, YakTableSchema schema) {
@@ -45,6 +49,12 @@ public interface JdbcDialect {
                 .map(primaryKey -> quoteIdentifier(primaryKey) + " = ?")
                 .collect(Collectors.joining(" AND "));
         return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate;
+    }
+
+    private void requireSplitColumn(String splitColumn) {
+        if (splitColumn == null || splitColumn.isBlank()) {
+            throw new IllegalArgumentException("splitColumn must not be blank");
+        }
     }
 
     private String selectSql(DataSourceTablePath table, YakTableSchema schema, String splitColumn) {

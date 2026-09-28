@@ -32,6 +32,11 @@ public class DataSyncRuntimeConfigDTO {
     @Max(value = 100000, message = "写入批次大小不能超过 100000")
     private Integer writeBatchSize = 500;
 
+    /** 动态分片目标行数；为空时不启用自动范围分片。 */
+    @Min(value = 1, message = "Split Size 必须大于 0")
+    @Max(value = 10000000, message = "Split Size 不能超过 10000000")
+    private Long splitSize;
+
     /** JDBC 连接与语句超时秒数。 */
     @NotNull(message = "超时时间不能为空")
     @Min(value = 1, message = "超时时间必须大于 0")
