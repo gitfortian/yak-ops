@@ -50,7 +50,7 @@ A task persists:
 - source / target database, schema and table locations.
 - first-class `writeMode`: APPEND / OVERWRITE / UPSERT; this is task semantics, not runtime tuning.
 - YakFlow runtime tuning JSON, including optional JDBC dynamic `splitSize` and bounded Source `sourceParallelism`.
-- monotonically increasing definition version.
+- definition version for executable Task semantics. The staged publication contract keeps metadata-only changes on the same version and increments only when executable definition changes.
 - user-facing name and remark.
 
 Datasource credentials never belong to the task table.
@@ -64,6 +64,42 @@ UPSERT      executable; updates/inserts by target primary key using native JDBC 
 ```
 
 REALTIME tasks currently persist APPEND for the shared Task contract while runtime writes continue through `JdbcWriteMode.CHANGELOG`.
+
+## Task Publication Lifecycle — Staged
+
+The next Task lifecycle milestone introduces an explicit publication gate shared by OFFLINE and REALTIME.
+
+Full contract: [Task Publication Lifecycle](./task-lifecycle.md).
+
+Product actions are “上线 / 下线”. Persisted status values are intentionally named `PUBLISHED / UNPUBLISHED` rather than `ONLINE / OFFLINE` so they do not collide semantically with `DataSyncType.OFFLINE`.
+
+Target lifecycle:
+
+```text
+Create
+  ↓
+UNPUBLISHED v1
+  ├── Edit executable definition → v2
+  └── Publish
+         ↓
+     PUBLISHED vN
+         ├── Run / Start → Instance(taskVersion = N)
+         └── Unpublish → UNPUBLISHED vN
+```
+
+Core rules:
+
+- create produces `UNPUBLISHED v1`.
+- executable definition is editable only while unpublished.
+- publish/unpublish do not create a new definition version.
+- only published Tasks may create new Instances.
+- unpublish never means Stop; active Instances must end or be canceled first.
+- terminal Instance status never changes Task publication status.
+- metadata-only changes such as name/remark do not create a new definition version.
+- V1 keeps one current Task version; no separate draft/published versions or version-history table are introduced.
+- existing rows will be migrated as `PUBLISHED` to preserve current executability; new rows start `UNPUBLISHED`.
+
+This section is a staged contract only. The current implementation continues to use the pre-publication CRUD/run behavior until the backend and frontend lifecycle PRs land.
 
 ## MySQL CDC Source Requirements
 
@@ -351,6 +387,7 @@ Each acceptance path verifies target rows and final YakFlow metrics.
 The current product surface includes:
 
 - Workspace-scoped OFFLINE / REALTIME Task CRUD.
+- The Task publication lifecycle is documented as the next staged contract but is not yet part of the current executable product surface.
 - persisted Task Instance history with `syncType`, lifecycle status and sanitized definition snapshot.
 - shared Catalog-driven mapping validation.
 - OFFLINE manual execution, metrics, APPEND / OVERWRITE / UPSERT behavior and real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance.
