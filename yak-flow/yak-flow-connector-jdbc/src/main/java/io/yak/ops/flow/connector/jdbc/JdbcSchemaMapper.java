@@ -45,7 +45,7 @@ public final class JdbcSchemaMapper {
         return new YakTableSchema(columns, primaryKeys);
     }
 
-    private static YakDataType toYakType(DataSourceColumn column) {
+    static YakDataType toYakType(DataSourceColumn column) {
         return switch (column.jdbcType()) {
             case Types.BOOLEAN, Types.BIT -> YakDataType.BOOLEAN;
             case Types.TINYINT -> YakDataType.TINYINT;

@@ -2,6 +2,7 @@ package io.yak.ops.business.datasync.execution;
 
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import java.util.ArrayList;
@@ -44,7 +45,13 @@ final class OfflineSyncSchemaResolver {
             if (target == null) {
                 throw new IllegalArgumentException("target column not found: " + source.getName());
             }
-            mapped.add(toColumn(target, index + 1));
+
+            DataSourceColumn sourceColumn = toColumn(source, index + 1);
+            DataSourceColumn targetColumn = toColumn(target, index + 1);
+            if (!JdbcSchemaCompatibility.isCompatible(sourceColumn, targetColumn)) {
+                throw new IllegalArgumentException("source and target columns are incompatible: " + source.getName());
+            }
+            mapped.add(targetColumn);
         }
         return JdbcSchemaMapper.fromColumns(mapped);
     }

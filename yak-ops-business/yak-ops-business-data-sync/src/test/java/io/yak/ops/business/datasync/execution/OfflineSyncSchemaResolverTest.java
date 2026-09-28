@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasync.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.flow.api.row.YakTableSchema;
@@ -24,6 +25,16 @@ class OfflineSyncSchemaResolverTest {
 
         assertEquals(List.of("id", "name"), sourceSchema.columns().stream().map(value -> value.name()).toList());
         assertEquals(List.of("ID", "NAME"), targetSchema.columns().stream().map(value -> value.name()).toList());
+    }
+
+    @Test
+    void shouldRejectSchemaThatConnectorCannotWriteSafely() {
+        DataSourceCatalogColumnVO source = column("id", Types.BIGINT, 1);
+        DataSourceCatalogColumnVO target = column("ID", Types.SMALLINT, 1);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> OfflineSyncSchemaResolver.targetWriteSchema(List.of(source), List.of(target)));
     }
 
     private DataSourceCatalogColumnVO column(String name, int jdbcType, int ordinal) {

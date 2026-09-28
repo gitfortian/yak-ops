@@ -110,11 +110,9 @@ Field mapping rules:
 - The editor is read-only for mappings; no rename, expression or Transform exists.
 - Backend mapping preview is the source of truth.
 - Backend must canonicalize database / Schema scope from the referenced Datasource before Catalog lookup and before task persistence; frontend values are hints only for unbound scope levels.
-- Task create/update must repeat the same backend compatibility validation; frontend state cannot bypass it.
-- String / binary target capacity must not be smaller when both sides expose size metadata.
-- DECIMAL target precision / scale must not be smaller when metadata is available.
-- Numeric widening is limited to integer → integer/decimal and decimal → decimal.
-- String ↔ numeric and other implicit Transform are rejected.
+- Task create/update/run must repeat the same backend compatibility validation; frontend state cannot bypass it.
+- JDBC type and capacity compatibility is owned by YakFlow JDBC Connector and must use the same rule for preview and execution.
+- Data Sync must not maintain a second `java.sql.Types` type-family table or database-specific conversion policy.
 
 ## Offline Execution Lifecycle
 
