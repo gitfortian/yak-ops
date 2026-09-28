@@ -2,6 +2,8 @@
 
 `Alert` 是 Yak UI 的页面内常驻警告提示条，用于前置条件、风险说明和容易踩坑的操作提示。
 
+业务文案由产品层提供，例如：`【提示】任务启动前，请先完成发布。`
+
 Source location:
 
 ```text
@@ -15,9 +17,7 @@ yak-ops-ui/packages/yak-ui/src/alert/
 ```tsx
 import { Alert } from "@yak-ops/yak-ui";
 
-<Alert>
-  【提示】任务交互升级，增加了“发布”动作，在“启动”任务前，需要先保证已经进行了“发布”。
-</Alert>;
+const warning = <Alert>{warningCopy}</Alert>;
 ```
 
 ## Contract
