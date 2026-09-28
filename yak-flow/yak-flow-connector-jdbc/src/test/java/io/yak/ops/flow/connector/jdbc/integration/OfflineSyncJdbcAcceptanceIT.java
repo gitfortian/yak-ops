@@ -2,12 +2,15 @@ package io.yak.ops.flow.connector.jdbc.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.yak.ops.flow.api.row.RowKind;
 import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
+import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
@@ -134,6 +137,13 @@ class OfflineSyncJdbcAcceptanceIT {
 
         runSync(target, targetTable, JdbcSaveMode.OVERWRITE);
         assertTargetRows(target, query);
+
+        try (var connection = DIRECT_CONNECTION.open(target, 10);
+                var statement = connection.createStatement()) {
+            statement.execute(staleInsertSql);
+        }
+        runUpsert(target, targetTable);
+        assertUpsertRows(target, query);
     }
 
     private void runSync(DataSourceConnection target, DataSourceTablePath targetTable, JdbcSaveMode saveMode)
@@ -154,6 +164,38 @@ class OfflineSyncJdbcAcceptanceIT {
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(30)));
         assertEquals(new ExecutionMetrics(3, 3), execution.metrics());
+    }
+
+    private void runUpsert(DataSourceConnection target, DataSourceTablePath targetTable) throws Exception {
+        JdbcSink sink = new JdbcSink(
+                new JdbcSinkConfig(
+                        target,
+                        targetTable,
+                        2,
+                        10,
+                        JdbcSaveMode.APPEND,
+                        JdbcWriteMode.UPSERT),
+                DIRECT_CONNECTION);
+        try (var writer = sink.createWriter(SCHEMA)) {
+            writer.open();
+            writer.write(List.of(
+                    new YakRow(RowKind.INSERT, List.of(1L, "upserted", new BigDecimal("11.11"))),
+                    new YakRow(RowKind.INSERT, List.of(4L, "new-row", new BigDecimal("40.00")))));
+            writer.flush();
+        }
+    }
+
+    private void assertUpsertRows(DataSourceConnection target, String query) throws Exception {
+        try (var connection = DIRECT_CONNECTION.open(target, 10);
+                var statement = connection.createStatement();
+                var resultSet = statement.executeQuery(query)) {
+            assertRow(resultSet, 1L, "upserted", new BigDecimal("11.11"));
+            assertRow(resultSet, 2L, "flow", new BigDecimal("20.50"));
+            assertRow(resultSet, 3L, "acceptance", new BigDecimal("30.75"));
+            assertRow(resultSet, 4L, "new-row", new BigDecimal("40.00"));
+            assertRow(resultSet, 999L, "stale", new BigDecimal("999.99"));
+            assertEquals(false, resultSet.next());
+        }
     }
 
     private void assertTargetRows(DataSourceConnection target, String query) throws Exception {
