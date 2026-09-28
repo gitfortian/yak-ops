@@ -180,8 +180,8 @@ class JdbcBatchConnectorTest {
 
     private void assertRange(JdbcSourceSplit split, long lowerBound, long upperBound) {
         assertEquals("id", split.splitColumn());
-        assertEquals(lowerBound, split.lowerBoundInclusive());
-        assertEquals(upperBound, split.upperBoundInclusive());
+        assertEquals(lowerBound, split.lowerBoundInclusive().longValue());
+        assertEquals(upperBound, split.upperBoundInclusive().longValue());
     }
 
     private TestDataSourceConnection connection(String type, String jdbcUrl) {
@@ -198,7 +198,6 @@ class JdbcBatchConnectorTest {
             statement.execute("INSERT INTO source_table VALUES (3, 'batch', 30.75)");
         }
     }
-
 
     private void createRangeSource(TestDataSourceConnection connection) throws Exception {
         try (var opened = DIRECT_CONNECTION.open(connection, 5);
