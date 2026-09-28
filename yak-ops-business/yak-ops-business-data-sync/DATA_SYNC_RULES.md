@@ -113,6 +113,7 @@ Field mapping rules:
 - Mapping is automatic by case-insensitive same-name field matching.
 - The editor is read-only for mappings; no rename, expression or Transform exists.
 - Backend mapping preview is the source of truth.
+- Mapping preview and run-time validation must reuse JDBC logical compatibility after Catalog fields are projected to `YakColumn`; Data Sync must not maintain its own `java.sql.Types` family rules.
 - Backend must canonicalize database / Schema scope from the referenced Datasource before Catalog lookup and before task persistence; frontend values are hints only for unbound scope levels.
 - Task create/update must repeat the same backend compatibility validation; frontend state cannot bypass it.
 - String / binary target capacity must not be smaller when both sides expose size metadata.
