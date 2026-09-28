@@ -20,6 +20,9 @@ public class DataSyncRuntimeConfigVO {
     /** Sink 写入批次大小。 */
     private Integer writeBatchSize;
 
+    /** 动态分片目标行数；为空时不启用自动范围分片。 */
+    private Long splitSize;
+
     /** 连接与语句超时秒数。 */
     private Integer timeoutSeconds;
 }
