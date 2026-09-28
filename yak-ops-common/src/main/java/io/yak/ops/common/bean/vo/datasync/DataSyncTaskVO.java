@@ -21,6 +21,9 @@ public class DataSyncTaskVO {
     /** 数据同步类型：OFFLINE 或 REALTIME。 */
     private String syncType;
 
+    /** 离线同步写入方式：APPEND / OVERWRITE / UPSERT；REALTIME 当前固定为 APPEND。 */
+    private String writeMode;
+
     /** 来源数据源 ID。 */
     private String sourceDataSourceId;
 
