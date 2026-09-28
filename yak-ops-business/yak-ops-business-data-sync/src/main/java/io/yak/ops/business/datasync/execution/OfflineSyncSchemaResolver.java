@@ -60,7 +60,8 @@ final class OfflineSyncSchemaResolver {
         List<DataSourceColumn> result = new ArrayList<>(ordered.size());
         for (int index = 0; index < ordered.size(); index++) {
             DataSourceCatalogColumnVO column = ordered.get(index);
-            DataSourceColumn mapped = DataSyncCatalogColumns.toColumn(column, rewriteOrdinal ? index + 1 : ordinal(column));
+            DataSourceColumn mapped =
+                    DataSyncCatalogColumns.toColumn(column, rewriteOrdinal ? index + 1 : ordinal(column));
             if (mapped == null) throw new IllegalArgumentException("catalog column metadata is incomplete");
             result.add(mapped);
         }
