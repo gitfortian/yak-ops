@@ -17,6 +17,7 @@ import {
 } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   batchDeleteDataSources,
@@ -36,6 +37,7 @@ const MAX_BATCH_SELECTION = 100;
 
 const DataSourcePage = () => {
   const intl = useIntl();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dbTypeItems = [
     {
       label: intl.formatMessage({ id: "pages.datasource.toolbar.allTypes" }),
@@ -61,6 +63,12 @@ const DataSourcePage = () => {
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchTesting, setBatchTesting] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    setEditingRecord(undefined);
+    setFormOpen(true);
+  }, [searchParams]);
 
   const hasActiveFilters = Boolean(keyword.trim() || dbType);
 
@@ -129,6 +137,14 @@ const DataSourcePage = () => {
   const handleCreate = () => {
     setEditingRecord(undefined);
     setFormOpen(true);
+  };
+
+  const handleFormOpenChange = (open: boolean) => {
+    setFormOpen(open);
+    if (open || searchParams.get("create") !== "1") return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("create");
+    setSearchParams(nextSearchParams, { replace: true });
   };
 
   const handleEdit = async (record: DataSourceRecord) => {
@@ -291,7 +307,7 @@ const DataSourcePage = () => {
       <DataSourceForm
         open={formOpen}
         record={editingRecord}
-        onOpenChange={setFormOpen}
+        onOpenChange={handleFormOpenChange}
         onSaved={refresh}
       />
 
