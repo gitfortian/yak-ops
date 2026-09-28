@@ -37,7 +37,7 @@ A task persists:
 - Workspace ownership.
 - source / target datasource IDs.
 - source / target database, schema and table locations.
-- YakFlow runtime tuning JSON, including optional JDBC dynamic `splitSize`.
+- YakFlow runtime tuning JSON, including optional JDBC dynamic `splitSize` and bounded Source `sourceParallelism`.
 - monotonically increasing definition version.
 - user-facing name and remark.
 
