@@ -35,14 +35,19 @@ public final class JdbcSchemaMapper {
         List<String> primaryKeys = new ArrayList<>();
 
         for (DataSourceColumn column : ordered) {
-            YakDataType dataType = toYakType(column);
-            Integer length = isLengthType(dataType.kind()) ? column.size() : null;
-            columns.add(new YakColumn(column.name(), dataType, column.nullable(), length));
+            columns.add(toYakColumn(column));
             if (column.primaryKey()) {
                 primaryKeys.add(column.name());
             }
         }
         return new YakTableSchema(columns, primaryKeys);
+    }
+
+    public static YakColumn toYakColumn(DataSourceColumn column) {
+        Objects.requireNonNull(column, "column must not be null");
+        YakDataType dataType = toYakType(column);
+        Integer length = isLengthType(dataType.kind()) ? column.size() : null;
+        return new YakColumn(column.name(), dataType, column.nullable(), length);
     }
 
     static YakDataType toYakType(DataSourceColumn column) {
