@@ -237,6 +237,8 @@ Must:
 - Keep Debezium Engine, SourceRecord, RecordCommitter and schema-history implementation types inside `yak-flow-connector-cdc-mysql`.
 - Use the same `YakRow + RowKind` contract as bounded sources.
 - Use `snapshot.mode=initial` for the Phase 4 full-snapshot-then-binlog path.
+- Require the Source MySQL environment to provide binary logging with ROW format and FULL row image for the current connector contract.
+- Require the Source account to have the privileges needed by Debezium for snapshot and binlog streaming; deployment documentation must call out `SELECT`, `RELOAD`, `SHOW DATABASES`, `REPLICATION SLAVE` and `REPLICATION CLIENT`, plus environment-specific snapshot lock permissions when needed.
 - Persist Debezium offsets and internal schema history under a caller-owned state directory.
 - Acknowledge Debezium records only from `notifyCheckpointComplete`, after the Sink barrier flush succeeds.
 - Require a primary key for Phase 4 CDC.
@@ -256,7 +258,9 @@ Must Not:
 
 The API keeps connector state opaque. The Local Execution Engine coordinates in-process checkpoint barriers and keeps only the latest completed checkpoint for the active execution.
 
-The current phase still does not define durable checkpoint serialization, restart recovery or a transaction commit protocol. Those concerns must not leak Debezium offset structures into the public API.
+The current phase still does not define durable serialization/restoration for generic YakFlow `CheckpointState` or a transaction commit protocol. Those concerns must not leak Debezium offset structures into the public API.
+
+The MySQL CDC connector is allowed to persist its own Debezium offsets/schema history under the caller-owned state directory. A later new execution may reuse those connector-owned files; this must not be described as restoration of the previous LocalExecution.
 
 ## Dependency Direction
 
