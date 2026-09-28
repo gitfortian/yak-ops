@@ -34,7 +34,7 @@ class MySqlDebeziumEngineConfigTest {
                 "secret",
                 "app",
                 null,
-                Map.of(),
+                Map.of("serverTimezone", "Asia/Shanghai", "useSSL", "false", "connectTimeout", "30000"),
                 SshTunnelConfig.disabled(),
                 "{}");
         YakTableSchema schema = new YakTableSchema(
@@ -54,6 +54,9 @@ class MySqlDebeziumEngineConfigTest {
         assertEquals("127.0.0.1", properties.getProperty("database.hostname"));
         assertEquals("3306", properties.getProperty("database.port"));
         assertEquals("54001", properties.getProperty("database.server.id"));
+        assertEquals("Asia/Shanghai", properties.getProperty("driver.serverTimezone"));
+        assertEquals("false", properties.getProperty("driver.useSSL"));
+        assertEquals("30000", properties.getProperty("driver.connectTimeout"));
         assertEquals("0", properties.getProperty("offset.flush.interval.ms"));
         assertEquals(
                 "org.apache.kafka.connect.storage.FileOffsetBackingStore",
