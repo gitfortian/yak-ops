@@ -28,13 +28,12 @@ DataSyncService
       ↓
 Task / Instance persistence
 
-OfflineSyncExecutor
-      ↓
-OfflineSyncExecutionPlanner
-      ↓
-OfflineSyncExecutionPlan
-      ↓
-YakFlow Local Execution Engine
+OfflineSyncExecutor                 RealtimeSyncExecutor
+      ↓                                   ↓
+OfflineSyncExecutionPlanner         RealtimeSyncExecutionPlanner
+      ↓                                   ↓
+OfflineSyncExecutionPlan            RealtimeSyncExecutionPlan
+      └──────────────→ YakFlow Local Execution Engine ←──────────────┘
 ```
 
 This capability explicitly uses `DataSyncService / DataSyncServiceImpl` naming.
@@ -132,11 +131,11 @@ Realtime config owns only product/runtime tuning:
 
 It must not expose Debezium offsets, schema-history files, state directories or MySQL `serverId`; those belong to realtime execution/runtime ownership.
 
-PR1 contract boundary:
-- create/update/detail/page may persist and return `REALTIME` tasks.
-- realtime save-time validation must resolve Datasource/Catalog again on the backend.
-- `runTask` must reject `REALTIME` until the realtime planner/executor lifecycle is introduced.
-- no realtime Instance, checkpoint ownership or frontend route is introduced by this contract PR.
+Realtime contract boundary:
+- create/update/detail/page persist and return `REALTIME` tasks.
+- realtime save-time validation resolves Datasource/Catalog again on the backend.
+- `runTask` may create and submit a REALTIME Instance through `RealtimeSyncExecutor`.
+- durable checkpoint/state-directory ownership, stable serverId allocation and frontend routes remain later stages.
 
 ## Offline Task Editor Contract
 
@@ -190,6 +189,51 @@ Must Not:
 - Claim distributed execution or restart recovery.
 - Add scheduler / retry policy in Phase 3.
 
+## Realtime Execution Lifecycle
+
+PR2 enables manual execution of saved REALTIME tasks.
+
+Lifecycle:
+
+```text
+run REALTIME task
+      ↓
+PENDING
+      ↓
+RealtimeSyncExecutionPlanner
+      ↓
+MySqlCdcSource(snapshot.mode=initial + binlog)
+      ↓
+LocalExecutionEngine
+      ↓
+JdbcSink(CHANGELOG)
+      ↓
+RUNNING
+   ├── CANCELED
+   └── FAILED
+```
+
+Must:
+- Revalidate current realtime Source/Target topology, Source primary key and field compatibility before creating execution input.
+- Persist `syncType` and the type-specific config in the sanitized definition snapshot.
+- Resolve source/target runtime credentials only inside `RealtimeSyncExecutionPlanner` after the Instance exists.
+- Reuse `OfflineSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
+- Use `JdbcWriteMode.CHANGELOG` for INSERT/UPDATE/DELETE application.
+- Start the Local Execution Engine with the task's `checkpointIntervalSeconds`.
+- Reuse the process-local execution registry so the existing cancel API works for both OFFLINE and REALTIME.
+- Persist Runtime counters while RUNNING.
+
+Current PR2 bootstrap only:
+- CDC state is placed under `java.io.tmpdir/yak-ops/realtime-sync/{instanceId}`.
+- MySQL replication `serverId` is temporarily derived from the Instance ID.
+- A process restart still marks active instances LOST and does not restore REALTIME execution.
+
+Must Not:
+- Claim durable checkpoint recovery or exactly-once.
+- Treat the temporary state directory as product-owned persistent state.
+- Treat the temporary instance-derived serverId as the final allocation contract.
+- Allow a continuous REALTIME execution to finish as SUCCEEDED; unexpected Source completion is FAILED.
+
 ## Metrics + Acceptance
 
 Phase 4 closes the first offline-sync milestone with observable row metrics and real cross-database acceptance.
@@ -207,7 +251,7 @@ Acceptance:
 
 ## Current Phase
 
-The offline milestone remains Phase 4 and fully executable. Realtime Phase 1 adds the task-definition contract only.
+The offline milestone remains Phase 4 and fully executable. Realtime Phase 2 adds single-node manual execution wiring.
 
 Phase 4 implements:
 - task create/update/delete/detail/page.
@@ -226,16 +270,21 @@ Phase 4 implements:
 - real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
 - save-and-run product flow.
 
-Realtime Phase 1 additionally implements:
+Realtime Phase 2 additionally implements:
 - `REALTIME` task type persistence and query.
 - dedicated realtime runtime config DTO / VO.
 - MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
 - Source primary-key validation.
-- explicit execution guard so REALTIME cannot enter the offline executor.
+- sanitized realtime definition snapshots.
+- `RealtimeSyncExecutionPlanner` with MySQL CDC Source + JDBC CHANGELOG Sink.
+- `RealtimeSyncExecutor` with RUNNING / FAILED / CANCELED lifecycle and Runtime counters.
+- shared active-execution registry / cancel semantics.
+- task-configured automatic checkpoint interval inside the Local Execution Engine.
 
-Phase 4 / Realtime Phase 1 do not implement:
-- realtime planner / executor wiring.
-- realtime checkpoint/state-directory ownership.
+Phase 4 / Realtime Phase 2 do not implement:
+- durable realtime checkpoint/state-directory ownership.
+- stable MySQL replication serverId allocation.
+- realtime process restart recovery.
 - realtime frontend.
 - scheduler.
 - retry policy.
