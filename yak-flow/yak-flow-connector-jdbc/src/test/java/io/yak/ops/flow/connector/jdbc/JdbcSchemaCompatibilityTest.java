@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.flow.api.row.YakColumn;
+import YakDataType;
 import io.yak.ops.flow.api.row.YakTypes;
 import org.junit.jupiter.api.Test;
 
@@ -65,11 +66,11 @@ class JdbcSchemaCompatibilityTest {
                 column("source", YakTypes.DOUBLE), column("target", YakTypes.FLOAT)));
     }
 
-    private YakColumn column(String name, io.yak.ops.flow.api.row.YakDataType type) {
+    private YakColumn column(String name, YakDataType type) {
         return column(name, type, null);
     }
 
-    private YakColumn column(String name, io.yak.ops.flow.api.row.YakDataType type, Integer length) {
+    private YakColumn column(String name, YakDataType type, Integer length) {
         return new YakColumn(name, type, true, length);
     }
 }
