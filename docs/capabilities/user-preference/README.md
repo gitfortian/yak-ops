@@ -12,12 +12,20 @@ Scope:
 User Preference answers:
 
 ```text
-Who am I?      → Security
+Who am I?      → Platform Security
 Where am I?    → Workspace
 What do I prefer? → User Preference
 ```
 
 Preferences belong to the authenticated user and are persisted on the server. Browser storage may cache product state, but it is not the source of truth for preferences that must survive logout or device changes.
+
+## Current Owner
+
+Backend:
+- `yak-ops-platform/src/main/java/io/yak/ops/preference`
+
+Persistence:
+- `yak-ops-dao/src/main/java/io/yak/ops/dao/**/preference`
 
 ## Current Scenes
 

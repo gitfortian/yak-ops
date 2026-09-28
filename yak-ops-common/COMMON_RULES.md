@@ -80,7 +80,7 @@ Common 中带字段的枚举统一保持不可变契约：
 - unified Result / ErrorCode / BusinessException / PageData Contract only has one implementation.
 - `BusinessException` stays independent from HTTP/Spring Web and acts as the cross-domain exception base.
 - public shared objects remain behavior-free.
-- Security HTTP DTO / VO may stay in Common when Boot and Security share them, but Security-specific error codes, exceptions and internal models must stay in `yak-ops-security`.
+- Security HTTP DTO / VO may stay in Common when Boot and Security share them, but Security-specific error codes, exceptions and internal models must stay in `yak-ops-platform`.
 - existing MyBatis shared configuration is reused where appropriate.
 
 ## Must Not
