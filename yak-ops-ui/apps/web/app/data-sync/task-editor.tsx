@@ -737,7 +737,13 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           ? await updateDataSyncTask(id, payload())
           : await createDataSyncTask(payload());
       if (publishAfterSave) {
-        await publishDataSyncTask(saved.id);
+        try {
+          await publishDataSyncTask(saved.id);
+        } catch {
+          toast.warning("任务已保存，但上线失败，当前保持已下线");
+          navigate(`${basePath}/${saved.id}`, { replace: true });
+          return;
+        }
         toast.success(realtime ? "实时同步任务已保存并上线" : "同步任务已保存并上线");
         navigate(basePath, { replace: true });
         return;
