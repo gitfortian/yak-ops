@@ -18,17 +18,14 @@ public interface JdbcDialect {
     String qualifiedTable(DataSourceTablePath table);
 
     default String selectSql(DataSourceTablePath table, YakTableSchema schema) {
-        String columns = schema.columns().stream()
-                .map(YakColumn::name)
-                .map(this::quoteIdentifier)
-                .collect(Collectors.joining(", "));
-        String orderBy = schema.primaryKeys().isEmpty()
-                ? ""
-                : " ORDER BY "
-                        + schema.primaryKeys().stream()
-                                .map(this::quoteIdentifier)
-                                .collect(Collectors.joining(", "));
-        return "SELECT " + columns + " FROM " + qualifiedTable(table) + orderBy;
+        return selectSql(table, schema, null);
+    }
+
+    default String selectRangeSql(DataSourceTablePath table, YakTableSchema schema, String splitColumn) {
+        if (splitColumn == null || splitColumn.isBlank()) {
+            throw new IllegalArgumentException("splitColumn must not be blank");
+        }
+        return selectSql(table, schema, splitColumn);
     }
 
     default String insertSql(DataSourceTablePath table, YakTableSchema schema) {
@@ -48,5 +45,22 @@ public interface JdbcDialect {
                 .map(primaryKey -> quoteIdentifier(primaryKey) + " = ?")
                 .collect(Collectors.joining(" AND "));
         return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate;
+    }
+
+    private String selectSql(DataSourceTablePath table, YakTableSchema schema, String splitColumn) {
+        String columns = schema.columns().stream()
+                .map(YakColumn::name)
+                .map(this::quoteIdentifier)
+                .collect(Collectors.joining(", "));
+        String where = splitColumn == null
+                ? ""
+                : " WHERE " + quoteIdentifier(splitColumn) + " >= ? AND " + quoteIdentifier(splitColumn) + " <= ?";
+        String orderBy = schema.primaryKeys().isEmpty()
+                ? ""
+                : " ORDER BY "
+                        + schema.primaryKeys().stream()
+                                .map(this::quoteIdentifier)
+                                .collect(Collectors.joining(", "));
+        return "SELECT " + columns + " FROM " + qualifiedTable(table) + where + orderBy;
     }
 }
