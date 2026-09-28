@@ -175,7 +175,7 @@ RUNNING
 ```
 
 Must:
-- Persist a sanitized definition snapshot before execution starts.
+- Persist a sanitized definition snapshot before execution starts, including the Task's `writeMode`.
 - Resolve runtime datasource credentials by datasource ID only after the instance exists.
 - Keep at most one PENDING / RUNNING instance per task in the current single-node product.
 - Register each active LocalExecution in the in-process execution registry before transitioning the instance to RUNNING.
