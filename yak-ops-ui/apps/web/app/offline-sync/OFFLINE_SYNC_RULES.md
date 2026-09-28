@@ -3,7 +3,7 @@
 Scope:
 
 - `yak-ops-ui/apps/web/app/offline-sync/**`
-- `yak-ops-ui/apps/web/service/data-sync/**`
+- OFFLINE mode of `yak-ops-ui/apps/web/app/data-sync/task-editor.tsx`
 
 ## Phase 4 Boundary
 
@@ -22,7 +22,7 @@ Must:
 - Display backend mapping preview as the source of truth.
 - Keep mapping read-only and same-name in this phase.
 - Disable save while the current mapping is incompatible.
-- Keep runtime tuning limited to fetch size, read batch size, write batch size and timeout.
+- Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
 - Use existing Yak UI primitives.
 - Keep Task Definition and Task Instance as separate Tabs.
 - A manual run creates a new Instance and navigates to its detail page.
