@@ -79,7 +79,7 @@ Owns the first single-node YakFlow execution runtime. It connects one Source and
 
 The checkpoint barrier is an ordering boundary, not an exactly-once claim: Source state is captured before the barrier enters the channel, Sink flushes every preceding row before the checkpoint completes, and the runtime keeps the completed checkpoint in memory for the active execution. Durable checkpoint storage and restore-after-process-restart are not part of this phase.
 
-The Local Runtime depends on `yak-flow-api` only. It does not depend on Spring, Yak Ops Business/DAO, JDBC or Debezium, and it does not introduce distributed scheduling, worker discovery or resource management.
+The Local Execution Engine depends on `yak-flow-api` only. It does not depend on Spring, Yak Ops Business/DAO, JDBC or Debezium, and it does not introduce distributed scheduling, worker discovery or resource management.
 
 ### `yak-flow/yak-flow-connector-jdbc`
 
@@ -95,7 +95,7 @@ Owns MySQL continuous change capture for YakFlow. Debezium is strictly an implem
 
 The connector performs Debezium `snapshot.mode=initial` followed by binlog streaming and converts `READ / CREATE / UPDATE / DELETE` events into the existing `YakRow + RowKind` contract. It uses file-backed Debezium offset and schema-history state under a caller-owned state directory.
 
-Checkpoint completion is downstream-aware. The Local Runtime captures Source state, places a barrier into the row channel, flushes the Sink, and only then invokes `SourceReader.notifyCheckpointComplete`. The MySQL CDC Reader uses that callback to acknowledge Debezium records, so a crash before downstream flush does not advance the persisted Debezium offset. This provides at-least-once recovery semantics; it does not claim exactly-once.
+Checkpoint completion is downstream-aware. The Local Execution Engine captures Source state, places a barrier into the row channel, flushes the Sink, and only then invokes `SourceReader.notifyCheckpointComplete`. The MySQL CDC Reader uses that callback to acknowledge Debezium records, so a crash before downstream flush does not advance the persisted Debezium offset. This provides at-least-once recovery semantics; it does not claim exactly-once.
 
 ### `yak-ops-business`
 
@@ -146,7 +146,7 @@ Owns Workspace-scoped Data Sync product definitions and execution-instance persi
 
 The current phase supports only `OFFLINE` task definitions. A task definition describes source/target datasource IDs, table locations and YakFlow runtime tuning. An instance is a historical execution record with its own task-version reference, trigger type, status, row counters and a sanitized definition snapshot.
 
-Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current phase can manually run OFFLINE tasks through YakFlow Local Runtime, persist instance lifecycle and Runtime row metrics, cancel active local executions and mark stale process-local executions LOST on startup. Scheduling and distributed execution remain out of scope.
+Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current phase can manually run OFFLINE tasks through YakFlow Local Execution Engine, persist instance lifecycle and Runtime row metrics, cancel active local executions and mark stale process-local executions LOST on startup. Scheduling and distributed execution remain out of scope.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
 
@@ -228,7 +228,7 @@ Boot
 
 Boot owns protocol entry and application assembly.
 
-YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; CDC remains a later connector stage.
+YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; CDC remains a later connector stage.
 
 Platform owns Security/User, Workspace and User Preference capability behavior. Business owns Datasource and Data Sync product behavior. DAO owns persistence and schema. None of them depend on Boot.
 
