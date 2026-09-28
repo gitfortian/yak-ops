@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Component;
 
 /**
- * 保存当前 Yak Ops 进程内正在执行的 LocalExecution 引用，只用于运行中实例取消和生命周期收口。
+ * 保存当前 Yak Ops 进程内正在执行的 Data Sync LocalExecution 引用，供离线/实时实例统一取消和生命周期收口。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -19,7 +19,7 @@ public class OfflineSyncExecutionRegistry {
     public void register(String instanceId, LocalExecution<?> execution) {
         LocalExecution<?> existing = executions.putIfAbsent(instanceId, execution);
         if (existing != null) {
-            throw new IllegalStateException("offline sync execution already registered: " + instanceId);
+            throw new IllegalStateException("data sync execution already registered: " + instanceId);
         }
     }
 

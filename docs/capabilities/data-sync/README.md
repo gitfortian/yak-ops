@@ -1,6 +1,6 @@
 # Data Sync Capability
 
-Status: Offline Phase 4 + Realtime Phase 1 Task Contract
+Status: Offline Phase 4 + Realtime Phase 2 Execution
 
 ## Goal
 
@@ -18,7 +18,7 @@ YakFlow Local Execution Engine
 JdbcSource -> JdbcSink
 ```
 
-Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle. The realtime milestone now starts by extending the same Task contract before any new execution wiring is introduced.
+Phase 1 established task and instance persistence. Phase 2 added Catalog reads and the offline task editor. Phase 3 starts saved OFFLINE tasks with YakFlow Local Execution Engine and persists the execution lifecycle. Realtime Phase 1 added the shared Task contract; Realtime Phase 2 now wires saved REALTIME tasks into the existing YakFlow Local Execution Engine.
 
 ## Task Definition
 
@@ -72,7 +72,42 @@ Realtime config currently contains:
 
 Execution-only values such as Debezium state directory, offsets, schema history and MySQL replication `serverId` are not Task fields.
 
-A REALTIME task can be created, updated, queried and filtered by `syncType`, but it cannot be run yet. The existing `runTask` path rejects REALTIME so it cannot accidentally enter `OfflineSyncExecutor`. Realtime planner/executor wiring, checkpoint ownership and frontend pages are separate follow-up phases.
+A REALTIME task can be created, updated, queried and filtered by `syncType`. Realtime Phase 2 adds manual execution without creating a second Task/Instance model.
+
+## Realtime Phase 2 — Execution
+
+Manual realtime run path:
+
+```text
+saved REALTIME Task
+        ↓
+create Instance(PENDING)
+        ↓
+sanitized snapshot(syncType + realtimeConfig)
+        ↓
+RealtimeSyncExecutionPlanner
+        ↓
+MySqlCdcSource
+(snapshot initial + binlog)
+        ↓
+LocalExecutionEngine
+        ↓
+JdbcSink(CHANGELOG)
+        ↓
+RUNNING
+   ├── CANCELED
+   └── FAILED
+```
+
+The planner re-reads Source/Target Catalog metadata and runtime connections, builds the existing source logical schema plus target physical write schema, and uses `JdbcWriteMode.CHANGELOG` so Debezium INSERT/UPDATE/DELETE events reuse the common `YakRow + RowKind` protocol.
+
+The executor uses the same process-local Instance registry and cancel API as offline sync. Runtime `readRows/writeRows` are persisted while the job is RUNNING; for REALTIME these counters represent YakFlow change events rather than source-table business row cardinality.
+
+PR2 intentionally does not define durable realtime state ownership. The current bootstrap uses:
+- `java.io.tmpdir/yak-ops/realtime-sync/{instanceId}` for Debezium state.
+- an Instance-ID-derived temporary MySQL replication `serverId`.
+
+Those choices are execution scaffolding only. A process restart still marks active Instances LOST and no REALTIME restore is attempted.
 
 ## Task Instance
 
@@ -215,12 +250,13 @@ Phase 1 provides:
 
 Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
 
-Realtime Phase 1 now provides the reusable Task contract and save-time Source/Target/primary-key validation only.
+Realtime Phase 2 now provides the reusable Task contract, save/run validation, MySQL CDC execution planner, JDBC CHANGELOG sink wiring, process-local runtime lifecycle and cancel/metrics integration.
 
 It still does not provide:
 
-- realtime planner / executor integration.
-- realtime checkpoint/state-directory product ownership.
+- durable realtime checkpoint/state-directory product ownership.
+- stable MySQL replication serverId allocation.
+- realtime process restart recovery.
 - realtime frontend.
 - scheduler.
 - retry policy.

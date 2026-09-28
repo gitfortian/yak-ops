@@ -11,7 +11,6 @@ import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalExecutionEngine;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
@@ -19,15 +18,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 将持久化离线同步实例交给 YakFlow Local Execution Engine，并收口 RUNNING / SUCCESS / FAILURE / CANCEL 状态。
+ * 将持久化 REALTIME 同步实例交给 YakFlow 连续执行，并收口运行状态、指标和取消语义。
  *
  * @author weifuwan
- * @since 2026-09-27
+ * @since 2026-09-28
  */
 @Component
-public class OfflineSyncExecutor {
+public class RealtimeSyncExecutor {
 
-    private static final Logger LOG = LoggerFactory.getLogger(OfflineSyncExecutor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RealtimeSyncExecutor.class);
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final long METRICS_FLUSH_INTERVAL_MILLIS = 500L;
 
@@ -35,28 +34,14 @@ public class OfflineSyncExecutor {
     private DataSyncInstanceRepository instanceRepository;
 
     @Resource
-    private OfflineSyncExecutionPlanner executionPlanner;
+    private RealtimeSyncExecutionPlanner executionPlanner;
 
     @Resource
     private OfflineSyncExecutionRegistry executionRegistry;
 
-    /**
-     * 单机 Local Execution Engine 无法跨进程恢复；应用启动时把上一进程遗留的离线/实时活动实例统一标记为 LOST。
-     */
-    @PostConstruct
-    public void recoverLostExecutions() {
-        int affected = instanceRepository.markActiveAsLost(
-                DateUtils.now(),
-                DataSyncErrorCode.EXECUTION_LOST.getCode(),
-                DataSyncErrorCode.EXECUTION_LOST.getMessage());
-        if (affected > 0) {
-            LOG.warn("应用启动发现遗留数据同步实例，已标记为 LOST，count={}", affected);
-        }
-    }
-
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
-                .name("yak-offline-sync-" + instanceId)
+                .name("yak-realtime-sync-" + instanceId)
                 .start(() -> execute(workspaceId, instanceId, snapshot));
     }
 
@@ -64,9 +49,9 @@ public class OfflineSyncExecutor {
         LocalExecution<?> execution = null;
         WorkspaceContext.bind(workspaceId);
         try {
-            OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
-            execution = new LocalExecutionEngine()
-                    .start(plan.source(), plan.sink(), plan.sourceSchema(), plan.sourceParallelism());
+            RealtimeSyncExecutionPlan plan = executionPlanner.plan(instanceId, snapshot);
+            execution = new LocalExecutionEngine(plan.checkpointInterval())
+                    .start(plan.source(), plan.sink(), plan.sourceSchema());
             executionRegistry.register(instanceId, execution);
 
             LocalDateTime startTime = DateUtils.now();
@@ -85,7 +70,7 @@ public class OfflineSyncExecutor {
             }
 
             LOG.info(
-                    "离线同步实例开始执行，workspaceId={}, taskId={}, instanceId={}",
+                    "实时同步实例开始执行，workspaceId={}, taskId={}, instanceId={}",
                     workspaceId,
                     snapshot.getTaskId(),
                     instanceId);
@@ -96,17 +81,10 @@ public class OfflineSyncExecutor {
             }
             ExecutionStatus status = execution.await();
             persistMetrics(workspaceId, instanceId, execution.metrics());
-            if (status == ExecutionStatus.SUCCEEDED) {
-                transitionTerminal(workspaceId, instanceId, DataSyncInstanceStatus.SUCCEEDED, null, null);
-                LOG.info(
-                        "离线同步实例执行成功，workspaceId={}, taskId={}, instanceId={}",
-                        workspaceId,
-                        snapshot.getTaskId(),
-                        instanceId);
-            } else if (status == ExecutionStatus.CANCELED) {
+            if (status == ExecutionStatus.CANCELED) {
                 transitionTerminal(workspaceId, instanceId, DataSyncInstanceStatus.CANCELED, null, null);
                 LOG.info(
-                        "离线同步实例已取消，workspaceId={}, taskId={}, instanceId={}",
+                        "实时同步实例已停止，workspaceId={}, taskId={}, instanceId={}",
                         workspaceId,
                         snapshot.getTaskId(),
                         instanceId);
@@ -119,11 +97,24 @@ public class OfflineSyncExecutor {
                         DataSyncErrorCode.EXECUTION_FAILED.getCode(),
                         message);
                 LOG.error(
-                        "离线同步实例执行失败，workspaceId={}, taskId={}, instanceId={}, error={}",
+                        "实时同步实例执行失败，workspaceId={}, taskId={}, instanceId={}, error={}",
                         workspaceId,
                         snapshot.getTaskId(),
                         instanceId,
                         message);
+            } else if (status == ExecutionStatus.SUCCEEDED) {
+                String message = "实时同步连续 Source 意外结束";
+                transitionTerminal(
+                        workspaceId,
+                        instanceId,
+                        DataSyncInstanceStatus.FAILED,
+                        DataSyncErrorCode.EXECUTION_FAILED.getCode(),
+                        message);
+                LOG.error(
+                        "实时同步实例意外结束，workspaceId={}, taskId={}, instanceId={}",
+                        workspaceId,
+                        snapshot.getTaskId(),
+                        instanceId);
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -133,9 +124,7 @@ public class OfflineSyncExecutor {
             if (execution != null) execution.cancel();
             failPendingOrRunning(workspaceId, instanceId, exception);
         } finally {
-            if (execution != null) {
-                executionRegistry.remove(instanceId, execution);
-            }
+            if (execution != null) executionRegistry.remove(instanceId, execution);
             WorkspaceContext.clear();
         }
     }
@@ -168,7 +157,7 @@ public class OfflineSyncExecutor {
                     errorCode,
                     message);
         }
-        LOG.error("离线同步实例执行异常，workspaceId={}, instanceId={}, error={}", workspaceId, instanceId, message);
+        LOG.error("实时同步实例执行异常，workspaceId={}, instanceId={}, error={}", workspaceId, instanceId, message);
     }
 
     private void transitionTerminal(

@@ -7,6 +7,7 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.OfflineSyncExecutionRegistry;
 import io.yak.ops.business.datasync.execution.OfflineSyncExecutor;
+import io.yak.ops.business.datasync.execution.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
@@ -75,6 +76,9 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Resource
     private OfflineSyncExecutor offlineSyncExecutor;
+
+    @Resource
+    private RealtimeSyncExecutor realtimeSyncExecutor;
 
     @Resource
     private OfflineSyncExecutionRegistry executionRegistry;
@@ -189,11 +193,11 @@ public class DataSyncServiceImpl implements DataSyncService {
     public synchronized DataSyncInstanceVO runTask(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
-        if (task.getSyncType() != DataSyncType.OFFLINE) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 任务执行将在实时执行阶段开放");
-        }
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
+        if (task.getSyncType() == DataSyncType.REALTIME) {
+            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+        }
         requireCompatibleMapping(resolvedScope);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
@@ -341,8 +345,13 @@ public class DataSyncServiceImpl implements DataSyncService {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 运行参数不能为空");
         }
 
-        DataSourceVO source = dataSourceService.queryDataSource(dto.getSourceDataSourceId());
-        DataSourceVO target = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
+        validateRealtimeTopology(dto.getSourceDataSourceId(), dto.getTargetDataSourceId(), resolvedScope);
+    }
+
+    private void validateRealtimeTopology(
+            String sourceDataSourceId, String targetDataSourceId, DataSyncMappingPreviewDTO resolvedScope) {
+        DataSourceVO source = dataSourceService.queryDataSource(sourceDataSourceId);
+        DataSourceVO target = dataSourceService.queryDataSource(targetDataSourceId);
         if (!"MYSQL".equals(source.getDbType())) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源数据源仅支持 MYSQL");
         }
@@ -351,7 +360,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         }
 
         List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
-                dto.getSourceDataSourceId(),
+                sourceDataSourceId,
                 tablePath(
                         resolvedScope.getSourceDatabase(),
                         resolvedScope.getSourceSchema(),
@@ -383,11 +392,16 @@ public class DataSyncServiceImpl implements DataSyncService {
         snapshot.setTaskId(task.getId());
         snapshot.setTaskName(task.getName());
         snapshot.setTaskVersion(task.getDefinitionVersion());
+        snapshot.setSyncType(task.getSyncType().name());
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
         snapshot.setTarget(endpointSnapshot(
                 target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable()));
-        snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
+        if (task.getSyncType() == DataSyncType.REALTIME) {
+            snapshot.setRealtimeConfig(toRealtimeConfigVO(task.getRuntimeConfig()));
+        } else {
+            snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
+        }
         return snapshot;
     }
 
@@ -404,7 +418,9 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private void submitAfterCommit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
-        Runnable submit = () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        Runnable submit = DataSyncType.REALTIME.name().equals(snapshot.getSyncType())
+                ? () -> realtimeSyncExecutor.submit(workspaceId, instanceId, snapshot)
+                : () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             submit.run();
             return;

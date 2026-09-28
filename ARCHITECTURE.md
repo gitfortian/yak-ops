@@ -146,7 +146,9 @@ Owns Workspace-scoped Data Sync product definitions and execution-instance persi
 
 The current product contract supports both `OFFLINE` and `REALTIME` task definitions. Both reuse the same Workspace-scoped Task persistence and source/target table contract, while `runtime_config` is interpreted by `sync_type`: OFFLINE stores bounded JDBC tuning and REALTIME stores CDC/checkpoint/write tuning. REALTIME currently accepts only MySQL Source and MySQL/PostgreSQL/Oracle Target, and requires a Source primary key.
 
-Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current executable product path can manually run OFFLINE tasks through YakFlow Local Execution Engine, persist instance lifecycle and Runtime row metrics, cancel active local executions and mark stale process-local executions LOST on startup. REALTIME execution is deliberately guarded until its planner/executor and checkpoint-state ownership are introduced. Scheduling and distributed execution remain out of scope.
+Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current executable product path can manually run both OFFLINE and REALTIME tasks through YakFlow Local Execution Engine, persist the shared instance lifecycle and Runtime counters, cancel active local executions and mark stale process-local executions LOST on startup.
+
+REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGELOG. `RealtimeSyncExecutionPlanner` resolves current Catalog schema and runtime connections after the Instance exists, while `RealtimeSyncExecutor` owns the process-local RUNNING/FAILED/CANCELED loop. The PR2 execution bootstrap uses an instance-scoped directory under `java.io.tmpdir` plus an instance-derived MySQL replication `serverId`; these are explicitly temporary mechanics, not durable checkpoint ownership or restart recovery. Scheduling and distributed execution remain out of scope.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only when execution is introduced.
 
@@ -228,7 +230,7 @@ Boot
 
 Boot owns protocol entry and application assembly.
 
-YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; the MySQL CDC connector already exists, while Data Sync realtime product execution wiring remains a later stage.
+YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary. The MySQL CDC connector is now wired into the Data Sync REALTIME execution path; durable realtime state ownership and restart recovery remain later stages.
 
 Platform owns Security/User, Workspace and User Preference capability behavior. Business owns Datasource and Data Sync product behavior. DAO owns persistence and schema. None of them depend on Boot.
 
