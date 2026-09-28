@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -64,7 +65,8 @@ class DataSyncInstanceSyncTypeContractTest {
         WorkspaceContext.bind("workspace-1");
         DataSyncException exception = assertThrows(DataSyncException.class, () -> service.runTask("task-1"));
 
-        assertEquals("实时同步目标表主键必须与来源表主键一致", exception.getMessage());
+        assertEquals(DataSyncErrorCode.INVALID_TASK, exception.getErrorCode());
+        assertEquals("同步任务参数不合法：实时同步目标表主键必须与来源表主键一致", exception.getUserMessage());
         assertEquals(null, captured.get());
     }
 
