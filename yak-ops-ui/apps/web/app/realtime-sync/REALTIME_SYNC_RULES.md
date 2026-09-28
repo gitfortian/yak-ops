@@ -23,11 +23,14 @@ Must:
   - `writeBatchSize`
   - `timeoutSeconds`
 - Explain that first start performs the initial snapshot and then continuously consumes MySQL Binlog.
-- When editing an existing REALTIME Task, show a Yak UI `Alert` that saving creates a new Task version and that version's first start performs a fresh initial snapshot.
+- When editing an existing UNPUBLISHED REALTIME Task, show a Yak UI `Alert` that executable-definition changes create a new Task version and that version's first start performs a fresh initial snapshot; metadata-only name/remark changes do not increment the version.
 - In the REALTIME source section, show a Yak UI `Alert` that ROW Binlog and CDC account permissions are required; ordinary Datasource connection-test success does not prove CDC readiness.
-- Expose Save and Save & Start.
-- After Save & Start, navigate to the created REALTIME Instance detail.
-- Keep Start / Edit / Instance / Delete actions on the task list.
+- The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Start remains a separate PUBLISHED Task action.
+- Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
+- UNPUBLISHED Task actions are 上线 / 编辑 / 实例 / 删除.
+- PUBLISHED idle Task actions are 启动 / 下线 / 实例.
+- PUBLISHED Task with a PENDING / RUNNING Instance exposes 停止 / 实例; 下线 is unavailable until the active Instance ends.
+- Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 - Keep Task Definition and Task Instance as separate Tabs.
 - Query Instance page with `syncType = REALTIME`; never filter mixed OFFLINE/REALTIME results only in frontend memory.
 - Poll Instance list/detail every 2 seconds only while PENDING/RUNNING data is visible.

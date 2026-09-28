@@ -388,6 +388,7 @@ The current product surface includes:
 
 - Workspace-scoped OFFLINE / REALTIME Task CRUD.
 - Task publication lifecycle backend with UNPUBLISHED / PUBLISHED state, publish/unpublish commands and status-gated update/delete/run.
+- OFFLINE / REALTIME Task lifecycle UI with publication status badges/filtering, publish/unpublish actions, active-instance Stop actions and explicit Save / Save & Publish editor flow.
 - persisted Task Instance history with `syncType`, lifecycle status and sanitized definition snapshot.
 - shared Catalog-driven mapping validation.
 - OFFLINE manual execution, metrics, APPEND / OVERWRITE / UPSERT behavior and real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance.
