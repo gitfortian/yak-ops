@@ -1,33 +1,19 @@
 package io.yak.ops.business.datasync.execution;
 
-import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
-import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
-import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
-import io.yak.ops.flow.api.row.YakTableSchema;
-import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
-import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
-import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
-import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
-import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalRuntime;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
-import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -49,7 +35,7 @@ public class OfflineSyncExecutor {
     private DataSyncInstanceRepository instanceRepository;
 
     @Resource
-    private DataSourceService dataSourceService;
+    private OfflineSyncExecutionPlanner executionPlanner;
 
     @Resource
     private OfflineSyncExecutionRegistry executionRegistry;
@@ -78,40 +64,8 @@ public class OfflineSyncExecutor {
         LocalExecution<?> execution = null;
         WorkspaceContext.bind(workspaceId);
         try {
-            DataSyncEndpointSnapshotVO sourceEndpoint = snapshot.getSource();
-            DataSyncEndpointSnapshotVO targetEndpoint = snapshot.getTarget();
-            DataSyncRuntimeConfigVO runtimeConfig = snapshot.getRuntimeConfig();
-
-            List<DataSourceCatalogColumnVO> sourceColumns =
-                    dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
-            List<DataSourceCatalogColumnVO> targetColumns =
-                    dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
-            YakTableSchema sourceSchema = OfflineSyncSchemaResolver.sourceSchema(sourceColumns);
-            YakTableSchema targetWriteSchema =
-                    OfflineSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
-
-            DataSourceConnection sourceConnection =
-                    dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId());
-            DataSourceConnection targetConnection =
-                    dataSourceService.resolveRuntimeConnection(targetEndpoint.getDataSourceId());
-
-            JdbcSource source = new JdbcSource(new JdbcSourceConfig(
-                    sourceConnection,
-                    tablePathValue(sourceEndpoint),
-                    sourceSchema,
-                    runtimeConfig.getFetchSize(),
-                    runtimeConfig.getReadBatchSize(),
-                    runtimeConfig.getTimeoutSeconds()));
-            JdbcSink sink = new JdbcSink(
-                    new JdbcSinkConfig(
-                            targetConnection,
-                            tablePathValue(targetEndpoint),
-                            runtimeConfig.getWriteBatchSize(),
-                            runtimeConfig.getTimeoutSeconds(),
-                            JdbcWriteMode.INSERT),
-                    targetWriteSchema);
-
-            execution = new LocalRuntime().start(source, sink, sourceSchema);
+            OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
+            execution = new LocalRuntime().start(plan.source(), plan.sink(), plan.sourceSchema());
             executionRegistry.register(instanceId, execution);
 
             LocalDateTime startTime = DateUtils.now();
@@ -231,18 +185,6 @@ public class OfflineSyncExecutor {
                 DateUtils.now(),
                 errorCode,
                 errorMessage);
-    }
-
-    private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {
-        DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(endpoint.getDatabase());
-        path.setSchema(endpoint.getSchema());
-        path.setTable(endpoint.getTable());
-        return path;
-    }
-
-    private DataSourceTablePath tablePathValue(DataSyncEndpointSnapshotVO endpoint) {
-        return new DataSourceTablePath(endpoint.getDatabase(), endpoint.getSchema(), endpoint.getTable());
     }
 
     private String safeMessage(Throwable throwable) {
