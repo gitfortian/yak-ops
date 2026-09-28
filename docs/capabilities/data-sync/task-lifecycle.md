@@ -1,6 +1,6 @@
 # Data Sync Task Publication Lifecycle
 
-Status: Staged contract — PR1 defines behavior only. Persistence, backend commands and frontend adoption are implemented by later PRs.
+Status: Backend active — PR2 implements persistence, lifecycle commands and version enforcement. Frontend adoption remains PR3.
 
 ## Goal
 
@@ -360,9 +360,9 @@ Create/update APIs never auto-publish, and run never auto-publishes.
 
 Any future convenience action such as “Save and Publish” must explicitly compose the normal commands instead of creating a hidden lifecycle path.
 
-## Persistence Target
+## Persistence
 
-PR2 is expected to add one first-class Task field:
+PR2 adds one first-class Task field:
 
 ```text
 status
@@ -397,7 +397,7 @@ PR1 — Data Sync Task Online / Offline Contract
   → documentation only
 
 PR2 — Data Sync Task Lifecycle Backend
-  → persistence + status enum + validation + publish/unpublish commands + version semantics
+  → implemented: persistence + status enum + validation + publish/unpublish commands + version semantics
 
 PR3 — Offline / Realtime Task Lifecycle UI
   → status presentation + action matrix + editor flow

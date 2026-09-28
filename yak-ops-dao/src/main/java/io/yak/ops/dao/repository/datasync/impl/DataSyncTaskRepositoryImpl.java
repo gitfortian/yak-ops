@@ -36,7 +36,7 @@ public class DataSyncTaskRepositoryImpl extends BaseRepositoryImpl<DataSyncTaskM
     @Override
     public PageData<DataSyncTaskEntity> queryPage(String workspaceId, DataSyncTaskPageQuery query) {
         DataSyncTaskPageQuery condition =
-                query == null ? new DataSyncTaskPageQuery(1, 10, null, null, null, null) : query;
+                query == null ? new DataSyncTaskPageQuery(1, 10, null, null, null, null, null) : query;
         Page<DataSyncTaskEntity> page = Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
         IPage<DataSyncTaskEntity> result = taskMapper.selectPage(
                 page,
@@ -95,6 +95,7 @@ public class DataSyncTaskRepositoryImpl extends BaseRepositoryImpl<DataSyncTaskM
                     .like(DataSyncTaskEntity::getTargetTable, query.keyword()));
         }
         return wrapper.eq(query.syncType() != null, DataSyncTaskEntity::getSyncType, query.syncType())
+                .eq(query.status() != null, DataSyncTaskEntity::getStatus, query.status())
                 .eq(
                         StringUtils.hasText(query.sourceDataSourceId()),
                         DataSyncTaskEntity::getSourceDataSourceId,

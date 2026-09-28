@@ -1,5 +1,6 @@
 package io.yak.ops.dao.repository.datasync;
 
+import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 
 /**
@@ -9,6 +10,7 @@ import io.yak.ops.common.enums.datasync.DataSyncType;
  * @param pageSize 每页数量
  * @param keyword 任务名称、来源表或目标表关键字
  * @param syncType 同步类型
+ * @param status 任务发布状态
  * @param sourceDataSourceId 来源数据源 ID
  * @param targetDataSourceId 目标数据源 ID
  * @author weifuwan
@@ -19,5 +21,6 @@ public record DataSyncTaskPageQuery(
         int pageSize,
         String keyword,
         DataSyncType syncType,
+        DataSyncTaskStatus status,
         String sourceDataSourceId,
         String targetDataSourceId) {}

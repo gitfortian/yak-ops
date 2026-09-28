@@ -62,13 +62,25 @@ public class DataSyncController {
         return Result.success(dataSyncService.queryTaskPage(dto));
     }
 
+    @Operation(summary = "上线数据同步任务")
+    @PostMapping("/tasks/{id}/publish")
+    public Result<DataSyncTaskVO> publishTask(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.publishTask(id));
+    }
+
+    @Operation(summary = "下线数据同步任务")
+    @PostMapping("/tasks/{id}/unpublish")
+    public Result<DataSyncTaskVO> unpublishTask(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.unpublishTask(id));
+    }
+
     @Operation(summary = "手动运行数据同步任务")
     @PostMapping("/tasks/{id}/run")
     public Result<DataSyncInstanceVO> runTask(@PathVariable("id") String id) {
         return Result.success(dataSyncService.runTask(id));
     }
 
-    @Operation(summary = "删除离线同步任务")
+    @Operation(summary = "删除数据同步任务")
     @DeleteMapping("/tasks/{id}")
     public Result<Boolean> deleteTask(@PathVariable("id") String id) {
         return Result.success(dataSyncService.deleteTask(id));
