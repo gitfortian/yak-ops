@@ -42,11 +42,22 @@ A task persists:
 - Workspace ownership.
 - source / target datasource IDs.
 - source / target database, schema and table locations.
+- first-class `writeMode`: APPEND / OVERWRITE / UPSERT; this is task semantics, not runtime tuning.
 - YakFlow runtime tuning JSON, including optional JDBC dynamic `splitSize` and bounded Source `sourceParallelism`.
 - monotonically increasing definition version.
 - user-facing name and remark.
 
 Datasource credentials never belong to the task table.
+
+Current write-mode rollout is staged:
+
+```text
+APPEND      defined + executable
+OVERWRITE   contract only; execution remains disabled until JDBC save-mode support lands
+UPSERT      contract only; execution remains disabled until native dialect upsert support lands
+```
+
+REALTIME tasks currently persist APPEND for the shared Task contract while runtime writes continue through `JdbcWriteMode.CHANGELOG`.
 
 ## Realtime Phase 1 — Task Contract
 
@@ -83,7 +94,7 @@ saved REALTIME Task
         ↓
 create Instance(PENDING)
         ↓
-sanitized snapshot(syncType + realtimeConfig)
+sanitized snapshot(syncType + writeMode + realtimeConfig)
         ↓
 RealtimeSyncExecutionPlanner
         ↓
