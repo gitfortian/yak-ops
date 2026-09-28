@@ -226,6 +226,16 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
   ];
 
   const canceledLabel = realtime ? "已停止" : "已取消";
+  const statusOptions: Array<[DataSyncInstanceStatus | "ALL", string]> = [
+    ["ALL", "全部状态"],
+    ["PENDING", "等待"],
+    ["RUNNING", "运行中"],
+    ["SUCCEEDED", "成功"],
+    ["FAILED", "失败"],
+    ["CANCELED", canceledLabel],
+    ["LOST", "已丢失"],
+  ];
+  const statusItems = Object.fromEntries(statusOptions);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -245,6 +255,7 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
         <div className="w-[150px]">
           <Select
             size="small"
+            items={statusItems}
             value={status}
             onValueChange={(value) => {
               setStatus(String(value || "ALL") as DataSyncInstanceStatus | "ALL");
@@ -255,15 +266,7 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[
-                ["ALL", "全部状态"],
-                ["PENDING", "等待"],
-                ["RUNNING", "运行中"],
-                ["SUCCEEDED", "成功"],
-                ["FAILED", "失败"],
-                ["CANCELED", canceledLabel],
-                ["LOST", "已丢失"],
-              ].map(([value, label]) => (
+              {statusOptions.map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   <SelectItemText>{label}</SelectItemText>
                   <SelectItemIndicator />
