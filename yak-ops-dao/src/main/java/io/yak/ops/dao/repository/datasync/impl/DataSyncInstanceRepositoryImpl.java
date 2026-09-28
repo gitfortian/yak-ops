@@ -40,9 +40,7 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
     @Override
     public PageData<DataSyncInstanceEntity> queryPage(String workspaceId, DataSyncInstancePageQuery query) {
         DataSyncInstancePageQuery condition =
-                query == null
-                        ? new DataSyncInstancePageQuery(1, 10, null, null, null, null, null, null, null)
-                        : query;
+                query == null ? new DataSyncInstancePageQuery(1, 10, null, null, null, null, null, null, null) : query;
         Page<DataSyncInstanceEntity> page = Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
         IPage<DataSyncInstanceEntity> result = instanceMapper.selectPage(
                 page,
