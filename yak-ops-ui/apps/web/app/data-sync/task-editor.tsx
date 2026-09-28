@@ -17,10 +17,11 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import {
   listDataSources,
   listDataSourceSchemas,
@@ -63,6 +64,7 @@ interface CatalogOptions {
   schemas: string[];
   tables: DataSourceCatalogTable[];
   loading: boolean;
+  refresh: () => void;
 }
 
 const EMPTY_RUNTIME: DataSyncRuntimeConfig = {
@@ -122,11 +124,14 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
   const [schemas, setSchemas] = useState<string[]>([]);
   const [tables, setTables] = useState<DataSourceCatalogTable[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refresh = useCallback(() => setRefreshVersion((value) => value + 1), []);
 
   useEffect(() => {
     if (!dataSourceId) {
       setSchemas([]);
       setTables([]);
+      setLoading(false);
       return;
     }
     let active = true;
@@ -150,15 +155,18 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
     return () => {
       active = false;
     };
-  }, [dataSourceId, database, schema]);
+  }, [dataSourceId, database, schema, refreshVersion]);
 
-  return { schemas, tables, loading };
+  return { schemas, tables, loading, refresh };
 }
 
 interface DataSourceEndpointCardProps {
   title: string;
   dataSources: DataSourceRecord[];
   dataSourceId: string;
+  refreshing: boolean;
+  onRefresh: () => void | Promise<void>;
+  onCreateDataSource: () => void;
   onDataSourceChange: (value: string) => void;
 }
 
@@ -166,13 +174,24 @@ function DataSourceEndpointCard({
   title,
   dataSources,
   dataSourceId,
+  refreshing,
+  onRefresh,
+  onCreateDataSource,
   onDataSourceChange,
 }: DataSourceEndpointCardProps) {
   const selectedDataSource = dataSources.find((item) => item.id === dataSourceId);
-  const dataSourceItems = useMemo(
+  const dataSourceOptions = useMemo(
     () =>
-      Object.fromEntries(
-        dataSources.flatMap((item) => (item.id ? [[item.id, item.name || item.id] as const] : [])),
+      dataSources.flatMap((item) =>
+        item.id
+          ? [
+              {
+                value: item.id,
+                label: item.name || item.id,
+                searchText: [item.dbType, item.database, item.schema].filter(Boolean).join(" "),
+              },
+            ]
+          : [],
       ),
     [dataSources],
   );
@@ -194,26 +213,27 @@ function DataSourceEndpointCard({
             数据源
           </FieldLabel>
           <div className="space-y-1">
-            <Select
-              size="small"
-              items={dataSourceItems}
-              value={dataSourceId || undefined}
-              onValueChange={(value) => onDataSourceChange(String(value || ""))}
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择数据源" />
-              </SelectTrigger>
-              <SelectContent>
-                {dataSources.map((item) =>
-                  item.id ? (
-                    <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{item.name || item.id}</SelectItemText>
-                      <SelectItemIndicator />
-                    </SelectItem>
-                  ) : null,
-                )}
-              </SelectContent>
-            </Select>
+            <DataSyncSearchableSelect
+              value={dataSourceId || null}
+              options={dataSourceOptions}
+              placeholder="请选择数据源"
+              searchPlaceholder="搜索数据源"
+              emptyText="暂无数据源"
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              footer={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                  onClick={onCreateDataSource}
+                >
+                  <Plus size={14} />
+                  新增数据源
+                </Button>
+              }
+              onValueChange={onDataSourceChange}
+            />
             {scopeText ? (
               <div className="px-1 text-xs text-[#98a2b3]">连接范围：{scopeText}</div>
             ) : null}
@@ -250,12 +270,23 @@ function TableSection({
   onTableChange,
 }: TableSectionProps) {
   const tableValue = selectedTableKey(catalog.tables, database, schema, table);
-  const tableItems = useMemo(
-    () => Object.fromEntries(catalog.tables.map((item) => [tableKey(item), tableLabel(item)])),
+  const schemaOptions = useMemo(
+    () => catalog.schemas.map((item) => ({ value: item, label: item })),
+    [catalog.schemas],
+  );
+  const tableOptions = useMemo(
+    () =>
+      catalog.tables.map((item) => ({
+        value: tableKey(item),
+        label: tableLabel(item),
+        searchText: [item.database, item.schema, item.name, item.type, item.remarks]
+          .filter(Boolean)
+          .join(" "),
+      })),
     [catalog.tables],
   );
   const requiresSchema = !boundSchema && catalog.schemas.length > 0;
-  const tableDisabled = !dataSourceId || catalog.loading || (requiresSchema && !schema);
+  const tableDisabled = !dataSourceId || (requiresSchema && !schema);
 
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white">
@@ -266,60 +297,43 @@ function TableSection({
         {requiresSchema ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel>Schema</FieldLabel>
-            <Select
-              size="small"
-              value={schema || undefined}
-              onValueChange={(value) => onSchemaChange(String(value || ""))}
-            >
-              <SelectTrigger variant="outlined">
-                <SelectValue placeholder="请选择 Schema" />
-              </SelectTrigger>
-              <SelectContent>
-                {catalog.schemas.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    <SelectItemText>{item}</SelectItemText>
-                    <SelectItemIndicator />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <DataSyncSearchableSelect
+              value={schema || null}
+              options={schemaOptions}
+              placeholder="请选择 Schema"
+              searchPlaceholder="搜索 Schema"
+              emptyText="暂无 Schema"
+              refreshing={catalog.loading}
+              onRefresh={catalog.refresh}
+              onValueChange={onSchemaChange}
+            />
           </Field>
         ) : null}
 
         <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel required>表</FieldLabel>
-          <Select
-            size="small"
-            items={tableItems}
-            disabled={tableDisabled}
+          <DataSyncSearchableSelect
             value={tableValue}
+            options={tableOptions}
+            disabled={tableDisabled}
+            placeholder={
+              !dataSourceId
+                ? "请先选择数据源"
+                : requiresSchema && !schema
+                  ? "请先选择 Schema"
+                  : catalog.loading
+                    ? "正在读取 Catalog..."
+                    : "请选择表"
+            }
+            searchPlaceholder="搜索表"
+            emptyText="暂无表"
+            refreshing={catalog.loading}
+            onRefresh={catalog.refresh}
             onValueChange={(value) => {
               const selected = catalog.tables.find((item) => tableKey(item) === value);
               if (selected) onTableChange(selected);
             }}
-          >
-            <SelectTrigger variant="outlined">
-              <SelectValue
-                placeholder={
-                  !dataSourceId
-                    ? "请先选择数据源"
-                    : requiresSchema && !schema
-                      ? "请先选择 Schema"
-                      : catalog.loading
-                        ? "正在读取 Catalog..."
-                        : "请选择表"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {catalog.tables.map((item) => (
-                <SelectItem key={tableKey(item)} value={tableKey(item)}>
-                  <SelectItemText>{tableLabel(item)}</SelectItemText>
-                  <SelectItemIndicator />
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
         </Field>
         {children}
       </div>
@@ -450,6 +464,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     realtimeConfig: { ...EMPTY_REALTIME },
   }));
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [mappingLoading, setMappingLoading] = useState(false);
@@ -480,11 +495,19 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
 
-  useEffect(() => {
-    void listDataSources({ pageNo: 1, pageSize: 200 }).then((result) =>
-      setDataSources(result?.bizData || []),
-    );
+  const loadDataSources = useCallback(async () => {
+    setDataSourcesLoading(true);
+    try {
+      const result = await listDataSources({ pageNo: 1, pageSize: 200 });
+      setDataSources(result?.bizData || []);
+    } finally {
+      setDataSourcesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDataSources();
+  }, [loadDataSources]);
 
   useEffect(() => {
     if (dataSources.length === 0) return;
@@ -807,6 +830,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 title="来源"
                 dataSources={sourceDataSources}
                 dataSourceId={form.sourceDataSourceId}
+                refreshing={dataSourcesLoading}
+                onRefresh={loadDataSources}
+                onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
                   setForm((current) => ({
@@ -822,6 +848,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 title="去向"
                 dataSources={targetDataSources}
                 dataSourceId={form.targetDataSourceId}
+                refreshing={dataSourcesLoading}
+                onRefresh={loadDataSources}
+                onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
                   setForm((current) => ({
