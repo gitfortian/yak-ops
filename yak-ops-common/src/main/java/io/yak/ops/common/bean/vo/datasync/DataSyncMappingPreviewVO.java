@@ -12,7 +12,9 @@ import lombok.Data;
 @Data
 public class DataSyncMappingPreviewVO {
 
+    /** 当前来源表全部字段是否满足无 Transform 的直接同步条件。 */
     private boolean compatible;
 
+    /** 按来源字段生成的同名字段映射明细。 */
     private List<DataSyncFieldMappingVO> mappings = List.of();
 }

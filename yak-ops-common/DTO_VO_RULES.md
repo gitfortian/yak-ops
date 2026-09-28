@@ -134,6 +134,8 @@ Must:
 - 展示字段、派生字段可以放 VO，例如 `environmentName`。
 - 时间字段保持 `LocalDate / LocalTime / LocalDateTime` 类型，由统一 JSON 配置负责格式化。
 - 敏感字段必须在进入 VO 前完成遮罩、移除或脱敏。
+- VO 字段必须有 JavaDoc，描述业务语义；状态值、单位、可空条件、脱敏语义、快照语义等不能只靠字段名猜测。
+- 字段 JavaDoc 必须与当前接口行为保持一致；当列表与详情返回策略不同、字段语义发生变化或旧约束失效时，同一变更中更新对应注释。
 
 Must Not:
 - Controller 直接返回 Entity。
