@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Local Runtime 测试使用的可配置 Source，可模拟有界数据和持续无界数据。
+ * Local Execution Engine 测试使用的可配置 Source，可模拟有界数据和持续无界数据。
  *
  * @author weifuwan
  * @since 2026-09-27
