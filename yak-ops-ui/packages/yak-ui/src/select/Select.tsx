@@ -1,8 +1,9 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, type HTMLAttributes, type ReactNode } from "react";
 import { Select as BaseSelect } from "@base-ui/react/select";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../cn";
+import { Input, type InputProps } from "../input";
 
 type SelectSize = "small" | "medium" | "large";
 
@@ -113,6 +114,10 @@ export function SelectValue({ className, ...props }: SelectValueProps) {
 export type SelectContentProps = Omit<BaseSelect.Popup.Props, "children" | "className"> & {
   children: ReactNode;
   className?: string;
+  header?: ReactNode;
+  footer?: ReactNode;
+  emptyContent?: ReactNode;
+  listClassName?: string;
   positionerClassName?: string;
   side?: BaseSelect.Positioner.Props["side"];
   align?: BaseSelect.Positioner.Props["align"];
@@ -125,6 +130,10 @@ export function SelectContent({
   alignOffset = 0,
   children,
   className,
+  emptyContent,
+  footer,
+  header,
+  listClassName,
   positionerClassName,
   side = "bottom",
   sideOffset = 4,
@@ -150,12 +159,103 @@ export function SelectContent({
             className,
           )}
         >
-          <BaseSelect.List className="max-h-80 overflow-y-auto p-1 outline-none">
-            {children}
+          {header}
+          <BaseSelect.List
+            className={cn(
+              "max-h-80 overflow-y-auto p-1 outline-none empty:p-0",
+              emptyContent != null && "max-h-0 p-0",
+              listClassName,
+            )}
+          >
+            {emptyContent == null ? children : null}
           </BaseSelect.List>
+          {emptyContent != null ? <SelectEmpty>{emptyContent}</SelectEmpty> : null}
+          {footer}
         </BaseSelect.Popup>
       </BaseSelect.Positioner>
     </BaseSelect.Portal>
+  );
+}
+
+export type SelectSearchProps = Omit<InputProps, "size"> & {
+  extra?: ReactNode;
+  size?: SelectSize;
+};
+
+export function SelectSearch({
+  className,
+  extra,
+  onKeyDown,
+  size,
+  variant = "outlined",
+  ...props
+}: SelectSearchProps) {
+  const contextSize = useContext(SelectSizeContext);
+  const resolvedSize = size ?? contextSize;
+
+  return (
+    <div className="flex items-center gap-2 border-b border-[var(--yak-components-select-border)] p-2">
+      <div className="relative min-w-0 flex-1">
+        <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[var(--yak-components-input-icon)]">
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none">
+            <circle cx="8.5" cy="8.5" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+            <path
+              d="m12 12 3.5 3.5"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="1.5"
+            />
+          </svg>
+        </span>
+        <Input
+          {...props}
+          size={resolvedSize}
+          variant={variant}
+          className={cn("!pl-8", className)}
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            if (!event.defaultPrevented && event.key !== "Escape" && event.key !== "Tab") {
+              event.stopPropagation();
+            }
+          }}
+        />
+      </div>
+      {extra ? <div className="shrink-0">{extra}</div> : null}
+    </div>
+  );
+}
+
+export type SelectFooterProps = HTMLAttributes<HTMLDivElement>;
+
+export function SelectFooter({ className, onKeyDown, ...props }: SelectFooterProps) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        "flex min-h-10 items-center gap-2 border-t border-[var(--yak-components-select-border)] px-3 py-2",
+        className,
+      )}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (!event.defaultPrevented && event.key !== "Escape" && event.key !== "Tab") {
+          event.stopPropagation();
+        }
+      }}
+    />
+  );
+}
+
+export type SelectEmptyProps = HTMLAttributes<HTMLDivElement>;
+
+export function SelectEmpty({ className, ...props }: SelectEmptyProps) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        "px-3 py-6 text-center text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-muted-text)]",
+        className,
+      )}
+    />
   );
 }
 

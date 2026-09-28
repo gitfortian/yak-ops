@@ -53,6 +53,7 @@ Base UI is an implementation dependency, not a product-facing API.
 - Combobox empty-state presentation must preserve Base UI's mounted live region for accessibility. When the list is not empty, the mounted Empty node must collapse to zero layout space; do not hide or unmount it just to remove visual spacing.
 - Select / Menu / Tooltip / Popover / Dialog / Drawer / Tabs remain compositional instead of becoming giant convenience-prop components.
 - Select separates domain values from user-visible labels: when `value` and `label` differ, product code must pass `items` to `Select` so `SelectValue` renders the matching label. Controlled state and `onValueChange` continue to use the domain `value`; product code must not duplicate value-to-label lookup logic inside the trigger. Resource IDs and internal composite keys are domain values and must never become the closed-trigger display text when a human-readable label exists.
+- Select popup composition stays generic: `SelectContent.header` may host `SelectSearch`, `SelectSearch.extra` may host refresh or other actions, `SelectContent.emptyContent` owns generic empty presentation, and `SelectContent.footer` may host `SelectFooter` with arbitrary product-owned actions. Yak UI owns popup layout and keyboard isolation only; filtering state, remote search, refresh requests, CRUD and footer business behavior remain in the app layer.
 - Modal is the shared product-facing dialog shell: it owns title, close affordance, scrollable body, fixed footer, width and placement; product code owns business content, step state and submit lifecycle.
 - Modal defaults to the existing top-offset placement. `centered` is an explicit opt-in for short, stable-height content that comfortably fits the viewport. Long forms, Wizards, Table/search-result surfaces and content likely to scroll keep the default top-offset placement. Product code must not emulate centered placement through `className`.
 - Modal outside-press dismissal is opt-in. `maskClosable` defaults to `false`; only an explicit `maskClosable={true}` allows backdrop / outside presses to close it. The close button and Escape key remain available.
@@ -69,6 +70,44 @@ Base UI is an implementation dependency, not a product-facing API.
 - Table owns generic tabular rendering, loading / empty presentation, scroll / sticky header and pagination placement; product code owns fetching, filters, mutations and business cell content.
 - PageHeader owns generic page title, description, right-side composition and optional divider; product code owns page actions and business behavior.
 - `className` is a layout / positioning / necessary escape hatch, not a second visual contract.
+
+## Select Popup Composition
+
+Select keeps the existing simple option-list API and adds optional popup regions without forcing product code into a second component.
+
+```tsx
+<SelectContent
+  header={
+    <SelectSearch
+      value={keyword}
+      onChange={(event) => setKeyword(event.target.value)}
+      extra={<Button onClick={refresh}>...</Button>}
+    />
+  }
+  emptyContent={filteredItems.length === 0 ? emptyText : undefined}
+  footer={
+    <SelectFooter>
+      <Button onClick={createItem}>...</Button>
+    </SelectFooter>
+  }
+>
+  {filteredItems.map((item) => (
+    <SelectItem key={item.value} value={item.value}>
+      <SelectItemText>{item.label}</SelectItemText>
+    </SelectItem>
+  ))}
+</SelectContent>
+```
+
+Contract:
+
+- Existing `<SelectContent><SelectItem ... /></SelectContent>` remains valid.
+- `SelectSearch` is popup-local input presentation. It does not own local filtering or remote querying.
+- `SelectSearch.extra` is a generic React composition slot; refresh/loading/create semantics belong to product code.
+- Search input typing and cursor keys stay inside the input instead of leaking into Select typeahead/list navigation; Escape remains available to close the popup and Tab keeps normal focus behavior.
+- `emptyContent` replaces the option list body for the current render while keeping the Select popup structure mounted.
+- `SelectFooter` owns only border, spacing and layout. Its children and click handlers are external product content.
+- Do not add Datasource-specific create/refresh props to Select.
 
 ## Form Boundary
 
