@@ -83,10 +83,7 @@ export function OfflineSyncPage() {
   const [pendingDelete, setPendingDelete] = useState<DataSyncTaskRecord>();
   const [deleting, setDeleting] = useState(false);
 
-  const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances(
-    "OFFLINE",
-    true,
-  );
+  const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances("OFFLINE", true);
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
@@ -167,7 +164,6 @@ export function OfflineSyncPage() {
       setActionKey(undefined);
     }
   };
-
 
   const columns: TableColumns<DataSyncTaskRecord> = [
     {
