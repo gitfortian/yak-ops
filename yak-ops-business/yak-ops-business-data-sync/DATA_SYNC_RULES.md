@@ -48,6 +48,10 @@ Must:
 - Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
 - Keep `definitionVersion` starting at 1 and increment it on every successful task-definition update.
 - Persist one type-specific YakFlow config JSON in `runtime_config`; `OFFLINE` uses batch/fetch/split tuning while `REALTIME` uses CDC/checkpoint/write tuning.
+- Persist target data semantics as first-class Task field `writeMode`; do not place APPEND / OVERWRITE / UPSERT inside `runtime_config`.
+- Keep `DataSyncWriteMode` persistence values stable: APPEND=1, OVERWRITE=2, UPSERT=3.
+- PR1 only accepts APPEND. OVERWRITE / UPSERT must fail fast until their JDBC execution behavior lands.
+- REALTIME currently persists APPEND for the shared Task contract while runtime application continues through `JdbcWriteMode.CHANGELOG`; realtime writeMode is not user-configurable.
 - Support `OFFLINE` and `REALTIME` task definitions.
 - Keep `REALTIME` Source limited to MySQL CDC in the current milestone.
 - Keep `REALTIME` Target limited to MySQL / PostgreSQL / Oracle JDBC sinks in the current milestone.
@@ -85,7 +89,7 @@ Phase 1 only defines persistence. Runtime state transitions are introduced with 
 
 Each Instance must persist its own `syncType` snapshot in addition to task ID/name/version. Historical Instance filtering must not depend on the current Task row because Tasks may be deleted.
 
-The instance `definitionSnapshot` is immutable execution input captured when an instance starts. It may include task name, datasource IDs/names/types, table locations, runtime config and future field mappings.
+The instance `definitionSnapshot` is immutable execution input captured when an instance starts. It includes task name, sync type, write mode, datasource IDs/names/types, table locations and the type-specific runtime config.
 
 It must never contain:
 - normalized datasource connection JSON.
@@ -219,7 +223,7 @@ RUNNING
 
 Must:
 - Revalidate current realtime Source/Target topology, Source primary key and field compatibility before creating execution input.
-- Persist `syncType` and the type-specific config in the sanitized definition snapshot.
+- Persist `syncType`, the fixed APPEND `writeMode` and the type-specific config in the sanitized definition snapshot.
 - Resolve source/target runtime credentials only inside `RealtimeSyncExecutionPlanner` after the Instance exists.
 - Reuse `OfflineSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
 - Use `JdbcWriteMode.CHANGELOG` for INSERT/UPDATE/DELETE application.
