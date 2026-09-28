@@ -378,11 +378,15 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     private boolean executableDefinitionChanged(
             DataSyncTaskEntity entity, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
-        return !Objects.equals(entity.getSourceDataSourceId(), dto.getSourceDataSourceId().trim())
+        return !Objects.equals(
+                        entity.getSourceDataSourceId(),
+                        dto.getSourceDataSourceId().trim())
                 || !Objects.equals(entity.getSourceDatabase(), resolvedScope.getSourceDatabase())
                 || !Objects.equals(entity.getSourceSchema(), resolvedScope.getSourceSchema())
                 || !Objects.equals(entity.getSourceTable(), dto.getSourceTable().trim())
-                || !Objects.equals(entity.getTargetDataSourceId(), dto.getTargetDataSourceId().trim())
+                || !Objects.equals(
+                        entity.getTargetDataSourceId(),
+                        dto.getTargetDataSourceId().trim())
                 || !Objects.equals(entity.getTargetDatabase(), resolvedScope.getTargetDatabase())
                 || !Objects.equals(entity.getTargetSchema(), resolvedScope.getTargetSchema())
                 || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
@@ -646,8 +650,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         return task.getStatus() == null ? DataSyncTaskStatus.PUBLISHED : task.getStatus();
     }
 
-    private void requireTaskStatus(
-            DataSyncTaskEntity task, DataSyncTaskStatus expected, String detail) {
+    private void requireTaskStatus(DataSyncTaskEntity task, DataSyncTaskStatus expected, String detail) {
         if (taskStatus(task) != expected) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK_STATUS, detail);
         }
