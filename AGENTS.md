@@ -29,8 +29,17 @@ logging / logger / log level / runtime logging
 **/controller/**
 → CONTROLLER_RULES.md
 
-yak-ops-security/**
-→ yak-ops-security/SECURITY_RULES.md
+yak-ops-platform/**
+→ yak-ops-platform/PLATFORM_RULES.md
+
+yak-ops-platform/src/main/java/io/yak/ops/security/**
+→ yak-ops-platform/SECURITY_RULES.md
+
+yak-ops-platform/src/main/java/io/yak/ops/workspace/**
+→ yak-ops-platform/WORKSPACE_RULES.md
+
+yak-ops-platform/src/main/java/io/yak/ops/preference/**
+→ yak-ops-platform/USER_PREFERENCE_RULES.md
 
 yak-ops-business/yak-ops-business-datasource/**
 → yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md
@@ -93,7 +102,7 @@ If no Capability Contract exists, inspect current code first and write the minim
 Must:
 - Read current code and direct dependencies before changing structure.
 - Treat Datasource as the current user-facing product domain, Data Sync as the staged product layer being added on top, and YakFlow as the execution capability.
-- Treat User/Login/Security as supporting platform capability, not a second product domain.
+- Treat Platform (Security / Workspace / User Preference) as supporting product context, not a second product domain.
 - Reuse existing utilities before adding abstractions.
 - Solve only the current task.
 - Prefer modifying existing code over adding layers.

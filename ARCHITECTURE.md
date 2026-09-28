@@ -7,8 +7,7 @@ Scope:
 - Data Sync staged product task/instance architecture
 - YakFlow staged data-sync execution capability
 - Workspace business ownership boundary
-- Supporting user/login/security capability
-- User-scoped preference capability
+- Supporting Platform capability for Security/User, Workspace and User Preference
 - Module ownership and dependency direction
 
 Depends On:
@@ -18,7 +17,7 @@ Depends On:
 
 Yak Ops currently exposes Datasource as its user-facing product, with Workspace as the shared business ownership boundary. Data Sync is now a staged product capability that owns task definitions and task instances, while YakFlow remains the execution capability underneath it.
 
-User/Login/Security is a supporting platform capability required to access the product. Workspace is separate from Security: authentication answers who the user is, while Workspace answers which business data boundary is active. User Preference is also separate: it persists what the authenticated user prefers across logout, browsers and devices.
+Platform is the supporting product-context capability required to use Yak Ops. Inside Platform, Security answers who the user is, Workspace answers which business data boundary is active, and User Preference persists what the authenticated user prefers across logout, browsers and devices. These remain separate Java package and Service boundaries while sharing one physical Maven module.
 
 Architecture follows current ownership, not historical modules and not a future platform plan.
 
@@ -32,13 +31,13 @@ Application runtime infrastructure is also a Boot boundary. DataSource/MyBatis-P
 
 Owns shared data contracts for Datasource, Workspace, User Preference and Security, plus the unified Result / ErrorCode / PageData contracts, request `WorkspaceContext` and the cross-domain `BusinessException` base. Security HTTP DTO / VO remain here when Boot and Security share them, but Security-specific error codes, exceptions and internal models do not.
 
-### `yak-ops-security`
+### `yak-ops-platform`
 
-Owns user management, login/logout/current identity, HttpSession authentication state, authentication policy and the authentication interceptor implementation. It does not own RBAC administration, project authorization, messaging or notification runtime.
+Owns supporting product context: Security/User, Workspace and User Preference. Security owns user management, login/logout/current identity, HttpSession authentication state, authentication policy and the authentication interceptor implementation. Workspace owns Workspace lifecycle and membership. User Preference owns authenticated-user-scoped favorites and usage signals. These capabilities share one Maven module but remain separate package and Service boundaries.
 
 Security does not own Controller, ControllerAdvice, OpenAPI configuration, connection-pool/MyBatis assembly or MVC interceptor registration. Boot exposes and wires the current Security HTTP capability by calling Security-owned services and registering Security-owned behavior.
 
-Security production code was migrated from `yak-framework/yak-security`.
+The Security capability inside Platform was migrated from `yak-framework/yak-security`.
 
 Security business/runtime code uses the `io.yak.ops.security` product namespace. `SecurityErrorCode`, `YakSecurityException`, `UserAccount` and `UserCheckType` are Security-owned domain contracts. Shared HTTP DTO / VO live in `io.yak.ops.common`, while user persistence is owned by `yak-ops-dao`. `UserStatus` temporarily remains Common because DAO persistence directly owns its MyBatis enum mapping. Security exposes exactly two stable Service entries to Boot: `LoginService` and `UserService`; user administration behavior is consolidated inside `UserServiceImpl` rather than split into a second concrete service.
 
@@ -100,7 +99,7 @@ Checkpoint completion is downstream-aware. The Local Runtime captures Source sta
 
 ### `yak-ops-business`
 
-Owns the application Service Layer. Stable capabilities expose one public Service Layer interface and keep Spring implementation, transactions, validation and DAO/Plugin orchestration in `impl`.
+Owns the product-business Service Layer for Datasource and Data Sync. Stable product capabilities expose one public Service Layer interface and keep Spring implementation, transactions, validation and DAO/Plugin orchestration in `impl`.
 
 The default naming is `XxxBusiness + XxxBusinessImpl`; a capability may explicitly choose `XxxService + XxxServiceImpl` in its nearest rules. A capability must not keep both names for the same boundary.
 
@@ -108,7 +107,7 @@ Boot depends on stable Service Layer interfaces. Public contracts use shared DTO
 
 Detailed rules are defined in `yak-ops-business/BUSINESS_RULES.md`.
 
-### `yak-ops-business/yak-ops-business-workspace`
+### `yak-ops-platform` / Workspace
 
 Owns Workspace creation, Workspace discovery, membership and membership validation through the single stable `WorkspaceService` boundary.
 
@@ -116,7 +115,7 @@ Workspace is not a Security role model. Security owns authenticated identity; Wo
 
 The request Workspace ID is carried by `X-Workspace-Id`. Boot validates membership and binds the trusted value into Common `WorkspaceContext`. Missing Workspace context is globally allowed; a Workspace-scoped capability explicitly requires it.
 
-### `yak-ops-business/yak-ops-business-user-preference`
+### `yak-ops-platform` / User Preference
 
 Owns user-scoped product preference persistence through the single stable `UserPreferenceService` boundary.
 
@@ -214,23 +213,24 @@ The former Yak Common and Yak Security code required by the product is now owned
 UI
  ↓ HTTP
 Boot
- ├────────→ Security ─────────────→ Common
+ ├────────→ Platform ─────────────→ Common
+ │              │
+ │              ├─ Security / User
+ │              ├─ Workspace
+ │              ├─ User Preference
  │              └───────────────→ DAO ─→ Common
- ├────────→ UserPreferenceService → Common
- │              └───────────────→ DAO ─→ Common
- └────────→ DataSourceService ───→ Common
-                │
-                ├───────────────→ DAO ─→ Common
-                └───────────────→ Datasource Plugin API
-                                      ↑
-                                Plugin Implementations
+ └────────→ Business
+                ├─ DataSourceService ─→ DAO / Datasource Plugin API
+                └─ DataSyncService ───→ DataSourceService / YakFlow
+                                            ↑
+                                      Plugin Implementations
 ```
 
 Boot owns protocol entry and application assembly.
 
 YakFlow API is an implementation-independent contract boundary. YakFlow Local Runtime depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary; CDC remains a later connector stage.
 
-Security, Workspace, User Preference, Datasource and Data Sync own capability behavior. DAO owns persistence and schema. None of them depend on Boot.
+Platform owns Security/User, Workspace and User Preference capability behavior. Business owns Datasource and Data Sync product behavior. DAO owns persistence and schema. None of them depend on Boot.
 
 ## Refactor Rule
 

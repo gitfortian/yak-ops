@@ -49,7 +49,7 @@
             </dependency>
 
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-common</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-security</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-platform</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-dao</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-spi</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-core</artifactId><version>${project.version}</version></dependency>
@@ -61,10 +61,8 @@
             <dependency><groupId>io.debezium</groupId><artifactId>debezium-embedded</artifactId><version>${debezium.version}</version></dependency>
             <dependency><groupId>io.debezium</groupId><artifactId>debezium-connector-mysql</artifactId><version>${debezium.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-boot</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-workspace</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datasource</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-data-sync</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-user-preference</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-jdbc</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-all</artifactId><version>${project.version}</version></dependency>

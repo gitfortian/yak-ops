@@ -1,9 +1,9 @@
 package io.yak.ops.boot.workspace;
 
-import io.yak.ops.business.workspace.WorkspaceService;
-import io.yak.ops.business.workspace.constant.WorkspaceConstants;
-import io.yak.ops.business.workspace.enums.WorkspaceErrorCode;
-import io.yak.ops.business.workspace.exception.WorkspaceException;
+import io.yak.ops.workspace.WorkspaceService;
+import io.yak.ops.workspace.constant.WorkspaceConstants;
+import io.yak.ops.workspace.enums.WorkspaceErrorCode;
+import io.yak.ops.workspace.exception.WorkspaceException;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.security.authentication.AuthenticationManager;

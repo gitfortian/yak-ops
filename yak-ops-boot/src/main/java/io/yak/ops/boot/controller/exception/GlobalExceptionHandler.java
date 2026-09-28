@@ -1,7 +1,7 @@
 package io.yak.ops.boot.controller.exception;
 
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.workspace.enums.WorkspaceErrorCode;
+import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.exception.BusinessException;
