@@ -5,9 +5,9 @@ Scope:
 - `yak-ops-ui/apps/web/app/realtime-sync/**`
 - REALTIME mode of `yak-ops-ui/apps/web/app/data-sync/task-editor.tsx`
 
-## PR5 Boundary
+## Current V1 Boundary
 
-Realtime Sync owns Task configuration plus persisted Instance runtime presentation.
+Realtime Sync owns Task configuration plus persisted Instance runtime presentation. Backend Phase 6 additionally proves the configured REALTIME path against MySQL, PostgreSQL and Oracle targets; the frontend does not duplicate that database-specific validation logic.
 
 Must:
 
@@ -15,6 +15,7 @@ Must:
 - Source Datasource must be MySQL.
 - Target Datasource may be MySQL / PostgreSQL / Oracle.
 - Reuse the shared Data Sync Task Editor for Catalog and field mapping.
+- Treat backend validation as the source of truth for exact Source/Target primary-key correspondence; do not reimplement the PK contract in frontend state.
 - Configure only:
   - `checkpointIntervalSeconds`
   - `queueCapacity`

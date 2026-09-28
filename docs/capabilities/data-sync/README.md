@@ -65,6 +65,21 @@ UPSERT      executable; updates/inserts by target primary key using native JDBC 
 
 REALTIME tasks currently persist APPEND for the shared Task contract while runtime writes continue through `JdbcWriteMode.CHANGELOG`.
 
+## MySQL CDC Source Requirements
+
+REALTIME currently uses the Debezium MySQL connector. The Source MySQL server and account must satisfy the connector prerequisites before a task is started:
+
+- binary logging enabled.
+- `binlog_format=ROW`.
+- `binlog_row_image=FULL`.
+- the CDC account has the permissions needed for initial snapshot and binlog streaming: `SELECT`, `RELOAD`, `SHOW DATABASES`, `REPLICATION SLAVE`, and `REPLICATION CLIENT`.
+- hosted MySQL variants may require additional snapshot-lock privileges such as `LOCK TABLES` depending on their locking model.
+- the Source table has a primary key, and the Target primary-key set exactly matches it through case-insensitive same-name mapping.
+
+The application allocates the Debezium replication `serverId`; it is not a user-editable task field.
+
+Reference: [Debezium MySQL connector setup](https://debezium.io/documentation/reference/stable/connectors/mysql.html#setting-up-mysql).
+
 ## Realtime Phase 1 — Task Contract
 
 Realtime Phase 1 intentionally stops at the product definition boundary:
@@ -156,6 +171,8 @@ fresh initial snapshot
 
 The state files remain connector-private. Data Sync owns only their directory lifecycle and stable identity; Task/Instance JSON never stores Debezium offset structures.
 
+For packaged runtime, `yak.ops.home` is the release home. The Docker image declares `/opt/yak-ops/data` as a volume. Production deployments that require restart continuation across container replacement must persist `${yak.ops.home}/data`; deleting or replacing that directory removes the file-backed CDC state and therefore removes the ability to resume from the previous Debezium offset.
+
 MySQL replication `serverId` is now managed by a process-local allocator. It derives a preferred value from the stable realtime state key, probes on collision, and releases the lease after the execution ends.
 
 Application restart still does not resurrect the previous LocalExecution:
@@ -167,14 +184,14 @@ old RUNNING/PENDING Instance
 
 same Task/version run again
         ↓
-new Instance
+new Instance + new LocalExecution
         ↓
-reuse existing CDC state
+reuse existing connector-owned CDC state
         ↓
-continue from persisted offset
+continue from persisted Debezium offset
 ```
 
-This is restart continuation through a new Instance, not automatic recovery of the old Instance and not an exactly-once claim.
+This is connector-state continuation through a new Instance, not generic YakFlow Runtime checkpoint restoration, not resurrection of the old Instance, and not an exactly-once claim.
 
 ## Task Instance
 
@@ -329,24 +346,28 @@ MySQL Source
 
 Each acceptance path verifies target rows and final YakFlow metrics.
 
-## Phase 1 Boundary
+## Current Capability Boundary
 
-Phase 1 provides:
+The current product surface includes:
 
-- Flyway tables.
-- DAO Entity / Mapper / Repository.
-- shared DTO / VO and persistence enums.
-- `DataSyncService` task CRUD and task/instance query contract.
-- task persistence implementation.
+- Workspace-scoped OFFLINE / REALTIME Task CRUD.
+- persisted Task Instance history with `syncType`, lifecycle status and sanitized definition snapshot.
+- shared Catalog-driven mapping validation.
+- OFFLINE manual execution, metrics, APPEND / OVERWRITE / UPSERT behavior and real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance.
+- REALTIME manual execution with MySQL CDC, persisted connector state, restart continuation, metrics and Stop.
+- REALTIME Task editor plus Instance list/detail with active polling.
+- Manual E2E playbooks for user-visible product verification, alongside automated Acceptance tests.
 
-Phase 4 now provides persisted read/write metrics, save-and-run UI and real MySQL -> MySQL/PostgreSQL/Oracle acceptance executed by CI.
-
-Realtime Phase 5 additionally provides the runtime product surface:
+Current REALTIME product flow:
 
 ```text
 REALTIME Task
   ↓ Start / Save & Start
 Instance(PENDING/RUNNING)
+  ↓
+MySQL initial snapshot + Binlog
+  ↓
+JDBC CHANGELOG Sink
   ↓
 Instance Tab + Detail
   ├── persisted read/write event counters
@@ -354,7 +375,7 @@ Instance Tab + Detail
   └── Stop
 ```
 
-Instance rows now persist `syncType`, so REALTIME pagination is filtered in the backend and remains valid even after the originating Task is deleted. The UI labels `readRows/writeRows` as change events because UPDATE currently emits UPDATE_BEFORE + UPDATE_AFTER.
+Instance rows persist `syncType`, so REALTIME pagination is filtered in the backend and remains valid even after the originating Task is deleted. The UI labels `readRows/writeRows` as change events because UPDATE currently emits UPDATE_BEFORE + UPDATE_AFTER.
 
 Checkpoint time is deliberately not displayed because the current Instance contract does not persist a trustworthy last-checkpoint timestamp.
 
@@ -382,13 +403,12 @@ The acceptance remains at-least-once; passing these tests does not create an exa
 
 It still does not provide:
 
-- automatic restart of LOST Instances.
+- automatic resurrection/restart of LOST Instances.
 - distributed state ownership / fencing.
 - exactly-once transaction coordination.
 - persisted last-checkpoint timestamp / checkpoint history UI.
-- scheduler.
-- retry policy.
+- scheduler or retry policy.
 - distributed execution.
-- process restart recovery.
+- Transform, DDL propagation, schema evolution or multi-table REALTIME tasks.
 
 Those belong to later PRs.

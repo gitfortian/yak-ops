@@ -150,7 +150,7 @@ Data Sync depends on Datasource through the stable `DataSourceService` boundary 
 
 REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGELOG. `RealtimeSyncExecutionPlanner` resolves current Catalog schema and runtime connections after the Instance exists, while `RealtimeSyncExecutor` owns the process-local RUNNING/FAILED/CANCELED loop.
 
-Realtime CDC state is product-owned under `${yak.ops.home}/data/data-sync/realtime/{workspaceId}/{taskId}/v{definitionVersion}`. Debezium engine identity uses the same stable Workspace/Task/version scope, so a later Instance for the same definition reuses persisted offsets and schema history. A new definitionVersion gets a new state domain and therefore starts a fresh snapshot. MySQL replication `serverId` is allocated per active state domain by a single-node allocator and released when execution ends.
+Realtime CDC state is product-owned under `${yak.ops.home}/data/data-sync/realtime/{workspaceId}/{taskId}/v{definitionVersion}`. Debezium engine identity uses the same stable Workspace/Task/version scope, so a later Instance for the same definition reuses persisted offsets and schema history. A new definitionVersion gets a new state domain and therefore starts a fresh snapshot. MySQL replication `serverId` is allocated per active state domain by a single-node allocator and released when execution ends. Deployments that require continuation across container replacement must persist `${yak.ops.home}/data`; the Docker image exposes `/opt/yak-ops/data` as a volume.
 
 LocalExecution itself is still process-local: after an application restart, old active Instances become LOST rather than being resurrected. A later manual run creates a new Instance and reuses the existing REALTIME state domain. Scheduling, distributed recovery and exactly-once coordination remain out of scope.
 
@@ -234,7 +234,7 @@ Boot
 
 Boot owns protocol entry and application assembly.
 
-YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary. The MySQL CDC connector is now wired into the Data Sync REALTIME execution path; durable realtime state ownership and restart recovery remain later stages.
+YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary. The MySQL CDC connector is wired into the Data Sync REALTIME execution path with task/version-scoped durable connector state. Generic LocalExecution resurrection, distributed recovery and exactly-once coordination remain later stages.
 
 Platform owns Security/User, Workspace and User Preference capability behavior. Business owns Datasource and Data Sync product behavior. DAO owns persistence and schema. None of them depend on Boot.
 

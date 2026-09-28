@@ -198,9 +198,10 @@ It must not expose Debezium offsets, schema-history files, state directories or 
 Realtime contract boundary:
 - create/update/detail/page persist and return `REALTIME` tasks.
 - realtime save-time validation resolves Datasource/Catalog again on the backend.
-- `runTask` may create and submit a REALTIME Instance through `RealtimeSyncExecutor`.
+- `runTask` creates and submits a REALTIME Instance through `RealtimeSyncExecutor`.
 - realtime state ownership and serverId allocation stay inside `execution.realtime` and never become Task DTO fields.
-- frontend routes remain a later stage.
+- the current frontend exposes REALTIME Task list/editor plus Instance list/detail, active polling and Stop.
+- backend validation remains the source of truth for datasource type, field compatibility and Source/Target primary-key correspondence.
 
 ## Offline Task Editor Contract
 
@@ -261,7 +262,7 @@ Must Not:
 
 ## Realtime Execution Lifecycle
 
-PR2 enables manual execution of saved REALTIME tasks.
+The current REALTIME V1 supports manual execution of saved REALTIME tasks.
 
 Lifecycle:
 
@@ -325,12 +326,14 @@ Metrics:
 
 Acceptance:
 - CI must execute backend tests; `verify -DskipTests` is forbidden.
-- Real Testcontainers coverage must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
+- Offline JDBC acceptance must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
+- Realtime CDC acceptance must prove MySQL CDC -> MySQL/PostgreSQL/Oracle using initial snapshot, INSERT/UPDATE/DELETE, checkpoint, persisted offset, cancel, same-state restart and offset continuation.
+- The post-restart CDC acceptance must prove one new Source INSERT produces exactly one read/write event, so continuation cannot silently fall back to a fresh snapshot.
 - H2 compatibility tests remain useful unit/integration coverage but are not the final cross-database acceptance proof.
 
 ## Current Phase
 
-The offline milestone remains Phase 4 and fully executable. Realtime Phase 5 adds persisted Instance runtime UI on top of the existing single-node lifecycle.
+The offline milestone remains Phase 4 and fully executable. Realtime Phase 6 closes the first REALTIME V1 milestone with cross-database CDC acceptance.
 
 Phase 4 implements:
 - task create/update/delete/detail/page.
@@ -349,11 +352,11 @@ Phase 4 implements:
 - real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
 - save-and-run product flow.
 
-Realtime Phase 5 additionally implements:
+Realtime Phase 6 implements:
 - `REALTIME` task type persistence and query.
 - dedicated realtime runtime config DTO / VO.
 - MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
-- Source primary-key validation.
+- Source primary-key validation plus exact case-insensitive Source/Target primary-key set correspondence.
 - sanitized realtime definition snapshots.
 - `RealtimeSyncExecutionPlanner` with MySQL CDC Source + JDBC CHANGELOG Sink.
 - `RealtimeSyncExecutor` with RUNNING / FAILED / CANCELED lifecycle and Runtime counters.
@@ -365,14 +368,14 @@ Realtime Phase 5 additionally implements:
 - controlled MySQL CDC serverId allocation/release.
 - manual rerun continuation from persisted Debezium offsets after stop/failure/process restart.
 - persisted Instance `syncType` for historical OFFLINE / REALTIME filtering.
-- REALTIME Instance list/detail frontend, active polling, Stop action and persisted event counters.
+- REALTIME Task editor plus Instance list/detail frontend, active polling, Stop action and persisted event counters.
+- real MySQL CDC -> MySQL/PostgreSQL/Oracle acceptance in CI, including restart continuation proof.
 
-Phase 4 / Realtime Phase 5 do not implement:
-- automatic restart of a LOST Instance.
+Phase 4 / Realtime Phase 6 do not implement:
+- automatic resurrection/restart of a LOST Instance.
 - distributed state ownership or fencing.
 - exactly-once transaction coordination.
-- realtime frontend.
-- scheduler.
-- retry policy.
+- persisted last-checkpoint timestamp or checkpoint-history UI.
+- scheduler or retry policy.
 - distributed workers.
-- process-level execution recovery.
+- Transform, DDL propagation, schema evolution or multi-table REALTIME tasks.
