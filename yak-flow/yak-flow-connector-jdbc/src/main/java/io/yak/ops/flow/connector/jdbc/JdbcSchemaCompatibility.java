@@ -1,6 +1,7 @@
 package io.yak.ops.flow.connector.jdbc;
 
 import io.yak.ops.flow.api.row.YakDataType;
+import io.yak.ops.flow.api.row.YakTypeKind;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 
 /**
@@ -20,16 +21,18 @@ public final class JdbcSchemaCompatibility {
         YakDataType targetType = resolveType(target);
         if (sourceType == null || targetType == null) return false;
 
-        if (sourceType == targetType) {
-            return sameTypeCompatible(sourceType, source, target);
+        YakTypeKind sourceKind = sourceType.kind();
+        YakTypeKind targetKind = targetType.kind();
+        if (sourceKind == targetKind) {
+            return sameTypeCompatible(sourceKind, source, target);
         }
-        if (isInteger(sourceType) && isInteger(targetType)) {
-            return integerRank(sourceType) <= integerRank(targetType);
+        if (isInteger(sourceKind) && isInteger(targetKind)) {
+            return integerRank(sourceKind) <= integerRank(targetKind);
         }
-        if (isInteger(sourceType) && targetType == YakDataType.DECIMAL) {
-            return integerToDecimalCompatible(sourceType, source, target);
+        if (isInteger(sourceKind) && targetKind == YakTypeKind.DECIMAL) {
+            return integerToDecimalCompatible(sourceKind, source, target);
         }
-        return sourceType == YakDataType.FLOAT && targetType == YakDataType.DOUBLE;
+        return sourceKind == YakTypeKind.FLOAT && targetKind == YakTypeKind.DOUBLE;
     }
 
     private static YakDataType resolveType(DataSourceColumn column) {
@@ -40,23 +43,24 @@ public final class JdbcSchemaCompatibility {
         }
     }
 
-    private static boolean sameTypeCompatible(YakDataType dataType, DataSourceColumn source, DataSourceColumn target) {
-        if (dataType == YakDataType.STRING || dataType == YakDataType.BINARY) {
+    private static boolean sameTypeCompatible(
+            YakTypeKind kind, DataSourceColumn source, DataSourceColumn target) {
+        if (kind == YakTypeKind.STRING || kind == YakTypeKind.BINARY) {
             return capacityCompatible(source.size(), target.size());
         }
-        if (dataType == YakDataType.DECIMAL) {
+        if (kind == YakTypeKind.DECIMAL) {
             return decimalCompatible(source, target);
         }
         return true;
     }
 
     private static boolean integerToDecimalCompatible(
-            YakDataType sourceType, DataSourceColumn source, DataSourceColumn target) {
+            YakTypeKind sourceKind, DataSourceColumn source, DataSourceColumn target) {
         if (!positive(target.size())) return true;
 
         int targetScale = knownScale(target.scale()) ? target.scale() : 0;
         int targetIntegerDigits = target.size() - targetScale;
-        int sourceIntegerDigits = positive(source.size()) ? source.size() : integerDigits(sourceType);
+        int sourceIntegerDigits = positive(source.size()) ? source.size() : integerDigits(sourceKind);
         return targetIntegerDigits >= sourceIntegerDigits;
     }
 
@@ -78,30 +82,30 @@ public final class JdbcSchemaCompatibility {
         return !positive(sourceSize) || !positive(targetSize) || targetSize >= sourceSize;
     }
 
-    private static boolean isInteger(YakDataType dataType) {
-        return dataType == YakDataType.TINYINT
-                || dataType == YakDataType.SMALLINT
-                || dataType == YakDataType.INTEGER
-                || dataType == YakDataType.BIGINT;
+    private static boolean isInteger(YakTypeKind kind) {
+        return kind == YakTypeKind.TINYINT
+                || kind == YakTypeKind.SMALLINT
+                || kind == YakTypeKind.INTEGER
+                || kind == YakTypeKind.BIGINT;
     }
 
-    private static int integerRank(YakDataType dataType) {
-        return switch (dataType) {
+    private static int integerRank(YakTypeKind kind) {
+        return switch (kind) {
             case TINYINT -> 1;
             case SMALLINT -> 2;
             case INTEGER -> 3;
             case BIGINT -> 4;
-            default -> throw new IllegalArgumentException("not an integer type: " + dataType);
+            default -> throw new IllegalArgumentException("not an integer type: " + kind);
         };
     }
 
-    private static int integerDigits(YakDataType dataType) {
-        return switch (dataType) {
+    private static int integerDigits(YakTypeKind kind) {
+        return switch (kind) {
             case TINYINT -> 3;
             case SMALLINT -> 5;
             case INTEGER -> 10;
             case BIGINT -> 19;
-            default -> throw new IllegalArgumentException("not an integer type: " + dataType);
+            default -> throw new IllegalArgumentException("not an integer type: " + kind);
         };
     }
 
