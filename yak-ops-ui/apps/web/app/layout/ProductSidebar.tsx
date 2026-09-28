@@ -22,10 +22,10 @@ export default function ProductSidebar({ productLabel, navigation }: ProductSide
               to={item.path}
               className={({ isActive }) =>
                 [
-                  "flex h-8 items-center gap-3.5 border-r-2 px-[14px] text-sm font-medium text-[#26282c] transition-colors",
+                  "flex h-8 items-center gap-3.5 border-r-2 px-[14px] text-[13px] text-[#26282c] transition-colors",
                   isActive
-                    ? "border-[#1544d1] bg-[#dbe3fb]"
-                    : "border-transparent hover:bg-[#f2f2f2]",
+                    ? "border-[#1544d1] bg-[#dbe3fb] font-semibold"
+                    : "border-transparent font-normal hover:bg-[#f2f2f2]",
                 ].join(" ")
               }
             >
