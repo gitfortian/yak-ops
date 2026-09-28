@@ -194,7 +194,6 @@ export function RealtimeSyncPage() {
     }
   };
 
-
   const confirmDelete = async () => {
     if (!pendingDelete || deleting) return;
     setDeleting(true);
