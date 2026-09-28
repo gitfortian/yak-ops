@@ -375,7 +375,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const targetDataSources = useMemo(
     () =>
       realtime
-        ? dataSources.filter((item) => ["MYSQL", "POSTGRE_SQL", "ORACLE"].includes(item.dbType || ""))
+        ? dataSources.filter((item) =>
+            ["MYSQL", "POSTGRE_SQL", "ORACLE"].includes(item.dbType || ""),
+          )
         : dataSources,
     [dataSources, realtime],
   );
@@ -594,7 +596,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       if (runAfterSave) {
         const instance = await runDataSyncTask(saved.id);
         toast.success(realtime ? "实时同步任务已保存并启动" : "同步任务已保存并启动");
-        navigate(realtime ? basePath : `/offline-sync/instances/${instance.id}`, { replace: true });
+        navigate(realtime ? basePath : `/offline-sync/instances/${instance.id}`, {
+          replace: true,
+        });
         return;
       }
       toast.success(editing ? "同步任务已保存" : "同步任务已创建");
