@@ -38,8 +38,11 @@ import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
+import io.yak.ops.flow.api.row.YakColumn;
+import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
+import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import jakarta.annotation.Resource;
-import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -391,83 +394,16 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private boolean compatibleType(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
-        if (source.getJdbcType() == null || target.getJdbcType() == null) return false;
-        int sourceType = source.getJdbcType();
-        int targetType = target.getJdbcType();
-
-        boolean familyCompatible = sourceType == targetType
-                || (isBoolean(sourceType) && isBoolean(targetType))
-                || (isInteger(sourceType) && (isInteger(targetType) || isDecimal(targetType)))
-                || (isDecimal(sourceType) && isDecimal(targetType))
-                || (isString(sourceType) && isString(targetType))
-                || (isBinary(sourceType) && isBinary(targetType))
-                || (isDate(sourceType) && isDate(targetType))
-                || (isTime(sourceType) && isTime(targetType))
-                || (isTimestamp(sourceType) && isTimestamp(targetType));
-        if (!familyCompatible) return false;
-
-        if ((isString(sourceType) || isBinary(sourceType))
-                && positive(source.getSize())
-                && positive(target.getSize())
-                && source.getSize() > target.getSize()) {
+        DataSourceColumn sourceColumn = DataSyncCatalogColumns.toColumn(source);
+        DataSourceColumn targetColumn = DataSyncCatalogColumns.toColumn(target);
+        if (sourceColumn == null || targetColumn == null) return false;
+        try {
+            YakColumn sourceYakColumn = JdbcSchemaMapper.toYakColumn(sourceColumn);
+            YakColumn targetYakColumn = JdbcSchemaMapper.toYakColumn(targetColumn);
+            return JdbcSchemaCompatibility.isCompatible(sourceYakColumn, targetYakColumn);
+        } catch (IllegalArgumentException exception) {
             return false;
         }
-        if (isDecimal(sourceType) && isDecimal(targetType)) {
-            if (positive(source.getSize()) && positive(target.getSize()) && source.getSize() > target.getSize()) {
-                return false;
-            }
-            if (source.getScale() != null && target.getScale() != null && source.getScale() > target.getScale()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean isBoolean(int type) {
-        return type == Types.BOOLEAN || type == Types.BIT;
-    }
-
-    private boolean isInteger(int type) {
-        return type == Types.TINYINT || type == Types.SMALLINT || type == Types.INTEGER || type == Types.BIGINT;
-    }
-
-    private boolean isDecimal(int type) {
-        return type == Types.REAL
-                || type == Types.FLOAT
-                || type == Types.DOUBLE
-                || type == Types.NUMERIC
-                || type == Types.DECIMAL;
-    }
-
-    private boolean isString(int type) {
-        return type == Types.CHAR
-                || type == Types.VARCHAR
-                || type == Types.LONGVARCHAR
-                || type == Types.NCHAR
-                || type == Types.NVARCHAR
-                || type == Types.LONGNVARCHAR
-                || type == Types.CLOB
-                || type == Types.NCLOB;
-    }
-
-    private boolean isBinary(int type) {
-        return type == Types.BINARY || type == Types.VARBINARY || type == Types.LONGVARBINARY || type == Types.BLOB;
-    }
-
-    private boolean isDate(int type) {
-        return type == Types.DATE;
-    }
-
-    private boolean isTime(int type) {
-        return type == Types.TIME || type == Types.TIME_WITH_TIMEZONE;
-    }
-
-    private boolean isTimestamp(int type) {
-        return type == Types.TIMESTAMP || type == Types.TIMESTAMP_WITH_TIMEZONE;
-    }
-
-    private boolean positive(Integer value) {
-        return value != null && value > 0;
     }
 
     private DataSyncMappingPreviewDTO resolveMappingScope(DataSyncMappingPreviewDTO dto) {
