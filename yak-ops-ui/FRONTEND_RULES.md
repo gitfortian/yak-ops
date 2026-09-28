@@ -51,6 +51,7 @@ scripts               = executable architecture/tooling checks
 - Domain endpoint 与后端 Contract 跟随 `service/<domain>`。
 - 依赖方向保持 `app → service → http`。
 - 通用 UI Primitive 从 `@yak-ops/yak-ui` 使用。
+- 页面内持续可见的前置条件、风险提示、兼容性限制和“避免踩坑”警告统一使用 Yak UI `Alert`；不要在 `app/**` 手写黄色提示条。一次性操作结果仍使用 Toast。
 - HTTP 请求统一经过 `service/http`。
 - Component / Page / Hook 不直接调用 `fetch`。
 - 跨页面运行时状态放 `context`，访问 Hook 放 `hooks`。
