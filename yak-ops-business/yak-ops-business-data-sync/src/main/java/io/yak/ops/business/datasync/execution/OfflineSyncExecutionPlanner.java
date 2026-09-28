@@ -16,7 +16,7 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.util.List;
-import java.util.Objects;
+import io.yak.ops.common.util.ObjectUtils;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,11 +32,11 @@ public class OfflineSyncExecutionPlanner {
     private DataSourceService dataSourceService;
 
     public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
-        Objects.requireNonNull(snapshot, "definition snapshot must not be null");
-        DataSyncEndpointSnapshotVO sourceEndpoint = Objects.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
-        DataSyncEndpointSnapshotVO targetEndpoint = Objects.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
+        ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
+        DataSyncEndpointSnapshotVO sourceEndpoint = ObjectUtils.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
+        DataSyncEndpointSnapshotVO targetEndpoint = ObjectUtils.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
         DataSyncRuntimeConfigVO runtimeConfig =
-                Objects.requireNonNull(snapshot.getRuntimeConfig(), "runtime config must not be null");
+                ObjectUtils.requireNonNull(snapshot.getRuntimeConfig(), "runtime config must not be null");
 
         List<DataSourceCatalogColumnVO> sourceColumns =
                 dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
