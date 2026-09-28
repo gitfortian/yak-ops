@@ -33,9 +33,8 @@ public final class DataSyncCatalogColumns {
     }
 
     public static DataSourceColumn toColumn(DataSourceCatalogColumnVO column) {
-        int ordinal = column == null || column.getOrdinalPosition() == null
-                ? Integer.MAX_VALUE
-                : column.getOrdinalPosition();
+        int ordinal =
+                column == null || column.getOrdinalPosition() == null ? Integer.MAX_VALUE : column.getOrdinalPosition();
         return toColumn(column, ordinal);
     }
 
