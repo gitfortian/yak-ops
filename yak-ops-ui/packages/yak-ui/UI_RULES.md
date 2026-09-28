@@ -66,6 +66,10 @@ Base UI is an implementation dependency, not a product-facing API.
 - Toast enter / exit motion is transform + opacity only: cards enter from above, leave upward or in the swipe direction, and use a smooth decelerating curve without bounce or spring motion.
 - Toast tone is semantic only: success / error / warning / info own icon and halo color, while the main card remains a neutral panel. Do not tint the whole Toast surface with status colors.
 - Toast keeps generic action composition only. Error-copy, retry, request diagnostics and other product-specific behavior stay in the app layer.
+- Alert is the shared inline warning primitive for persistent page-level cautions such as operation prerequisites, compatibility limits, risky side effects and explicit “avoid pitfalls” guidance.
+- Alert V1 is warning-only and content-only: product code passes the warning copy through `children`; Yak UI owns the icon, surface, spacing, radius, color tokens and accessibility role. Do not add business actions, dismiss lifecycle or product-specific props to Alert.
+- Persistent warnings that the user should see before acting use Alert instead of Toast. Transient save / request / execution feedback continues to use Toast.
+- Product code must not hand-build yellow warning boxes when Alert fits the case.
 - Badge is the common lightweight status-label primitive; product-specific status semantics stay outside Yak UI.
 - Table owns generic tabular rendering, loading / empty presentation, scroll / sticky header and pagination placement; product code owns fetching, filters, mutations and business cell content.
 - PageHeader owns generic page title, description, right-side composition and optional divider; product code owns page actions and business behavior.
@@ -175,6 +179,7 @@ File selection uses native browser file input. Upload request, file type / size 
 ## Legacy Replacement Reference
 
 ```text
+AntD Alert           → Alert
 AntD Button          → Button
 AntD Checkbox        → Checkbox
 AntD Input           → Input
@@ -218,6 +223,7 @@ AntD Space           → normal flex / grid layout
 
 ```text
 Yak UI
+├── Alert
 ├── Badge
 ├── Button
 ├── Checkbox

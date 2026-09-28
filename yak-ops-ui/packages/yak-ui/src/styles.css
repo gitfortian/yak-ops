@@ -121,6 +121,11 @@
 
   --yak-components-menu-item-hover: #f5f6f8;
 
+  --yak-components-alert-warning-bg: #fff8e8;
+  --yak-components-alert-warning-border: #f6dfad;
+  --yak-components-alert-warning-icon: #f79009;
+  --yak-components-alert-warning-text: #6d4710;
+
   --yak-components-badge-neutral-bg: #f2f4f7;
   --yak-components-badge-neutral-text: #667085;
   --yak-components-badge-success-bg: #ecfdf3;
