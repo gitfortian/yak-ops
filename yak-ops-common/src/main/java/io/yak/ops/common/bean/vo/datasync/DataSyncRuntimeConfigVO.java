@@ -23,6 +23,9 @@ public class DataSyncRuntimeConfigVO {
     /** 动态分片目标行数；为空时不启用自动范围分片。 */
     private Long splitSize;
 
+    /** bounded Source Reader 并行度。 */
+    private Integer sourceParallelism;
+
     /** 连接与语句超时秒数。 */
     private Integer timeoutSeconds;
 }
