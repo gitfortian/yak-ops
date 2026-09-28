@@ -5,7 +5,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 /**
- * Local Runtime Source 与 Sink 之间的有界内存 Channel，通过阻塞队列提供最小背压。
+ * Local Execution Engine Source 与 Sink 之间的有界内存 Channel，通过阻塞队列提供最小背压。
  *
  * @author weifuwan
  * @since 2026-09-27
