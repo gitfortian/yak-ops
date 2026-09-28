@@ -40,7 +40,7 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
     @Override
     public PageData<DataSyncInstanceEntity> queryPage(String workspaceId, DataSyncInstancePageQuery query) {
         DataSyncInstancePageQuery condition =
-                query == null ? new DataSyncInstancePageQuery(1, 10, null, null, null, null, null, null) : query;
+                query == null ? new DataSyncInstancePageQuery(1, 10, null, null, null, null, null, null, null) : query;
         Page<DataSyncInstanceEntity> page = Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
         IPage<DataSyncInstanceEntity> result = instanceMapper.selectPage(
                 page,
@@ -142,6 +142,7 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
                 Wrappers.<DataSyncInstanceEntity>lambdaQuery().eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId);
         return wrapper.eq(StringUtils.hasText(query.taskId()), DataSyncInstanceEntity::getTaskId, query.taskId())
                 .like(StringUtils.hasText(query.keyword()), DataSyncInstanceEntity::getTaskName, query.keyword())
+                .eq(query.syncType() != null, DataSyncInstanceEntity::getSyncType, query.syncType())
                 .eq(query.status() != null, DataSyncInstanceEntity::getStatus, query.status())
                 .eq(query.triggerType() != null, DataSyncInstanceEntity::getTriggerType, query.triggerType())
                 .ge(query.startTimeStart() != null, DataSyncInstanceEntity::getStartTime, query.startTimeStart())

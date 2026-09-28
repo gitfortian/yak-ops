@@ -3,6 +3,7 @@ package io.yak.ops.dao.entity.datasync;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
+import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.dao.entity.BaseEntity;
 import java.time.LocalDateTime;
 import lombok.Getter;
@@ -32,6 +33,9 @@ public class DataSyncInstanceEntity extends BaseEntity {
 
     /** 实例采用的任务定义版本。 */
     private Integer taskVersion;
+
+    /** 实例同步类型，独立固化以支持任务删除后的历史查询。 */
+    private DataSyncType syncType;
 
     /** 实例触发方式。 */
     private DataSyncTriggerType triggerType;

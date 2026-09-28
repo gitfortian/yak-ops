@@ -209,6 +209,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         instance.setTaskId(task.getId());
         instance.setTaskName(task.getName());
         instance.setTaskVersion(task.getDefinitionVersion());
+        instance.setSyncType(task.getSyncType());
         instance.setTriggerType(DataSyncTriggerType.MANUAL);
         instance.setStatus(DataSyncInstanceStatus.PENDING);
         instance.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
@@ -261,6 +262,7 @@ public class DataSyncServiceImpl implements DataSyncService {
                 dto.getPageSize(),
                 StringUtils.trimToNull(dto.getTaskId()),
                 StringUtils.trimToNull(dto.getKeyword()),
+                dto.getSyncType(),
                 dto.getStatus(),
                 dto.getTriggerType(),
                 dto.getStartTimeStart(),
@@ -539,8 +541,10 @@ public class DataSyncServiceImpl implements DataSyncService {
     }
 
     private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {
-        DataSyncInstanceVO target =
-                BeanCopyUtils.copy(source, DataSyncInstanceVO.class, "triggerType", "status", "definitionSnapshot");
+        DataSyncInstanceVO target = BeanCopyUtils.copy(
+                source, DataSyncInstanceVO.class, "syncType", "triggerType", "status", "definitionSnapshot");
+        target.setSyncType(
+                source.getSyncType() == null ? null : source.getSyncType().name());
         target.setTriggerType(
                 source.getTriggerType() == null ? null : source.getTriggerType().name());
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());

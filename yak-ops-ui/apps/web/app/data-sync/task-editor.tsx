@@ -674,13 +674,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           : await createDataSyncTask(payload());
       if (runAfterSave) {
         const instance = await runDataSyncTask(saved.id);
-        if (realtime) {
-          toast.success("实时同步任务已保存并启动");
-          navigate(basePath, { replace: true });
-        } else {
-          toast.success("同步任务已保存并启动");
-          navigate(`/offline-sync/instances/${instance.id}`, { replace: true });
-        }
+        toast.success(realtime ? "实时同步任务已保存并启动" : "同步任务已保存并启动");
+        navigate(`${basePath}/instances/${instance.id}`, { replace: true });
         return;
       }
       toast.success(editing ? "同步任务已保存" : "同步任务已创建");

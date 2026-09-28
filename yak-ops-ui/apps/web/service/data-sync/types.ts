@@ -144,6 +144,7 @@ export interface DataSyncInstanceRecord {
   taskId: string;
   taskName: string;
   taskVersion: number;
+  syncType: DataSyncType | string;
   triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | string;
   status: DataSyncInstanceStatus;
   readRows: number;
@@ -161,6 +162,7 @@ export interface DataSyncInstancePageParams {
   pageNo: number;
   pageSize: number;
   taskId?: string;
+  syncType?: DataSyncType;
   keyword?: string;
   status?: DataSyncInstanceStatus;
   triggerType?: string;

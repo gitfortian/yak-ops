@@ -26,6 +26,9 @@ public class DataSyncInstanceVO {
     /** 实例启动时采用的任务定义版本。 */
     private Integer taskVersion;
 
+    /** 实例同步类型，例如 OFFLINE、REALTIME。 */
+    private String syncType;
+
     /** 实例触发方式，例如 MANUAL、SCHEDULE、RETRY。 */
     private String triggerType;
 
