@@ -223,7 +223,7 @@ final class JdbcSinkWriter implements SinkWriter {
     }
 
     private int sqlType(YakDataType dataType) {
-        return switch (dataType) {
+        return switch (dataType.kind()) {
             case BOOLEAN -> Types.BOOLEAN;
             case TINYINT -> Types.TINYINT;
             case SMALLINT -> Types.SMALLINT;
