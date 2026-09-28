@@ -106,7 +106,7 @@ Must:
 - Persist one type-specific YakFlow config JSON in `runtime_config`; `OFFLINE` uses batch/fetch/split tuning while `REALTIME` uses CDC/checkpoint/write tuning.
 - Persist target data semantics as first-class Task field `writeMode`; do not place APPEND / OVERWRITE / UPSERT inside `runtime_config`.
 - Keep `DataSyncWriteMode` persistence values stable: APPEND=1, OVERWRITE=2, UPSERT=3.
-- PR1 only accepts APPEND. OVERWRITE / UPSERT must fail fast until their JDBC execution behavior lands.
+- OFFLINE accepts APPEND and OVERWRITE. UPSERT must fail fast until native JDBC upsert behavior lands.
 - REALTIME currently persists APPEND for the shared Task contract while runtime application continues through `JdbcWriteMode.CHANGELOG`; realtime writeMode is not user-configurable.
 - Support `OFFLINE` and `REALTIME` task definitions.
 - Keep `REALTIME` Source limited to MySQL CDC in the current milestone.
@@ -243,6 +243,9 @@ Must:
 - Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Execution Engine is not process-recoverable.
 - Revalidate current Catalog field compatibility when a task is started.
 - Build runtime Catalog schema, datasource connections and JDBC Source / Sink through `OfflineSyncExecutionPlanner`.
+- Map OFFLINE APPEND to `JdbcSaveMode.APPEND + JdbcWriteMode.INSERT`.
+- Map OFFLINE OVERWRITE to `JdbcSaveMode.OVERWRITE + JdbcWriteMode.INSERT`; target TRUNCATE happens before Source rows are written.
+- Revalidate writeMode at run time and keep UPSERT rejected until native dialect support exists.
 - Keep `OfflineSyncExecutionPlan` in memory only; it may hold runtime connection objects indirectly and must never be persisted, serialized into an Instance or logged.
 - Keep `OfflineSyncExecutor` focused on execution lifecycle, metrics, cancellation and terminal-state persistence.
 - Keep historical instances after task deletion; active instances block task deletion.

@@ -196,6 +196,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
+        validateWriteMode(task.getSyncType(), taskWriteMode(task));
         if (task.getSyncType() == DataSyncType.REALTIME) {
             validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
         }
@@ -511,10 +512,11 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     private void validateWriteMode(DataSyncType syncType, DataSyncWriteMode writeMode) {
         DataSyncWriteMode resolved = requireWriteMode(writeMode);
-        if (resolved != DataSyncWriteMode.APPEND) {
-            throw new DataSyncException(
-                    DataSyncErrorCode.INVALID_TASK,
-                    syncType == DataSyncType.REALTIME ? "REALTIME 当前固定使用 APPEND 写入方式" : "OFFLINE 当前阶段仅支持 APPEND 写入方式");
+        if (syncType == DataSyncType.REALTIME && resolved != DataSyncWriteMode.APPEND) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 当前固定使用 APPEND 写入方式");
+        }
+        if (syncType == DataSyncType.OFFLINE && resolved == DataSyncWriteMode.UPSERT) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 当前阶段暂不支持 UPSERT 写入方式");
         }
     }
 

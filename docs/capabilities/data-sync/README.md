@@ -52,8 +52,8 @@ Datasource credentials never belong to the task table.
 Current write-mode rollout is staged:
 
 ```text
-APPEND      defined + executable
-OVERWRITE   contract only; execution remains disabled until JDBC save-mode support lands
+APPEND      executable; preserves existing target data
+OVERWRITE   executable; commits TRUNCATE TABLE before the INSERT load
 UPSERT      contract only; execution remains disabled until native dialect upsert support lands
 ```
 
@@ -230,7 +230,23 @@ Offline Sync
 
 A bound database is displayed as read-only context and cannot be overridden by a Task. Backend task persistence and mapping preview canonicalize scope from Datasource again, so API callers cannot bypass the UI rule.
 
-No filter SQL, split key, pre/post SQL, resource group or Transform is introduced in this phase.
+No filter SQL, split key, custom pre/post SQL, resource group or Transform is introduced in this phase.
+
+OFFLINE write modes now support:
+
+```text
+APPEND
+  target rows preserved
+  ↓
+INSERT batches
+
+OVERWRITE
+  TRUNCATE TABLE target
+  ↓ commit
+  INSERT batches
+```
+
+OVERWRITE is not an atomic table replacement. If the load fails after TRUNCATE commits, previous target rows are not restored.
 
 ## Phase 3 — Offline Execution
 

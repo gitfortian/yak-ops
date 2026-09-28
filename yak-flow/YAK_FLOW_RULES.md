@@ -200,6 +200,11 @@ Must:
 - Fall back to one whole-table split when no eligible integer single primary key exists or the table row count does not exceed `splitSize`.
 - Reject dynamic plans above 10,000 splits instead of allocating an unbounded split list; callers must increase `splitSize`.
 - Treat each JDBC split as an independent read transaction; V1 does not claim one database-consistent snapshot across multiple splits.
+- Keep target pre-write handling separate from row write semantics: `JdbcSaveMode.APPEND / OVERWRITE` is independent from `JdbcWriteMode.INSERT / CHANGELOG`.
+- APPEND preserves target rows before normal writes.
+- OVERWRITE executes dialect-owned `TRUNCATE TABLE` once when the bounded INSERT writer opens, commits that destructive pre-write action, then continues with normal INSERT batches.
+- Reject OVERWRITE with CHANGELOG; realtime CDC must never clear the target table.
+- Do not silently fall back from TRUNCATE to DELETE when permissions, foreign keys or database rules reject overwrite.
 - Commit Sink writes in explicit JDBC batches.
 - Roll back uncommitted Sink data on write/flush failure.
 - Own JDBC Catalog field compatibility used by Data Sync mapping preview and runtime execution.
@@ -214,6 +219,7 @@ Must Not:
 - Duplicate datasource host/port/username/password configuration models inside YakFlow.
 - Add custom SQL, Transform or arbitrary SQL execution in Phase 3.
 - Auto-create target tables in Phase 3.
+- Claim OVERWRITE is atomic with the subsequent data load; after TRUNCATE commits, a later load failure may leave the target empty or partially refilled.
 - Claim snapshot restart consistency from the current row-count checkpoint state.
 - Add skew detection or sampling policy in the dynamic range split phase.
 - Duplicate JDBC type-family or conversion compatibility rules in Data Sync Business.

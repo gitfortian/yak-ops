@@ -32,6 +32,10 @@ public interface JdbcDialect {
         return "SELECT MIN(" + column + "), MAX(" + column + "), COUNT(*) FROM " + qualifiedTable(table);
     }
 
+    default String truncateSql(DataSourceTablePath table) {
+        return "TRUNCATE TABLE " + qualifiedTable(table);
+    }
+
     default String insertSql(DataSourceTablePath table, YakTableSchema schema) {
         String columns = schema.columns().stream()
                 .map(YakColumn::name)
