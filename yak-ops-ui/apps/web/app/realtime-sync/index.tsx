@@ -18,7 +18,7 @@ import {
 } from "@yak-ops/yak-ui";
 import { ArrowRight, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import {
@@ -61,6 +61,17 @@ const pathText = (database?: string, schema?: string, table?: string) =>
 
 export function RealtimeSyncPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("tab") !== "instances") return;
+
+    const nextParams = new URLSearchParams({ tab: "instances" });
+    const taskId = params.get("taskId");
+    if (taskId) nextParams.set("taskId", taskId);
+    navigate(`/operations/realtime-tasks?${nextParams.toString()}`, { replace: true });
+  }, [location.search, navigate]);
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
