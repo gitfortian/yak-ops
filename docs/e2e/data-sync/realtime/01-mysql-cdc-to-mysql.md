@@ -1,47 +1,47 @@
-# REALTIME-001: MySQL CDC → MySQL
+# REALTIME-001：MySQL CDC → MySQL
 
-## Verification Goal
+## 验证目标
 
-Verify the complete Yak Ops REALTIME synchronization Golden Path:
+验证 Yak Ops 实时同步完整核心路径：
 
 ```text
-MySQL Source
-    ↓ initial snapshot + binlog
-Yak Ops Realtime Sync
-    ↓
-YakFlow Local Execution Engine
-    ↓
-JdbcSink CHANGELOG
-    ↓
-MySQL Target
+MySQL 源端
+   ↓ 初始化快照 + binlog
+Yak Ops 实时同步
+   ↓
+YakFlow 本地执行引擎
+   ↓
+JdbcSink 变更日志（CHANGELOG）
+   ↓
+MySQL 目标端
 ```
 
-This case proves:
+本用例验证：
 
-- A REALTIME Task can be configured from the UI.
-- Initial snapshot rows reach the Target.
-- Source INSERT is applied to the Target.
-- Source UPDATE is applied to the Target.
-- Source DELETE is applied to the Target.
-- Instance event counters increase with CDC events.
-- The running Task can be stopped from the product UI.
+- 可以从 UI 配置 `REALTIME` 任务。
+- 初始化快照数据能够写入目标端。
+- 源端 INSERT 能够应用到目标端。
+- 源端 UPDATE 能够应用到目标端。
+- 源端 DELETE 能够应用到目标端。
+- 实例事件计数会随 CDC 事件增加。
+- 运行中的任务可以从产品 UI 停止。
 
-This case does not prove restart continuation or exactly-once semantics.
+本用例不验证重启续传，也不声明 exactly-once 语义。
 
-## Preconditions
+## 前置条件
 
-- Yak Ops is running.
-- A non-production MySQL CDC Source is available.
-- A MySQL Target is available.
-- Two Yak Ops Datasource resources are available:
-  - Source bound to `yak_e2e_realtime_source`.
-  - Target bound to `yak_e2e_realtime_target`.
-- Both Datasources pass connection validation.
-- The Source account has the privileges required by the current Debezium MySQL connector contract: `SELECT`, `RELOAD`, `SHOW DATABASES`, `REPLICATION SLAVE`, and `REPLICATION CLIENT`.
-- Hosted MySQL variants may additionally require snapshot-lock privileges such as `LOCK TABLES`, depending on their locking model.
-- The Source MySQL instance has binary logging enabled for row-based CDC.
+- Yak Ops 正常运行。
+- 已准备一个非生产 MySQL CDC 源端。
+- 已准备一个 MySQL 目标端。
+- Yak Ops 中已存在两个数据源资源：
+  - 源端绑定 `yak_e2e_realtime_source`。
+  - 目标端绑定 `yak_e2e_realtime_target`。
+- 两个数据源都能通过连接校验。
+- 源端账号拥有当前 Debezium MySQL 连接器契约要求的权限：`SELECT`、`RELOAD`、`SHOW DATABASES`、`REPLICATION SLAVE`、`REPLICATION CLIENT`。
+- 某些托管 MySQL 在不同锁模型下，初始化快照还可能要求 `LOCK TABLES` 等锁表权限。
+- 源端 MySQL 已开启支持行级 CDC 的 binlog。
 
-Check the Source MySQL runtime:
+检查源端 MySQL 运行参数：
 
 ```sql
 SHOW VARIABLES LIKE 'log_bin';
@@ -49,21 +49,21 @@ SHOW VARIABLES LIKE 'binlog_format';
 SHOW VARIABLES LIKE 'binlog_row_image';
 ```
 
-Expected:
+预期：
 
 ```text
-log_bin         = ON
-binlog_format   = ROW
+log_bin          = ON
+binlog_format    = ROW
 binlog_row_image = FULL
 ```
 
-If the environment uses different valid CDC settings, record that deviation before executing the case.
+如果当前环境采用其它有效的 CDC 配置，执行本用例前必须记录差异。
 
-See the capability-level prerequisites in [MySQL CDC Source Requirements](../../../capabilities/data-sync/README.md#mysql-cdc-source-requirements).
+能力级前置要求参见 [MySQL CDC 源端要求](../../../capabilities/data-sync/README.md#mysql-cdc-source-requirements)。
 
-## 1. Prepare Source
+## 1. 准备源端
 
-Run on the Source MySQL server:
+在源端 MySQL 服务上执行：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS yak_e2e_realtime_source;
@@ -89,7 +89,7 @@ FROM e2e_realtime_user
 ORDER BY id;
 ```
 
-Expected Source rows:
+预期源端数据：
 
 | id | name | balance |
 | ---: | --- | ---: |
@@ -97,11 +97,11 @@ Expected Source rows:
 | 2 | Bob | 200.00 |
 | 3 | Carol | 300.75 |
 
-The primary key is required by the current REALTIME product contract. The Target table must expose the same primary-key field set under case-insensitive same-name mapping.
+当前 `REALTIME` 产品契约要求源表存在主键。目标表必须在大小写不敏感的同名字段映射下，提供完全相同的主键字段集合。
 
-## 2. Prepare Target
+## 2. 准备目标端
 
-Run on the Target MySQL server:
+在目标端 MySQL 服务上执行：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS yak_e2e_realtime_target;
@@ -118,22 +118,22 @@ CREATE TABLE e2e_realtime_user (
 );
 ```
 
-Confirm that the Target is empty:
+确认目标端为空：
 
 ```sql
 SELECT COUNT(*) AS row_count
 FROM e2e_realtime_user;
 ```
 
-Expected:
+预期：
 
 ```text
 0
 ```
 
-## 3. Create the Realtime Sync Task
+## 3. 创建实时同步任务
 
-Open Yak Ops:
+打开 Yak Ops：
 
 ```text
 数据集成
@@ -143,48 +143,48 @@ Open Yak Ops:
 新建任务
 ```
 
-Configure:
+按下面内容配置。
 
-### Basic Information
-
-```text
-Task Name: e2e_realtime_mysql_cdc
-Sync Type: REALTIME
-```
-
-### Datasource
-
-Source:
+### 基本信息
 
 ```text
-Datasource: MySQL Datasource bound to yak_e2e_realtime_source
+任务名称：e2e_realtime_mysql_cdc
+同步类型：REALTIME
 ```
 
-Target:
+### 数据源
+
+源端：
 
 ```text
-Datasource: MySQL Datasource bound to yak_e2e_realtime_target
+数据源：绑定 yak_e2e_realtime_source 的 MySQL 数据源
 ```
 
-### Data Source
-
-Select:
+目标端：
 
 ```text
-Table: e2e_realtime_user
+数据源：绑定 yak_e2e_realtime_target 的 MySQL 数据源
 ```
 
-### Data Target
+### 数据来源
 
-Select:
+选择：
 
 ```text
-Table: e2e_realtime_user
+表：e2e_realtime_user
 ```
 
-### Field Mapping
+### 数据去向
 
-Confirm that the automatic mapping is compatible:
+选择：
+
+```text
+表：e2e_realtime_user
+```
+
+### 字段映射
+
+确认自动映射兼容：
 
 ```text
 id         → id
@@ -193,43 +193,43 @@ balance    → balance
 updated_at → updated_at
 ```
 
-Do not continue if the mapping preview reports incompatibility, the Source primary key cannot be resolved, or the Target primary-key set differs from the Source primary-key set. The backend rejects missing, extra or different Target PK fields before execution.
+如果映射预览提示不兼容、无法识别源端主键，或者目标端主键字段集合与源端不同，不要继续执行。后端会在运行前拒绝目标端主键缺失、多出或字段不同的情况。
 
-### Runtime
+### 运行参数
 
-Use the normal realtime defaults for:
+实时核心路径使用正常默认值，主要包括：
 
-- checkpoint interval.
-- CDC queue capacity.
-- poll batch size.
-- JDBC write batch size.
-- timeout.
+- checkpoint 间隔。
+- CDC 队列容量。
+- 轮询批次大小。
+- JDBC 写入批次大小。
+- 超时时间。
 
-This Golden Path verifies product behavior, not runtime tuning.
+本核心路径验证产品行为，不验证运行参数调优效果。
 
-## 4. Start the Task and Verify Initial Snapshot
+## 4. 启动任务并验证初始化快照
 
-Click:
+点击：
 
 ```text
 保存并启动
 ```
 
-Expected product behavior:
+预期产品行为：
 
 ```text
-Task saved
+任务保存成功
    ↓
-Instance created
+实例创建
    ↓
 PENDING
    ↓
 RUNNING
 ```
 
-REALTIME execution remains `RUNNING` until stopped or failed.
+实时任务会持续保持 `RUNNING`，直到被停止或运行失败。
 
-Wait until the initial snapshot is visible on the Target, then run:
+等待初始化快照出现在目标端后执行：
 
 ```sql
 USE yak_e2e_realtime_target;
@@ -239,7 +239,7 @@ FROM e2e_realtime_user
 ORDER BY id;
 ```
 
-Expected:
+预期：
 
 | id | name | balance |
 | ---: | --- | ---: |
@@ -247,18 +247,18 @@ Expected:
 | 2 | Bob | 200.00 |
 | 3 | Carol | 300.75 |
 
-At this point the Instance should have observed three snapshot INSERT events:
+此时实例应该已经处理 3 个初始化快照 INSERT 事件：
 
 ```text
 readRows = 3
 writeRows = 3
 ```
 
-Do not perform the next Source mutation until the snapshot result is confirmed.
+确认快照结果正确后，再执行下一次源端变更。
 
-## 5. Verify INSERT
+## 5. 验证 INSERT
 
-Run on the Source:
+在源端执行：
 
 ```sql
 USE yak_e2e_realtime_source;
@@ -267,7 +267,7 @@ INSERT INTO e2e_realtime_user (id, name, balance, updated_at)
 VALUES (4, 'David', 400.25, '2026-09-28 11:03:00');
 ```
 
-Wait for CDC propagation, then run on the Target:
+等待 CDC 传播完成后，在目标端执行：
 
 ```sql
 USE yak_e2e_realtime_target;
@@ -277,22 +277,22 @@ FROM e2e_realtime_user
 WHERE id = 4;
 ```
 
-Expected:
+预期：
 
 | id | name | balance |
 | ---: | --- | ---: |
 | 4 | David | 400.25 |
 
-Expected event counters after the INSERT is applied:
+INSERT 应用完成后的预期事件计数：
 
 ```text
 readRows = 4
 writeRows = 4
 ```
 
-## 6. Verify UPDATE
+## 6. 验证 UPDATE
 
-Run on the Source:
+在源端执行：
 
 ```sql
 USE yak_e2e_realtime_source;
@@ -304,7 +304,7 @@ SET name = 'Bobby',
 WHERE id = 2;
 ```
 
-Wait for CDC propagation, then run on the Target:
+等待 CDC 传播完成后，在目标端执行：
 
 ```sql
 USE yak_e2e_realtime_target;
@@ -314,31 +314,31 @@ FROM e2e_realtime_user
 WHERE id = 2;
 ```
 
-Expected:
+预期：
 
 | id | name | balance |
 | ---: | --- | ---: |
 | 2 | Bobby | 250.00 |
 
-The current YakFlow CDC protocol emits an UPDATE as two change events:
+当前 YakFlow CDC 协议会把一次 UPDATE 发送成两个变更事件：
 
 ```text
 UPDATE_BEFORE
 UPDATE_AFTER
 ```
 
-Expected counters after the UPDATE is fully applied:
+UPDATE 完整应用后的预期计数：
 
 ```text
 readRows = 6
 writeRows = 6
 ```
 
-The counters are change-event counts, not business-row counts.
+这里的计数表示变更事件数量，不是业务数据行数。
 
-## 7. Verify DELETE
+## 7. 验证 DELETE
 
-Run on the Source:
+在源端执行：
 
 ```sql
 USE yak_e2e_realtime_source;
@@ -347,7 +347,7 @@ DELETE FROM e2e_realtime_user
 WHERE id = 1;
 ```
 
-Wait for CDC propagation, then run on the Target:
+等待 CDC 传播完成后，在目标端执行：
 
 ```sql
 USE yak_e2e_realtime_target;
@@ -357,22 +357,22 @@ FROM e2e_realtime_user
 WHERE id = 1;
 ```
 
-Expected:
+预期：
 
 ```text
 0
 ```
 
-Expected counters after the DELETE is applied:
+DELETE 应用完成后的预期计数：
 
 ```text
 readRows = 7
 writeRows = 7
 ```
 
-## 8. Verify Final Target State
+## 8. 验证目标端最终状态
 
-Run:
+执行：
 
 ```sql
 USE yak_e2e_realtime_target;
@@ -382,7 +382,7 @@ FROM e2e_realtime_user
 ORDER BY id;
 ```
 
-Expected final business rows:
+预期最终业务数据：
 
 | id | name | balance |
 | ---: | --- | ---: |
@@ -390,28 +390,28 @@ Expected final business rows:
 | 3 | Carol | 300.75 |
 | 4 | David | 400.25 |
 
-Verify the final count:
+验证最终总行数：
 
 ```sql
 SELECT COUNT(*) AS row_count
 FROM e2e_realtime_user;
 ```
 
-Expected:
+预期：
 
 ```text
 3
 ```
 
-## 9. Stop the Realtime Instance
+## 9. 停止实时实例
 
-From the running Instance page, click:
+在运行中的实例页面点击：
 
 ```text
 停止
 ```
 
-Expected:
+预期：
 
 ```text
 RUNNING
@@ -419,42 +419,42 @@ RUNNING
 CANCELED
 ```
 
-The realtime UI may present `CANCELED` as `已停止`.
+实时同步 UI 可能会把 `CANCELED` 展示为“已停止”。
 
-This step verifies user-controlled stop only. It does not verify offset reuse on the next run; that belongs to a separate continuation E2E case.
+本步骤只验证用户主动停止，不验证下一次运行是否复用 offset；续传能力应由独立的实时续传 E2E 用例验证。
 
-## 10. Acceptance Checklist
+## 10. 验收清单
 
-- [ ] Source MySQL CDC prerequisites are satisfied, including binlog mode and CDC account privileges.
-- [ ] Source and Target primary-key field sets match exactly under case-insensitive same-name mapping.
-- [ ] Source contains exactly the three initial seed rows before Task start.
-- [ ] Target is empty before Task start.
-- [ ] REALTIME Task saves successfully.
-- [ ] Instance reaches `RUNNING`.
-- [ ] Initial snapshot creates Target rows `1 / 2 / 3`.
-- [ ] Snapshot counters reach `3 / 3`.
-- [ ] Source INSERT of row `4` appears on Target.
-- [ ] Counters reach `4 / 4` after INSERT.
-- [ ] Source UPDATE of row `2` becomes `Bobby / 250.00` on Target.
-- [ ] Counters reach `6 / 6` after UPDATE.
-- [ ] Source DELETE of row `1` removes row `1` from Target.
-- [ ] Counters reach `7 / 7` after DELETE.
-- [ ] Final Target contains exactly rows `2 / 3 / 4`.
-- [ ] Stop transitions the active Instance to `CANCELED / 已停止`.
+- [ ] MySQL CDC 源端前置条件满足，包括 binlog 模式和 CDC 账号权限。
+- [ ] 源端与目标端主键字段集合在大小写不敏感的同名映射下完全一致。
+- [ ] 任务启动前，源端恰好包含 3 条初始化数据。
+- [ ] 任务启动前，目标端为空。
+- [ ] `REALTIME` 任务保存成功。
+- [ ] 实例到达 `RUNNING`。
+- [ ] 初始化快照在目标端生成数据 `1 / 2 / 3`。
+- [ ] 快照计数达到 `3 / 3`。
+- [ ] 源端 INSERT 的数据 `4` 出现在目标端。
+- [ ] INSERT 后计数达到 `4 / 4`。
+- [ ] 源端 UPDATE 后，目标端数据 `2` 更新为 `Bobby / 250.00`。
+- [ ] UPDATE 后计数达到 `6 / 6`。
+- [ ] 源端 DELETE 数据 `1` 后，目标端数据 `1` 被删除。
+- [ ] DELETE 后计数达到 `7 / 7`。
+- [ ] 最终目标端只包含数据 `2 / 3 / 4`。
+- [ ] 停止后，活动实例状态变为 `CANCELED / 已停止`。
 
-Any unchecked item means this E2E case has not passed.
+任意一项未通过，都表示本 E2E 用例未通过。
 
-## 11. Cleanup
+## 11. 清理
 
-Stop the REALTIME Instance before dropping tables.
+删除表之前，先停止 `REALTIME` 实例。
 
-Then run:
+然后执行：
 
 ```sql
 DROP TABLE IF EXISTS yak_e2e_realtime_source.e2e_realtime_user;
 DROP TABLE IF EXISTS yak_e2e_realtime_target.e2e_realtime_user;
 ```
 
-Delete the E2E Task from Yak Ops if it is no longer needed.
+如果不再需要，可以在 Yak Ops 中删除该 E2E 任务。
 
-Do not delete product-owned realtime state directories manually as part of this Golden Path. State lifecycle and continuation are validated by dedicated realtime continuation cases.
+不要在本核心路径中手工删除产品管理的实时状态目录。状态生命周期和续传能力由专门的实时续传用例验证。

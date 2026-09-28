@@ -1,122 +1,134 @@
-# Data Sync Manual E2E Playbook
+# 数据同步手工 E2E 操作手册
 
-Status: Active
+状态：启用
 
-Scope:
+适用范围：
 
-- Yak Ops Data Sync product flow.
-- OFFLINE and REALTIME manual end-to-end acceptance.
-- Human-executed verification against real databases.
+- Yak Ops 数据同步产品主流程。
+- 离线与实时手工端到端验收。
+- 基于真实数据库、由人工执行的验证。
 
-## Purpose
+## 目标
 
-Manual E2E is the product-level acceptance layer above automated Unit / Integration / Acceptance tests.
+手工 E2E 位于自动化单元测试、集成测试、验收测试之上，用于验证产品级完整链路。
 
-It answers one question:
+它只回答一个问题：
 
-> Can a user prepare real database data, configure Data Sync through Yak Ops, run the task and verify the final database result from beginning to end?
+> 用户能否准备真实数据库数据，通过 Yak Ops 配置数据同步，运行任务，并从头到尾验证最终数据库结果？
 
-The verification path is:
-
-```text
-Source Database
-      ↓
-Datasource Resource
-      ↓
-Task Definition
-      ↓
-Yak Ops UI Operation
-      ↓
-Data Sync Business Layer
-      ↓
-YakFlow Local Execution Engine
-      ↓
-Connector
-      ↓
-Target Database
-      ↓
-Result Verification
-```
-
-## What Manual E2E Is Not
-
-Manual E2E does not replace automated tests.
+验证链路如下：
 
 ```text
-Unit Test
-  proves local behavior
-
-Integration / Acceptance Test
-  proves Runtime / Connector behavior against real databases
-
-Manual E2E
-  proves the complete user-visible product workflow
+源数据库
+   ↓
+数据源资源
+   ↓
+任务定义
+   ↓
+Yak Ops UI 操作
+   ↓
+数据同步业务层
+   ↓
+YakFlow 本地执行引擎
+   ↓
+连接器
+   ↓
+目标数据库
+   ↓
+结果验证
 ```
 
-Manual E2E documents must not be converted into large automated test matrices merely to mirror every parameter combination.
+## 文档语言规则
 
-## Case Design Rules
+E2E 文档面向人工执行和产品验收，说明文字统一使用中文。
 
-Each case represents one meaningful user scenario.
+必须遵循：
 
-Must:
+- 除 SQL 代码块外，标题、背景、步骤、操作说明、预期结果、验收清单、注意事项统一使用中文。
+- SQL 代码可以保留英文关键字、表名、字段名、测试数据等原始内容。
+- 系统真实枚举、状态值、字段名、配置键属于可执行标识，不强行翻译；使用行内代码保留原值，例如 `OFFLINE`、`REALTIME`、`APPEND`、`RUNNING`、`SUCCEEDED`、`CANCELED`、`readRows`、`writeRows`。
+- 技术标识周围的解释必须使用中文，禁止出现整段英文说明。
+- 新增或修改 E2E 用例时，同样遵循本规则。
 
-- Start from database preparation and finish with result verification.
-- Be executable independently from the first step to the last step.
-- Use explicit Source / Target DDL and seed data.
-- Use deterministic `e2e_*` table names.
-- Describe the Yak Ops UI operation instead of calling internal APIs directly.
-- Record the important task parameters.
-- State the expected Instance lifecycle.
-- Verify the target database with SQL.
-- State exact expected business rows whenever possible.
-- Include an acceptance checklist.
-- Include cleanup SQL.
-- Keep database passwords, tokens, SSH keys and other credentials out of the document.
-- Match the capability contract currently implemented on `main`.
+## 手工 E2E 不是什么
 
-Must Not:
+手工 E2E 不替代自动化测试。
 
-- Treat a successful Task save as proof that synchronization works.
-- Treat `RUNNING` as proof that realtime CDC works.
-- Verify only row counts when a scenario depends on UPDATE / DELETE semantics.
-- Claim exactly-once semantics.
-- Expand one scenario into a Cartesian-product matrix of every database, write mode and runtime parameter.
-- Duplicate automated connector Acceptance tests line by line.
+```text
+单元测试
+  验证局部行为
 
-## Execution Conventions
+集成测试 / 验收测试
+  验证运行时 / 连接器在真实数据库上的行为
 
-Before running a case:
+手工 E2E
+  验证用户可见的完整产品流程
+```
 
-1. Use a non-production database environment.
-2. Confirm the required Datasource resources can connect successfully.
-3. Run the case with a clean `e2e_*` table state.
-4. Do not reuse data from another E2E case unless that dependency is explicitly documented.
-5. Record any deviation from the documented expected result as a failure until explained.
+不能为了覆盖所有参数组合，把手工 E2E 文档扩展成大型自动化测试矩阵。
 
-For realtime cases, wait for the current change to appear on the target before performing the next source mutation. This keeps each INSERT / UPDATE / DELETE observation attributable to one operation.
+## 用例设计规则
 
-## Current Golden Paths
+每个用例只代表一个有明确意义的用户场景。
 
-| ID | Scenario | Purpose |
+必须：
+
+- 从数据库准备开始，以结果验证结束。
+- 从第一步到最后一步可以独立执行。
+- 明确给出源端 / 目标端 DDL 和初始化数据。
+- 使用确定性的 `e2e_*` 表名。
+- 描述 Yak Ops UI 操作，不直接调用内部 API。
+- 记录关键任务参数。
+- 明确实例预期生命周期。
+- 使用 SQL 验证目标数据库。
+- 在条件允许时明确写出预期业务数据。
+- 提供验收清单。
+- 提供清理 SQL。
+- 文档中不得出现数据库密码、Token、SSH 密钥等凭证。
+- 与 `main` 分支当前已经实现的能力契约保持一致。
+
+禁止：
+
+- 把“任务保存成功”当成同步成功。
+- 把 `RUNNING` 当成实时 CDC 已正确工作的证明。
+- 当场景依赖 UPDATE / DELETE 语义时，只验证行数。
+- 声称具备 exactly-once 语义。
+- 把一个场景扩展成数据库、写入模式、运行参数的笛卡尔积测试矩阵。
+- 逐行复制自动化连接器验收测试。
+
+## 执行约定
+
+执行用例前：
+
+1. 使用非生产数据库环境。
+2. 确认所需数据源资源可以正常连接。
+3. 使用干净的 `e2e_*` 表状态执行用例。
+4. 除非文档明确声明依赖关系，否则不要复用其它 E2E 用例的数据。
+5. 任何与文档预期结果不一致的情况，在原因明确前都按失败处理。
+
+实时用例中，每完成一次源端变更，都要等待该变更出现在目标端后，再执行下一次 INSERT / UPDATE / DELETE。这样可以确保每次观察结果都能对应到单一操作。
+
+## 当前核心路径
+
+| ID | 场景 | 目的 |
 | --- | --- | --- |
-| OFFLINE-001 | [MySQL → MySQL / APPEND](offline/01-mysql-to-mysql-append.md) | Prove the complete bounded offline product path and APPEND semantics. |
-| REALTIME-001 | [MySQL CDC → MySQL](realtime/01-mysql-cdc-to-mysql.md) | Prove initial snapshot plus INSERT / UPDATE / DELETE CDC through the product UI. |
+| OFFLINE-001 | [MySQL → MySQL / APPEND](offline/01-mysql-to-mysql-append.md) | 验证完整的有界离线产品链路以及 `APPEND` 写入语义。 |
+| REALTIME-001 | [MySQL CDC → MySQL](realtime/01-mysql-cdc-to-mysql.md) | 验证初始化快照以及 INSERT / UPDATE / DELETE CDC 能通过产品 UI 完整执行。 |
 
-## Expansion Rule
+## 扩展规则
 
-Add a new Manual E2E case only when it proves a materially different product behavior.
+只有当新用例能够验证明显不同的产品行为时，才新增手工 E2E 用例。
 
-Good future cases include:
+后续适合增加的场景包括：
 
-- MySQL → PostgreSQL offline type compatibility.
-- MySQL → Oracle offline type compatibility.
-- OFFLINE OVERWRITE semantics.
-- OFFLINE UPSERT semantics.
-- OFFLINE split + parallel Reader execution.
-- MySQL CDC → PostgreSQL.
-- MySQL CDC → Oracle.
-- Realtime Stop → rerun continuation from persisted offset.
-- Process restart → old Instance LOST → new Instance continuation.
+- MySQL → PostgreSQL 离线类型兼容性。
+- MySQL → Oracle 离线类型兼容性。
+- 离线 `OVERWRITE` 写入语义。
+- 离线 `UPSERT` 写入语义。
+- 离线 split + 并行 Reader 执行。
+- MySQL CDC → PostgreSQL。
+- MySQL CDC → Oracle。
+- 实时停止后重新运行，从已持久化 offset 继续。
+- 进程重启后旧实例变为 `LOST`，新实例继续执行。
 
-A Pull Request that changes one of these behaviors should name the Manual E2E case that proves the behavior after implementation.
+如果一个 PR 修改了上述行为，应在 PR 中明确指出实现完成后由哪个手工 E2E 用例验证该行为。
