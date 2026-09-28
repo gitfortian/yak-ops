@@ -121,6 +121,8 @@ The connector:
 - reads a table as a bounded Source with forward-only JDBC cursor batches.
 - supports an optional explicit integer single-primary-key range split contract: split key + inclusive lower/upper bounds + requested split count.
 - writes `INSERT` rows with JDBC batch commit.
+- separates target save mode from row write mode: APPEND keeps existing rows, while OVERWRITE commits a dialect-quoted `TRUNCATE TABLE` before the INSERT load begins.
+- rejects OVERWRITE for CDC CHANGELOG writers.
 - provides MySQL, PostgreSQL and Oracle identifier/table dialects.
 - requires the target table to exist.
 
@@ -143,6 +145,8 @@ Each range split opens its own JDBC read transaction. This V1 guarantees non-ove
 When `splitSize` is configured, the Enumerator detects an eligible single integer primary key and queries `MIN / MAX / COUNT(*)`. It uses `ceil(rowCount / splitSize)` as the requested split count, then reuses the same non-overlapping range planner. `splitSize` is a target row count only: actual rows per split depend on key distribution.
 
 Tables without an eligible single integer primary key, or tables whose row count does not exceed `splitSize`, stay as one whole-table split. Dynamic planning refuses more than 10,000 splits and asks the caller to increase `splitSize`.
+
+OVERWRITE is intentionally destructive and not load-atomic: once the target TRUNCATE succeeds and is committed, a later Source/Sink failure does not restore previous target rows. The target must already exist and the runtime user must have TRUNCATE permission.
 
 Skew detection, distribution-factor analysis and sampling remain later phases.
 
