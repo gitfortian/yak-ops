@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakTypes;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
@@ -98,6 +99,7 @@ class OfflineSyncJdbcAcceptanceIT {
         executeTarget(
                 mysqlConnection(),
                 new DataSourceTablePath(MYSQL_DATABASE, null, "target_mysql"),
+                "INSERT INTO target_mysql VALUES (999, 'stale', 999.99)",
                 "SELECT id, name, amount FROM target_mysql ORDER BY id");
     }
 
@@ -106,6 +108,7 @@ class OfflineSyncJdbcAcceptanceIT {
         executeTarget(
                 postgresConnection(),
                 new DataSourceTablePath("yakflow", "public", "target_pg"),
+                "INSERT INTO target_pg VALUES (999, 'stale', 999.99)",
                 "SELECT id, name, amount FROM target_pg ORDER BY id");
     }
 
@@ -114,10 +117,26 @@ class OfflineSyncJdbcAcceptanceIT {
         executeTarget(
                 oracleConnection(),
                 new DataSourceTablePath(null, null, "target_oracle"),
+                "INSERT INTO \"target_oracle\" (\"id\", \"name\", \"amount\") VALUES (999, 'stale', 999.99)",
                 "SELECT \"id\", \"name\", \"amount\" FROM \"target_oracle\" ORDER BY \"id\"");
     }
 
-    private void executeTarget(DataSourceConnection target, DataSourceTablePath targetTable, String query)
+    private void executeTarget(
+            DataSourceConnection target, DataSourceTablePath targetTable, String staleInsertSql, String query)
+            throws Exception {
+        runSync(target, targetTable, JdbcSaveMode.APPEND);
+        assertTargetRows(target, query);
+
+        try (var connection = DIRECT_CONNECTION.open(target, 10);
+                var statement = connection.createStatement()) {
+            statement.execute(staleInsertSql);
+        }
+
+        runSync(target, targetTable, JdbcSaveMode.OVERWRITE);
+        assertTargetRows(target, query);
+    }
+
+    private void runSync(DataSourceConnection target, DataSourceTablePath targetTable, JdbcSaveMode saveMode)
             throws Exception {
         JdbcSource source = new JdbcSource(
                 new JdbcSourceConfig(
@@ -130,12 +149,14 @@ class OfflineSyncJdbcAcceptanceIT {
                         1L),
                 DIRECT_CONNECTION);
         JdbcSink sink =
-                new JdbcSink(new JdbcSinkConfig(target, targetTable, 2, 10), DIRECT_CONNECTION);
+                new JdbcSink(new JdbcSinkConfig(target, targetTable, 2, 10, saveMode), DIRECT_CONNECTION);
         LocalExecution<?> execution = new LocalExecutionEngine().start(source, sink, SCHEMA, 3);
 
         assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(30)));
         assertEquals(new ExecutionMetrics(3, 3), execution.metrics());
+    }
 
+    private void assertTargetRows(DataSourceConnection target, String query) throws Exception {
         try (var connection = DIRECT_CONNECTION.open(target, 10);
                 var statement = connection.createStatement();
                 var resultSet = statement.executeQuery(query)) {
