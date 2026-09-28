@@ -51,10 +51,14 @@ This means a bounded JDBC Source and an unbounded MySQL CDC Source can feed the 
 This phase establishes only `yak-flow-api`:
 
 - `YakRow`, `RowKind` and the common table schema model.
+- logical type contract: `YakTypeKind -> YakDataType -> YakBasicType / YakDecimalType`.
+- `YakColumn` references a complete logical type; DECIMAL precision / scale live inside `YakDecimalType` rather than as unrelated column fields.
 - `Source`, `SourceSplit`, `SourceSplitEnumerator` and `SourceReader`.
 - `Sink` and `SinkWriter`.
 - `Boundedness`.
 - opaque `CheckpointState`.
+
+Current type scope remains intentionally relational and flat. ARRAY / MAP / ROW and other composite types are deferred until a connector or Transform capability actually requires them.
 
 ## Phase 2 — Local Execution Engine
 
