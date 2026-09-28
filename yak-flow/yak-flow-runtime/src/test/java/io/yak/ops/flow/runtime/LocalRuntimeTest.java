@@ -2,6 +2,7 @@ package io.yak.ops.flow.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.flow.api.row.RowKind;
@@ -34,6 +35,30 @@ class LocalRuntimeTest {
         assertTrue(sink.rows().stream().allMatch(row -> row.rowKind() == RowKind.INSERT));
         assertEquals(1, sink.flushCount());
         assertFalse(execution.failure().isPresent());
+    }
+
+    @Test
+    void shouldRunBoundedSplitsWithParallelReaders() throws Exception {
+        ParallelTestSource source = new ParallelTestSource(4, 4);
+        TestSink sink = new TestSink();
+
+        LocalExecution<TestSplit> execution = new LocalRuntime().start(source, sink, SCHEMA, 4);
+
+        assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(5)));
+        assertEquals(4, sink.rows().size());
+        assertEquals(new ExecutionMetrics(4, 4), execution.metrics());
+        assertTrue(source.maxActiveReaders() >= 4);
+        assertEquals(1, sink.flushCount());
+        assertFalse(execution.failure().isPresent());
+    }
+
+    @Test
+    void shouldRejectParallelReadersForContinuousSource() {
+        TestSource source = new TestSource(Boundedness.CONTINUOUS_UNBOUNDED, Integer.MAX_VALUE, 1);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new LocalRuntime().start(source, new TestSink(), SCHEMA, 2));
     }
 
     @Test
