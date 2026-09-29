@@ -37,6 +37,8 @@ How to prove        → Explicit Verification
 - [YakFlow](./capabilities/yak-flow/README.md)
 - [Workspace](./capabilities/workspace/README.md)
 - [User Preference](./capabilities/user-preference/README.md)
+- [Version Management](./release/README.md)
+- [v1.0.0 Release Contract](./release/v1.0.0.md)
 - Platform rules: [yak-ops-platform/PLATFORM_RULES.md](../yak-ops-platform/PLATFORM_RULES.md)
 - Security rules: [yak-ops-platform/SECURITY_RULES.md](../yak-ops-platform/SECURITY_RULES.md)
 
