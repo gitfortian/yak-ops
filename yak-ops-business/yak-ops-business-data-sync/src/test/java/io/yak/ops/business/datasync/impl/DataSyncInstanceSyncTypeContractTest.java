@@ -49,6 +49,9 @@ class DataSyncInstanceSyncTypeContractTest {
         DataSyncInstanceEntity instance = captured.get();
         assertNotNull(instance);
         assertEquals(DataSyncType.REALTIME, instance.getSyncType());
+        assertEquals(3, instance.getMaxAttempts());
+        assertEquals(5, instance.getBackoffSeconds());
+        assertEquals(1, instance.getCurrentAttempt());
     }
 
     @Test
@@ -134,6 +137,7 @@ class DataSyncInstanceSyncTypeContractTest {
         task.setRuntimeConfig(
                 "{\"checkpointIntervalSeconds\":10,\"queueCapacity\":64,\"pollBatchSize\":500,"
                         + "\"writeBatchSize\":500,\"timeoutSeconds\":30}");
+        task.setRetryPolicy("{\"maxAttempts\":3,\"backoffSeconds\":5}");
         task.setDefinitionVersion(1);
         return task;
     }

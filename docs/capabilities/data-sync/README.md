@@ -306,6 +306,17 @@ The definition snapshot must not contain datasource connection JSON, passwords, 
 
 Full contract: [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
 
+v1.1 PR4 已实现 Retry Runtime：
+
+```text
+Execution
+  ├── Attempt #1 FAILED
+  ├── RETRY_WAITING
+  └── Attempt #2 ...
+```
+
+Task 的 Retry Policy 在 Execution 创建时冻结。默认 `maxAttempts=1`；只有显式配置更大值才自动重试。OFFLINE 与 REALTIME 共用 Attempt Lifecycle，REALTIME Retry 继续复用既有 CDC state。
+
 ## Phase 2 — Offline Task Editor
 
 The editable product path is:

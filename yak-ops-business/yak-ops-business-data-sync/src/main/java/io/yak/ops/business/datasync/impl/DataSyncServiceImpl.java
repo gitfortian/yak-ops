@@ -7,6 +7,7 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
@@ -17,6 +18,7 @@ import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRealtimeConfigDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncRetryPolicyDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
@@ -24,11 +26,13 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -44,9 +48,11 @@ import io.yak.ops.common.util.CollectionUtils;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
+import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
@@ -89,6 +95,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncInstanceRepository instanceRepository;
 
     @Resource
+    private DataSyncAttemptRepository attemptRepository;
+
+    @Resource
     private DataSyncScheduleRepository scheduleRepository;
 
     @Resource
@@ -102,6 +111,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncExecutionRegistry executionRegistry;
+
+    @Resource
+    private DataSyncAttemptLifecycle attemptLifecycle;
 
     @Resource
     private ScheduleEngine scheduleEngine;
@@ -442,6 +454,15 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     @Override
+    public List<DataSyncAttemptVO> queryAttempts(String instanceId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        requireInstance(workspaceId, instanceId);
+        return attemptRepository.queryByExecution(workspaceId, instanceId).stream()
+                .map(this::toAttemptVO)
+                .toList();
+    }
+
+    @Override
     public PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
         if (CollectionUtils.isNotEmpty(dto.getSorts())) {
@@ -478,17 +499,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
 
         if (instance.getStatus() == DataSyncInstanceStatus.PENDING) {
-            if (!instanceRepository.transitionStatus(
-                    workspaceId,
-                    id,
-                    DataSyncInstanceStatus.PENDING,
-                    DataSyncInstanceStatus.CANCELED,
-                    null,
-                    DateUtils.now(),
-                    null,
-                    null)) {
+            if (!instanceRepository.cancelExecution(workspaceId, id, DataSyncInstanceStatus.PENDING, DateUtils.now())) {
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             }
+            attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+        } else if (instance.getStatus() == DataSyncInstanceStatus.RETRY_WAITING) {
+            if (!instanceRepository.cancelExecution(
+                    workspaceId, id, DataSyncInstanceStatus.RETRY_WAITING, DateUtils.now())) {
+                throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
+            }
+            attemptLifecycle.cancelActiveAttempt(workspaceId, id);
         } else if (instance.getStatus() == DataSyncInstanceStatus.RUNNING) {
             if (!executionRegistry.cancel(id)) {
                 instanceRepository.transitionStatus(
@@ -500,16 +520,11 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         DateUtils.now(),
                         DataSyncErrorCode.EXECUTION_LOST.getCode(),
                         DataSyncErrorCode.EXECUTION_LOST.getMessage());
+            } else if (!instanceRepository.cancelExecution(
+                    workspaceId, id, DataSyncInstanceStatus.RUNNING, DateUtils.now())) {
+                throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             } else {
-                instanceRepository.transitionStatus(
-                        workspaceId,
-                        id,
-                        DataSyncInstanceStatus.RUNNING,
-                        DataSyncInstanceStatus.CANCELED,
-                        null,
-                        DateUtils.now(),
-                        null,
-                        null);
+                attemptLifecycle.cancelActiveAttempt(workspaceId, id);
             }
         } else {
             throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
@@ -531,6 +546,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         instance.setTaskVersion(task.getDefinitionVersion());
         instance.setSyncType(task.getSyncType());
         instance.setTriggerType(triggerType);
+        DataSyncRetryPolicyVO retryPolicy = snapshot.getRetryPolicy();
+        instance.setMaxAttempts(retryPolicy.getMaxAttempts());
+        instance.setBackoffSeconds(retryPolicy.getBackoffSeconds());
+        instance.setCurrentAttempt(1);
         instance.setStatus(DataSyncInstanceStatus.PENDING);
         instance.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
         instance.setReadRows(0L);
@@ -667,7 +686,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || !Objects.equals(entity.getTargetSchema(), resolvedScope.getTargetSchema())
                 || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
-                || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto));
+                || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
+                || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
     }
 
     private boolean jsonEquals(String left, String right) {
@@ -688,12 +708,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setTargetTable(dto.getTargetTable().trim());
         entity.setWriteMode(requireWriteMode(dto.getWriteMode()));
         entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
+        entity.setRetryPolicy(retryPolicyJson(dto));
         entity.setRemark(StringUtils.trimToNull(dto.getRemark()));
     }
 
     private void validateTaskDefinition(
             DataSyncType syncType, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
         validateWriteMode(syncType, dto.getWriteMode());
+        if (dto.getRetryPolicy() == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Retry Policy 不能为空");
+        }
         if (syncType == DataSyncType.OFFLINE) {
             if (dto.getRuntimeConfig() == null) {
                 throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 运行参数不能为空");
@@ -783,6 +807,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 : JSONUtils.toJson(dto.getRuntimeConfig());
     }
 
+    private String retryPolicyJson(DataSyncTaskDTO dto) {
+        DataSyncRetryPolicyDTO policy =
+                dto.getRetryPolicy() == null ? new DataSyncRetryPolicyDTO() : dto.getRetryPolicy();
+        return JSONUtils.toJson(policy);
+    }
+
+    private String normalizedRetryPolicyJson(String json) {
+        return StringUtils.isBlank(json) ? JSONUtils.toJson(new DataSyncRetryPolicyDTO()) : json;
+    }
+
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
         DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
         if (!preview.isCompatible()) {
@@ -801,6 +835,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
+        snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
         snapshot.setTarget(endpointSnapshot(
@@ -957,12 +992,13 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
-        DataSyncTaskVO target =
-                BeanCopyUtils.copy(source, DataSyncTaskVO.class, "syncType", "status", "writeMode", "runtimeConfig");
+        DataSyncTaskVO target = BeanCopyUtils.copy(
+                source, DataSyncTaskVO.class, "syncType", "status", "writeMode", "runtimeConfig", "retryPolicy");
         target.setSyncType(
                 source.getSyncType() == null ? null : source.getSyncType().name());
         target.setStatus(taskStatus(source).name());
         target.setWriteMode(taskWriteMode(source).name());
+        target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
         } else {
@@ -979,6 +1015,19 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncRealtimeConfigVO toRealtimeConfigVO(String json) {
         DataSyncRealtimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
         return BeanCopyUtils.copy(source, DataSyncRealtimeConfigVO.class);
+    }
+
+    private DataSyncRetryPolicyVO toRetryPolicyVO(String json) {
+        DataSyncRetryPolicyDTO source = StringUtils.isBlank(json)
+                ? new DataSyncRetryPolicyDTO()
+                : JSONUtils.parseObject(json, DataSyncRetryPolicyDTO.class);
+        return BeanCopyUtils.copy(source, DataSyncRetryPolicyVO.class);
+    }
+
+    private DataSyncAttemptVO toAttemptVO(DataSyncAttemptEntity source) {
+        DataSyncAttemptVO target = BeanCopyUtils.copy(source, DataSyncAttemptVO.class, "status");
+        target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
+        return target;
     }
 
     private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {

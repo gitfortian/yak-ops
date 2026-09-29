@@ -63,6 +63,9 @@ public class DataSyncTaskEntity extends BaseEntity {
     /** 按 syncType 持久化的 YakFlow 运行参数 JSON，不包含数据源连接凭证。 */
     private String runtimeConfig;
 
+    /** 执行重试策略 JSON，包含 maxAttempts 与 backoffSeconds。 */
+    private String retryPolicy;
+
     /** 当前任务定义版本，从 1 开始递增。 */
     private Integer definitionVersion;
 

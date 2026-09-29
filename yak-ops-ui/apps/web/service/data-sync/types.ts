@@ -28,6 +28,11 @@ export interface DataSyncRealtimeConfig {
   timeoutSeconds: number;
 }
 
+export interface DataSyncRetryPolicy {
+  maxAttempts: number;
+  backoffSeconds: number;
+}
+
 export interface DataSyncTaskRecord {
   id: string;
   name: string;
@@ -44,6 +49,7 @@ export interface DataSyncTaskRecord {
   targetTable: string;
   runtimeConfig?: DataSyncRuntimeConfig;
   realtimeConfig?: DataSyncRealtimeConfig;
+  retryPolicy?: DataSyncRetryPolicy;
   definitionVersion: number;
   remark?: string;
   createTime?: string;
@@ -76,6 +82,7 @@ interface DataSyncTaskSaveBase {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
+  retryPolicy?: DataSyncRetryPolicy;
   remark?: string;
 }
 
@@ -121,6 +128,7 @@ export interface DataSyncMappingPreview {
 export type DataSyncInstanceStatus =
   | "PENDING"
   | "RUNNING"
+  | "RETRY_WAITING"
   | "SUCCEEDED"
   | "FAILED"
   | "CANCELED"
@@ -146,6 +154,7 @@ export interface DataSyncDefinitionSnapshot {
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;
   realtimeConfig?: DataSyncRealtimeConfig;
+  retryPolicy?: DataSyncRetryPolicy;
 }
 
 export interface DataSyncInstanceRecord {
@@ -156,6 +165,10 @@ export interface DataSyncInstanceRecord {
   syncType: DataSyncType | string;
   triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | string;
   status: DataSyncInstanceStatus;
+  maxAttempts?: number;
+  backoffSeconds?: number;
+  currentAttempt?: number;
+  nextRetryTime?: string;
   readRows: number;
   writeRows: number;
   startTime?: string;
@@ -182,4 +195,19 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
+}
+
+export interface DataSyncAttemptRecord {
+  id: string;
+  executionId: string;
+  attemptNo: number;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "LOST" | string;
+  readRows: number;
+  writeRows: number;
+  startTime?: string;
+  finishTime?: string;
+  errorCode?: number;
+  errorMessage?: string;
+  createTime?: string;
+  updateTime?: string;
 }

@@ -57,6 +57,9 @@ public class DataSyncTaskVO {
     /** REALTIME 任务的 CDC、Checkpoint 和写入参数；OFFLINE 任务为空。 */
     private DataSyncRealtimeConfigVO realtimeConfig;
 
+    /** Execution 失败后的固定重试策略。 */
+    private DataSyncRetryPolicyVO retryPolicy;
+
     /** 当前任务定义版本，从 1 开始，任务定义每次成功修改后递增。 */
     private Integer definitionVersion;
 

@@ -5,11 +5,13 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.page.PagingData;
+import java.util.List;
 
 /**
  * Data Sync 对上层暴露的唯一稳定 Service Contract。
@@ -48,6 +50,8 @@ public interface DataSyncService {
     boolean deleteTask(String id);
 
     DataSyncInstanceVO queryInstance(String id);
+
+    List<DataSyncAttemptVO> queryAttempts(String instanceId);
 
     PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto);
 

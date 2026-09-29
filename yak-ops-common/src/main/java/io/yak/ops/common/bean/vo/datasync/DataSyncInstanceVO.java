@@ -32,7 +32,19 @@ public class DataSyncInstanceVO {
     /** Execution 根触发方式，当前正常来源为 MANUAL / SCHEDULE；Retry Attempt 不覆盖该字段。 */
     private String triggerType;
 
-    /** 实例生命周期状态，例如 PENDING、RUNNING、SUCCEEDED、FAILED、CANCELED、LOST。 */
+    /** Execution 允许的最大 Attempt 总数。 */
+    private Integer maxAttempts;
+
+    /** Attempt 失败后的固定等待秒数。 */
+    private Integer backoffSeconds;
+
+    /** 当前或最终 Attempt 序号。 */
+    private Integer currentAttempt;
+
+    /** RETRY_WAITING 状态下下一次 Attempt 的计划时间。 */
+    private LocalDateTime nextRetryTime;
+
+    /** 实例生命周期状态，例如 PENDING、RUNNING、RETRY_WAITING、SUCCEEDED、FAILED、CANCELED、LOST。 */
     private String status;
 
     /** Source 已成功进入 Runtime Channel 的累计读取行数。 */

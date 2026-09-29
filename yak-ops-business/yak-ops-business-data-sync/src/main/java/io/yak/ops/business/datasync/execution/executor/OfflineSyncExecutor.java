@@ -1,27 +1,31 @@
 package io.yak.ops.business.datasync.execution.executor;
 
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlan;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlanner;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncAttemptStatus;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
-import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.SensitiveUtils;
-import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
+import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
 import io.yak.ops.flow.runtime.ExecutionStatus;
 import io.yak.ops.flow.runtime.LocalExecution;
 import io.yak.ops.flow.runtime.LocalExecutionEngine;
 import jakarta.annotation.Resource;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 将持久化离线同步实例交给 YakFlow Local Execution Engine，并收口 RUNNING / SUCCESS / FAILURE / CANCEL 状态。
+ * 将 Offline Execution 按 Retry Policy 拆成连续 Attempt，并复用同一个 Execution Root 收口最终状态。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -34,13 +38,13 @@ public class OfflineSyncExecutor {
     private static final long METRICS_FLUSH_INTERVAL_MILLIS = 500L;
 
     @Resource
-    private DataSyncInstanceRepository instanceRepository;
-
-    @Resource
     private OfflineSyncExecutionPlanner executionPlanner;
 
     @Resource
     private DataSyncExecutionRegistry executionRegistry;
+
+    @Resource
+    private DataSyncAttemptLifecycle attemptLifecycle;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
@@ -49,131 +53,212 @@ public class OfflineSyncExecutor {
     }
 
     private void execute(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
-        LocalExecution<?> execution = null;
         WorkspaceContext.bind(workspaceId);
+        try {
+            int maxAttempts = maxAttempts(snapshot);
+            int backoffSeconds = backoffSeconds(snapshot);
+            DataSyncInstanceStatus expectedExecutionStatus = DataSyncInstanceStatus.PENDING;
+
+            for (int attemptNo = 1; attemptNo <= maxAttempts; attemptNo++) {
+                DataSyncRetryDecision decision = executeAttempt(
+                        workspaceId,
+                        instanceId,
+                        snapshot,
+                        attemptNo,
+                        maxAttempts,
+                        backoffSeconds,
+                        expectedExecutionStatus);
+                if (!decision.retry()) return;
+                if (!waitForRetry(workspaceId, instanceId, decision.nextRetryTime())) return;
+                expectedExecutionStatus = DataSyncInstanceStatus.RETRY_WAITING;
+            }
+        } finally {
+            WorkspaceContext.clear();
+        }
+    }
+
+    private DataSyncRetryDecision executeAttempt(
+            String workspaceId,
+            String instanceId,
+            DataSyncDefinitionSnapshotVO snapshot,
+            int attemptNo,
+            int maxAttempts,
+            int backoffSeconds,
+            DataSyncInstanceStatus expectedExecutionStatus) {
+        DataSyncAttemptEntity attempt = attemptLifecycle.createAttempt(workspaceId, instanceId, attemptNo);
+        LocalExecution<?> execution = null;
+        boolean started = false;
         try {
             OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
             execution = new LocalExecutionEngine()
                     .start(plan.source(), plan.sink(), plan.sourceSchema(), plan.sourceParallelism());
             executionRegistry.register(instanceId, execution);
 
-            LocalDateTime startTime = DateUtils.now();
-            if (!instanceRepository.transitionStatus(
-                    workspaceId,
-                    instanceId,
-                    DataSyncInstanceStatus.PENDING,
-                    DataSyncInstanceStatus.RUNNING,
-                    startTime,
-                    null,
-                    null,
-                    null)) {
+            if (!attemptLifecycle.startAttempt(
+                    workspaceId, instanceId, attempt.getId(), attemptNo, expectedExecutionStatus)) {
                 execution.cancel();
                 execution.await();
-                return;
+                attemptLifecycle.cancelActiveAttempt(workspaceId, instanceId);
+                return DataSyncRetryDecision.stop();
             }
+            started = true;
 
             LOG.info(
-                    "离线同步实例开始执行，workspaceId={}, taskId={}, instanceId={}",
+                    "离线同步Attempt开始执行，workspaceId={}, taskId={}, instanceId={}, attempt={}/{}",
                     workspaceId,
                     snapshot.getTaskId(),
-                    instanceId);
+                    instanceId,
+                    attemptNo,
+                    maxAttempts);
 
             while (execution.status() == ExecutionStatus.RUNNING) {
-                persistMetrics(workspaceId, instanceId, execution.metrics());
+                persistMetrics(workspaceId, instanceId, attempt.getId(), execution.metrics());
                 Thread.sleep(METRICS_FLUSH_INTERVAL_MILLIS);
             }
+
             ExecutionStatus status = execution.await();
-            persistMetrics(workspaceId, instanceId, execution.metrics());
+            ExecutionMetrics metrics = execution.metrics();
+            persistMetrics(workspaceId, instanceId, attempt.getId(), metrics);
+
             if (status == ExecutionStatus.SUCCEEDED) {
-                transitionTerminal(workspaceId, instanceId, DataSyncInstanceStatus.SUCCEEDED, null, null);
+                attemptLifecycle.succeedAttempt(
+                        workspaceId, instanceId, attempt.getId(), attemptNo, metrics.readRows(), metrics.writeRows());
                 LOG.info(
-                        "离线同步实例执行成功，workspaceId={}, taskId={}, instanceId={}",
-                        workspaceId,
-                        snapshot.getTaskId(),
-                        instanceId);
-            } else if (status == ExecutionStatus.CANCELED) {
-                transitionTerminal(workspaceId, instanceId, DataSyncInstanceStatus.CANCELED, null, null);
-                LOG.info(
-                        "离线同步实例已取消，workspaceId={}, taskId={}, instanceId={}",
-                        workspaceId,
-                        snapshot.getTaskId(),
-                        instanceId);
-            } else if (status == ExecutionStatus.FAILED) {
-                String message = safeMessage(execution.failure().orElse(null));
-                transitionTerminal(
-                        workspaceId,
-                        instanceId,
-                        DataSyncInstanceStatus.FAILED,
-                        DataSyncErrorCode.EXECUTION_FAILED.getCode(),
-                        message);
-                LOG.error(
-                        "离线同步实例执行失败，workspaceId={}, taskId={}, instanceId={}, error={}",
+                        "离线同步Execution执行成功，workspaceId={}, taskId={}, instanceId={}, attempt={}",
                         workspaceId,
                         snapshot.getTaskId(),
                         instanceId,
-                        message);
+                        attemptNo);
+                return DataSyncRetryDecision.stop();
             }
+
+            if (status == ExecutionStatus.CANCELED) {
+                attemptLifecycle.cancelActiveAttempt(workspaceId, instanceId);
+                LOG.info(
+                        "离线同步Execution已取消，workspaceId={}, taskId={}, instanceId={}, attempt={}",
+                        workspaceId,
+                        snapshot.getTaskId(),
+                        instanceId,
+                        attemptNo);
+                return DataSyncRetryDecision.stop();
+            }
+
+            String message = safeMessage(execution.failure().orElse(null));
+            return failAttempt(
+                    workspaceId,
+                    instanceId,
+                    attempt,
+                    attemptNo,
+                    maxAttempts,
+                    backoffSeconds,
+                    DataSyncAttemptStatus.RUNNING,
+                    DataSyncInstanceStatus.RUNNING,
+                    metrics,
+                    message);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             if (execution != null) execution.cancel();
-            failPendingOrRunning(workspaceId, instanceId, exception);
-        } catch (Exception exception) {
-            if (execution != null) execution.cancel();
-            failPendingOrRunning(workspaceId, instanceId, exception);
-        } finally {
-            if (execution != null) {
-                executionRegistry.remove(instanceId, execution);
-            }
-            WorkspaceContext.clear();
-        }
-    }
-
-    private void persistMetrics(String workspaceId, String instanceId, ExecutionMetrics metrics) {
-        instanceRepository.updateMetrics(workspaceId, instanceId, metrics.readRows(), metrics.writeRows());
-    }
-
-    private void failPendingOrRunning(String workspaceId, String instanceId, Throwable throwable) {
-        String message = safeMessage(throwable);
-        Integer errorCode = DataSyncErrorCode.EXECUTION_FAILED.getCode();
-        LocalDateTime finishTime = DateUtils.now();
-        boolean updated = instanceRepository.transitionStatus(
-                workspaceId,
-                instanceId,
-                DataSyncInstanceStatus.RUNNING,
-                DataSyncInstanceStatus.FAILED,
-                null,
-                finishTime,
-                errorCode,
-                message);
-        if (!updated) {
-            instanceRepository.transitionStatus(
+            return failAttempt(
                     workspaceId,
                     instanceId,
-                    DataSyncInstanceStatus.PENDING,
-                    DataSyncInstanceStatus.FAILED,
-                    null,
-                    finishTime,
-                    errorCode,
-                    message);
+                    attempt,
+                    attemptNo,
+                    maxAttempts,
+                    backoffSeconds,
+                    started ? DataSyncAttemptStatus.RUNNING : DataSyncAttemptStatus.PENDING,
+                    started ? DataSyncInstanceStatus.RUNNING : expectedExecutionStatus,
+                    execution == null ? null : execution.metrics(),
+                    safeMessage(exception));
+        } catch (Exception exception) {
+            if (execution != null) execution.cancel();
+            return failAttempt(
+                    workspaceId,
+                    instanceId,
+                    attempt,
+                    attemptNo,
+                    maxAttempts,
+                    backoffSeconds,
+                    started ? DataSyncAttemptStatus.RUNNING : DataSyncAttemptStatus.PENDING,
+                    started ? DataSyncInstanceStatus.RUNNING : expectedExecutionStatus,
+                    execution == null ? null : execution.metrics(),
+                    safeMessage(exception));
+        } finally {
+            if (execution != null) executionRegistry.remove(instanceId, execution);
         }
-        LOG.error("离线同步实例执行异常，workspaceId={}, instanceId={}, error={}", workspaceId, instanceId, message);
     }
 
-    private void transitionTerminal(
+    private DataSyncRetryDecision failAttempt(
             String workspaceId,
             String instanceId,
-            DataSyncInstanceStatus status,
-            Integer errorCode,
-            String errorMessage) {
-        instanceRepository.transitionStatus(
+            DataSyncAttemptEntity attempt,
+            int attemptNo,
+            int maxAttempts,
+            int backoffSeconds,
+            DataSyncAttemptStatus expectedAttemptStatus,
+            DataSyncInstanceStatus expectedExecutionStatus,
+            ExecutionMetrics metrics,
+            String message) {
+        long readRows = metrics == null ? 0L : metrics.readRows();
+        long writeRows = metrics == null ? 0L : metrics.writeRows();
+        DataSyncRetryDecision decision = attemptLifecycle.failAttempt(
                 workspaceId,
                 instanceId,
-                DataSyncInstanceStatus.RUNNING,
-                status,
-                null,
-                DateUtils.now(),
-                errorCode,
-                errorMessage);
+                attempt.getId(),
+                attemptNo,
+                expectedAttemptStatus,
+                expectedExecutionStatus,
+                maxAttempts,
+                backoffSeconds,
+                readRows,
+                writeRows,
+                DataSyncErrorCode.EXECUTION_FAILED.getCode(),
+                message);
+        if (decision.retry()) {
+            LOG.warn(
+                    "离线同步Attempt失败等待重试，workspaceId={}, instanceId={}, attempt={}/{}, nextRetryTime={}, error={}",
+                    workspaceId,
+                    instanceId,
+                    attemptNo,
+                    maxAttempts,
+                    decision.nextRetryTime(),
+                    message);
+        } else {
+            LOG.error(
+                    "离线同步Execution执行失败，workspaceId={}, instanceId={}, attempt={}/{}, error={}",
+                    workspaceId,
+                    instanceId,
+                    attemptNo,
+                    maxAttempts,
+                    message);
+        }
+        return decision;
+    }
+
+    private void persistMetrics(String workspaceId, String instanceId, String attemptId, ExecutionMetrics metrics) {
+        attemptLifecycle.updateMetrics(workspaceId, instanceId, attemptId, metrics.readRows(), metrics.writeRows());
+    }
+
+    private boolean waitForRetry(String workspaceId, String instanceId, LocalDateTime nextRetryTime) {
+        if (nextRetryTime == null) return false;
+        long delayMillis = Math.max(
+                0L, Duration.between(LocalDateTime.now(), nextRetryTime).toMillis());
+        try {
+            if (delayMillis > 0) Thread.sleep(delayMillis);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return attemptLifecycle.isRetryWaiting(workspaceId, instanceId);
+    }
+
+    private int maxAttempts(DataSyncDefinitionSnapshotVO snapshot) {
+        DataSyncRetryPolicyVO policy = snapshot.getRetryPolicy();
+        return policy == null || policy.getMaxAttempts() == null ? 1 : Math.max(1, policy.getMaxAttempts());
+    }
+
+    private int backoffSeconds(DataSyncDefinitionSnapshotVO snapshot) {
+        DataSyncRetryPolicyVO policy = snapshot.getRetryPolicy();
+        return policy == null || policy.getBackoffSeconds() == null ? 60 : Math.max(0, policy.getBackoffSeconds());
     }
 
     private String safeMessage(Throwable throwable) {

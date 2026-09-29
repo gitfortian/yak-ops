@@ -1,6 +1,6 @@
 # Data Sync Execution Retry / Attempt Contract
 
-Status: v1.1 PR3 — Contract
+Status: v1.1 PR4 — Persistence + Runtime
 
 Depends On:
 
@@ -34,7 +34,23 @@ Execution
   └── implicit Attempt #1
 ```
 
-PR3 只冻结身份、状态与触发关系，不新增自动重试逻辑，也不新增 Attempt 表。
+PR3 冻结身份、状态与触发关系；PR4 已实现 Attempt Persistence + Runtime Retry。
+
+当前实现：
+
+```text
+Task.retryPolicy
+      ↓ freeze
+Execution(DataSyncInstance)
+      ↓
+Attempt #1
+      ↓ FAILED
+Execution = RETRY_WAITING
+      ↓ fixed backoff
+Attempt #2
+```
+
+默认 `maxAttempts=1`，因此升级后历史任务不会自动改变执行行为。
 
 ## 2. Terminology
 
@@ -295,9 +311,15 @@ Attempt 1 RUNNING
        Execution CANCELED
 ```
 
-`RETRY_WAITING` 是目标产品状态，PR3 不立即修改现有持久化 Enum。
+`RETRY_WAITING` 已在 PR4 进入 `DataSyncInstanceStatus` 与 V3 Schema。
 
-对应 Enum / Migration 只有在 Retry Backend PR 真正使用该状态时才能引入。
+```text
+PENDING / RUNNING / RETRY_WAITING
+        =
+Active Execution
+```
+
+因此 Schedule 并发判断、Task Unpublish 阻断和 Operations Center Active 判断都会覆盖等待重试状态。
 
 ## 10. Cancel Semantics
 
@@ -432,13 +454,13 @@ FAILED Execution 的“再次运行”是新 Execution。
 
 ## 15. Persistence Target
 
-Retry Backend follow-up PR 可以引入新的 Migration，例如：
+PR4 已新增：
 
 ```text
 V3__data_sync_execution_attempt.sql
 ```
 
-目标持久化方向：
+持久化方向：
 
 ```text
 yak_ops_data_sync_instance
@@ -448,7 +470,13 @@ yak_ops_data_sync_attempt
   → Attempt History
 ```
 
-PR3 不冻结具体列长度或 SQL 名称之外的实现细节；实现 PR 必须继续遵守 DAO / Flyway Rules。
+V3 同时完成：
+
+- `yak_ops_data_sync_task.retry_policy`：Task 级 Retry Policy JSON。
+- Execution Root：`max_attempts / backoff_seconds / current_attempt / next_retry_time`。
+- Execution Status：新增 `RETRY_WAITING`。
+- `yak_ops_data_sync_attempt`：Attempt 状态、指标、时间与失败诊断。
+- 已有 Task backfill 为 `maxAttempts=1 / backoffSeconds=60`，保持升级前不自动 Retry。
 
 禁止：
 
@@ -485,22 +513,45 @@ Execution Detail 再展示 Attempt History。
 
 PR3 不实现 UI。
 
-## 17. PR3 Non-Goals
+## 17. PR4 Runtime
+
+PR4 已实现：
+
+- OFFLINE / REALTIME FAILED Attempt 自动 Retry。
+- 固定 `backoffSeconds`。
+- Attempt #N 独立持久化。
+- Execution Root 不变。
+- root trigger 不变。
+- 每次 Retry 继续使用同一个 `definitionSnapshot`。
+- REALTIME Retry 继续复用同 Task + definitionVersion 的 CDC state。
+- Attempt metrics 独立持久化，Execution 只镜像当前 / 最终 Attempt 指标。
+- `GET /instances/{id}/attempts` 只读 Attempt History。
+- CANCELED / LOST 不自动 Retry。
+- RETRY_WAITING 可被用户 Cancel。
+- 应用重启时 PENDING / RUNNING Attempt 与 PENDING / RUNNING / RETRY_WAITING Execution 统一标记 LOST。
+
+Backoff 由当前进程内虚拟线程等待，不使用 Quartz。
+
+因此：
+
+> PR4 不提供跨进程 durable retry timer。
+
+应用在 RETRY_WAITING 时退出，下一次启动会标记 Execution LOST；跨进程恢复由后续 Recovery Contract 负责。
+
+## 18. PR4 Non-Goals
 
 本 PR 不做：
 
-- 自动 Retry。
-- Retry Policy API / UI。
-- Attempt Entity / Repository / Table。
-- `RETRY_WAITING` Enum / Migration。
-- backoff timer。
-- Attempt 列表 API。
-- Attempt Operations UI。
+- Retry Policy 配置 UI。
+- exponential backoff / jitter。
+- durable retry timer。
 - Quartz Retry Trigger。
-- Realtime Auto Recovery。
+- 自动恢复 LOST。
+- Realtime Desired State / Auto Recovery。
 - Distributed Retry ownership / fencing。
+- Attempt Operations UI。
 
-## 18. Follow-up Implementation Invariants
+## 19. Implementation Invariants
 
 真正实现 Retry 时必须证明：
 
