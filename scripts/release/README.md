@@ -131,3 +131,52 @@ bash scripts/release/smoke-compose.sh v1.0.0
 Manual E2E 的执行人、日期、环境和 Evidence 统一记录在 `docs/release/v1.0.0-readiness.md`。
 
 Release Gate 只判断候选版本是否满足上线门槛，不创建 Git Tag，也不向 Registry 推送镜像。
+
+## Release Publish
+
+正式 `V1 Release Gate` PASS 后，发布动作由 `.github/workflows/release-publish.yml` 负责。
+
+仓库需要预先配置 GitHub Actions Repository Secrets：
+
+```text
+DOCKERHUB_USERNAME
+DOCKERHUB_TOKEN
+```
+
+`DOCKERHUB_TOKEN` 使用 Docker Hub Personal Access Token，只授予发布所需的 Read / Write 权限，不把 Token 写入仓库或聊天记录。
+
+Workflow 手动输入：
+
+```text
+release_version
+release_commit
+gate_run_id
+publish_latest
+```
+
+发布流程：
+
+```text
+Verify formal Release Gate
+→ Checkout exact release commit
+→ Download Gate release-candidate Artifact
+→ Verify SHA256SUMS
+→ Build images from the verified Distribution
+→ Local Compose Smoke
+→ Push immutable Docker version tags
+→ Pull version tags back from Docker Hub
+→ Registry Compose Smoke
+→ Record registry digests
+→ Create immutable Git Tag
+→ Create GitHub Release + upload assets
+→ Update latest
+```
+
+安全规则：
+
+- Tag 只能指向输入的 `release_commit`，该 Commit 必须与正式 Gate 的 `head_sha` 完全一致。
+- Publish Workflow 不重新执行 Maven / npm 构建；Docker Image 只消费正式 Gate Artifact 中的 `yak-ops-{version}.tar.gz`。
+- 如果不可变 Docker version tag 已存在，必须先验证其 OCI version / revision；验证不一致时立即失败，禁止覆盖。
+- Git Tag 已存在时必须解析到同一个 Release Commit，禁止移动 Tag。
+- `latest` 只能在 Registry version image 二次拉取和 Compose Smoke、GitHub Release 全部成功后更新。
+- 最终 Release Evidence 记录 Distribution SHA-256 与 Docker Hub Registry Digest。
