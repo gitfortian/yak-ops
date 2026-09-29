@@ -24,8 +24,28 @@ on:
         required: true
         default: "1.0.0"
         type: string
-      manual_e2e_confirmed:
-        description: Required V1 Manual E2E scenarios have passed.
+      offline_001_confirmed:
+        description: OFFLINE-001 MySQL to MySQL APPEND passed.
+        required: true
+        default: false
+        type: boolean
+      offline_002_confirmed:
+        description: OFFLINE-002 MySQL to MySQL OVERWRITE passed.
+        required: true
+        default: false
+        type: boolean
+      offline_003_confirmed:
+        description: OFFLINE-003 MySQL to MySQL UPSERT passed.
+        required: true
+        default: false
+        type: boolean
+      realtime_001_confirmed:
+        description: REALTIME-001 snapshot and INSERT/UPDATE/DELETE passed.
+        required: true
+        default: false
+        type: boolean
+      realtime_002_confirmed:
+        description: REALTIME-002 persisted-offset continuation passed.
         required: true
         default: false
         type: boolean
@@ -236,7 +256,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ inputs.release_version }}
-      MANUAL_E2E_CONFIRMED: ${{ inputs.manual_e2e_confirmed }}
+      OFFLINE_001_CONFIRMED: ${{ inputs.offline_001_confirmed }}
+      OFFLINE_002_CONFIRMED: ${{ inputs.offline_002_confirmed }}
+      OFFLINE_003_CONFIRMED: ${{ inputs.offline_003_confirmed }}
+      REALTIME_001_CONFIRMED: ${{ inputs.realtime_001_confirmed }}
+      REALTIME_002_CONFIRMED: ${{ inputs.realtime_002_confirmed }}
       BASELINE_REVIEW_CONFIRMED: ${{ inputs.baseline_review_confirmed }}
       BLOCKERS_CLEARED: ${{ inputs.blockers_cleared }}
       RELEASE_NOTES_CONFIRMED: ${{ inputs.release_notes_confirmed }}
@@ -252,9 +276,22 @@ jobs:
             exit 1
           fi
 
-          for value in             "${MANUAL_E2E_CONFIRMED}"             "${BASELINE_REVIEW_CONFIRMED}"             "${BLOCKERS_CLEARED}"             "${RELEASE_NOTES_CONFIRMED}"; do
+          checks=(
+            "OFFLINE-001:${OFFLINE_001_CONFIRMED}"
+            "OFFLINE-002:${OFFLINE_002_CONFIRMED}"
+            "OFFLINE-003:${OFFLINE_003_CONFIRMED}"
+            "REALTIME-001:${REALTIME_001_CONFIRMED}"
+            "REALTIME-002:${REALTIME_002_CONFIRMED}"
+            "Baseline Review:${BASELINE_REVIEW_CONFIRMED}"
+            "Release Blockers Cleared:${BLOCKERS_CLEARED}"
+            "Release Notes Ready:${RELEASE_NOTES_CONFIRMED}"
+          )
+
+          for check in "${checks[@]}"; do
+            name="${check%%:*}"
+            value="${check#*:}"
             if [[ "${value}" != "true" ]]; then
-              echo "A required human release confirmation is missing."
+              echo "Missing release confirmation: ${name}"
               exit 1
             fi
           done
