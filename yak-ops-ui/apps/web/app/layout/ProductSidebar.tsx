@@ -16,9 +16,7 @@ export default function ProductSidebar({ productLabel, navigation }: ProductSide
         {navigation.map((item, index) => {
           const Icon = item.icon;
           const previousGroupLabel = index > 0 ? navigation[index - 1]?.groupLabel : undefined;
-          const showGroupLabel = Boolean(
-            item.groupLabel && item.groupLabel !== previousGroupLabel,
-          );
+          const showGroupLabel = Boolean(item.groupLabel && item.groupLabel !== previousGroupLabel);
 
           return (
             <div key={item.path}>

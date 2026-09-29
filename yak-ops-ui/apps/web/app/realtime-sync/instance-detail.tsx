@@ -1,7 +1,13 @@
-import { DataSyncInstanceDetailPage } from "@/app/data-sync/instance-runtime";
+import { Navigate, useParams } from "react-router-dom";
 
 export function RealtimeSyncInstanceDetailPage() {
-  return <DataSyncInstanceDetailPage syncType="REALTIME" basePath="/realtime-sync" />;
+  const { id } = useParams<{ id: string }>();
+  return (
+    <Navigate
+      replace
+      to={id ? `/operations/realtime-tasks/instances/${id}` : "/operations/realtime-tasks"}
+    />
+  );
 }
 
 export default RealtimeSyncInstanceDetailPage;

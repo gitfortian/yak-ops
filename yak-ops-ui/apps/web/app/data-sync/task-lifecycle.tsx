@@ -86,12 +86,9 @@ interface LifecycleAction {
 interface DataSyncTaskLifecycleActionsProps {
   record: DataSyncTaskRecord;
   activeInstance?: DataSyncInstanceRecord;
-  runLabel: string;
   actionKey?: string;
   onPublish: (record: DataSyncTaskRecord) => void;
   onUnpublish: (record: DataSyncTaskRecord) => void;
-  onRun: (record: DataSyncTaskRecord) => void;
-  onStop: (instance: DataSyncInstanceRecord) => void;
   onEdit: (record: DataSyncTaskRecord) => void;
   onInstances: (record: DataSyncTaskRecord) => void;
   onDelete: (record: DataSyncTaskRecord) => void;
@@ -100,12 +97,9 @@ interface DataSyncTaskLifecycleActionsProps {
 export function DataSyncTaskLifecycleActions({
   record,
   activeInstance,
-  runLabel,
   actionKey,
   onPublish,
   onUnpublish,
-  onRun,
-  onStop,
   onEdit,
   onInstances,
   onDelete,
@@ -115,31 +109,17 @@ export function DataSyncTaskLifecycleActions({
     ? activeInstance
       ? [
           {
-            key: "stop",
-            label: "停止",
-            className: "text-[#d92d20]",
-            loading: actionKey === `${record.id}:stop`,
-            onClick: () => onStop(activeInstance),
-          },
-          {
             key: "instances",
             label: "实例",
-            className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
+            className: "text-[var(--yak-color-primary)]",
             onClick: () => onInstances(record),
           },
         ]
       : [
           {
-            key: "run",
-            label: runLabel,
-            className: "text-[var(--yak-color-primary)]",
-            loading: actionKey === `${record.id}:run`,
-            onClick: () => onRun(record),
-          },
-          {
             key: "unpublish",
             label: "下线",
-            className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
+            className: "text-[var(--yak-color-primary)]",
             loading: actionKey === `${record.id}:unpublish`,
             onClick: () => onUnpublish(record),
           },

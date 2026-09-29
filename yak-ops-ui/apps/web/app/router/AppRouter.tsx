@@ -151,10 +151,7 @@ export default function AppRouter() {
             />
           }
         >
-          <Route
-            path="/operations"
-            element={<Navigate replace to="/operations/offline-tasks" />}
-          />
+          <Route path="/operations" element={<Navigate replace to="/operations/offline-tasks" />} />
           <Route path="/operations/offline-tasks" element={<OfflineTaskOperationsPage />} />
           <Route
             path="/operations/offline-tasks/instances/:id"

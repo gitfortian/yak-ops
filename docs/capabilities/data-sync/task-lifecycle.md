@@ -335,24 +335,29 @@ After migration:
 
 ## Frontend Contract
 
-PR3 adopts these product rules:
+Task definition and Task execution are separate product responsibilities.
+
+### Data Integration — Definition Surface
+
+The OFFLINE / REALTIME definition pages own:
 
 ```text
 UNPUBLISHED
-  → Edit
   → Publish
+  → Edit
+  → Instances (cross-navigation to Operations Center)
   → Delete
 
 PUBLISHED + idle
-  → Run / Start
   → Unpublish
-  → Instances
+  → Instances (cross-navigation to Operations Center)
 
-PUBLISHED + active REALTIME
-  → Stop Instance
-  → Instances
-  → Unpublish unavailable until active execution ends
+PUBLISHED + active Instance
+  → Instances (cross-navigation to Operations Center)
+  → Unpublish unavailable until the active Instance ends
 ```
+
+Definition pages do not expose Run / Start / Stop and do not render an Instance-list Tab.
 
 The editor uses two explicit save paths:
 
@@ -367,9 +372,28 @@ Save & Publish
   → return to Task list
 ```
 
-Run / Start stays a separate PUBLISHED Task action. The old “Save & Run / Save & Start” shortcut is removed so publication and execution remain visible product states.
+### Operations Center — Execution Surface
 
-Create/update APIs never auto-publish, and run never auto-publishes. Save & Publish explicitly composes the normal save and publish commands rather than creating a hidden lifecycle path.
+Operations Center owns execution and runtime visibility:
+
+```text
+PUBLISHED + idle
+  → Run / Start
+  → open the created Instance detail
+
+PUBLISHED + active Instance
+  → Stop
+  → Instances
+
+Any Task with historical Instances
+  → Instance history may be opened with a Task filter
+```
+
+Operations Center lists only PUBLISHED Tasks in its executable Task view. Historical Instance lookup is independent of the current Task publication state.
+
+The definition-page `实例` action routes into Operations Center. Legacy Data Integration Instance detail URLs redirect to the equivalent Operations Center detail route.
+
+Create/update APIs never auto-publish, run never auto-publishes, and publication never auto-runs. Save & Publish explicitly composes the normal save and publish commands rather than creating a hidden lifecycle path.
 
 ## Persistence
 

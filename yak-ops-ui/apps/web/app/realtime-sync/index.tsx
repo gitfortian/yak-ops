@@ -13,24 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
   Table,
-  Tabs,
-  TabsList,
-  TabsPanel,
-  TabsTab,
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { ArrowRight, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import {
-  cancelDataSyncInstance,
   deleteDataSyncTask,
   listDataSyncTasks,
   publishDataSyncTask,
-  runDataSyncTask,
   unpublishDataSyncTask,
   type DataSyncTaskRecord,
   type DataSyncTaskStatus,
@@ -43,7 +37,6 @@ import {
   DataSyncTaskStatusBadge,
   useActiveTaskInstances,
 } from "@/app/data-sync/task-lifecycle";
-import { RealtimeSyncInstances } from "./instances";
 
 export { RealtimeSyncEditorPage } from "./editor";
 export { RealtimeSyncInstanceDetailPage } from "./instance-detail";
@@ -68,9 +61,17 @@ const pathText = (database?: string, schema?: string, table?: string) =>
 
 export function RealtimeSyncPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "instances" ? "instances" : "tasks";
-  const taskInstanceFilter = searchParams.get("taskId") || undefined;
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("tab") !== "instances") return;
+
+    const nextParams = new URLSearchParams({ tab: "instances" });
+    const taskId = params.get("taskId");
+    if (taskId) nextParams.set("taskId", taskId);
+    navigate(`/operations/realtime-tasks?${nextParams.toString()}`, { replace: true });
+  }, [location.search, navigate]);
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
@@ -125,7 +126,7 @@ export function RealtimeSyncPage() {
   );
   const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances(
     "REALTIME",
-    activeTab === "tasks",
+    true,
   );
 
   const dataSourceMap = useMemo(
@@ -165,10 +166,9 @@ export function RealtimeSyncPage() {
   }, [keyword, pageNo, taskStatus]);
 
   useEffect(() => {
-    if (activeTab !== "tasks") return;
     const timer = window.setTimeout(() => void loadTasks(), keyword.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [activeTab, keyword, loadTasks]);
+  }, [keyword, loadTasks]);
 
   const publishTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
@@ -188,31 +188,6 @@ export function RealtimeSyncPage() {
     try {
       await unpublishDataSyncTask(record.id);
       toast.success("实时同步任务已下线");
-      await Promise.all([loadTasks(), refreshActiveInstances()]);
-    } finally {
-      setActionKey(undefined);
-    }
-  };
-
-  const startTask = async (record: DataSyncTaskRecord) => {
-    if (actionKey) return;
-    setActionKey(`${record.id}:run`);
-    try {
-      const instance = await runDataSyncTask(record.id);
-      toast.success("实时同步任务已启动");
-      navigate(`/realtime-sync/instances/${instance.id}`);
-    } finally {
-      setActionKey(undefined);
-    }
-  };
-
-  const stopTask = async (record: DataSyncTaskRecord) => {
-    const activeInstance = activeByTask.get(record.id);
-    if (!activeInstance || actionKey) return;
-    setActionKey(`${record.id}:stop`);
-    try {
-      await cancelDataSyncInstance(activeInstance.id);
-      toast.success("实时同步实例已停止");
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -301,14 +276,13 @@ export function RealtimeSyncPage() {
         <DataSyncTaskLifecycleActions
           record={record}
           activeInstance={activeByTask.get(record.id)}
-          runLabel="启动"
           actionKey={actionKey}
           onPublish={(value) => void publishTask(value)}
           onUnpublish={(value) => void unpublishTask(value)}
-          onRun={(value) => void startTask(value)}
-          onStop={() => void stopTask(record)}
           onEdit={(value) => navigate(`/realtime-sync/${value.id}`)}
-          onInstances={(value) => setSearchParams({ tab: "instances", taskId: value.id })}
+          onInstances={(value) =>
+            navigate(`/operations/realtime-tasks?tab=instances&taskId=${value.id}`)
+          }
           onDelete={setPendingDelete}
         />
       ),
@@ -327,118 +301,85 @@ export function RealtimeSyncPage() {
 
         <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
           <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) => {
-                if (value === "instances") setSearchParams({ tab: "instances" });
-                else setSearchParams({});
-              }}
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <TabsList>
-                <TabsTab value="tasks">任务定义</TabsTab>
-                <TabsTab value="instances">任务实例</TabsTab>
-              </TabsList>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button
+                size="small"
+                variant="primary"
+                onClick={() => {
+                  setDraft(emptyDraft());
+                  setCreateOpen(true);
+                }}
+              >
+                <Plus size={14} />
+                新建实时同步任务
+              </Button>
+              <div className="w-[300px]">
+                <Input
+                  size="small"
+                  variant="outlined"
+                  value={keyword}
+                  placeholder="搜索任务名称或表名"
+                  onChange={(event) => {
+                    setKeyword(event.target.value);
+                    setPageNo(1);
+                  }}
+                />
+              </div>
+              <div className="w-[150px]">
+                <Select
+                  size="small"
+                  items={DATA_SYNC_TASK_STATUS_ITEMS}
+                  value={taskStatus}
+                  onValueChange={(value) => {
+                    setTaskStatus(String(value || "ALL") as DataSyncTaskStatus | "ALL");
+                    setPageNo(1);
+                  }}
+                >
+                  <SelectTrigger variant="outlined">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">
+                      <SelectItemText>全部状态</SelectItemText>
+                      <SelectItemIndicator />
+                    </SelectItem>
+                    <SelectItem value="PUBLISHED">
+                      <SelectItemText>已上线</SelectItemText>
+                      <SelectItemIndicator />
+                    </SelectItem>
+                    <SelectItem value="UNPUBLISHED">
+                      <SelectItemText>已下线</SelectItemText>
+                      <SelectItemIndicator />
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-              <TabsPanel value="tasks" className="flex min-h-0 flex-1 flex-col pt-4">
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <Button
-                    size="small"
-                    variant="primary"
-                    onClick={() => {
-                      setDraft(emptyDraft());
-                      setCreateOpen(true);
-                    }}
-                  >
-                    <Plus size={14} />
-                    新建实时同步任务
-                  </Button>
-                  <div className="w-[300px]">
-                    <Input
-                      size="small"
-                      variant="outlined"
-                      value={keyword}
-                      placeholder="搜索任务名称或表名"
-                      onChange={(event) => {
-                        setKeyword(event.target.value);
-                        setPageNo(1);
-                      }}
-                    />
-                  </div>
-                  <div className="w-[150px]">
-                    <Select
-                      size="small"
-                      items={DATA_SYNC_TASK_STATUS_ITEMS}
-                      value={taskStatus}
-                      onValueChange={(value) => {
-                        setTaskStatus(String(value || "ALL") as DataSyncTaskStatus | "ALL");
-                        setPageNo(1);
-                      }}
-                    >
-                      <SelectTrigger variant="outlined">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">
-                          <SelectItemText>全部状态</SelectItemText>
-                          <SelectItemIndicator />
-                        </SelectItem>
-                        <SelectItem value="PUBLISHED">
-                          <SelectItemText>已上线</SelectItemText>
-                          <SelectItemIndicator />
-                        </SelectItem>
-                        <SelectItem value="UNPUBLISHED">
-                          <SelectItemText>已下线</SelectItemText>
-                          <SelectItemIndicator />
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="mt-4 min-h-0 flex-1">
-                  <Table<DataSyncTaskRecord>
-                    className="min-h-full"
-                    columns={columns}
-                    dataSource={records}
-                    rowKey="id"
-                    loading={loading}
-                    bordered
-                    size="medium"
-                    scroll={{ x: 1300 }}
-                    emptyText="还没有实时同步任务"
-                    pagination={
-                      total > 0
-                        ? {
-                            current: pageNo,
-                            pageSize: PAGE_SIZE,
-                            total,
-                            disabled: loading,
-                            onChange: (page) => setPageNo(page),
-                          }
-                        : false
-                    }
-                  />
-                </div>
-              </TabsPanel>
-
-              <TabsPanel value="instances" className="flex min-h-0 flex-1 flex-col pt-4">
-                {taskInstanceFilter ? (
-                  <div className="mb-3 flex items-center gap-2 text-xs text-[#667085]">
-                    <span>已按任务筛选：{taskInstanceFilter}</span>
-                    <Button
-                      size="small"
-                      variant="ghost"
-                      className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
-                      onClick={() => setSearchParams({ tab: "instances" })}
-                    >
-                      清除
-                    </Button>
-                  </div>
-                ) : null}
-                <RealtimeSyncInstances taskId={taskInstanceFilter} />
-              </TabsPanel>
-            </Tabs>
+            <div className="mt-4 min-h-0 flex-1">
+              <Table<DataSyncTaskRecord>
+                className="min-h-full"
+                columns={columns}
+                dataSource={records}
+                rowKey="id"
+                loading={loading}
+                bordered
+                size="medium"
+                scroll={{ x: 1200 }}
+                emptyText="还没有实时同步任务"
+                pagination={
+                  total > 0
+                    ? {
+                        current: pageNo,
+                        pageSize: PAGE_SIZE,
+                        total,
+                        disabled: loading,
+                        onChange: (page) => setPageNo(page),
+                      }
+                    : false
+                }
+              />
+            </div>
           </div>
         </div>
       </div>
