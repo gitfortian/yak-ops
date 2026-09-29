@@ -207,21 +207,41 @@ updated_at → updated_at
 
 本核心路径验证产品行为，不验证运行参数调优效果。
 
-## 4. 启动任务并验证初始化快照
+## 4. 上线、启动并验证初始化快照
 
-点击：
+先在任务编辑页点击：
 
 ```text
-保存并启动
+保存并上线
 ```
 
-预期产品行为：
+预期：
 
 ```text
 任务保存成功
    ↓
-实例创建
-   ↓
+任务状态：已上线（PUBLISHED）
+```
+
+然后打开：
+
+```text
+运维中心
+  ↓
+实时任务
+  ↓
+任务
+```
+
+找到 `e2e_realtime_mysql_cdc`，点击：
+
+```text
+启动
+```
+
+预期实例生命周期：
+
+```text
 PENDING
    ↓
 RUNNING
@@ -429,8 +449,8 @@ CANCELED
 - [ ] 源端与目标端主键字段集合在大小写不敏感的同名映射下完全一致。
 - [ ] 任务启动前，源端恰好包含 3 条初始化数据。
 - [ ] 任务启动前，目标端为空。
-- [ ] `REALTIME` 任务保存成功。
-- [ ] 实例到达 `RUNNING`。
+- [ ] `REALTIME` 任务通过“保存并上线”进入 `PUBLISHED`。
+- [ ] 运维中心启动后实例到达 `RUNNING`。
 - [ ] 初始化快照在目标端生成数据 `1 / 2 / 3`。
 - [ ] 快照计数达到 `3 / 3`。
 - [ ] 源端 INSERT 的数据 `4` 出现在目标端。
@@ -455,6 +475,6 @@ DROP TABLE IF EXISTS yak_e2e_realtime_source.e2e_realtime_user;
 DROP TABLE IF EXISTS yak_e2e_realtime_target.e2e_realtime_user;
 ```
 
-如果不再需要，可以在 Yak Ops 中删除该 E2E 任务。
+如果不再需要，可以在 Yak Ops 中先下线再删除该 E2E 任务。
 
 不要在本核心路径中手工删除产品管理的实时状态目录。状态生命周期和续传能力由专门的实时续传用例验证。
