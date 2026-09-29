@@ -96,7 +96,7 @@ weifuwan/yak-ops-api:1.0.0
 - OCI Image Label 的 revision 必须可以追溯到 Release Commit。
 - Release 时任何版本不一致都属于 Release Blocker。
 
-版本一致性的机械校验由后续 Release Gate PR 实现，本文件先定义契约。
+版本一致性由 `scripts/release/check-release-metadata.sh` 机械校验，并已进入普通 Quality Check。传入 `vX.Y.Z` 时还会校验期望 Tag 版本与仓库元数据一致；正式 Release Workflow 的编排由后续 PR 负责。
 
 ## 4. Git Tag
 
@@ -151,7 +151,7 @@ NOTICE
 README.md
 ```
 
-Release 必须为 Distribution 生成 SHA-256 校验信息。
+Release 必须通过 `scripts/release/verify-distribution.sh` 检查 Tar 根目录、关键文件、启动脚本执行权限和内置 MySQL Driver；验证通过后生成 `yak-ops-dist/target/SHA256SUMS`。
 
 建议 Release Asset：
 
