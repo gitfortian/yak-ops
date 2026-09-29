@@ -67,7 +67,10 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
                 .eq(DataSyncInstanceEntity::getTaskId, taskId)
                 .in(
                         DataSyncInstanceEntity::getStatus,
-                        List.of(DataSyncInstanceStatus.PENDING, DataSyncInstanceStatus.RUNNING)));
+                        List.of(
+                                DataSyncInstanceStatus.PENDING,
+                                DataSyncInstanceStatus.RUNNING,
+                                DataSyncInstanceStatus.RETRY_WAITING)));
         return count != null && count > 0;
     }
 
@@ -85,6 +88,129 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
                         Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
                                 .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
                                 .eq(DataSyncInstanceEntity::getId, id))
+                > 0;
+    }
+
+    @Override
+    public boolean startAttempt(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            int attemptNo,
+            LocalDateTime startTime) {
+        if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(id) || expectedStatus == null || attemptNo < 1) {
+            return false;
+        }
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(DataSyncInstanceStatus.RUNNING);
+        update.setCurrentAttempt(attemptNo);
+        update.setReadRows(0L);
+        update.setWriteRows(0L);
+        if (attemptNo == 1) update.setStartTime(startTime);
+        update.initUpdate();
+        return instanceMapper.update(
+                        update,
+                        Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(DataSyncInstanceEntity::getId, id)
+                                .eq(DataSyncInstanceEntity::getStatus, expectedStatus)
+                                .set(DataSyncInstanceEntity::getNextRetryTime, null)
+                                .set(DataSyncInstanceEntity::getFinishTime, null)
+                                .set(DataSyncInstanceEntity::getErrorCode, null)
+                                .set(DataSyncInstanceEntity::getErrorMessage, null))
+                > 0;
+    }
+
+    @Override
+    public boolean waitForRetry(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            int attemptNo,
+            LocalDateTime nextRetryTime,
+            long readRows,
+            long writeRows,
+            Integer errorCode,
+            String errorMessage) {
+        if (!StringUtils.hasText(workspaceId)
+                || !StringUtils.hasText(id)
+                || expectedStatus == null
+                || attemptNo < 1
+                || nextRetryTime == null) {
+            return false;
+        }
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(DataSyncInstanceStatus.RETRY_WAITING);
+        update.setCurrentAttempt(attemptNo);
+        update.setNextRetryTime(nextRetryTime);
+        update.setReadRows(Math.max(0, readRows));
+        update.setWriteRows(Math.max(0, writeRows));
+        update.setErrorCode(errorCode);
+        update.setErrorMessage(errorMessage);
+        update.initUpdate();
+        return instanceMapper.update(
+                        update,
+                        Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(DataSyncInstanceEntity::getId, id)
+                                .eq(DataSyncInstanceEntity::getStatus, expectedStatus)
+                                .set(DataSyncInstanceEntity::getFinishTime, null))
+                > 0;
+    }
+
+    @Override
+    public boolean completeExecution(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            DataSyncInstanceStatus targetStatus,
+            int attemptNo,
+            LocalDateTime finishTime,
+            long readRows,
+            long writeRows,
+            Integer errorCode,
+            String errorMessage) {
+        if (!StringUtils.hasText(workspaceId)
+                || !StringUtils.hasText(id)
+                || expectedStatus == null
+                || targetStatus == null
+                || attemptNo < 1) {
+            return false;
+        }
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(targetStatus);
+        update.setCurrentAttempt(attemptNo);
+        update.setFinishTime(finishTime == null ? DateUtils.now() : finishTime);
+        update.setReadRows(Math.max(0, readRows));
+        update.setWriteRows(Math.max(0, writeRows));
+        update.setErrorCode(errorCode);
+        update.setErrorMessage(errorMessage);
+        update.initUpdate();
+        return instanceMapper.update(
+                        update,
+                        Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(DataSyncInstanceEntity::getId, id)
+                                .eq(DataSyncInstanceEntity::getStatus, expectedStatus)
+                                .set(DataSyncInstanceEntity::getNextRetryTime, null))
+                > 0;
+    }
+
+    @Override
+    public boolean cancelExecution(
+            String workspaceId, String id, DataSyncInstanceStatus expectedStatus, LocalDateTime finishTime) {
+        if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(id) || expectedStatus == null) return false;
+        DataSyncInstanceEntity update = new DataSyncInstanceEntity();
+        update.setStatus(DataSyncInstanceStatus.CANCELED);
+        update.setFinishTime(finishTime == null ? DateUtils.now() : finishTime);
+        update.initUpdate();
+        return instanceMapper.update(
+                        update,
+                        Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
+                                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(DataSyncInstanceEntity::getId, id)
+                                .eq(DataSyncInstanceEntity::getStatus, expectedStatus)
+                                .set(DataSyncInstanceEntity::getNextRetryTime, null))
                 > 0;
     }
 
@@ -133,7 +259,11 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
                 Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
                         .in(
                                 DataSyncInstanceEntity::getStatus,
-                                List.of(DataSyncInstanceStatus.PENDING, DataSyncInstanceStatus.RUNNING)));
+                                List.of(
+                                        DataSyncInstanceStatus.PENDING,
+                                        DataSyncInstanceStatus.RUNNING,
+                                        DataSyncInstanceStatus.RETRY_WAITING))
+                        .set(DataSyncInstanceEntity::getNextRetryTime, null));
     }
 
     private LambdaQueryWrapper<DataSyncInstanceEntity> queryWrapper(

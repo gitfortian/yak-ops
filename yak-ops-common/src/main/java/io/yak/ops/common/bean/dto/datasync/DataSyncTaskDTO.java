@@ -72,6 +72,10 @@ public class DataSyncTaskDTO {
     @Valid
     private DataSyncRealtimeConfigDTO realtimeConfig = new DataSyncRealtimeConfigDTO();
 
+    /** Execution 失败后的固定重试策略。 */
+    @Valid
+    private DataSyncRetryPolicyDTO retryPolicy = new DataSyncRetryPolicyDTO();
+
     /** 用户维护的任务备注。 */
     @Size(max = 500, message = "任务备注不能超过 500 个字符")
     private String remark;

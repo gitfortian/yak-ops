@@ -39,6 +39,7 @@ import {
   type DataSyncFieldMapping,
   type DataSyncMappingPreview,
   type DataSyncRealtimeConfig,
+  type DataSyncRetryPolicy,
   type DataSyncRuntimeConfig,
   type DataSyncTaskSavePayload,
   type DataSyncTaskStatus,
@@ -60,6 +61,7 @@ interface EditorForm {
   targetTable: string;
   runtimeConfig: DataSyncRuntimeConfig;
   realtimeConfig: DataSyncRealtimeConfig;
+  retryPolicy: DataSyncRetryPolicy;
 }
 
 interface CatalogOptions {
@@ -85,6 +87,11 @@ const EMPTY_REALTIME: DataSyncRealtimeConfig = {
   timeoutSeconds: 30,
 };
 
+const EMPTY_RETRY_POLICY: DataSyncRetryPolicy = {
+  maxAttempts: 1,
+  backoffSeconds: 60,
+};
+
 const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
@@ -99,6 +106,7 @@ const EMPTY_FORM: EditorForm = {
   targetTable: "",
   runtimeConfig: EMPTY_RUNTIME,
   realtimeConfig: EMPTY_REALTIME,
+  retryPolicy: EMPTY_RETRY_POLICY,
 };
 
 const tableKey = (table: DataSourceCatalogTable) =>
@@ -467,6 +475,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     targetDataSourceId: draft?.targetDataSourceId || "",
     runtimeConfig: { ...EMPTY_RUNTIME },
     realtimeConfig: { ...EMPTY_REALTIME },
+    retryPolicy: { ...EMPTY_RETRY_POLICY },
   }));
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
@@ -560,6 +569,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           targetTable: task.targetTable,
           runtimeConfig: task.runtimeConfig || { ...EMPTY_RUNTIME },
           realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
+          retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
         });
       })
       .finally(() => {
@@ -701,6 +711,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetDatabase: form.targetDatabase || undefined,
       targetSchema: form.targetSchema || undefined,
       targetTable: form.targetTable,
+      retryPolicy: form.retryPolicy,
       remark: form.remark.trim() || undefined,
     };
     if (realtime) {

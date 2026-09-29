@@ -8,6 +8,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
@@ -17,6 +18,7 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -117,6 +119,12 @@ public class DataSyncController {
     @GetMapping("/instances/{id}")
     public Result<DataSyncInstanceVO> instanceDetail(@PathVariable("id") String id) {
         return Result.success(dataSyncService.queryInstance(id));
+    }
+
+    @Operation(summary = "查询同步Execution的Attempt历史")
+    @GetMapping("/instances/{id}/attempts")
+    public Result<List<DataSyncAttemptVO>> attemptHistory(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.queryAttempts(id));
     }
 
     @Operation(summary = "分页查询同步实例")

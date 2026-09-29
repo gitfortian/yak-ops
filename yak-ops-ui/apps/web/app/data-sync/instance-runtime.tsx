@@ -33,7 +33,9 @@ const PAGE_SIZE = 20;
 const POLL_INTERVAL_MILLIS = 2000;
 
 const isActive = (record?: DataSyncInstanceRecord) =>
-  record?.status === "PENDING" || record?.status === "RUNNING";
+  record?.status === "PENDING" ||
+  record?.status === "RUNNING" ||
+  record?.status === "RETRY_WAITING";
 
 const statusMeta = (
   status: DataSyncInstanceStatus,
@@ -44,6 +46,8 @@ const statusMeta = (
       return { label: "等待", tone: "neutral" };
     case "RUNNING":
       return { label: "运行中", tone: "info" };
+    case "RETRY_WAITING":
+      return { label: "等待重试", tone: "warning" };
     case "SUCCEEDED":
       return { label: "成功", tone: "success" };
     case "FAILED":
@@ -230,6 +234,7 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
     ["ALL", "全部状态"],
     ["PENDING", "等待"],
     ["RUNNING", "运行中"],
+    ["RETRY_WAITING", "等待重试"],
     ["SUCCEEDED", "成功"],
     ["FAILED", "失败"],
     ["CANCELED", canceledLabel],

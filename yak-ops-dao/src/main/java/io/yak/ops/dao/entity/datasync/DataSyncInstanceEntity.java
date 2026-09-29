@@ -40,6 +40,18 @@ public class DataSyncInstanceEntity extends BaseEntity {
     /** Execution 根触发方式；Retry Attempt 不改变该来源。 */
     private DataSyncTriggerType triggerType;
 
+    /** 本次 Execution 允许的最大 Attempt 总数，包含首次执行。 */
+    private Integer maxAttempts;
+
+    /** Attempt 失败后的固定等待秒数。 */
+    private Integer backoffSeconds;
+
+    /** 当前或最终 Attempt 序号，从 1 开始。 */
+    private Integer currentAttempt;
+
+    /** RETRY_WAITING 状态下下一次 Attempt 的计划时间。 */
+    private LocalDateTime nextRetryTime;
+
     /** 实例生命周期状态。 */
     private DataSyncInstanceStatus status;
 

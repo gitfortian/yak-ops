@@ -1,6 +1,7 @@
 import HttpUtils from "@/service/http/HttpUtils";
 
 import type {
+  DataSyncAttemptRecord,
   DataSyncInstancePageParams,
   DataSyncInstancePageResult,
   DataSyncInstanceRecord,
@@ -64,3 +65,6 @@ export const getDataSyncInstance = (id: string): Promise<DataSyncInstanceRecord>
 
 export const cancelDataSyncInstance = (id: string): Promise<DataSyncInstanceRecord> =>
   HttpUtils.postData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/instances/${id}/cancel`);
+
+export const listDataSyncAttempts = (id: string): Promise<DataSyncAttemptRecord[]> =>
+  HttpUtils.getData<DataSyncAttemptRecord[]>(`${DATA_SYNC_API_PREFIX}/instances/${id}/attempts`);

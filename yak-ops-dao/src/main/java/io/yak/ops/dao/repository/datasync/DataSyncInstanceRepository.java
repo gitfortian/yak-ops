@@ -23,6 +23,39 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
 
     boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows);
 
+    boolean startAttempt(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            int attemptNo,
+            LocalDateTime startTime);
+
+    boolean waitForRetry(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            int attemptNo,
+            LocalDateTime nextRetryTime,
+            long readRows,
+            long writeRows,
+            Integer errorCode,
+            String errorMessage);
+
+    boolean completeExecution(
+            String workspaceId,
+            String id,
+            DataSyncInstanceStatus expectedStatus,
+            DataSyncInstanceStatus targetStatus,
+            int attemptNo,
+            LocalDateTime finishTime,
+            long readRows,
+            long writeRows,
+            Integer errorCode,
+            String errorMessage);
+
+    boolean cancelExecution(
+            String workspaceId, String id, DataSyncInstanceStatus expectedStatus, LocalDateTime finishTime);
+
     boolean transitionStatus(
             String workspaceId,
             String id,

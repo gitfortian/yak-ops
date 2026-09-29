@@ -124,6 +124,22 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     @Test
+    void shouldIncrementVersionWhenRetryPolicyChanges() throws Exception {
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
+        task.setRetryPolicy("{\"maxAttempts\":1,\"backoffSeconds\":60}");
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSyncServiceImpl service = editableService(task, captured);
+        DataSyncTaskDTO dto = taskDto();
+        dto.getRetryPolicy().setMaxAttempts(3);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO updated = service.updateTask("task-1", dto);
+
+        assertEquals(4, updated.getDefinitionVersion());
+        assertEquals(4, captured.get().getDefinitionVersion());
+    }
+
+    @Test
     void shouldRejectUpdateForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
