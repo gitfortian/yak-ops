@@ -178,7 +178,8 @@ public class DataSyncAttemptLifecycle {
     public void cancelActiveAttempt(String workspaceId, String executionId) {
         LocalDateTime finishTime = DateUtils.now();
         attemptRepository.cancelActiveByExecution(workspaceId, executionId, finishTime);
-        DataSyncInstanceEntity execution = instanceRepository.queryById(workspaceId, executionId).orElse(null);
+        DataSyncInstanceEntity execution =
+                instanceRepository.queryById(workspaceId, executionId).orElse(null);
         if (execution == null
                 || execution.getStatus() == null
                 || execution.getStatus().isTerminal()) return;
