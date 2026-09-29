@@ -51,10 +51,10 @@ function writeJson(path, update) {
 
 function replaceRequired(path, pattern, replacement) {
   const before = fs.readFileSync(path, 'utf8');
-  const after = before.replace(pattern, replacement);
-  if (after === before) {
+  if (!pattern.test(before)) {
     throw new Error(`Expected release-version pattern was not found in ${path}`);
   }
+  const after = before.replace(pattern, replacement);
   fs.writeFileSync(path, after);
 }
 
