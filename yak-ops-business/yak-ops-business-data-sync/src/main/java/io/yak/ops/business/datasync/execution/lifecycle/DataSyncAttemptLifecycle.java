@@ -53,8 +53,7 @@ public class DataSyncAttemptLifecycle {
             int attemptNo,
             DataSyncInstanceStatus expectedExecutionStatus) {
         LocalDateTime startTime = DateUtils.now();
-        if (!instanceRepository.startAttempt(
-                workspaceId, executionId, expectedExecutionStatus, attemptNo, startTime)) {
+        if (!instanceRepository.startAttempt(workspaceId, executionId, expectedExecutionStatus, attemptNo, startTime)) {
             attemptRepository.cancelActiveByExecution(workspaceId, executionId, DateUtils.now());
             return false;
         }
@@ -72,20 +71,14 @@ public class DataSyncAttemptLifecycle {
         return true;
     }
 
-    public void updateMetrics(
-            String workspaceId, String executionId, String attemptId, long readRows, long writeRows) {
+    public void updateMetrics(String workspaceId, String executionId, String attemptId, long readRows, long writeRows) {
         attemptRepository.updateMetrics(workspaceId, attemptId, readRows, writeRows);
         instanceRepository.updateMetrics(workspaceId, executionId, readRows, writeRows);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void succeedAttempt(
-            String workspaceId,
-            String executionId,
-            String attemptId,
-            int attemptNo,
-            long readRows,
-            long writeRows) {
+            String workspaceId, String executionId, String attemptId, int attemptNo, long readRows, long writeRows) {
         LocalDateTime finishTime = DateUtils.now();
         if (!attemptRepository.transitionStatus(
                 workspaceId,
@@ -127,7 +120,8 @@ public class DataSyncAttemptLifecycle {
             long writeRows,
             Integer errorCode,
             String errorMessage) {
-        DataSyncInstanceEntity execution = instanceRepository.queryById(workspaceId, executionId).orElse(null);
+        DataSyncInstanceEntity execution =
+                instanceRepository.queryById(workspaceId, executionId).orElse(null);
         if (execution == null) return DataSyncRetryDecision.stop();
         if (execution.getStatus() == DataSyncInstanceStatus.CANCELED) {
             attemptRepository.cancelActiveByExecution(workspaceId, executionId, DateUtils.now());
@@ -185,7 +179,9 @@ public class DataSyncAttemptLifecycle {
         LocalDateTime finishTime = DateUtils.now();
         attemptRepository.cancelActiveByExecution(workspaceId, executionId, finishTime);
         DataSyncInstanceEntity execution = instanceRepository.queryById(workspaceId, executionId).orElse(null);
-        if (execution == null || execution.getStatus() == null || execution.getStatus().isTerminal()) return;
+        if (execution == null
+                || execution.getStatus() == null
+                || execution.getStatus().isTerminal()) return;
         instanceRepository.cancelExecution(workspaceId, executionId, execution.getStatus(), finishTime);
     }
 
