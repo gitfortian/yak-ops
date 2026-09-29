@@ -35,7 +35,6 @@
             <outputDirectory>conf</outputDirectory>
             <includes>
                 <include>application.yml</include>
-                <include>logback-spring.xml</include>
             </includes>
         </fileSet>
         <fileSet>
