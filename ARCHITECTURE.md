@@ -152,7 +152,11 @@ REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGE
 
 Realtime CDC state is product-owned under `${yak.ops.home}/data/data-sync/realtime/{workspaceId}/{taskId}/v{definitionVersion}`. Debezium engine identity uses the same stable Workspace/Task/version scope, so a later Instance for the same definition reuses persisted offsets and schema history. A new definitionVersion gets a new state domain and therefore starts a fresh snapshot. MySQL replication `serverId` is allocated per active state domain by a single-node allocator and released when execution ends. Deployments that require continuation across container replacement must persist `${yak.ops.home}/data`; the Docker image exposes `/opt/yak-ops/data` as a volume.
 
-LocalExecution itself is still process-local: after an application restart, old active Instances become LOST rather than being resurrected. A later manual run creates a new Instance and reuses the existing REALTIME state domain. Scheduling, distributed recovery and exactly-once coordination remain out of scope.
+LocalExecution itself is still process-local: after an application restart, old active Instances become LOST rather than being resurrected. A later manual run creates a new Instance and reuses the existing REALTIME state domain.
+
+v1.1 introduces a framework-neutral Data Sync scheduling boundary under `io.yak.ops.business.datasync.scheduler`. `ScheduleEngine` only expresses Cron registration, reschedule, removal and next-fire queries; `DataSyncScheduleFireListener` is the callback boundary for later business triggering. Business does not import Quartz and does not delegate Task publication, concurrency, retry or Instance lifecycle semantics to the scheduler framework.
+
+The first Quartz implementation is application infrastructure owned by Boot. PR1 does not yet persist Schedule definitions or create scheduled Instances. Distributed recovery and exactly-once coordination remain out of scope.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only at execution time. Realtime state paths and MySQL serverId leases are runtime-owned and are not persisted inside the definition snapshot.
 
@@ -193,6 +197,7 @@ Hard boundary:
 - every Yak Ops Controller package lives under `io.yak.ops.boot.controller`
 - Controller depends on stable Service Layer interfaces rather than Impl / DAO / Plugin internals
 - application-wide Spring infrastructure configuration lives in `yak-ops-boot`
+- Quartz integration and SchedulerFactoryBean customization live in `yak-ops-boot`; `org.quartz.*` does not enter Data Sync Business contracts
 - capability modules must not depend on Boot
 
 ### `yak-ops-ui`

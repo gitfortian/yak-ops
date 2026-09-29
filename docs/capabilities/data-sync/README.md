@@ -101,6 +101,34 @@ Core rules:
 
 The backend lifecycle contract is active: new Tasks start UNPUBLISHED, publish/unpublish are explicit commands, update/delete/run are status-gated, and executable-definition changes own version increments. Frontend action adoption remains the next PR.
 
+## Scheduler Contract — v1.1 PR1
+
+v1.1 的 Scheduler 第一阶段已经建立框架无关 Contract 与 Quartz 基础设施边界：
+
+```text
+Data Sync Business
+        ↓ ScheduleEngine
+Boot / Quartz
+        ↓
+Cron Trigger
+        ↓
+DataSyncScheduleFire
+        ↓
+DataSyncScheduleFireListener
+```
+
+当前 PR1 只定义边界，不持久化 Schedule、不创建 Instance，也不实现 `SKIP_IF_RUNNING` / Retry。
+
+核心约束：
+
+- Quartz 依赖只存在于 Boot。
+- JobData 只保存 `scheduleId / workspaceId / taskId`。
+- Cron 必须携带显式 Time Zone。
+- misfire 固定为 `DO_NOTHING`。
+- Quartz 不拥有 Task 发布状态、并发策略、Retry 或 Instance 生命周期。
+
+完整 Contract：[Data Sync Scheduler Contract](./scheduler.md)。
+
 ## MySQL CDC Source Requirements
 
 REALTIME currently uses the Debezium MySQL connector. The Source MySQL server and account must satisfy the connector prerequisites before a task is started:
