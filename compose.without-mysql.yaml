@@ -14,9 +14,9 @@ services:
       SERVER_PORT: 9527
       SPRING_PROFILES_ACTIVE: mysql
 
-      YAK_DATASOURCE_URL: "jdbc:mysql://${MYSQL_HOST:-host.docker.internal}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai"
-      YAK_DATASOURCE_USERNAME: ${MYSQL_USER:?set MYSQL_USER}
-      YAK_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      YAK_DATABASE_URL: "jdbc:mysql://${MYSQL_HOST:-host.docker.internal}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai"
+      YAK_DATABASE_USERNAME: ${MYSQL_USER:?set MYSQL_USER}
+      YAK_DATABASE_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
 
       YAK_SECURITY_BOOTSTRAP_USERNAME: ${YAK_SECURITY_BOOTSTRAP_USERNAME:-root}
       YAK_SECURITY_BOOTSTRAP_PASSWORD: ${YAK_SECURITY_BOOTSTRAP_PASSWORD:-Root@123456}
