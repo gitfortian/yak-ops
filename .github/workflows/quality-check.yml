@@ -30,6 +30,9 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Release metadata consistency
+        run: bash scripts/release/check-release-metadata.sh
+
       - name: Backend logging rules
         run: python3 scripts/verify_logging_rules.py
 
