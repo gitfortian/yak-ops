@@ -30,6 +30,9 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Release tooling syntax
+        run: bash -n scripts/release/*.sh
+
       - name: Release metadata consistency
         run: bash scripts/release/check-release-metadata.sh
 
