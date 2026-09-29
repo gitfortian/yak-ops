@@ -39,6 +39,7 @@ How to prove        → Explicit Verification
 - [User Preference](./capabilities/user-preference/README.md)
 - [Version Management](./release/README.md)
 - [v1.0.0 Release Contract](./release/v1.0.0.md)
+- [v1.0.0 Release Readiness](./release/v1.0.0-readiness.md)
 - Platform rules: [yak-ops-platform/PLATFORM_RULES.md](../yak-ops-platform/PLATFORM_RULES.md)
 - Security rules: [yak-ops-platform/SECURITY_RULES.md](../yak-ops-platform/SECURITY_RULES.md)
 

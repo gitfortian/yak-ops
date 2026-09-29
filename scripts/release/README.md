@@ -117,11 +117,17 @@ Compose Smoke 也可以在本地对已经构建好的正式版本镜像执行：
 bash scripts/release/smoke-compose.sh v1.0.0
 ```
 
-手动触发正式 V1 Release Decision 时还必须显式确认：
+手动触发正式 V1 Release Decision 时还必须逐项显式确认：
 
-- Required Manual E2E 已通过。
+- OFFLINE-001 / APPEND 已通过。
+- OFFLINE-002 / OVERWRITE 已通过。
+- OFFLINE-003 / UPSERT 已通过。
+- REALTIME-001 / Snapshot + INSERT/UPDATE/DELETE 已通过。
+- REALTIME-002 / persisted-offset continuation 已通过。
 - V1 Flyway baseline 已完成最终审查。
 - 没有未关闭的 P0 / P1 Release Blocker。
 - Release Notes 与 Known Limitations 已准备完成。
+
+Manual E2E 的执行人、日期、环境和 Evidence 统一记录在 `docs/release/v1.0.0-readiness.md`。
 
 Release Gate 只判断候选版本是否满足上线门槛，不创建 Git Tag，也不向 Registry 推送镜像。

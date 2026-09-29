@@ -189,21 +189,41 @@ splitSize = 空 / 禁用
 
 本用例验证基础产品链路，不验证 split / 并行 Reader 行为。
 
-## 4. 启动任务
+## 4. 上线并运行任务
 
-点击：
+先在任务编辑页点击：
 
 ```text
-保存并运行
+保存并上线
 ```
 
-预期产品行为：
+预期：
 
 ```text
 任务保存成功
    ↓
-实例创建
-   ↓
+任务状态：已上线（PUBLISHED）
+```
+
+然后打开：
+
+```text
+运维中心
+  ↓
+离线任务
+  ↓
+任务
+```
+
+找到 `e2e_offline_mysql_append`，点击：
+
+```text
+运行
+```
+
+预期实例生命周期：
+
+```text
 PENDING
    ↓
 RUNNING
@@ -276,8 +296,8 @@ ORDER BY id;
 - [ ] 执行前，目标表包含已有的 `id = 100` 数据。
 - [ ] 可以从 UI 选择源端 / 目标端数据源和表。
 - [ ] 自动字段映射兼容。
-- [ ] 任务保存成功。
-- [ ] 手工运行后成功创建实例。
+- [ ] 任务通过“保存并上线”进入 `PUBLISHED`。
+- [ ] 运维中心手工运行后成功创建实例。
 - [ ] 实例最终状态为 `SUCCEEDED`。
 - [ ] 最终 `readRows = 3`。
 - [ ] 最终 `writeRows = 3`。
@@ -296,6 +316,6 @@ DROP TABLE IF EXISTS yak_e2e_source.e2e_offline_user_append;
 DROP TABLE IF EXISTS yak_e2e_target.e2e_offline_user_append;
 ```
 
-如果不再需要，可以在 Yak Ops 中删除该 E2E 任务。
+如果不再需要，可以在 Yak Ops 中先下线再删除该 E2E 任务。
 
 历史实例记录可以按照数据同步产品生命周期契约继续保留。
