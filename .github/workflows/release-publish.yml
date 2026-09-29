@@ -316,27 +316,27 @@ jobs:
 
           evidence="release-evidence-v${RELEASE_VERSION}.md"
           cat > "${evidence}" <<EOF
-# Yak Ops v${RELEASE_VERSION} Release Evidence
+          # Yak Ops v${RELEASE_VERSION} Release Evidence
 
-- Product Version: ${RELEASE_VERSION}
-- Git Tag: v${RELEASE_VERSION}
-- Release Commit: ${RELEASE_COMMIT}
-- Formal Release Gate: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}
-- Distribution: ${archive}
-- Distribution SHA-256: ${distribution_sha}
-- Backend Image: ${DOCKERHUB_NAMESPACE}/yak-ops-api:${RELEASE_VERSION}
-- Backend Registry Digest: ${BACKEND_REGISTRY_DIGEST}
-- Frontend Image: ${DOCKERHUB_NAMESPACE}/yak-ops:${RELEASE_VERSION}
-- Frontend Registry Digest: ${FRONTEND_REGISTRY_DIGEST}
-- Required Manual E2E: PASS
-- Flyway Baseline Review: PASS
-- Release Blocker Review: PASS
-- Quality Gate: PASS
-- Full Backend Acceptance: PASS
-- Distribution Verification: PASS
-- Registry Image Identity: PASS
-- Registry Image Compose Smoke: PASS
-EOF
+          - Product Version: ${RELEASE_VERSION}
+          - Git Tag: v${RELEASE_VERSION}
+          - Release Commit: ${RELEASE_COMMIT}
+          - Formal Release Gate: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}
+          - Distribution: ${archive}
+          - Distribution SHA-256: ${distribution_sha}
+          - Backend Image: ${DOCKERHUB_NAMESPACE}/yak-ops-api:${RELEASE_VERSION}
+          - Backend Registry Digest: ${BACKEND_REGISTRY_DIGEST}
+          - Frontend Image: ${DOCKERHUB_NAMESPACE}/yak-ops:${RELEASE_VERSION}
+          - Frontend Registry Digest: ${FRONTEND_REGISTRY_DIGEST}
+          - Required Manual E2E: PASS
+          - Flyway Baseline Review: PASS
+          - Release Blocker Review: PASS
+          - Quality Gate: PASS
+          - Full Backend Acceptance: PASS
+          - Distribution Verification: PASS
+          - Registry Image Identity: PASS
+          - Registry Image Compose Smoke: PASS
+          EOF
 
           cat "${evidence}"
 
