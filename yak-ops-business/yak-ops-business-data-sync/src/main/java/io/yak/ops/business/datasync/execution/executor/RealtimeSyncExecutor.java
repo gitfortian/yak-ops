@@ -251,14 +251,14 @@ public class RealtimeSyncExecutor {
         return decision;
     }
 
-    private void persistMetrics(
-            String workspaceId, String instanceId, String attemptId, ExecutionMetrics metrics) {
+    private void persistMetrics(String workspaceId, String instanceId, String attemptId, ExecutionMetrics metrics) {
         attemptLifecycle.updateMetrics(workspaceId, instanceId, attemptId, metrics.readRows(), metrics.writeRows());
     }
 
     private boolean waitForRetry(String workspaceId, String instanceId, LocalDateTime nextRetryTime) {
         if (nextRetryTime == null) return false;
-        long delayMillis = Math.max(0L, Duration.between(LocalDateTime.now(), nextRetryTime).toMillis());
+        long delayMillis = Math.max(
+                0L, Duration.between(LocalDateTime.now(), nextRetryTime).toMillis());
         try {
             if (delayMillis > 0) Thread.sleep(delayMillis);
         } catch (InterruptedException exception) {
