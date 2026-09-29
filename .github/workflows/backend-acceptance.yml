@@ -1,6 +1,13 @@
 name: Backend Acceptance
 
 on:
+  workflow_call:
+    inputs:
+      full_sweep:
+        description: Run JDBC and CDC acceptance regardless of changed paths.
+        required: false
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -35,6 +42,7 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          FULL_SWEEP: ${{ inputs.full_sweep }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
@@ -42,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${EVENT_NAME}" == "schedule" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${FULL_SWEEP}" == "true" || "${EVENT_NAME}" == "schedule" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "jdbc=true" >> "${GITHUB_OUTPUT}"
             echo "cdc=true" >> "${GITHUB_OUTPUT}"
             exit 0
