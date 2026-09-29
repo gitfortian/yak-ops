@@ -93,3 +93,87 @@ jobs:
 
       - name: Frontend build
         run: npm run build
+
+
+  distribution-quality:
+    name: Distribution Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect distribution changes
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_sha="${PR_BASE_SHA}"
+            head_sha="${PR_HEAD_SHA}"
+          else
+            base_sha="${PUSH_BEFORE_SHA}"
+            head_sha="${CURRENT_SHA}"
+          fi
+
+          if [[ -z "${base_sha}" || "${base_sha}" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse "${head_sha}^")"
+          fi
+
+          git diff --name-only "${base_sha}" "${head_sha}" > /tmp/distribution-changes.txt
+          required=false
+
+          while IFS= read -r file; do
+            case "${file}" in
+              release.env|.env.example|compose.yaml|compose.without-mysql.yaml|Dockerfile|README.md|NOTICE|pom.xml|yak-ops-dist/*|scripts/release/*|yak-ops-ui/package.json|yak-ops-ui/package-lock.json)
+                required=true
+                break
+                ;;
+            esac
+          done < /tmp/distribution-changes.txt
+
+          echo "required=${required}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Java
+        if: steps.changes.outputs.required == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Setup Node
+        if: steps.changes.outputs.required == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.13"
+          cache: npm
+          cache-dependency-path: yak-ops-ui/package-lock.json
+
+      - name: Install frontend dependencies
+        if: steps.changes.outputs.required == 'true'
+        working-directory: yak-ops-ui
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Build frontend distribution
+        if: steps.changes.outputs.required == 'true'
+        working-directory: yak-ops-ui
+        run: npm run build
+
+      - name: Build Yak Ops distribution
+        if: steps.changes.outputs.required == 'true'
+        run: bash mvnw -B -ntp -DskipTests package
+
+      - name: Verify Yak Ops distribution
+        if: steps.changes.outputs.required == 'true'
+        run: bash scripts/release/verify-distribution.sh
