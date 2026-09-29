@@ -94,4 +94,34 @@ bash scripts/release/verify-distribution.sh v1.0.0
 yak-ops-dist/target/SHA256SUMS
 ```
 
-Docker Image 的构建、Compose Smoke Test 和正式 Release Workflow 由后续 Release Gate 负责。
+## V1 Release Gate
+
+V1 自动发布门禁由 `.github/workflows/v1-release-gate.yml` 负责。
+
+它会复用现有 Quality Check，并强制 Backend Acceptance 执行 Full Sweep，然后继续执行：
+
+```text
+Distribution Build
+→ Distribution Verification
+→ Backend / Frontend Docker Build
+→ OCI Version / Revision Check
+→ Compose Startup
+→ Login through Nginx
+→ Current User Check
+→ Release Candidate Evidence
+```
+
+Compose Smoke 也可以在本地对已经构建好的正式版本镜像执行：
+
+```bash
+bash scripts/release/smoke-compose.sh v1.0.0
+```
+
+手动触发正式 V1 Release Decision 时还必须显式确认：
+
+- Required Manual E2E 已通过。
+- V1 Flyway baseline 已完成最终审查。
+- 没有未关闭的 P0 / P1 Release Blocker。
+- Release Notes 与 Known Limitations 已准备完成。
+
+Release Gate 只判断候选版本是否满足上线门槛，不创建 Git Tag，也不向 Registry 推送镜像。
