@@ -40,6 +40,16 @@ public class QuartzScheduleEngine implements ScheduleEngine {
     private Scheduler scheduler;
 
     @Override
+    public void validate(DataSyncScheduleDefinition definition) {
+        try {
+            buildTrigger(definition);
+        } catch (RuntimeException exception) {
+            throw new ScheduleEngineException(
+                    "Quartz schedule definition is invalid: " + definition.scheduleId(), exception);
+        }
+    }
+
+    @Override
     public void schedule(DataSyncScheduleDefinition definition) {
         try {
             scheduler.scheduleJob(buildJob(definition), buildTrigger(definition));
