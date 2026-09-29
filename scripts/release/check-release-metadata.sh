@@ -58,7 +58,7 @@ check_contains "Frontend Maven version matches release metadata" yak-ops-ui/pom.
 check_contains "Frontend package version matches release metadata" yak-ops-ui/package.json "\"version\": \"${YAK_OPS_VERSION}\""
 
 check "Frontend package-lock version matches release metadata" \
-    node -e 'const fs=require("fs"); const expected=process.argv[1]; const lock=JSON.parse(fs.readFileSync("yak-ops-ui/package-lock.json","utf8")); if(lock.version!==expected || !lock.packages || !lock.packages[""] || lock.packages[""].version!==expected) process.exit(1);' "$YAK_OPS_VERSION"
+    python3 -c 'import json,sys; expected=sys.argv[1]; lock=json.load(open("yak-ops-ui/package-lock.json", encoding="utf-8")); raise SystemExit(0 if lock.get("version")==expected and lock.get("packages",{}).get("",{}).get("version")==expected else 1)' "$YAK_OPS_VERSION"
 
 for compose_file in compose.yaml compose.without-mysql.yaml; do
     check_contains "${compose_file} frontend image matches release metadata" "$compose_file" "${DOCKERHUB_NAMESPACE}/yak-ops:${YAK_OPS_VERSION}"
