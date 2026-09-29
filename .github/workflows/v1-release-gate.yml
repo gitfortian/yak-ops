@@ -90,14 +90,29 @@ jobs:
       - backend-acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '1.0.0' }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Resolve release version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_version="${DISPATCH_VERSION}"
+          else
+            source release.env
+            release_version="${YAK_OPS_VERSION}"
+          fi
+
+          echo "RELEASE_VERSION=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
 
       - name: Setup Java
         uses: actions/setup-java@v5
