@@ -1,6 +1,6 @@
 # Data Sync Scheduler Contract
 
-Status: v1.1 PR1 — Contract + Quartz Boundary
+Status: v1.1 PR2 — Offline Schedule Persistence + Trigger
 
 Depends On:
 
@@ -185,7 +185,21 @@ scheduledFireTime
 
 然后通过 `DataSyncScheduleFireListener` 交回 Business。
 
-PR1 只建立该回调边界，不提供业务 Listener 实现，因此本 PR 不创建 Instance、不执行 Task。
+PR2 已由 `DataSyncServiceImpl` 实现该回调边界。
+
+到点后必须重新读取数据库并校验：
+
+```text
+Schedule exists + enabled
+        ↓
+Task exists + OFFLINE + PUBLISHED
+        ↓
+Active Instance?
+   ├── YES → SKIP
+   └── NO  → create Instance(triggerType=SCHEDULE)
+```
+
+Quartz JobData 不是执行授权来源；真正执行前始终以 Yak Ops DB 当前状态为准。
 
 ## 9. Quartz Ownership
 
@@ -220,7 +234,29 @@ DataSyncScheduleFireListener
 
 ## 10. Persistence Boundary
 
-PR1 不新增数据库表，不修改 Flyway。
+PR2 新增：
+
+```text
+V2__data_sync_schedule.sql
+        ↓
+yak_ops_data_sync_schedule
+```
+
+一条 Offline Task 在同一个 Workspace 内最多存在一个 Schedule。
+
+持久化字段：
+
+```text
+id
+workspace_id
+task_id
+cron_expression
+time_zone
+enabled
+audit fields
+```
+
+新建 Schedule 默认 `enabled=false`；启用调度必须满足 Task = `OFFLINE + PUBLISHED`。
 
 后续持久化必须遵守：
 
@@ -239,25 +275,60 @@ Quartz 自身的 JobStore 只能作为 Scheduler Runtime State。
 - 禁止通过 `spring.quartz.jdbc.initialize-schema=always` 在生产环境自动重建表。
 - Data Sync 业务代码不得直接查询 `QRTZ_*`。
 
-`V1__baseline.sql` 已冻结，任何相关数据库变化必须从新的 Migration 开始。
+`V1__baseline.sql` 保持冻结；Schedule Schema 从 `V2__data_sync_schedule.sql` 开始演进。
 
-## 11. PR1 Non-Goals
+## 11. PR2 Runtime Recovery
+
+当前 Quartz 仍使用 RAMJobStore，因此 Quartz Trigger 本身不是持久化 Source of Truth。
+
+应用启动后：
+
+```text
+Application Ready
+      ↓
+DataSyncService.restoreScheduleRuntime()
+      ↓
+query enabled schedules
+      ↓
+validate OFFLINE + PUBLISHED
+      ↓
+re-register Quartz Trigger
+```
+
+这保证应用重启后 Schedule Definition 不丢失，也不要求 PR2 提前引入 Quartz JDBC JobStore。
+
+Task 下线时会在同一业务事务中把 Schedule 标记为 disabled，并在 commit 后移除 Quartz Trigger。
+
+Task 删除时会同步删除 Schedule 业务记录，并在 commit 后清理 Quartz Runtime。
+
+## 12. PR2 HTTP Contract
+
+后端当前提供：
+
+```text
+PUT  /api/v1/data-sync/tasks/{id}/schedule
+GET  /api/v1/data-sync/tasks/{id}/schedule
+POST /api/v1/data-sync/tasks/{id}/schedule/enable
+POST /api/v1/data-sync/tasks/{id}/schedule/disable
+```
+
+Save 只保存 Cron + Time Zone，新 Schedule 默认不启用。
+
+## 13. PR2 Non-Goals
 
 本 PR 明确不做：
 
-- Schedule Entity / Repository。
-- Schedule CRUD API。
 - Schedule UI。
-- 启用 / 禁用。
-- Publish / Unpublish 联动。
-- Cron 到点创建 Instance。
-- `SKIP_IF_RUNNING` 实现。
+- 可配置的 Concurrency Policy。
+- QUEUE / PARALLEL。
 - Retry / Attempt。
 - Quartz JDBC JobStore。
 - Scheduler Cluster。
 - Realtime Auto Recovery。
 
-## 12. PR1 Verification
+当前 Scheduled Fire 在发现 Active Instance 时固定跳过，作为单机调度安全语义；可配置并发策略属于后续 PR。
+
+## 14. PR2 Verification
 
 至少证明：
 
@@ -269,3 +340,10 @@ Quartz 自身的 JobStore 只能作为 Scheduler Runtime State。
 - Reschedule 可以更新 Cron。
 - Unschedule 幂等。
 - 不修改 V1 Flyway baseline。
+- V2 Schedule Schema / Entity / Repository 一致。
+- 新 Schedule 默认 disabled。
+- 只有 PUBLISHED OFFLINE Task 可以 enable。
+- Task unpublish 自动 disable + unschedule。
+- Scheduled Fire 创建 `triggerType=SCHEDULE` Instance。
+- Active Instance 存在时 Scheduled Fire 不重复创建。
+- 应用启动从 DB 恢复 enabled Schedule Runtime。

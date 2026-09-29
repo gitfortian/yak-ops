@@ -3,8 +3,10 @@ package io.yak.ops.boot.scheduler;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
+import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import java.lang.reflect.Field;
 import java.time.ZoneId;
 import java.util.Properties;
@@ -62,6 +64,14 @@ class QuartzScheduleEngineTest {
         assertEquals("Asia/Shanghai", trigger.getTimeZone().getID());
         assertEquals(CronTrigger.MISFIRE_INSTRUCTION_DO_NOTHING, trigger.getMisfireInstruction());
         assertTrue(engine.queryNextFireTime("schedule-1").isPresent());
+    }
+
+    @Test
+    void shouldRejectInvalidCronDuringValidation() {
+        DataSyncScheduleDefinition definition = new DataSyncScheduleDefinition(
+                "schedule-1", "workspace-1", "task-1", "invalid-cron", ZoneId.of("Asia/Shanghai"));
+
+        assertThrows(ScheduleEngineException.class, () -> engine.validate(definition));
     }
 
     @Test

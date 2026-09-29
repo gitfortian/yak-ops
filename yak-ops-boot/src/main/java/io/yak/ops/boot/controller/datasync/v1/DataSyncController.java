@@ -5,10 +5,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
@@ -78,6 +80,31 @@ public class DataSyncController {
     @PostMapping("/tasks/{id}/run")
     public Result<DataSyncInstanceVO> runTask(@PathVariable("id") String id) {
         return Result.success(dataSyncService.runTask(id));
+    }
+
+    @Operation(summary = "保存离线同步任务调度")
+    @PutMapping("/tasks/{id}/schedule")
+    public Result<DataSyncScheduleVO> saveSchedule(
+            @PathVariable("id") String id, @Valid @RequestBody DataSyncScheduleDTO dto) {
+        return Result.success(dataSyncService.saveSchedule(id, dto));
+    }
+
+    @Operation(summary = "查询离线同步任务调度")
+    @GetMapping("/tasks/{id}/schedule")
+    public Result<DataSyncScheduleVO> scheduleDetail(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.querySchedule(id));
+    }
+
+    @Operation(summary = "启用离线同步任务调度")
+    @PostMapping("/tasks/{id}/schedule/enable")
+    public Result<DataSyncScheduleVO> enableSchedule(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.enableSchedule(id));
+    }
+
+    @Operation(summary = "停用离线同步任务调度")
+    @PostMapping("/tasks/{id}/schedule/disable")
+    public Result<DataSyncScheduleVO> disableSchedule(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.disableSchedule(id));
     }
 
     @Operation(summary = "删除数据同步任务")

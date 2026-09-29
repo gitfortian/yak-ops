@@ -13,6 +13,8 @@ import java.util.Optional;
  */
 public interface ScheduleEngine {
 
+    void validate(DataSyncScheduleDefinition definition);
+
     void schedule(DataSyncScheduleDefinition definition);
 
     void reschedule(DataSyncScheduleDefinition definition);

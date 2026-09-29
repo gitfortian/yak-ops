@@ -2,10 +2,12 @@ package io.yak.ops.business.datasync;
 
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.page.PagingData;
 
@@ -32,6 +34,16 @@ public interface DataSyncService {
     DataSyncTaskVO unpublishTask(String id);
 
     DataSyncInstanceVO runTask(String id);
+
+    DataSyncScheduleVO saveSchedule(String taskId, DataSyncScheduleDTO dto);
+
+    DataSyncScheduleVO querySchedule(String taskId);
+
+    DataSyncScheduleVO enableSchedule(String taskId);
+
+    DataSyncScheduleVO disableSchedule(String taskId);
+
+    void restoreScheduleRuntime();
 
     boolean deleteTask(String id);
 

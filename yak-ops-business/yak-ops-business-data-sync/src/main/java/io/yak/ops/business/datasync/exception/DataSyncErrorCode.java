@@ -26,7 +26,11 @@ public enum DataSyncErrorCode implements ErrorCode {
     INSTANCE_NOT_CANCELABLE(42011, "同步实例当前不可停止"),
     EXECUTION_FAILED(42012, "离线同步执行失败"),
     EXECUTION_LOST(42013, "离线同步执行上下文丢失"),
-    INVALID_TASK_STATUS(42014, "同步任务当前状态不允许该操作");
+    INVALID_TASK_STATUS(42014, "同步任务当前状态不允许该操作"),
+    SCHEDULE_NOT_FOUND(42015, "同步任务调度不存在"),
+    INVALID_SCHEDULE(42016, "同步任务调度参数不合法"),
+    SCHEDULE_PERSIST_FAILED(42017, "同步任务调度保存失败"),
+    SCHEDULE_RUNTIME_FAILED(42018, "同步任务调度运行时同步失败");
 
     private final Integer code;
     private final String message;

@@ -8,11 +8,17 @@ import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
+import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
+import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRealtimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -24,6 +30,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
@@ -38,9 +45,11 @@ import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import io.yak.ops.flow.api.row.YakColumn;
@@ -48,10 +57,14 @@ import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import jakarta.annotation.Resource;
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -64,8 +77,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * @since 2026-09-27
  */
 @Service
-public class DataSyncServiceImpl implements DataSyncService {
+public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFireListener {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DataSyncServiceImpl.class);
     private static final Set<String> REALTIME_TARGET_TYPES = Set.of("MYSQL", "POSTGRE_SQL", "ORACLE");
 
     @Resource
@@ -73,6 +87,9 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Resource
     private DataSyncInstanceRepository instanceRepository;
+
+    @Resource
+    private DataSyncScheduleRepository scheduleRepository;
 
     @Resource
     private DataSourceService dataSourceService;
@@ -85,6 +102,9 @@ public class DataSyncServiceImpl implements DataSyncService {
 
     @Resource
     private DataSyncExecutionRegistry executionRegistry;
+
+    @Resource
+    private ScheduleEngine scheduleEngine;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -223,6 +243,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS, "请先停止当前运行实例再下线任务");
         }
+        disableScheduleForTask(workspaceId, task.getId());
         task.setStatus(DataSyncTaskStatus.UNPUBLISHED);
         task.initUpdate();
         if (taskRepository.update(workspaceId, task) == null) {
@@ -241,26 +262,161 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
+        return createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.MANUAL);
+    }
 
-        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, resolvedScope);
-        DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
-        instance.setWorkspaceId(workspaceId);
-        instance.setTaskId(task.getId());
-        instance.setTaskName(task.getName());
-        instance.setTaskVersion(task.getDefinitionVersion());
-        instance.setSyncType(task.getSyncType());
-        instance.setTriggerType(DataSyncTriggerType.MANUAL);
-        instance.setStatus(DataSyncInstanceStatus.PENDING);
-        instance.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
-        instance.setReadRows(0L);
-        instance.setWriteRows(0L);
-        instance.initCreate();
-        if (instanceRepository.add(instance) == null) {
-            throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncScheduleVO saveSchedule(String taskId, DataSyncScheduleDTO dto) {
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE);
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskEntity task = requireTask(workspaceId, taskId);
+        requireOfflineTask(task);
+
+        String cronExpression = StringUtils.trimToNull(dto.getCronExpression());
+        String timeZone = normalizeTimeZone(dto.getTimeZone());
+        if (cronExpression == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "Cron 表达式不能为空");
         }
 
-        submitAfterCommit(workspaceId, instance.getId(), snapshot);
-        return toInstanceVO(instance, true);
+        DataSyncScheduleEntity schedule =
+                scheduleRepository.queryByTask(workspaceId, taskId).orElse(null);
+        if (schedule == null) {
+            schedule = new DataSyncScheduleEntity();
+            schedule.setWorkspaceId(workspaceId);
+            schedule.setTaskId(taskId);
+            schedule.setEnabled(false);
+            schedule.setCronExpression(cronExpression);
+            schedule.setTimeZone(timeZone);
+            schedule.initCreate();
+            validateScheduleDefinition(toScheduleDefinition(schedule));
+            if (scheduleRepository.add(schedule) == null) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED);
+            }
+        } else {
+            schedule.setCronExpression(cronExpression);
+            schedule.setTimeZone(timeZone);
+            schedule.initUpdate();
+            validateScheduleDefinition(toScheduleDefinition(schedule));
+            if (scheduleRepository.update(workspaceId, schedule) == null) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED);
+            }
+            if (Boolean.TRUE.equals(schedule.getEnabled())) {
+                requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "启用中的调度要求任务保持上线");
+                replaceScheduleAfterCommit(schedule);
+            }
+        }
+        return toScheduleVO(schedule);
+    }
+
+    @Override
+    public DataSyncScheduleVO querySchedule(String taskId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        requireOfflineTask(requireTask(workspaceId, taskId));
+        return toScheduleVO(requireSchedule(workspaceId, taskId));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncScheduleVO enableSchedule(String taskId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskEntity task = requireTask(workspaceId, taskId);
+        requireOfflineTask(task);
+        requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务上线后才能启用调度");
+
+        DataSyncScheduleEntity schedule = requireSchedule(workspaceId, taskId);
+        validateScheduleDefinition(toScheduleDefinition(schedule));
+        if (!Boolean.TRUE.equals(schedule.getEnabled())) {
+            schedule.setEnabled(true);
+            schedule.initUpdate();
+            if (scheduleRepository.update(workspaceId, schedule) == null) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED);
+            }
+        }
+        replaceScheduleAfterCommit(schedule);
+        return toScheduleVO(schedule);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncScheduleVO disableSchedule(String taskId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        requireOfflineTask(requireTask(workspaceId, taskId));
+        DataSyncScheduleEntity schedule = requireSchedule(workspaceId, taskId);
+        if (Boolean.TRUE.equals(schedule.getEnabled())) {
+            schedule.setEnabled(false);
+            schedule.initUpdate();
+            if (scheduleRepository.update(workspaceId, schedule) == null) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED);
+            }
+        }
+        unscheduleAfterCommit(schedule.getId());
+        return toScheduleVO(schedule);
+    }
+
+    @Override
+    public void restoreScheduleRuntime() {
+        for (DataSyncScheduleEntity schedule : scheduleRepository.queryEnabled()) {
+            DataSyncTaskEntity task = taskRepository
+                    .queryById(schedule.getWorkspaceId(), schedule.getTaskId())
+                    .orElseThrow(() -> new DataSyncException(
+                            DataSyncErrorCode.SCHEDULE_RUNTIME_FAILED, "启用中的调度关联任务不存在，scheduleId=" + schedule.getId()));
+            requireOfflineTask(task);
+            requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "启用中的调度关联任务必须保持上线");
+            validateScheduleDefinition(toScheduleDefinition(schedule));
+            replaceScheduleRuntime(schedule);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public synchronized void onFire(DataSyncScheduleFire fire) {
+        if (fire == null) throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE);
+
+        DataSyncScheduleEntity schedule = scheduleRepository
+                .queryById(fire.workspaceId(), fire.scheduleId())
+                .orElse(null);
+        if (schedule == null
+                || !Boolean.TRUE.equals(schedule.getEnabled())
+                || !Objects.equals(schedule.getTaskId(), fire.taskId())) {
+            LOG.info(
+                    "离线调度触发已忽略，workspaceId={}, taskId={}, scheduleId={}",
+                    fire.workspaceId(),
+                    fire.taskId(),
+                    fire.scheduleId());
+            return;
+        }
+
+        DataSyncTaskEntity task =
+                taskRepository.queryById(fire.workspaceId(), fire.taskId()).orElse(null);
+        if (task == null
+                || task.getSyncType() != DataSyncType.OFFLINE
+                || task.getStatus() != DataSyncTaskStatus.PUBLISHED) {
+            LOG.info(
+                    "离线调度触发因任务状态已忽略，workspaceId={}, taskId={}, scheduleId={}",
+                    fire.workspaceId(),
+                    fire.taskId(),
+                    fire.scheduleId());
+            return;
+        }
+        if (instanceRepository.existsActiveByTask(fire.workspaceId(), fire.taskId())) {
+            LOG.info(
+                    "离线调度触发因已有运行实例跳过，workspaceId={}, taskId={}, scheduleId={}",
+                    fire.workspaceId(),
+                    fire.taskId(),
+                    fire.scheduleId());
+            return;
+        }
+
+        DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+        DataSyncInstanceVO instance =
+                createInstance(fire.workspaceId(), task, resolvedScope, DataSyncTriggerType.SCHEDULE);
+        LOG.info(
+                "离线调度已创建同步实例，workspaceId={}, taskId={}, scheduleId={}, instanceId={}",
+                fire.workspaceId(),
+                fire.taskId(),
+                fire.scheduleId(),
+                instance.getId());
     }
 
     @Override
@@ -272,6 +428,7 @@ public class DataSyncServiceImpl implements DataSyncService {
         if (instanceRepository.existsActiveByTask(workspaceId, entity.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
+        deleteScheduleForTask(workspaceId, entity.getId());
         if (taskRepository.deleteById(workspaceId, entity.getId()) <= 0) {
             throw new DataSyncException(DataSyncErrorCode.DELETE_TASK_FAILED);
         }
@@ -359,6 +516,125 @@ public class DataSyncServiceImpl implements DataSyncService {
         }
 
         return toInstanceVO(requireInstance(workspaceId, id), true);
+    }
+
+    private DataSyncInstanceVO createInstance(
+            String workspaceId,
+            DataSyncTaskEntity task,
+            DataSyncMappingPreviewDTO resolvedScope,
+            DataSyncTriggerType triggerType) {
+        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, resolvedScope);
+        DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
+        instance.setWorkspaceId(workspaceId);
+        instance.setTaskId(task.getId());
+        instance.setTaskName(task.getName());
+        instance.setTaskVersion(task.getDefinitionVersion());
+        instance.setSyncType(task.getSyncType());
+        instance.setTriggerType(triggerType);
+        instance.setStatus(DataSyncInstanceStatus.PENDING);
+        instance.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
+        instance.setReadRows(0L);
+        instance.setWriteRows(0L);
+        instance.initCreate();
+        if (instanceRepository.add(instance) == null) {
+            throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
+        }
+        submitAfterCommit(workspaceId, instance.getId(), snapshot);
+        return toInstanceVO(instance, true);
+    }
+
+    private void requireOfflineTask(DataSyncTaskEntity task) {
+        if (task == null || task.getSyncType() != DataSyncType.OFFLINE) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "只有离线同步任务支持 Cron 调度");
+        }
+    }
+
+    private DataSyncScheduleEntity requireSchedule(String workspaceId, String taskId) {
+        return scheduleRepository
+                .queryByTask(workspaceId, taskId)
+                .orElseThrow(() -> new DataSyncException(DataSyncErrorCode.SCHEDULE_NOT_FOUND));
+    }
+
+    private String normalizeTimeZone(String value) {
+        String timeZone = StringUtils.trimToNull(value);
+        if (timeZone == null) throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "时区不能为空");
+        try {
+            return ZoneId.of(timeZone).getId();
+        } catch (DateTimeException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "时区不合法", exception);
+        }
+    }
+
+    private DataSyncScheduleDefinition toScheduleDefinition(DataSyncScheduleEntity schedule) {
+        try {
+            return new DataSyncScheduleDefinition(
+                    schedule.getId(),
+                    schedule.getWorkspaceId(),
+                    schedule.getTaskId(),
+                    schedule.getCronExpression(),
+                    ZoneId.of(schedule.getTimeZone()));
+        } catch (DateTimeException | IllegalArgumentException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "调度定义不完整", exception);
+        }
+    }
+
+    private void validateScheduleDefinition(DataSyncScheduleDefinition definition) {
+        try {
+            scheduleEngine.validate(definition);
+        } catch (ScheduleEngineException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "Cron 表达式不合法", exception);
+        }
+    }
+
+    private void replaceScheduleAfterCommit(DataSyncScheduleEntity schedule) {
+        runAfterCommit(() -> replaceScheduleRuntime(schedule));
+    }
+
+    private void unscheduleAfterCommit(String scheduleId) {
+        runAfterCommit(() -> {
+            try {
+                scheduleEngine.unschedule(scheduleId);
+            } catch (ScheduleEngineException exception) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_RUNTIME_FAILED, "移除调度失败", exception);
+            }
+        });
+    }
+
+    private void replaceScheduleRuntime(DataSyncScheduleEntity schedule) {
+        try {
+            scheduleEngine.unschedule(schedule.getId());
+            scheduleEngine.schedule(toScheduleDefinition(schedule));
+        } catch (ScheduleEngineException exception) {
+            throw new DataSyncException(DataSyncErrorCode.SCHEDULE_RUNTIME_FAILED, "注册调度失败", exception);
+        }
+    }
+
+    private void disableScheduleForTask(String workspaceId, String taskId) {
+        DataSyncScheduleEntity schedule =
+                scheduleRepository.queryByTask(workspaceId, taskId).orElse(null);
+        if (schedule == null) return;
+        if (Boolean.TRUE.equals(schedule.getEnabled())) {
+            schedule.setEnabled(false);
+            schedule.initUpdate();
+            if (scheduleRepository.update(workspaceId, schedule) == null) {
+                throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED);
+            }
+        }
+        unscheduleAfterCommit(schedule.getId());
+    }
+
+    private void deleteScheduleForTask(String workspaceId, String taskId) {
+        DataSyncScheduleEntity schedule =
+                scheduleRepository.queryByTask(workspaceId, taskId).orElse(null);
+        if (schedule == null) return;
+        if (scheduleRepository.deleteByTask(workspaceId, taskId) <= 0) {
+            throw new DataSyncException(DataSyncErrorCode.SCHEDULE_PERSIST_FAILED, "删除任务调度失败");
+        }
+        unscheduleAfterCommit(schedule.getId());
+    }
+
+    private DataSyncScheduleVO toScheduleVO(DataSyncScheduleEntity entity) {
+        return BeanCopyUtils.copy(entity, DataSyncScheduleVO.class);
     }
 
     private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {
@@ -553,14 +829,18 @@ public class DataSyncServiceImpl implements DataSyncService {
         Runnable submit = DataSyncType.REALTIME.name().equals(snapshot.getSyncType())
                 ? () -> realtimeSyncExecutor.submit(workspaceId, instanceId, snapshot)
                 : () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        runAfterCommit(submit);
+    }
+
+    private void runAfterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            submit.run();
+            action.run();
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                submit.run();
+                action.run();
             }
         });
     }

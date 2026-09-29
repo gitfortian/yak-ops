@@ -156,7 +156,9 @@ LocalExecution itself is still process-local: after an application restart, old 
 
 v1.1 introduces a framework-neutral Data Sync scheduling boundary under `io.yak.ops.business.datasync.scheduler`. `ScheduleEngine` only expresses Cron registration, reschedule, removal and next-fire queries; `DataSyncScheduleFireListener` is the callback boundary for later business triggering. Business does not import Quartz and does not delegate Task publication, concurrency, retry or Instance lifecycle semantics to the scheduler framework.
 
-The first Quartz implementation is application infrastructure owned by Boot. PR1 does not yet persist Schedule definitions or create scheduled Instances. Distributed recovery and exactly-once coordination remain out of scope.
+The first Quartz implementation is application infrastructure owned by Boot. PR2 persists one Offline Schedule per Workspace/Task in `yak_ops_data_sync_schedule`; that business table is the scheduling source of truth, while the current Quartz RAMJobStore remains replaceable runtime state. Boot restores enabled schedules after application startup.
+
+Quartz fire events re-enter Data Sync Business through `DataSyncScheduleFireListener`. Business re-reads Schedule and Task state, requires OFFLINE + PUBLISHED, skips when an active Instance already exists, and creates a normal persisted Instance with `triggerType=SCHEDULE`. Task unpublish disables its Schedule and removes the runtime Trigger after commit. Distributed recovery and exactly-once coordination remain out of scope.
 
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only at execution time. Realtime state paths and MySQL serverId leases are runtime-owned and are not persisted inside the definition snapshot.
 

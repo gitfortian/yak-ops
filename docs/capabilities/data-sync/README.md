@@ -117,7 +117,16 @@ DataSyncScheduleFire
 DataSyncScheduleFireListener
 ```
 
-当前 PR1 只定义边界，不持久化 Schedule、不创建 Instance，也不实现 `SKIP_IF_RUNNING` / Retry。
+PR2 已完成 Offline Schedule Persistence + Trigger：
+
+- `V2__data_sync_schedule.sql` 持久化 Cron / Time Zone / enabled。
+- 新 Schedule 默认 disabled；PUBLISHED OFFLINE Task 才能 enable。
+- Quartz Fire 回到 Business 后重新校验 DB 状态并创建 `triggerType=SCHEDULE` Instance。
+- Active Instance 存在时固定 skip，不创建并发实例。
+- Task unpublish 自动 disable + unschedule。
+- 应用启动按 DB enabled Schedule 恢复 Quartz Runtime。
+
+Retry / Attempt、可配置并发策略和 Quartz JDBC JobStore 仍属于后续阶段。
 
 核心约束：
 
