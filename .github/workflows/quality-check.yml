@@ -1,6 +1,7 @@
 name: Quality Check
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
@@ -135,7 +136,7 @@ jobs:
 
           while IFS= read -r file; do
             case "${file}" in
-              release.env|.env.example|compose.yaml|compose.without-mysql.yaml|Dockerfile|README.md|NOTICE|pom.xml|yak-ops-dist/*|scripts/release/*|yak-ops-ui/package.json|yak-ops-ui/package-lock.json)
+              release.env|.env.example|compose.yaml|compose.without-mysql.yaml|Dockerfile|docker/*|README.md|NOTICE|pom.xml|yak-ops-dist/*|scripts/release/*|yak-ops-ui/package.json|yak-ops-ui/package-lock.json)
                 required=true
                 break
                 ;;
