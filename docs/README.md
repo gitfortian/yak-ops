@@ -40,6 +40,7 @@ How to prove        → Explicit Verification
 - [Version Management](./release/README.md)
 - [v1.0.0 Release Contract](./release/v1.0.0.md)
 - [v1.0.0 Release Readiness](./release/v1.0.0-readiness.md)
+- [v1.0.0 Release Notes](./release/v1.0.0-release-notes.md)
 - Platform rules: [yak-ops-platform/PLATFORM_RULES.md](../yak-ops-platform/PLATFORM_RULES.md)
 - Security rules: [yak-ops-platform/SECURITY_RULES.md](../yak-ops-platform/SECURITY_RULES.md)
 
