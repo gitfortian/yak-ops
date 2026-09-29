@@ -63,7 +63,6 @@ REQUIRED_ENTRIES=(
     "${BASE_DIR}/libs/yak-ops-api.jar"
     "${BASE_DIR}/web/index.html"
     "${BASE_DIR}/conf/application.yml"
-    "${BASE_DIR}/conf/logback-spring.xml"
     "${BASE_DIR}/bin/run-yak-ops.sh"
     "${BASE_DIR}/jdbc-drivers-builtin/mysql/5/mysql-connector-java-5.1.49.jar"
     "${BASE_DIR}/jdbc-drivers-builtin/mysql/8/mysql-connector-j-8.4.0.jar"
