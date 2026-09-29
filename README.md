@@ -35,6 +35,7 @@ Management Center
 - [架构](ARCHITECTURE.md)
 - [版本管理](docs/release/README.md)
 - [v1.0.0 Release Contract](docs/release/v1.0.0.md)
+- [v1.1.0 Release Contract](docs/release/v1.1.0.md)（开发中）
 - [Data Sync 手工 E2E](docs/e2e/data-sync/README.md)
 
 ## Distribution

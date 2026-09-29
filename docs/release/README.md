@@ -14,6 +14,18 @@ Scope:
 
 本规则管理的是 Yak Ops **产品发布版本**，不管理 Data Sync Task 的 `definitionVersion`。
 
+当前主干开发版本：
+
+```text
+1.1.0-SNAPSHOT
+```
+
+已发布稳定版本：
+
+```text
+1.0.0
+```
+
 ## 1. 两种版本必须分离
 
 Yak Ops 同时存在两类版本，它们语义完全不同：
