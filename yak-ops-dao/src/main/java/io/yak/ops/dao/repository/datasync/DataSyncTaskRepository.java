@@ -3,6 +3,7 @@ package io.yak.ops.dao.repository.datasync;
 import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.BaseRepository;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -16,6 +17,8 @@ public interface DataSyncTaskRepository extends BaseRepository<DataSyncTaskEntit
     PageData<DataSyncTaskEntity> queryPage(String workspaceId, DataSyncTaskPageQuery query);
 
     Optional<DataSyncTaskEntity> queryById(String workspaceId, String id);
+
+    List<DataSyncTaskEntity> queryRealtimeDesiredRunning();
 
     DataSyncTaskEntity update(String workspaceId, DataSyncTaskEntity entity);
 

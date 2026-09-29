@@ -251,20 +251,23 @@ MySQL replication `serverId` is now managed by a process-local allocator. It der
 Application restart still does not resurrect the previous LocalExecution:
 
 ```text
-old RUNNING/PENDING Instance
+old PENDING / RUNNING / RETRY_WAITING Execution
         ↓ application restart
        LOST
 
-same Task/version run again
+PUBLISHED REALTIME Task
++ desiredState=RUNNING
         ↓
-new Instance + new LocalExecution
+new AUTO_RECOVERY Execution
         ↓
 reuse existing connector-owned CDC state
         ↓
 continue from persisted Debezium offset
 ```
 
-This is connector-state continuation through a new Instance, not generic YakFlow Runtime checkpoint restoration, not resurrection of the old Instance, and not an exactly-once claim.
+If desiredState=STOPPED, no automatic restart occurs.
+
+This is connector-state continuation through a new Execution, not generic YakFlow Runtime checkpoint restoration, not resurrection of the old LocalExecution, and not an exactly-once claim.
 
 ## Task Instance / Execution
 
@@ -305,6 +308,29 @@ Retry does not create a new Execution root and does not re-read the latest Task 
 The definition snapshot must not contain datasource connection JSON, passwords, SSH private keys, tokens or other credentials.
 
 Full contract: [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
+
+## Realtime Desired State + Auto Recovery — v1.1 PR5
+
+PR5 将 REALTIME 的“用户期望”与“当前 Execution 状态”拆开：
+
+```text
+Publication State  → PUBLISHED / UNPUBLISHED
+Desired State      → RUNNING / STOPPED
+Execution State    → PENDING / RUNNING / RETRY_WAITING / terminal
+```
+
+核心规则：
+
+- 手工 Start REALTIME → `desiredState=RUNNING`。
+- Stop / Unpublish → `desiredState=STOPPED`。
+- 应用启动先把旧进程 active Execution 标记 LOST。
+- 随后只恢复 `PUBLISHED + REALTIME + desiredState=RUNNING` 的 Task。
+- Auto Recovery 创建新的 Execution，`triggerType=AUTO_RECOVERY`。
+- 新 Execution 继续使用同 `taskId + definitionVersion` 的 CDC state domain。
+- Retry 仍然发生在 Execution 内部，不与 Auto Recovery 混合。
+- PR5 不提供常驻 recovery watchdog 或多节点 fencing。
+
+完整 Contract：[Realtime Desired State + Auto Recovery](./realtime-desired-state.md)。
 
 v1.1 PR4 已实现 Retry Runtime：
 
@@ -503,11 +529,11 @@ The acceptance remains at-least-once; passing these tests does not create an exa
 
 It still does not provide:
 
-- automatic resurrection/restart of LOST Instances.
+- resurrection of the old LocalExecution object.
+- continuous recovery watchdog after startup reconciliation.
 - distributed state ownership / fencing.
 - exactly-once transaction coordination.
 - persisted last-checkpoint timestamp / checkpoint history UI.
-- scheduler or retry policy.
 - distributed execution.
 - Transform, DDL propagation, schema evolution or multi-table REALTIME tasks.
 

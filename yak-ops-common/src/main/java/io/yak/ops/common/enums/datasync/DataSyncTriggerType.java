@@ -19,7 +19,8 @@ public enum DataSyncTriggerType {
     /**
      * 兼容保留值。v1.1 Retry / Attempt Contract 不再使用 RETRY 创建新的 Execution Root。
      */
-    RETRY(3, "重试");
+    RETRY(3, "重试"),
+    AUTO_RECOVERY(4, "自动恢复");
 
     @EnumValue
     private final Integer value;

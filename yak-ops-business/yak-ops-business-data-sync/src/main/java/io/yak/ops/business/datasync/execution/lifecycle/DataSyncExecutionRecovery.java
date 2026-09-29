@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
  * 收口单节点 Data Sync 应用启动恢复语义。
  *
  * <p>LocalExecution 本身不能跨进程恢复，因此上一进程遗留的 PENDING / RUNNING / RETRY_WAITING Execution 会标记为 LOST。
- * REALTIME 的 Debezium state 不在这里删除；用户后续重新运行同一 Task definitionVersion 时复用已有 offset/state。</p>
+ * REALTIME 的 Debezium state 不在这里删除；该阶段只收口旧进程状态，随后由 Boot 启动动作根据 REALTIME desiredState
+ * 决定是否创建新的 AUTO_RECOVERY Execution。</p>
  *
  * @author weifuwan
  * @since 2026-09-28

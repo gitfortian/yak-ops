@@ -24,6 +24,9 @@ public class DataSyncTaskVO {
     /** 任务发布状态：UNPUBLISHED 或 PUBLISHED。 */
     private String status;
 
+    /** REALTIME 期望运行状态：STOPPED / RUNNING；OFFLINE 固定为 STOPPED。 */
+    private String desiredState;
+
     /** 离线同步写入方式：APPEND / OVERWRITE / UPSERT；REALTIME 当前固定为 APPEND。 */
     private String writeMode;
 

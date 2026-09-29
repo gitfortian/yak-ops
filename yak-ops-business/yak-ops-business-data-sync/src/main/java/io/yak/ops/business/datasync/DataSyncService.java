@@ -47,6 +47,8 @@ public interface DataSyncService {
 
     void restoreScheduleRuntime();
 
+    void restoreRealtimeDesiredState();
+
     boolean deleteTask(String id);
 
     DataSyncInstanceVO queryInstance(String id);
