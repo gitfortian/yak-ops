@@ -266,31 +266,45 @@ continue from persisted Debezium offset
 
 This is connector-state continuation through a new Instance, not generic YakFlow Runtime checkpoint restoration, not resurrection of the old Instance, and not an exactly-once claim.
 
-## Task Instance
+## Task Instance / Execution
 
-An instance represents one concrete execution attempt of a task.
+From v1.1 PR3, the existing `DataSyncInstance` is the stable **Execution root** rather than the identity of every retry attempt.
 
-One task may have many instances:
+Current v1.0 / early v1.1 data remains compatible:
 
 ```text
 Task
-├── Instance #1 SUCCEEDED
-├── Instance #2 FAILED
-└── Instance #3 RUNNING
+  ↓
+Execution = existing Instance
+  └── implicit Attempt #1
 ```
 
-Instance persistence owns:
+After Retry is implemented, the target model is:
+
+```text
+Task
+├── Execution #1
+│    ├── Attempt #1 FAILED
+│    └── Attempt #2 SUCCEEDED
+└── Execution #2 RUNNING
+     └── Attempt #1 RUNNING
+```
+
+Execution persistence continues to own:
 
 - task ID / task name / task definition version.
 - sync type snapshot (OFFLINE / REALTIME).
-- trigger type.
-- execution status.
+- root trigger type.
 - sanitized definition snapshot.
-- read / write row counters.
-- start / finish time.
-- structured failure code and sanitized failure message.
+- execution-level status and current/final presentation fields.
+
+Attempt persistence will later own each runtime try's metrics, timestamps and failure diagnostics.
+
+Retry does not create a new Execution root and does not re-read the latest Task definition. Every Attempt under one Execution reuses the same `taskVersion + definitionSnapshot`.
 
 The definition snapshot must not contain datasource connection JSON, passwords, SSH private keys, tokens or other credentials.
+
+Full contract: [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
 
 ## Phase 2 — Offline Task Editor
 

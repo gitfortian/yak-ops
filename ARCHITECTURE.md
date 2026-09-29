@@ -160,6 +160,8 @@ The first Quartz implementation is application infrastructure owned by Boot. PR2
 
 Quartz fire events re-enter Data Sync Business through `DataSyncScheduleFireListener`. Business re-reads Schedule and Task state, requires OFFLINE + PUBLISHED, skips when an active Instance already exists, and creates a normal persisted Instance with `triggerType=SCHEDULE`. Task unpublish disables its Schedule and removes the runtime Trigger after commit. Distributed recovery and exactly-once coordination remain out of scope.
 
+v1.1 PR3 defines the retry identity boundary without implementing automatic retry. The existing `yak_ops_data_sync_instance` remains the stable Execution root. Existing rows are treated as single-attempt executions with an implicit Attempt #1. Future retry persistence is child-owned: one Execution may contain multiple Attempts, while every Attempt reuses the Execution's immutable taskVersion and sanitized definition snapshot. Retry does not create another root Instance, does not replace MANUAL/SCHEDULE trigger ownership, and does not belong to Quartz or YakFlow Runtime policy.
+
 The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only at execution time. Realtime state paths and MySQL serverId leases are runtime-owned and are not persisted inside the definition snapshot.
 
 ### `yak-ops-plugins/yak-ops-plugin-datasource`

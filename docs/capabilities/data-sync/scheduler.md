@@ -164,7 +164,11 @@ Attempt 2
 
 Quartz 只负责第一步。
 
-Retry 不使用 Quartz refire 语义冒充 Data Sync Attempt。
+Retry 不使用 Quartz refire / Trigger 语义冒充 Data Sync Attempt，Retry Backoff 也不由 Quartz 持久化。
+
+完整身份与状态规则见 [Execution Retry / Attempt Contract](./execution-retry-attempt.md)。
+
+当 Retry Backend 引入 `RETRY_WAITING` 后，该状态仍属于 Active Execution；`SKIP_IF_RUNNING` 必须把等待 Retry 的 Execution 视为正在占用该 Task，避免下一个 Cron Fire 创建第二个并发 Execution。
 
 ## 8. Fire Boundary
 

@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 数据同步任务实例响应。
+ * 数据同步 Execution 根实例响应。
  *
  * <p>分页列表不返回任务定义快照；实例详情可以返回启动时固化的脱敏 definition snapshot。</p>
  *
@@ -14,7 +14,7 @@ import lombok.Data;
 @Data
 public class DataSyncInstanceVO {
 
-    /** 单次同步执行实例 ID。 */
+    /** 单次外部运行请求形成的 Execution ID；Retry Attempt 不创建新的根 ID。 */
     private String id;
 
     /** 产生该实例的任务 ID。 */
@@ -29,7 +29,7 @@ public class DataSyncInstanceVO {
     /** 实例同步类型，例如 OFFLINE、REALTIME。 */
     private String syncType;
 
-    /** 实例触发方式，例如 MANUAL、SCHEDULE、RETRY。 */
+    /** Execution 根触发方式，当前正常来源为 MANUAL / SCHEDULE；Retry Attempt 不覆盖该字段。 */
     private String triggerType;
 
     /** 实例生命周期状态，例如 PENDING、RUNNING、SUCCEEDED、FAILED、CANCELED、LOST。 */
@@ -53,7 +53,7 @@ public class DataSyncInstanceVO {
     /** 失败或 LOST 时已脱敏的错误信息；正常实例为空。 */
     private String errorMessage;
 
-    /** 详情查询时返回的脱敏任务定义快照；分页列表中为空。 */
+    /** 详情查询时返回的 Execution 脱敏定义快照；未来所有 Retry Attempt 必须复用，分页列表中为空。 */
     private DataSyncDefinitionSnapshotVO definitionSnapshot;
 
     /** 实例记录创建时间，通常早于或等于实际开始时间。 */
