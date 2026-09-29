@@ -11,7 +11,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * 映射 yak_ops_data_sync_instance 表，承载一次数据同步执行尝试的历史持久化状态。
+ * 映射 yak_ops_data_sync_instance 表，承载一次数据同步 Execution 的稳定根身份与历史状态。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -37,13 +37,13 @@ public class DataSyncInstanceEntity extends BaseEntity {
     /** 实例同步类型，独立固化以支持任务删除后的历史查询。 */
     private DataSyncType syncType;
 
-    /** 实例触发方式。 */
+    /** Execution 根触发方式；Retry Attempt 不改变该来源。 */
     private DataSyncTriggerType triggerType;
 
     /** 实例生命周期状态。 */
     private DataSyncInstanceStatus status;
 
-    /** 脱敏后的任务定义快照，禁止包含任何数据源凭证。 */
+    /** Execution 固定的脱敏任务定义快照，未来所有 Retry Attempt 必须复用，禁止包含任何数据源凭证。 */
     @ToString.Exclude
     private String definitionSnapshot;
 

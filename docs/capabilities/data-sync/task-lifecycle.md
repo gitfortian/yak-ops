@@ -6,9 +6,11 @@ Status: Active — PR2 implements persistence and backend lifecycle enforcement;
 
 Separate **Task publication state** from **Instance execution state**.
 
-A Task answers whether its current definition is allowed to create new execution Instances. An Instance answers what happened during one concrete execution attempt.
+A Task answers whether its current definition is allowed to create new execution Instances. From v1.1 PR3, an Instance is the stable Execution root; individual Retry attempts are child Attempts under that Execution.
 
 This contract applies to both `OFFLINE` and `REALTIME` sync types.
+
+Retry / Attempt semantics are defined separately in [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
 
 ## Terminology
 
@@ -67,7 +69,7 @@ Instance completion or cancellation does not automatically unpublish a Task.
 7. A `PUBLISHED` Task cannot be deleted.
 8. Task deletion still requires no active Instance.
 9. `syncType` is immutable after Task creation. OFFLINE ↔ REALTIME conversion requires a new Task.
-10. Instance `taskVersion` and `definitionSnapshot` remain immutable historical execution input.
+10. Instance/Execution `taskVersion` and `definitionSnapshot` remain immutable historical execution input; all child Attempts must reuse them.
 
 These invariants are backend rules. Frontend button state is presentation only and cannot replace backend enforcement.
 
