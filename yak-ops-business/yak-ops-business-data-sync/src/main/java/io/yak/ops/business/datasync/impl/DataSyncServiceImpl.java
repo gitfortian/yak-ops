@@ -808,7 +808,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private String retryPolicyJson(DataSyncTaskDTO dto) {
-        DataSyncRetryPolicyDTO policy = dto.getRetryPolicy() == null ? new DataSyncRetryPolicyDTO() : dto.getRetryPolicy();
+        DataSyncRetryPolicyDTO policy =
+                dto.getRetryPolicy() == null ? new DataSyncRetryPolicyDTO() : dto.getRetryPolicy();
         return JSONUtils.toJson(policy);
     }
 
