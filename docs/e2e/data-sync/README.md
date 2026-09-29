@@ -108,12 +108,19 @@ E2E 文档面向人工执行和产品验收，说明文字统一使用中文。
 
 实时用例中，每完成一次源端变更，都要等待该变更出现在目标端后，再执行下一次 INSERT / UPDATE / DELETE。这样可以确保每次观察结果都能对应到单一操作。
 
-## 当前核心路径
+## V1 必选手工 E2E
+
+`v1.0.0` 发布前必须完整执行以下 5 个场景：
 
 | ID | 场景 | 目的 |
 | --- | --- | --- |
-| OFFLINE-001 | [MySQL → MySQL / APPEND](offline/01-mysql-to-mysql-append.md) | 验证完整的有界离线产品链路以及 `APPEND` 写入语义。 |
-| REALTIME-001 | [MySQL CDC → MySQL](realtime/01-mysql-cdc-to-mysql.md) | 验证初始化快照以及 INSERT / UPDATE / DELETE CDC 能通过产品 UI 完整执行。 |
+| OFFLINE-001 | [MySQL → MySQL / APPEND](offline/01-mysql-to-mysql-append.md) | 验证完整离线产品链路，以及 `APPEND` 保留目标端旧数据。 |
+| OFFLINE-002 | [MySQL → MySQL / OVERWRITE](offline/02-mysql-to-mysql-overwrite.md) | 验证目标表先清空，再写入本次 Source 数据。 |
+| OFFLINE-003 | [MySQL → MySQL / UPSERT](offline/03-mysql-to-mysql-upsert.md) | 验证按目标主键更新已有数据、插入新数据并保留无关旧数据。 |
+| REALTIME-001 | [MySQL CDC → MySQL](realtime/01-mysql-cdc-to-mysql.md) | 验证 initial snapshot 以及 INSERT / UPDATE / DELETE CDC 完整产品链路。 |
+| REALTIME-002 | [MySQL CDC 停止后续传](realtime/02-mysql-cdc-restart-continuation.md) | 验证同一 Task / definitionVersion 停止后复用 persisted offset，而不是 fresh snapshot。 |
+
+正式执行结果统一记录在 [v1.0.0 Release Readiness](../../release/v1.0.0-readiness.md)。
 
 ## 扩展规则
 
@@ -121,14 +128,11 @@ E2E 文档面向人工执行和产品验收，说明文字统一使用中文。
 
 后续适合增加的场景包括：
 
-- MySQL → PostgreSQL 离线类型兼容性。
-- MySQL → Oracle 离线类型兼容性。
-- 离线 `OVERWRITE` 写入语义。
-- 离线 `UPSERT` 写入语义。
+- MySQL → PostgreSQL 离线产品级兼容性。
+- MySQL → Oracle 离线产品级兼容性。
 - 离线 split + 并行 Reader 执行。
-- MySQL CDC → PostgreSQL。
-- MySQL CDC → Oracle。
-- 实时停止后重新运行，从已持久化 offset 继续。
+- MySQL CDC → PostgreSQL 产品级兼容性。
+- MySQL CDC → Oracle 产品级兼容性。
 - 进程重启后旧实例变为 `LOST`，新实例继续执行。
 
 如果一个 PR 修改了上述行为，应在 PR 中明确指出实现完成后由哪个手工 E2E 用例验证该行为。
