@@ -470,6 +470,29 @@ MySQL Source
 
 Each acceptance path verifies target rows and final YakFlow metrics.
 
+## v1.1 Automation Acceptance
+
+PR7 将 Automation & Recovery 纳入独立 Backend Acceptance：
+
+```text
+Quartz Scheduler Contract
+        ↓
+Data Sync Automation Acceptance
+        ↓
+JDBC / CDC Cross-Database Acceptance
+        ↓
+Manual Automation E2E
+```
+
+自动化覆盖 Schedule / Disable / `SKIP_IF_RUNNING`、Retry / Backoff / Cancel，以及 REALTIME `AUTO_RECOVERY` 同版本 state identity。
+
+手工必选场景：
+
+- [AUTOMATION-001：离线 Cron 调度与停用](../../e2e/data-sync/automation/01-offline-cron-disable.md)
+- [AUTOMATION-002：实时同步进程重启自动恢复](../../e2e/data-sync/automation/02-realtime-process-restart-auto-recovery.md)
+
+完整证据矩阵见 [v1.1 Automation & Recovery 验收](../../e2e/data-sync/automation/README.md)。
+
 ## Current Capability Boundary
 
 The current product surface includes:

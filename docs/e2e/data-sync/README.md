@@ -77,7 +77,8 @@ E2E 文档面向人工执行和产品验收，说明文字统一使用中文。
 - 从第一步到最后一步可以独立执行。
 - 明确给出源端 / 目标端 DDL 和初始化数据。
 - 使用确定性的 `e2e_*` 表名。
-- 描述 Yak Ops UI 操作，不直接调用内部 API。
+- 产品已有 UI 的步骤必须描述 Yak Ops UI 操作，不直接调用 Java Service、Repository 或数据库内部表。
+- 当当前版本明确没有对应配置 UI 时，可以按具体 E2E 文档说明使用已经对外发布的 Data Sync HTTP Endpoint 完成前置配置；执行、运行态观察和结果验证仍优先使用 UI / 真实数据库。
 - 记录关键任务参数。
 - 明确实例预期生命周期。
 - 使用 SQL 验证目标数据库。
@@ -121,6 +122,19 @@ E2E 文档面向人工执行和产品验收，说明文字统一使用中文。
 | REALTIME-002 | [MySQL CDC 停止后续传](realtime/02-mysql-cdc-restart-continuation.md) | 验证同一 Task / definitionVersion 停止后复用 persisted offset，而不是 fresh snapshot。 |
 
 正式执行结果统一记录在 [v1.0.0 Release Readiness](../../release/v1.0.0-readiness.md)。
+
+## v1.1 Automation & Recovery 必选手工 E2E
+
+v1.1 Release 前新增两条必选场景：
+
+| ID | 场景 | 目的 |
+| --- | --- | --- |
+| AUTOMATION-001 | [离线 Cron 调度与停用](automation/01-offline-cron-disable.md) | 验证 Schedule 启用、Scheduler Next Run、自动 `SCHEDULE` Execution 与停用后不再触发。 |
+| AUTOMATION-002 | [实时同步进程重启自动恢复](automation/02-realtime-process-restart-auto-recovery.md) | 验证旧 Execution → `LOST`、新 `AUTO_RECOVERY` Execution、同版本 CDC state 续传与 Stop 后不再恢复。 |
+
+完整验收证据矩阵见 [v1.1 Automation & Recovery 验收](automation/README.md)。
+
+Retry / Backoff、`SKIP_IF_RUNNING` 等难以通过稳定人工故障注入复现的状态机规则，以 `DataSyncAutomationAcceptanceIT` 作为 Release 硬证据；手工 E2E 不为覆盖状态矩阵而人为制造不稳定环境。
 
 ## 扩展规则
 
