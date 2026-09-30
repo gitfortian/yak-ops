@@ -370,7 +370,10 @@ Acceptance:
 - CI must execute backend tests; `verify -DskipTests` is forbidden.
 - Offline JDBC acceptance must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
 - Realtime CDC acceptance must prove MySQL CDC -> MySQL/PostgreSQL/Oracle using initial snapshot, INSERT/UPDATE/DELETE, checkpoint, persisted offset, cancel, same-state restart and offset continuation.
+- Automation acceptance must independently prove Schedule Fire / disable / SKIP_IF_RUNNING, Retry maxAttempts + backoff, Cancel no-retry, and REALTIME AUTO_RECOVERY identity semantics.
+- Quartz Cron / Time Zone / Misfire / next-fire behavior must be part of the Automation Acceptance evidence; business listener tests alone are not enough to claim scheduler acceptance.
 - The post-restart CDC acceptance must prove one new Source INSERT produces exactly one read/write event, so continuation cannot silently fall back to a fresh snapshot.
+- v1.1 Manual E2E must execute the required Automation scenarios defined under `docs/e2e/data-sync/automation`.
 - H2 compatibility tests remain useful unit/integration coverage but are not the final cross-database acceptance proof.
 
 ## Current Phase

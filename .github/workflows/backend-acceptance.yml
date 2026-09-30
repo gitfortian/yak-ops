@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       full_sweep:
-        description: Run JDBC and CDC acceptance regardless of changed paths.
+        description: Run JDBC, CDC and Automation acceptance regardless of changed paths.
         required: false
         type: boolean
         default: false
@@ -30,6 +30,7 @@ jobs:
     outputs:
       jdbc: ${{ steps.changes.outputs.jdbc }}
       cdc: ${{ steps.changes.outputs.cdc }}
+      automation: ${{ steps.changes.outputs.automation }}
 
     steps:
       - name: Checkout
@@ -37,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect JDBC and CDC changes
+      - name: Detect acceptance changes
         id: changes
         shell: bash
         env:
@@ -53,6 +54,7 @@ jobs:
           if [[ "${FULL_SWEEP}" == "true" || "${EVENT_NAME}" == "schedule" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "jdbc=true" >> "${GITHUB_OUTPUT}"
             echo "cdc=true" >> "${GITHUB_OUTPUT}"
+            echo "automation=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -72,6 +74,7 @@ jobs:
 
           jdbc=false
           cdc=false
+          automation=false
 
           while IFS= read -r file; do
             case "${file}" in
@@ -85,10 +88,17 @@ jobs:
                 cdc=true
                 ;;
             esac
+
+            case "${file}" in
+              pom.xml|mvnw|mvnw.cmd|.mvn/*|yak-ops-bom/*|yak-ops-common/src/main/java/io/yak/ops/common/*datasync*|yak-ops-dao/src/main/java/io/yak/ops/dao/*datasync*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V4__*|yak-ops-business/yak-ops-business-data-sync/*|yak-ops-business/yak-ops-business-data-sync/**/*|yak-ops-boot/src/main/java/io/yak/ops/boot/scheduler/*|yak-ops-boot/src/main/java/io/yak/ops/boot/config/*|.github/workflows/backend-acceptance.yml)
+                automation=true
+                ;;
+            esac
           done < /tmp/backend-acceptance-changes.txt
 
           echo "jdbc=${jdbc}" >> "${GITHUB_OUTPUT}"
           echo "cdc=${cdc}" >> "${GITHUB_OUTPUT}"
+          echo "automation=${automation}" >> "${GITHUB_OUTPUT}"
 
   jdbc-acceptance:
     name: JDBC Acceptance
@@ -144,6 +154,33 @@ jobs:
           -Dsurefire.failIfNoSpecifiedTests=false
           test
 
+  automation-acceptance:
+    name: Data Sync Automation Acceptance
+    needs: detect-changes
+    if: needs.detect-changes.outputs.automation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run Data Sync automation acceptance
+        run: >-
+          bash mvnw -q
+          -pl yak-ops-boot
+          -am
+          -Dtest=DataSyncAutomationAcceptanceIT,QuartzScheduleEngineTest
+          -Dsurefire.failIfNoSpecifiedTests=false
+          test
+
   acceptance-gate:
     name: Backend Acceptance Gate
     if: always()
@@ -151,6 +188,7 @@ jobs:
       - detect-changes
       - jdbc-acceptance
       - mysql-cdc-acceptance
+      - automation-acceptance
     runs-on: ubuntu-latest
 
     steps:
@@ -160,6 +198,7 @@ jobs:
           DETECT_RESULT: ${{ needs.detect-changes.result }}
           JDBC_RESULT: ${{ needs.jdbc-acceptance.result }}
           CDC_RESULT: ${{ needs.mysql-cdc-acceptance.result }}
+          AUTOMATION_RESULT: ${{ needs.automation-acceptance.result }}
         run: |
           set -euo pipefail
 
@@ -168,7 +207,7 @@ jobs:
             exit 1
           fi
 
-          for result in "${JDBC_RESULT}" "${CDC_RESULT}"; do
+          for result in "${JDBC_RESULT}" "${CDC_RESULT}" "${AUTOMATION_RESULT}"; do
             if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
               echo "Acceptance job failed: ${result}"
               exit 1
