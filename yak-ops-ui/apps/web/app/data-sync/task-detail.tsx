@@ -62,9 +62,15 @@ interface DataSyncTaskDetailPageProps {
   syncType: DataSyncType;
   basePath: string;
   title: string;
+  localScroll?: boolean;
 }
 
-export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTaskDetailPageProps) {
+export function DataSyncTaskDetailPage({
+  syncType,
+  basePath,
+  title,
+  localScroll = false,
+}: DataSyncTaskDetailPageProps) {
   const realtime = syncType === "REALTIME";
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
@@ -227,12 +233,20 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
         : "-";
 
   return (
-    <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
+    <div
+      className={
+        localScroll
+          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#f6f6f6] text-[#242731]"
+          : "min-h-full bg-[#f6f6f6] text-[#242731]"
+      }
+    >
       <PageHeader
         title={task.name}
         description={`${title} · v${task.definitionVersion}`}
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className={
+          localScroll ? "shrink-0 bg-white px-6 max-md:px-4" : "bg-white px-6 max-md:px-4"
+        }
         extra={
           <Button size="small" onClick={() => navigate(basePath)}>
             返回任务列表
@@ -240,8 +254,19 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
         }
       />
 
-      <div className="space-y-4 px-6 pb-8 pt-5 max-md:px-4">
-        <section className="rounded-lg border border-[#e6e8eb] bg-white">
+      <div
+        className={
+          localScroll ? "min-h-0 flex-1 overflow-y-auto" : "px-6 pb-8 pt-5 max-md:px-4"
+        }
+      >
+        <div
+          className={
+            localScroll
+              ? "mx-6 mb-6 mt-5 space-y-4 rounded-lg border border-[#e6e8eb] bg-white p-4 max-md:mx-4"
+              : "space-y-4"
+          }
+        >
+          <section className="rounded-lg border border-[#e6e8eb] bg-white">
           <div className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
             基本信息
           </div>
@@ -404,6 +429,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
               </TabsPanel>
             </Tabs>
           </section>
+          </div>
         </div>
       </div>
     </div>
