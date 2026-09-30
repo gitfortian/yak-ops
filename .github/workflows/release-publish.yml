@@ -6,17 +6,15 @@ on:
       release_version:
         description: Product version to publish.
         required: true
-        default: "1.0.0"
+        default: "1.1.0"
         type: string
       release_commit:
         description: Exact commit that passed the formal Release Gate.
         required: true
-        default: "4d146ab05894b47a63e89e0d27e0606abe803bed"
         type: string
       gate_run_id:
-        description: Successful V1 Release Gate workflow run ID for this commit.
+        description: Successful formal Release Gate workflow run ID for this commit.
         required: true
-        default: "36513582550"
         type: string
       publish_latest:
         description: Update latest only after immutable images and GitHub Release succeed.
@@ -56,9 +54,9 @@ jobs:
           run_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}" --jq '.conclusion')"
           run_branch="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}" --jq '.head_branch')"
           run_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}" --jq '.head_sha')"
-          release_decision="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "V1 Release Decision") | .conclusion' | tail -n 1)"
+          release_decision="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "Release Decision") | .conclusion' | tail -n 1)"
 
-          test "${run_name}" = "V1 Release Gate"
+          test "${run_name}" = "Release Gate"
           test "${run_event}" = "workflow_dispatch"
           test "${run_status}" = "completed"
           test "${run_conclusion}" = "success"
@@ -66,7 +64,7 @@ jobs:
           test "${run_sha}" = "${RELEASE_COMMIT}"
           test "${release_decision}" = "success"
 
-          echo "Formal V1 Release Gate verified: run=${GATE_RUN_ID} commit=${RELEASE_COMMIT}"
+          echo "Formal Release Gate verified: run=${GATE_RUN_ID} commit=${RELEASE_COMMIT}"
 
       - name: Checkout exact release commit
         uses: actions/checkout@v5
@@ -80,6 +78,8 @@ jobs:
           set -euo pipefail
           bash scripts/release/check-release-metadata.sh "v${RELEASE_VERSION}"
           test -f "docs/release/v${RELEASE_VERSION}-release-notes.md"
+          test -f "docs/release/v${RELEASE_VERSION}-readiness.md"
+          test "$(grep -m1 '^Status:' "docs/release/v${RELEASE_VERSION}-readiness.md")" = "Status: Ready"
           test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT}"
 
       - name: Download formal Gate artifact
@@ -329,7 +329,7 @@ jobs:
           - Frontend Image: ${DOCKERHUB_NAMESPACE}/yak-ops:${RELEASE_VERSION}
           - Frontend Registry Digest: ${FRONTEND_REGISTRY_DIGEST}
           - Required Manual E2E: PASS
-          - Flyway Baseline Review: PASS
+          - Migration Review: PASS
           - Release Blocker Review: PASS
           - Quality Gate: PASS
           - Full Backend Acceptance: PASS
@@ -379,6 +379,11 @@ jobs:
         run: |
           set -euo pipefail
           source release.env
+
+          if [[ "${RELEASE_VERSION}" == *-* ]]; then
+            echo "Prerelease versions must not update latest: ${RELEASE_VERSION}"
+            exit 1
+          fi
 
           backend_repository="${DOCKERHUB_NAMESPACE}/yak-ops-api"
           frontend_repository="${DOCKERHUB_NAMESPACE}/yak-ops"

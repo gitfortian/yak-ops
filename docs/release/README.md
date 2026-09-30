@@ -26,6 +26,19 @@ Scope:
 1.0.0
 ```
 
+当前候选版本：
+
+```text
+1.1.0 — Scope Frozen / Awaiting Manual E2E
+```
+
+候选材料：
+
+- [v1.1.0 Release Contract](./v1.1.0.md)
+- [v1.1.0 Release Notes](./v1.1.0-release-notes.md)
+- [v1.1.0 Release Readiness](./v1.1.0-readiness.md)
+- [v1.1.0 Release Evidence](./v1.1.0-release-evidence.md)
+
 ## 1. 两种版本必须分离
 
 Yak Ops 同时存在两类版本，它们语义完全不同：
@@ -211,6 +224,10 @@ yak-ops-{version}.tar.gz
 
 ## 7. Release Gate
 
+Yak Ops 使用通用 `Release Gate` / `Release Decision`，不再把正式发布逻辑硬编码为某个历史版本的场景列表。
+
+每个版本的具体 Manual E2E 要求写在自己的 Readiness 文档中。正式 Decision 只在对应 Readiness 已明确 `Status: Ready` 且人工确认全部为 true 时允许通过。
+
 Yak Ops 不以“功能开发完成”作为可发布标准。
 
 正式 Release 必须同时通过四层 Gate。
@@ -241,6 +258,7 @@ Release 时必须执行完整 Backend Acceptance。
 ```text
 JDBC Acceptance
 MySQL CDC Cross-Database Acceptance
+Data Sync Automation Acceptance
 ```
 
 日常 PR 可以按改动范围条件执行；正式 Release 必须 Full Sweep。
@@ -398,7 +416,9 @@ Compose Smoke Test
       ↓
 Version Consistency Check
       ↓
-Release Gate PASS
+Release Gate PASS on exact Ready commit
+      ↓
+Release Publish verifies exact Gate run + commit
       ↓
 Tag vX.Y.Z
       ↓
