@@ -1,126 +1,34 @@
 # Frontend Service Rules
 
-Scope:
-- `yak-ops-ui/apps/web/service/**`
+Status: Active
 
-Depends On:
-- `./ARCHITECTURE.md`
-- `./FRONTEND_RULES.md`
+Scope: `yak-ops-ui/apps/web/service/**`。
 
-## Flow
-
-```text
-App Domain
-→ Domain Service
-→ service/http
-→ Backend API
-```
+依赖边界见 [Architecture](ARCHITECTURE.md)，通用实现约束见 [Frontend Rules](FRONTEND_RULES.md)。
 
 ## Ownership
 
-```text
-service/http
-= HTTP transport / Result envelope / network + auth failure handling
+`service/http` 是唯一 HTTP transport，拥有 HttpUtils、统一 Result、JSON、网络和认证失败处理。领域 Service 拥有 endpoint、参数适配及后端请求/响应类型；页面拥有 UI 状态。
 
-service/auth
-= login / logout / current user contract + endpoints
-
-service/datasource
-= Datasource contract + CRUD / connection / read-only Catalog metadata
-
-service/data-sync
-= Data Sync task CRUD + mapping preview contract
-
-service/preference
-= User Preference contract used by current product favorites / frequent-item consumers
-```
-
-Backend request / response Contract 与对应 Service 放在一起。
+数据源调用包含 CRUD、批量操作、连接测试与只读 Catalog；数据同步调用包含定义、发布、执行、调度及运维读取。具体函数以真实 App 调用链为入口，不在文档复制 endpoint 清单。
 
 ## Service Locality
 
-Service 同样优先局部内聚，不按 endpoint 名词机械拆文件。
-
-默认 Domain Service 结构：
-
-```text
-service/<domain>/
-├── index.ts
-└── types.ts
-```
-
-- `index.ts`：该 Domain 的 endpoint、参数适配和轻量响应转换。
-- `types.ts`：稳定的 backend request / response Contract。
-
-只有形成独立 transport、独立协议、独立生命周期，或单文件复杂度已经明显影响阅读时，才继续拆 Service 文件。
-
-不要因为存在 CRUD / Catalog 等概念，就默认创建 `api.ts / catalog.ts`。
+默认使用 `service/<domain>/index.ts + types.ts`。只有独立 transport、协议、生命周期或明确的阅读复杂度才继续拆分，不按 CRUD / Catalog 等名词机械创建小文件，不添加 interface / impl / adapter 层。
 
 ## Dependency Invariant
 
-Service 是 App 的下层。
-
-```text
-app → service
-```
-
-禁止：
-
-```text
-service → app
-```
-
-不要为了复用 `type` 破坏依赖方向。
-
-例如 Datasource API Contract 的 owner 是：
-
-```text
-service/datasource/types.ts
-```
-
-App 可以 import / re-export Service Contract；Service 不得 import App model。
+- 领域请求统一经过 HttpUtils；原生 `fetch` 仅属于 transport。
+- 请求/响应类型与对应 Service 放在一起；App 可以导入或重新导出，Service 不导入 App model 或 UI 组件。
+- UI 只消费业务 data，不解析 `Result<T>`；HttpUtils 不持有数据源或同步业务规则。
+- 后端错误保留失败语义，不制造假成功数据。
+- User Preference 请求显式省略 Workspace Header；其他请求按接口的真实 scope 使用 transport，不在页面手工拼接上下文。
+- 不创建 axios、umi-request 或第二套 transport，不在 Service 保存页面状态。
 
 ## Service Export Lifecycle
 
-Frontend Service export 必须服务于当前 App 调用链，不把“后端存在的 API”机械镜像成前端函数。
-
-Must:
-- 新增 service function 时必须存在真实 App caller，或在当前功能 PR 中同时落地 caller。
-- service function 删除后，同一变更中删除只为它存在的 request / response type、endpoint 常量和适配代码。
-- 后端能力暂时没有前端产品入口时，可以保留后端 Contract，但前端不提前创建占位 service export。
-- 审查 service 时以 `app → service` 的真实引用为准，不以“以后可能会用”作为保留理由。
-
-Must Not:
-- 为每个后端 Controller 方法自动创建同名 frontend service。
-- 保留全仓只有定义、没有 App caller 的 export。
-- 保留只被死 service function 使用的 TypeScript interface / type。
-- 为未来页面提前维护 URL prefix、response type 或 adapter。
-
-## Must
-
-- Endpoint 由对应 Domain Service 拥有。
-- 普通 HTTP 统一经过 `HttpUtils`。
-- 原生 `fetch` 只允许存在于唯一 transport owner。
-- HttpUtils 只负责 HTTP、统一 Result、JSON、网络错误和 transport 行为。
-- Domain Service 负责 endpoint、参数、响应 Contract 和数据适配。
-- User Preference 是 user-scoped capability；`service/preference` 请求必须显式省略 Workspace Header，不能把当前 Workspace 变成偏好归属条件。
-- 同一个 Domain 的轻量 endpoint 优先保持在一个 Service entry 中。
-- 稳定 backend Contract 可以独立放在 `types.ts`。
-- UI 只拿业务 data，不解析后端统一 Result。
-- 后端错误保留失败语义，不返回假成功数据。
-
-## Must Not
-
-- 从 `service/**` import `@/app/**`。
-- Component、Page、Hook 直接调用 `fetch`。
-- 创建 axios、umi-request 或第二套 transport。
-- 让 HttpUtils 知道 Datasource 业务规则。
-- 让 UI 感知 `Result<T>`。
-- 为 Service 创建 interface / impl / adapter 层。
-- 为 CRUD / Catalog 等概念创建只有少量代码的 Service 文件。
-- 在 Service 保存页面 UI state。
-- 从 Service import UI Component。
+新增函数必须有真实 App caller，或与调用方一同交付；后端存在某接口不构成新增前端导出的理由。删除函数时同时清理只为它存在的类型、endpoint 常量和适配代码，不保留未来页面占位。
 
 ## Enforcement
 
-以上稳定 invariant 由 `npm run architecture:check` 检查。
+确定性的依赖检查见 [architecture check](scripts/check-architecture.mjs)。导出是否有业务价值、错误语义是否正确仍需结合调用方审查，不能仅凭静态门禁通过宣称全部满足。

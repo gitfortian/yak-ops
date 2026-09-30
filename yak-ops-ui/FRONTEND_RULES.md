@@ -1,122 +1,42 @@
 # Frontend Rules
 
-Scope:
-- `yak-ops-ui/apps/**`
-- `yak-ops-ui/packages/**`
-- `yak-ops-ui/scripts/**`
+Status: Active
 
-Depends On:
-- `./ARCHITECTURE.md`
-
-Related:
-- `./SERVICE_RULES.md`
-- `./apps/web/APP_RULES.md`
-- `./apps/web/FORM_RULES.md`
-- `./apps/web/app/datasource/DATASOURCE_RULES.md`
-- `./packages/yak-ui/UI_RULES.md`
-- `./docs/tooling.md`
+Scope: `yak-ops-ui/apps/**`、`yak-ops-ui/packages/**`、`yak-ops-ui/scripts/**`。
 
 ## Ownership
 
-```text
-apps/web/app/<domain> = product capability
-apps/web/service      = backend communication + backend contracts
-apps/web/utils        = business-agnostic helpers
-apps/web/themes       = theme
-apps/web/hooks        = cross-component hooks
-apps/web/context      = app-wide context
-apps/web/config       = runtime configuration
-apps/web/constants    = stable constants
-apps/web/assets       = bundled assets
-apps/web/public       = raw static assets
-
-packages/yak-ui       = business-agnostic UI primitives
-scripts               = executable architecture/tooling checks
-```
+目录和依赖归 [Architecture](ARCHITECTURE.md)。按任务读取 [App](apps/web/APP_RULES.md)、[Form](apps/web/FORM_RULES.md)、[Service](SERVICE_RULES.md)、[Yak UI](packages/yak-ui/UI_RULES.md) 与就近领域规则，不把链接当作全量必读清单。
 
 ## Local Cohesion
 
-优先局部内聚，不为“概念完整”而拆文件。
-
-不要因为代码里出现 Management / Model / Plugin / Connection 等名词，就自动创建对应目录。
-
-只有独立行为、明显复用或复杂度足够高时才抽取新的文件或目录。
-
-页面专属的小组件可以留在页面文件；仅被一个父组件使用的简单逻辑不需要额外架构层。
+优先局部内聚：状态放在拥有行为的最小边界，页面私有组件与逻辑留在领域内。只有独立行为、真实复用或复杂度足够时才拆文件；不因名词、文件长度或形式对称创建新层级。
 
 ## Must
 
-- 代码先确定 owner，再确定目录。
-- 业务 UI / state / presentation 跟随 `app/<domain>`。
-- Domain endpoint 与后端 Contract 跟随 `service/<domain>`。
-- 依赖方向保持 `app → service → http`。
-- 通用 UI Primitive 从 `@yak-ops/yak-ui` 使用。
-- 页面内持续可见的前置条件、风险提示、兼容性限制和“避免踩坑”警告统一使用 Yak UI `Alert`；不要在 `app/**` 手写黄色提示条。一次性操作结果仍使用 Toast。
-- HTTP 请求统一经过 `service/http`。
-- Component / Page / Hook 不直接调用 `fetch`。
-- 跨页面运行时状态放 `context`，访问 Hook 放 `hooks`。
-- React state 放在拥有行为的最小边界。
-- TypeScript、Oxlint、Oxfmt 和 architecture check 报错从源头修复。
+- 先确定 owner，再放代码；业务私有实现不进入 root `utils / hooks / types / constants`。
+- 跨页面运行态归 `context`，跨组件访问 Hook 归 `hooks`，不为局部状态引入 Zustand / Redux。
+- App 通过领域 Service 调用后端，组件、页面、Hook 不直接调用原生 `fetch`。
+- 产品层使用 `@yak-ops/yak-ui` 公共导出，不直接依赖 Base UI。
+- 持续风险提示、瞬时结果与字段错误的选用遵循 [Alert](packages/yak-ui/docs/alert.md)，不要手写另一套提示条。
+- 修改行为时维护对应权威契约及验证入口，不把实施进展追加到通用规则。
 
 ## Must Not
 
-- 重新创建 `apps/web/src`、`apps/web/pages`、`apps/web/shared`、根 `src/public/types/mock`。
-- 重新创建 `packages/datasource` 或 `@yak-ops/datasource`。
-- Service 反向 import `app/**`。
-- App 直接 import `service/http`。
-- 为单一概念创建没有独立行为的目录层。
-- 新增第二套 HTTP Client。
-- 重新引入 `antd`、`@ant-design/icons` 或第二套 UI framework。
-- App / Domain 直接 import `@base-ui/react`。
-- 为局部状态引入 Zustand / Redux。
-- 用 broad lint disable、删除 enforcement 或跳过 formatter 让检查变绿。
+- 恢复 `apps/web/src`、`apps/web/pages`、`apps/web/shared` 或根 `src/public/types/mock`。
+- 恢复 `packages/datasource`、`@yak-ops/datasource` 或第二套 UI / HTTP framework。
+- Service 反向依赖 App，或 App 绕过领域 Service 直接依赖 `service/http`。
+- 为单一概念建立没有独立行为的目录、另一套表单运行时或全局组件大桶。
+- 使用 broad lint disable、删除 enforcement、跳过 formatter 或降低约束让检查变绿。
 
 ## Architecture Gate
 
-```bash
-npm run architecture:check
-```
-
-合理架构演进必须同步 Architecture / Rules / enforcement。
+架构变化同步 Architecture、就近 Rules 和现有 enforcement。检查入口见 [Tooling](docs/tooling.md#architecture-check)。
 
 ## Physical Quality Gates
 
-前端可被工具确定验证的规则必须由确定性工具执行，不依赖 AI Review。
-
-CI 按独立 gate 顺序执行：
-
-```text
-format:check
-    ↓
-lint
-    ↓
-typecheck
-    ↓
-architecture:check
-    ↓
-build
-```
-
-每个 gate 必须独立暴露失败结果，不能只包装成单一的 `npm run check` CI 步骤。
-
-CI 只负责检查，不负责修改代码：
-
-- Format 使用 `npm run format:check`，禁止在 CI 执行 `npm run format`。
-- Lint 使用 `npm run lint`，禁止在 CI 执行 `npm run lint:fix`。
-- TypeScript 使用 `npm run typecheck`。
-- Architecture 使用 `npm run architecture:check`。
-- Production build 使用 `npm run build`。
-
-`npm run check` 保留为本地聚合入口，并保持与 CI 前四个 quality gate 相同的执行顺序。
+可确定判断的格式、静态规则、类型、架构与生产构建由工具检查。CI 独立暴露各 gate，只检查、不修改源码；不能用聚合命令隐藏具体失败阶段。
 
 ## Validation
 
-本地聚合验证：
-
-```bash
-cd yak-ops-ui
-npm run check
-npm run build
-```
-
-CI 必须直接执行各独立 quality gate，以便明确显示具体失败阶段。
+命令、工具和执行范围只在 [Frontend Tooling](docs/tooling.md#required-checks) 维护。报告实际执行结果，不把编译通过当成浏览器交互验收。

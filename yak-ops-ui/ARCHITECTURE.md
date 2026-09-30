@@ -2,203 +2,69 @@
 
 Status: Active
 
-Scope:
-- `yak-ops-ui/apps/**`
-- `yak-ops-ui/packages/**`
+Scope: `yak-ops-ui/apps/**`、`yak-ops-ui/packages/**`。
 
-Depends On:
-- `../ARCHITECTURE.md`
-- `./FRONTEND_RULES.md`
+系统模块边界见 [Repository Architecture](../ARCHITECTURE.md)。本文件只定义前端目录、职责和依赖；实现约束见 [Frontend Rules](FRONTEND_RULES.md)。
 
-## Principle
+## Web Root Ownership
 
-Yak Ops UI 使用 Workspace + Dify-style Web Root。
+`apps/web` 是产品 Web Root，`packages/yak-ui` 是业务无关的共享 UI。
 
-`apps/web` 是产品 Web Root。
-
-业务能力归 `app/<domain>`，后端通信与后端 Contract 归 `service/<domain>`，真正跨业务的基础能力才进入 root infrastructure。无业务语义 UI Primitive 归 `packages/yak-ui`。
+```text
+apps/web/
+  app/<domain>     产品页面、局部状态与展示
+  app/router      URL 与产品入口装配
+  app/layout      认证后共享 Shell
+  service/<domain> 后端调用与请求/响应类型
+  service/http    唯一 HTTP transport
+  context         应用级运行态
+  hooks           跨组件 Hook
+  utils           无业务工具
+  themes          应用主题
+  types           跨 Web 稳定类型
+  config          运行配置
+  constants       稳定常量
+  assets          参与构建的资源
+  public          原样静态资源
+packages/yak-ui/   共享组件、公共 Props 与视觉状态
+scripts/          工具与架构检查
+```
 
 ## Domain Locality
 
-Domain 内优先局部内聚，不把概念名自动变成目录层级。
+- `app/datasource`：数据源管理页面；就近约束见 [Datasource Rules](apps/web/app/datasource/DATASOURCE_RULES.md)。
+- `app/offline-sync`、`app/realtime-sync`：任务定义入口；共享编辑器、生命周期展示及运行态组件由 `app/data-sync` 承载。
+- `app/operations`：运维入口，复用 `app/data-sync` 的任务运行与实例组件；界面职责见 [Operations Rules](apps/web/app/operations/OPERATIONS_RULES.md)。
+- `app/management`：用户与工作空间管理；`app/login`：登录产品页面。
 
-Datasource 当前结构：
-
-```text
-app/datasource/
-├── index.tsx
-├── table.tsx
-├── form.tsx
-├── constants.ts
-├── types.ts
-├── icons/
-└── i18n/
-
-service/datasource/
-├── index.ts
-└── types.ts
-```
-
-Datasource 当前就是普通管理页面：
-
-```text
-Filter + Table + Pagination + CRUD Modal
-```
-
-`index.tsx` 拥有列表、筛选、分页和删除确认状态；`table.tsx` 只负责列表展示；`form.tsx` 只负责新增、编辑和连接测试。
-
-禁止为了 Datasource CRUD 重新创建 Editor Runtime、Domain Hook、Summary Layer 或动态表单体系。
+Task、Execution、Attempt、Schedule 的业务含义由 [Data Sync Contract](../docs/capabilities/data-sync/README.md) 及其专题定义，不在前端架构中重述。共享编辑器规则见 [Task Editor Rules](apps/web/app/data-sync/DATA_SYNC_TASK_EDITOR_RULES.md)。
 
 ## Dependency Direction
 
 ```text
-app/router
-   ↓
-app/layout
-   ├── app/datasource
-   └── app/management
-            ↓
-      packages/yak-ui
-
-app/datasource
-   ↓
-service/datasource
-   ↓
-service/http
+app/router → app/layout / app/<domain>
+app/<domain> → service/<domain> → service/http
+app → @yak-ops/yak-ui → Base UI / DOM
 ```
 
-核心 invariant：
-
-```text
-app → service → http
-```
-
-## Datasource Contract Ownership
-
-稳定后端 Contract 归：
-
-```text
-service/datasource/types.ts
-```
-
-App 只通过 `app/datasource/types.ts` 重新导出这些 Contract。
-
-当前前端只消费 CRUD、分页和 Connection Test；不消费 Summary、Catalog、Plugin Config、Driver Upload 或 Runtime Install API。
-
-## Datasource Product Baseline
-
-当前只展示：
-
-- MySQL
-- Oracle
-- PostgreSQL
-
-表单按 Provider 使用固定连接模式：
-
-```text
-MySQL / PostgreSQL
-→ host / port / database / username / password / properties
-
-Oracle
-→ jdbcUrl / username / password
-```
-
-Create Wizard 的数据源类型选择顶部使用 User Preference `DATASOURCE_CREATE_TYPE` 展示最多 3 个常用类型；排序由用户使用次数和最近使用时间决定，不足 3 个时从当前支持类型补足。选择 Provider 时异步记录一次 usage；偏好失败不阻塞 Datasource 创建。
-
-MySQL / PostgreSQL 由前端维护 Host / Port / Database 输入、JDBC Preview 和轻量 Key/Value 高级参数；Oracle 直接输入完整 `jdbc:oracle:` URL，不拆连接地址，也不展示高级参数。HTTP Contract 统一使用 `connectionParams` 对象；前端不把连接参数序列化成 JSON 字符串。结构化 JDBC URL 生成、Driver Class、Provider 差异、Normalize 和 Connection Test 仍由后端 JDBC Plugin 负责；Oracle 原生 JDBC URL 由 Provider 校验后直接使用。SSH 与动态 Driver Manager 不属于当前前端能力。
-
-## Web Root Ownership
-
-```text
-app        → Product Domain + Router + Layout
-service    → Domain API + Backend Contract + HTTP transport
-utils      → 无业务工具
-themes     → Theme
-types      → 跨 Web 稳定类型
-hooks      → 跨组件 React Hook
-context    → App-wide Context
-config     → 运行配置
-constants  → 稳定常量
-assets     → 参与构建的资源
-public     → 原样静态资源
-```
+后端请求/响应类型归 `service/<domain>/types.ts`。App 可以导入或重新导出；Service 不反向依赖 App。共享 UI 不依赖业务 Service。
 
 ## App Shell
 
-Authenticated product pages share one parameterized application shell:
+[AppLayout](apps/web/app/layout/AppLayout.tsx) 拥有视口、Launcher 开关与 Workspace-scoped Outlet 生命周期；TopBar、ProductSidebar、ProductLauncher 和 AllProductMenu 归 `app/layout`。
 
-```text
-app/layout/
-├── AppLayout.tsx
-├── TopBar.tsx
-├── ProductSidebar.tsx
-├── ProductLauncher.tsx
-├── AllProductMenu.tsx
-└── navigation.ts
-```
+产品 Registry 由 [navigation.ts](apps/web/app/layout/navigation.ts) 定义。数据集成与运维中心使用工作空间边界，管理中心是系统级入口；路由装配决定 `workspaceScoped`，偏好数据不定义产品标签、图标或路由。
 
-Ownership:
-
-- `AppLayout` owns the viewport and the Global Product Launcher open / close state. Data Integration and Management Center reuse this same shell.
-- `TopBar` owns product identity, launcher trigger and current-user actions. Workspace Switcher is rendered only for Workspace-scoped products.
-- `ProductSidebar` renders navigation supplied by the current product.
-- Data Integration is Workspace-scoped. Management Center is system-scoped and does not require an active Workspace.
-- Management Center routes are `/management/users` and `/management/workspaces`. User management calls `service/user`; Workspace management calls `service/workspace`. Management UI only renders actions already backed by stable backend contracts.
-- `ProductLauncher` owns a fixed 220px launcher track. The track, not the first-level panel alone, opens from `translateX(-220px)` to `translateX(0)` in 300ms and closes in 220ms without resizing Sidebar / Outlet.
-- `所有产品` is a dedicated `view-all` row. Activating it keeps the first-level panel visible, highlights the row with `#1c1e21`, and opens `AllProductMenu` to its right.
-- `AllProductMenu` is absolutely anchored to the track with `left: 100%`, so its left edge always touches the first-level panel's right edge. It clips from 765px to 0 width on close, uses background `#1c1e21`, opens in 240ms and closes in 170ms.
-- A full Launcher close is staggered rather than hard-sequenced: the second level starts collapsing immediately, then the shared launcher track starts sliding 36ms later. Because both levels share the same moving coordinate system, no gap may appear between them during close.
-- Product/category rows use subtle `#282b2e` hover feedback and brighter text/icon color; neither first nor second level adds an outer shadow.
-- `navigation.ts` owns the complete product Registry and category grouping; current products are `数据集成` and `管理中心`. Registry metadata never comes from User Preference persistence.
-- ProductLauncher owns Global Product Favorites runtime state. When opened it reads the current user's `PRODUCT_MENU` preferences through `service/preference`; the first-level product area renders only favorite Registry entries in server `sortOrder`.
-- AllProductMenu always renders the complete Registry and owns the star interaction surface. Star changes are persisted through User Preference and reflected in the first-level list immediately; browser state is not the cross-device source of truth.
-- User Preference requests are user-scoped and explicitly omit `X-Workspace-Id`.
-- Launcher closes from the TopBar X trigger, Escape and route change.
-- While Launcher is open, a transparent blank-area interaction layer sits below the menu panels and above page content. A single blank-area click closes the whole Launcher; the visual close still staggers the second level ahead of the first level.
-- Product pages rendered inside `AppLayout` fill the available container; they do not subtract shell dimensions from `100vh / 100dvh`.
+Shell 的交互不变量由 [App Rules](apps/web/APP_RULES.md) 定义。页面内标题使用 [PageHeader](packages/yak-ui/docs/page-header.md)，不是第二个应用 TopBar；固定标题和局部滚动由页面布局负责。
 
 ## Service Boundary
 
-`service/http` 是唯一 HTTP transport owner。
-
-Datasource Service 保持：
-
-```text
-service/datasource/
-├── index.ts
-└── types.ts
-```
-
-Global Product Favorites 使用：
-
-```text
-service/preference/
-├── index.ts
-└── types.ts
-```
-
-Preference Service 只承载后端 User Preference HTTP Contract；Product Registry 和 Launcher 展示逻辑仍属于 `app/layout`。
-
-不按 CRUD endpoint 机械拆文件。
+[Service Rules](SERVICE_RULES.md) 定义 HTTP、类型与导出生命周期。数据源 Service 包含只读 Catalog 调用，数据同步 Service 承载任务、发布、调度、运行与运维读模型；不按后端接口数量提前生成前端导出。
 
 ## Architecture Enforcement
 
-```bash
-npm run architecture:check
-```
-
-架构变化必须同时更新：
-
-```text
-ARCHITECTURE.md
-*_RULES.md
-check-architecture.mjs
-```
+架构校验入口为 [check-architecture.mjs](scripts/check-architecture.mjs)。目录或依赖边界发生变化时，同时维护对应 Architecture、Rules 和已有检查；不能只删检查绕过边界。
 
 ## Verification
 
-```bash
-cd yak-ops-ui
-npm run check
-npm run build
-```
+验证命令与工具归属见 [Frontend Tooling](docs/tooling.md)，不在每份架构文档重复维护命令清单。

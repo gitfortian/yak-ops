@@ -1,160 +1,46 @@
 # Datasource Frontend Rules
 
-Scope:
+Status: Active
 
-- `yak-ops-ui/apps/web/app/datasource/**`
-- `yak-ops-ui/apps/web/service/datasource/**`
+Scope: `apps/web/app/datasource/**`、`apps/web/service/datasource/**`。
 
-Depends On:
+数据源能力、连接模式和常用类型行为见 [Datasource Contract](../../../../../docs/capabilities/datasource/README.md)；通用布局见 [Form Rules](../../FORM_RULES.md)。本文件维护页面特有的组合与交互约束。
 
-- `/yak-ops-ui/apps/web/FORM_RULES.md`
+## Ownership
 
-Owns:
+`index.tsx` 拥有筛选、分页、选择、加载和弹窗状态；`table.tsx` 组合列、行操作与批量底栏；`form.tsx` 复用新增/编辑字段、校验、连接测试和保存。类型由 `service/datasource/types.ts` 定义，文案归本领域 i18n。
 
-- Workspace-scoped Datasource CRUD UI
-- Datasource filters / table / pagination
-- Datasource create / edit / connection-test form
-- Datasource backend Contract adaptation
+活动 Workspace 由 App 提供，页面不把 `workspaceId` 放入业务 DTO、不手工拼接 Workspace Header；空间切换的局部状态隔离由共享 Shell 负责。
 
-## Principle
+## List
 
-Datasource V1 is a Workspace-scoped database connection management page, not a frontend plugin platform.
+- 页面使用中性底色，筛选、Table 与分页放在同一无阴影、无额外圆角的白色内容面板。
+- 工具栏顺序为“新增数据源 → 数据源类型 → 数据源名称”，不把新增入口放进 PageHeader extra；筛选使用 outlined 控件。
+- 只使用共享 Table，采用 medium 密度；边框、高度、加载遮罩和分页位置遵循 [Table Contract](../../../../packages/yak-ui/docs/table.md)，不能用页面高度把分页推到底部。`pageSizeLabel` 提供“每页显示：”。
+- 行内只有居中的“编辑｜删除”，不提供单行连接测试。表单连接测试与批量测试保留。
+- 受控选择保留跨页 ID，筛选变化清空选择，单次最多 100 条；表头及底部全选只作用当前页可选记录。
+- Table footer 承载批量删除与批量测试，右侧复用分页。删除二次确认；连接测试反馈逐条结果汇总，不能把失败伪装成成功。
 
-The active Workspace is application context, not Datasource form state. Datasource DTOs never carry `workspaceId`; `service/http` injects the validated current Workspace header automatically. Switching Workspace remounts the workspace-scoped product outlet so list/filter/selection/form state cannot leak across Workspaces.
+## Create / Edit
 
-Current product flow:
+新增为“类型选择 → 连接配置”两步 Modal，编辑直接进入同一配置表单且不可修改 dbType。类型选择区保留固定高度、分类及搜索；Item 仅显示图标与名称。常用类型按能力契约排序和补足，只映射实际支持类型；记录 usage 失败不阻断表单。
 
-```text
-Filter
-→ Table
-→ Create Wizard / Edit / Delete / Batch Delete / Batch Test Connection
-```
+当前使用 `MYSQL / ORACLE / POSTGRE_SQL`；PostgreSQL 别名进入表单后归一为 `POSTGRE_SQL`，显示人类可读名称。新增类型须先有后端 Provider 再接入产品，不建设动态 Provider UI。
 
-Create Wizard:
+Create 默认环境为 DEVELOP，Edit 保留原环境；环境不是当前可编辑字段。访问身份与认证占位选项不扩张后端契约。MySQL 支持 AUTO / MYSQL_8 / MYSQL_5 驱动选择；PostgreSQL 与 Oracle 不提交 driverId。
 
-```text
-常用数据源 Top 3 + 全部数据源
-→ 选择数据源类型并记录用户使用偏好
-→ 配置连接信息
-→ 测试连接 / 完成
-```
+## Connection Form
 
-不要为了未来扩展提前引入动态表单、Editor Runtime、Domain Hook、Summary Layer 或 Provider UI abstraction。
+Create / Update / Connection Test 共用结构化 `connectionParams`，dbType 由外层字段路由，不重复塞入连接对象，也不由 App / Service 手工序列化成 JSON 字符串。
 
-## Structure
+MySQL / PostgreSQL 使用结构化 Host / Port / Database 和只读 JDBC Preview。Oracle 接收完整原生 JDBC URL；校验非空与 Vendor 前缀，不在产品表单解析或重写 SID / Service Name / RAC，不展示高级参数、驱动版本或结构化预览。历史 Oracle properties 编辑时可透明保留。
 
-```text
-app/datasource/
-├── index.tsx
-├── table.tsx
-├── form.tsx
-├── constants.ts
-├── types.ts
-├── icons/
-└── i18n/
+PostgreSQL 采用数据库连接目标，不增加顶层 schema 或默认 public；默认 search path 通过通用 currentSchema 属性传递。端口默认值与 Preview 实现见 [form.tsx](form.tsx)，连接标准化和真实连接测试仍由后端负责。
 
-service/datasource/
-├── index.ts
-└── types.ts
-```
+## Advanced Properties
 
-## Supported Type Baseline
+候选 Key 从领域 Service 调用后端 discovery 获取，不维护 Vendor 参数列表。推荐值用 Combobox 搜索/多选，多选拆成独立行；自定义属性仍可使用 Input。Key 非空且大小写不敏感去重；候选不是白名单，值的类型、枚举与 Provider 语义由后端校验。Oracle 不进入 discovery 流程。
 
-当前只展示：
+## Boundary
 
-- `MYSQL`
-- `ORACLE`
-- `POSTGRE_SQL`（UI 展示 PostgreSQL）
-
-PostgreSQL 的 `POSTGRESQL` / `POSTGRES` 只作为兼容输入别名；进入前端表单状态后必须统一规范为 `POSTGRE_SQL`，列表始终展示产品名 `PostgreSQL`，不得把 canonical type 文本直接暴露给用户。
-
-新增类型必须先扩展后端 Provider，再独立更新前端产品入口。
-
-## Page Ownership
-
-`index.tsx` owns:
-
-- keyword / dbType filters
-- paging state
-- list loading
-- create / edit modal visibility
-- delete confirmation
-- multi-selection / batch operation state
-- list refresh
-
-不要为这些页面局部状态再创建 `hooks/use-datasources.ts`。
-
-## Form Ownership
-
-`form.tsx` owns:
-
-- create wizard state
-- edit form state
-- field validation
-- connection test
-- save
-
-Create / Edit 统一使用 Yak UI `Modal`。Create 第一步顶部展示最多 3 个“常用数据源”，下方继续提供全部支持类型、轻量分类与搜索；点击任意数据源 Item 直接进入配置步骤。常用区通过 User Preference 的 `DATASOURCE_CREATE_TYPE` 场景按 `useCount DESC, lastUsedTime DESC` 排序，冷启动时用当前产品支持类型补足最多 3 个位置。Edit 跳过类型选择，直接进入同一份配置表单。Create / Edit 共用字段渲染、校验、连接测试和保存逻辑。
-
-连接字段按 Provider 使用固定模式，不引入动态表单：
-
-```text
-MySQL / PostgreSQL
-→ host / port / database / username / password / properties
-
-Oracle
-→ jdbcUrl / username / password
-```
-
-公共字段仍包含 `name / dbType / remark`。
-
-UI 中的访问身份当前固定为“用户名和密码”，认证选项当前固定为“无认证”，版本当前固定为“自动选择”；这三个选择只表达当前产品能力边界，不进入后端连接 Contract。
-
-Create 默认使用 `DEVELOP` environment；Edit 沿用后端详情中的 environment。Environment 不作为当前 UI 产品字段。
-
-MySQL / PostgreSQL 使用 Host / Port / Database 结构化输入并展示 JDBC Preview；Oracle 直接输入完整 `jdbc:oracle:` URL，不拆 Host / Port / Database，也不展示高级参数。MySQL / PostgreSQL 的高级参数编辑器保持 Provider-neutral，不维护 Vendor JDBC 参数提示清单、枚举值或校验规则。HTTP 层直接提交 `connectionParams` 对象，不允许在 App / Service 层手动 `JSON.stringify`。结构化 JDBC URL 生成、属性 Normalize / Validate、driver、Provider 差异和 Connection Test 仍由后端 JDBC Plugin 负责；Oracle 的原生 JDBC URL 由 Provider 校验后直接使用。
-
-高级参数 Key 候选项通过 `service/datasource` 调用 `connection-property-keys` 接口动态获取。推荐 Key 使用 Yak UI `Combobox` 搜索 / 多选；一次选中多个 Key 后拆成独立的 Key / Value 行。已选择的推荐 Key 在行内继续使用可搜索 Combobox 编辑；自定义 Key 通过“自定义属性”创建并保留普通 Input。候选项只是推荐值，不是前端白名单。
-
-PostgreSQL 表单遵循 Database connection target：不新增 Schema 字段，不默认写入 `public`，JDBC Preview 只展示 `jdbc:postgresql://host:port/database`。如用户确实需要默认 search path，只通过通用高级参数 Key/Value 传递 `currentSchema`，前端不对其值做 PostgreSQL-specific 校验。
-
-## Must
-
-- 列表只使用 `@yak-ops/yak-ui` 的 `Table`；Datasource 业务层禁止手写 `<table> / <thead> / <tbody>`。
-- Datasource Table 使用 Yak UI 的中等密度、无圆角卡片覆盖；分页占用列表剩余高度的底部位置，并通过 `pageSizeLabel` 显示“每页显示：”。
-- Datasource 页面保持 `#F6F6F6` 页面底色，筛选、Table 和 Pagination 必须放在同一个白色内容面板中；内容面板不加阴影和额外圆角。
-- 筛选只保留 dbType 和 keyword；工具栏顺序固定为“新增数据源 → 数据源类型 → 数据源名称”，新增入口不放在 PageHeader extra。筛选 Input / SelectTrigger 统一使用 Yak UI `outlined` variant，不在页面里覆盖基础 border/background。
-- 列表行操作只保留“编辑｜删除”文字操作，中间使用轻量 Divider；操作组在操作列内居中对齐；列表不提供单行 Connection Test，连接测试保留在新增 / 编辑表单内。
-- Table 启用受控 `rowSelection`；表头和底部 Checkbox 都只全选当前页，跨页已选 ID 保留；筛选条件变化清空选择，单次最多选择 100 条。
-- Table `footer` 左侧承载“批量删除 / 批量测试连通性”，右侧继续使用 Yak UI Pagination；批量删除必须二次确认，批量连接测试直接执行并反馈成功 / 失败数量。
-- 新增使用 Yak UI `Modal` 两步 Wizard；Modal Header / Footer 固定，只允许 Body 滚动。第一步选择区使用固定高度，顶部展示最多 3 个常用数据源，下方提供“全部 / 关系型数据库”分类和搜索。Datasource Item 使用紧凑单行结构，只展示 Icon + 名称，不展示说明文案。第二步配置表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form：Label 左对齐、Control 右侧占满，Input / Select / PasswordInput 统一使用 `small`，字段纵向间距保持紧凑，分组只使用轻量边框与标题。MySQL / PostgreSQL 使用 Host + Port + Database 结构化输入并实时展示 JDBC Preview，高级参数使用轻量 Key/Value 列表；Oracle 只展示完整 JDBC URL + 用户名 / 密码 / 认证选项，不展示 JDBC Preview、Host / Port / Database、版本或高级参数。当前只展示 `MYSQL / ORACLE / POSTGRE_SQL`，不引入动态 Provider UI。
-- 常用数据源只消费 `service/preference` 的 `DATASOURCE_CREATE_TYPE`；User Preference 是用户级能力，请求必须省略 Workspace Header。选择 Provider 时记录一次 usage，不阻塞进入配置步骤；偏好接口失败时 Create Wizard 仍必须可用。
-- 常用数据源排序以服务端 `useCount` 为主、`lastUsedTime` 为次，并只映射到当前 `COMMON_DB_OPTIONS` 中真实支持的类型；不足 3 个时从产品支持类型顺序补足，禁止把未知历史 itemKey 渲染成入口。
-- Edit 使用与 Create 相同的 Yak UI `Modal` 和配置内容；不展示可修改的数据库类型控件，通过标题明确当前 Provider，且编辑时禁止修改 `dbType`。
-- Create / Edit 的必填标识与错误信息统一使用 Yak UI `FieldLabel required` / `FieldRequiredMark` / `FieldError`；Datasource 只持有字段规则和 i18n message，不在页面重复手写红色星号或错误文本样式。
-- Create / Update / Connection Test 共用同一个 `connectionParams` Contract；MySQL / PostgreSQL 使用 `host / port / database / username / password / properties`，Oracle 使用 `jdbcUrl / username / password`。字段必填规则由当前 Provider 模式决定；`dbType` 由外层请求字段负责 Provider 路由，不重复塞进连接对象。
-- Oracle Create / Edit 必须直接提交完整 `jdbc:oracle:` URL；前端只校验非空和 Vendor 前缀，不解析 SID / Service Name / RAC DESCRIPTION，也不得重新拼接或规范化 Oracle JDBC URL。
-- Oracle 不请求、不展示 `connection-property-keys` 和高级参数编辑器；已有历史 Oracle 连接中的 `properties` 可在编辑保存时透明保留，但不暴露为当前产品能力。
-- PostgreSQL Create / Edit 必须使用默认端口 `5432`、`jdbc:postgresql://host:port/database` Preview，并且请求体中不得出现顶层 `schema` 字段。
-- 高级参数 Key 候选项必须从后端 Provider discovery 接口获取，前端禁止维护 Vendor property 常量列表。
-- 推荐 Key 选择支持搜索和多选，多选结果必须拆成独立 Key / Value 行；同一 Key 只能存在一次，重复判断大小写不敏感。
-- 自定义 JDBC Property 仍然允许输入；候选项不得被当成严格白名单。
-- 高级参数前端只校验 Key 非空 / 不重复；参数名称 canonicalization、布尔 / 枚举 / 数值语义和 Provider-specific 校验全部由对应后端 Provider 持有。
-- CRUD、Batch Operations 和 Connection Test 统一走 `service/datasource`。
-- Datasource 请求依赖全局当前 Workspace；页面不得自行拼接 `X-Workspace-Id` 或把 `workspaceId` 加进业务 DTO。
-- HTTP transport only through `service/http`。
-- Common primitives from `@yak-ops/yak-ui`。
-- Backend Contract owner stays in `service/datasource/types.ts`。
-
-## Must Not
-
-- Recreate `editor/` or `hooks/` under Datasource。
-- Recreate Summary cards。
-- Recreate dynamic form schema / renderer / form runtime。
-- Recreate SSH Tunnel UI。
-- Recreate Driver Manager / Driver Class configuration UI。
-- Recreate `management / model / plugin / connection` directories。
-- Recreate `packages/datasource`。
-- Call `fetch` directly from Datasource UI。
-- Import `service/http` directly from App。
-- Reintroduce Ant Design or a second UI framework。
+不恢复 Summary 卡片、SSH UI、Driver Manager、动态表单或仅为局部状态建立的 editor / hooks 层。通用控件和表单视觉只引用对应契约，不在本领域复制第二份规则。

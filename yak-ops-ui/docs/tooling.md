@@ -2,234 +2,50 @@
 
 Status: Active
 
-Scope:
-- `yak-ops-ui`
+Scope: `yak-ops-ui` 的工具、命令和验证入口。
 
 ## Toolchain
 
-当前前端工具链：
+Vite、React、React Router、Tailwind、TypeScript、Oxlint、Oxfmt 与 npm 构成当前工具链；具体版本及 Node engines 读取 [workspace package.json](../package.json)、各 workspace manifest 和 [package-lock.json](../package-lock.json)，不另写版本副本。
 
-```text
-Vite 6
-React 18
-React Router
-Tailwind CSS 4
-TypeScript 5.9
-Oxlint
-Oxfmt
-npm
-Node architecture check
-```
-
-Node 要求：
-
-```text
->= 22.13
-```
-
-Umi Max、Biome、Yarn、Husky、lint-staged、commitlint 不属于当前前端工具链。
+Tailwind 通过 Vite Plugin 接入，不恢复旧 PostCSS pipeline、Umi、Biome 或第二套 Utility CSS / lint 工具。Vite 是唯一前端开发和生产构建入口。
 
 ## Required Checks
 
-本地在 `yak-ops-ui/` 下执行：
+在 `yak-ops-ui/` 执行：
 
 ```bash
+npm ci
 npm run check
 npm run build
 ```
 
-`check` 是本地聚合入口，按下面顺序执行四个确定性 quality gate：
-
-```text
-format:check
-      ↓
-lint
-      ↓
-typecheck
-      ↓
-architecture:check
-```
-
-Build 独立执行，验证 Vite 真实生产构建。
-
-GitHub Actions 不使用单一 `npm run check` 步骤，而是直接执行每个 gate，让失败原因在 CI 中独立可见：
-
-```text
-Frontend format
-      ↓
-Frontend lint
-      ↓
-Frontend type check
-      ↓
-Frontend architecture
-      ↓
-Frontend build
-```
-
-## Commands
-
-```bash
-npm run dev
-npm run build
-npm run preview
-npm run architecture:check
-npm run typecheck
-npm run lint
-npm run lint:fix
-npm run format
-npm run format:check
-npm run check
-```
+本地 check 聚合格式、Lint、类型和架构检查；生产构建独立执行。脚本定义在 package.json，实际 CI 编排见 [Quality Check](../../.github/workflows/quality-check.yml)。
 
 ## Physical Quality Gate
 
-前端中能由工具确定判断的规则由确定性工具负责，不使用 AI 做全文格式判断。
-
-所有 CI gate 都是 check-only：
-
-- Oxfmt 负责格式，CI 执行 `npm run format:check`。
-- Oxlint 负责静态代码规则，CI 执行 `npm run lint`。
-- TypeScript 负责类型正确性，CI 执行 `npm run typecheck`。
-- Node architecture check 负责仓库架构边界，CI 执行 `npm run architecture:check`。
-- Vite 负责生产构建验证，CI 执行 `npm run build`。
-
-CI 禁止执行会修改源码的命令：
-
-```text
-npm run format
-npm run lint:fix
-```
-
-格式或 lint 不通过时直接失败，由开发者在本地修复后重新提交。
+- Oxfmt 负责格式；Oxlint 负责静态规则，warning 按失败处理，必要 disable 仅最小范围并说明原因。
+- TypeScript 负责 apps / packages 类型校验，不能用 lint 代替。
+- Node architecture check 负责可确定判断的目录与依赖边界；Vite 验证真实生产构建。
+- CI 独立执行各 gate 且 check-only，不执行 format / lint:fix 改源码，不包装成单一 check 黑盒。
+- 检查失败在源头修复，不维护与 formatter 冲突的手工排版规则。
 
 ## Architecture Check
 
-```bash
-npm run architecture:check
-```
-
-由 `scripts/check-architecture.mjs` 执行。
-
-它保护当前稳定边界，包括：
-
-- 禁止恢复 `src / pages / shared / packages/datasource` 等遗留目录。
-- `packages` 当前只允许 `yak-ui`。
-- Workspace root 不拥有运行时依赖。
-- 禁止恢复 `@yak-ops/datasource`。
-- 禁止恢复 Ant Design / Umi / 第二套 HTTP Client。
-- `service/**` 禁止反向依赖 `app/**`。
-- `app/**` 禁止直接依赖 `service/http`。
-- 原生 `fetch` 只允许存在于唯一 HTTP transport owner。
-- `@base-ui/react` 只允许由 `packages/yak-ui` 使用。
-
-如果架构需要演进，应先修改 Architecture / Rules，再修改 enforcement。不要通过删检查规则绕过边界。
-
-## Typecheck
-
-TypeScript 是静态类型正确性的 owner：
-
-```bash
-tsc --noEmit
-```
-
-检查覆盖 `apps / packages`。
-
-不要用 lint 替代 typecheck。
-
-## Lint
-
-Oxlint 拥有静态代码规则。
-
-```text
-apps
-packages
-scripts
-```
-
-- warning 按失败处理。
-- 优先修 owner 问题，不使用 broad disable。
-- 必须 disable 时只做最小范围并说明原因。
-- 不再新增 Biome / ESLint 作为第二套 lint owner。
-
-## Format
-
-Oxfmt 拥有 TypeScript / TSX / JavaScript / tooling scripts 格式。
-
-格式检查与 lint 分离。
-
-不要手工维护与 Oxfmt 冲突的格式规则。
-
-## Build
-
-Vite 是唯一前端开发与构建入口。
-
-```bash
-npm run dev
-npm run build
-```
-
-禁止重新添加：
-
-- `max dev`
-- `max build`
-- Umi config
-- Umi route config
-- Umi runtime model
-
-## Tailwind
-
-Tailwind CSS 4 通过 Vite Plugin 接入。
-
-不要恢复 Tailwind 3 PostCSS pipeline 或第二套 Utility CSS framework。
+[check-architecture.mjs](../scripts/check-architecture.mjs) 是规则执行入口。架构变化同步文档与 enforcement；脚本只能证明其实际覆盖的规则，不能替代业务 review。
 
 ## Package Manager
 
-前端命令统一使用 npm。
-
-根 `package.json` 使用 npm workspaces：
-
-```text
-apps/*
-packages/*
-```
-
-运行时依赖由真实 workspace owner 声明：
-
-```text
-apps/web
-→ React / Router / Lucide / Yak UI
-
-packages/yak-ui
-→ Base UI / CVA
-```
-
-Workspace root 只保留构建和质量工具，不声明运行时 dependencies。
-
-前端提交 `package-lock.json` 作为 npm 依赖锁定文件。新增或修改依赖后必须同步更新 lockfile；CI 使用 `npm ci` 按 lockfile 安装依赖。
+使用 npm workspaces 与 package-lock.json。运行时依赖属于真正的 apps / packages owner；workspace root 只承载工具依赖。依赖变更同步 lockfile，CI 使用 npm ci，不恢复 Yarn 或第二套安装流程。
 
 ## Git Hooks
 
-当前不维护 Husky / lint-staged / commitlint gate。
-
-不要保留“依赖已经删除但 hook 还存在”的假门禁。
-
-本地质量入口统一是：
-
-```bash
-npm run check
-npm run build
-```
-
-CI 则直接运行独立 physical quality gates，不把聚合命令作为黑盒门禁。
+当前不维护 Husky / lint-staged / commitlint gate；不保留依赖已删除的假 Hook。开发、预览和修复命令直接查 package.json，文档不复制完整 scripts 清单。
 
 ## Tests
 
-当前 Yak Ops UI 没有重新建立前端测试 gate。
-
-需要测试时单独定义测试 Contract 和 Tooling，再进入前端质量体系。
+当前前端没有独立自动化测试 gate。引入测试体系需要明确 Contract 与 Tooling，不在普通文档整理中增加框架或放宽现有门禁。编译与静态检查不能证明弹层定位、焦点、动画或真实业务链路。
 
 ## Verification Record
 
-提交或 PR 中只记录实际执行过的检查。
-
-如果环境无法执行，应明确说明原因，不得写没有实际执行的 “CI passed / build passed”。
+组件文档中的验收步骤描述可重复执行的方法，不表示已经通过。一次结果放在 PR / CI；发布结果放对应版本证据，并按 [Engineering Context Model](../../docs/engineering-context-model.md#evidence-chain) 记录提交、环境、执行范围和证据。局部样式夹具、真实 React 运行时、产品 E2E 分开报告；未执行、失败和 skipped 不写成完整验收通过。
