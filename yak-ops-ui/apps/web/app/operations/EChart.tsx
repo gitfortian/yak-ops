@@ -1,19 +1,6 @@
-import {
-  BarChart,
-  LineChart,
-  PieChart,
-} from "echarts/charts";
-import {
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-} from "echarts/components";
-import {
-  init,
-  use as useECharts,
-  type ECharts,
-  type EChartsCoreOption,
-} from "echarts/core";
+import { BarChart, LineChart, PieChart } from "echarts/charts";
+import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { init, use as useECharts, type ECharts, type EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
 import { Spinner } from "@yak-ops/yak-ui";
@@ -35,12 +22,7 @@ export interface EChartProps {
   ariaLabel?: string;
 }
 
-export function EChart({
-  ariaLabel,
-  className = "h-72",
-  loading = false,
-  option,
-}: EChartProps) {
+export function EChart({ ariaLabel, className = "h-72", loading = false, option }: EChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts>();
 
