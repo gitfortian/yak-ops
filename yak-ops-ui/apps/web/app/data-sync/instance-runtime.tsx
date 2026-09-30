@@ -285,12 +285,14 @@ interface DataSyncInstanceDetailPageProps {
   syncType: DataSyncType;
   basePath: string;
   listPath?: string;
+  backLabel?: string;
 }
 
 export function DataSyncInstanceDetailPage({
   syncType,
   basePath,
   listPath,
+  backLabel = "返回实例列表",
 }: DataSyncInstanceDetailPageProps) {
   const realtime = syncType === "REALTIME";
   const resolvedListPath = listPath ?? `${basePath}?tab=instances`;
@@ -361,7 +363,7 @@ export function DataSyncInstanceDetailPage({
               </Button>
             ) : null}
             <Button size="small" onClick={() => navigate(resolvedListPath)}>
-              返回实例列表
+              {backLabel}
             </Button>
           </>
         }
