@@ -143,7 +143,9 @@ export function OfflineOperationsDashboard() {
   };
 
   const successRate =
-    summary.executionCount > 0 ? Math.round((summary.succeededCount / summary.executionCount) * 1000) / 10 : 0;
+    summary.executionCount > 0
+      ? Math.round((summary.succeededCount / summary.executionCount) * 1000) / 10
+      : 0;
   const hasTrendData = summary.executionCount > 0;
   const hasStatusData = (dashboard?.statusDistribution || []).some((item) => item.count > 0);
   const hasFailureData = (dashboard?.failureRanking || []).length > 0;
@@ -437,7 +439,10 @@ export function OfflineOperationsDashboard() {
             </Card>
 
             <Card>
-              <CardHeader title="执行结果趋势" description="按 Execution 创建时间聚合成功、失败与丢失状态" />
+              <CardHeader
+                title="执行结果趋势"
+                description="按 Execution 创建时间聚合成功、失败与丢失状态"
+              />
               <CardContent className="p-4">
                 {hasTrendData ? (
                   <EChart
@@ -456,7 +461,10 @@ export function OfflineOperationsDashboard() {
             </Card>
 
             <Card>
-              <CardHeader title="执行状态分布" description="展示当前时间范围内 Execution 的状态分布" />
+              <CardHeader
+                title="执行状态分布"
+                description="展示当前时间范围内 Execution 的状态分布"
+              />
               <CardContent className="p-4">
                 {hasStatusData ? (
                   <EChart
@@ -475,7 +483,10 @@ export function OfflineOperationsDashboard() {
             </Card>
 
             <Card>
-              <CardHeader title="失败任务 TOP 5" description="按 FAILED + LOST Execution 数量排序" />
+              <CardHeader
+                title="失败任务 TOP 5"
+                description="按 FAILED + LOST Execution 数量排序"
+              />
               <CardContent className="p-4">
                 {hasFailureData ? (
                   <EChart
