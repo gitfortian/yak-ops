@@ -15,13 +15,11 @@ Input、PasswordInput、Select、Textarea 默认使用 `small + outlined`，底�
 ## Horizontal Field
 
 ```tsx
-<Field
-  className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3"
-  invalid={Boolean(error)}
->
+<Field className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3" invalid={Boolean(error)}>
   <FieldLabel required htmlFor="field-id" className="pt-1.5 text-xs leading-4">
     字段
   </FieldLabel>
+
   <div className="min-w-0">
     <Input id="field-id" size="small" variant="outlined" />
     <FieldError match={Boolean(error)} className="mt-1">
