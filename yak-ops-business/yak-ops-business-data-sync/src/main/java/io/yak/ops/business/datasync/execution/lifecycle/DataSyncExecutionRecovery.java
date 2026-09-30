@@ -2,8 +2,10 @@ package io.yak.ops.business.datasync.execution.lifecycle;
 
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.common.util.DateUtils;
+import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
+import java.util.List;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
@@ -33,8 +35,12 @@ public class DataSyncExecutionRecovery {
     @Resource
     private DataSyncAttemptRepository attemptRepository;
 
+    @Resource
+    private DataSyncAttemptLifecycle attemptLifecycle;
+
     @PostConstruct
     public void recoverLostExecutions() {
+        List<DataSyncInstanceEntity> activeExecutions = instanceRepository.queryActive();
         int attempts = attemptRepository.markActiveAsLost(
                 DateUtils.now(),
                 DataSyncErrorCode.EXECUTION_LOST.getCode(),
@@ -43,6 +49,12 @@ public class DataSyncExecutionRecovery {
                 DateUtils.now(),
                 DataSyncErrorCode.EXECUTION_LOST.getCode(),
                 DataSyncErrorCode.EXECUTION_LOST.getMessage());
+        if (executions > 0) {
+            activeExecutions.forEach(execution -> attemptLifecycle.recordExecutionLost(
+                    execution.getWorkspaceId(),
+                    execution.getId(),
+                    "应用启动发现旧进程遗留 Execution，已标记为 LOST"));
+        }
         if (executions > 0 || attempts > 0) {
             LOG.warn("应用启动发现遗留数据同步执行，已标记为 LOST，executions={}, attempts={}", executions, attempts);
         }
