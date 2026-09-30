@@ -3,6 +3,13 @@ import {
   Button,
   PageHeader,
   SectionCard,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
   Spinner,
   Tabs,
   TabsList,
@@ -10,7 +17,7 @@ import {
   TabsTab,
   toast,
 } from "@yak-ops/yak-ui";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -31,7 +38,6 @@ import {
 import {
   DataSyncExecutionDetailContent,
   dataSyncInstanceStatusMeta,
-  dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
 import { DataSyncExecutionLogPanel } from "./execution-log";
@@ -39,6 +45,15 @@ import { DataSyncTaskStatusBadge } from "./task-lifecycle";
 
 const EXECUTION_PAGE_SIZE = 20;
 const POLL_INTERVAL_MILLIS = 2000;
+
+type ExecutionStatusFilter = "ALL" | "SUCCEEDED" | "FAILED" | "RUNNING";
+
+const EXECUTION_STATUS_ITEMS = {
+  ALL: "全部状态",
+  SUCCEEDED: "成功",
+  FAILED: "失败",
+  RUNNING: "运行中",
+};
 
 const pathText = (database?: string, schema?: string, table?: string) =>
   [database, schema, table].filter(Boolean).join(".") || "-";
@@ -89,6 +104,7 @@ export function DataSyncTaskDetailPage({
   const [executionPage, setExecutionPage] = useState(1);
   const [executionTotal, setExecutionTotal] = useState(0);
   const [executionListLoading, setExecutionListLoading] = useState(true);
+  const [executionStatus, setExecutionStatus] = useState<ExecutionStatusFilter>("ALL");
 
   const [selectedExecution, setSelectedExecution] = useState<DataSyncInstanceRecord>();
   const [attempts, setAttempts] = useState<DataSyncAttemptRecord[]>([]);
@@ -129,13 +145,14 @@ export function DataSyncTaskDetailPage({
         pageSize: EXECUTION_PAGE_SIZE,
         taskId,
         syncType,
+        status: executionStatus === "ALL" ? undefined : executionStatus,
       });
       setExecutions(result?.bizData || []);
       setExecutionTotal(result?.pagination?.total || 0);
     } finally {
       setExecutionListLoading(false);
     }
-  }, [executionPage, syncType, taskId]);
+  }, [executionPage, executionStatus, syncType, taskId]);
 
   const loadSelectedExecution = useCallback(async () => {
     if (!executionId || !taskId) {
@@ -206,6 +223,14 @@ export function DataSyncTaskDetailPage({
     setExecutionPage(nextPage);
   };
 
+  const changeExecutionStatus = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("executionId");
+    setSearchParams(next, { replace: true });
+    setExecutionStatus((value || "ALL") as ExecutionStatusFilter);
+    setExecutionPage(1);
+  };
+
   const changeDetailTab = (value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value === "log") next.set("tab", "log");
@@ -237,9 +262,57 @@ export function DataSyncTaskDetailPage({
     return (
       <div className="flex h-full min-h-0 overflow-hidden bg-[#f6f6f6] text-[#242731]">
         <aside className="flex w-[320px] shrink-0 flex-col border-r border-[#e6e8eb] bg-white max-xl:w-[280px]">
-          <div className="shrink-0 border-b border-[#eef0f3] px-4 py-4">
-            <div className="text-base font-semibold text-[#242731]">执行记录</div>
-            <div className="mt-1 text-xs text-[#98a2b3]">{executionTotal} 条任务实例</div>
+          <div className="shrink-0 border-b border-[#eef0f3]">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="text-sm font-semibold text-[#242731]">执行记录</div>
+              <Button
+                size="small"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="刷新执行记录"
+                title="刷新"
+                disabled={executionListLoading}
+                onClick={() => void loadExecutions()}
+              >
+                <RefreshCw
+                  size={14}
+                  className={
+                    executionListLoading ? "animate-spin motion-reduce:animate-none" : undefined
+                  }
+                />
+              </Button>
+            </div>
+
+            <div className="px-4 pb-3">
+              <Select
+                size="small"
+                items={EXECUTION_STATUS_ITEMS}
+                value={executionStatus}
+                onValueChange={(value) => changeExecutionStatus(String(value || "ALL"))}
+              >
+                <SelectTrigger variant="outlined" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">
+                    <SelectItemText>全部状态</SelectItemText>
+                    <SelectItemIndicator />
+                  </SelectItem>
+                  <SelectItem value="SUCCEEDED">
+                    <SelectItemText>成功</SelectItemText>
+                    <SelectItemIndicator />
+                  </SelectItem>
+                  <SelectItem value="FAILED">
+                    <SelectItemText>失败</SelectItemText>
+                    <SelectItemIndicator />
+                  </SelectItem>
+                  <SelectItem value="RUNNING">
+                    <SelectItemText>运行中</SelectItemText>
+                    <SelectItemIndicator />
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -249,7 +322,7 @@ export function DataSyncTaskDetailPage({
               </div>
             ) : executions.length === 0 ? (
               <div className="flex min-h-40 items-center justify-center px-4 text-center text-sm text-[#98a2b3]">
-                这个任务还没有执行记录
+                暂无执行记录
               </div>
             ) : (
               <div className="space-y-1">
@@ -260,30 +333,18 @@ export function DataSyncTaskDetailPage({
                     <button
                       key={execution.id}
                       type="button"
-                      className={`w-full cursor-pointer rounded-md border px-3 py-3 text-left transition-colors ${
-                        selected
-                          ? "border-[#c7d2fe] bg-[#f5f7ff]"
-                          : "border-transparent bg-white hover:bg-[#f6f6f6]"
+                      className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
+                        selected ? "bg-[#f5f7ff]" : "bg-white hover:bg-[#f6f6f6]"
                       }`}
                       onClick={() => selectExecution(execution.id)}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge tone={meta.tone}>{meta.label}</Badge>
-                        <span className="truncate text-xs text-[#98a2b3]">
-                          {execution.startTime || execution.createTime || "-"}
-                        </span>
-                      </div>
-                      <div className="mt-2 truncate text-xs font-medium text-[#475467]">
-                        {dataSyncTriggerText(execution.triggerType)}
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#98a2b3]">
-                        <span className="truncate" title={execution.id}>
-                          {execution.id}
-                        </span>
-                        <span className="shrink-0">
-                          {(execution.writeRows ?? 0).toLocaleString()} 写入
-                        </span>
-                      </div>
+                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <span
+                        className="min-w-0 truncate text-xs text-[#98a2b3]"
+                        title={execution.startTime || execution.createTime}
+                      >
+                        {execution.startTime || execution.createTime || "-"}
+                      </span>
                     </button>
                   );
                 })}
@@ -492,9 +553,57 @@ export function DataSyncTaskDetailPage({
 
           <div className="flex min-h-[560px] gap-4 max-lg:flex-col">
             <section className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-lg border border-[#e6e8eb] bg-white max-lg:w-full">
-              <div className="flex items-center justify-between border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5">
-                <div className="text-sm font-semibold text-[#344054]">执行记录</div>
-                <div className="text-xs text-[#98a2b3]">{executionTotal} 条</div>
+              <div className="shrink-0 border-b border-[#eef0f3]">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="text-sm font-semibold text-[#344054]">执行记录</div>
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    className="h-7 w-7 px-0"
+                    aria-label="刷新执行记录"
+                    title="刷新"
+                    disabled={executionListLoading}
+                    onClick={() => void loadExecutions()}
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={
+                        executionListLoading ? "animate-spin motion-reduce:animate-none" : undefined
+                      }
+                    />
+                  </Button>
+                </div>
+
+                <div className="px-4 pb-3">
+                  <Select
+                    size="small"
+                    items={EXECUTION_STATUS_ITEMS}
+                    value={executionStatus}
+                    onValueChange={(value) => changeExecutionStatus(String(value || "ALL"))}
+                  >
+                    <SelectTrigger variant="outlined" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">
+                        <SelectItemText>全部状态</SelectItemText>
+                        <SelectItemIndicator />
+                      </SelectItem>
+                      <SelectItem value="SUCCEEDED">
+                        <SelectItemText>成功</SelectItemText>
+                        <SelectItemIndicator />
+                      </SelectItem>
+                      <SelectItem value="FAILED">
+                        <SelectItemText>失败</SelectItemText>
+                        <SelectItemIndicator />
+                      </SelectItem>
+                      <SelectItem value="RUNNING">
+                        <SelectItemText>运行中</SelectItemText>
+                        <SelectItemIndicator />
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -504,7 +613,7 @@ export function DataSyncTaskDetailPage({
                   </div>
                 ) : executions.length === 0 ? (
                   <div className="flex min-h-40 items-center justify-center px-4 text-center text-sm text-[#98a2b3]">
-                    这个任务还没有执行记录
+                    暂无执行记录
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -515,30 +624,18 @@ export function DataSyncTaskDetailPage({
                         <button
                           key={execution.id}
                           type="button"
-                          className={`w-full cursor-pointer rounded-md border px-3 py-2.5 text-left transition-colors ${
-                            selected
-                              ? "border-[#c7d2fe] bg-[#f5f7ff]"
-                              : "border-transparent bg-white hover:bg-[#f6f6f6]"
+                          className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
+                            selected ? "bg-[#f5f7ff]" : "bg-white hover:bg-[#f6f6f6]"
                           }`}
                           onClick={() => selectExecution(execution.id)}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <Badge tone={meta.tone}>{meta.label}</Badge>
-                            <span className="truncate text-xs text-[#98a2b3]">
-                              {execution.startTime || execution.createTime || "-"}
-                            </span>
-                          </div>
-                          <div className="mt-2 truncate text-xs font-medium text-[#475467]">
-                            {dataSyncTriggerText(execution.triggerType)}
-                          </div>
-                          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#98a2b3]">
-                            <span className="truncate" title={execution.id}>
-                              {execution.id}
-                            </span>
-                            <span className="shrink-0">
-                              {(execution.writeRows ?? 0).toLocaleString()} 写入
-                            </span>
-                          </div>
+                          <Badge tone={meta.tone}>{meta.label}</Badge>
+                          <span
+                            className="min-w-0 truncate text-xs text-[#98a2b3]"
+                            title={execution.startTime || execution.createTime}
+                          >
+                            {execution.startTime || execution.createTime || "-"}
+                          </span>
                         </button>
                       );
                     })}
