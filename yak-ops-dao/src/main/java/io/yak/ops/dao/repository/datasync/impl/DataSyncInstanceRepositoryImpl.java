@@ -60,6 +60,17 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
     }
 
     @Override
+    public Optional<DataSyncInstanceEntity> queryLatestByTask(String workspaceId, String taskId) {
+        if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(taskId)) return Optional.empty();
+        return Optional.ofNullable(instanceMapper.selectOne(Wrappers.<DataSyncInstanceEntity>lambdaQuery()
+                .eq(DataSyncInstanceEntity::getWorkspaceId, workspaceId)
+                .eq(DataSyncInstanceEntity::getTaskId, taskId)
+                .orderByDesc(DataSyncInstanceEntity::getCreateTime)
+                .orderByDesc(DataSyncInstanceEntity::getId)
+                .last("LIMIT 1")));
+    }
+
+    @Override
     public boolean existsActiveByTask(String workspaceId, String taskId) {
         if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(taskId)) return false;
         Long count = instanceMapper.selectCount(Wrappers.<DataSyncInstanceEntity>lambdaQuery()

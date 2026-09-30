@@ -19,6 +19,8 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
 
     Optional<DataSyncInstanceEntity> queryById(String workspaceId, String id);
 
+    Optional<DataSyncInstanceEntity> queryLatestByTask(String workspaceId, String taskId);
+
     boolean existsActiveByTask(String workspaceId, String taskId);
 
     boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows);

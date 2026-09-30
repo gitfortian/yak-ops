@@ -1,16 +1,89 @@
-import { Badge, Button, Input, Table, toast, type TableColumns } from "@yak-ops/yak-ui";
+import {
+  Badge,
+  Button,
+  Input,
+  Table,
+  toast,
+  type BadgeProps,
+  type TableColumns,
+} from "@yak-ops/yak-ui";
 import { useCallback, useEffect, useState } from "react";
 
-import { useActiveTaskInstances } from "@/app/data-sync/task-lifecycle";
 import {
   cancelDataSyncInstance,
-  listDataSyncTasks,
+  listDataSyncOperationTasks,
   runDataSyncTask,
-  type DataSyncTaskRecord,
+  type DataSyncInstanceRecord,
+  type DataSyncTaskOperationRecord,
   type DataSyncType,
 } from "@/service/data-sync";
 
 const PAGE_SIZE = 20;
+const POLL_INTERVAL_MILLIS = 2000;
+
+const isActive = (instance?: DataSyncInstanceRecord) =>
+  instance?.status === "PENDING" ||
+  instance?.status === "RUNNING" ||
+  instance?.status === "RETRY_WAITING";
+
+const triggerText = (triggerType?: string) => {
+  if (triggerType === "MANUAL") return "手动";
+  if (triggerType === "SCHEDULE") return "调度";
+  if (triggerType === "AUTO_RECOVERY") return "自动恢复";
+  if (triggerType === "RETRY") return "重试";
+  return triggerType || "-";
+};
+
+const instanceStatusMeta = (
+  record: DataSyncTaskOperationRecord,
+): { label: string; tone: BadgeProps["tone"] } => {
+  const latest = record.latestInstance;
+  if (!latest) {
+    if (record.syncType === "REALTIME" && record.desiredState === "RUNNING") {
+      return { label: "待处理", tone: "warning" };
+    }
+    return { label: "未运行", tone: "neutral" };
+  }
+  if (!isActive(latest) && record.syncType === "REALTIME" && record.desiredState === "RUNNING") {
+    return { label: "待处理", tone: "warning" };
+  }
+  switch (latest.status) {
+    case "PENDING":
+      return { label: "等待", tone: "neutral" };
+    case "RUNNING":
+      return { label: "运行中", tone: "info" };
+    case "RETRY_WAITING":
+      return { label: "等待重试", tone: "warning" };
+    case "SUCCEEDED":
+      return { label: "成功", tone: "success" };
+    case "FAILED":
+      return { label: "失败", tone: "danger" };
+    case "CANCELED":
+      return { label: record.syncType === "REALTIME" ? "已停止" : "已取消", tone: "neutral" };
+    case "LOST":
+      return { label: "已丢失", tone: "warning" };
+    default:
+      return { label: latest.status || "-", tone: "neutral" };
+  }
+};
+
+const lastRunText = (record: DataSyncTaskOperationRecord) => {
+  const latest = record.latestInstance;
+  if (!latest) return { time: "-", trigger: "-" };
+  return {
+    time: latest.startTime || latest.createTime || "-",
+    trigger: triggerText(latest.triggerType),
+  };
+};
+
+const nextRunText = (record: DataSyncTaskOperationRecord) => {
+  if (record.syncType === "REALTIME") {
+    if (record.desiredState !== "RUNNING") return "-";
+    return isActive(record.latestInstance) ? "持续运行" : "待处理";
+  }
+  if (!record.schedule?.enabled) return "-";
+  return record.schedule.nextFireTime || "待计算";
+};
 
 interface DataSyncTaskOperationsProps {
   syncType: DataSyncType;
@@ -24,18 +97,17 @@ export function DataSyncTaskOperations({
   onOpenInstanceDetail,
 }: DataSyncTaskOperationsProps) {
   const realtime = syncType === "REALTIME";
-  const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
+  const [records, setRecords] = useState<DataSyncTaskOperationRecord[]>([]);
   const [keyword, setKeyword] = useState("");
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [actionKey, setActionKey] = useState<string>();
-  const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances(syncType, true);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await listDataSyncTasks({
+      const result = await listDataSyncOperationTasks({
         pageNo,
         pageSize: PAGE_SIZE,
         keyword: keyword.trim() || undefined,
@@ -54,38 +126,43 @@ export function DataSyncTaskOperations({
     return () => window.clearTimeout(timer);
   }, [keyword, loadTasks]);
 
-  const runTask = async (record: DataSyncTaskRecord) => {
+  useEffect(() => {
+    if (!records.some((record) => isActive(record.latestInstance))) return;
+    const timer = window.setInterval(() => void loadTasks(), POLL_INTERVAL_MILLIS);
+    return () => window.clearInterval(timer);
+  }, [loadTasks, records]);
+
+  const runTask = async (record: DataSyncTaskOperationRecord) => {
     if (actionKey) return;
     setActionKey(`${record.id}:run`);
     try {
       const instance = await runDataSyncTask(record.id);
       toast.success(realtime ? "实时同步任务已启动" : "同步任务已启动");
-      await refreshActiveInstances();
+      await loadTasks();
       onOpenInstanceDetail(instance.id);
     } finally {
       setActionKey(undefined);
     }
   };
 
-  const stopTask = async (record: DataSyncTaskRecord) => {
-    const activeInstance = activeByTask.get(record.id);
-    if (!activeInstance || actionKey) return;
-
+  const stopTask = async (record: DataSyncTaskOperationRecord) => {
+    const activeInstance = record.latestInstance;
+    if (!isActive(activeInstance) || !activeInstance || actionKey) return;
     setActionKey(`${record.id}:stop`);
     try {
       await cancelDataSyncInstance(activeInstance.id);
       toast.success(realtime ? "实时同步实例已停止" : "同步实例已停止");
-      await refreshActiveInstances();
+      await loadTasks();
     } finally {
       setActionKey(undefined);
     }
   };
 
-  const columns: TableColumns<DataSyncTaskRecord> = [
+  const columns: TableColumns<DataSyncTaskOperationRecord> = [
     {
       key: "name",
       title: "任务名称",
-      minWidth: 220,
+      minWidth: 190,
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="truncate text-[13px] font-medium text-[#252832]">{record.name}</div>
@@ -94,21 +171,114 @@ export function DataSyncTaskOperations({
       ),
     },
     {
+      key: "automation",
+      title: "自动化",
+      minWidth: 180,
+      render: (_value, record) =>
+        realtime ? (
+          <div>
+            <Badge tone={record.desiredState === "RUNNING" ? "success" : "neutral"}>
+              {record.desiredState === "RUNNING" ? "期望运行" : "期望停止"}
+            </Badge>
+            <div className="mt-1 text-xs text-[#98a2b3]">
+              {record.latestInstance?.triggerType === "AUTO_RECOVERY"
+                ? "最近由自动恢复拉起"
+                : "Desired State"}
+            </div>
+          </div>
+        ) : record.schedule ? (
+          <div>
+            <Badge tone={record.schedule.enabled ? "success" : "neutral"}>
+              {record.schedule.enabled ? "调度开启" : "调度关闭"}
+            </Badge>
+            <div
+              className="mt-1 truncate text-xs text-[#98a2b3]"
+              title={record.schedule.cronExpression}
+            >
+              {record.schedule.cronExpression}
+            </div>
+          </div>
+        ) : (
+          <Badge tone="neutral">仅手动</Badge>
+        ),
+    },
+    {
       key: "runtimeStatus",
       title: "运行状态",
-      width: 120,
+      minWidth: 170,
       render: (_value, record) => {
-        const activeInstance = activeByTask.get(record.id);
-        if (!activeInstance) return <Badge tone="neutral">空闲</Badge>;
-        if (activeInstance.status === "PENDING") return <Badge tone="neutral">等待</Badge>;
-        return <Badge tone="info">运行中</Badge>;
+        const meta = instanceStatusMeta(record);
+        const latest = record.latestInstance;
+        const detail =
+          latest?.errorMessage ||
+          (record.syncType === "REALTIME" && record.desiredState === "RUNNING" && !isActive(latest)
+            ? `实际状态：${latest?.status || "无活动 Execution"}`
+            : undefined);
+        return (
+          <div>
+            <Badge tone={meta.tone}>{meta.label}</Badge>
+            {detail ? (
+              <div className="mt-1 max-w-[220px] truncate text-xs text-[#98a2b3]" title={detail}>
+                {detail}
+              </div>
+            ) : null}
+          </div>
+        );
       },
     },
     {
-      key: "updated",
-      title: "更新时间",
-      width: 180,
-      render: (_value, record) => record.updateTime || "-",
+      key: "lastRun",
+      title: "上次运行",
+      minWidth: 170,
+      render: (_value, record) => {
+        const lastRun = lastRunText(record);
+        return (
+          <div>
+            <div className="text-xs text-[#475467]">{lastRun.time}</div>
+            <div className="mt-1 text-xs text-[#98a2b3]">{lastRun.trigger}</div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "nextRun",
+      title: "下次运行",
+      minWidth: 160,
+      render: (_value, record) => (
+        <div>
+          <div className="text-xs text-[#475467]">{nextRunText(record)}</div>
+          {!realtime && record.schedule?.enabled ? (
+            <div className="mt-1 text-xs text-[#98a2b3]">{record.schedule.timeZone}</div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "attempt",
+      title: "Attempt",
+      minWidth: 150,
+      render: (_value, record) => {
+        const latest = record.latestInstance;
+        if (!latest) return "-";
+        const current = latest.currentAttempt || 1;
+        const max = latest.maxAttempts || record.retryPolicy?.maxAttempts || 1;
+        return (
+          <div>
+            <div className="text-xs font-medium text-[#475467]">
+              {current} / {max}
+            </div>
+            {latest.status === "RETRY_WAITING" ? (
+              <div className="mt-1 text-xs text-[#b54708]">
+                {latest.nextRetryTime ? `${latest.nextRetryTime} 重试` : "等待重试"}
+              </div>
+            ) : max > 1 ? (
+              <div className="mt-1 text-xs text-[#98a2b3]">
+                Backoff {latest.backoffSeconds ?? record.retryPolicy?.backoffSeconds ?? 0}s
+              </div>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       key: "actions",
@@ -116,10 +286,16 @@ export function DataSyncTaskOperations({
       width: 170,
       align: "center",
       render: (_value, record) => {
-        const activeInstance = activeByTask.get(record.id);
-        const actionLoading = activeInstance
+        const active = isActive(record.latestInstance);
+        const actionLoading = active
           ? actionKey === `${record.id}:stop`
           : actionKey === `${record.id}:run`;
+        const startLabel =
+          realtime && record.desiredState === "RUNNING" && !active
+            ? "重新启动"
+            : realtime
+              ? "启动"
+              : "运行";
 
         return (
           <div className="flex items-center justify-center gap-1">
@@ -129,16 +305,16 @@ export function DataSyncTaskOperations({
               loading={actionLoading}
               disabled={Boolean(actionKey) && !actionLoading}
               className={
-                activeInstance
+                active
                   ? "px-1 text-xs font-normal text-[#d92d20]"
                   : "px-1 text-xs font-normal text-[var(--yak-color-primary)]"
               }
               onClick={() => {
-                if (activeInstance) void stopTask(record);
+                if (active) void stopTask(record);
                 else void runTask(record);
               }}
             >
-              {activeInstance ? "停止" : realtime ? "启动" : "运行"}
+              {active ? "停止" : startLabel}
             </Button>
             <span className="h-3 w-px bg-[#e4e7ec]" />
             <Button
@@ -174,7 +350,7 @@ export function DataSyncTaskOperations({
       </div>
 
       <div className="mt-4 min-h-0 flex-1">
-        <Table<DataSyncTaskRecord>
+        <Table<DataSyncTaskOperationRecord>
           className="min-h-full"
           columns={columns}
           dataSource={records}
@@ -182,7 +358,7 @@ export function DataSyncTaskOperations({
           loading={loading}
           bordered
           size="medium"
-          scroll={{ x: 760 }}
+          scroll={{ x: 1260 }}
           emptyText={realtime ? "暂无已上线实时同步任务" : "暂无已上线离线同步任务"}
           pagination={
             total > 0

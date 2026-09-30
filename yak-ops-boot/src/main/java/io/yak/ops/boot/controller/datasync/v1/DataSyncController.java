@@ -12,6 +12,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
@@ -64,6 +65,12 @@ public class DataSyncController {
     @PostMapping("/tasks/page")
     public Result<PagingData<DataSyncTaskVO>> taskPage(@Valid @RequestBody DataSyncTaskQueryDTO dto) {
         return Result.success(dataSyncService.queryTaskPage(dto));
+    }
+
+    @Operation(summary = "分页查询运维中心数据同步任务运行态")
+    @PostMapping("/operations/tasks/page")
+    public Result<PagingData<DataSyncTaskOperationVO>> taskOperationPage(@Valid @RequestBody DataSyncTaskQueryDTO dto) {
+        return Result.success(dataSyncService.queryTaskOperationPage(dto));
     }
 
     @Operation(summary = "上线数据同步任务")

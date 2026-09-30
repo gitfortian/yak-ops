@@ -9,6 +9,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.page.PagingData;
 import java.util.List;
@@ -28,6 +29,8 @@ public interface DataSyncService {
     DataSyncTaskVO queryTask(String id);
 
     PagingData<DataSyncTaskVO> queryTaskPage(DataSyncTaskQueryDTO dto);
+
+    PagingData<DataSyncTaskOperationVO> queryTaskOperationPage(DataSyncTaskQueryDTO dto);
 
     DataSyncMappingPreviewVO previewMapping(DataSyncMappingPreviewDTO dto);
 
