@@ -53,8 +53,14 @@ class DataSyncOperationsMetricsReadModelTest {
         assertEquals(2500L, result.getSummary().getAverageDurationMillis());
 
         assertEquals(7, result.getTrend().size());
-        assertEquals(1, result.getStatusDistribution().size());
-        assertEquals(DataSyncInstanceStatus.SUCCEEDED.name(), result.getStatusDistribution().getFirst().getStatus());
+        assertEquals(DataSyncInstanceStatus.values().length, result.getStatusDistribution().size());
+        assertEquals(
+                6L,
+                result.getStatusDistribution().stream()
+                        .filter(item -> DataSyncInstanceStatus.SUCCEEDED.name().equals(item.getStatus()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getCount());
         assertEquals(1, result.getFailureRanking().size());
 
         DataSyncOperationsTrendPointVO populated = result.getTrend().stream()
