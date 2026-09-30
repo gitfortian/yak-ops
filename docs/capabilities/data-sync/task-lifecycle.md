@@ -10,6 +10,18 @@ A Task answers whether its current definition is allowed to create new execution
 
 This contract applies to both `OFFLINE` and `REALTIME` sync types.
 
+REALTIME 从 v1.1 PR5 起同时拥有独立的 Desired State：
+
+```text
+Task Publication State
+  PUBLISHED / UNPUBLISHED
+
+Realtime Desired State
+  RUNNING / STOPPED
+```
+
+Publication 只回答“是否允许创建新 Execution”；Desired State 只回答“用户是否希望 REALTIME 持续运行”。完整规则见 [Realtime Desired State + Auto Recovery](./realtime-desired-state.md)。
+
 Retry / Attempt semantics are defined separately in [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
 
 ## Terminology

@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
+import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
+import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.mapper.datasync.DataSyncTaskMapper;
@@ -11,6 +14,7 @@ import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import io.yak.ops.dao.repository.impl.BaseRepositoryImpl;
 import jakarta.annotation.Resource;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -53,6 +57,16 @@ public class DataSyncTaskRepositoryImpl extends BaseRepositoryImpl<DataSyncTaskM
         return Optional.ofNullable(taskMapper.selectOne(Wrappers.<DataSyncTaskEntity>lambdaQuery()
                 .eq(DataSyncTaskEntity::getWorkspaceId, workspaceId)
                 .eq(DataSyncTaskEntity::getId, id)));
+    }
+
+    @Override
+    public List<DataSyncTaskEntity> queryRealtimeDesiredRunning() {
+        return taskMapper.selectList(Wrappers.<DataSyncTaskEntity>lambdaQuery()
+                .eq(DataSyncTaskEntity::getSyncType, DataSyncType.REALTIME)
+                .eq(DataSyncTaskEntity::getStatus, DataSyncTaskStatus.PUBLISHED)
+                .eq(DataSyncTaskEntity::getDesiredState, DataSyncDesiredState.RUNNING)
+                .orderByAsc(DataSyncTaskEntity::getWorkspaceId)
+                .orderByAsc(DataSyncTaskEntity::getId));
     }
 
     @Override

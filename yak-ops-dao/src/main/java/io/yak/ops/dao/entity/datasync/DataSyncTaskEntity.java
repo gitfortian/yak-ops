@@ -1,6 +1,7 @@
 package io.yak.ops.dao.entity.datasync;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
@@ -32,6 +33,9 @@ public class DataSyncTaskEntity extends BaseEntity {
 
     /** 任务发布状态：UNPUBLISHED 或 PUBLISHED。 */
     private DataSyncTaskStatus status;
+
+    /** REALTIME 用户期望运行状态；OFFLINE 固定为 STOPPED。 */
+    private DataSyncDesiredState desiredState;
 
     /** 离线同步写入方式；REALTIME 当前固定保存为 APPEND。 */
     private DataSyncWriteMode writeMode;

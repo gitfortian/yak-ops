@@ -25,8 +25,8 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
-import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
@@ -37,6 +37,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
@@ -47,6 +48,7 @@ import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.CollectionUtils;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
@@ -137,6 +139,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setName(name);
         entity.setSyncType(syncType);
         entity.setStatus(DataSyncTaskStatus.UNPUBLISHED);
+        entity.setDesiredState(DataSyncDesiredState.STOPPED);
         applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(1);
         entity.initCreate();
@@ -256,6 +259,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS, "请先停止当前运行实例再下线任务");
         }
         disableScheduleForTask(workspaceId, task.getId());
+        task.setDesiredState(DataSyncDesiredState.STOPPED);
         task.setStatus(DataSyncTaskStatus.UNPUBLISHED);
         task.initUpdate();
         if (taskRepository.update(workspaceId, task) == null) {
@@ -273,6 +277,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
+        }
+        if (task.getSyncType() == DataSyncType.REALTIME) {
+            updateDesiredState(workspaceId, task, DataSyncDesiredState.RUNNING);
         }
         return createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.MANUAL);
     }
@@ -377,6 +384,44 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "启用中的调度关联任务必须保持上线");
             validateScheduleDefinition(toScheduleDefinition(schedule));
             replaceScheduleRuntime(schedule);
+        }
+    }
+
+    @Override
+    public void restoreRealtimeDesiredState() {
+        for (DataSyncTaskEntity task : taskRepository.queryRealtimeDesiredRunning()) {
+            String workspaceId = task.getWorkspaceId();
+            WorkspaceContext.bind(workspaceId);
+            try {
+                if (taskDesiredState(task) != DataSyncDesiredState.RUNNING
+                        || taskStatus(task) != DataSyncTaskStatus.PUBLISHED
+                        || task.getSyncType() != DataSyncType.REALTIME) {
+                    continue;
+                }
+                if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
+                    LOG.info("实时同步自动恢复跳过已有活动Execution，workspaceId={}, taskId={}", workspaceId, task.getId());
+                    continue;
+                }
+
+                DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+                DataSyncInstanceVO recovered =
+                        createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.AUTO_RECOVERY);
+                LOG.info(
+                        "实时同步自动恢复已创建新Execution，workspaceId={}, taskId={}, taskVersion={}, instanceId={}",
+                        workspaceId,
+                        task.getId(),
+                        task.getDefinitionVersion(),
+                        recovered.getId());
+            } catch (Exception exception) {
+                LOG.error(
+                        "实时同步自动恢复失败，workspaceId={}, taskId={}, taskVersion={}, error={}",
+                        workspaceId,
+                        task.getId(),
+                        task.getDefinitionVersion(),
+                        SensitiveUtils.mask(exception.getMessage()));
+            } finally {
+                WorkspaceContext.clear();
+            }
         }
     }
 
@@ -496,6 +541,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncInstanceEntity instance = requireInstance(workspaceId, id);
         if (instance.getStatus() == null || instance.getStatus().isTerminal()) {
             return toInstanceVO(instance, true);
+        }
+
+        if (instance.getSyncType() == DataSyncType.REALTIME) {
+            DataSyncTaskEntity task =
+                    taskRepository.queryById(workspaceId, instance.getTaskId()).orElse(null);
+            if (task != null) updateDesiredState(workspaceId, task, DataSyncDesiredState.STOPPED);
         }
 
         if (instance.getStatus() == DataSyncInstanceStatus.PENDING) {
@@ -965,6 +1016,19 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return task.getStatus() == null ? DataSyncTaskStatus.PUBLISHED : task.getStatus();
     }
 
+    private DataSyncDesiredState taskDesiredState(DataSyncTaskEntity task) {
+        return task.getDesiredState() == null ? DataSyncDesiredState.STOPPED : task.getDesiredState();
+    }
+
+    private void updateDesiredState(String workspaceId, DataSyncTaskEntity task, DataSyncDesiredState desiredState) {
+        if (taskDesiredState(task) == desiredState) return;
+        task.setDesiredState(desiredState);
+        task.initUpdate();
+        if (taskRepository.update(workspaceId, task) == null) {
+            throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "更新实时同步期望状态失败");
+        }
+    }
+
     private void requireTaskStatus(DataSyncTaskEntity task, DataSyncTaskStatus expected, String detail) {
         if (taskStatus(task) != expected) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK_STATUS, detail);
@@ -993,10 +1057,18 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
         DataSyncTaskVO target = BeanCopyUtils.copy(
-                source, DataSyncTaskVO.class, "syncType", "status", "writeMode", "runtimeConfig", "retryPolicy");
+                source,
+                DataSyncTaskVO.class,
+                "syncType",
+                "status",
+                "desiredState",
+                "writeMode",
+                "runtimeConfig",
+                "retryPolicy");
         target.setSyncType(
                 source.getSyncType() == null ? null : source.getSyncType().name());
         target.setStatus(taskStatus(source).name());
+        target.setDesiredState(taskDesiredState(source).name());
         target.setWriteMode(taskWriteMode(source).name());
         target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {

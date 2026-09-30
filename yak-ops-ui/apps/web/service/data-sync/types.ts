@@ -11,6 +11,8 @@ export type DataSyncType = "OFFLINE" | "REALTIME";
 
 export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
 
+export type DataSyncDesiredState = "STOPPED" | "RUNNING";
+
 export interface DataSyncRuntimeConfig {
   fetchSize: number;
   readBatchSize: number;
@@ -38,6 +40,7 @@ export interface DataSyncTaskRecord {
   name: string;
   syncType: DataSyncType | string;
   status: DataSyncTaskStatus | string;
+  desiredState?: DataSyncDesiredState | string;
   writeMode: DataSyncWriteMode | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
@@ -163,7 +166,7 @@ export interface DataSyncInstanceRecord {
   taskName: string;
   taskVersion: number;
   syncType: DataSyncType | string;
-  triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | string;
+  triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | "AUTO_RECOVERY" | string;
   status: DataSyncInstanceStatus;
   maxAttempts?: number;
   backoffSeconds?: number;

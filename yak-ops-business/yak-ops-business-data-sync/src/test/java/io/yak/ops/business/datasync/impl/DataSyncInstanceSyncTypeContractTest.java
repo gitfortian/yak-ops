@@ -82,6 +82,7 @@ class DataSyncInstanceSyncTypeContractTest {
                     if ("queryById".equals(method.getName()) && args != null && args.length == 2) {
                         return Optional.of(task);
                     }
+                    if ("update".equals(method.getName())) return args[1];
                     throw new UnsupportedOperationException(method.getName());
                 });
     }
