@@ -3,14 +3,22 @@ package io.yak.ops.business.datasync.execution.lifecycle;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.common.enums.datasync.DataSyncAttemptStatus;
+import io.yak.ops.common.enums.datasync.DataSyncExecutionEventLevel;
+import io.yak.ops.common.enums.datasync.DataSyncExecutionEventType;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.util.DateUtils;
+import io.yak.ops.common.util.SensitiveUtils;
+import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncExecutionEventRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,11 +31,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class DataSyncAttemptLifecycle {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DataSyncAttemptLifecycle.class);
+    private static final int MAX_EVENT_MESSAGE_LENGTH = 1000;
+
     @Resource
     private DataSyncAttemptRepository attemptRepository;
 
     @Resource
     private DataSyncInstanceRepository instanceRepository;
+
+    @Resource
+    private DataSyncExecutionEventRepository eventRepository;
 
     @Transactional(rollbackFor = Exception.class)
     public DataSyncAttemptEntity createAttempt(String workspaceId, String executionId, int attemptNo) {
@@ -68,6 +82,22 @@ public class DataSyncAttemptLifecycle {
                 null)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "启动 Attempt 失败");
         }
+        if (attemptNo == 1) {
+            appendEvent(
+                    workspaceId,
+                    executionId,
+                    null,
+                    DataSyncExecutionEventLevel.INFO,
+                    DataSyncExecutionEventType.EXECUTION_STARTED,
+                    "Execution 开始执行");
+        }
+        appendEvent(
+                workspaceId,
+                executionId,
+                attemptId,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.ATTEMPT_STARTED,
+                "Attempt #" + attemptNo + " 开始执行");
         return true;
     }
 
@@ -104,6 +134,20 @@ public class DataSyncAttemptLifecycle {
                 null)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "完成 Execution 成功状态失败");
         }
+        appendEvent(
+                workspaceId,
+                executionId,
+                attemptId,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.ATTEMPT_SUCCEEDED,
+                "Attempt #" + attemptNo + " 执行成功");
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.EXECUTION_SUCCEEDED,
+                "Execution 执行成功");
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -140,6 +184,13 @@ public class DataSyncAttemptLifecycle {
                 errorMessage)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "记录 Attempt 失败状态失败");
         }
+        appendEvent(
+                workspaceId,
+                executionId,
+                attemptId,
+                DataSyncExecutionEventLevel.ERROR,
+                DataSyncExecutionEventType.ATTEMPT_FAILED,
+                "Attempt #" + attemptNo + " 执行失败：" + safeEventMessage(errorMessage));
 
         if (attemptNo < Math.max(1, maxAttempts)) {
             LocalDateTime nextRetryTime = finishTime.plusSeconds(Math.max(0, backoffSeconds));
@@ -155,6 +206,13 @@ public class DataSyncAttemptLifecycle {
                     errorMessage)) {
                 return DataSyncRetryDecision.stop();
             }
+            appendEvent(
+                    workspaceId,
+                    executionId,
+                    attemptId,
+                    DataSyncExecutionEventLevel.WARN,
+                    DataSyncExecutionEventType.RETRY_WAITING,
+                    "Attempt #" + attemptNo + " 失败，等待重试");
             return DataSyncRetryDecision.retryAt(nextRetryTime);
         }
 
@@ -171,6 +229,13 @@ public class DataSyncAttemptLifecycle {
                 errorMessage)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "记录 Execution 最终失败状态失败");
         }
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.ERROR,
+                DataSyncExecutionEventType.EXECUTION_FAILED,
+                "Execution 执行失败：" + safeEventMessage(errorMessage));
         return DataSyncRetryDecision.stop();
     }
 
@@ -183,7 +248,59 @@ public class DataSyncAttemptLifecycle {
         if (execution == null
                 || execution.getStatus() == null
                 || execution.getStatus().isTerminal()) return;
-        instanceRepository.cancelExecution(workspaceId, executionId, execution.getStatus(), finishTime);
+        if (instanceRepository.cancelExecution(workspaceId, executionId, execution.getStatus(), finishTime)) {
+            recordExecutionCanceled(workspaceId, executionId);
+        }
+    }
+
+    public void recordSourceReady(String workspaceId, String executionId, String attemptId) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                attemptId,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.SOURCE_READY,
+                "来源执行计划已准备");
+    }
+
+    public void recordTargetReady(String workspaceId, String executionId, String attemptId) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                attemptId,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.TARGET_READY,
+                "目标执行计划已准备");
+    }
+
+    public void recordAutoRecoveryStarted(String workspaceId, String executionId) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.AUTO_RECOVERY_STARTED,
+                "应用启动恢复已创建新的实时同步 Execution");
+    }
+
+    public void recordExecutionCanceled(String workspaceId, String executionId) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.INFO,
+                DataSyncExecutionEventType.EXECUTION_CANCELED,
+                "Execution 已取消");
+    }
+
+    public void recordExecutionLost(String workspaceId, String executionId, String message) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.WARN,
+                DataSyncExecutionEventType.EXECUTION_LOST,
+                safeEventMessage(message));
     }
 
     public boolean isRetryWaiting(String workspaceId, String executionId) {
@@ -191,5 +308,38 @@ public class DataSyncAttemptLifecycle {
                 .queryById(workspaceId, executionId)
                 .map(value -> value.getStatus() == DataSyncInstanceStatus.RETRY_WAITING)
                 .orElse(false);
+    }
+
+    private void appendEvent(
+            String workspaceId,
+            String executionId,
+            String attemptId,
+            DataSyncExecutionEventLevel level,
+            DataSyncExecutionEventType eventType,
+            String message) {
+        try {
+            DataSyncExecutionEventEntity event = new DataSyncExecutionEventEntity();
+            event.setWorkspaceId(workspaceId);
+            event.setExecutionId(executionId);
+            event.setAttemptId(attemptId);
+            event.setLevel(level);
+            event.setEventType(eventType);
+            event.setMessage(safeEventMessage(message));
+            event.initCreate();
+            eventRepository.add(event);
+        } catch (RuntimeException exception) {
+            LOG.warn(
+                    "数据同步产品事件记录失败，workspaceId={}, executionId={}, eventType={}, error={}",
+                    workspaceId,
+                    executionId,
+                    eventType,
+                    SensitiveUtils.mask(exception.getMessage()));
+        }
+    }
+
+    private String safeEventMessage(String message) {
+        String value = StringUtils.trimToNull(SensitiveUtils.mask(message));
+        if (value == null) return "执行状态已更新";
+        return value.length() > MAX_EVENT_MESSAGE_LENGTH ? value.substring(0, MAX_EVENT_MESSAGE_LENGTH) : value;
     }
 }
