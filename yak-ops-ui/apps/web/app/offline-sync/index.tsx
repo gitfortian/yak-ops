@@ -63,10 +63,8 @@ export function OfflineSyncPage() {
     const params = new URLSearchParams(location.search);
     if (params.get("tab") !== "instances") return;
 
-    const nextParams = new URLSearchParams({ tab: "instances" });
     const taskId = params.get("taskId");
-    if (taskId) nextParams.set("taskId", taskId);
-    navigate(`/operations/offline-tasks?${nextParams.toString()}`, { replace: true });
+    navigate(taskId ? `/offline-sync/${taskId}/detail` : "/offline-sync", { replace: true });
   }, [location.search, navigate]);
 
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
@@ -232,9 +230,7 @@ export function OfflineSyncPage() {
           onPublish={(value) => void publishTask(value)}
           onUnpublish={(value) => void unpublishTask(value)}
           onEdit={(value) => navigate(`/offline-sync/${value.id}`)}
-          onInstances={(value) =>
-            navigate(`/operations/offline-tasks?tab=instances&taskId=${value.id}`)
-          }
+          onDetail={(value) => navigate(`/offline-sync/${value.id}/detail`)}
           onDelete={setPendingDelete}
         />
       ),
@@ -474,4 +470,5 @@ export function OfflineSyncPage() {
 
 export { OfflineSyncEditorPage } from "./editor";
 export { OfflineSyncInstanceDetailPage } from "./instance-detail";
+export { OfflineSyncTaskDetailPage } from "./task-detail";
 export default OfflineSyncPage;
