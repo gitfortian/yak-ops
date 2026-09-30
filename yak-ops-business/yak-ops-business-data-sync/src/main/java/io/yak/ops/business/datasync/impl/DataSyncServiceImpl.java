@@ -610,8 +610,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         DateUtils.now(),
                         DataSyncErrorCode.EXECUTION_LOST.getCode(),
                         DataSyncErrorCode.EXECUTION_LOST.getMessage())) {
-                    attemptLifecycle.recordExecutionLost(
-                            workspaceId, id, "无法定位进程内运行句柄，Execution 已标记为 LOST");
+                    attemptLifecycle.recordExecutionLost(workspaceId, id, "无法定位进程内运行句柄，Execution 已标记为 LOST");
                 }
             } else if (!instanceRepository.cancelExecution(
                     workspaceId, id, DataSyncInstanceStatus.RUNNING, DateUtils.now())) {
@@ -1186,7 +1185,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncExecutionEventVO target =
                 BeanCopyUtils.copy(source, DataSyncExecutionEventVO.class, "level", "eventType");
         target.setLevel(source.getLevel() == null ? null : source.getLevel().name());
-        target.setEventType(source.getEventType() == null ? null : source.getEventType().name());
+        target.setEventType(
+                source.getEventType() == null ? null : source.getEventType().name());
         return target;
     }
 
