@@ -1307,8 +1307,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncOperationsFailureRankVO toOperationsFailureRankVO(DataSyncOperationsFailureStats source) {
-        DataSyncOperationsFailureRankVO target =
-                BeanCopyUtils.copy(source, DataSyncOperationsFailureRankVO.class);
+        DataSyncOperationsFailureRankVO target = BeanCopyUtils.copy(source, DataSyncOperationsFailureRankVO.class);
         target.setFailedCount(zero(target.getFailedCount()));
         target.setLostCount(zero(target.getLostCount()));
         target.setAbnormalCount(zero(target.getAbnormalCount()));
