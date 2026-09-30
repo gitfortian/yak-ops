@@ -49,6 +49,16 @@ OFFLINE / REALTIME 共用 DataSyncAttemptLifecycle。状态变更使用 Reposito
 
 本地注册表仅持有活动 Runtime 的取消引用；启动将旧进程活动记录标记 LOST，不能把数据库 RUNNING 当作仍有本地执行对象。连续 Source 意外完成不标记 SUCCEEDED。
 
+## Operations Metrics Read Model
+
+运维聚合查询通过专用 DataSyncOperationsMetricsRepository / Mapper 读取 Execution 根记录，不复用分页接口后在 Business 或前端全量 groupBy。SQL 必须带 workspaceId、syncType 和受控时间范围；当前最大历史窗口为 30 天。
+
+Business 负责解析 TODAY / LAST_7_DAYS / LAST_30_DAYS、补齐连续时间桶与状态零值，并把 DAO 聚合结果映射为 HTTP VO。DAO 不拥有产品时间范围枚举，前端也不重复计算时间桶。
+
+聚合 readRows / writeRows 只能使用 Execution 当前 / 最终 Attempt 镜像；禁止 join Attempt 后求和，否则 Retry 会重复计算。currentActiveTaskCount 明确是当前快照，其他 summary / trend / status / failure ranking 明确属于所选时间窗口。
+
+在没有独立 Metrics Snapshot 前，不新增 TPS、events/s、CDC Lag、Checkpoint Lag 等伪时间序列字段，也不从两次累计值查询差分冒充稳定 Runtime 指标。
+
 ## Execution Event Implementation
 
 Execution 产品日志复用 lifecycle owner 持久化有限状态事件，不建立第二套 Server Log 系统。事件必须 Workspace-scoped，可选关联 Attempt，并使用 Common 中的事件级别 / 类型枚举；查询仍通过稳定 DataSyncService 进入 DAO Repository。
