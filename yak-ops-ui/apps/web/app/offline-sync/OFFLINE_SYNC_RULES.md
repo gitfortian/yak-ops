@@ -44,6 +44,10 @@ Must:
 - Datasource Select footer exposes “新增数据源” as a product-owned action and routes to Datasource create; Schema / Table do not invent create actions.
 - Static enum Selects such as OFFLINE write mode stay simple and do not add search / refresh / footer without a real option-volume need.
 - Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
+- Task list is a definition summary surface: show task/version, Source → Target, write mode, Schedule definition summary, publication status, updater/update time and actions. Runtime metrics such as Last Run / Next Run / Attempt / Retry / readRows / writeRows stay in Operations Center or Task Detail.
+- Task list Schedule summary reads persisted Cron + Time Zone only; it must not calculate next fire time or own Schedule enable / disable.
+- Task list updater resolves current-page `updateBy` values with one batch user lookup; never issue one user request per row. Historical `system` stays SYSTEM.
+- Task list fixes the action column on the right through Yak UI Table `fixed: "right"`; product code must not rebuild sticky column CSS.
 - Task list keeps four stable action slots: 上线/下线、编辑、详情、删除. `详情` is always visible and opens `/offline-sync/:taskId/detail` inside Data Integration.
 - UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除. PUBLISHED disables 编辑 / 删除; an active PENDING / RUNNING / RETRY_WAITING Execution also disables 下线 while 详情 remains available.
 - Run / Stop never execute from the Offline Sync list, editor or Task Detail.
