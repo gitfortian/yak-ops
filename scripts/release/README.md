@@ -9,7 +9,7 @@
 准备新版本：
 
 ```bash
-bash scripts/release/prepare-release-version.sh 1.0.0
+bash scripts/release/prepare-release-version.sh 1.1.0
 ```
 
 该命令统一更新：
@@ -35,7 +35,7 @@ bash scripts/release/check-release-metadata.sh
 Release / Tag 场景可以额外传入期望版本：
 
 ```bash
-bash scripts/release/check-release-metadata.sh v1.0.0
+bash scripts/release/check-release-metadata.sh v1.1.0
 ```
 
 检查范围包括：
@@ -75,7 +75,7 @@ bash scripts/release/verify-distribution.sh
 也可以传入 Release / Tag 期望版本：
 
 ```bash
-bash scripts/release/verify-distribution.sh v1.0.0
+bash scripts/release/verify-distribution.sh v1.1.0
 ```
 
 验证器要求 `yak-ops-dist/target` 下只有一个 `yak-ops-*.tar.gz`，并检查：
@@ -94,9 +94,9 @@ bash scripts/release/verify-distribution.sh v1.0.0
 yak-ops-dist/target/SHA256SUMS
 ```
 
-## V1 Release Gate
+## Release Gate
 
-V1 自动发布门禁由 `.github/workflows/v1-release-gate.yml` 负责。
+正式自动发布门禁由 `.github/workflows/v1-release-gate.yml` 中的通用 `Release Gate` 负责。文件名保留历史兼容，但 Workflow 不再绑定某个具体版本。
 
 它会复用现有 Quality Check，并强制 Backend Acceptance 执行 Full Sweep，然后继续执行：
 
@@ -114,27 +114,31 @@ Distribution Build
 Compose Smoke 也可以在本地对已经构建好的正式版本镜像执行：
 
 ```bash
-bash scripts/release/smoke-compose.sh v1.0.0
+bash scripts/release/smoke-compose.sh v1.1.0
 ```
 
-手动触发正式 V1 Release Decision 时还必须逐项显式确认：
+手动触发正式 Release Decision 时必须逐项显式确认：
 
-- OFFLINE-001 / APPEND 已通过。
-- OFFLINE-002 / OVERWRITE 已通过。
-- OFFLINE-003 / UPSERT 已通过。
-- REALTIME-001 / Snapshot + INSERT/UPDATE/DELETE 已通过。
-- REALTIME-002 / persisted-offset continuation 已通过。
-- V1 Flyway baseline 已完成最终审查。
+- 对应版本 Readiness 中列出的 Required Manual E2E 已全部通过。
+- 当前版本新增 Migration 已完成最终审查。
 - 没有未关闭的 P0 / P1 Release Blocker。
-- Release Notes 与 Known Limitations 已准备完成。
+- Release Notes / Readiness / Known Limitations 已准备完成。
 
-Manual E2E 的执行人、日期、环境和 Evidence 统一记录在 `docs/release/v1.0.0-readiness.md`。
+Workflow 还会机械检查：
+
+- Release Decision 必须从 `main` 运行。
+- 正式 Release Decision 只接受稳定 `X.Y.Z` 版本；`SNAPSHOT` / `rc.N` 只能用于候选验证，不能直接进入正式 Publish。
+- `docs/release/v{version}-readiness.md` 存在。
+- Readiness 文档第一个 `Status:` 行必须精确为 `Status: Ready`。
+- `docs/release/v{version}-release-notes.md` 存在。
+
+Manual E2E 的执行人、日期、环境和 Evidence 统一记录在对应版本的 Readiness 文档。
 
 Release Gate 只判断候选版本是否满足上线门槛，不创建 Git Tag，也不向 Registry 推送镜像。
 
 ## Release Publish
 
-正式 `V1 Release Gate` PASS 后，发布动作由 `.github/workflows/release-publish.yml` 负责。
+正式 `Release Gate` PASS 后，发布动作由 `.github/workflows/release-publish.yml` 负责。
 
 仓库需要预先配置 GitHub Actions Repository Secrets：
 
@@ -157,7 +161,7 @@ publish_latest
 发布流程：
 
 ```text
-Verify formal Release Gate
+Verify exact formal Release Gate + Release Decision
 → Checkout exact release commit
 → Download Gate release-candidate Artifact
 → Verify SHA256SUMS
