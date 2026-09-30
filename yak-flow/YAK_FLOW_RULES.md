@@ -1,275 +1,55 @@
 # YakFlow Rules
 
-Scope:
-- `yak-flow/**`
+Status: Active
 
-Status:
-- Active / Staged
+Scope: `yak-flow/**`。
 
-Depends On:
-- `/ARCHITECTURE.md`
-- `/JAVA_RULES.md`
-- `/docs/capabilities/yak-flow/README.md`
+遵循 [Architecture](../ARCHITECTURE.md)、[Java Rules](../JAVA_RULES.md)。数据平面、类型、split、写入、checkpoint 和续传的权威行为定义在 [YakFlow Capability](../docs/capabilities/yak-flow/README.md)，不在此复制参数和阶段说明。
 
 ## Product Boundary
 
-YakFlow is a batch/stream unified data synchronization capability.
-
-Current first-milestone product target:
-
-```text
-Batch:
-MySQL -> MySQL / PostgreSQL / Oracle
-
-CDC:
-MySQL CDC -> MySQL / PostgreSQL / Oracle
-```
-
-Transform is explicitly outside the first milestone.
+YakFlow 不拥有 Task / Execution / Attempt 数据库、产品发布状态、Cron 或 Retry Policy。不能用连接器计数或本地 checkpoint 冒充产品持久化、事务提交证明或跨进程恢复。
 
 ## API Contract
 
-Batch and CDC use one Source/Sink protocol.
+API 保持 JDK-only：用 Boundedness 表达生命周期，用 YakRow / RowKind 表达数据变化，用不透明 CheckpointState 隔离连接器细节。不创建 BatchSource / CdcSource 两套协议或额外 JobMode。
 
-Must:
-- Represent bounded and continuous execution with `Boundedness`.
-- Represent row change semantics with `RowKind`.
-- Keep `YakRow` usable by both JDBC batch reads and CDC events.
-- Keep checkpoint state opaque to the runtime-facing API.
-- Keep `yak-flow-api` independent from Spring, JDBC, Debezium and Yak Ops business modules.
-- Keep connector-specific state and protocol details inside connector modules when those modules are introduced.
-
-Must Not:
-- Add separate `BatchSource` and `CdcSource` contract families.
-- Add a `JobMode` enum to distinguish batch from CDC.
-- Put Debezium types in `yak-flow-api`.
-- Put JDBC types in `yak-flow-api`.
-- Add Transform, DAG or SQL-expression contracts before the first synchronization milestone requires them.
-- Add distributed scheduler, worker or resource-manager contracts in Phase 1.
-- Claim exactly-once semantics without a concrete Source + Runtime + Sink implementation that proves them.
-
-## Row Contract
-
-`YakRow` is the common record carrier.
-
-`RowKind` values:
-
-```text
-INSERT
-UPDATE_BEFORE
-UPDATE_AFTER
-DELETE
-```
-
-Batch sources normally emit `INSERT`. CDC sources may emit any supported change kind.
-
-The core type system describes portable logical values only. Database-specific native types and conversion rules belong to connectors.
-
-Logical type contract:
-- `YakTypeKind` identifies the logical type family only.
-- `YakDataType` is the complete logical type contract used by `YakColumn`.
-- parameterized types own their parameters; `YakDecimalType` owns DECIMAL precision / scale.
-- `YakBasicType` represents types without extra parameters and must not represent DECIMAL.
-- `YakColumn` owns field metadata such as name, nullability and current String/Binary capacity.
-- unknown JDBC DECIMAL precision / scale may remain null rather than inventing metadata.
-- composite types such as ARRAY / MAP / ROW are not part of the current relational-database milestone.
+Spring、JDBC、Debezium、Kafka Connect 和产品 DTO 不进入 API。数据库原生类型转换归 Connector，通用逻辑类型及参数归 API；不要为尚不存在的 Transform / DAG 扩张契约。
 
 ## Local Execution Engine
 
-The current runtime is deliberately single-node and local.
+只依赖 API，线程和 Channel 保持有界。Reader 并行度不决定 split 数量，Enumerator 分配与 Sink 写入仍串行。具体范围和 checkpoint 限制以 Capability 为准。
 
-Must:
-- Keep one bounded in-memory channel between Source work and Sink work.
-- Allow bounded Source executions to run 1-16 parallel Readers while keeping split assignment serialized through one Enumerator.
-- Keep one Sink Writer in Local Execution Engine; parallel Source Readers converge into the same bounded Row Channel before serial Sink writes.
-- Allow bounded jobs to finish naturally.
-- Keep continuous unbounded jobs alive until cancel or failure.
-- Use channel ordering for checkpoint barriers: Source state first, barrier second, Sink flush before checkpoint completion.
-- Keep checkpoint coordination on the single-Reader execution path; bounded executions with source parallelism greater than 1 reject checkpoint requests until multi-Reader checkpoint state aggregation is designed.
-- Interrupt blocked local workers on cancel/failure so execution cannot remain stuck on channel operations.
-- Treat checkpoint completion as an ordering/durability observation only; it is not an exactly-once contract.
+取消 / 失败时释放或中断阻塞工作；连续 Reader.poll 不得永久阻塞。checkpoint 顺序必须是 Source capture → barrier → Sink flush → completion，不能为吞吐提前确认上游。
 
-Must Not:
-- Add a distributed scheduler, Worker registry, ResourceManager or remote RPC layer.
-- Add persistent Job/Attempt tables in this phase.
-- Persist opaque `CheckpointState` with Java serialization merely to obtain a file checkpoint.
-- Introduce connector-specific logic into the runtime.
-- Let an unbounded Source report natural job success only because it is temporarily idle.
-
-Continuous `SourceReader.poll()` implementations must return periodically rather than block forever so cancel and checkpoint requests can be observed.
-
-Local Execution Engine metrics:
-- `readRows` counts rows after a Source batch has successfully entered the Runtime channel.
-- `writeRows` counts rows after `SinkWriter.write` returns successfully.
-- Metrics are monotonic in one execution and are observation data, not a transaction-commit proof.
-- A successful bounded execution must finish with final metrics persisted by the product layer.
+不把 Connector 特例写入 Runtime；不使用 Java 序列化强行持久化 opaque CheckpointState；不新增远程 RPC、Worker Registry 或分布式资源管理层。
 
 ## Package Organization
 
-YakFlow package structure follows execution responsibility rather than file count.
+按实际职责聚合，避免按文件数量拆包。Connector 默认浅层：source / sink / dialect / debezium 等包有真实类族才创建，不建立单类包或空未来包。
 
-Must:
-- Keep connector package depth shallow; the connector namespace plus one responsibility subpackage is the default.
-- Create a responsibility subpackage only when a real group exists, normally at least two closely related classes.
-- Keep one capability family together: Source / Split / Enumerator belong together unless an external runtime boundary gives a clearer ownership split.
-- Isolate third-party runtime details in a dedicated package when they have their own types and lifecycle, for example `debezium`.
-- Mirror production responsibility packages in unit tests.
-- Put real external-system end-to-end tests under an `integration` test package.
-- Prefer names that express ownership such as `source`, `sink`, `dialect`, `debezium`; avoid generic dumping grounds.
+Source / Split / Enumerator 保持内聚；MySQL `source` 管 YakFlow 生命周期，`debezium` 隔离 Engine / SourceRecord / RecordCommitter 等实现。不能用 util / helper / manager / common 大桶回避归属。
 
-Must Not:
-- Put every class in the connector root package once multiple responsibilities exist.
-- Create one package per class.
-- Create empty future packages before code exists.
-- Use generic `util`, `helper`, `manager` or `common` packages to avoid deciding ownership.
-- Split a tightly related class family across packages only for visual symmetry.
-
-Current MySQL CDC layout:
-
-```text
-mysql/
-├── source/
-│   ├── MySqlCdcSource
-│   ├── MySqlCdcSourceConfig
-│   ├── MySqlCdcSplit
-│   ├── MySqlCdcSplitEnumerator
-│   └── MySqlCdcEnumeratorState
-└── debezium/
-    ├── MySqlCdcSourceReader
-    ├── MySqlDebeziumEngineConfig
-    ├── DebeziumRecordConverter
-    ├── DebeziumBatch
-    └── MySqlCdcCheckpointState
-```
-
-The split is intentional: `source` owns YakFlow Source semantics, while `debezium` owns all Debezium / Kafka Connect implementation details.
-
-## Integration Test Boundary
-
-Connector integration tests may use Testcontainers when a protocol cannot be validated faithfully with an in-memory substitute.
-
-Must:
-- Use an isolated container owned by the test; never depend on a developer or shared external database.
-- Configure the real source protocol required by the connector, such as MySQL row-based binlog for CDC.
-- Use bounded polling timeouts; no unbounded sleeps or hanging waits.
-- Cover the important lifecycle boundary, not only connection success.
-- Keep unit tests for conversion and config logic even when an integration test exists.
-
-Execution boundary:
-- Real-database acceptance classes use the `*IT` suffix so default Surefire discovery does not start Docker during ordinary `Backend verify`.
-- `.github/workflows/backend-acceptance.yml` owns real-database acceptance execution.
-- Pull requests and pushes run JDBC / MySQL CDC cross-database acceptance only when their dependency paths change.
-- Manual dispatch and the weekly full sweep run both acceptance suites as a dependency-filter safety net.
-- Local JDBC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-jdbc -am -Dtest=OfflineSyncJdbcAcceptanceIT -Dsurefire.failIfNoSpecifiedTests=false test`.
-- Local MySQL CDC acceptance: `bash mvnw -q -pl yak-flow/yak-flow-connector-cdc-mysql -am -Dtest=MySqlCdcIntegrationIT -Dsurefire.failIfNoSpecifiedTests=false test`.
-
-The JDBC batch acceptance baseline uses real Testcontainers databases and covers:
-- MySQL Source -> MySQL Sink.
-- MySQL Source -> PostgreSQL Sink.
-- MySQL Source -> Oracle Sink.
-- final YakFlow read/write metrics matching transferred rows.
-
-The MySQL CDC cross-database acceptance baseline runs the same lifecycle against:
-- MySQL Sink.
-- PostgreSQL Sink.
-- Oracle Sink.
-
-Every target path must cover:
-- initial snapshot.
-- binlog INSERT / UPDATE / DELETE.
-- JDBC CHANGELOG application on the real target database.
-- downstream checkpoint completion.
-- persisted offset file creation.
-- cancel / stop.
-- restart with the same connector state directory.
-- continuation from the persisted offset without replaying the initial snapshot as a new logical start.
+单元测试镜像对应职责；真实外部系统验收放 integration 包。
 
 ## JDBC Batch Connector
 
-The current bounded JDBC connector owns synchronization behavior, not datasource configuration ownership.
+复用 Datasource Plugin API 的规范化 Connection / TablePath 与 Driver / SSH runtime，不复制 host / port / password 模型。数据库标识符由方言引用，禁止拼接任意用户 SQL。
 
-Must:
-- Consume normalized `DataSourceConnection` and `DataSourceTablePath` from the Datasource plugin API.
-- Reuse Datasource JDBC runtime behavior for Driver loading and SSH tunneling.
-- Keep table/column identifiers quoted through a database dialect; never concatenate raw user SQL.
-- Read only declared schema columns and preserve column order into `YakRow`.
-- Use bounded cursor batches instead of loading an entire table into memory.
-- Allow an explicit integer single-primary-key split contract with inclusive lower/upper bounds and a requested split count.
-- Generate numeric range splits without gaps, overlaps or empty ranges; split planning is independent from Source Reader parallelism.
-- When `splitSize` is configured, detect a single integer primary key, query `MIN / MAX / COUNT(*)`, and derive the requested range split count from the target rows per split.
-- Fall back to one whole-table split when no eligible integer single primary key exists or the table row count does not exceed `splitSize`.
-- Reject dynamic plans above 10,000 splits instead of allocating an unbounded split list; callers must increase `splitSize`.
-- Treat each JDBC split as an independent read transaction; V1 does not claim one database-consistent snapshot across multiple splits.
-- Keep target pre-write handling separate from row write semantics: `JdbcSaveMode.APPEND / OVERWRITE` is independent from `JdbcWriteMode.INSERT / UPSERT / CHANGELOG`.
-- APPEND preserves target rows before normal writes.
-- OVERWRITE executes dialect-owned `TRUNCATE TABLE` once when the bounded INSERT writer opens, commits that destructive pre-write action, then continues with normal INSERT batches.
-- UPSERT requires target primary keys and uses database-native SQL owned by each dialect: MySQL `ON DUPLICATE KEY UPDATE`, PostgreSQL `ON CONFLICT DO UPDATE`, Oracle `MERGE INTO`.
-- UPSERT updates only non-primary-key columns; a key-only schema may use a no-op/do-nothing matched path.
-- Reject OVERWRITE with UPSERT or CHANGELOG; realtime CDC must never clear the target table.
-- Do not silently fall back from TRUNCATE to DELETE when permissions, foreign keys or database rules reject overwrite.
-- Commit Sink writes in explicit JDBC batches.
-- Roll back uncommitted Sink data on write/flush failure.
-- Own JDBC Catalog field compatibility used by Data Sync mapping preview and runtime execution.
-- Convert JDBC metadata into `YakColumn` through `JdbcSchemaMapper` before compatibility evaluation.
-- Keep `JdbcSchemaCompatibility` dependent on YakFlow logical columns/types only; it must not interpret `java.sql.Types` or Datasource metadata directly.
-- Treat `JdbcSchemaMapper` logical type support as the compatibility baseline; a JDBC type that cannot map to YakFlow is incompatible.
-- Reject integer narrowing; allow integer widening and integer -> DECIMAL only when known target integer-digit capacity is sufficient.
-- Preserve known String / Binary capacity and DECIMAL integer/fraction capacity; allow FLOAT -> DOUBLE widening.
-- Keep current acceptance coverage on MySQL Source and MySQL/PostgreSQL/Oracle Sink.
+列顺序从声明 Schema 贯穿 Reader、YakRow 和 Writer。JdbcSchemaMapper 负责 Catalog → 逻辑类型；JdbcSchemaCompatibility 只接收逻辑列，Data Sync Business 不得另写 JDBC 类型分类。
 
-Must Not:
-- Duplicate datasource host/port/username/password configuration models inside YakFlow.
-- Add custom SQL, Transform or arbitrary SQL execution in Phase 3.
-- Auto-create target tables in Phase 3.
-- Claim OVERWRITE is atomic with the subsequent data load; after TRUNCATE commits, a later load failure may leave the target empty or partially refilled.
-- Claim snapshot restart consistency from the current row-count checkpoint state.
-- Add skew detection or sampling policy in the dynamic range split phase.
-- Duplicate JDBC type-family or conversion compatibility rules in Data Sync Business.
-
-Target tables must exist before execution. Auto-create DDL and schema evolution require their own explicit design.
+target pre-write 与逐行 write 保持分离，遵循 [JDBC Batch Contract](../docs/capabilities/yak-flow/README.md#jdbc-batch-connector)。按事务批次提交，失败回滚未提交内容；不得把 OVERWRITE 宣称为原子替换或在 TRUNCATE 失败时偷偷执行 DELETE。
 
 ## MySQL CDC Connector
 
-MySQL CDC uses Debezium Engine as a connector-private protocol implementation.
+Debezium 版本归 BOM；所有 Debezium / Kafka Connect 类型、offset 与 schema-history 内容留在 Connector。连接端点和 SSH 复用 Datasource runtime，不新增强制外部 Kafka 服务。
 
-Must:
-- Pin Debezium to a stable Final release in the Yak Ops BOM.
-- Keep Debezium Engine, SourceRecord, RecordCommitter and schema-history implementation types inside `yak-flow-connector-cdc-mysql`.
-- Use the same `YakRow + RowKind` contract as bounded sources.
-- Use `snapshot.mode=initial` for the Phase 4 full-snapshot-then-binlog path.
-- Require the Source MySQL environment to provide binary logging with ROW format and FULL row image for the current connector contract.
-- Require the Source account to have the privileges needed by Debezium for snapshot and binlog streaming; deployment documentation must call out `SELECT`, `RELOAD`, `SHOW DATABASES`, `REPLICATION SLAVE` and `REPLICATION CLIENT`, plus environment-specific snapshot lock permissions when needed.
-- Persist Debezium offsets and internal schema history under a caller-owned state directory.
-- Acknowledge Debezium records only from `notifyCheckpointComplete`, after the Sink barrier flush succeeds.
-- Require a primary key for Phase 4 CDC.
-- Keep recovery semantics explicitly at-least-once.
-- Allow SSH-backed Datasource connections through the existing Datasource JDBC endpoint runtime rather than implementing SSH inside YakFlow.
+仅在下游 barrier flush 完成后的 notifyCheckpointComplete 确认记录；未完成持久化的 offset 可能重放，不能宣称 exactly-once。状态目录由调用方提供，不能自行持久化产品 Task 或定义第二套执行身份。
 
-Must Not:
-- Import Debezium or Kafka Connect types into `yak-flow-api` or `yak-flow-runtime`.
-- Mark Debezium records processed when they merely enter the YakFlow row channel.
-- Claim exactly-once after a process crash.
-- Implement Transform, schema evolution or DDL propagation in Phase 4.
-- Add Kafka as a mandatory runtime dependency or external service.
+## Integration Test Boundary
 
-## Checkpoint Boundary
+协议验证使用测试自有的隔离容器，不访问开发者或共享数据库。MySQL CDC 必须启用真实复制协议；等待必须有上限，不能以连接成功代替生命周期与结果断言。
 
-`CheckpointState` is an opaque connector/runtime contract.
+保留转换、类型与配置的单元覆盖；真实数据库验收类使用 `*IT`。执行命令、触发路径和完整扫描入口由 [Backend Acceptance](../.github/workflows/backend-acceptance.yml) 维护，普通 verify 与专项验收不能互相冒充。
 
-The API keeps connector state opaque. The Local Execution Engine coordinates in-process checkpoint barriers and keeps only the latest completed checkpoint for the active execution.
-
-The current phase still does not define durable serialization/restoration for generic YakFlow `CheckpointState` or a transaction commit protocol. Those concerns must not leak Debezium offset structures into the public API.
-
-The MySQL CDC connector is allowed to persist its own Debezium offsets/schema history under the caller-owned state directory. A later new execution may reuse those connector-owned files; this must not be described as restoration of the previous LocalExecution.
-
-## Dependency Direction
-
-```text
-yak-flow-runtime --------+
-                         |
-jdbc batch connector -----+--> yak-flow-api
-                         |
-mysql cdc connector -------+
-```
-
-`yak-flow-api` depends only on the JDK.
+Capability 的 [Verification](../docs/capabilities/yak-flow/README.md#verification) 定义必须验证的行为。文档不保存某次 CI 绿色结果；没有实际运行的检查不能记为通过。

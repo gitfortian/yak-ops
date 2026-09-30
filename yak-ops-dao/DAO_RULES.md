@@ -2,7 +2,7 @@
 
 Scope:
 - `yak-ops-dao/**`
-- Concrete Repository / Mapper code after it is migrated into this module
+- All concrete Yak Ops Repository / Mapper code
 
 Depends On:
 - `/ARCHITECTURE.md`
@@ -14,12 +14,12 @@ Owns:
 - Unified Flyway configuration and database schema history
 - MyBatis-Plus Repository base capabilities
 - All versioned SQL migrations under `src/main/resources/db/migration/yak-ops`
-- Concrete database access after a domain is explicitly migrated here
+- Concrete product database access through DAO-owned repositories
 - Security user persistence through `UserEntity`, `UserMapper` and `UserRepository`
 - Workspace persistence through DAO-owned Workspace / WorkspaceMember Entity, Mapper and Repository
 - User Preference persistence through DAO-owned Entity / Mapper / Repository
 - Datasource persistence through DAO-owned Entity / Mapper / Repository and mapper XML
-- Data Sync persistence through DAO-owned Task / Instance Entity, Mapper and Repository
+- Data Sync persistence through DAO-owned Task / Schedule / Execution / Attempt Entity, Mapper and Repository
 
 ## Flyway
 
@@ -56,7 +56,7 @@ Database table mapping objects use the `Entity` suffix and live under `io.yak.op
 - Declare MyBatis table-mapping Entity classes in Common or Business modules.
 - Introduce a second ID generator or switch individual tables back to auto-increment IDs.
 - Add Flyway migration directories outside `yak-ops-dao`.
-- Keep tables or migrations for product capabilities that have already been deleted.
+- Delete or rewrite applied migrations when removing a capability; remove obsolete schema/data through a new forward migration under FLYWAY_RULES.md.
 
 ## Boundary
 

@@ -1,426 +1,74 @@
 # Data Sync Rules
 
-Scope:
-- `yak-ops-business/yak-ops-business-data-sync/**`
-- `yak-ops-common/src/main/java/io/yak/ops/common/**/datasync/**`
-- `yak-ops-dao/src/main/java/io/yak/ops/dao/**/datasync/**`
-- `yak_ops_data_sync_*` schema
+Status: Active
 
-Status:
-- Active / Staged
+Scope: `yak-ops-business/yak-ops-business-data-sync/**` 及 Common / DAO 中对应的 datasync 契约和持久化实现。
 
-Depends On:
-- `/ARCHITECTURE.md`
-- `/JAVA_RULES.md`
-- `/yak-ops-business/BUSINESS_RULES.md`
-- `/yak-ops-common/DTO_VO_RULES.md`
-- `/yak-ops-dao/DAO_RULES.md`
-- `/yak-ops-dao/ENTITY_RULES.md`
-- `/yak-ops-dao/FLYWAY_RULES.md`
-- `/docs/capabilities/data-sync/README.md`
-- `/docs/capabilities/data-sync/task-lifecycle.md`
+## Applicable Rules
+
+遵循 [Architecture](../../ARCHITECTURE.md)、[Java Rules](../../JAVA_RULES.md)、[Business Rules](../BUSINESS_RULES.md)。DTO / VO、Entity、Repository 与 Migration 分别遵循 Common / DAO 的就近规则，不在本文件复制。
+
+产品行为只由 [Data Sync Capability](../../docs/capabilities/data-sync/README.md) 及其发布、执行重试、调度、实时恢复专题定义。本文件管实现职责，不再维护另一份阶段、状态或字段清单。
 
 ## Business Boundary
 
-Data Sync owns product task definitions and task instances. YakFlow owns execution mechanics.
+唯一稳定产品 Service 为 `DataSyncService / impl.DataSyncServiceImpl`。它编排 Task、发布、Schedule 与执行请求；YakFlow 只负责数据平面执行。
 
-```text
-DataSyncService
-      ↓
-Task / Instance persistence
-
-OfflineSyncExecutor                 RealtimeSyncExecutor
-      ↓                                   ↓
-OfflineSyncExecutionPlanner         RealtimeSyncExecutionPlanner
-      ↓                                   ↓
-OfflineSyncExecutionPlan            RealtimeSyncExecutionPlan
-      └──────────────→ YakFlow Local Execution Engine ←──────────────┘
-```
-
-This capability explicitly uses `DataSyncService / DataSyncServiceImpl` naming.
+Datasource 校验、Catalog 和运行连接必须经过 DataSourceService。禁止跨到 Datasource DAO / Plugin Registry，禁止复制连接模型或在 Business 维护 JDBC type-family 转换。
 
 ## Execution Package Organization
 
-Execution code is grouped by responsibility, not by OFFLINE / REALTIME duplication:
-
-```text
-io.yak.ops.business.datasync.execution
-├── executor
-│   ├── OfflineSyncExecutor
-│   └── RealtimeSyncExecutor
-├── planning
-│   ├── DataSyncSchemaResolver
-│   ├── OfflineSyncExecutionPlan
-│   ├── OfflineSyncExecutionPlanner
-│   ├── RealtimeSyncExecutionPlan
-│   └── RealtimeSyncExecutionPlanner
-├── lifecycle
-│   ├── DataSyncExecutionRegistry
-│   └── DataSyncExecutionRecovery
-└── realtime
-    ├── RealtimeSyncStateManager
-    └── MySqlCdcServerIdAllocator
-```
-
-Responsibilities:
-- `executor` owns Runtime submission, status transition, metrics flush and terminal-state handling.
-- `planning` owns Task snapshot -> YakFlow Source / Sink / schema execution-plan projection.
-- `lifecycle` owns OFFLINE / REALTIME shared process-level registry and startup recovery.
-- `realtime` owns REALTIME-only CDC state identity and MySQL replication resources.
-
-Dependency direction:
-
-```text
-DataSyncServiceImpl
-   ↓
-executor ─────→ planning
-   │              ↓
-   ├────────→ lifecycle
-   └────────→ realtime
-                  ↑
-          realtime planning only
-```
-
-Must:
-- Keep the `execution` root package free of concrete classes.
-- Keep OFFLINE and REALTIME executors together under `executor`.
-- Keep execution plans, planners and shared schema projection together under `planning`.
-- Keep shared process lifecycle classes under `lifecycle`.
-- Keep MySQL CDC state/serverId ownership under `realtime`.
-- Mirror responsibility packages in tests where package-private behavior is intentionally tested.
-
-Must Not:
-- Create one package per class.
-- Duplicate `offline/planning` and `realtime/planning` subtrees while each contains only one or two tightly related classes.
-- Let `lifecycle` or `realtime` depend back on `executor`.
-- Put Datasource credentials or YakFlow runtime objects into lifecycle persistence.
-
-## Task Definition
-
-Must:
-- Be Workspace-scoped.
-- Keep task name unique inside one Workspace.
-- Persist datasource references by datasource ID, not by copying credentials.
-- Treat the current Datasource-bound database as authoritative. Task / mapping requests cannot override a bound database.
-- Treat the current Datasource-bound Schema as authoritative when present. A task-level Schema is allowed only when the Datasource leaves Schema unbound.
-- Keep `definitionVersion` starting at 1. The current implementation increments on every successful update; the staged Task Publication Lifecycle narrows this to executable-definition changes only, while metadata-only changes keep the same version.
-- Persist one type-specific YakFlow config JSON in `runtime_config`; `OFFLINE` uses batch/fetch/split tuning while `REALTIME` uses CDC/checkpoint/write tuning.
-- Persist target data semantics as first-class Task field `writeMode`; do not place APPEND / OVERWRITE / UPSERT inside `runtime_config`.
-- Keep `DataSyncWriteMode` persistence values stable: APPEND=1, OVERWRITE=2, UPSERT=3.
-- OFFLINE accepts APPEND, OVERWRITE and UPSERT. REALTIME remains fixed to APPEND at the Task layer.
-- REALTIME currently persists APPEND for the shared Task contract while runtime application continues through `JdbcWriteMode.CHANGELOG`; realtime writeMode is not user-configurable.
-- Support `OFFLINE` and `REALTIME` task definitions.
-- Keep `REALTIME` Source limited to MySQL CDC in the current milestone.
-- Keep `REALTIME` Target limited to MySQL / PostgreSQL / Oracle JDBC sinks in the current milestone.
-- Require a primary key on the `REALTIME` Source table.
-- Require the REALTIME Target primary-key set to exactly match the Source primary-key set through case-insensitive same-name mapping; PK order may differ, but missing, extra or different PK fields are invalid.
-
-Must Not:
-- Persist datasource password, `connection_params`, `original_json`, SSH private key, token or other secret in a task.
-- Create a second datasource connection model inside Data Sync.
-- Start YakFlow as a side effect of create/update/query methods in Phase 1.
-
-## Task Publication Lifecycle
-
-PR2 implements the backend publication contract. PR3 owns frontend status presentation and action adoption.
-
-Product wording is “上线 / 下线”, while persisted status values are deliberately `PUBLISHED / UNPUBLISHED` so they cannot be confused with `DataSyncType.OFFLINE`.
-
-Target invariants:
-
-- New Tasks start `UNPUBLISHED` at `definitionVersion = 1`.
-- Only `UNPUBLISHED` Tasks may update executable definition.
-- `syncType` is immutable after create.
-- Publish and unpublish do not change `definitionVersion`.
-- Only `PUBLISHED` Tasks may create a new Instance.
-- Run/start never publishes implicitly.
-- Unpublish is rejected while a `PENDING` or `RUNNING` Instance exists; it never silently cancels execution.
-- Delete requires `UNPUBLISHED` and no active Instance.
-- Instance terminal transitions do not change Task publication status.
-
-Version ownership:
-
-- `name` / `remark` are metadata and do not increment `definitionVersion`.
-- Source/Target identity or scope, write mode and type-specific runtime config are executable definition and increment `definitionVersion` when their canonical persisted values change.
-- No-op updates do not increment the version.
-- V1 does not persist separate `draftVersion` or `publishedVersion`; a published Task cannot edit executable definition, so its current version is its published version.
-- REALTIME state remains scoped by `{taskId}/v{definitionVersion}`; any executable-definition version change gets a fresh CDC state scope, while metadata-only edits and publish/unpublish preserve state identity.
+`io.yak.ops.business.datasync.execution` 根包不放具体实现，按已有职责聚合：
 
-Target commands:
+| 包 | 职责 |
+| --- | --- |
+| executor | OFFLINE / REALTIME Runtime 提交、单次尝试、指标 flush 和终态处理 |
+| planning | 冻结快照 + Catalog / Connection 到执行计划；共用 SchemaResolver |
+| lifecycle | Execution / Attempt 状态迁移、进程内注册、取消和启动 LOST 处理 |
+| realtime | CDC state identity、目录和 MySQL serverId 资源 |
 
-```text
-POST /tasks/{id}/publish
-POST /tasks/{id}/unpublish
-POST /tasks/{id}/run
-POST /instances/{id}/cancel
-```
+executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime 不反向依赖 executor。不要复制 offline/planning 与 realtime/planning 层级、逐类建包或重建 Manager / Coordinator。
 
-Publish must repeat the current Datasource/Catalog/topology/field compatibility validation before changing status. Run keeps its existing execution-time revalidation as a second protection boundary.
+测试按对应职责组织；直接代码入口见 [execution 目录](src/main/java/io/yak/ops/business/datasync/execution)。
 
-Existing Task rows are backfilled as `PUBLISHED` when persistence is introduced so the lifecycle migration does not silently disable currently executable tasks. Newly created Tasks explicitly start `UNPUBLISHED`.
+## Task and Mapping Implementation
 
-The complete contract, including REALTIME CDC-state implications and the referenced-Datasource mutation caveat, is defined in `docs/capabilities/data-sync/task-lifecycle.md`.
+- 通过 WorkspaceContext.requireWorkspaceId 获取产品请求范围；所有 Task / Schedule / Execution / Attempt 访问必须带 workspaceId，不能仅凭资源 ID 查询。
+- Task 保存、发布、运行均按 [Task / Mapping Contract](../../docs/capabilities/data-sync/README.md#datasource-scope-and-mapping) 做服务端校验；前端值只在未绑定范围内参与选择。
+- 复用 DataSyncCatalogColumns 处理同名字段 / 主键集合，复用 DataSyncSchemaResolver 与 JdbcSchemaMapper 投影，再交 JdbcSchemaCompatibility 判断；不在 Service 再写一套类型能力表。
+- 版本比较集中在可执行定义的规范化比较，不每次 PUT 加一；包括 retryPolicy，具体语义见 [Version Contract](../../docs/capabilities/data-sync/task-lifecycle.md#definition-version-contract)。
+- CRUD / 查询、发布与运行的副作用必须分开；不能在保存或发布方法里偷偷启动 YakFlow。
 
-## Task Instance
+## Execution and Metrics Implementation
 
-Task instance is historical execution state, not the current task definition.
+新 Execution 先保存脱敏快照，再提交 Runtime；有事务时在提交后派发，不让执行依赖尚未提交的产品记录。
 
-Persisted instance states:
+OFFLINE / REALTIME 共用 DataSyncAttemptLifecycle。状态变更使用 Repository 的预期状态条件更新，竞争失败不能当作已成功转移；取消和重试不得复活终态根记录。
 
-```text
-PENDING
-RUNNING
-SUCCEEDED
-FAILED
-CANCELED
-LOST
-```
+活动集合、backoff、root trigger 及指标唯一语义见 [Execution Contract](../../docs/capabilities/data-sync/execution-retry-attempt.md)。实现必须按 Runtime / Attempt 区分计数与 Execution 当前尝试镜像；不得对根记录使用跨 Attempt 的“只增不减”修补或累计总量。
 
-Trigger types:
+本地注册表仅持有活动 Runtime 的取消引用；启动将旧进程活动记录标记 LOST，不能把数据库 RUNNING 当作仍有本地执行对象。连续 Source 意外完成不标记 SUCCEEDED。
 
-```text
-MANUAL
-SCHEDULE
-RETRY
-```
+## Scheduler and Recovery Implementation
 
-Phase 1 only defines persistence. Runtime state transitions are introduced with execution work.
+- `scheduler` 下只定义框架无关 Contract；org.quartz.*、JobFactory 和最终启动装配归 Boot。
+- onFire 重读数据库，不能直接信任 Quartz JobData 的授权或状态；Schedule / Runtime 边界见 [Scheduler](../../docs/capabilities/data-sync/scheduler.md)。
+- Runtime 更新安排在提交后，但不能把它描述为与 DB 原子提交。不得用 Quartz Refire 实现产品 Retry。
+- 启动恢复遍历跨 Workspace 任务时，显式绑定所属 Workspace，并在 finally 清理，不能泄漏上下文到下一任务。
+- REALTIME 目录和 serverId 生命周期留在 realtime；offset / schema-history 内容留在连接器。恢复条件与限制见 [Realtime Contract](../../docs/capabilities/data-sync/realtime-desired-state.md)。
 
-Each Instance must persist its own `syncType` snapshot in addition to task ID/name/version. Historical Instance filtering must not depend on the current Task row because Tasks may be deleted.
+## Secret and Persistence Boundary
 
-The instance `definitionSnapshot` is immutable execution input captured when an instance starts. It includes task name, sync type, write mode, datasource IDs/names/types, table locations and the type-specific runtime config.
+运行连接只在可信执行规划阶段解析。Task / Execution / Attempt / Retry Policy、HTTP 响应、日志和异常不得泄漏原始凭证。ExecutionPlan 为内存对象，不能持久化或序列化到响应；快照不得包含连接 JSON、密码、SSH 私钥、Token、offset 结构或运行时租约。
 
-It must never contain:
-- normalized datasource connection JSON.
-- original datasource JSON.
-- database passwords.
-- SSH password/private key/passphrase.
-- API tokens, access keys or equivalent secrets.
+Data Sync Entity / Mapper / Repository 和全部 Schema 归 DAO；不重复定义 DAO 模型、不建立数据库物理外键。历史 Execution 自存 syncType 等身份，不通过 join 当前 Task 推断历史；Task 删除不级联删除历史记录。
 
-## Persistence
-
-Tables:
-
-```text
-yak_ops_data_sync_task
-yak_ops_data_sync_instance
-```
+迁移遵循 [Flyway Rules](../../yak-ops-dao/FLYWAY_RULES.md)。V1 是冻结基线，现有 Schedule / Attempt / Desired State 已由向前迁移定义，不能按旧阶段计划重复建表或回改已冻结 SQL。
 
-No database physical foreign keys.
+## Verification
 
-Repository queries must always scope Task / Instance product access by `workspace_id`.
-Instance page queries may additionally filter by persisted `sync_type` so OFFLINE and REALTIME product surfaces never mix historical execution records.
+普通编译 / 格式 / verify 使用 [Java Rules](../../JAVA_RULES.md)。专项执行与路径过滤由 [Backend Acceptance](../../.github/workflows/backend-acceptance.yml) 定义，不在这里复制命令。
 
-Task deletion does not imply deleting historical instances.
+现有验证职责：业务状态测试检查身份、状态与命令；Quartz 测试检查 Cron / Time Zone / Misfire / next-fire；JDBC / CDC 真实数据库验收检查数据与恢复；[手工 E2E](../../docs/e2e/data-sync/README.md) 检查产品完整链路。
 
-## Realtime Task Definition Contract
-
-The first realtime product contract reuses the existing Task model rather than creating a second realtime task table or service.
-
-Persisted type-specific config:
-
-```text
-OFFLINE
-  -> DataSyncRuntimeConfig
-
-REALTIME
-  -> DataSyncRealtimeConfig
-```
-
-Realtime config owns only product/runtime tuning:
-
-- `checkpointIntervalSeconds`
-- `queueCapacity`
-- `pollBatchSize`
-- `writeBatchSize`
-- `timeoutSeconds`
-
-It must not expose Debezium offsets, schema-history files, state directories or MySQL `serverId`; those belong to realtime execution/runtime ownership.
-
-Realtime contract boundary:
-- create/update/detail/page persist and return `REALTIME` tasks.
-- realtime save-time validation resolves Datasource/Catalog again on the backend.
-- `runTask` creates and submits a REALTIME Instance through `RealtimeSyncExecutor`.
-- realtime state ownership and serverId allocation stay inside `execution.realtime` and never become Task DTO fields.
-- the current frontend exposes REALTIME Task list/editor plus Instance list/detail, active polling and Stop.
-- backend validation remains the source of truth for datasource type, field compatibility and Source/Target primary-key correspondence.
-
-## Offline Task Editor Contract
-
-Phase 2 publishes task CRUD and mapping-preview HTTP contracts for the offline task editor.
-
-Field mapping rules:
-- Mapping is automatic by case-insensitive same-name field matching.
-- The editor is read-only for mappings; no rename, expression or Transform exists.
-- Backend mapping preview is the source of truth.
-- Mapping preview and run-time validation must reuse JDBC logical compatibility after Catalog fields are projected to `YakColumn`; Data Sync must not maintain its own `java.sql.Types` family rules.
-- Backend must canonicalize database / Schema scope from the referenced Datasource before Catalog lookup and before task persistence; frontend values are hints only for unbound scope levels.
-- Task create/update must repeat the same backend compatibility validation; frontend state cannot bypass it.
-- String / binary target capacity must not be smaller when both sides expose size metadata.
-- DECIMAL target precision / scale must not be smaller when metadata is available.
-- Numeric widening is limited to integer → integer/decimal and decimal → decimal.
-- String ↔ numeric and other implicit Transform are rejected.
-
-## Offline Execution Lifecycle
-
-Phase 3 enables manual execution of saved OFFLINE tasks.
-
-Lifecycle:
-
-```text
-run task
-   ↓
-PENDING
-   ↓
-RUNNING
-   ├── SUCCEEDED
-   ├── FAILED
-   └── CANCELED
-```
-
-Must:
-- Persist a sanitized definition snapshot before execution starts, including the Task's `writeMode`.
-- Resolve runtime datasource credentials by datasource ID only after the instance exists.
-- Keep at most one PENDING / RUNNING instance per task in the current single-node product.
-- Register each active LocalExecution in the in-process execution registry before transitioning the instance to RUNNING.
-- Allow PENDING and RUNNING instances to be canceled.
-- Mark all leftover PENDING / RUNNING instances LOST at application startup because Local Execution Engine is not process-recoverable.
-- Revalidate current Catalog field compatibility when a task is started.
-- Build runtime Catalog schema, datasource connections and JDBC Source / Sink through `OfflineSyncExecutionPlanner`.
-- Map OFFLINE APPEND to `JdbcSaveMode.APPEND + JdbcWriteMode.INSERT`.
-- Map OFFLINE OVERWRITE to `JdbcSaveMode.OVERWRITE + JdbcWriteMode.INSERT`; target TRUNCATE happens before Source rows are written.
-- Map OFFLINE UPSERT to `JdbcSaveMode.APPEND + JdbcWriteMode.UPSERT`.
-- Require a target primary key for UPSERT and require the Source mapping to contain every target primary-key field, including all parts of a composite key.
-- Revalidate UPSERT primary-key requirements at both save time and run time because Catalog metadata may change.
-- Keep `OfflineSyncExecutionPlan` in memory only; it may hold runtime connection objects indirectly and must never be persisted, serialized into an Instance or logged.
-- Keep `OfflineSyncExecutor` focused on execution lifecycle, metrics, cancellation and terminal-state persistence.
-- Keep historical instances after task deletion; active instances block task deletion.
-
-Must Not:
-- Persist runtime DataSourceConnection or credentials into definitionSnapshot.
-- Expose DataSourceService.resolveRuntimeConnection through Boot.
-- Claim distributed execution or restart recovery.
-- Add scheduler / retry policy in Phase 3.
-
-## Realtime Execution Lifecycle
-
-The current REALTIME V1 supports manual execution of saved REALTIME tasks.
-
-Lifecycle:
-
-```text
-run REALTIME task
-      ↓
-PENDING
-      ↓
-RealtimeSyncExecutionPlanner
-      ↓
-MySqlCdcSource(snapshot.mode=initial + binlog)
-      ↓
-LocalExecutionEngine
-      ↓
-JdbcSink(CHANGELOG)
-      ↓
-RUNNING
-   ├── CANCELED
-   └── FAILED
-```
-
-Must:
-- Revalidate current realtime Source/Target topology, Source primary key, exact Source/Target primary-key correspondence and field compatibility before creating execution input.
-- Persist `syncType`, the fixed APPEND `writeMode` and the type-specific config in the sanitized definition snapshot.
-- Resolve source/target runtime credentials only inside `RealtimeSyncExecutionPlanner` after the Instance exists.
-- Reuse `DataSyncSchemaResolver` so source event value order and target physical column names stay aligned across MySQL/PostgreSQL/Oracle.
-- Use `JdbcWriteMode.CHANGELOG` for INSERT/UPDATE/DELETE application.
-- Start the Local Execution Engine with the task's `checkpointIntervalSeconds`.
-- Reuse the process-local execution registry so the existing cancel API works for both OFFLINE and REALTIME.
-- Persist Runtime counters while RUNNING.
-
-Realtime state ownership:
-- State root is `${yak.ops.home}/data/data-sync/realtime`; when `yak.ops.home` is absent the current working directory is the base.
-- State scope is `{workspaceId}/{taskId}/v{definitionVersion}`.
-- `offsets.dat` and `schema-history.dat` are connector-owned files inside that product-owned scope.
-- Debezium engine name must be stable for the same Workspace / Task / definitionVersion.
-- A later Instance for the same definitionVersion reuses the same state scope.
-- A changed definitionVersion uses a fresh state scope and restarts from snapshot.
-- Application restart marks old active Instances LOST, but does not delete REALTIME state.
-- A later manual run may continue from the latest completed Debezium offset through a new Instance.
-- `MySqlCdcServerIdAllocator` must keep active serverIds unique inside the current single-node process, prefer a stable ID derived from the state key, resolve collisions by probing, and release the lease when execution ends.
-- `DataSyncExecutionRecovery` owns startup LOST recovery for both OFFLINE and REALTIME.
-- `DataSyncExecutionRegistry` owns process-local cancel references for both OFFLINE and REALTIME.
-
-Must Not:
-- Claim automatic Instance resurrection after process restart.
-- Claim exactly-once.
-- Persist state directory paths, Debezium offsets, schema history or serverId leases in Task/Instance definition JSON.
-- Delete REALTIME state merely because an Instance becomes CANCELED / FAILED / LOST.
-- Allow a continuous REALTIME execution to finish as SUCCEEDED; unexpected Source completion is FAILED.
-
-## Metrics + Acceptance
-
-Phase 4 closes the first offline-sync milestone with observable row metrics and real cross-database acceptance.
-
-Metrics:
-- `readRows` and `writeRows` are copied from YakFlow `ExecutionMetrics` into the Instance while RUNNING.
-- Active metrics are flushed approximately every 500ms and once again after Runtime termination.
-- Metrics must never decrease within one Instance.
-- Final successful Instance metrics must match the Runtime final snapshot.
-
-Acceptance:
-- CI must execute backend tests; `verify -DskipTests` is forbidden.
-- Offline JDBC acceptance must prove MySQL -> MySQL, MySQL -> PostgreSQL and MySQL -> Oracle.
-- Realtime CDC acceptance must prove MySQL CDC -> MySQL/PostgreSQL/Oracle using initial snapshot, INSERT/UPDATE/DELETE, checkpoint, persisted offset, cancel, same-state restart and offset continuation.
-- Automation acceptance must independently prove Schedule Fire / disable / SKIP_IF_RUNNING, Retry maxAttempts + backoff, Cancel no-retry, and REALTIME AUTO_RECOVERY identity semantics.
-- Quartz Cron / Time Zone / Misfire / next-fire behavior must be part of the Automation Acceptance evidence; business listener tests alone are not enough to claim scheduler acceptance.
-- The post-restart CDC acceptance must prove one new Source INSERT produces exactly one read/write event, so continuation cannot silently fall back to a fresh snapshot.
-- v1.1 Manual E2E must execute the required Automation scenarios defined under `docs/e2e/data-sync/automation`.
-- H2 compatibility tests remain useful unit/integration coverage but are not the final cross-database acceptance proof.
-
-## Current Phase
-
-The offline milestone remains Phase 4 and fully executable. Realtime Phase 6 closes the first REALTIME V1 milestone with cross-database CDC acceptance.
-
-Phase 4 implements:
-- task create/update/delete/detail/page.
-- instance detail/page query.
-- persistence contracts.
-- Datasource Catalog reads through DataSourceService.
-- task HTTP CRUD / page endpoints.
-- backend automatic field mapping preview and save-time validation.
-- offline task editor frontend.
-- manual instance creation and run.
-- PENDING / RUNNING / SUCCEEDED / FAILED / CANCELED lifecycle.
-- in-process LocalExecution registry and cancel.
-- startup LOST recovery.
-- instance list / detail product contract.
-- Runtime read/write row metrics persisted into Instance.
-- real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance in CI.
-- save-and-run product flow.
-
-Realtime Phase 6 implements:
-- `REALTIME` task type persistence and query.
-- dedicated realtime runtime config DTO / VO.
-- MySQL Source + MySQL/PostgreSQL/Oracle Target contract validation.
-- Source primary-key validation plus exact case-insensitive Source/Target primary-key set correspondence.
-- sanitized realtime definition snapshots.
-- `RealtimeSyncExecutionPlanner` with MySQL CDC Source + JDBC CHANGELOG Sink.
-- `RealtimeSyncExecutor` with RUNNING / FAILED / CANCELED lifecycle and Runtime counters.
-- shared `DataSyncExecutionRegistry` cancel semantics.
-- centralized `DataSyncExecutionRecovery` startup LOST handling.
-- task-configured automatic checkpoint interval inside the Local Execution Engine.
-- durable task/version-scoped CDC state directories.
-- stable Debezium engine identity across Instances.
-- controlled MySQL CDC serverId allocation/release.
-- manual rerun continuation from persisted Debezium offsets after stop/failure/process restart.
-- persisted Instance `syncType` for historical OFFLINE / REALTIME filtering.
-- REALTIME Task editor plus Instance list/detail frontend, active polling, Stop action and persisted event counters.
-- real MySQL CDC -> MySQL/PostgreSQL/Oracle acceptance in CI, including restart continuation proof.
-
-Phase 4 / Realtime Phase 6 do not implement:
-- automatic resurrection/restart of a LOST Instance.
-- distributed state ownership or fencing.
-- exactly-once transaction coordination.
-- persisted last-checkpoint timestamp or checkpoint-history UI.
-- scheduler or retry policy.
-- distributed workers.
-- Transform, DDL propagation, schema evolution or multi-table REALTIME tasks.
+不得以跳过测试、仅 H2、业务替身或单次连接成功替代对应验收证据。验证结果只对实际提交与场景有效，记录在 PR / CI 或版本 Evidence，不追加阶段完成清单。

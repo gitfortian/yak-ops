@@ -1,453 +1,89 @@
 # Data Sync Task Publication Lifecycle
 
-Status: Active — PR2 implements persistence and backend lifecycle enforcement; PR3 implements OFFLINE / REALTIME frontend lifecycle adoption.
+Status: Active
+
+Scope: OFFLINE / REALTIME Task 的发布、命令前置条件与定义版本。
 
 ## Goal
 
-Separate **Task publication state** from **Instance execution state**.
-
-A Task answers whether its current definition is allowed to create new execution Instances. From v1.1 PR3, an Instance is the stable Execution root; individual Retry attempts are child Attempts under that Execution.
-
-This contract applies to both `OFFLINE` and `REALTIME` sync types.
-
-REALTIME 从 v1.1 PR5 起同时拥有独立的 Desired State：
-
-```text
-Task Publication State
-  PUBLISHED / UNPUBLISHED
-
-Realtime Desired State
-  RUNNING / STOPPED
-```
-
-Publication 只回答“是否允许创建新 Execution”；Desired State 只回答“用户是否希望 REALTIME 持续运行”。完整规则见 [Realtime Desired State + Auto Recovery](./realtime-desired-state.md)。
-
-Retry / Attempt semantics are defined separately in [Execution Retry / Attempt Contract](./execution-retry-attempt.md).
+发布状态只回答“当前任务定义是否允许创建新 Execution”。执行状态见 [Execution Retry / Attempt](execution-retry-attempt.md)，实时运行意图见 [Realtime Desired State](realtime-desired-state.md)；三者不互相替代。
 
 ## Terminology
 
-Do not reuse `ONLINE / OFFLINE` as persisted enum values because `DataSyncType.OFFLINE` already means batch synchronization.
-
-Product wording and persisted values are intentionally separated:
-
-| Product wording | Persisted task publication status |
-| --- | --- |
-| 已下线 / 下线 | `UNPUBLISHED` |
-| 已上线 / 上线 | `PUBLISHED` |
-
-Target enum:
-
-```text
-DataSyncTaskStatus
-├── UNPUBLISHED = 0
-└── PUBLISHED   = 1
-```
-
-The Task field is `status`.
-
-This status is not an Instance status and must never reuse `PENDING / RUNNING / SUCCEEDED / FAILED / CANCELED / LOST`.
+产品使用“上线 / 下线”，持久化使用 `PUBLISHED / UNPUBLISHED`，避免与同步类型 OFFLINE 混淆。状态枚举的存储值保持 `UNPUBLISHED=0`、`PUBLISHED=1`，Task 字段名仍为 `status`。
 
 ## Core State Machine
 
 ```text
-CREATE
-  ↓
-UNPUBLISHED v1
-  ├── Update executable definition → UNPUBLISHED v2
-  ├── Update metadata only          → UNPUBLISHED v1
-  └── Publish
-         ↓
-     PUBLISHED vN
-         ├── Run / Start → Instance(taskVersion = N)
-         └── Unpublish
-                ↓
-          UNPUBLISHED vN
+Create → UNPUBLISHED v1
+           ├─ 有效可执行定义变更 → UNPUBLISHED vN+1
+           ├─ 元数据变更 / 无变化 → UNPUBLISHED vN
+           └─ Publish → PUBLISHED vN
+                          ├─ Run / Start → 新 Execution
+                          └─ Unpublish → UNPUBLISHED vN
 ```
 
-Publication does not create an Instance.
-
-Execution does not change publication status.
-
-Instance completion or cancellation does not automatically unpublish a Task.
+发布不创建 Execution，也不隐式启用 Schedule；运行不隐式发布。Execution 成功、失败、取消均不改变 Task 发布状态。
 
 ## Invariants
 
-1. New Tasks are created as `UNPUBLISHED`.
-2. Only `UNPUBLISHED` Tasks may update their executable definition.
-3. `publish` and `unpublish` do not increment `definitionVersion`.
-4. Only `PUBLISHED` Tasks may create a new Instance.
-5. `run/start` never publishes a Task implicitly.
-6. A Task with a `PENDING` or `RUNNING` Instance cannot be unpublished.
-7. A `PUBLISHED` Task cannot be deleted.
-8. Task deletion still requires no active Instance.
-9. `syncType` is immutable after Task creation. OFFLINE ↔ REALTIME conversion requires a new Task.
-10. Instance/Execution `taskVersion` and `definitionSnapshot` remain immutable historical execution input; all child Attempts must reuse them.
+新任务从 UNPUBLISHED、definitionVersion=1 开始。`syncType` 不可修改；类型转换必须创建新任务。
 
-These invariants are backend rules. Frontend button state is presentation only and cannot replace backend enforcement.
+当前 Update API 整体要求 UNPUBLISHED，包括只改 name / remark；不能把“元数据不增加版本”误解为“已发布时也可编辑”。Task 保存校验完整定义，不是部分草稿接口。
+
+Run / Start 要求已发布且没有活动 Execution。活动集合由 [Execution Status](execution-retry-attempt.md#execution-status) 定义，包含 RETRY_WAITING。活动 Execution 阻止下线和删除；下线不是 Stop。前端状态展示不替代后端检查。
 
 ## Command Semantics
 
-### Create
+以下路径相对于 `/api/v1/data-sync`，实际 HTTP 声明由 Boot Controller 维护。
 
-```text
-POST /tasks
-  ↓
-validate complete Task definition
-  ↓
-persist status = UNPUBLISHED
-persist definitionVersion = 1
-```
+| 命令 | 前置条件及结果 |
+| --- | --- |
+| POST /tasks | 校验完整定义，创建 UNPUBLISHED v1；不发布、不运行 |
+| PUT /tasks/{id} | 仅 UNPUBLISHED；重新校验资源与映射；按有效变化决定版本 |
+| POST /tasks/{id}/publish | 仅 UNPUBLISHED；重新校验当前 Datasource、Catalog、类型及主键要求；版本不变 |
+| POST /tasks/{id}/unpublish | 仅 PUBLISHED 且无活动 Execution；关闭 Schedule、清除实时运行意图；版本不变 |
+| POST /tasks/{id}/run | 仅 PUBLISHED 且无活动 Execution；校验后创建冻结输入的新 Execution |
+| DELETE /tasks/{id} | 仅 UNPUBLISHED 且无活动 Execution；清理 Schedule，保留运行历史 |
 
-Create does not publish and does not run.
-
-The current complete-definition validation remains: a Task is not a partial draft model.
-
-### Update
-
-```text
-PUT /tasks/{id}
-```
-
-Allowed only when `status = UNPUBLISHED`.
-
-Update still performs the current backend Datasource / Catalog / mapping validation.
-
-Version behavior depends on what changed:
-
-- metadata-only change → version unchanged.
-- executable-definition change → `definitionVersion + 1`.
-- no effective change → version unchanged.
-
-### Publish
-
-Target command:
-
-```text
-POST /tasks/{id}/publish
-```
-
-Allowed only when `status = UNPUBLISHED`.
-
-Publish must revalidate the current external reality before changing status:
-
-- referenced Datasources still exist.
-- Datasource-bound database / schema scope resolves correctly.
-- Source / Target tables still exist and remain field-compatible.
-- OFFLINE UPSERT primary-key requirements still hold.
-- REALTIME Source / Target type rules still hold.
-- REALTIME Source primary key and exact Source / Target PK correspondence still hold.
-
-A successful publish:
-
-```text
-UNPUBLISHED vN
-      ↓
-PUBLISHED vN
-```
-
-It does not increment `definitionVersion`, create an Instance, or start YakFlow.
-
-### Unpublish
-
-Target command:
-
-```text
-POST /tasks/{id}/unpublish
-```
-
-Allowed only when:
-
-- `status = PUBLISHED`.
-- there is no `PENDING` / `RUNNING` Instance for the Task.
-
-A successful unpublish:
-
-```text
-PUBLISHED vN
-    ↓
-UNPUBLISHED vN
-```
-
-Unpublish is not Stop/Cancel.
-
-V1 deliberately rejects unpublish while an Instance is active instead of silently canceling it. A future explicit “Stop and Unpublish” composite action may be added, but it must remain an explicit product command.
-
-### Run / Start
-
-Existing execution command remains conceptually separate:
-
-```text
-POST /tasks/{id}/run
-```
-
-Run requires:
-
-- `status = PUBLISHED`.
-- no active Instance for the Task under the current single-node contract.
-- the existing run-time validation to pass.
-
-Run creates a new Instance using the current `definitionVersion`.
-
-Run never changes Task publication status.
-
-### Delete
-
-Delete requires:
-
-- `status = UNPUBLISHED`.
-- no active Instance.
-
-Historical Instances remain after Task deletion under the existing contract.
+Stop / Cancel 属于 Execution 契约。成功下线对 Schedule 和 desiredState 的联动分别见 [Scheduler](scheduler.md) 与 [Realtime Desired State](realtime-desired-state.md)。
 
 ## Definition Version Contract
 
-`definitionVersion` describes **executable Task definition**, not publication actions and not arbitrary row updates.
+比较规范化后的可执行定义，而不是每次 PUT 都加一。后端 `executableDefinitionChanged` 比较：Source / Target 数据源 ID 与表范围、writeMode、对应 runtimeConfig，以及规范化后的 **retryPolicy**。
 
-### Does not increment version
+name / remark、无实质变化的更新、发布 / 下线、运行 / 取消不增加版本。Schedule 单独持久化，修改 Cron / Time Zone 不调用 Task 版本比较。
 
-Metadata:
-
-- `name`
-- `remark`
-
-Lifecycle commands:
-
-- publish.
-- unpublish.
-- run/start.
-- instance cancel/stop.
-
-### Increments version
-
-Executable definition:
-
-- Source Datasource ID.
-- Source database / schema / table scope.
-- Target Datasource ID.
-- Target database / schema / table scope.
-- OFFLINE `writeMode`.
-- OFFLINE runtime config.
-- REALTIME runtime config.
-
-`syncType` does not participate in version comparison because it is immutable after create.
-
-The backend must compare the canonical persisted executable definition, not blindly increment on every `PUT`.
+产品版本与 Task definitionVersion 无关。Execution 创建后使用自己的 taskVersion 与 definitionSnapshot，Retry 不重新读取最新 Task 定义。
 
 ## Why V1 Does Not Need publishedVersion / draftVersion
 
-V1 keeps one current Task row and one `definitionVersion`.
-
-The invariant:
-
-```text
-PUBLISHED Task
-  → current definitionVersion is the published definitionVersion
-  → executable definition cannot be edited while published
-```
-
-means separate fields such as these are intentionally deferred:
-
-- `draftVersion`
-- `publishedVersion`
-- `currentVersion`
-- Task version history table
-
-They become necessary only when the product supports editing a new draft while an older version remains published, rollback, approval workflows, or historical definition browsing.
-
-## OFFLINE Semantics
-
-```text
-UNPUBLISHED
-  → cannot Run
-
-PUBLISHED
-  → may Run
-  → Instance reaches SUCCEEDED / FAILED / CANCELED
-  → Task remains PUBLISHED
-```
-
-A successful bounded sync does not automatically unpublish the Task.
-
-This keeps the model compatible with future manual rerun, Scheduler and Retry triggers.
-
-## REALTIME Semantics
-
-Task publication and continuous execution remain separate:
-
-```text
-PUBLISHED + no active Instance
-  → may Start
-
-PUBLISHED + RUNNING Instance
-  → CDC is active
-
-Stop Instance
-  → Instance becomes CANCELED
-  → Task remains PUBLISHED
-  → may Start again
-```
-
-Before unpublishing a running REALTIME Task, the user must stop the active Instance first.
+当前只有一个 Task 行和一个 definitionVersion。已发布时不能编辑，因此无需另建 publishedVersion、draftVersion 或版本历史表。不支持同时运行旧发布版并编辑新草稿，也不提供定义回滚或审批流程。
 
 ## REALTIME Version and CDC State
 
-Current REALTIME CDC state identity remains:
+CDC state 使用 `{workspaceId}/{taskId}/v{definitionVersion}`。同版本的新 Execution 复用该范围；任何有效可执行定义变更，包括 runtime tuning 或 retryPolicy，都会形成新版本和新的 CDC state 范围。仅改元数据或发布状态不改变该 identity。
 
-```text
-{workspaceId}/{taskId}/v{definitionVersion}
-```
-
-Therefore:
-
-```text
-same definitionVersion
-  → reuse the same connector state scope
-  → later Instance may continue from persisted offset
-
-new definitionVersion
-  → new connector state scope
-  → fresh initial snapshot
-```
-
-The V1 publication contract deliberately keeps this conservative rule.
-
-Consequences:
-
-- metadata-only edits do not increment `definitionVersion`, so they do not force a fresh snapshot.
-- any REALTIME executable-definition change increments `definitionVersion`, including runtime tuning, so the next start uses a fresh state scope.
-- publish / unpublish alone do not change version and therefore do not discard CDC continuation state.
-
-A future `stateVersion` may decouple executable-definition revisions from CDC state compatibility, but it is not part of this contract.
-
-### Referenced Datasource mutation caution
-
-Task versioning currently versions Task fields, not the mutable connection definition behind a referenced Datasource ID.
-
-Changing a REALTIME Source Datasource connection in place while keeping the same Task ID/version can make old CDC state incompatible with the new physical source.
-
-This contract does **not** claim that such state reuse is safe. Before production-grade Datasource mutation support, Data Sync needs either:
-
-- a stable Datasource revision/fingerprint included in realtime state identity, or
-- enforcement that blocks incompatible Datasource connection mutation while referenced by published realtime Tasks.
-
-This is intentionally deferred from PR1/PR2 rather than hidden by the publication model.
-
-## Existing Task Migration
-
-When the status column is introduced, existing Task rows should be backfilled as `PUBLISHED`.
-
-Reason:
-
-- existing Tasks are currently executable without a publication gate.
-- backfilling them as `UNPUBLISHED` would silently disable current operational behavior.
-- active REALTIME Instances can continue consistently because their parent Task remains published.
-
-After migration:
-
-- newly created Tasks explicitly start as `UNPUBLISHED`.
-- existing Tasks may be intentionally unpublished by the user after active Instances are stopped.
+完整续传条件和“引用的数据源原地改连接不会自动增加任务版本”的风险见 [CDC Continuation](realtime-desired-state.md#cdc-continuation)。不承诺跨物理 Source 变更仍能安全复用旧状态。
 
 ## Frontend Contract
 
-Task definition and Task execution are separate product responsibilities.
+数据集成只编排定义与发布，运维中心编排运行和状态观察。Save 与 Save & Publish 是已有 API 的显式组合，不新增自动运行路径；配置 Schedule 时顺序见 [Scheduler UI Ownership](scheduler.md#ui-ownership)。
 
-### Data Integration — Definition Surface
-
-The OFFLINE / REALTIME definition pages own:
-
-```text
-UNPUBLISHED
-  → Publish
-  → Edit
-  → Instances (cross-navigation to Operations Center)
-  → Delete
-
-PUBLISHED + idle
-  → Unpublish
-  → Instances (cross-navigation to Operations Center)
-
-PUBLISHED + active Instance
-  → Instances (cross-navigation to Operations Center)
-  → Unpublish unavailable until the active Instance ends
-```
-
-Definition pages do not expose Run / Start / Stop and do not render an Instance-list Tab.
-
-The editor uses two explicit save paths:
-
-```text
-Save
-  → create/update UNPUBLISHED Task
-  → remain in editor
-
-Save & Publish
-  → create/update UNPUBLISHED Task
-  → call publish command
-  → return to Task list
-```
-
-### Operations Center — Execution Surface
-
-Operations Center owns execution and runtime visibility:
-
-```text
-PUBLISHED + idle
-  → Run / Start
-  → open the created Instance detail
-
-PUBLISHED + active Instance
-  → Stop
-  → Instances
-
-Any Task with historical Instances
-  → Instance history may be opened with a Task filter
-```
-
-Operations Center lists only PUBLISHED Tasks in its executable Task view. Historical Instance lookup is independent of the current Task publication state.
-
-The definition-page `实例` action routes into Operations Center. Legacy Data Integration Instance detail URLs redirect to the equivalent Operations Center detail route.
-
-Create/update APIs never auto-publish, run never auto-publishes, and publication never auto-runs. Save & Publish explicitly composes the normal save and publish commands rather than creating a hidden lifecycle path.
+历史实例的筛选依据持久化快照，不因 Task 下线或删除而消失。具体页面布局、按钮和路由由前端 owner 维护，本契约不复制其视觉规则。
 
 ## Persistence
 
-PR2 adds one first-class Task field:
+Task status 已属于现有 [V1 baseline](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V1__baseline.sql)，不是待实施的新增列。数据库默认值 1 保留兼容语义，应用创建仍显式写入 UNPUBLISHED=0。后续变更遵循 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不能执行旧开发阶段的“新增状态列 / 回填所有任务”计划。
 
-```text
-status
-  0 = UNPUBLISHED
-  1 = PUBLISHED
-```
-
-No new Task-version history table is required for V1.
-
-No physical foreign keys are introduced.
+保留现有 Task ID、状态存储值及运行历史，不为整理文档改变 Schema 或引入物理外键。
 
 ## Non-goals
 
-This contract does not add:
+本契约不拥有 Scheduler 的计时、Retry 的 Attempt 或实时自动恢复算法；这些能力有独立现行契约，并非未实现。仍不提供自动 Stop-and-Unpublish、自动重新发布、CDC stateVersion、Datasource revision / fingerprint 或分布式发布协调。
 
-- Scheduler execution.
-- Retry policy.
-- approval workflow.
-- draft-vs-published simultaneous versions.
-- version rollback.
-- Task definition history table.
-- automatic Stop on unpublish.
-- automatic republish after edit.
-- CDC `stateVersion`.
-- Datasource revision/fingerprint.
-- distributed publication coordination.
+## Code and Verification
 
-## Delivery Sequence
+实现入口：[DataSyncServiceImpl](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/impl/DataSyncServiceImpl.java)。验证入口：[DataSyncTaskLifecycleContractTest](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncTaskLifecycleContractTest.java) 及 [Data Sync 验证导航](README.md#code-and-verification)。
 
-```text
-PR1 — Data Sync Task Online / Offline Contract
-  → documentation only
-
-PR2 — Data Sync Task Lifecycle Backend
-  → implemented: persistence + status enum + validation + publish/unpublish commands + version semantics
-
-PR3 — Offline / Realtime Task Lifecycle UI
-  → implemented: status presentation + filtering + active-instance action matrix + editor flow
-```
+重点检查命令前置条件、元数据与可执行定义的版本差异、历史快照保持以及 RETRY_WAITING 的活动状态语义。测试与手工验收的实际结果不写入当前规则正文。
