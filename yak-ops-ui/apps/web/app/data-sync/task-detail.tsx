@@ -375,9 +375,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
               </TabsList>
 
               {selectedExecution ? (
-                <div className="mt-2 text-xs text-[#98a2b3]">
-                  Execution {selectedExecution.id}
-                </div>
+                <div className="mt-2 text-xs text-[#98a2b3]">Execution {selectedExecution.id}</div>
               ) : null}
 
               <TabsPanel value="status" className="pt-3">
@@ -399,7 +397,10 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
               </TabsPanel>
 
               <TabsPanel value="log" className="pt-3">
-                <DataSyncExecutionLogPanel record={selectedExecution} active={activeTab === "log"} />
+                <DataSyncExecutionLogPanel
+                  record={selectedExecution}
+                  active={activeTab === "log"}
+                />
               </TabsPanel>
             </Tabs>
           </section>
