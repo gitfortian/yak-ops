@@ -1,5 +1,6 @@
 package io.yak.ops.business.datasync.execution.lifecycle;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -128,6 +129,48 @@ class DataSyncAttemptLifecycleTest {
         assertEquals(null, attemptTarget.get());
         assertEquals(0, completed.get());
         assertTrue(events.isEmpty());
+    }
+
+    @Test
+    void shouldMaskSensitiveExecutionEventMessage() throws Exception {
+        DataSyncAttemptLifecycle lifecycle = new DataSyncAttemptLifecycle();
+        AtomicReference<DataSyncExecutionEventEntity> captured = new AtomicReference<>();
+        inject(
+                lifecycle,
+                "eventRepository",
+                (DataSyncExecutionEventRepository) Proxy.newProxyInstance(
+                        DataSyncExecutionEventRepository.class.getClassLoader(),
+                        new Class<?>[] {DataSyncExecutionEventRepository.class},
+                        (proxy, method, args) -> {
+                            if ("add".equals(method.getName())) {
+                                DataSyncExecutionEventEntity event = (DataSyncExecutionEventEntity) args[0];
+                                captured.set(event);
+                                return event;
+                            }
+                            throw new UnsupportedOperationException(method.getName());
+                        }));
+
+        lifecycle.recordExecutionLost("workspace-1", "execution-1", "password=secret");
+
+        assertEquals("password=******", captured.get().getMessage());
+        assertEquals(DataSyncExecutionEventType.EXECUTION_LOST, captured.get().getEventType());
+    }
+
+    @Test
+    void shouldNotFailRuntimeWhenExecutionEventPersistenceFails() throws Exception {
+        DataSyncAttemptLifecycle lifecycle = new DataSyncAttemptLifecycle();
+        inject(
+                lifecycle,
+                "eventRepository",
+                (DataSyncExecutionEventRepository) Proxy.newProxyInstance(
+                        DataSyncExecutionEventRepository.class.getClassLoader(),
+                        new Class<?>[] {DataSyncExecutionEventRepository.class},
+                        (proxy, method, args) -> {
+                            if ("add".equals(method.getName())) throw new IllegalStateException("event-store-down");
+                            throw new UnsupportedOperationException(method.getName());
+                        }));
+
+        assertDoesNotThrow(() -> lifecycle.recordSourceReady("workspace-1", "execution-1", "attempt-1"));
     }
 
     private DataSyncInstanceEntity execution(DataSyncInstanceStatus status) {
