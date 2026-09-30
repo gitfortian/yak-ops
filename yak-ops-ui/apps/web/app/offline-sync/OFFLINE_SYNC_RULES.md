@@ -29,7 +29,8 @@ Must:
 - Use existing Yak UI primitives.
 - Keep the OFFLINE editor as a full-height local-scroll workspace: PageHeader and the desktop section navigator stay outside the scrolling region, while only the definition content column owns vertical scrolling. Do not rely on sticky positioning for these fixed editor controls and do not change the global AppLayout scroll contract for this page.
 - Keep the Offline Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.
-- Task Detail stays inside Data Integration and shows Basic Info plus Task-filtered Execution history and the selected Execution detail. It is read-only for runtime commands.
+- Task Detail stays inside Data Integration and shows Basic Info plus Task-filtered Execution history. The selected Execution uses `执行情况 / 执行日志` Tabs: execution status reuses the shared Execution / Attempt presentation; execution log reads persisted product events only. It is read-only for runtime commands.
+- `执行日志` only polls every 2 seconds while that Tab is visible and the selected Execution is PENDING / RUNNING / RETRY_WAITING; terminal or hidden logs do not keep polling. Historical Executions may legitimately have an empty event timeline and frontend must not synthesize missing history.
 - Operations Center owns manual Run, Stop, Schedule Runtime controls and cross-Task runtime polling. A manual Run may continue to open the Operations Center Execution detail.
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run is an Operations Center action for PUBLISHED Tasks.

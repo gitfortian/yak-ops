@@ -249,3 +249,30 @@ export interface DataSyncAttemptRecord {
   createTime?: string;
   updateTime?: string;
 }
+
+export type DataSyncExecutionEventLevel = "INFO" | "WARN" | "ERROR" | string;
+
+export type DataSyncExecutionEventType =
+  | "EXECUTION_STARTED"
+  | "ATTEMPT_STARTED"
+  | "SOURCE_READY"
+  | "TARGET_READY"
+  | "ATTEMPT_SUCCEEDED"
+  | "ATTEMPT_FAILED"
+  | "RETRY_WAITING"
+  | "EXECUTION_SUCCEEDED"
+  | "EXECUTION_FAILED"
+  | "EXECUTION_CANCELED"
+  | "EXECUTION_LOST"
+  | "AUTO_RECOVERY_STARTED"
+  | string;
+
+export interface DataSyncExecutionEventRecord {
+  id: string;
+  executionId: string;
+  attemptId?: string;
+  level: DataSyncExecutionEventLevel;
+  eventType: DataSyncExecutionEventType;
+  message: string;
+  createTime?: string;
+}

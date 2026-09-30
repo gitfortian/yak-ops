@@ -32,7 +32,8 @@ Must:
 - Start / Stop never execute from the Realtime Sync list, editor or Task Detail.
 - Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 - Keep the Realtime Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.
-- Task Detail shows Basic Info plus Task-filtered Execution history and selected Execution / Attempt detail, and polls only while visible active Execution data exists.
+- Task Detail shows Basic Info plus Task-filtered Execution history. The selected Execution uses `执行情况 / 执行日志` Tabs: status reuses the shared Execution / Attempt presentation; logs display persisted product events, not Server Log lines.
+- Selected Execution status continues polling only while active data exists. `执行日志` polls every 2 seconds only while the log Tab is visible and the selected Execution is PENDING / RUNNING / RETRY_WAITING; terminal or hidden logs do not keep polling. Historical Executions may legitimately have an empty event timeline and frontend must not synthesize missing history.
 - Operations Center queries Instance data with `syncType = REALTIME`; never filter mixed OFFLINE/REALTIME results only in frontend memory.
 - Operations Center polls Instance list/detail every 2 seconds only while PENDING/RUNNING data is visible.
 - PENDING/RUNNING Instances expose Stop in Operations Center.
