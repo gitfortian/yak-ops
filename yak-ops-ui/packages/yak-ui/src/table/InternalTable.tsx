@@ -330,7 +330,7 @@ export function InternalTable<RecordType extends object>({
             ref={loadingRef}
             className="absolute left-0 z-20 flex items-center justify-center overflow-hidden bg-[var(--yak-components-table-loading-bg)]"
           >
-            <Spinner size="large" label="Loading table" />
+            <Spinner size="xlarge" label="Loading table" />
           </div>
         ) : null}
       </div>
