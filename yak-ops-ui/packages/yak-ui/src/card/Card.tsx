@@ -16,7 +16,7 @@ export function Card({ className, ...props }: CardProps) {
   );
 }
 
-export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
+export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   description?: ReactNode;
   extra?: ReactNode;
