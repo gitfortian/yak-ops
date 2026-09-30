@@ -32,15 +32,18 @@ import {
 } from "@/service/datasource";
 import {
   createDataSyncTask,
+  getDataSyncSchedule,
   getDataSyncTask,
   previewDataSyncMapping,
   publishDataSyncTask,
+  saveDataSyncSchedule,
   updateDataSyncTask,
   type DataSyncFieldMapping,
   type DataSyncMappingPreview,
   type DataSyncRealtimeConfig,
   type DataSyncRetryPolicy,
   type DataSyncRuntimeConfig,
+  type DataSyncScheduleSavePayload,
   type DataSyncTaskSavePayload,
   type DataSyncTaskStatus,
   type DataSyncType,
@@ -62,6 +65,11 @@ interface EditorForm {
   runtimeConfig: DataSyncRuntimeConfig;
   realtimeConfig: DataSyncRealtimeConfig;
   retryPolicy: DataSyncRetryPolicy;
+}
+
+interface ScheduleForm {
+  cronExpression: string;
+  timeZone: string;
 }
 
 interface CatalogOptions {
@@ -90,6 +98,11 @@ const EMPTY_REALTIME: DataSyncRealtimeConfig = {
 const EMPTY_RETRY_POLICY: DataSyncRetryPolicy = {
   maxAttempts: 1,
   backoffSeconds: 60,
+};
+
+const EMPTY_SCHEDULE: ScheduleForm = {
+  cronExpression: "",
+  timeZone: "Asia/Shanghai",
 };
 
 const EMPTY_FORM: EditorForm = {
@@ -484,6 +497,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [saving, setSaving] = useState(false);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mapping, setMapping] = useState<DataSyncMappingPreview>();
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
+  const [scheduleExists, setScheduleExists] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
 
   const sourceCatalog = useCatalogOptions(
@@ -543,8 +558,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     if (!id) return;
     let active = true;
     setLoading(true);
-    void getDataSyncTask(id)
-      .then((task) => {
+    void Promise.all([
+      getDataSyncTask(id),
+      realtime ? Promise.resolve(undefined) : getDataSyncSchedule(id),
+    ])
+      .then(([task, schedule]) => {
         if (!active) return;
         if (task.syncType !== syncType) {
           toast.error("任务类型与当前页面不匹配");
@@ -571,6 +589,17 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
           retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
         });
+        if (!realtime) {
+          setScheduleExists(Boolean(schedule));
+          setScheduleForm(
+            schedule
+              ? {
+                  cronExpression: schedule.cronExpression,
+                  timeZone: schedule.timeZone,
+                }
+              : { ...EMPTY_SCHEDULE },
+          );
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -578,7 +607,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     return () => {
       active = false;
     };
-  }, [basePath, id, navigate, syncType]);
+  }, [basePath, id, navigate, realtime, syncType]);
 
   const mappingPayload = useMemo(
     () =>
@@ -678,6 +707,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     }));
   };
 
+  const patchSchedule = (key: keyof ScheduleForm, value: string) =>
+    setScheduleForm((current) => ({ ...current, [key]: value }));
+
   const patchRealtime = (key: keyof DataSyncRealtimeConfig, value: string) => {
     const parsed = Number(value);
     setForm((current) => ({
@@ -730,9 +762,21 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     };
   };
 
+  const schedulePayload = (): DataSyncScheduleSavePayload => ({
+    cronExpression: scheduleForm.cronExpression.trim(),
+    timeZone: scheduleForm.timeZone.trim(),
+  });
+
   const published = editing && taskStatus === "PUBLISHED";
+  const scheduleConfigured = Boolean(scheduleForm.cronExpression.trim());
+  const scheduleRequired = scheduleExists || scheduleConfigured;
+  const scheduleValid =
+    realtime ||
+    !scheduleRequired ||
+    (scheduleConfigured && Boolean(scheduleForm.timeZone.trim()));
   const canSave =
     !published &&
+    scheduleValid &&
     form.name.trim() &&
     mapping?.compatible &&
     !mappingLoading &&
@@ -747,6 +791,18 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         editing && id
           ? await updateDataSyncTask(id, payload())
           : await createDataSyncTask(payload());
+
+      if (!realtime && scheduleRequired) {
+        try {
+          await saveDataSyncSchedule(saved.id, schedulePayload());
+          setScheduleExists(true);
+        } catch {
+          toast.warning("任务已保存，但调度配置保存失败");
+          navigate(`${basePath}/${saved.id}`, { replace: true });
+          return;
+        }
+      }
+
       if (publishAfterSave) {
         try {
           await publishDataSyncTask(saved.id);
@@ -1044,6 +1100,53 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             )}
           </section>
 
+          {!realtime ? (
+            <section id="schedule" className="rounded-lg border border-[#e6e8eb] bg-white">
+              <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+                调度配置
+              </h2>
+              <div className="space-y-3 p-4">
+                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
+                  <FieldLabel className="pt-1.5">Cron 表达式</FieldLabel>
+                  <div className="space-y-1">
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      maxLength={128}
+                      value={scheduleForm.cronExpression}
+                      placeholder="例如 0 0 2 * * ?"
+                      onChange={(event) => patchSchedule("cronExpression", event.target.value)}
+                    />
+                    <div className="px-1 text-xs text-[#98a2b3]">
+                      {scheduleExists
+                        ? "已创建调度，Cron 不能为空；如需停止调度，请在运维中心关闭。"
+                        : "留空则不创建调度，任务仅支持手动运行。"}
+                    </div>
+                  </div>
+                </Field>
+                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
+                  <FieldLabel required={scheduleRequired} className="pt-1.5">
+                    时区
+                  </FieldLabel>
+                  <div className="space-y-1">
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      maxLength={64}
+                      value={scheduleForm.timeZone}
+                      placeholder="Asia/Shanghai"
+                      onChange={(event) => patchSchedule("timeZone", event.target.value)}
+                    />
+                    <div className="px-1 text-xs text-[#98a2b3]">
+                      使用 IANA Time Zone，避免依赖浏览器或服务器默认时区。
+                    </div>
+                  </div>
+                </Field>
+                <Alert>这里只配置调度规则；任务上线后请在运维中心开启或关闭调度。</Alert>
+              </div>
+            </section>
+          ) : null}
+
           <section id="runtime" className="rounded-lg border border-[#e6e8eb] bg-white">
             <button
               type="button"
@@ -1076,6 +1179,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             ["source", "数据来源"],
             ["target", "数据去向"],
             ["mapping", "字段映射"],
+            ...(realtime ? [] : [["schedule", "调度配置"]]),
             ["runtime", "运行参数"],
           ].map(([anchor, label]) => (
             <a
