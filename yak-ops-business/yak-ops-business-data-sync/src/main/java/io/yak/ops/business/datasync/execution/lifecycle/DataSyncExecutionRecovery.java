@@ -51,9 +51,7 @@ public class DataSyncExecutionRecovery {
                 DataSyncErrorCode.EXECUTION_LOST.getMessage());
         if (executions > 0) {
             activeExecutions.forEach(execution -> attemptLifecycle.recordExecutionLost(
-                    execution.getWorkspaceId(),
-                    execution.getId(),
-                    "应用启动发现旧进程遗留 Execution，已标记为 LOST"));
+                    execution.getWorkspaceId(), execution.getId(), "应用启动发现旧进程遗留 Execution，已标记为 LOST"));
         }
         if (executions > 0 || attempts > 0) {
             LOG.warn("应用启动发现遗留数据同步执行，已标记为 LOST，executions={}, attempts={}", executions, attempts);
