@@ -2,6 +2,7 @@ import {
   Alert,
   Badge,
   Button,
+  CollapseSection,
   Field,
   FieldLabel,
   Input,
@@ -18,7 +19,7 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -268,7 +269,6 @@ function DataSourceEndpointCard({
 }
 
 interface TableSectionProps {
-  title: string;
   children?: ReactNode;
   dataSourceId: string;
   boundSchema?: string;
@@ -281,7 +281,6 @@ interface TableSectionProps {
 }
 
 function TableSection({
-  title,
   children,
   dataSourceId,
   boundSchema,
@@ -312,11 +311,8 @@ function TableSection({
   const tableDisabled = !dataSourceId || (requiresSchema && !schema);
 
   return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white">
-      <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-        {title}
-      </h2>
-      <div className="space-y-3 p-4">
+    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="space-y-3">
         {requiresSchema ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
             <FieldLabel>Schema</FieldLabel>
@@ -360,7 +356,7 @@ function TableSection({
         </Field>
         {children}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -499,7 +495,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [mapping, setMapping] = useState<DataSyncMappingPreview>();
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
   const [scheduleExists, setScheduleExists] = useState(false);
-  const [runtimeOpen, setRuntimeOpen] = useState(false);
 
   const sourceCatalog = useCatalogOptions(
     form.sourceDataSourceId,
@@ -903,11 +898,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             </div>
           ) : null}
 
-          <section id="basic" className="rounded-lg border border-[#e6e8eb] bg-white">
-            <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-              基本信息
-            </h2>
-            <div className="space-y-3 p-4">
+          <CollapseSection id="basic" title="基本信息">
+            <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                 <FieldLabel required>任务名称</FieldLabel>
                 <Input
@@ -932,13 +924,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 />
               </Field>
             </div>
-          </section>
+          </CollapseSection>
 
-          <section id="datasource" className="rounded-lg border border-[#e6e8eb] bg-white">
-            <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-              数据源
-            </h2>
-            <div className="grid grid-cols-2 gap-3 p-4 max-lg:grid-cols-1">
+          <CollapseSection id="datasource" title="数据源">
+            <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
               <DataSourceEndpointCard
                 title="来源"
                 dataSources={sourceDataSources}
@@ -976,11 +965,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 }}
               />
             </div>
-          </section>
+          </CollapseSection>
 
-          <div id="source">
+          <CollapseSection id="source" title="数据来源">
             <TableSection
-              title="数据来源"
               dataSourceId={form.sourceDataSourceId}
               boundSchema={selectedSourceDataSource?.schema}
               database={form.sourceDatabase}
@@ -1003,11 +991,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
               ) : null}
             </TableSection>
-          </div>
+          </CollapseSection>
 
-          <div id="target">
+          <CollapseSection id="target" title="数据去向">
             <TableSection
-              title="数据去向"
               dataSourceId={form.targetDataSourceId}
               boundSchema={selectedTargetDataSource?.schema}
               database={form.targetDatabase}
@@ -1065,47 +1052,45 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 </Field>
               ) : null}
             </TableSection>
-          </div>
+          </CollapseSection>
 
-          <section
+          <CollapseSection
             id="mapping"
-            className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
-          >
-            <div className="flex items-center justify-between border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5">
-              <h2 className="text-sm font-semibold text-[#344054]">字段映射</h2>
-              {mapping ? (
+            title="字段映射"
+            extra={
+              mapping ? (
                 mapping.compatible ? (
                   <Badge tone="success">字段兼容</Badge>
                 ) : (
                   <Badge tone="danger">存在不兼容字段</Badge>
                 )
-              ) : null}
-            </div>
+              ) : undefined
+            }
+          >
             {!mappingPayload ? (
-              <div className="px-4 py-10 text-center text-sm text-[#98a2b3]">
+              <div className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-10 text-center text-sm text-[#98a2b3]">
                 请选择来源表和目标表
               </div>
             ) : (
-              <Table<DataSyncFieldMapping>
-                columns={mappingColumns}
-                dataSource={mapping?.mappings || []}
-                rowKey="sourceName"
-                loading={mappingLoading}
-                bordered
-                size="small"
-                pagination={false}
-                emptyText="暂无字段"
-                scroll={{ x: 900 }}
-              />
+              <div className="overflow-hidden rounded-lg bg-white">
+                <Table<DataSyncFieldMapping>
+                  columns={mappingColumns}
+                  dataSource={mapping?.mappings || []}
+                  rowKey="sourceName"
+                  loading={mappingLoading}
+                  bordered
+                  size="small"
+                  pagination={false}
+                  emptyText="暂无字段"
+                  scroll={{ x: 900 }}
+                />
+              </div>
             )}
-          </section>
+          </CollapseSection>
 
           {!realtime ? (
-            <section id="schedule" className="rounded-lg border border-[#e6e8eb] bg-white">
-              <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-                调度配置
-              </h2>
-              <div className="space-y-3 p-4">
+            <CollapseSection id="schedule" title="调度配置">
+              <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
                 <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
                   <FieldLabel className="pt-1.5">Cron 表达式</FieldLabel>
                   <div className="space-y-1">
@@ -1144,20 +1129,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 </Field>
                 <Alert>这里只配置调度规则；任务上线后请在运维中心开启或关闭调度。</Alert>
               </div>
-            </section>
+            </CollapseSection>
           ) : null}
 
-          <section id="runtime" className="rounded-lg border border-[#e6e8eb] bg-white">
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-center justify-between border-0 bg-[#fafafa] px-4 py-2.5 text-left"
-              onClick={() => setRuntimeOpen((value) => !value)}
-            >
-              <span className="text-sm font-semibold text-[#344054]">运行参数</span>
-              {runtimeOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-            {runtimeOpen ? (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[#eef0f3] p-4 max-lg:grid-cols-1">
+          <CollapseSection id="runtime" title="运行参数" defaultOpen={false}>
+            <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
                 {realtime ? (
                   <RealtimeRuntimeFields config={form.realtimeConfig} onChange={patchRealtime} />
                 ) : (
@@ -1168,8 +1145,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   />
                 )}
               </div>
-            ) : null}
-          </section>
+            </div>
+          </CollapseSection>
         </main>
 
         <aside className="sticky top-4 hidden h-fit w-40 shrink-0 space-y-1 self-start lg:block">
