@@ -1,11 +1,6 @@
 import { Badge, Button, PageHeader, Spinner, toast } from "@yak-ops/yak-ui";
 import { ArrowRight } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { getDataSource, type DataSourceRecord } from "@/service/datasource";
@@ -58,11 +53,7 @@ interface DataSyncTaskDetailPageProps {
   title: string;
 }
 
-export function DataSyncTaskDetailPage({
-  syncType,
-  basePath,
-  title,
-}: DataSyncTaskDetailPageProps) {
+export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTaskDetailPageProps) {
   const realtime = syncType === "REALTIME";
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
@@ -210,7 +201,11 @@ export function DataSyncTaskDetailPage({
     ? `${schedule.cronExpression} · ${schedule.timeZone} · ${schedule.enabled ? "已开启" : "已关闭"}`
     : "仅手动";
   const desiredStateText =
-    task.desiredState === "RUNNING" ? "期望运行" : task.desiredState === "STOPPED" ? "期望停止" : "-";
+    task.desiredState === "RUNNING"
+      ? "期望运行"
+      : task.desiredState === "STOPPED"
+        ? "期望停止"
+        : "-";
 
   return (
     <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
