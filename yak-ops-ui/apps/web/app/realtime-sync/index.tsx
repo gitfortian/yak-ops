@@ -40,6 +40,7 @@ import {
 
 export { RealtimeSyncEditorPage } from "./editor";
 export { RealtimeSyncInstanceDetailPage } from "./instance-detail";
+export { RealtimeSyncTaskDetailPage } from "./task-detail";
 
 const PAGE_SIZE = 20;
 const REALTIME_TARGET_TYPES = new Set(["MYSQL", "POSTGRE_SQL", "ORACLE"]);
@@ -67,10 +68,8 @@ export function RealtimeSyncPage() {
     const params = new URLSearchParams(location.search);
     if (params.get("tab") !== "instances") return;
 
-    const nextParams = new URLSearchParams({ tab: "instances" });
     const taskId = params.get("taskId");
-    if (taskId) nextParams.set("taskId", taskId);
-    navigate(`/operations/realtime-tasks?${nextParams.toString()}`, { replace: true });
+    navigate(taskId ? `/realtime-sync/${taskId}/detail` : "/realtime-sync", { replace: true });
   }, [location.search, navigate]);
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
@@ -280,9 +279,7 @@ export function RealtimeSyncPage() {
           onPublish={(value) => void publishTask(value)}
           onUnpublish={(value) => void unpublishTask(value)}
           onEdit={(value) => navigate(`/realtime-sync/${value.id}`)}
-          onInstances={(value) =>
-            navigate(`/operations/realtime-tasks?tab=instances&taskId=${value.id}`)
-          }
+          onDetail={(value) => navigate(`/realtime-sync/${value.id}/detail`)}
           onDelete={setPendingDelete}
         />
       ),
