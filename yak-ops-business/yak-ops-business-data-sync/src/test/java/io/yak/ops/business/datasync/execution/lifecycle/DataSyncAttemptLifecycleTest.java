@@ -1,17 +1,23 @@
 package io.yak.ops.business.datasync.execution.lifecycle;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.common.enums.datasync.DataSyncAttemptStatus;
+import io.yak.ops.common.enums.datasync.DataSyncExecutionEventType;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
+import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncExecutionEventRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -26,9 +32,11 @@ class DataSyncAttemptLifecycleTest {
         AtomicReference<DataSyncAttemptStatus> attemptTarget = new AtomicReference<>();
         AtomicReference<DataSyncInstanceStatus> executionTarget = new AtomicReference<>();
         AtomicInteger completed = new AtomicInteger();
+        List<DataSyncExecutionEventType> events = new ArrayList<>();
 
         inject(lifecycle, "attemptRepository", attemptRepository(attemptTarget, new AtomicInteger()));
         inject(lifecycle, "instanceRepository", instanceRepository(execution, executionTarget, completed));
+        inject(lifecycle, "eventRepository", eventRepository(events));
 
         DataSyncRetryDecision decision = lifecycle.failAttempt(
                 "workspace-1",
@@ -48,6 +56,8 @@ class DataSyncAttemptLifecycleTest {
         assertEquals(DataSyncAttemptStatus.FAILED, attemptTarget.get());
         assertEquals(DataSyncInstanceStatus.RETRY_WAITING, executionTarget.get());
         assertEquals(0, completed.get());
+        assertEquals(
+                List.of(DataSyncExecutionEventType.ATTEMPT_FAILED, DataSyncExecutionEventType.RETRY_WAITING), events);
     }
 
     @Test
@@ -57,9 +67,11 @@ class DataSyncAttemptLifecycleTest {
         AtomicReference<DataSyncAttemptStatus> attemptTarget = new AtomicReference<>();
         AtomicReference<DataSyncInstanceStatus> executionTarget = new AtomicReference<>();
         AtomicInteger completed = new AtomicInteger();
+        List<DataSyncExecutionEventType> events = new ArrayList<>();
 
         inject(lifecycle, "attemptRepository", attemptRepository(attemptTarget, new AtomicInteger()));
         inject(lifecycle, "instanceRepository", instanceRepository(execution, executionTarget, completed));
+        inject(lifecycle, "eventRepository", eventRepository(events));
 
         DataSyncRetryDecision decision = lifecycle.failAttempt(
                 "workspace-1",
@@ -79,6 +91,9 @@ class DataSyncAttemptLifecycleTest {
         assertEquals(DataSyncAttemptStatus.FAILED, attemptTarget.get());
         assertEquals(DataSyncInstanceStatus.FAILED, executionTarget.get());
         assertEquals(1, completed.get());
+        assertEquals(
+                List.of(DataSyncExecutionEventType.ATTEMPT_FAILED, DataSyncExecutionEventType.EXECUTION_FAILED),
+                events);
     }
 
     @Test
@@ -89,9 +104,11 @@ class DataSyncAttemptLifecycleTest {
         AtomicInteger canceledAttempts = new AtomicInteger();
         AtomicReference<DataSyncInstanceStatus> executionTarget = new AtomicReference<>();
         AtomicInteger completed = new AtomicInteger();
+        List<DataSyncExecutionEventType> events = new ArrayList<>();
 
         inject(lifecycle, "attemptRepository", attemptRepository(attemptTarget, canceledAttempts));
         inject(lifecycle, "instanceRepository", instanceRepository(execution, executionTarget, completed));
+        inject(lifecycle, "eventRepository", eventRepository(events));
 
         DataSyncRetryDecision decision = lifecycle.failAttempt(
                 "workspace-1",
@@ -111,6 +128,49 @@ class DataSyncAttemptLifecycleTest {
         assertEquals(1, canceledAttempts.get());
         assertEquals(null, attemptTarget.get());
         assertEquals(0, completed.get());
+        assertTrue(events.isEmpty());
+    }
+
+    @Test
+    void shouldMaskSensitiveExecutionEventMessage() throws Exception {
+        DataSyncAttemptLifecycle lifecycle = new DataSyncAttemptLifecycle();
+        AtomicReference<DataSyncExecutionEventEntity> captured = new AtomicReference<>();
+        inject(
+                lifecycle,
+                "eventRepository",
+                (DataSyncExecutionEventRepository) Proxy.newProxyInstance(
+                        DataSyncExecutionEventRepository.class.getClassLoader(),
+                        new Class<?>[] {DataSyncExecutionEventRepository.class},
+                        (proxy, method, args) -> {
+                            if ("add".equals(method.getName())) {
+                                DataSyncExecutionEventEntity event = (DataSyncExecutionEventEntity) args[0];
+                                captured.set(event);
+                                return event;
+                            }
+                            throw new UnsupportedOperationException(method.getName());
+                        }));
+
+        lifecycle.recordExecutionLost("workspace-1", "execution-1", "password=secret");
+
+        assertEquals("password=******", captured.get().getMessage());
+        assertEquals(DataSyncExecutionEventType.EXECUTION_LOST, captured.get().getEventType());
+    }
+
+    @Test
+    void shouldNotFailRuntimeWhenExecutionEventPersistenceFails() throws Exception {
+        DataSyncAttemptLifecycle lifecycle = new DataSyncAttemptLifecycle();
+        inject(
+                lifecycle,
+                "eventRepository",
+                (DataSyncExecutionEventRepository) Proxy.newProxyInstance(
+                        DataSyncExecutionEventRepository.class.getClassLoader(),
+                        new Class<?>[] {DataSyncExecutionEventRepository.class},
+                        (proxy, method, args) -> {
+                            if ("add".equals(method.getName())) throw new IllegalStateException("event-store-down");
+                            throw new UnsupportedOperationException(method.getName());
+                        }));
+
+        assertDoesNotThrow(() -> lifecycle.recordSourceReady("workspace-1", "execution-1", "attempt-1"));
     }
 
     private DataSyncInstanceEntity execution(DataSyncInstanceStatus status) {
@@ -134,6 +194,20 @@ class DataSyncAttemptLifecycleTest {
                     if ("cancelActiveByExecution".equals(method.getName())) {
                         canceledAttempts.incrementAndGet();
                         return 1;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private DataSyncExecutionEventRepository eventRepository(List<DataSyncExecutionEventType> events) {
+        return (DataSyncExecutionEventRepository) Proxy.newProxyInstance(
+                DataSyncExecutionEventRepository.class.getClassLoader(),
+                new Class<?>[] {DataSyncExecutionEventRepository.class},
+                (proxy, method, args) -> {
+                    if ("add".equals(method.getName())) {
+                        DataSyncExecutionEventEntity event = (DataSyncExecutionEventEntity) args[0];
+                        events.add(event.getEventType());
+                        return event;
                     }
                     throw new UnsupportedOperationException(method.getName());
                 });

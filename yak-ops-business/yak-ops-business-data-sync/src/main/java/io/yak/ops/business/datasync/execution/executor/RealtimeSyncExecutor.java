@@ -115,6 +115,8 @@ public class RealtimeSyncExecutor {
                 return DataSyncRetryDecision.stop();
             }
             started = true;
+            attemptLifecycle.recordSourceReady(workspaceId, instanceId, attempt.getId());
+            attemptLifecycle.recordTargetReady(workspaceId, instanceId, attempt.getId());
 
             LOG.info(
                     "实时同步Attempt开始执行，workspaceId={}, taskId={}, instanceId={}, attempt={}/{}",

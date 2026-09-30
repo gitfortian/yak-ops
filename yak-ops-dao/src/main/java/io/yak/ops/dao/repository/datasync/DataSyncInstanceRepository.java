@@ -5,6 +5,7 @@ import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.repository.BaseRepository;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,6 +23,11 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
     Optional<DataSyncInstanceEntity> queryLatestByTask(String workspaceId, String taskId);
 
     boolean existsActiveByTask(String workspaceId, String taskId);
+
+    /**
+     * 应用启动恢复专用：查询所有 Workspace 中仍处于活动状态的 Execution。
+     */
+    List<DataSyncInstanceEntity> queryActive();
 
     boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows);
 

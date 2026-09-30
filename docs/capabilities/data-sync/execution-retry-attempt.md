@@ -2,7 +2,7 @@
 
 Status: Active
 
-Scope: Execution / Attempt 身份、状态聚合、Retry、取消、指标和持久化兼容性。
+Scope: Execution / Attempt 身份、状态聚合、Retry、取消、指标、产品事件时间线和持久化兼容性。
 
 ## Identity
 
@@ -77,6 +77,16 @@ Backoff 使用进程内等待，不使用 Quartz，不是跨进程 durable timer
 
 指标轮询和终态 flush 不应更改上述身份边界。详情通过 Attempt History 观察每次尝试，不伪造 checkpoint 时间或全局业务总量。
 
+## Execution Event Log
+
+Execution Detail 的“执行日志”数据源是产品生命周期事件，不是 Logback / JVM Server Log 的文件镜像。事件只记录有限的稳定语义，例如 Execution / Attempt 开始、Source / Target 执行计划准备、Attempt 成功 / 失败、等待重试、Execution 成功 / 失败 / 取消 / LOST，以及 REALTIME AUTO_RECOVERY 创建新 Execution。
+
+事件按 Workspace + Execution 隔离，Attempt 级事件保存 attemptId，Execution 级事件不强制绑定 Attempt。展示消息进入持久化前统一脱敏并限制长度；不得写入连接 JSON、密码、Token、SSH 私钥、SQL Debug、逐批读写或其他高频 Runtime 明细。
+
+`GET /api/v1/data-sync/instances/{id}/logs` 先验证当前 Workspace 对该 Execution 的可见性，再按 createTime / id 顺序返回事件。事件记录属于可观察性：写入失败会记录 Server Log，但不能把原本可成功的数据同步改判为失败。
+
+V5 只从迁移生效后开始记录新事件，不回填历史 Execution。旧 Execution 因此可以返回空事件列表；不能用当前状态反推并伪造过去时间线。
+
 ## Write Safety
 
 Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow 写入语义](../yak-flow/README.md#jdbc-batch-connector)。APPEND 重放可能重复写；OVERWRITE 再次尝试会重新执行破坏性清空；UPSERT / CHANGELOG 的主键应用不构成端到端 exactly-once。
@@ -87,13 +97,13 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 [现有 V3 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__data_sync_execution_attempt.sql) 保存 Task Retry Policy、Execution 的冻结策略 / 当前尝试 / 下次重试时间，以及 `yak_ops_data_sync_attempt`。
 
-`yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。V3 前的记录按单次执行解释；迁移没有为每条历史 Instance 回填实体 Attempt 行，所以历史 attempts 查询可以为空，不应伪造历史尝试。
+`yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。V3 前的记录按单次执行解释；迁移没有为每条历史 Instance 回填实体 Attempt 行，所以历史 attempts 查询可以为空，不应伪造历史尝试。V5 新增 `yak_ops_data_sync_execution_event` 保存后续产品事件，同样不回填旧运行历史。
 
 旧 Task 默认回填 maxAttempts=1、backoffSeconds=60。Schema 由 DAO 维护，遵守 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不修改已冻结迁移或建立第二套 Task / Instance 模型。
 
 ## Operations Contract
 
-列表一行对应一个 Execution，展示当前 / 最终 Attempt 信息；详情读取 `GET /api/v1/data-sync/instances/{id}/attempts` 获取尝试历史。Retry Policy 的请求契约由后端 DTO 维护，页面如何配置由前端 owner 负责；Attempt 观察与策略编辑是不同职责。
+列表一行对应一个 Execution，展示当前 / 最终 Attempt 信息；详情读取 `GET /api/v1/data-sync/instances/{id}/attempts` 获取尝试历史，并通过 `GET /api/v1/data-sync/instances/{id}/logs` 获取产品事件时间线。Retry Policy 的请求契约由后端 DTO 维护，页面如何配置由前端 owner 负责；Attempt 观察、事件观察与策略编辑是不同职责。
 
 ## Current Limits
 

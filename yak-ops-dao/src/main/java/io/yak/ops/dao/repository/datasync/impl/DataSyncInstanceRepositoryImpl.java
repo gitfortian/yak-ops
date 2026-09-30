@@ -86,6 +86,19 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
     }
 
     @Override
+    public List<DataSyncInstanceEntity> queryActive() {
+        return instanceMapper.selectList(Wrappers.<DataSyncInstanceEntity>lambdaQuery()
+                .in(
+                        DataSyncInstanceEntity::getStatus,
+                        List.of(
+                                DataSyncInstanceStatus.PENDING,
+                                DataSyncInstanceStatus.RUNNING,
+                                DataSyncInstanceStatus.RETRY_WAITING))
+                .orderByAsc(DataSyncInstanceEntity::getCreateTime)
+                .orderByAsc(DataSyncInstanceEntity::getId));
+    }
+
+    @Override
     public boolean updateMetrics(String workspaceId, String id, long readRows, long writeRows) {
         if (!StringUtils.hasText(workspaceId) || !StringUtils.hasText(id) || readRows < 0 || writeRows < 0) {
             return false;
