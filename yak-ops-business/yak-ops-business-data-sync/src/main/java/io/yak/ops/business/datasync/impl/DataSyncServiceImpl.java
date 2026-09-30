@@ -44,6 +44,7 @@ import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
+import io.yak.ops.common.page.PageData;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.CollectionUtils;
@@ -69,6 +70,7 @@ import jakarta.annotation.Resource;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -125,6 +127,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO createTask(DataSyncTaskDTO dto) {
+        return createTask(dto, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO createTask(DataSyncTaskDTO dto, String operatorUserId) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         String name = StringUtils.trimToNull(dto.getName());
@@ -144,7 +152,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setDesiredState(DataSyncDesiredState.STOPPED);
         applyDefinition(entity, dto, resolvedScope);
         entity.setDefinitionVersion(1);
-        entity.initCreate();
+        entity.initCreate(operatorUserId);
 
         if (taskRepository.add(entity) == null) {
             throw new DataSyncException(DataSyncErrorCode.CREATE_TASK_FAILED);
@@ -155,6 +163,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO updateTask(String id, DataSyncTaskDTO dto) {
+        return updateTask(id, dto, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO updateTask(String id, DataSyncTaskDTO dto, String operatorUserId) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK);
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity entity = requireTask(workspaceId, id);
@@ -177,7 +191,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (executableDefinitionChanged) {
             entity.setDefinitionVersion(Math.max(1, entity.getDefinitionVersion()) + 1);
         }
-        entity.initUpdate();
+        entity.initUpdate(operatorUserId);
 
         if (taskRepository.update(workspaceId, entity) == null) {
             throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED);
@@ -207,7 +221,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 dto.getStatus(),
                 StringUtils.trimToNull(dto.getSourceDataSourceId()),
                 StringUtils.trimToNull(dto.getTargetDataSourceId()));
-        return PagingData.from(taskRepository.queryPage(workspaceId, query).map(this::toTaskVO));
+        PageData<DataSyncTaskEntity> page = taskRepository.queryPage(workspaceId, query);
+        Map<String, DataSyncScheduleEntity> scheduleByTask = new HashMap<>();
+        scheduleRepository
+                .queryByTasks(workspaceId, page.records().stream().map(DataSyncTaskEntity::getId).toList())
+                .forEach(schedule -> scheduleByTask.put(schedule.getTaskId(), schedule));
+        return PagingData.from(page.map(task -> toTaskListVO(task, scheduleByTask.get(task.getId()))));
     }
 
     @Override
@@ -259,12 +278,18 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO publishTask(String id) {
+        return publishTask(id, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO publishTask(String id, String operatorUserId) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         requireTaskStatus(task, DataSyncTaskStatus.UNPUBLISHED, "任务已经上线");
         validatePersistedTaskDefinition(task);
         task.setStatus(DataSyncTaskStatus.PUBLISHED);
-        task.initUpdate();
+        task.initUpdate(operatorUserId);
         if (taskRepository.update(workspaceId, task) == null) {
             throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "上线任务失败");
         }
@@ -274,6 +299,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTaskVO unpublishTask(String id) {
+        return unpublishTask(id, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DataSyncTaskVO unpublishTask(String id, String operatorUserId) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务已经下线");
@@ -283,7 +314,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         disableScheduleForTask(workspaceId, task.getId());
         task.setDesiredState(DataSyncDesiredState.STOPPED);
         task.setStatus(DataSyncTaskStatus.UNPUBLISHED);
-        task.initUpdate();
+        task.initUpdate(operatorUserId);
         if (taskRepository.update(workspaceId, task) == null) {
             throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "下线任务失败");
         }
@@ -1109,6 +1140,15 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (taskRepository.existsByName(workspaceId, name, excludeId)) {
             throw new DataSyncException(DataSyncErrorCode.DUPLICATE_TASK_NAME);
         }
+    }
+
+    private DataSyncTaskVO toTaskListVO(DataSyncTaskEntity source, DataSyncScheduleEntity schedule) {
+        DataSyncTaskVO target = toTaskVO(source);
+        if (schedule != null) {
+            target.setScheduleCronExpression(schedule.getCronExpression());
+            target.setScheduleTimeZone(schedule.getTimeZone());
+        }
+        return target;
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
