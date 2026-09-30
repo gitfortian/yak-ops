@@ -36,11 +36,7 @@ public class DataSyncOperationsMetricsRepositoryImpl implements DataSyncOperatio
 
     @Override
     public List<DataSyncOperationsTrendStats> queryTrend(
-            String workspaceId,
-            DataSyncType syncType,
-            LocalDateTime startTime,
-            LocalDateTime endTime,
-            boolean hourly) {
+            String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime, boolean hourly) {
         if (!valid(workspaceId, syncType, startTime, endTime)) return List.of();
         return hourly
                 ? metricsMapper.selectHourlyTrend(workspaceId, syncType.getValue(), startTime, endTime)
@@ -62,8 +58,7 @@ public class DataSyncOperationsMetricsRepositoryImpl implements DataSyncOperatio
                 workspaceId, syncType.getValue(), startTime, endTime, Math.max(1, Math.min(20, limit)));
     }
 
-    private boolean valid(
-            String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime) {
+    private boolean valid(String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime) {
         return StringUtils.isNotBlank(workspaceId)
                 && syncType != null
                 && startTime != null
