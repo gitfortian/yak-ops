@@ -17,6 +17,7 @@ export function OfflineTaskOperationsInstanceDetailPage() {
       syncType="OFFLINE"
       basePath="/operations/offline-tasks"
       listPath="/operations/offline-tasks"
+      backLabel="返回运维中心"
     />
   );
 }
@@ -27,6 +28,7 @@ export function RealtimeTaskOperationsInstanceDetailPage() {
       syncType="REALTIME"
       basePath="/operations/realtime-tasks"
       listPath="/operations/realtime-tasks"
+      backLabel="返回运维中心"
     />
   );
 }
