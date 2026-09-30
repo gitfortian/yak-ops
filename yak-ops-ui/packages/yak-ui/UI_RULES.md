@@ -30,7 +30,7 @@ Base UI 是内部交互实现依赖，不是产品层 API。公共导出以 [src
 - Modal / Dialog / Drawer：[弹层](docs/modal.md)
 - Table / Pagination：[表格](docs/table.md)
 - PageHeader：[页面标题](docs/page-header.md)
-- Card：只提供通用 Surface / Header / Content 组合，不拥有指标、图表或领域文案
+- Card：只提供通用 Surface / Header / Content 组合；SectionCard 提供固定“标题竖线 + 内容”区块节奏，契约见 [SectionCard](docs/section-card.md)，两者都不拥有指标、图表或领域文案
 - 常驻警告：[Alert](docs/alert.md)
 - 瞬时操作反馈：[Toast](docs/toast.md)
 
