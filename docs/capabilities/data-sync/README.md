@@ -18,7 +18,7 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 | 关注点 | 权威正文 |
 | --- | --- |
 | 创建、编辑、上线、下线和 definitionVersion | [Task Publication Lifecycle](task-lifecycle.md) |
-| Execution / Attempt 身份、状态、取消与指标 | [Execution Retry / Attempt](execution-retry-attempt.md) |
+| Execution / Attempt 身份、状态、取消、指标与产品事件日志 | [Execution Retry / Attempt](execution-retry-attempt.md) |
 | 离线 Cron、启停、触发校验与恢复 | [Scheduler](scheduler.md) |
 | 实时期望状态、进程重启与 CDC state | [Realtime Desired State](realtime-desired-state.md) |
 | 类型、split、写入与 checkpoint 机制 | [YakFlow](../yak-flow/README.md) |
@@ -65,7 +65,7 @@ Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普�
 
 ## Product Responsibilities
 
-数据集成负责 Task 定义、发布，以及围绕当前 Task 的只读运行详情：任务详情可以查看该 Task 的 Execution 历史、选中的 Execution 状态、指标、Attempt 历史和冻结快照。Task Editor 仍只负责定义，不承载运行态；数据集成详情不提供 Run / Start / Stop。
+数据集成负责 Task 定义、发布，以及围绕当前 Task 的只读运行详情：任务详情可以查看该 Task 的 Execution 历史、选中的 Execution 状态、指标、Attempt 历史、产品事件日志和冻结快照。Task Editor 仍只负责定义，不承载运行态；数据集成详情不提供 Run / Start / Stop。
 
 运维中心负责执行命令、OFFLINE Schedule 启停、REALTIME 运行意图与跨 Task 的运行观察。后端权限与状态校验不能由前端按钮可用性替代；Task 详情和运维中心复用同一 Execution / Attempt 后端事实，不建立第二套运行模型。
 
