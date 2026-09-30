@@ -16,11 +16,7 @@ public interface DataSyncOperationsMetricsRepository {
             String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime);
 
     List<DataSyncOperationsTrendStats> queryTrend(
-            String workspaceId,
-            DataSyncType syncType,
-            LocalDateTime startTime,
-            LocalDateTime endTime,
-            boolean hourly);
+            String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime, boolean hourly);
 
     List<DataSyncOperationsStatusStats> queryStatusDistribution(
             String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime);
