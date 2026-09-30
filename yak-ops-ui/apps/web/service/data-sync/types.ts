@@ -85,6 +85,11 @@ export interface DataSyncScheduleRecord {
   updateTime?: string;
 }
 
+export interface DataSyncScheduleSavePayload {
+  cronExpression: string;
+  timeZone: string;
+}
+
 export interface DataSyncTaskOperationRecord {
   id: string;
   name: string;
