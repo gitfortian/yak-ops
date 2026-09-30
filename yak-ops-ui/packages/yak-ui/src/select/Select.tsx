@@ -88,7 +88,7 @@ export function SelectTrigger({
       className={cn(selectTriggerVariants({ size: resolvedSize, variant }), className)}
     >
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      <BaseSelect.Icon className="shrink-0 text-[var(--yak-components-input-icon)] transition-transform duration-150 group-data-popup-open/select-trigger:rotate-180 motion-reduce:transition-none">
+      <BaseSelect.Icon className="shrink-0 text-[var(--yak-components-input-icon)] transition-transform duration-[240ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-data-popup-open/select-trigger:rotate-180 motion-reduce:transition-none">
         <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none">
           <path
             d="m6 8 4 4 4-4"
@@ -155,6 +155,8 @@ export function SelectContent({
           {...props}
           className={cn(
             "min-w-[var(--anchor-width)] max-w-80 overflow-hidden rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-select-border)] bg-[var(--yak-components-select-bg)] shadow-[var(--yak-components-select-shadow)] outline-none",
+            "[transform-origin:var(--transform-origin)] transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[opacity,transform]",
+            "data-starting-style:scale-y-[0.96] data-starting-style:opacity-0 data-ending-style:scale-y-[0.98] data-ending-style:opacity-0 data-ending-style:duration-[180ms] data-ending-style:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
             selectFontSizeClasses[size],
             className,
           )}
