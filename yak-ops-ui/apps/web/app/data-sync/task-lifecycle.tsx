@@ -89,6 +89,7 @@ interface LifecycleAction {
   key: string;
   label: string;
   className: string;
+  disabled?: boolean;
   loading?: boolean;
   onClick: () => void;
 }
@@ -115,69 +116,50 @@ export function DataSyncTaskLifecycleActions({
   onDelete,
 }: DataSyncTaskLifecycleActionsProps) {
   const published = isPublishedTask(record);
-  const actions: LifecycleAction[] = published
-    ? activeInstance
-      ? [
-          {
-            key: "instances",
-            label: "实例",
-            className: "text-[var(--yak-color-primary)]",
-            onClick: () => onInstances(record),
-          },
-        ]
-      : [
-          {
-            key: "unpublish",
-            label: "下线",
-            className: "text-[var(--yak-color-primary)]",
-            loading: actionKey === `${record.id}:unpublish`,
-            onClick: () => onUnpublish(record),
-          },
-          {
-            key: "instances",
-            label: "实例",
-            className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
-            onClick: () => onInstances(record),
-          },
-        ]
-    : [
-        {
-          key: "publish",
-          label: "上线",
-          className: "text-[var(--yak-color-primary)]",
-          loading: actionKey === `${record.id}:publish`,
-          onClick: () => onPublish(record),
-        },
-        {
-          key: "edit",
-          label: "编辑",
-          className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
-          onClick: () => onEdit(record),
-        },
-        {
-          key: "instances",
-          label: "实例",
-          className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
-          onClick: () => onInstances(record),
-        },
-        {
-          key: "delete",
-          label: "删除",
-          className: "text-[#667085] hover:text-[#d92d20]",
-          onClick: () => onDelete(record),
-        },
-      ];
+  const lifecycleAction = published ? "unpublish" : "publish";
+  const actions: LifecycleAction[] = [
+    {
+      key: "lifecycle",
+      label: published ? "下线" : "上线",
+      className: "text-[var(--yak-color-primary)]",
+      disabled: published && Boolean(activeInstance),
+      loading: actionKey === `${record.id}:${lifecycleAction}`,
+      onClick: () => (published ? onUnpublish(record) : onPublish(record)),
+    },
+    {
+      key: "edit",
+      label: "编辑",
+      className: published
+        ? "text-[#667085]"
+        : "text-[#667085] hover:text-[var(--yak-color-primary)]",
+      disabled: published,
+      onClick: () => onEdit(record),
+    },
+    {
+      key: "instances",
+      label: "实例",
+      className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
+      onClick: () => onInstances(record),
+    },
+    {
+      key: "delete",
+      label: "删除",
+      className: published ? "text-[#667085]" : "text-[#667085] hover:text-[#d92d20]",
+      disabled: published,
+      onClick: () => onDelete(record),
+    },
+  ];
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-center justify-center gap-0">
       {actions.map((action, index) => (
         <Fragment key={action.key}>
-          {index > 0 ? <span className="h-3 w-px bg-[#e4e7ec]" /> : null}
+          {index > 0 ? <span className="mx-0.5 h-3 w-px bg-[#e4e7ec]" /> : null}
           <Button
             variant="ghost"
             size="small"
             loading={action.loading}
-            disabled={Boolean(actionKey) && !action.loading}
+            disabled={action.disabled || (Boolean(actionKey) && !action.loading)}
             className={`px-1 text-xs font-normal ${action.className}`}
             onClick={action.onClick}
           >
