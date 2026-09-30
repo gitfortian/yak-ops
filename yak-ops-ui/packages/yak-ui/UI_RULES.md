@@ -157,7 +157,12 @@ Yak UI Table uses an AntD-familiar core contract without becoming an AntD compat
 - Table-level `onChange(pagination, filters, sorter, extra)` is the single generic notification boundary for paginate / sort / filter changes.
 - Local filter and sort run before local pagination; server pagination remains owned by the product when `pagination.total` is provided.
 - Current Table supports size, border, row hover, selected-row state, ellipsis, sort, filter, horizontal / vertical scroll and sticky header.
-- Table header uses the shared `#F2F2F2` surface and does not draw internal header dividers; `bordered` applies the outer frame and body grid only.
+- Table header uses the shared `#F2F2F2` surface without an outer frame or internal header dividers. `bordered` applies only to the complete body grid, including its first/last column edges and first/last row edges; scroll containers and the footer never draw the grid frame.
+- Table data height follows content. Internal scroll/layout wrappers must not grow to fill spare page height. Existing product `min-h-full` may size the outer shell only; it must not stretch the data grid or push Pagination to the page bottom. `scroll.y` remains an opt-in maximum viewport height, not a fixed body height.
+- Body cells own the shared border token and collapsed grid lines. Unbordered tables retain row bottom separators; empty/initial-loading cells preserve their stable minimum body height and follow the same border contract.
+- Footer/Pagination follow the data viewport with a 12px gap, outside its scroll and border region, without an extra top divider or `mt-auto` bottom pinning.
+- Loading uses a viewport-local sibling overlay, measured from the actual header cell rather than a size-based top offset. It follows resize/scroll changes, preserves sticky headers, excludes scrollbars/footer/spare page space, and cleans up observers/listeners after loading.
+- See `docs/table.md` for the body-only border contract and manual acceptance scenarios.
 - Pagination is a single-line compact control; the active page uses `--yak-color-primary` instead of Button primary styling, and page-size wording is supplied through the generic `pageSizeLabel` composition point.
 - Checked Table selection controls use the shared primary token; product code must not invent a separate selection blue.
 - Expandable rows, fixed columns, virtualization, multi-column sort and component overrides remain deferred.
