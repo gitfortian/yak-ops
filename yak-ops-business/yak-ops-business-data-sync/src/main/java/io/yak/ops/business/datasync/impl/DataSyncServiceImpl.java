@@ -290,11 +290,15 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncOperationsSummaryStats summaryStats =
                 operationsMetricsRepository.querySummary(workspaceId, dto.getSyncType(), rangeStart, rangeEnd);
         List<DataSyncOperationsTrendStats> trendStats = operationsMetricsRepository.queryTrend(
-                workspaceId, dto.getSyncType(), rangeStart, rangeEnd, dto.getRange().isHourly());
-        List<DataSyncOperationsStatusStats> statusStats =
-                operationsMetricsRepository.queryStatusDistribution(workspaceId, dto.getSyncType(), rangeStart, rangeEnd);
-        List<DataSyncOperationsFailureStats> failureStats =
-                operationsMetricsRepository.queryFailureRanking(workspaceId, dto.getSyncType(), rangeStart, rangeEnd, 5);
+                workspaceId,
+                dto.getSyncType(),
+                rangeStart,
+                rangeEnd,
+                dto.getRange().isHourly());
+        List<DataSyncOperationsStatusStats> statusStats = operationsMetricsRepository.queryStatusDistribution(
+                workspaceId, dto.getSyncType(), rangeStart, rangeEnd);
+        List<DataSyncOperationsFailureStats> failureStats = operationsMetricsRepository.queryFailureRanking(
+                workspaceId, dto.getSyncType(), rangeStart, rangeEnd, 5);
 
         DataSyncOperationsDashboardVO result = new DataSyncOperationsDashboardVO();
         result.setSyncType(dto.getSyncType().name());
@@ -304,7 +308,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         result.setSummary(toOperationsSummaryVO(summaryStats));
         result.setTrend(toOperationsTrendVO(trendStats, dto.getRange(), rangeStart, rangeEnd));
         result.setStatusDistribution(toOperationsStatusDistribution(statusStats));
-        result.setFailureRanking(failureStats.stream().map(this::toOperationsFailureRankVO).toList());
+        result.setFailureRanking(
+                failureStats.stream().map(this::toOperationsFailureRankVO).toList());
         return result;
     }
 
@@ -1257,10 +1262,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             if (item.getBucketStart() != null) byBucket.put(item.getBucketStart(), item);
         }
 
-        LocalDateTime bucket =
-                range.isHourly() ? rangeStart.truncatedTo(ChronoUnit.HOURS) : rangeStart.toLocalDate().atStartOfDay();
-        LocalDateTime endBucket =
-                range.isHourly() ? rangeEnd.truncatedTo(ChronoUnit.HOURS) : rangeEnd.toLocalDate().atStartOfDay();
+        LocalDateTime bucket = range.isHourly()
+                ? rangeStart.truncatedTo(ChronoUnit.HOURS)
+                : rangeStart.toLocalDate().atStartOfDay();
+        LocalDateTime endBucket = range.isHourly()
+                ? rangeEnd.truncatedTo(ChronoUnit.HOURS)
+                : rangeEnd.toLocalDate().atStartOfDay();
         List<DataSyncOperationsTrendPointVO> result = new ArrayList<>();
         while (!bucket.isAfter(endBucket)) {
             DataSyncOperationsTrendStats stats = byBucket.get(bucket);
