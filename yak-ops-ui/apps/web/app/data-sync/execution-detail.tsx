@@ -1,5 +1,6 @@
-import { Alert, Badge, Table, type BadgeProps } from "@yak-ops/yak-ui";
+import { Alert, Badge, SectionCard, Table, type BadgeProps } from "@yak-ops/yak-ui";
 import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type {
   DataSyncAttemptRecord,
@@ -58,11 +59,43 @@ export const dataSyncDurationText = (record: DataSyncInstanceRecord) => {
 const pathText = (database?: string, schema?: string, table?: string) =>
   [database, schema, table].filter(Boolean).join(".") || "-";
 
+interface DetailSectionProps {
+  title: ReactNode;
+  children: ReactNode;
+  sectionCard: boolean;
+  legacyClassName: string;
+  showLegacyTitle?: boolean;
+}
+
+function DetailSection({
+  title,
+  children,
+  sectionCard,
+  legacyClassName,
+  showLegacyTitle = true,
+}: DetailSectionProps) {
+  if (sectionCard) {
+    return <SectionCard title={title}>{children}</SectionCard>;
+  }
+
+  return (
+    <section className={legacyClassName}>
+      {showLegacyTitle ? (
+        <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+          {title}
+        </h2>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
 interface DataSyncExecutionDetailContentProps {
   record: DataSyncInstanceRecord;
   attempts: DataSyncAttemptRecord[];
   realtime: boolean;
   showRealtimeStopCaution?: boolean;
+  sectionCard?: boolean;
 }
 
 export function DataSyncExecutionDetailContent({
@@ -70,6 +103,7 @@ export function DataSyncExecutionDetailContent({
   attempts,
   realtime,
   showRealtimeStopCaution = false,
+  sectionCard = false,
 }: DataSyncExecutionDetailContentProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
   const snapshot = record.definitionSnapshot;
@@ -82,7 +116,12 @@ export function DataSyncExecutionDetailContent({
         <Alert>停止后将从最近 Checkpoint 续跑，少量未确认事件可能重复消费。</Alert>
       ) : null}
 
-      <section className="rounded-lg border border-[#e6e8eb] bg-white p-5">
+      <DetailSection
+        title="执行概览"
+        sectionCard={sectionCard}
+        legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
+        showLegacyTitle={false}
+      >
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone={meta.tone}>{meta.label}</Badge>
           <span className="text-sm text-[#667085]">
@@ -110,12 +149,13 @@ export function DataSyncExecutionDetailContent({
             实时指标统计 YakFlow 变更事件；UPDATE 会产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
           </div>
         ) : null}
-      </section>
+      </DetailSection>
 
-      <section className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
-        <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-          Attempt 历史
-        </h2>
+      <DetailSection
+        title="Attempt 历史"
+        sectionCard={sectionCard}
+        legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
+      >
         <Table<DataSyncAttemptRecord>
           columns={[
             {
@@ -179,14 +219,15 @@ export function DataSyncExecutionDetailContent({
             下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
           </div>
         ) : null}
-      </section>
+      </DetailSection>
 
       {snapshot ? (
-        <section className="rounded-lg border border-[#e6e8eb] bg-white">
-          <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
-            任务配置快照
-          </h2>
-          <div className="p-5">
+        <DetailSection
+          title="任务配置快照"
+          sectionCard={sectionCard}
+          legacyClassName="rounded-lg border border-[#e6e8eb] bg-white"
+        >
+          <div className={sectionCard ? undefined : "p-5"}>
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[#344054]">
@@ -234,7 +275,7 @@ export function DataSyncExecutionDetailContent({
               </div>
             ) : null}
           </div>
-        </section>
+        </DetailSection>
       ) : null}
 
       {record.errorMessage ? (
