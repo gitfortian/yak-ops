@@ -3,6 +3,7 @@ import { BizError } from "@/service/http/request";
 
 import type {
   DataSyncAttemptRecord,
+  DataSyncExecutionEventRecord,
   DataSyncInstancePageParams,
   DataSyncInstancePageResult,
   DataSyncInstanceRecord,
@@ -80,6 +81,9 @@ export const cancelDataSyncInstance = (id: string): Promise<DataSyncInstanceReco
 
 export const listDataSyncAttempts = (id: string): Promise<DataSyncAttemptRecord[]> =>
   HttpUtils.getData<DataSyncAttemptRecord[]>(`${DATA_SYNC_API_PREFIX}/instances/${id}/attempts`);
+
+export const listDataSyncExecutionEvents = (id: string): Promise<DataSyncExecutionEventRecord[]> =>
+  HttpUtils.getData<DataSyncExecutionEventRecord[]>(`${DATA_SYNC_API_PREFIX}/instances/${id}/logs`);
 
 const DATA_SYNC_SCHEDULE_NOT_FOUND_CODE = 42015;
 
