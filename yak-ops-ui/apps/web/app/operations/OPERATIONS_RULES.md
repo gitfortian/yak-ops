@@ -23,6 +23,7 @@ Must:
 - Poll active Instance state only while active execution exists.
 - Task operations table must surface automation runtime, not only a binary idle/running state: Last Run, Next Run, Attempt progress, Retry Waiting, and trigger source belong here.
 - OFFLINE automation state comes from persisted Schedule + Scheduler runtime `nextFireTime`; frontend must not calculate Quartz Cron next-fire timestamps.
+- Operations Center owns OFFLINE Schedule enable / disable for PUBLISHED Tasks. Show the action only when a persisted Schedule exists, refresh the backend read model after mutation, and never create or edit Cron / Time Zone here.
 - REALTIME must present Desired State separately from actual Execution state. `desiredState=RUNNING` with no active Execution is an observable mismatch, not “idle”.
 - AUTO_RECOVERY is an Execution root trigger and must be labeled as automatic recovery rather than generic retry.
 - Execution list remains one row per Execution. Attempt history belongs in Execution detail and must not be flattened into the Instance list.
