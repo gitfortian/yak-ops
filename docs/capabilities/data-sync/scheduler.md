@@ -1,6 +1,6 @@
 # Data Sync Scheduler Contract
 
-Status: v1.1 PR2 — Offline Schedule Persistence + Trigger
+Status: v1.1 — Offline Schedule Persistence + Trigger + UI Closure
 
 Depends On:
 
@@ -351,3 +351,36 @@ Save 只保存 Cron + Time Zone，新 Schedule 默认不启用。
 - Scheduled Fire 创建 `triggerType=SCHEDULE` Instance。
 - Active Instance 存在时 Scheduled Fire 不重复创建。
 - 应用启动从 DB 恢复 enabled Schedule Runtime。
+
+
+## 15. v1.1 UI Ownership
+
+`Offline Sync Schedule Configuration UI Closure` 将既有 Schedule Backend 接入产品 UI，不改变 Scheduler Runtime 语义。
+
+职责固定为：
+
+```text
+Offline Sync Editor
+  ↓
+Schedule Definition
+  ├── Quartz Cron
+  └── IANA Time Zone
+
+Operations Center
+  ↓
+Schedule Runtime Control
+  ├── Enable
+  ├── Disable
+  └── Observe nextFireTime
+```
+
+规则：
+
+- 新建 / 编辑 OFFLINE Task 时可以配置 Cron + Time Zone。
+- Schedule 依赖稳定 `taskId`，因此前端保存顺序是 Task → Schedule。
+- Save & Publish 的顺序是 Task → Schedule → Publish。
+- Cron 留空且从未创建 Schedule 时表示仅手动运行。
+- Schedule Definition 保存不会隐式启用调度。
+- 只有 PUBLISHED OFFLINE Task 可以在 Operations Center 启用 Schedule。
+- Task 下线仍由后端自动 disable + unschedule。
+- Operations Center 不编辑 Cron / Time Zone，也不在前端计算 next fire。
