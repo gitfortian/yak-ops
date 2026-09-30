@@ -22,9 +22,8 @@
   - 来源绑定 `yak_e2e_automation_source`。
   - 目标绑定 `yak_e2e_automation_target`。
 - 两个数据源连接校验通过。
-- 当前版本尚未提供 Schedule 配置 UI，因此**仅 Schedule 配置步骤**允许使用对外 Data Sync HTTP 接口。
-- Task 创建、上线、运行态观察和结果验证仍通过 Yak Ops UI / 数据库完成。
-- 不允许直接修改 `yak_ops_data_sync_schedule`。
+- Schedule 配置、上线、启停与运行态观察全部通过 Yak Ops UI 完成。
+- 不允许通过 HTTP 接口或直接修改 `yak_ops_data_sync_schedule` 绕过产品 UI。
 
 ## 1. 准备来源表
 
@@ -96,6 +95,8 @@ CREATE TABLE e2e_automation_cron_user (
 来源表：e2e_automation_cron_user
 目标表：e2e_automation_cron_user
 写入方式：APPEND
+Cron 表达式：0/30 * * * * ?
+时区：Asia/Shanghai
 ```
 
 字段映射全部兼容后点击：
@@ -104,38 +105,34 @@ CREATE TABLE e2e_automation_cron_user (
 保存并上线
 ```
 
-记录 Task ID：
-
-```text
-TASK_ID
-```
-
-## 4. 配置 Schedule
-
-使用与当前登录用户相同的授权上下文调用公开 HTTP 接口。
-
-保存 Schedule：
-
-```text
-PUT /api/v1/data-sync/tasks/{TASK_ID}/schedule
-```
-
-请求体：
-
-```json
-{
-  "cronExpression": "0/30 * * * * ?",
-  "timeZone": "Asia/Shanghai"
-}
-```
-
-然后启用：
-
-```text
-POST /api/v1/data-sync/tasks/{TASK_ID}/schedule/enable
-```
-
 这里使用每 30 秒一次，仅为了缩短人工验收时间。
+
+保存并上线后，Schedule Definition 已存在但默认仍为关闭状态；保存配置本身不得隐式启用调度。
+
+## 4. 在 Operations Center 启用 Schedule
+
+打开：
+
+```text
+运维中心
+  ↓
+离线任务
+  ↓
+任务
+```
+
+找到 `e2e_automation_offline_cron`，确认自动化区域能看到刚才保存的 Cron，然后点击：
+
+```text
+开启调度
+```
+
+预期：
+
+```text
+自动化：调度开启
+下次运行：有明确时间
+```
 
 ## 5. 在 Operations Center 验证调度运行态
 
@@ -207,13 +204,11 @@ ORDER BY id;
 
 ## 8. 停用 Schedule
 
-在第二个触发点到来前执行：
+在第二个触发点到来前，在 Operations Center 点击：
 
 ```text
-POST /api/v1/data-sync/tasks/{TASK_ID}/schedule/disable
+关闭调度
 ```
-
-回到 Operations Center。
 
 预期：
 
@@ -253,8 +248,9 @@ Execution 数量仍然 = N
 - [ ] 来源端初始化数据恰好 3 条。
 - [ ] 目标端开始为空。
 - [ ] Task 已上线。
-- [ ] Schedule 保存成功。
-- [ ] Schedule 启用成功。
+- [ ] 离线任务编辑页成功保存 Cron / Time Zone。
+- [ ] Schedule 保存后没有被隐式启用。
+- [ ] Operations Center 成功开启 Schedule。
 - [ ] Operations Center 显示 Cron / Time Zone / Next Run。
 - [ ] 到点后自动创建 `SCHEDULE` Execution。
 - [ ] 自动 Execution 最终 `SUCCEEDED`。

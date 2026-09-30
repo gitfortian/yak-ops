@@ -1,4 +1,4 @@
-name: V1 Release Gate
+name: Release Gate
 
 on:
   pull_request:
@@ -20,37 +20,17 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Product version to validate.
+        description: Stable product version to validate and release.
         required: true
-        default: "1.0.0"
+        default: "1.1.0"
         type: string
-      offline_001_confirmed:
-        description: OFFLINE-001 MySQL to MySQL APPEND passed.
+      manual_e2e_confirmed:
+        description: All required Manual E2E listed in this version's readiness document passed.
         required: true
         default: false
         type: boolean
-      offline_002_confirmed:
-        description: OFFLINE-002 MySQL to MySQL OVERWRITE passed.
-        required: true
-        default: false
-        type: boolean
-      offline_003_confirmed:
-        description: OFFLINE-003 MySQL to MySQL UPSERT passed.
-        required: true
-        default: false
-        type: boolean
-      realtime_001_confirmed:
-        description: REALTIME-001 snapshot and INSERT/UPDATE/DELETE passed.
-        required: true
-        default: false
-        type: boolean
-      realtime_002_confirmed:
-        description: REALTIME-002 persisted-offset continuation passed.
-        required: true
-        default: false
-        type: boolean
-      baseline_review_confirmed:
-        description: V1 Flyway baseline has completed final review and is ready to freeze.
+      migration_review_confirmed:
+        description: All migrations shipped by this version completed final release review.
         required: true
         default: false
         type: boolean
@@ -60,16 +40,15 @@ on:
         default: false
         type: boolean
       release_notes_confirmed:
-        description: Release notes and known limitations are ready.
+        description: Release notes, readiness and known limitations are ready.
         required: true
         default: false
         type: boolean
-
 permissions:
   contents: read
 
 concurrency:
-  group: v1-release-gate-${{ github.ref }}
+  group: release-gate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -204,26 +183,25 @@ jobs:
           frontend_id="$(docker image inspect --format '{{.Id}}' "${frontend_image}")"
           commit_sha="$(git rev-parse HEAD)"
 
-          cat > release-evidence/release-evidence.md <<EOF
-          # Yak Ops ${RELEASE_VERSION} Release Candidate Evidence
-
-          - Product Version: `${RELEASE_VERSION}`
-          - Candidate Commit: `${commit_sha}`
-          - Workflow Run: `https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`
-          - Distribution: `${archive}`
-          - Distribution SHA-256: `${distribution_sha}`
-          - Backend Image: `${backend_image}`
-          - Backend Local Image ID: `${backend_id}`
-          - Frontend Image: `${frontend_image}`
-          - Frontend Local Image ID: `${frontend_id}`
-          - Quality Gate: PASS
-          - Full Backend Acceptance: PASS
-          - Distribution Verification: PASS
-          - Docker Image Identity: PASS
-          - Compose Login Smoke: PASS
-
-          Local image IDs are candidate-build evidence. Registry manifest digests are recorded only after immutable version tags are pushed during the publish step.
-          EOF
+          {
+            printf '# Yak Ops %s Release Candidate Evidence\n\n' "${RELEASE_VERSION}"
+            printf -- '- Product Version: `%s`\n' "${RELEASE_VERSION}"
+            printf -- '- Candidate Commit: `%s`\n' "${commit_sha}"
+            printf -- '- Workflow Run: `https://github.com/%s/actions/runs/%s`\n' "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}"
+            printf -- '- Distribution: `%s`\n' "${archive}"
+            printf -- '- Distribution SHA-256: `%s`\n' "${distribution_sha}"
+            printf -- '- Backend Image: `%s`\n' "${backend_image}"
+            printf -- '- Backend Local Image ID: `%s`\n' "${backend_id}"
+            printf -- '- Frontend Image: `%s`\n' "${frontend_image}"
+            printf -- '- Frontend Local Image ID: `%s`\n' "${frontend_id}"
+            printf -- '- Quality Gate: PASS\n'
+            printf -- '- Full Backend Acceptance: PASS\n'
+            printf -- '- Data Sync Automation Acceptance: PASS\n'
+            printf -- '- Distribution Verification: PASS\n'
+            printf -- '- Docker Image Identity: PASS\n'
+            printf -- '- Compose Login Smoke: PASS\n\n'
+            printf '%s\n' 'Local image IDs are candidate-build evidence. Registry manifest digests are recorded only after immutable version tags are pushed during the publish step.'
+          } > release-evidence/release-evidence.md
 
           cat release-evidence/release-evidence.md
 
@@ -261,43 +239,49 @@ jobs:
             fi
           done
 
-          echo "V1 automated release gate passed."
+          echo "Automated release gate passed."
 
   release-decision:
-    name: V1 Release Decision
+    name: Release Decision
     if: github.event_name == 'workflow_dispatch'
     needs:
       - automated-release-gate
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ inputs.release_version }}
-      OFFLINE_001_CONFIRMED: ${{ inputs.offline_001_confirmed }}
-      OFFLINE_002_CONFIRMED: ${{ inputs.offline_002_confirmed }}
-      OFFLINE_003_CONFIRMED: ${{ inputs.offline_003_confirmed }}
-      REALTIME_001_CONFIRMED: ${{ inputs.realtime_001_confirmed }}
-      REALTIME_002_CONFIRMED: ${{ inputs.realtime_002_confirmed }}
-      BASELINE_REVIEW_CONFIRMED: ${{ inputs.baseline_review_confirmed }}
+      MANUAL_E2E_CONFIRMED: ${{ inputs.manual_e2e_confirmed }}
+      MIGRATION_REVIEW_CONFIRMED: ${{ inputs.migration_review_confirmed }}
       BLOCKERS_CLEARED: ${{ inputs.blockers_cleared }}
       RELEASE_NOTES_CONFIRMED: ${{ inputs.release_notes_confirmed }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Verify release readiness confirmations
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
-            echo "Formal V1 release decision must run from main, current ref: ${GITHUB_REF_NAME}"
+            echo "Formal release decision must run from main, current ref: ${GITHUB_REF_NAME}"
             exit 1
           fi
 
+          if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Formal release decision requires a stable X.Y.Z version: ${RELEASE_VERSION}"
+            exit 1
+          fi
+
+          readiness="docs/release/v${RELEASE_VERSION}-readiness.md"
+          notes="docs/release/v${RELEASE_VERSION}-release-notes.md"
+          test -f "${readiness}"
+          test -f "${notes}"
+          test "$(grep -m1 '^Status:' "${readiness}")" = "Status: Ready"
+
           checks=(
-            "OFFLINE-001:${OFFLINE_001_CONFIRMED}"
-            "OFFLINE-002:${OFFLINE_002_CONFIRMED}"
-            "OFFLINE-003:${OFFLINE_003_CONFIRMED}"
-            "REALTIME-001:${REALTIME_001_CONFIRMED}"
-            "REALTIME-002:${REALTIME_002_CONFIRMED}"
-            "Baseline Review:${BASELINE_REVIEW_CONFIRMED}"
+            "Required Manual E2E:${MANUAL_E2E_CONFIRMED}"
+            "Migration Review:${MIGRATION_REVIEW_CONFIRMED}"
             "Release Blockers Cleared:${BLOCKERS_CLEARED}"
             "Release Notes Ready:${RELEASE_NOTES_CONFIRMED}"
           )
