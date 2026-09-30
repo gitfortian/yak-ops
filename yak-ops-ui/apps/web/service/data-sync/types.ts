@@ -276,3 +276,60 @@ export interface DataSyncExecutionEventRecord {
   message: string;
   createTime?: string;
 }
+
+export type DataSyncOperationsRange = "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
+
+export interface DataSyncOperationsDashboardPayload {
+  syncType: DataSyncType;
+  range: DataSyncOperationsRange;
+}
+
+export interface DataSyncOperationsSummary {
+  executionCount: number;
+  succeededCount: number;
+  failedCount: number;
+  lostCount: number;
+  abnormalTaskCount: number;
+  currentActiveTaskCount: number;
+  autoRecoveryCount: number;
+  readRows: number;
+  writeRows: number;
+  averageDurationMillis: number;
+}
+
+export interface DataSyncOperationsTrendPoint {
+  bucketStart: string;
+  executionCount: number;
+  succeededCount: number;
+  failedCount: number;
+  lostCount: number;
+  autoRecoveryCount: number;
+  readRows: number;
+  writeRows: number;
+  averageDurationMillis: number;
+}
+
+export interface DataSyncOperationsStatusMetric {
+  status: DataSyncInstanceStatus;
+  count: number;
+}
+
+export interface DataSyncOperationsFailureRank {
+  taskId: string;
+  taskName: string;
+  failedCount: number;
+  lostCount: number;
+  abnormalCount: number;
+  latestFailureTime?: string;
+}
+
+export interface DataSyncOperationsDashboard {
+  syncType: DataSyncType | string;
+  range: DataSyncOperationsRange | string;
+  rangeStart: string;
+  rangeEnd: string;
+  summary: DataSyncOperationsSummary;
+  trend: DataSyncOperationsTrendPoint[];
+  statusDistribution: DataSyncOperationsStatusMetric[];
+  failureRanking: DataSyncOperationsFailureRank[];
+}
