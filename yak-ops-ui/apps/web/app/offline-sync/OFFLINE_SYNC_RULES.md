@@ -7,7 +7,7 @@ Scope:
 
 ## Phase 4 Boundary
 
-The offline product owns Task definition, publication configuration and Schedule definition. Operations Center owns manual execution, Schedule enable / disable, Stop and Instance runtime presentation.
+The offline product owns Task definition, publication configuration, Schedule definition and Task-scoped read-only runtime detail. Operations Center owns manual execution, Schedule enable / disable, Stop and cross-Task runtime operations.
 
 Must:
 
@@ -28,10 +28,9 @@ Must:
 - Show the Split consistency Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
 - Use existing Yak UI primitives.
 - Keep the OFFLINE editor as a full-height local-scroll workspace: PageHeader and the desktop section navigator stay outside the scrolling region, while only the definition content column owns vertical scrolling. Do not rely on sticky positioning for these fixed editor controls and do not change the global AppLayout scroll contract for this page.
-- Keep the Offline Sync page definition-focused; do not expose a Task Instance Tab there.
-- Route historical Instance access to Operations Center with the current Task filter.
-- Operations Center owns manual Run, Stop, Instance list/detail and runtime polling.
-- A manual Run in Operations Center creates a new Instance and navigates to the Operations Center Instance detail page.
+- Keep the Offline Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.
+- Task Detail stays inside Data Integration and shows Basic Info plus Task-filtered Execution history and the selected Execution detail. It is read-only for runtime commands.
+- Operations Center owns manual Run, Stop, Schedule Runtime controls and cross-Task runtime polling. A manual Run may continue to open the Operations Center Execution detail.
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run is an Operations Center action for PUBLISHED Tasks.
 - OFFLINE editor owns optional Schedule definition only: Quartz Cron expression + explicit IANA Time Zone. An empty Cron on a Task that has never created a Schedule means manual-only execution.
@@ -45,10 +44,9 @@ Must:
 - Datasource Select footer exposes “新增数据源” as a product-owned action and routes to Datasource create; Schema / Table do not invent create actions.
 - Static enum Selects such as OFFLINE write mode stay simple and do not add search / refresh / footer without a real option-volume need.
 - Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
-- UNPUBLISHED Task definition actions are 上线 / 编辑 / 实例 / 删除.
-- PUBLISHED idle Task definition actions are 下线 / 实例.
-- PUBLISHED Task with a PENDING / RUNNING Instance exposes only 实例 on the definition page; 下线 is unavailable until the active Instance ends.
-- The 实例 action always enters Operations Center. Run / Stop never execute from the Offline Sync definition page.
+- Task list keeps four stable action slots: 上线/下线、编辑、详情、删除. `详情` is always visible and opens `/offline-sync/:taskId/detail` inside Data Integration.
+- UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除. PUBLISHED disables 编辑 / 删除; an active PENDING / RUNNING / RETRY_WAITING Execution also disables 下线 while 详情 remains available.
+- Run / Stop never execute from the Offline Sync list, editor or Task Detail.
 - Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 
 Must Not:
