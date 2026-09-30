@@ -35,6 +35,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
@@ -66,6 +67,7 @@ import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import jakarta.annotation.Resource;
 import java.time.DateTimeException;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +208,26 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 StringUtils.trimToNull(dto.getSourceDataSourceId()),
                 StringUtils.trimToNull(dto.getTargetDataSourceId()));
         return PagingData.from(taskRepository.queryPage(workspaceId, query).map(this::toTaskVO));
+    }
+
+    @Override
+    public PagingData<DataSyncTaskOperationVO> queryTaskOperationPage(DataSyncTaskQueryDTO dto) {
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
+        if (CollectionUtils.isNotEmpty(dto.getSorts())) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, "运维任务分页暂不支持自定义排序");
+        }
+
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncTaskPageQuery query = new DataSyncTaskPageQuery(
+                dto.getPageNo(),
+                dto.getPageSize(),
+                StringUtils.trimToNull(dto.getKeyword()),
+                dto.getSyncType(),
+                DataSyncTaskStatus.PUBLISHED,
+                StringUtils.trimToNull(dto.getSourceDataSourceId()),
+                StringUtils.trimToNull(dto.getTargetDataSourceId()));
+        return PagingData.from(
+                taskRepository.queryPage(workspaceId, query).map(task -> toTaskOperationVO(workspaceId, task)));
     }
 
     @Override
@@ -705,6 +727,40 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncScheduleVO toScheduleVO(DataSyncScheduleEntity entity) {
         return BeanCopyUtils.copy(entity, DataSyncScheduleVO.class);
+    }
+
+    private DataSyncTaskOperationVO toTaskOperationVO(String workspaceId, DataSyncTaskEntity task) {
+        DataSyncTaskOperationVO target = new DataSyncTaskOperationVO();
+        target.setId(task.getId());
+        target.setName(task.getName());
+        target.setSyncType(
+                task.getSyncType() == null ? null : task.getSyncType().name());
+        target.setDesiredState(taskDesiredState(task).name());
+        target.setDefinitionVersion(task.getDefinitionVersion());
+        target.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
+        instanceRepository
+                .queryLatestByTask(workspaceId, task.getId())
+                .ifPresent(instance -> target.setLatestInstance(toInstanceVO(instance, false)));
+        if (task.getSyncType() == DataSyncType.OFFLINE) {
+            scheduleRepository
+                    .queryByTask(workspaceId, task.getId())
+                    .ifPresent(schedule -> target.setSchedule(toRuntimeScheduleVO(schedule)));
+        }
+        return target;
+    }
+
+    private DataSyncScheduleVO toRuntimeScheduleVO(DataSyncScheduleEntity entity) {
+        DataSyncScheduleVO target = toScheduleVO(entity);
+        if (!Boolean.TRUE.equals(entity.getEnabled())) return target;
+        try {
+            scheduleEngine
+                    .queryNextFireTime(entity.getId())
+                    .ifPresent(nextFireTime -> target.setNextFireTime(
+                            LocalDateTime.ofInstant(nextFireTime, ZoneId.of(entity.getTimeZone()))));
+        } catch (ScheduleEngineException exception) {
+            LOG.warn("查询调度下一次触发时间失败，scheduleId={}, error={}", entity.getId(), exception.getMessage());
+        }
+        return target;
     }
 
     private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {

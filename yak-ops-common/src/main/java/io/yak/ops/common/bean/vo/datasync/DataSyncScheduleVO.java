@@ -27,6 +27,9 @@ public class DataSyncScheduleVO {
     /** 当前是否启用调度。 */
     private Boolean enabled;
 
+    /** Scheduler Runtime 计算出的下一次触发时间；未启用或无下次触发时为空。 */
+    private LocalDateTime nextFireTime;
+
     /** 调度定义创建时间。 */
     private LocalDateTime createTime;
 

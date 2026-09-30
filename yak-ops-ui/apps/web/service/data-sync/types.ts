@@ -74,6 +74,33 @@ export interface DataSyncTaskPageResult {
   pagination: PaginationInfo;
 }
 
+export interface DataSyncScheduleRecord {
+  id: string;
+  taskId: string;
+  cronExpression: string;
+  timeZone: string;
+  enabled: boolean;
+  nextFireTime?: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface DataSyncTaskOperationRecord {
+  id: string;
+  name: string;
+  syncType: DataSyncType | string;
+  desiredState?: DataSyncDesiredState | string;
+  definitionVersion: number;
+  retryPolicy?: DataSyncRetryPolicy;
+  latestInstance?: DataSyncInstanceRecord;
+  schedule?: DataSyncScheduleRecord;
+}
+
+export interface DataSyncTaskOperationPageResult {
+  bizData: DataSyncTaskOperationRecord[];
+  pagination: PaginationInfo;
+}
+
 interface DataSyncTaskSaveBase {
   name: string;
   writeMode?: DataSyncWriteMode;

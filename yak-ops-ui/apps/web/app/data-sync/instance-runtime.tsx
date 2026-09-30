@@ -23,7 +23,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   cancelDataSyncInstance,
   getDataSyncInstance,
+  listDataSyncAttempts,
   listDataSyncInstances,
+  type DataSyncAttemptRecord,
   type DataSyncInstanceRecord,
   type DataSyncInstanceStatus,
   type DataSyncType,
@@ -59,6 +61,14 @@ const statusMeta = (
     default:
       return { label: status || "-", tone: "neutral" };
   }
+};
+
+const triggerText = (triggerType?: string) => {
+  if (triggerType === "MANUAL") return "手动运行";
+  if (triggerType === "SCHEDULE") return "调度触发";
+  if (triggerType === "AUTO_RECOVERY") return "自动恢复";
+  if (triggerType === "RETRY") return "重试";
+  return triggerType || "-";
 };
 
 const durationText = (record: DataSyncInstanceRecord) => {
@@ -333,18 +343,23 @@ export function DataSyncInstanceDetailPage({
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [record, setRecord] = useState<DataSyncInstanceRecord>();
+  const [attempts, setAttempts] = useState<DataSyncAttemptRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const value = await getDataSyncInstance(id);
+    const [value, attemptItems] = await Promise.all([
+      getDataSyncInstance(id),
+      listDataSyncAttempts(id),
+    ]);
     if (value.syncType !== syncType) {
       toast.error("实例类型与当前页面不匹配");
       navigate(resolvedListPath, { replace: true });
       return;
     }
     setRecord(value);
+    setAttempts(attemptItems || []);
     setLoading(false);
   }, [id, navigate, resolvedListPath, syncType]);
 
@@ -381,9 +396,7 @@ export function DataSyncInstanceDetailPage({
     <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
       <PageHeader
         title={`${record.taskName} / ${record.id}`}
-        description={`任务版本 v${record.taskVersion} · ${
-          record.triggerType === "MANUAL" ? "手动运行" : record.triggerType
-        }`}
+        description={`任务版本 v${record.taskVersion} · ${triggerText(record.triggerType)}`}
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
@@ -418,10 +431,11 @@ export function DataSyncInstanceDetailPage({
             </span>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-4 max-md:grid-cols-1">
+          <div className="mt-5 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
             {[
               [readLabel, String(record.readRows ?? 0)],
               [writeLabel, String(record.writeRows ?? 0)],
+              ["Attempt", `${record.currentAttempt || 1} / ${record.maxAttempts || 1}`],
               ["状态", meta.label],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
@@ -434,6 +448,75 @@ export function DataSyncInstanceDetailPage({
           {realtime ? (
             <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
               实时指标统计 YakFlow 变更事件；UPDATE 会产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
+            </div>
+          ) : null}
+        </section>
+
+        <section className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
+          <h2 className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+            Attempt 历史
+          </h2>
+          <Table<DataSyncAttemptRecord>
+            columns={[
+              {
+                key: "attemptNo",
+                title: "Attempt",
+                width: 90,
+                render: (_value, attempt) => `#${attempt.attemptNo}`,
+              },
+              {
+                key: "status",
+                title: "状态",
+                width: 110,
+                render: (_value, attempt) => {
+                  const attemptMeta = statusMeta(attempt.status, realtime);
+                  return <Badge tone={attemptMeta.tone}>{attemptMeta.label}</Badge>;
+                },
+              },
+              {
+                key: "time",
+                title: "开始 / 完成",
+                minWidth: 260,
+                render: (_value, attempt) => (
+                  <div className="text-xs text-[#667085]">
+                    {attempt.startTime || attempt.createTime || "-"} →{" "}
+                    {attempt.finishTime || "运行中"}
+                  </div>
+                ),
+              },
+              {
+                key: "metrics",
+                title: "读取 / 写入",
+                width: 140,
+                align: "right",
+                render: (_value, attempt) =>
+                  `${(attempt.readRows ?? 0).toLocaleString()} / ${(attempt.writeRows ?? 0).toLocaleString()}`,
+              },
+              {
+                key: "error",
+                title: "错误",
+                minWidth: 220,
+                render: (_value, attempt) => (
+                  <div
+                    className="max-w-[360px] truncate text-xs text-[#667085]"
+                    title={attempt.errorMessage || ""}
+                  >
+                    {attempt.errorMessage || "-"}
+                  </div>
+                ),
+              },
+            ]}
+            dataSource={attempts}
+            rowKey="id"
+            bordered
+            size="small"
+            pagination={false}
+            emptyText="旧实例或未执行实例暂无独立 Attempt 记录"
+            scroll={{ x: 900 }}
+          />
+          {record.status === "RETRY_WAITING" ? (
+            <div className="border-t border-[#eef0f3] px-4 py-3 text-xs text-[#b54708]">
+              下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
             </div>
           ) : null}
         </section>

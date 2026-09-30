@@ -7,6 +7,7 @@ import type {
   DataSyncInstanceRecord,
   DataSyncMappingPreview,
   DataSyncMappingPreviewPayload,
+  DataSyncTaskOperationPageResult,
   DataSyncTaskPageParams,
   DataSyncTaskPageResult,
   DataSyncTaskRecord,
@@ -21,6 +22,14 @@ export const listDataSyncTasks = (
   params: DataSyncTaskPageParams,
 ): Promise<DataSyncTaskPageResult> =>
   HttpUtils.postData<DataSyncTaskPageResult>(`${DATA_SYNC_API_PREFIX}/tasks/page`, params);
+
+export const listDataSyncOperationTasks = (
+  params: DataSyncTaskPageParams,
+): Promise<DataSyncTaskOperationPageResult> =>
+  HttpUtils.postData<DataSyncTaskOperationPageResult>(
+    `${DATA_SYNC_API_PREFIX}/operations/tasks/page`,
+    params,
+  );
 
 export const getDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
   HttpUtils.getData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}`);
