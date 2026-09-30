@@ -2,6 +2,12 @@
   --yak-color-primary: #0033ff;
   --yak-color-hover: #f6f6f6;
 
+  --yak-components-collapse-section-bg: #fafafa;
+  --yak-components-collapse-section-bg-hover: var(--yak-color-hover);
+  --yak-components-collapse-section-border: #e7e9ed;
+  --yak-components-collapse-section-text: #252832;
+  --yak-components-collapse-section-icon: #667085;
+
   --yak-radius-control-small: 6px;
   --yak-radius-control-medium: 8px;
   --yak-radius-control-large: 10px;

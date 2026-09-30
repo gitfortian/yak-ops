@@ -75,6 +75,7 @@ Base UI is an implementation dependency, not a product-facing API.
 - Persistent warnings that the user should see before acting use Alert instead of Toast. Transient save / request / execution feedback continues to use Toast.
 - Product code must not hand-build yellow warning boxes when Alert fits the case.
 - Badge is the common lightweight status-label primitive; product-specific status semantics stay outside Yak UI.
+- Collapsible remains the low-level disclosure primitive. CollapseSection is the shared configuration-section shell for a titled, full-row trigger plus animated content: the 32px header owns border, neutral surface, hover, pointer cursor, focus border and chevron rotation; the panel owns the 12px header-to-content gap. Product code owns the body layout and business state. `extra` is presentation-only and must not contain nested interactive controls inside the trigger.
 - Table owns generic tabular rendering, loading / empty presentation, scroll / sticky header and pagination placement; product code owns fetching, filters, mutations and business cell content.
 - PageHeader owns generic page title, description, right-side composition and optional divider; product code owns page actions and business behavior.
 - `className` is a layout / positioning / necessary escape hatch, not a second visual contract.
@@ -236,6 +237,7 @@ Yak UI
 ├── Badge
 ├── Button
 ├── Checkbox
+├── CollapseSection
 ├── Collapsible
 ├── Combobox
 ├── Dialog
