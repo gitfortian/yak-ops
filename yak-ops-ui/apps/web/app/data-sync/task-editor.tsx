@@ -771,9 +771,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const scheduleConfigured = Boolean(scheduleForm.cronExpression.trim());
   const scheduleRequired = scheduleExists || scheduleConfigured;
   const scheduleValid =
-    realtime ||
-    !scheduleRequired ||
-    (scheduleConfigured && Boolean(scheduleForm.timeZone.trim()));
+    realtime || !scheduleRequired || (scheduleConfigured && Boolean(scheduleForm.timeZone.trim()));
   const canSave =
     !published &&
     scheduleValid &&
