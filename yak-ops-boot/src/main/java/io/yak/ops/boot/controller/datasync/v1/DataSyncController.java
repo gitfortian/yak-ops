@@ -9,6 +9,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
@@ -132,6 +133,12 @@ public class DataSyncController {
     @GetMapping("/instances/{id}/attempts")
     public Result<List<DataSyncAttemptVO>> attemptHistory(@PathVariable("id") String id) {
         return Result.success(dataSyncService.queryAttempts(id));
+    }
+
+    @Operation(summary = "查询同步Execution产品事件")
+    @GetMapping("/instances/{id}/logs")
+    public Result<List<DataSyncExecutionEventVO>> executionLogs(@PathVariable("id") String id) {
+        return Result.success(dataSyncService.queryExecutionEvents(id));
     }
 
     @Operation(summary = "分页查询同步实例")
