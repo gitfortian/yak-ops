@@ -462,6 +462,7 @@ interface DataSyncTaskEditorPageProps {
 
 export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps) {
   const realtime = syncType === "REALTIME";
+  const localScroll = !realtime;
   const basePath = realtime ? "/realtime-sync" : "/offline-sync";
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
@@ -850,12 +851,18 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   }
 
   return (
-    <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
+    <div
+      className={
+        localScroll
+          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#f6f6f6] text-[#242731]"
+          : "min-h-full bg-[#f6f6f6] text-[#242731]"
+      }
+    >
       <PageHeader
         title={pageTitle}
         description={pageDescription}
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className={localScroll ? "shrink-0 bg-white px-6 max-md:px-4" : "bg-white px-6 max-md:px-4"}
         extra={
           <>
             <Button size="small" disabled={saving} onClick={() => navigate(basePath)}>
@@ -877,8 +884,20 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         }
       />
 
-      <div className="flex gap-5 px-6 pb-8 pt-5 max-md:px-4">
-        <main className="min-w-0 flex-1 space-y-4">
+      <div
+        className={
+          localScroll
+            ? "flex min-h-0 flex-1 gap-5 px-6 max-md:px-4"
+            : "flex gap-5 px-6 pb-8 pt-5 max-md:px-4"
+        }
+      >
+        <main
+          className={
+            localScroll
+              ? "min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
+              : "min-w-0 flex-1 space-y-4"
+          }
+        >
           {editing ? (
             <Alert>
               {realtime
@@ -1147,7 +1166,13 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           </CollapseSection>
         </main>
 
-        <aside className="sticky top-4 hidden h-fit w-40 shrink-0 space-y-1 self-start lg:block">
+        <aside
+          className={
+            localScroll
+              ? "hidden h-fit w-40 shrink-0 space-y-1 self-start pt-5 lg:block"
+              : "sticky top-4 hidden h-fit w-40 shrink-0 space-y-1 self-start lg:block"
+          }
+        >
           {[
             ["basic", "基本信息"],
             ["datasource", "数据源"],
