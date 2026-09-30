@@ -31,9 +31,9 @@ Must:
 - Keep the Offline Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.
 - Task Detail stays inside Data Integration and shows Basic Info plus Task-filtered Execution history. The selected Execution uses `执行情况 / 执行日志` Tabs: execution status reuses the shared Execution / Attempt presentation; execution log reads persisted product events only. It is read-only for runtime commands.
 - `执行日志` only polls every 2 seconds while that Tab is visible and the selected Execution is PENDING / RUNNING / RETRY_WAITING; terminal or hidden logs do not keep polling. Historical Executions may legitimately have an empty event timeline and frontend must not synthesize missing history.
-- Operations Center owns manual Run, Stop, Schedule Runtime controls and cross-Task runtime polling. A manual Run may continue to open the Operations Center Execution detail.
+- Operations Center OFFLINE root is an aggregate observability Dashboard. It no longer exposes the previous Task / Instance Tabs or per-Task Run / Stop / Schedule controls; Task Detail remains the place to inspect one Task's Execution history.
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
-- The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run is an Operations Center action for PUBLISHED Tasks.
+- The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Runtime execution is not an editor action.
 - OFFLINE editor owns optional Schedule definition only: Quartz Cron expression + explicit IANA Time Zone. An empty Cron on a Task that has never created a Schedule means manual-only execution.
 - Persist Schedule only after Task persistence succeeds because Schedule identity depends on `taskId`; Save & Publish must persist Task, then Schedule, then publish.
 - Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly enables it in Operations Center.
