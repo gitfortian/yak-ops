@@ -5,6 +5,8 @@ import { DataSyncInstanceDetailPage, DataSyncInstances } from "@/app/data-sync/i
 import { DataSyncTaskOperations } from "@/app/data-sync/task-operations";
 import type { DataSyncType } from "@/service/data-sync";
 
+import { OfflineOperationsDashboard } from "./offline-dashboard";
+
 interface TaskOperationsPageProps {
   syncType: DataSyncType;
   title: string;
@@ -78,14 +80,7 @@ function TaskOperationsPage({ syncType, title, description, basePath }: TaskOper
 }
 
 export function OfflineTaskOperationsPage() {
-  return (
-    <TaskOperationsPage
-      syncType="OFFLINE"
-      title="离线任务"
-      description="运行离线同步任务，并查看执行实例与运行状态"
-      basePath="/operations/offline-tasks"
-    />
-  );
+  return <OfflineOperationsDashboard />;
 }
 
 export function RealtimeTaskOperationsPage() {
@@ -104,7 +99,7 @@ export function OfflineTaskOperationsInstanceDetailPage() {
     <DataSyncInstanceDetailPage
       syncType="OFFLINE"
       basePath="/operations/offline-tasks"
-      listPath="/operations/offline-tasks?tab=instances"
+      listPath="/operations/offline-tasks"
     />
   );
 }
