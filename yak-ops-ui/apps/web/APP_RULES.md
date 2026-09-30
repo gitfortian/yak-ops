@@ -8,7 +8,7 @@ Scope: `yak-ops-ui/apps/web/**`。
 
 ## App Domain
 
-任务定义入口和运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或运行态组件。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
+任务定义、Task Detail 与运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或 Execution 展示组件。Task Detail 留在数据集成内，只读展示当前 Task 的 Execution / Attempt 运行事实；Run / Start / Stop、Schedule Runtime 和跨 Task 观察仍由运维中心负责。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
 
 ## App Shell
 

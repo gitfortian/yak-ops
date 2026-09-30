@@ -101,7 +101,7 @@ interface DataSyncTaskLifecycleActionsProps {
   onPublish: (record: DataSyncTaskRecord) => void;
   onUnpublish: (record: DataSyncTaskRecord) => void;
   onEdit: (record: DataSyncTaskRecord) => void;
-  onInstances: (record: DataSyncTaskRecord) => void;
+  onDetail: (record: DataSyncTaskRecord) => void;
   onDelete: (record: DataSyncTaskRecord) => void;
 }
 
@@ -112,7 +112,7 @@ export function DataSyncTaskLifecycleActions({
   onPublish,
   onUnpublish,
   onEdit,
-  onInstances,
+  onDetail,
   onDelete,
 }: DataSyncTaskLifecycleActionsProps) {
   const published = isPublishedTask(record);
@@ -136,10 +136,10 @@ export function DataSyncTaskLifecycleActions({
       onClick: () => onEdit(record),
     },
     {
-      key: "instances",
-      label: "实例",
+      key: "detail",
+      label: "详情",
       className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
-      onClick: () => onInstances(record),
+      onClick: () => onDetail(record),
     },
     {
       key: "delete",

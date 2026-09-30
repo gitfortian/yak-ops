@@ -7,6 +7,7 @@ import {
   OfflineSyncEditorPage,
   OfflineSyncInstanceDetailPage,
   OfflineSyncPage,
+  OfflineSyncTaskDetailPage,
 } from "@/app/offline-sync";
 import {
   OfflineTaskOperationsInstanceDetailPage,
@@ -18,6 +19,7 @@ import {
   RealtimeSyncEditorPage,
   RealtimeSyncInstanceDetailPage,
   RealtimeSyncPage,
+  RealtimeSyncTaskDetailPage,
 } from "@/app/realtime-sync";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -134,10 +136,12 @@ export default function AppRouter() {
           <Route path="/offline-sync" element={<OfflineSyncPage />} />
           <Route path="/offline-sync/new" element={<OfflineSyncEditorPage />} />
           <Route path="/offline-sync/instances/:id" element={<OfflineSyncInstanceDetailPage />} />
+          <Route path="/offline-sync/:taskId/detail" element={<OfflineSyncTaskDetailPage />} />
           <Route path="/offline-sync/:id" element={<OfflineSyncEditorPage />} />
           <Route path="/realtime-sync" element={<RealtimeSyncPage />} />
           <Route path="/realtime-sync/new" element={<RealtimeSyncEditorPage />} />
           <Route path="/realtime-sync/instances/:id" element={<RealtimeSyncInstanceDetailPage />} />
+          <Route path="/realtime-sync/:taskId/detail" element={<RealtimeSyncTaskDetailPage />} />
           <Route path="/realtime-sync/:id" element={<RealtimeSyncEditorPage />} />
         </Route>
 

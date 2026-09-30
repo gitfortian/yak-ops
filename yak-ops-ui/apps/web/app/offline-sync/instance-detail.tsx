@@ -1,13 +1,7 @@
-import { Navigate, useParams } from "react-router-dom";
+import { DataSyncLegacyInstanceDetailRedirect } from "@/app/data-sync/task-detail";
 
 export function OfflineSyncInstanceDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  return (
-    <Navigate
-      replace
-      to={id ? `/operations/offline-tasks/instances/${id}` : "/operations/offline-tasks"}
-    />
-  );
+  return <DataSyncLegacyInstanceDetailRedirect syncType="OFFLINE" basePath="/offline-sync" />;
 }
 
 export default OfflineSyncInstanceDetailPage;

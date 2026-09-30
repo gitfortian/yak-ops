@@ -1,13 +1,7 @@
-import { Navigate, useParams } from "react-router-dom";
+import { DataSyncLegacyInstanceDetailRedirect } from "@/app/data-sync/task-detail";
 
 export function RealtimeSyncInstanceDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  return (
-    <Navigate
-      replace
-      to={id ? `/operations/realtime-tasks/instances/${id}` : "/operations/realtime-tasks"}
-    />
-  );
+  return <DataSyncLegacyInstanceDetailRedirect syncType="REALTIME" basePath="/realtime-sync" />;
 }
 
 export default RealtimeSyncInstanceDetailPage;

@@ -7,7 +7,7 @@ Scope:
 
 ## Current V1 Boundary
 
-Realtime Sync owns Task definition and publication configuration. Operations Center owns Start / Stop and persisted Instance runtime presentation. Backend Phase 6 additionally proves the configured REALTIME path against MySQL, PostgreSQL and Oracle targets; the frontend does not duplicate that database-specific validation logic.
+Realtime Sync owns Task definition, publication configuration and Task-scoped read-only runtime detail. Operations Center owns Start / Stop, desired-state runtime operations and cross-Task visibility. Backend acceptance proves the configured REALTIME path against MySQL, PostgreSQL and Oracle targets; the frontend does not duplicate that database-specific validation logic.
 
 Must:
 
@@ -27,16 +27,16 @@ Must:
 - In the REALTIME source section, show a Yak UI `Alert` that ROW Binlog and CDC account permissions are required; ordinary Datasource connection-test success does not prove CDC readiness.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Start is an Operations Center action for PUBLISHED Tasks.
 - Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
-- UNPUBLISHED Task definition actions are 上线 / 编辑 / 实例 / 删除.
-- PUBLISHED idle Task definition actions are 下线 / 实例.
-- PUBLISHED Task with a PENDING / RUNNING Instance exposes only 实例 on the definition page; 下线 is unavailable until the active Instance ends.
-- The 实例 action always enters Operations Center. Start / Stop never execute from the Realtime Sync definition page.
+- Task list keeps four stable action slots: 上线/下线、编辑、详情、删除. `详情` is always visible and opens `/realtime-sync/:taskId/detail` inside Data Integration.
+- UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除. PUBLISHED disables 编辑 / 删除; an active PENDING / RUNNING / RETRY_WAITING Execution also disables 下线 while 详情 remains available.
+- Start / Stop never execute from the Realtime Sync list, editor or Task Detail.
 - Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
-- Keep the Realtime Sync page definition-focused; do not expose a Task Instance Tab there.
+- Keep the Realtime Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.
+- Task Detail shows Basic Info plus Task-filtered Execution history and selected Execution / Attempt detail, and polls only while visible active Execution data exists.
 - Operations Center queries Instance data with `syncType = REALTIME`; never filter mixed OFFLINE/REALTIME results only in frontend memory.
 - Operations Center polls Instance list/detail every 2 seconds only while PENDING/RUNNING data is visible.
 - PENDING/RUNNING Instances expose Stop in Operations Center.
-- On active REALTIME Instance detail, show a Yak UI `Alert` that restart continues from the latest completed Checkpoint and a small set of unconfirmed events may be consumed again.
+- On the Operations Center active REALTIME Execution detail, show a Yak UI `Alert` that restart continues from the latest completed Checkpoint and a small set of unconfirmed events may be consumed again. Task Detail is read-only and does not present Stop guidance as an action cue.
 - Display persisted `readRows/writeRows` as `读取事件/写入事件`; do not rename them to business row counts.
 - Explain that UPDATE produces UPDATE_BEFORE + UPDATE_AFTER events in current YakFlow metrics.
 - Display REALTIME snapshot runtime parameters from `realtimeConfig`.

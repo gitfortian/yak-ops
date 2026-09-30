@@ -65,9 +65,11 @@ Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普�
 
 ## Product Responsibilities
 
-数据集成负责定义与发布；运维中心负责执行、Schedule 启停、期望状态和运行记录。后端权限与状态校验不能由前端按钮可用性替代。
+数据集成负责 Task 定义、发布，以及围绕当前 Task 的只读运行详情：任务详情可以查看该 Task 的 Execution 历史、选中的 Execution 状态、指标、Attempt 历史和冻结快照。Task Editor 仍只负责定义，不承载运行态；数据集成详情不提供 Run / Start / Stop。
 
-历史 Execution 持有自身 syncType、任务版本与脱敏快照。查询历史不依赖当前 Task 行，删除 Task 不删除已有运行历史。运维可执行任务查询限定已发布任务，历史实例查询不受当前发布状态影响。
+运维中心负责执行命令、OFFLINE Schedule 启停、REALTIME 运行意图与跨 Task 的运行观察。后端权限与状态校验不能由前端按钮可用性替代；Task 详情和运维中心复用同一 Execution / Attempt 后端事实，不建立第二套运行模型。
+
+历史 Execution 持有自身 syncType、任务版本与脱敏快照。查询历史不依赖当前 Task 发布状态；删除 Task 不删除已有运行历史，但当前 Task 详情需要 Task 本身仍存在。运维可执行任务查询限定已发布任务。
 
 ## Current Capability Boundary
 
