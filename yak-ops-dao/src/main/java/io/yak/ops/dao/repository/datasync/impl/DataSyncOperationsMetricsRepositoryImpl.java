@@ -29,7 +29,9 @@ public class DataSyncOperationsMetricsRepositoryImpl implements DataSyncOperatio
     public DataSyncOperationsSummaryStats querySummary(
             String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime) {
         if (!valid(workspaceId, syncType, startTime, endTime)) return new DataSyncOperationsSummaryStats();
-        return metricsMapper.selectSummary(workspaceId, syncType.getValue(), startTime, endTime);
+        DataSyncOperationsSummaryStats result =
+                metricsMapper.selectSummary(workspaceId, syncType.getValue(), startTime, endTime);
+        return result == null ? new DataSyncOperationsSummaryStats() : result;
     }
 
     @Override
