@@ -222,10 +222,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 StringUtils.trimToNull(dto.getSourceDataSourceId()),
                 StringUtils.trimToNull(dto.getTargetDataSourceId()));
         PageData<DataSyncTaskEntity> page = taskRepository.queryPage(workspaceId, query);
+        List<String> offlineTaskIds = page.records().stream()
+                .filter(task -> task.getSyncType() == DataSyncType.OFFLINE)
+                .map(DataSyncTaskEntity::getId)
+                .toList();
         Map<String, DataSyncScheduleEntity> scheduleByTask = new HashMap<>();
-        scheduleRepository
-                .queryByTasks(workspaceId, page.records().stream().map(DataSyncTaskEntity::getId).toList())
-                .forEach(schedule -> scheduleByTask.put(schedule.getTaskId(), schedule));
+        if (!offlineTaskIds.isEmpty()) {
+            scheduleRepository
+                    .queryByTasks(workspaceId, offlineTaskIds)
+                    .forEach(schedule -> scheduleByTask.put(schedule.getTaskId(), schedule));
+        }
         return PagingData.from(page.map(task -> toTaskListVO(task, scheduleByTask.get(task.getId()))));
     }
 
