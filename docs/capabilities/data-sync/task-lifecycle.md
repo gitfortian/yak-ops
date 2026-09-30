@@ -68,9 +68,9 @@ CDC state 使用 `{workspaceId}/{taskId}/v{definitionVersion}`。同版本的新
 
 ## Frontend Contract
 
-数据集成只编排定义与发布，运维中心编排运行和状态观察。Save 与 Save & Publish 是已有 API 的显式组合，不新增自动运行路径；配置 Schedule 时顺序见 [Scheduler UI Ownership](scheduler.md#ui-ownership)。
+数据集成编排定义、发布和 Task 范围的只读运行详情；运维中心编排 Run / Start / Stop、Schedule Runtime 和跨 Task 状态观察。Task Detail 可以读取该 Task 的 Execution / Attempt 历史，但不因此获得执行命令所有权。Task Editor 仍只负责定义。Save 与 Save & Publish 是已有 API 的显式组合，不新增自动运行路径；配置 Schedule 时顺序见 [Scheduler UI Ownership](scheduler.md#ui-ownership)。
 
-历史实例的筛选依据持久化快照，不因 Task 下线或删除而消失。具体页面布局、按钮和路由由前端 owner 维护，本契约不复制其视觉规则。
+历史 Execution 的事实来自持久化记录和冻结快照，不因 Task 下线而消失；删除 Task 仍保留运行历史供运维查询，但基于当前 Task 路由的详情页不承诺在 Task 删除后继续存在。具体页面布局、按钮和路由由前端 owner 维护，本契约不复制其视觉规则。
 
 ## Persistence
 
