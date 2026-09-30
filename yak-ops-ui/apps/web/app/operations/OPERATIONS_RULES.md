@@ -7,34 +7,34 @@ Scope:
 
 ## Responsibility Boundary
 
-Operations Center owns Data Sync execution commands, runtime operations and cross-Task visibility. Data Integration owns Task definition / publication plus Task-scoped read-only runtime detail.
+Operations Center owns cross-Task operational observability. Data Integration owns Task definition / publication plus Task-scoped read-only runtime detail.
+
+The current surfaces are intentionally asymmetric while the dashboard rollout is in progress:
+
+- OFFLINE root is an aggregate Dashboard.
+- REALTIME currently retains the existing Task / Instance runtime operations surface.
 
 Must:
 
-- Keep OFFLINE and REALTIME operations separated by `syncType`.
-- List only `PUBLISHED` Tasks in the executable Task view.
-- OFFLINE idle Tasks expose Run; REALTIME idle Tasks expose Start.
-- PENDING / RUNNING / RETRY_WAITING Tasks expose Stop instead of a second Run / Start action.
-- Run / Start creates an Instance and navigates to the Operations Center Instance detail route.
-- Stop cancels only the active Instance; it must not unpublish the Task.
-- Keep Task execution and Instance history as separate Tabs inside the Operations Center Task page.
-- The Instance Tab may be filtered by `taskId`; clearing the filter keeps the user inside Operations Center.
-- Reuse shared Data Sync execution presentation across Operations Center and Data Integration Task Detail; do not fork OFFLINE / REALTIME runtime implementations.
-- Poll active Instance state only while active execution exists.
-- Task operations table must surface automation runtime, not only a binary idle/running state: Last Run, Next Run, Attempt progress, Retry Waiting, and trigger source belong here.
-- OFFLINE automation state comes from persisted Schedule + Scheduler runtime `nextFireTime`; frontend must not calculate Quartz Cron next-fire timestamps.
-- Operations Center owns OFFLINE Schedule enable / disable for PUBLISHED Tasks. Show the action only when a persisted Schedule exists, refresh the backend read model after mutation, and never create or edit Cron / Time Zone here.
-- REALTIME must present Desired State separately from actual Execution state. `desiredState=RUNNING` with no active Execution is an observable mismatch, not “idle”.
-- AUTO_RECOVERY is an Execution root trigger and must be labeled as automatic recovery rather than generic retry.
-- Execution list remains one row per Execution. Attempt history belongs in Execution detail and must not be flattened into the Instance list.
-- Preserve Workspace scoping through the Operations Center AppLayout.
-- Data Integration Task lists use `详情` to stay inside the current product and open Task-scoped Execution history; Run / Start / Stop remain outside that detail surface.
-- Legacy Data Integration Instance detail routes resolve the Instance and redirect to the corresponding Data Integration Task Detail while preserving the selected Execution.
+- Keep OFFLINE and REALTIME data isolated by `syncType`.
+- OFFLINE Dashboard reads only `POST /api/v1/data-sync/operations/dashboard`; do not fetch Instance pages and aggregate them in browser memory.
+- OFFLINE range is limited to TODAY / LAST_7_DAYS / LAST_30_DAYS. TODAY renders hourly buckets; 7 / 30 days render daily buckets exactly as supplied by backend.
+- OFFLINE Summary Cards show execution count, success count, write volume and average duration. Supporting text may expose success rate, current active Task count, failed / lost counts and abnormal Task count from the same read model.
+- OFFLINE charts are Card-wrapped and limited to persisted metrics the backend can prove: read/write volume trend, execution result trend, execution status distribution and FAILED + LOST Task Top 5.
+- Do not derive Retry totals by summing Attempt metrics; dashboard readRows / writeRows already follow the backend Execution current/final Attempt mirror semantics.
+- Do not invent realtime throughput, events/s, CDC Lag or Checkpoint Lag from cumulative counters. Those require a future persisted Metrics Time Series.
+- Reuse the local thin `EChart` integration for ECharts lifecycle: init / setOption / ResizeObserver / dispose. Product charts own option semantics; Yak UI does not depend on ECharts.
+- Use Yak UI `Card` only as a neutral visual surface. Card must not learn Data Sync metrics or ECharts options.
+- OFFLINE Dashboard is observability-only: it does not render Task definition tables, Instance history Tabs, Run / Stop buttons or Schedule runtime controls.
+- Existing OFFLINE Instance detail routes remain compatibility routes, but the Dashboard does not use them as its primary navigation.
+- REALTIME currently keeps PUBLISHED Task operations, Start / Stop, Desired State and Instance history behavior until its own dashboard surface replaces that root page.
+- Reuse shared Data Sync Execution presentation anywhere an existing compatibility detail route is still rendered.
+- Preserve Workspace scoping through the Operations Center AppLayout and backend read model.
 
 Must Not:
 
 - Edit Task definitions in Operations Center.
 - Publish / unpublish Tasks in Operations Center.
-- Duplicate backend lifecycle validation in frontend code.
+- Recompute backend dashboard buckets, status zero-fill or failure ranking in frontend code.
+- Build a second chart framework or wrap the entire ECharts API into Yak UI props.
 - Put runtime history inside the Task Editor; Task Detail is a separate read-only surface.
-- Create separate OFFLINE and REALTIME copies of generic task-operation or instance-runtime components.
