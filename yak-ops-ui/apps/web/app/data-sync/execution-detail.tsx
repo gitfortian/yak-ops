@@ -139,7 +139,8 @@ export function DataSyncExecutionDetailContent({
               minWidth: 260,
               render: (_value, attempt) => (
                 <div className="text-xs text-[#667085]">
-                  {attempt.startTime || attempt.createTime || "-"} → {attempt.finishTime || "运行中"}
+                  {attempt.startTime || attempt.createTime || "-"} →{" "}
+                  {attempt.finishTime || "运行中"}
                 </div>
               ),
             },
@@ -192,7 +193,11 @@ export function DataSyncExecutionDetailContent({
                   {snapshot.source.dataSourceName || snapshot.source.dataSourceId}
                 </div>
                 <div className="mt-1 text-xs text-[#667085]">
-                  {pathText(snapshot.source.database, snapshot.source.schema, snapshot.source.table)}
+                  {pathText(
+                    snapshot.source.database,
+                    snapshot.source.schema,
+                    snapshot.source.table,
+                  )}
                 </div>
               </div>
               <ArrowRight size={18} className="shrink-0 text-[#98a2b3]" />
@@ -201,7 +206,11 @@ export function DataSyncExecutionDetailContent({
                   {snapshot.target.dataSourceName || snapshot.target.dataSourceId}
                 </div>
                 <div className="mt-1 text-xs text-[#667085]">
-                  {pathText(snapshot.target.database, snapshot.target.schema, snapshot.target.table)}
+                  {pathText(
+                    snapshot.target.database,
+                    snapshot.target.schema,
+                    snapshot.target.table,
+                  )}
                 </div>
               </div>
             </div>
