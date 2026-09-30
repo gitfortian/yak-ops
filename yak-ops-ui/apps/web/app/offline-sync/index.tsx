@@ -26,6 +26,7 @@ import {
   deleteDataSyncTask,
   listDataSyncTasks,
   publishDataSyncTask,
+  runDataSyncTask,
   unpublishDataSyncTask,
   type DataSyncTaskRecord,
   type DataSyncTaskStatus,
@@ -178,6 +179,18 @@ export function OfflineSyncPage() {
     return user?.realName || user?.userName || "未知用户";
   };
 
+  const runTask = async (record: DataSyncTaskRecord) => {
+    if (actionKey) return;
+    setActionKey(`${record.id}:run`);
+    try {
+      await runDataSyncTask(record.id);
+      toast.success("同步任务已开始运行");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
+    }
+  };
+
   const publishTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
     setActionKey(`${record.id}:publish`);
@@ -295,7 +308,7 @@ export function OfflineSyncPage() {
     {
       key: "actions",
       title: "操作",
-      width: 260,
+      width: 320,
       fixed: "right",
       align: "center",
       render: (_value, record) => (
@@ -303,6 +316,7 @@ export function OfflineSyncPage() {
           record={record}
           activeInstance={activeByTask.get(record.id)}
           actionKey={actionKey}
+          onRun={(value) => void runTask(value)}
           onPublish={(value) => void publishTask(value)}
           onUnpublish={(value) => void unpublishTask(value)}
           onEdit={(value) => navigate(`/offline-sync/${value.id}`)}
@@ -397,7 +411,7 @@ export function OfflineSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1400 }}
+                scroll={{ x: 1460 }}
                 emptyText="还没有离线同步任务"
                 pagination={
                   total > 0
