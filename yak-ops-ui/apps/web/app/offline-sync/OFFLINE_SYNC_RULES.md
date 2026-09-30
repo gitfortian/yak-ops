@@ -7,7 +7,7 @@ Scope:
 
 ## Phase 4 Boundary
 
-The offline product owns Task definition, publication configuration, Schedule definition and Task-scoped read-only runtime detail. Operations Center owns manual execution, Schedule enable / disable, Stop and cross-Task runtime operations.
+The offline product owns Task definition, publication configuration, Schedule definition, a manual Run shortcut on the published Task list, and Task-scoped read-only runtime detail. Operations Center remains the cross-Task observability surface; Stop and Schedule runtime controls are not moved into the Offline Sync definition pages.
 
 Must:
 
@@ -50,9 +50,10 @@ Must:
 - Task list Schedule summary reads persisted Cron + Time Zone only; it must not calculate next fire time or own Schedule enable / disable.
 - Task list updater resolves current-page `updateBy` values with one batch user lookup; never issue one user request per row. Historical `system` stays SYSTEM.
 - Task list fixes the action column on the right through Yak UI Table `fixed: "right"`; product code must not rebuild sticky column CSS.
-- Task list keeps four stable action slots: 上线/下线、编辑、详情、删除. `详情` is always visible and opens `/offline-sync/:taskId/detail` inside Data Integration.
-- UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除. PUBLISHED disables 编辑 / 删除; an active PENDING / RUNNING / RETRY_WAITING Execution also disables 下线 while 详情 remains available.
-- Run / Stop never execute from the Offline Sync list, editor or Task Detail.
+- Task list keeps five stable action slots: 运行、上线/下线、编辑、详情、删除. `详情` is always visible and opens `/offline-sync/:taskId/detail` inside Data Integration.
+- `运行` is a manual shortcut for a PUBLISHED Task and creates a MANUAL Execution through the existing Run API. It is disabled while the Task is UNPUBLISHED or already has a PENDING / RUNNING / RETRY_WAITING Execution.
+- UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除 while 运行 is disabled. PUBLISHED without an active Execution enables 运行 / 下线 / 详情 and disables 编辑 / 删除. An active Execution disables both 运行 and 下线 while 详情 remains available.
+- Stop never executes from the Offline Sync list, editor or Task Detail; users inspect the created Execution from Task Detail after running.
 - Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 
 Must Not:
