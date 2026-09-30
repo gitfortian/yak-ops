@@ -7,7 +7,7 @@ Scope:
 
 ## Phase 4 Boundary
 
-The offline product owns Task definition and publication configuration. Operations Center owns manual execution, Stop and Instance runtime presentation.
+The offline product owns Task definition, publication configuration and Schedule definition. Operations Center owns manual execution, Schedule enable / disable, Stop and Instance runtime presentation.
 
 Must:
 
@@ -33,6 +33,10 @@ Must:
 - A manual Run in Operations Center creates a new Instance and navigates to the Operations Center Instance detail page.
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run is an Operations Center action for PUBLISHED Tasks.
+- OFFLINE editor owns optional Schedule definition only: Quartz Cron expression + explicit IANA Time Zone. An empty Cron on a Task that has never created a Schedule means manual-only execution.
+- Persist Schedule only after Task persistence succeeds because Schedule identity depends on `taskId`; Save & Publish must persist Task, then Schedule, then publish.
+- Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly enables it in Operations Center.
+- An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable remains an Operations Center action.
 - Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
 - Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`.
 - Schema Select may omit `items` when the domain value is intentionally identical to the visible label. Database is not editable in Offline Sync when Datasource already binds it.
@@ -48,6 +52,6 @@ Must:
 
 Must Not:
 
-- Add scheduler / retry policy before their backend lifecycle exists.
+- Add configurable scheduler concurrency, misfire or catch-up policies beyond the frozen v1.1 backend contract.
 - Add filter SQL, split key, pre/post SQL, resource group or Transform.
 - Reimplement JDBC type compatibility in frontend code.
