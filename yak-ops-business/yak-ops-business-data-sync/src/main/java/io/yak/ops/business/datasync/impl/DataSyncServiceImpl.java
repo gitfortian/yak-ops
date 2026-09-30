@@ -303,7 +303,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         result.setRangeEnd(rangeEnd);
         result.setSummary(toOperationsSummaryVO(summaryStats));
         result.setTrend(toOperationsTrendVO(trendStats, dto.getRange(), rangeStart, rangeEnd));
-        result.setStatusDistribution(statusStats.stream().map(this::toOperationsStatusVO).toList());
+        result.setStatusDistribution(toOperationsStatusDistribution(statusStats));
         result.setFailureRanking(failureStats.stream().map(this::toOperationsFailureRankVO).toList());
         return result;
     }
@@ -1278,6 +1278,23 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             point.setAverageDurationMillis(zero(point.getAverageDurationMillis()));
             result.add(point);
             bucket = range.isHourly() ? bucket.plusHours(1) : bucket.plusDays(1);
+        }
+        return result;
+    }
+
+    private List<DataSyncOperationsStatusMetricVO> toOperationsStatusDistribution(
+            List<DataSyncOperationsStatusStats> source) {
+        Map<Integer, Long> countByStatus = new HashMap<>();
+        for (DataSyncOperationsStatusStats item : source) {
+            if (item.getStatus() != null) countByStatus.put(item.getStatus(), zero(item.getCount()));
+        }
+
+        List<DataSyncOperationsStatusMetricVO> result = new ArrayList<>();
+        for (DataSyncInstanceStatus status : DataSyncInstanceStatus.values()) {
+            DataSyncOperationsStatusMetricVO item = new DataSyncOperationsStatusMetricVO();
+            item.setStatus(status.name());
+            item.setCount(countByStatus.getOrDefault(status.getValue(), 0L));
+            result.add(item);
         }
         return result;
     }
