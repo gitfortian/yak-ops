@@ -85,9 +85,9 @@ app/layout/
 ## Must
 
 - Domain UI / state / presentation 放在 `app/<domain>`。
-- Data Sync 跨离线/实时复用的任务编辑器与实例运行态基础能力收口在 `app/data-sync`；具体产品入口仍分别位于 `app/offline-sync` 与 `app/realtime-sync`。
-- 离线同步任务列表、实例入口 wrapper 收口在 `app/offline-sync`。
-- 实时同步任务列表、实例入口 wrapper 收口在 `app/realtime-sync`；运行态列表/详情共用 `app/data-sync/instance-runtime.tsx`。
+- Data Sync 跨离线/实时复用的任务编辑器、Task Detail 与 Execution 展示能力收口在 `app/data-sync`；具体产品入口仍分别位于 `app/offline-sync` 与 `app/realtime-sync`。
+- 离线同步任务列表、Task Detail 入口和 legacy Instance detail redirect wrapper 收口在 `app/offline-sync`。
+- 实时同步任务列表、Task Detail 入口和 legacy Instance detail redirect wrapper 收口在 `app/realtime-sync`；Execution 列表/详情继续复用 `app/data-sync` 的共享实现。
 - Management Center 的用户与工作空间页面收口在 `app/management/users` 与 `app/management/workspaces`，后端调用分别进入 `service/user` 与 `service/workspace`。
 - Domain backend Contract / calls 放在 `service/<domain>`。
 - 依赖方向保持 `app → service → http`。
