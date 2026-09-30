@@ -98,6 +98,7 @@ interface DataSyncTaskLifecycleActionsProps {
   record: DataSyncTaskRecord;
   activeInstance?: DataSyncInstanceRecord;
   actionKey?: string;
+  onRun?: (record: DataSyncTaskRecord) => void;
   onPublish: (record: DataSyncTaskRecord) => void;
   onUnpublish: (record: DataSyncTaskRecord) => void;
   onEdit: (record: DataSyncTaskRecord) => void;
@@ -109,6 +110,7 @@ export function DataSyncTaskLifecycleActions({
   record,
   activeInstance,
   actionKey,
+  onRun,
   onPublish,
   onUnpublish,
   onEdit,
@@ -118,6 +120,21 @@ export function DataSyncTaskLifecycleActions({
   const published = isPublishedTask(record);
   const lifecycleAction = published ? "unpublish" : "publish";
   const actions: LifecycleAction[] = [
+    ...(onRun
+      ? [
+          {
+            key: "run",
+            label: "运行",
+            className:
+              published && !activeInstance
+                ? "text-[var(--yak-color-primary)]"
+                : "text-[#667085]",
+            disabled: !published || Boolean(activeInstance),
+            loading: actionKey === `${record.id}:run`,
+            onClick: () => onRun(record),
+          },
+        ]
+      : []),
     {
       key: "lifecycle",
       label: published ? "下线" : "上线",
