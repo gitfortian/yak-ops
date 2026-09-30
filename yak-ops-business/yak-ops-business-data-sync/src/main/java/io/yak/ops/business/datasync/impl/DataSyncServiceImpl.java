@@ -1306,13 +1306,6 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return result;
     }
 
-    private DataSyncOperationsStatusMetricVO toOperationsStatusVO(DataSyncOperationsStatusStats source) {
-        DataSyncOperationsStatusMetricVO target = new DataSyncOperationsStatusMetricVO();
-        target.setStatus(dataSyncInstanceStatusName(source.getStatus()));
-        target.setCount(zero(source.getCount()));
-        return target;
-    }
-
     private DataSyncOperationsFailureRankVO toOperationsFailureRankVO(DataSyncOperationsFailureStats source) {
         DataSyncOperationsFailureRankVO target =
                 BeanCopyUtils.copy(source, DataSyncOperationsFailureRankVO.class);
@@ -1320,14 +1313,6 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         target.setLostCount(zero(target.getLostCount()));
         target.setAbnormalCount(zero(target.getAbnormalCount()));
         return target;
-    }
-
-    private String dataSyncInstanceStatusName(Integer value) {
-        if (value == null) return "UNKNOWN";
-        for (DataSyncInstanceStatus status : DataSyncInstanceStatus.values()) {
-            if (Objects.equals(status.getValue(), value)) return status.name();
-        }
-        return "UNKNOWN";
     }
 
     private long zero(Long value) {
