@@ -1,4 +1,14 @@
-import { Badge, Button, PageHeader, Spinner, toast } from "@yak-ops/yak-ui";
+import {
+  Badge,
+  Button,
+  PageHeader,
+  Spinner,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
+  toast,
+} from "@yak-ops/yak-ui";
 import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -23,6 +33,7 @@ import {
   dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
+import { DataSyncExecutionLogPanel } from "./execution-log";
 import { DataSyncTaskStatusBadge } from "./task-lifecycle";
 
 const EXECUTION_PAGE_SIZE = 20;
@@ -59,6 +70,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const executionId = searchParams.get("executionId") || undefined;
+  const activeTab = searchParams.get("tab") === "log" ? "log" : "status";
 
   const [task, setTask] = useState<DataSyncTaskRecord>();
   const [source, setSource] = useState<DataSourceRecord>();
@@ -185,6 +197,13 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
     next.delete("executionId");
     setSearchParams(next, { replace: true });
     setExecutionPage(nextPage);
+  };
+
+  const changeDetailTab = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === "log") next.set("tab", "log");
+    else next.delete("tab");
+    setSearchParams(next);
   };
 
   if (taskLoading || !task) {
@@ -349,32 +368,40 @@ export function DataSyncTaskDetailPage({ syncType, basePath, title }: DataSyncTa
           </section>
 
           <section className="min-w-0 flex-1">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-[#344054]">执行情况</div>
-                {selectedExecution ? (
-                  <div className="mt-1 text-xs text-[#98a2b3]">
-                    Execution {selectedExecution.id}
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <Tabs value={activeTab} onValueChange={changeDetailTab}>
+              <TabsList>
+                <TabsTab value="status">执行情况</TabsTab>
+                <TabsTab value="log">执行日志</TabsTab>
+              </TabsList>
 
-            {executionLoading && !selectedExecution ? (
-              <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
-                <Spinner size="large" label="加载执行详情" />
-              </div>
-            ) : selectedExecution ? (
-              <DataSyncExecutionDetailContent
-                record={selectedExecution}
-                attempts={attempts}
-                realtime={realtime}
-              />
-            ) : (
-              <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-                选择左侧执行记录查看详情
-              </div>
-            )}
+              {selectedExecution ? (
+                <div className="mt-2 text-xs text-[#98a2b3]">
+                  Execution {selectedExecution.id}
+                </div>
+              ) : null}
+
+              <TabsPanel value="status" className="pt-3">
+                {executionLoading && !selectedExecution ? (
+                  <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
+                    <Spinner size="large" label="加载执行详情" />
+                  </div>
+                ) : selectedExecution ? (
+                  <DataSyncExecutionDetailContent
+                    record={selectedExecution}
+                    attempts={attempts}
+                    realtime={realtime}
+                  />
+                ) : (
+                  <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
+                    选择左侧执行记录查看详情
+                  </div>
+                )}
+              </TabsPanel>
+
+              <TabsPanel value="log" className="pt-3">
+                <DataSyncExecutionLogPanel record={selectedExecution} active={activeTab === "log"} />
+              </TabsPanel>
+            </Tabs>
           </section>
         </div>
       </div>
