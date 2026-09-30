@@ -19,6 +19,7 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 | --- | --- |
 | 创建、编辑、上线、下线和 definitionVersion | [Task Publication Lifecycle](task-lifecycle.md) |
 | Execution / Attempt 身份、状态、取消、指标与产品事件日志 | [Execution Retry / Attempt](execution-retry-attempt.md) |
+| 运维中心聚合指标与时间范围 | [Operations Metrics Read Model](#operations-metrics-read-model) |
 | 离线 Cron、启停、触发校验与恢复 | [Scheduler](scheduler.md) |
 | 实时期望状态、进程重启与 CDC state | [Realtime Desired State](realtime-desired-state.md) |
 | 类型、split、写入与 checkpoint 机制 | [YakFlow](../yak-flow/README.md) |
@@ -70,6 +71,18 @@ Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普�
 运维中心负责执行命令、OFFLINE Schedule 启停、REALTIME 运行意图与跨 Task 的运行观察。后端权限与状态校验不能由前端按钮可用性替代；Task 详情和运维中心复用同一 Execution / Attempt 后端事实，不建立第二套运行模型。
 
 历史 Execution 持有自身 syncType、任务版本与脱敏快照。查询历史不依赖当前 Task 发布状态；删除 Task 不删除已有运行历史，但当前 Task 详情需要 Task 本身仍存在。运维可执行任务查询限定已发布任务。
+
+## Operations Metrics Read Model
+
+运维中心不通过拉取 Instance 分页后在浏览器聚合指标。后端提供 Workspace-scoped 的 `POST /api/v1/data-sync/operations/dashboard`，请求明确传入 `syncType` 与 `range`；当前范围只允许 TODAY、LAST_7_DAYS、LAST_30_DAYS。
+
+TODAY 使用小时桶，近 7 / 30 天使用自然日桶；后端补齐没有 Execution 的零值时间桶和全部 Execution 状态项，因此前端可以直接绘图，不再自行补洞。范围窗口基于应用 `LocalDateTime`，结束时间取请求时刻，不生成未来桶。
+
+摘要与趋势基于 `yak_ops_data_sync_instance` 的 Execution 根记录：execution / success / failed / lost / auto recovery、readRows / writeRows 与完成 Execution 平均耗时均按所选范围聚合。currentActiveTaskCount 是当前 PENDING / RUNNING / RETRY_WAITING Execution 的去重 Task 数，不受历史时间范围限制。abnormalTaskCount 是所选范围内出现 FAILED / LOST Execution 的去重 Task 数。
+
+readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-attempt.md#metrics-semantics)：它们是每个 Execution 当前或最终 Attempt 的镜像后再跨 Execution 求和，不累计同一 Execution 的多个 Attempt，也不代表去重业务行数或事务提交证明。Failure Ranking 按 FAILED + LOST 次数取 Top 5，并保留两个状态的独立计数。
+
+当前没有 Runtime Metrics Time Series，所以 REALTIME Dashboard 不能把本读模型解释为 events/s、分钟级吞吐、CDC Lag 或 Checkpoint Lag。要展示这些连续指标必须先建设独立的 Metrics Snapshot，而不是从累计 readRows / writeRows 反推。
 
 ## Current Capability Boundary
 
