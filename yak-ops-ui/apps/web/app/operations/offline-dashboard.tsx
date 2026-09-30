@@ -26,11 +26,11 @@ import {
 
 import { EChart } from "./EChart";
 
-const RANGE_ITEMS: Array<{ value: DataSyncOperationsRange; label: string }> = [
-  { value: "TODAY", label: "今日" },
-  { value: "LAST_7_DAYS", label: "近 7 天" },
-  { value: "LAST_30_DAYS", label: "近 30 天" },
-];
+const RANGE_ITEMS: Record<DataSyncOperationsRange, string> = {
+  TODAY: "今日",
+  LAST_7_DAYS: "近 7 天",
+  LAST_30_DAYS: "近 30 天",
+};
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "等待",
@@ -362,16 +362,18 @@ export function OfflineOperationsDashboard() {
           <Select<DataSyncOperationsRange>
             value={range}
             items={RANGE_ITEMS}
-            onValueChange={(value) => value && setRange(value)}
+            onValueChange={(value) => {
+              if (value) setRange(value);
+            }}
             size="small"
           >
             <SelectTrigger className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {RANGE_ITEMS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  <SelectItemText>{item.label}</SelectItemText>
+              {Object.entries(RANGE_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value as DataSyncOperationsRange}>
+                  <SelectItemText>{label}</SelectItemText>
                   <SelectItemIndicator />
                 </SelectItem>
               ))}
