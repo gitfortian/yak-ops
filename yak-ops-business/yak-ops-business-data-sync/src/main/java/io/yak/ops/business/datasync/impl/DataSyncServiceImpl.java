@@ -26,6 +26,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
@@ -52,10 +53,12 @@ import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncExecutionEventRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncInstancePageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
@@ -100,6 +103,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncAttemptRepository attemptRepository;
+
+    @Resource
+    private DataSyncExecutionEventRepository executionEventRepository;
 
     @Resource
     private DataSyncScheduleRepository scheduleRepository;
@@ -530,6 +536,15 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     @Override
+    public List<DataSyncExecutionEventVO> queryExecutionEvents(String instanceId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        requireInstance(workspaceId, instanceId);
+        return executionEventRepository.queryByExecution(workspaceId, instanceId).stream()
+                .map(this::toExecutionEventVO)
+                .toList();
+    }
+
+    @Override
     public PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
         if (CollectionUtils.isNotEmpty(dto.getSorts())) {
@@ -576,15 +591,17 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             }
             attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+            attemptLifecycle.recordExecutionCanceled(workspaceId, id);
         } else if (instance.getStatus() == DataSyncInstanceStatus.RETRY_WAITING) {
             if (!instanceRepository.cancelExecution(
                     workspaceId, id, DataSyncInstanceStatus.RETRY_WAITING, DateUtils.now())) {
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             }
             attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+            attemptLifecycle.recordExecutionCanceled(workspaceId, id);
         } else if (instance.getStatus() == DataSyncInstanceStatus.RUNNING) {
             if (!executionRegistry.cancel(id)) {
-                instanceRepository.transitionStatus(
+                if (instanceRepository.transitionStatus(
                         workspaceId,
                         id,
                         DataSyncInstanceStatus.RUNNING,
@@ -592,12 +609,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         null,
                         DateUtils.now(),
                         DataSyncErrorCode.EXECUTION_LOST.getCode(),
-                        DataSyncErrorCode.EXECUTION_LOST.getMessage());
+                        DataSyncErrorCode.EXECUTION_LOST.getMessage())) {
+                    attemptLifecycle.recordExecutionLost(
+                            workspaceId, id, "无法定位进程内运行句柄，Execution 已标记为 LOST");
+                }
             } else if (!instanceRepository.cancelExecution(
                     workspaceId, id, DataSyncInstanceStatus.RUNNING, DateUtils.now())) {
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             } else {
                 attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+                attemptLifecycle.recordExecutionCanceled(workspaceId, id);
             }
         } else {
             throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
@@ -630,6 +651,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         instance.initCreate();
         if (instanceRepository.add(instance) == null) {
             throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
+        }
+        if (triggerType == DataSyncTriggerType.AUTO_RECOVERY) {
+            attemptLifecycle.recordAutoRecoveryStarted(workspaceId, instance.getId());
         }
         submitAfterCommit(workspaceId, instance.getId(), snapshot);
         return toInstanceVO(instance, true);
@@ -1155,6 +1179,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncAttemptVO toAttemptVO(DataSyncAttemptEntity source) {
         DataSyncAttemptVO target = BeanCopyUtils.copy(source, DataSyncAttemptVO.class, "status");
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
+        return target;
+    }
+
+    private DataSyncExecutionEventVO toExecutionEventVO(DataSyncExecutionEventEntity source) {
+        DataSyncExecutionEventVO target =
+                BeanCopyUtils.copy(source, DataSyncExecutionEventVO.class, "level", "eventType");
+        target.setLevel(source.getLevel() == null ? null : source.getLevel().name());
+        target.setEventType(source.getEventType() == null ? null : source.getEventType().name());
         return target;
     }
 
