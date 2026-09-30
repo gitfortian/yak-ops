@@ -6,7 +6,7 @@ import { forwardRef, type ForwardedRef } from "react";
 import { cn } from "../cn";
 
 export const buttonVariants = cva(
-  "relative inline-flex cursor-pointer items-center justify-center whitespace-nowrap font-medium outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:ring-[3px] focus-visible:ring-[var(--yak-components-button-focus-ring)] data-disabled:cursor-not-allowed data-disabled:opacity-45",
+  "inline-flex cursor-pointer items-center justify-center whitespace-nowrap font-medium outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:ring-[3px] focus-visible:ring-[var(--yak-components-button-focus-ring)] data-disabled:cursor-not-allowed data-disabled:opacity-45",
   {
     variants: {
       variant: {
@@ -63,7 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       focusableWhenDisabled={focusableWhenDisabled ?? loading}
       aria-busy={loading || undefined}
-      className={cn(buttonVariants({ size, variant }), className)}
+      className={cn(buttonVariants({ size, variant }), loading && "relative", className)}
     >
       {loading ? <span className="inline-flex items-center gap-[inherit] opacity-0">{children}</span> : children}
       {loading ? (
