@@ -69,6 +69,15 @@ public class DataSyncTaskVO {
     /** 用户维护的任务说明。 */
     private String remark;
 
+    /** 任务最近一次更新操作人标识。 */
+    private String updateBy;
+
+    /** OFFLINE 任务配置的 Quartz Cron；未配置 Schedule 时为空。 */
+    private String scheduleCronExpression;
+
+    /** OFFLINE 任务 Schedule 的显式 IANA Time Zone；未配置 Schedule 时为空。 */
+    private String scheduleTimeZone;
+
     /** 任务创建时间。 */
     private LocalDateTime createTime;
 
