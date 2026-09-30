@@ -17,6 +17,8 @@ public interface DataSyncScheduleRepository extends BaseRepository<DataSyncSched
 
     Optional<DataSyncScheduleEntity> queryByTask(String workspaceId, String taskId);
 
+    List<DataSyncScheduleEntity> queryByTasks(String workspaceId, List<String> taskIds);
+
     List<DataSyncScheduleEntity> queryEnabled();
 
     DataSyncScheduleEntity update(String workspaceId, DataSyncScheduleEntity entity);

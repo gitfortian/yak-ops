@@ -46,6 +46,14 @@ public class DataSyncScheduleRepositoryImpl extends BaseRepositoryImpl<DataSyncS
     }
 
     @Override
+    public List<DataSyncScheduleEntity> queryByTasks(String workspaceId, List<String> taskIds) {
+        if (StringUtils.isBlank(workspaceId) || taskIds == null || taskIds.isEmpty()) return List.of();
+        return scheduleMapper.selectList(Wrappers.<DataSyncScheduleEntity>lambdaQuery()
+                .eq(DataSyncScheduleEntity::getWorkspaceId, workspaceId)
+                .in(DataSyncScheduleEntity::getTaskId, taskIds));
+    }
+
+    @Override
     public List<DataSyncScheduleEntity> queryEnabled() {
         return scheduleMapper.selectList(Wrappers.<DataSyncScheduleEntity>lambdaQuery()
                 .eq(DataSyncScheduleEntity::getEnabled, true)

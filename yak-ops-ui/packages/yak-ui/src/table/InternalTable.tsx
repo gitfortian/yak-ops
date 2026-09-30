@@ -49,6 +49,53 @@ const getColumnStyle = <RecordType extends object>(
   minWidth: column.minWidth,
 });
 
+const toCssLength = (width: CSSProperties["width"]): string | undefined => {
+  if (typeof width === "number") return `${width}px`;
+  return typeof width === "string" ? width : undefined;
+};
+
+const getFixedOffset = <RecordType extends object>(
+  columns: readonly TableColumn<RecordType>[],
+  index: number,
+  side: "left" | "right",
+): CSSProperties["left"] => {
+  const indexes =
+    side === "left"
+      ? Array.from({ length: index }, (_, offset) => offset)
+      : Array.from({ length: columns.length - index - 1 }, (_, offset) => index + offset + 1);
+  const widths = indexes
+    .filter((columnIndex) => columns[columnIndex]?.fixed === side)
+    .map((columnIndex) => toCssLength(columns[columnIndex]?.width))
+    .filter((width): width is string => Boolean(width));
+  if (widths.length === 0) return 0;
+  if (widths.length === 1) return widths[0];
+  return `calc(${widths.join(" + ")})`;
+};
+
+const getCellStyle = <RecordType extends object>(
+  column: TableColumn<RecordType>,
+  index: number,
+  columns: readonly TableColumn<RecordType>[],
+): CSSProperties => ({
+  ...getColumnStyle(column),
+  ...(column.fixed === "left" ? { left: getFixedOffset(columns, index, "left") } : {}),
+  ...(column.fixed === "right" ? { right: getFixedOffset(columns, index, "right") } : {}),
+});
+
+const fixedEdgeShadow = <RecordType extends object>(
+  columns: readonly TableColumn<RecordType>[],
+  index: number,
+): string | undefined => {
+  const column = columns[index];
+  if (column?.fixed === "left" && columns[index + 1]?.fixed !== "left") {
+    return "shadow-[4px_0_8px_-6px_rgba(16,24,40,0.24)]";
+  }
+  if (column?.fixed === "right" && columns[index - 1]?.fixed !== "right") {
+    return "shadow-[-4px_0_8px_-6px_rgba(16,24,40,0.24)]";
+  }
+  return undefined;
+};
+
 const getCellTitle = (content: ReactNode): string | undefined =>
   typeof content === "string" || typeof content === "number" ? String(content) : undefined;
 
@@ -232,17 +279,21 @@ export function InternalTable<RecordType extends object>({
               <tr>
                 {mergedColumns.map((column, index) => {
                   const align = column.align ?? "left";
+                  const fixed = column.fixed != null;
 
                   return (
                     <th
                       key={getTableColumnKey(column, index)}
                       scope="col"
-                      style={getColumnStyle(column)}
+                      style={getCellStyle(column, index, mergedColumns)}
                       className={cn(
                         "bg-[var(--yak-components-table-header-bg)] font-medium text-[var(--yak-components-table-header-text)]",
                         sizeClass.header,
                         alignClasses[align],
-                        sticky && "sticky top-0 z-10",
+                        (sticky || fixed) && "sticky",
+                        sticky && "top-0",
+                        fixed ? "z-30" : sticky && "z-20",
+                        scroll?.x != null && fixedEdgeShadow(mergedColumns, index),
                       )}
                     >
                       <div className={cn("min-w-0", column.ellipsis && "truncate")}>
@@ -278,17 +329,20 @@ export function InternalTable<RecordType extends object>({
                         ? column.render(value, record, rowIndex)
                         : (value as ReactNode);
                       const align = column.align ?? "left";
+                      const fixed = column.fixed != null;
 
                       return (
                         <td
                           key={getTableColumnKey(column, columnIndex)}
-                          style={getColumnStyle(column)}
+                          style={getCellStyle(column, columnIndex, mergedColumns)}
                           className={cn(
                             "border-b border-[var(--yak-components-table-border)] align-middle",
                             sizeClass.cell,
                             alignClasses[align],
                             bordered && "border-r first:border-l",
                             bordered && rowIndex === 0 && "border-t",
+                            fixed && "sticky z-10 bg-inherit",
+                            scroll?.x != null && fixedEdgeShadow(mergedColumns, columnIndex),
                           )}
                         >
                           <div

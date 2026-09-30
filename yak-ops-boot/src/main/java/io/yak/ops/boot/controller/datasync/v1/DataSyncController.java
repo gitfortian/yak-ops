@@ -17,6 +17,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
+import io.yak.ops.security.authentication.AuthenticationManager;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -43,16 +44,19 @@ public class DataSyncController {
     @Resource
     private DataSyncService dataSyncService;
 
+    @Resource
+    private AuthenticationManager authenticationManager;
+
     @Operation(summary = "创建数据同步任务")
     @PostMapping("/tasks")
     public Result<DataSyncTaskVO> createTask(@Valid @RequestBody DataSyncTaskDTO dto) {
-        return Result.success(dataSyncService.createTask(dto));
+        return Result.success(dataSyncService.createTask(dto, currentUserId()));
     }
 
     @Operation(summary = "编辑数据同步任务")
     @PutMapping("/tasks/{id}")
     public Result<DataSyncTaskVO> updateTask(@PathVariable("id") String id, @Valid @RequestBody DataSyncTaskDTO dto) {
-        return Result.success(dataSyncService.updateTask(id, dto));
+        return Result.success(dataSyncService.updateTask(id, dto, currentUserId()));
     }
 
     @Operation(summary = "查询数据同步任务详情")
@@ -76,13 +80,13 @@ public class DataSyncController {
     @Operation(summary = "上线数据同步任务")
     @PostMapping("/tasks/{id}/publish")
     public Result<DataSyncTaskVO> publishTask(@PathVariable("id") String id) {
-        return Result.success(dataSyncService.publishTask(id));
+        return Result.success(dataSyncService.publishTask(id, currentUserId()));
     }
 
     @Operation(summary = "下线数据同步任务")
     @PostMapping("/tasks/{id}/unpublish")
     public Result<DataSyncTaskVO> unpublishTask(@PathVariable("id") String id) {
-        return Result.success(dataSyncService.unpublishTask(id));
+        return Result.success(dataSyncService.unpublishTask(id, currentUserId()));
     }
 
     @Operation(summary = "手动运行数据同步任务")
@@ -150,5 +154,9 @@ public class DataSyncController {
     @PostMapping("/tasks/mapping-preview")
     public Result<DataSyncMappingPreviewVO> mappingPreview(@Valid @RequestBody DataSyncMappingPreviewDTO dto) {
         return Result.success(dataSyncService.previewMapping(dto));
+    }
+
+    private String currentUserId() {
+        return authenticationManager.getLoginUserId();
     }
 }

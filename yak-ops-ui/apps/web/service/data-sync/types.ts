@@ -55,6 +55,9 @@ export interface DataSyncTaskRecord {
   retryPolicy?: DataSyncRetryPolicy;
   definitionVersion: number;
   remark?: string;
+  updateBy?: string;
+  scheduleCronExpression?: string;
+  scheduleTimeZone?: string;
   createTime?: string;
   updateTime?: string;
 }

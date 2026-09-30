@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
+import { getUsersByIds, type UserRecord } from "@/service/user";
 import {
   deleteDataSyncTask,
   listDataSyncTasks,
@@ -68,6 +69,7 @@ export function OfflineSyncPage() {
   }, [location.search, navigate]);
 
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
+  const [updateUsers, setUpdateUsers] = useState<UserRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -86,6 +88,10 @@ export function OfflineSyncPage() {
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
     [dataSources],
+  );
+  const updateUserMap = useMemo(
+    () => new Map(updateUsers.map((user) => [user.id, user] as const)),
+    [updateUsers],
   );
   const dataSourceOptions = useMemo(
     () =>
@@ -139,6 +145,39 @@ export function OfflineSyncPage() {
     return () => window.clearTimeout(timer);
   }, [keyword, loadTasks]);
 
+  useEffect(() => {
+    const userIds = [
+      ...new Set(
+        records
+          .map((record) => record.updateBy)
+          .filter((userId): userId is string => Boolean(userId && userId !== "system")),
+      ),
+    ];
+    if (userIds.length === 0) {
+      setUpdateUsers([]);
+      return;
+    }
+
+    let active = true;
+    void getUsersByIds(userIds)
+      .then((users) => {
+        if (active) setUpdateUsers(users);
+      })
+      .catch(() => {
+        if (active) setUpdateUsers([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [records]);
+
+  const updateOperatorText = (record: DataSyncTaskRecord) => {
+    if (!record.updateBy) return "-";
+    if (record.updateBy === "system") return "SYSTEM";
+    const user = updateUserMap.get(record.updateBy);
+    return user?.realName || user?.userName || "未知用户";
+  };
+
   const publishTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
     setActionKey(`${record.id}:publish`);
@@ -167,7 +206,7 @@ export function OfflineSyncPage() {
     {
       key: "name",
       title: "任务名称",
-      minWidth: 200,
+      minWidth: 180,
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="truncate text-[13px] font-medium text-[#252832]">{record.name}</div>
@@ -178,7 +217,7 @@ export function OfflineSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 430,
+      minWidth: 400,
       render: (_value, record) => {
         const source = dataSourceMap.get(record.sourceDataSourceId);
         const target = dataSourceMap.get(record.targetDataSourceId);
@@ -206,6 +245,35 @@ export function OfflineSyncPage() {
       },
     },
     {
+      key: "writeMode",
+      title: "写入方式",
+      width: 110,
+      render: (_value, record) => (
+        <span className="text-xs font-medium text-[#475467]">{record.writeMode || "APPEND"}</span>
+      ),
+    },
+    {
+      key: "schedule",
+      title: "调度",
+      width: 190,
+      render: (_value, record) =>
+        record.scheduleCronExpression ? (
+          <div className="min-w-0">
+            <div className="truncate text-xs font-medium text-[#475467]">
+              Cron{record.scheduleTimeZone ? ` · ${record.scheduleTimeZone}` : ""}
+            </div>
+            <div
+              className="mt-0.5 truncate text-xs text-[#98a2b3]"
+              title={record.scheduleCronExpression}
+            >
+              {record.scheduleCronExpression}
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-[#98a2b3]">手动</span>
+        ),
+    },
+    {
       key: "status",
       title: "状态",
       width: 100,
@@ -213,14 +281,22 @@ export function OfflineSyncPage() {
     },
     {
       key: "updated",
-      title: "更新时间",
-      width: 170,
-      render: (_value, record) => record.updateTime || "-",
+      title: "更新信息",
+      width: 180,
+      render: (_value, record) => (
+        <div className="min-w-0">
+          <div className="truncate text-xs font-medium text-[#475467]" title={record.updateBy}>
+            {updateOperatorText(record)}
+          </div>
+          <div className="mt-0.5 text-xs text-[#98a2b3]">{record.updateTime || "-"}</div>
+        </div>
+      ),
     },
     {
       key: "actions",
       title: "操作",
       width: 260,
+      fixed: "right",
       align: "center",
       render: (_value, record) => (
         <DataSyncTaskLifecycleActions
@@ -321,7 +397,7 @@ export function OfflineSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1120 }}
+                scroll={{ x: 1400 }}
                 emptyText="还没有离线同步任务"
                 pagination={
                   total > 0

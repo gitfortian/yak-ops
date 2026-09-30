@@ -24,7 +24,11 @@ public interface DataSyncService {
 
     DataSyncTaskVO createTask(DataSyncTaskDTO dto);
 
+    DataSyncTaskVO createTask(DataSyncTaskDTO dto, String operatorUserId);
+
     DataSyncTaskVO updateTask(String id, DataSyncTaskDTO dto);
+
+    DataSyncTaskVO updateTask(String id, DataSyncTaskDTO dto, String operatorUserId);
 
     DataSyncTaskVO queryTask(String id);
 
@@ -36,7 +40,11 @@ public interface DataSyncService {
 
     DataSyncTaskVO publishTask(String id);
 
+    DataSyncTaskVO publishTask(String id, String operatorUserId);
+
     DataSyncTaskVO unpublishTask(String id);
+
+    DataSyncTaskVO unpublishTask(String id, String operatorUserId);
 
     DataSyncInstanceVO runTask(String id);
 
