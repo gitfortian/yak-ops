@@ -17,7 +17,6 @@ import io.yak.ops.dao.repository.datasync.DataSyncOperationsSummaryStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsTrendStats;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -31,7 +30,7 @@ class DataSyncOperationsMetricsReadModelTest {
     }
 
     @Test
-    void shouldBuildWorkspaceScopedTodayDashboardAndFillMissingHourlyBuckets() throws Exception {
+    void shouldBuildWorkspaceScopedSevenDayDashboardAndFillMissingDailyBuckets() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         AtomicReference<LocalDateTime> capturedStart = new AtomicReference<>();
         AtomicReference<LocalDateTime> capturedEnd = new AtomicReference<>();
@@ -39,13 +38,13 @@ class DataSyncOperationsMetricsReadModelTest {
 
         DataSyncOperationsDashboardDTO dto = new DataSyncOperationsDashboardDTO();
         dto.setSyncType(DataSyncType.OFFLINE);
-        dto.setRange(DataSyncOperationsRange.TODAY);
+        dto.setRange(DataSyncOperationsRange.LAST_7_DAYS);
 
         WorkspaceContext.bind("workspace-1");
         DataSyncOperationsDashboardVO result = service.queryOperationsDashboard(dto);
 
         assertEquals(DataSyncType.OFFLINE.name(), result.getSyncType());
-        assertEquals(DataSyncOperationsRange.TODAY.name(), result.getRange());
+        assertEquals(DataSyncOperationsRange.LAST_7_DAYS.name(), result.getRange());
         assertEquals(capturedStart.get(), result.getRangeStart());
         assertEquals(capturedEnd.get(), result.getRangeEnd());
         assertEquals(8L, result.getSummary().getExecutionCount());
@@ -53,11 +52,7 @@ class DataSyncOperationsMetricsReadModelTest {
         assertEquals(1200L, result.getSummary().getWriteRows());
         assertEquals(2500L, result.getSummary().getAverageDurationMillis());
 
-        long expectedBuckets = ChronoUnit.HOURS.between(
-                        capturedStart.get().truncatedTo(ChronoUnit.HOURS),
-                        capturedEnd.get().truncatedTo(ChronoUnit.HOURS))
-                + 1;
-        assertEquals(expectedBuckets, result.getTrend().size());
+        assertEquals(7, result.getTrend().size());
         assertEquals(1, result.getStatusDistribution().size());
         assertEquals(DataSyncInstanceStatus.SUCCEEDED.name(), result.getStatusDistribution().getFirst().getStatus());
         assertEquals(1, result.getFailureRanking().size());
@@ -66,7 +61,7 @@ class DataSyncOperationsMetricsReadModelTest {
                 .filter(point -> point.getExecutionCount() == 3L)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(capturedStart.get().plusHours(1), populated.getBucketStart());
+        assertEquals(capturedStart.get().plusDays(1), populated.getBucketStart());
         assertTrue(result.getTrend().stream().anyMatch(point -> point.getExecutionCount() == 0L));
     }
 
@@ -78,7 +73,7 @@ class DataSyncOperationsMetricsReadModelTest {
                     String workspaceId, DataSyncType syncType, LocalDateTime startTime, LocalDateTime endTime) {
                 assertEquals("workspace-1", workspaceId);
                 assertEquals(DataSyncType.OFFLINE, syncType);
-                assertEquals(startTime.toLocalDate().atStartOfDay(), startTime);
+                assertEquals(endTime.toLocalDate().minusDays(6).atStartOfDay(), startTime);
                 capturedStart.set(startTime);
                 capturedEnd.set(endTime);
 
@@ -103,9 +98,9 @@ class DataSyncOperationsMetricsReadModelTest {
                     LocalDateTime startTime,
                     LocalDateTime endTime,
                     boolean hourly) {
-                assertTrue(hourly);
+                assertTrue(!hourly);
                 DataSyncOperationsTrendStats stats = new DataSyncOperationsTrendStats();
-                stats.setBucketStart(startTime.plusHours(1));
+                stats.setBucketStart(startTime.plusDays(1));
                 stats.setExecutionCount(3L);
                 stats.setSucceededCount(2L);
                 stats.setFailedCount(1L);
@@ -140,7 +135,7 @@ class DataSyncOperationsMetricsReadModelTest {
                 stats.setFailedCount(2L);
                 stats.setLostCount(1L);
                 stats.setAbnormalCount(3L);
-                stats.setLatestFailureTime(startTime.plusHours(2));
+                stats.setLatestFailureTime(startTime.plusDays(2));
                 return List.of(stats);
             }
         };
