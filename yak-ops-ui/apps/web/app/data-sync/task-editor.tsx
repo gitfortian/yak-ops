@@ -1119,7 +1119,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     />
                     <div className="px-1 text-xs text-[#98a2b3]">
                       {scheduleExists
-                        ? "已创建调度；修改后会更新现有调度规则。"
+                        ? "已创建调度，Cron 不能为空；如需停止调度，请在运维中心关闭。"
                         : "留空则不创建调度，任务仅支持手动运行。"}
                     </div>
                   </div>
