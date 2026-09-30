@@ -49,6 +49,14 @@ OFFLINE / REALTIME 共用 DataSyncAttemptLifecycle。状态变更使用 Reposito
 
 本地注册表仅持有活动 Runtime 的取消引用；启动将旧进程活动记录标记 LOST，不能把数据库 RUNNING 当作仍有本地执行对象。连续 Source 意外完成不标记 SUCCEEDED。
 
+## Execution Event Implementation
+
+Execution 产品日志复用 lifecycle owner 持久化有限状态事件，不建立第二套 Server Log 系统。事件必须 Workspace-scoped，可选关联 Attempt，并使用 Common 中的事件级别 / 类型枚举；查询仍通过稳定 DataSyncService 进入 DAO Repository。
+
+只记录低频生命周期事实，禁止把 metrics flush、每批 Source / Sink、SQL Debug 或任意 Logback 行写入事件表。用户可见 message 必须在持久化前经过 SensitiveUtils 脱敏并限制长度；事件表不得成为连接凭证或异常原文的旁路泄漏点。
+
+产品事件用于观察，不控制 Runtime 结果：事件持久化失败记录普通 Server Log，但不得反向把本可成功的 Execution / Attempt 改成失败。历史记录不做推断回填。
+
 ## Scheduler and Recovery Implementation
 
 - `scheduler` 下只定义框架无关 Contract；org.quartz.*、JobFactory 和最终启动装配归 Boot。
@@ -59,11 +67,11 @@ OFFLINE / REALTIME 共用 DataSyncAttemptLifecycle。状态变更使用 Reposito
 
 ## Secret and Persistence Boundary
 
-运行连接只在可信执行规划阶段解析。Task / Execution / Attempt / Retry Policy、HTTP 响应、日志和异常不得泄漏原始凭证。ExecutionPlan 为内存对象，不能持久化或序列化到响应；快照不得包含连接 JSON、密码、SSH 私钥、Token、offset 结构或运行时租约。
+运行连接只在可信执行规划阶段解析。Task / Execution / Attempt / Execution Event / Retry Policy、HTTP 响应、日志和异常不得泄漏原始凭证。ExecutionPlan 为内存对象，不能持久化或序列化到响应；快照不得包含连接 JSON、密码、SSH 私钥、Token、offset 结构或运行时租约。
 
 Data Sync Entity / Mapper / Repository 和全部 Schema 归 DAO；不重复定义 DAO 模型、不建立数据库物理外键。历史 Execution 自存 syncType 等身份，不通过 join 当前 Task 推断历史；Task 删除不级联删除历史记录。
 
-迁移遵循 [Flyway Rules](../../yak-ops-dao/FLYWAY_RULES.md)。V1 是冻结基线，现有 Schedule / Attempt / Desired State 已由向前迁移定义，不能按旧阶段计划重复建表或回改已冻结 SQL。
+迁移遵循 [Flyway Rules](../../yak-ops-dao/FLYWAY_RULES.md)。V1 是冻结基线，Schedule / Attempt / Desired State / Execution Event 均由连续向前迁移定义，不能按旧阶段计划重复建表或回改已冻结 SQL。
 
 ## Verification
 
