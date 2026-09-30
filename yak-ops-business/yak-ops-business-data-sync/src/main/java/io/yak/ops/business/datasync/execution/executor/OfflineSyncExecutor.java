@@ -102,6 +102,8 @@ public class OfflineSyncExecutor {
                 return DataSyncRetryDecision.stop();
             }
             started = true;
+            attemptLifecycle.recordSourceReady(workspaceId, instanceId, attempt.getId());
+            attemptLifecycle.recordTargetReady(workspaceId, instanceId, attempt.getId());
 
             LOG.info(
                     "离线同步Attempt开始执行，workspaceId={}, taskId={}, instanceId={}, attempt={}/{}",
