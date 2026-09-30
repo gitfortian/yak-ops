@@ -109,9 +109,7 @@ export const saveDataSyncSchedule = (
   );
 
 export const enableDataSyncSchedule = (id: string): Promise<DataSyncScheduleRecord> =>
-  HttpUtils.postData<DataSyncScheduleRecord>(
-    `${DATA_SYNC_API_PREFIX}/tasks/${id}/schedule/enable`,
-  );
+  HttpUtils.postData<DataSyncScheduleRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/schedule/enable`);
 
 export const disableDataSyncSchedule = (id: string): Promise<DataSyncScheduleRecord> =>
   HttpUtils.postData<DataSyncScheduleRecord>(
