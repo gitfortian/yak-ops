@@ -1,4 +1,4 @@
-import { Badge, Spinner, type BadgeProps } from "@yak-ops/yak-ui";
+import { Badge, SectionCard, Spinner, type BadgeProps } from "@yak-ops/yak-ui";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -22,9 +22,14 @@ const levelTone = (level: DataSyncExecutionEventLevel): BadgeProps["tone"] => {
 interface DataSyncExecutionLogPanelProps {
   record?: DataSyncInstanceRecord;
   active: boolean;
+  sectionCard?: boolean;
 }
 
-export function DataSyncExecutionLogPanel({ record, active }: DataSyncExecutionLogPanelProps) {
+export function DataSyncExecutionLogPanel({
+  record,
+  active,
+  sectionCard = false,
+}: DataSyncExecutionLogPanelProps) {
   const executionId = record?.id;
   const live = isActiveDataSyncInstance(record);
   const [events, setEvents] = useState<DataSyncExecutionEventRecord[]>([]);
@@ -58,11 +63,57 @@ export function DataSyncExecutionLogPanel({ record, active }: DataSyncExecutionL
     return () => window.clearInterval(timer);
   }, [active, executionId, live, loadEvents]);
 
+  const emptyState = (
+    <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-[#98a2b3]">
+      {record ? "暂无执行日志，历史 Execution 可能没有产品事件记录" : "选择左侧执行记录查看日志"}
+    </div>
+  );
+
   if (!record) {
+    return sectionCard ? (
+      <SectionCard title="事件时间线">{emptyState}</SectionCard>
+    ) : (
+      <div className="rounded-lg border border-[#e6e8eb] bg-white">{emptyState}</div>
+    );
+  }
+
+  const timeline = loading && events.length === 0 ? (
+    <div className="flex min-h-56 items-center justify-center">
+      <Spinner size="large" label="加载执行日志" />
+    </div>
+  ) : events.length === 0 ? (
+    emptyState
+  ) : (
+    <div className="max-h-[560px] overflow-y-auto">
+      {events.map((event) => (
+        <div
+          key={event.id}
+          className="grid grid-cols-[160px_72px_minmax(0,1fr)] gap-3 border-b border-[#f0f1f3] px-4 py-3 last:border-b-0 max-md:grid-cols-1 max-md:gap-1.5"
+        >
+          <span className="font-mono text-xs text-[#98a2b3]">{event.createTime || "-"}</span>
+          <div>
+            <Badge tone={levelTone(event.level)}>{event.level}</Badge>
+          </div>
+          <div className="min-w-0">
+            <div className="break-words text-[13px] leading-5 text-[#344054]">
+              {event.message}
+            </div>
+            <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">{event.eventType}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (sectionCard) {
     return (
-      <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-        选择左侧执行记录查看日志
-      </div>
+      <SectionCard title="事件时间线">
+        <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#98a2b3]">
+          <span>{events.length} 条事件</span>
+          {live ? <span className="text-[#667085]">运行中 · 2s 自动刷新</span> : null}
+        </div>
+        {timeline}
+      </SectionCard>
     );
   }
 
@@ -75,36 +126,7 @@ export function DataSyncExecutionLogPanel({ record, active }: DataSyncExecutionL
         </div>
         {live ? <span className="text-xs text-[#667085]">运行中 · 2s 自动刷新</span> : null}
       </div>
-
-      {loading && events.length === 0 ? (
-        <div className="flex min-h-56 items-center justify-center">
-          <Spinner size="large" label="加载执行日志" />
-        </div>
-      ) : events.length === 0 ? (
-        <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-[#98a2b3]">
-          暂无执行日志，历史 Execution 可能没有产品事件记录
-        </div>
-      ) : (
-        <div className="max-h-[560px] overflow-y-auto">
-          {events.map((event) => (
-            <div
-              key={event.id}
-              className="grid grid-cols-[160px_72px_minmax(0,1fr)] gap-3 border-b border-[#f0f1f3] px-4 py-3 last:border-b-0 max-md:grid-cols-1 max-md:gap-1.5"
-            >
-              <span className="font-mono text-xs text-[#98a2b3]">{event.createTime || "-"}</span>
-              <div>
-                <Badge tone={levelTone(event.level)}>{event.level}</Badge>
-              </div>
-              <div className="min-w-0">
-                <div className="break-words text-[13px] leading-5 text-[#344054]">
-                  {event.message}
-                </div>
-                <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">{event.eventType}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {timeline}
     </section>
   );
 }
