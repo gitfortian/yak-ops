@@ -96,6 +96,7 @@ export interface TableRowSelection<RecordType extends object> {
 
 export interface TableScroll {
   x?: CSSProperties["minWidth"] | true;
+  /** 滚动视口的最大高度；数据较少时仍按内容高度展示。 */
   y?: CSSProperties["maxHeight"];
 }
 
@@ -108,6 +109,7 @@ export interface TableProps<RecordType extends object> {
   footer?: ReactNode;
   rowSelection?: TableRowSelection<RecordType>;
   size?: TableSize;
+  /** 仅数据区绘制完整网格，不为表头、滚动容器或底栏添加外框。 */
   bordered?: boolean;
   sticky?: boolean;
   scroll?: TableScroll;

@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "../cn";
 import { Empty } from "../empty";
@@ -21,21 +21,18 @@ import type {
 } from "./interface";
 import { getTableColumnKey, resolveTableRowKey } from "./utils";
 
-const sizeClasses: Record<TableSize, { header: string; cell: string; loadingTop: string }> = {
+const sizeClasses: Record<TableSize, { header: string; cell: string }> = {
   small: {
     header: "h-8 px-3 text-xs",
     cell: "px-3 py-1.5 text-xs",
-    loadingTop: "top-8",
   },
   medium: {
     header: "h-10 px-3 text-xs",
     cell: "px-3 py-2.5 text-[13px]",
-    loadingTop: "top-10",
   },
   large: {
     header: "h-12 px-4 text-[13px]",
     cell: "px-4 py-3 text-sm",
-    loadingTop: "top-12",
   },
 };
 
@@ -73,6 +70,9 @@ export function InternalTable<RecordType extends object>({
   size = "medium",
   sticky = false,
 }: TableProps<RecordType>) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLTableSectionElement>(null);
+  const loadingRef = useRef<HTMLDivElement>(null);
   const filtersRef = useRef<TableFilters>({});
   const sorterRef = useRef<TableSorterResult<RecordType>>({});
   const paginationStateRef = useRef<TablePaginationState | false>(false);
@@ -85,6 +85,36 @@ export function InternalTable<RecordType extends object>({
       sorterOverride?: TableSorterResult<RecordType>,
     ) => readonly RecordType[]
   >((data) => data);
+
+  useLayoutEffect(() => {
+    if (!loading) return;
+
+    const viewport = viewportRef.current;
+    const header = headerRef.current;
+    const mask = loadingRef.current;
+    if (!viewport || !header || !mask) return;
+
+    const updateLoadingBounds = () => {
+      const viewportTop = viewport.getBoundingClientRect().top;
+      // Measure a cell because sticky th elements can move independently of thead.
+      const headerBottom = header.rows[0]?.cells[0]?.getBoundingClientRect().bottom ?? viewportTop;
+      const top = Math.min(viewport.clientHeight, Math.max(0, headerBottom - viewportTop));
+      mask.style.top = `${top}px`;
+      mask.style.height = `${Math.max(0, viewport.clientHeight - top)}px`;
+      mask.style.width = `${viewport.clientWidth}px`;
+    };
+
+    updateLoadingBounds();
+    const observer = new ResizeObserver(updateLoadingBounds);
+    observer.observe(viewport);
+    observer.observe(header);
+    viewport.addEventListener("scroll", updateLoadingBounds, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      viewport.removeEventListener("scroll", updateLoadingBounds);
+    };
+  }, [loading, sticky]);
 
   const emitChange = (
     action: TableChangeAction,
@@ -175,124 +205,130 @@ export function InternalTable<RecordType extends object>({
 
   return (
     <div className={cn("flex min-w-0 flex-col", className)}>
-      <div
-        className={cn(
-          "relative min-h-0 flex-1 overflow-x-auto bg-[var(--yak-components-table-bg)]",
-          scroll?.y != null && "overflow-y-auto",
-          bordered && "border border-[var(--yak-components-table-border-strong)]",
-        )}
-        style={scrollStyle}
-      >
-        <table
-          aria-busy={loading || undefined}
+      <div className="relative min-h-0 shrink-0">
+        <div
+          ref={viewportRef}
           className={cn(
-            "w-full border-collapse text-[var(--yak-components-table-text)]",
-            tableLayoutFixed ? "table-fixed" : "table-auto",
+            "min-h-0 overflow-x-auto bg-[var(--yak-components-table-bg)]",
+            scroll?.y != null && "overflow-y-auto",
           )}
-          style={tableStyle}
+          style={scrollStyle}
         >
-          <colgroup>
-            {mergedColumns.map((column, index) => (
-              <col key={getTableColumnKey(column, index)} style={getColumnStyle(column)} />
-            ))}
-          </colgroup>
+          <table
+            aria-busy={loading || undefined}
+            className={cn(
+              "w-full border-collapse text-[var(--yak-components-table-text)]",
+              tableLayoutFixed ? "table-fixed" : "table-auto",
+            )}
+            style={tableStyle}
+          >
+            <colgroup>
+              {mergedColumns.map((column, index) => (
+                <col key={getTableColumnKey(column, index)} style={getColumnStyle(column)} />
+              ))}
+            </colgroup>
 
-          <thead>
-            <tr>
-              {mergedColumns.map((column, index) => {
-                const align = column.align ?? "left";
+            <thead ref={headerRef}>
+              <tr>
+                {mergedColumns.map((column, index) => {
+                  const align = column.align ?? "left";
+
+                  return (
+                    <th
+                      key={getTableColumnKey(column, index)}
+                      scope="col"
+                      style={getColumnStyle(column)}
+                      className={cn(
+                        "bg-[var(--yak-components-table-header-bg)] font-medium text-[var(--yak-components-table-header-text)]",
+                        sizeClass.header,
+                        alignClasses[align],
+                        sticky && "sticky top-0 z-10",
+                      )}
+                    >
+                      <div className={cn("min-w-0", column.ellipsis && "truncate")}>
+                        {column.title}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+
+            <tbody>
+              {data.map((record, rowIndex) => {
+                const rowProps = onRow?.(record, rowIndex) ?? {};
+                const { className: rowClassName, ...restRowProps } = rowProps;
+                const selected = isSelected(record, rowIndex);
 
                 return (
-                  <th
-                    key={getTableColumnKey(column, index)}
-                    scope="col"
-                    style={getColumnStyle(column)}
+                  <tr
+                    {...restRowProps}
+                    key={resolveTableRowKey(record, rowIndex, rowKey)}
+                    data-selected={selected ? "true" : undefined}
                     className={cn(
-                      "bg-[var(--yak-components-table-header-bg)] font-medium text-[var(--yak-components-table-header-text)]",
-                      sizeClass.header,
-                      alignClasses[align],
-                      sticky && "sticky top-0 z-10",
+                      "bg-[var(--yak-components-table-row-bg)]",
+                      "data-[selected=true]:bg-[var(--yak-color-hover)]",
+                      rowHoverable && "transition-colors hover:bg-[var(--yak-color-hover)]",
+                      rowClassName,
                     )}
                   >
-                    <div className={cn("min-w-0", column.ellipsis && "truncate")}>
-                      {column.title}
-                    </div>
-                  </th>
+                    {mergedColumns.map((column, columnIndex) => {
+                      const value = column.dataIndex == null ? undefined : record[column.dataIndex];
+                      const cell = column.render
+                        ? column.render(value, record, rowIndex)
+                        : (value as ReactNode);
+                      const align = column.align ?? "left";
+
+                      return (
+                        <td
+                          key={getTableColumnKey(column, columnIndex)}
+                          style={getColumnStyle(column)}
+                          className={cn(
+                            "border-b border-[var(--yak-components-table-border)] align-middle",
+                            sizeClass.cell,
+                            alignClasses[align],
+                            bordered && "border-r first:border-l",
+                            bordered && rowIndex === 0 && "border-t",
+                          )}
+                        >
+                          <div
+                            className={cn("min-w-0", column.ellipsis && "truncate")}
+                            title={column.ellipsis ? getCellTitle(cell) : undefined}
+                          >
+                            {cell ?? null}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
                 );
               })}
-            </tr>
-          </thead>
 
-          <tbody>
-            {data.map((record, rowIndex) => {
-              const rowProps = onRow?.(record, rowIndex) ?? {};
-              const { className: rowClassName, ...restRowProps } = rowProps;
-              const selected = isSelected(record, rowIndex);
-
-              return (
-                <tr
-                  {...restRowProps}
-                  key={resolveTableRowKey(record, rowIndex, rowKey)}
-                  data-selected={selected ? "true" : undefined}
-                  className={cn(
-                    "border-b border-[var(--yak-components-table-border)] bg-[var(--yak-components-table-row-bg)]",
-                    "data-[selected=true]:bg-[var(--yak-color-hover)]",
-                    rowHoverable && "transition-colors hover:bg-[var(--yak-color-hover)]",
-                    rowClassName,
-                  )}
-                >
-                  {mergedColumns.map((column, columnIndex) => {
-                    const value = column.dataIndex == null ? undefined : record[column.dataIndex];
-                    const cell = column.render
-                      ? column.render(value, record, rowIndex)
-                      : (value as ReactNode);
-                    const align = column.align ?? "left";
-
-                    return (
-                      <td
-                        key={getTableColumnKey(column, columnIndex)}
-                        style={getColumnStyle(column)}
-                        className={cn(
-                          "align-middle",
-                          sizeClass.cell,
-                          alignClasses[align],
-                          bordered &&
-                            "border-r border-[var(--yak-components-table-border)] last:border-r-0",
-                        )}
-                      >
-                        <div
-                          className={cn("min-w-0", column.ellipsis && "truncate")}
-                          title={column.ellipsis ? getCellTitle(cell) : undefined}
-                        >
-                          {cell ?? null}
-                        </div>
-                      </td>
-                    );
-                  })}
+              {data.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={Math.max(mergedColumns.length, 1)}
+                    className={cn(
+                      "border-b border-[var(--yak-components-table-border)]",
+                      bordered && "border-x border-t",
+                    )}
+                  >
+                    {loading ? (
+                      <div aria-hidden="true" className="min-h-48" />
+                    ) : (
+                      <Empty className="min-h-48" description={emptyText ?? "No data"} />
+                    )}
+                  </td>
                 </tr>
-              );
-            })}
-
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={Math.max(mergedColumns.length, 1)}>
-                  {loading ? (
-                    <div aria-hidden="true" className="min-h-48" />
-                  ) : (
-                    <Empty className="min-h-48" description={emptyText ?? "No data"} />
-                  )}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
 
         {loading ? (
           <div
-            className={cn(
-              "absolute inset-x-0 bottom-0 z-20 flex items-center justify-center bg-[var(--yak-components-table-loading-bg)]",
-              sizeClass.loadingTop,
-            )}
+            ref={loadingRef}
+            className="absolute left-0 z-20 flex items-center justify-center overflow-hidden bg-[var(--yak-components-table-loading-bg)]"
           >
             <Spinner size="large" label="Loading table" />
           </div>
@@ -300,7 +336,7 @@ export function InternalTable<RecordType extends object>({
       </div>
 
       {footer || resolvedPagination ? (
-        <div className="mt-auto flex min-h-12 flex-nowrap items-center gap-4 border-t border-[var(--yak-components-table-border-strong)] px-4">
+        <div className="mt-3 flex min-h-12 shrink-0 flex-nowrap items-center gap-4 px-4">
           {footer ? <div className="min-w-0 flex-1">{footer}</div> : null}
           {resolvedPagination ? (
             <Pagination
