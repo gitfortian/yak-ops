@@ -24,10 +24,7 @@ interface DataSyncExecutionLogPanelProps {
   active: boolean;
 }
 
-export function DataSyncExecutionLogPanel({
-  record,
-  active,
-}: DataSyncExecutionLogPanelProps) {
+export function DataSyncExecutionLogPanel({ record, active }: DataSyncExecutionLogPanelProps) {
   const executionId = record?.id;
   const live = isActiveDataSyncInstance(record);
   const [events, setEvents] = useState<DataSyncExecutionEventRecord[]>([]);
@@ -99,7 +96,9 @@ export function DataSyncExecutionLogPanel({
                 <Badge tone={levelTone(event.level)}>{event.level}</Badge>
               </div>
               <div className="min-w-0">
-                <div className="break-words text-[13px] leading-5 text-[#344054]">{event.message}</div>
+                <div className="break-words text-[13px] leading-5 text-[#344054]">
+                  {event.message}
+                </div>
                 <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">{event.eventType}</div>
               </div>
             </div>
