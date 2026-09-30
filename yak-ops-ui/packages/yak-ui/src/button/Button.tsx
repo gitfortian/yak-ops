@@ -65,9 +65,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-busy={loading || undefined}
       className={cn(buttonVariants({ size, variant }), loading && "relative", className)}
     >
-      {loading ? <span className="inline-flex items-center gap-[inherit] opacity-0">{children}</span> : children}
       {loading ? (
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="inline-flex items-center gap-[inherit] opacity-0">{children}</span>
+      ) : (
+        children
+      )}
+      {loading ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+        >
           <span className="relative size-4">
             <span className="absolute inset-0 rounded-full border-[1.5px] border-current opacity-25" />
             <span className="absolute inset-[2px] animate-spin rounded-full border-[1.5px] border-transparent border-r-current border-t-current motion-reduce:animate-none" />
