@@ -232,6 +232,191 @@ export function DataSyncTaskDetailPage({
         ? "期望停止"
         : "-";
 
+  if (localScroll) {
+    return (
+      <div className="flex h-full min-h-0 overflow-hidden bg-[#f6f6f6] text-[#242731]">
+        <aside className="flex w-[320px] shrink-0 flex-col border-r border-[#e6e8eb] bg-white max-xl:w-[280px]">
+          <div className="shrink-0 border-b border-[#eef0f3] px-4 py-4">
+            <div className="text-base font-semibold text-[#242731]">执行记录</div>
+            <div className="mt-1 text-xs text-[#98a2b3]">{executionTotal} 条任务实例</div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {executionListLoading && executions.length === 0 ? (
+              <div className="flex min-h-40 items-center justify-center">
+                <Spinner label="加载执行记录" />
+              </div>
+            ) : executions.length === 0 ? (
+              <div className="flex min-h-40 items-center justify-center px-4 text-center text-sm text-[#98a2b3]">
+                这个任务还没有执行记录
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {executions.map((execution) => {
+                  const meta = dataSyncInstanceStatusMeta(execution.status, realtime);
+                  const selected = execution.id === executionId;
+                  return (
+                    <button
+                      key={execution.id}
+                      type="button"
+                      className={`w-full cursor-pointer rounded-md border px-3 py-3 text-left transition-colors ${
+                        selected
+                          ? "border-[#c7d2fe] bg-[#f5f7ff]"
+                          : "border-transparent bg-white hover:bg-[#f6f6f6]"
+                      }`}
+                      onClick={() => selectExecution(execution.id)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge tone={meta.tone}>{meta.label}</Badge>
+                        <span className="truncate text-xs text-[#98a2b3]">
+                          {execution.startTime || execution.createTime || "-"}
+                        </span>
+                      </div>
+                      <div className="mt-2 truncate text-xs font-medium text-[#475467]">
+                        {dataSyncTriggerText(execution.triggerType)}
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#98a2b3]">
+                        <span className="truncate" title={execution.id}>
+                          {execution.id}
+                        </span>
+                        <span className="shrink-0">
+                          {(execution.writeRows ?? 0).toLocaleString()} 写入
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {executionTotal > EXECUTION_PAGE_SIZE ? (
+            <div className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2">
+              <Button
+                size="small"
+                variant="ghost"
+                disabled={executionPage <= 1}
+                className="px-1 text-xs font-normal"
+                onClick={() => changeExecutionPage(executionPage - 1)}
+              >
+                上一页
+              </Button>
+              <span className="text-xs text-[#98a2b3]">
+                {executionPage} / {totalPages}
+              </span>
+              <Button
+                size="small"
+                variant="ghost"
+                disabled={executionPage >= totalPages}
+                className="px-1 text-xs font-normal"
+                onClick={() => changeExecutionPage(executionPage + 1)}
+              >
+                下一页
+              </Button>
+            </div>
+          ) : null}
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <PageHeader
+            title={task.name}
+            description={`${title} · v${task.definitionVersion}`}
+            bordered
+            className="shrink-0 bg-white px-6 max-md:px-4"
+            extra={
+              <Button size="small" onClick={() => navigate(basePath)}>
+                返回任务列表
+              </Button>
+            }
+          />
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-6 mb-6 mt-5 space-y-4 rounded-lg border border-[#e6e8eb] bg-white p-4 max-md:mx-4">
+              <section className="rounded-lg border border-[#e6e8eb] bg-white">
+                <div className="border-b border-[#eef0f3] bg-[#fafafa] px-4 py-2.5 text-sm font-semibold text-[#344054]">
+                  基本信息
+                </div>
+                <div className="grid grid-cols-4 gap-x-6 gap-y-5 p-5 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+                  <InfoItem label="任务状态">
+                    <DataSyncTaskStatusBadge status={task.status} />
+                  </InfoItem>
+                  <InfoItem label="任务版本">v{task.definitionVersion}</InfoItem>
+                  <InfoItem label="同步类型">离线同步</InfoItem>
+                  <InfoItem label="写入方式">{writeModeText(task.writeMode)}</InfoItem>
+
+                  <InfoItem label="来源数据源">
+                    <div>{source?.name || task.sourceDataSourceId}</div>
+                    <div className="mt-0.5 text-xs text-[#667085]">
+                      {pathText(task.sourceDatabase, task.sourceSchema, task.sourceTable)}
+                    </div>
+                  </InfoItem>
+                  <div className="hidden items-center justify-center xl:flex">
+                    <ArrowRight size={18} className="text-[#98a2b3]" />
+                  </div>
+                  <InfoItem label="目标数据源">
+                    <div>{target?.name || task.targetDataSourceId}</div>
+                    <div className="mt-0.5 text-xs text-[#667085]">
+                      {pathText(task.targetDatabase, task.targetSchema, task.targetTable)}
+                    </div>
+                  </InfoItem>
+                  <InfoItem label="调度">{scheduleText}</InfoItem>
+
+                  <InfoItem label="重试策略">
+                    {retryPolicy
+                      ? `最多 ${retryPolicy.maxAttempts} 次 · Backoff ${retryPolicy.backoffSeconds}s`
+                      : "最多 1 次"}
+                  </InfoItem>
+                  <InfoItem label="更新时间">{task.updateTime || task.createTime || "-"}</InfoItem>
+                  {task.remark ? <InfoItem label="备注">{task.remark}</InfoItem> : null}
+                </div>
+              </section>
+
+              <section className="min-w-0">
+                <Tabs value={activeTab} onValueChange={changeDetailTab}>
+                  <TabsList>
+                    <TabsTab value="status">执行情况</TabsTab>
+                    <TabsTab value="log">执行日志</TabsTab>
+                  </TabsList>
+
+                  {selectedExecution ? (
+                    <div className="mt-2 text-xs text-[#98a2b3]">
+                      Execution {selectedExecution.id}
+                    </div>
+                  ) : null}
+
+                  <TabsPanel value="status" className="pt-3">
+                    {executionLoading && !selectedExecution ? (
+                      <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
+                        <Spinner size="large" label="加载执行详情" />
+                      </div>
+                    ) : selectedExecution ? (
+                      <DataSyncExecutionDetailContent
+                        record={selectedExecution}
+                        attempts={attempts}
+                        realtime={realtime}
+                      />
+                    ) : (
+                      <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
+                        选择左侧执行记录查看详情
+                      </div>
+                    )}
+                  </TabsPanel>
+
+                  <TabsPanel value="log" className="pt-3">
+                    <DataSyncExecutionLogPanel
+                      record={selectedExecution}
+                      active={activeTab === "log"}
+                    />
+                  </TabsPanel>
+                </Tabs>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={
