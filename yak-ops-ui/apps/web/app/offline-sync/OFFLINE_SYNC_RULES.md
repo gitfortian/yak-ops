@@ -27,6 +27,7 @@ Must:
 - Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
 - Show the Split consistency Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
 - Use existing Yak UI primitives.
+- Keep the OFFLINE editor as a full-height local-scroll workspace: PageHeader and the desktop section navigator stay outside the scrolling region, while only the definition content column owns vertical scrolling. Do not rely on sticky positioning for these fixed editor controls and do not change the global AppLayout scroll contract for this page.
 - Keep the Offline Sync page definition-focused; do not expose a Task Instance Tab there.
 - Route historical Instance access to Operations Center with the current Task filter.
 - Operations Center owns manual Run, Stop, Instance list/detail and runtime polling.
