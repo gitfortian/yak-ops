@@ -311,7 +311,7 @@ function TableSection({
   const tableDisabled = !dataSourceId || (requiresSchema && !schema);
 
   return (
-    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+    <div className="px-2 py-1">
       <div className="space-y-3">
         {requiresSchema ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
@@ -897,7 +897,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           ) : null}
 
           <CollapseSection id="basic" title="基本信息">
-            <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+            <div className="space-y-3 px-2 py-1">
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                 <FieldLabel required>任务名称</FieldLabel>
                 <Input
@@ -1066,12 +1066,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             }
           >
             {!mappingPayload ? (
-              <div className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-10 text-center text-sm text-[#98a2b3]">
+              <div className="px-4 py-10 text-center text-sm text-[#98a2b3]">
                 请选择来源表和目标表
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg bg-white">
-                <Table<DataSyncFieldMapping>
+              <Table<DataSyncFieldMapping>
                   columns={mappingColumns}
                   dataSource={mapping?.mappings || []}
                   rowKey="sourceName"
@@ -1082,13 +1081,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   emptyText="暂无字段"
                   scroll={{ x: 900 }}
                 />
-              </div>
             )}
           </CollapseSection>
 
           {!realtime ? (
             <CollapseSection id="schedule" title="调度配置">
-              <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+              <div className="space-y-3 px-2 py-1">
                 <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
                   <FieldLabel className="pt-1.5">Cron 表达式</FieldLabel>
                   <div className="space-y-1">
@@ -1131,7 +1129,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           ) : null}
 
           <CollapseSection id="runtime" title="运行参数" defaultOpen={false}>
-            <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+            <div className="px-2 py-1">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
                 {realtime ? (
                   <RealtimeRuntimeFields config={form.realtimeConfig} onChange={patchRealtime} />
