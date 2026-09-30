@@ -45,7 +45,7 @@ Mode-specific:
 - Use Yak UI `Alert` only for persistent risk / prerequisite semantics owned by the current mode: destructive OFFLINE OVERWRITE, configured OFFLINE Split snapshot caveat, REALTIME CDC prerequisites, and REALTIME edit-to-new-version snapshot behavior. Keep ordinary explanatory copy as normal supporting text.
 - Keep all Datasource values as IDs and render human-readable names through `Select.items`.
 - Keep the backend mapping preview as source of truth.
-- Compose editor configuration areas with Yak UI `CollapseSection` instead of page-local clickable headers. Basic Info / Datasource / Source / Target / Mapping and OFFLINE Schedule default open; Runtime Parameters default closed. The full 36px header remains clickable with shared hover / pointer / chevron behavior. Ordinary form bodies stay flat with spacing only; do not wrap them in another generic white background + border Card. Datasource Source/Target cards and Table's own body border remain because they represent real nested structures rather than section chrome.
+- Compose editor configuration areas with Yak UI `CollapseSection` instead of page-local clickable headers. Basic Info / Datasource / Source / Target / Mapping and OFFLINE Schedule default open; Runtime Parameters default closed. The full 36px header remains clickable with shared hover / pointer / chevron behavior, while each domain keeps ownership of its body layout. Data Sync configuration bodies use the existing white Card surface + border to preserve visual contrast against the page background.
 
 ## Must Not
 
