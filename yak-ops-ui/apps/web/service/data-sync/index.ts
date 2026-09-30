@@ -81,7 +81,6 @@ export const cancelDataSyncInstance = (id: string): Promise<DataSyncInstanceReco
 export const listDataSyncAttempts = (id: string): Promise<DataSyncAttemptRecord[]> =>
   HttpUtils.getData<DataSyncAttemptRecord[]>(`${DATA_SYNC_API_PREFIX}/instances/${id}/attempts`);
 
-
 const DATA_SYNC_SCHEDULE_NOT_FOUND_CODE = 42015;
 
 export const getDataSyncSchedule = async (
