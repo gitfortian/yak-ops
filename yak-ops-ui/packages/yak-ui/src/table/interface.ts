@@ -6,6 +6,8 @@ export type TableSize = "small" | "medium" | "large";
 
 export type TableAlign = "left" | "center" | "right";
 
+export type TableFixed = "left" | "right";
+
 export type TableSortOrder = "ascend" | "descend" | null;
 
 export type TableSortDirection = Exclude<TableSortOrder, null>;
@@ -52,6 +54,8 @@ export interface TableColumn<RecordType extends object> {
   width?: CSSProperties["width"];
   minWidth?: CSSProperties["minWidth"];
   align?: TableAlign;
+  /** 横向滚动时固定在视口左侧或右侧；固定列必须提供明确 width。 */
+  fixed?: TableFixed;
   ellipsis?: boolean;
   sorter?: boolean | TableSorterCompare<RecordType>;
   sortOrder?: TableSortOrder;
