@@ -1,311 +1,76 @@
 # Realtime Desired State + Auto Recovery
 
-Status: v1.1 PR5 — Backend
+Status: Active
 
-Depends On:
+Scope: REALTIME 运行意图、启动协调、CDC 状态 identity 与恢复边界。
 
-- [Data Sync Capability](./README.md)
-- [Task Publication Lifecycle](./task-lifecycle.md)
-- [Execution Retry / Attempt Contract](./execution-retry-attempt.md)
-- [Yak Ops v1.1.0 Release Contract](../../release/v1.1.0.md)
+## State Ownership
 
-## 1. Goal
+发布状态回答是否允许创建新 Execution；desiredState 回答用户希望运行还是停止；Execution 状态回答某次运行的实际进展。三个状态不能相互替代。
 
-REALTIME Task 需要区分三种不同状态：
+`yak_ops_data_sync_task.desired_state` 保存 STOPPED / RUNNING。OFFLINE 固定 STOPPED，Cron 不复用该字段。发布规则见 [Task Lifecycle](task-lifecycle.md)，Execution / Attempt 见 [Retry Contract](execution-retry-attempt.md)。
 
-```text
-Publication State
-Desired State
-Execution State
-```
+## User Commands
 
-它们回答不同问题：
+| 命令或事件 | desiredState 语义 |
+| --- | --- |
+| 手工启动已发布 REALTIME Task | 置 RUNNING，同一业务命令创建 MANUAL Execution |
+| 取消当前活动 REALTIME Execution | 置 STOPPED，再取消 Runtime / Execution / 活动 Attempt |
+| 成功下线 Task | 置 STOPPED；已有活动 Execution 时仍按发布契约拒绝下线 |
+| Execution 后续 FAILED / LOST | 不自动改成 STOPPED，运行失败不代表用户改变意图 |
+| 对已终态 Execution 重复 Cancel | 只返回历史结果，不改变 Task desiredState |
 
-```text
-PUBLISHED / UNPUBLISHED
-  → 这个 Task 当前是否允许创建新的 Execution？
+当前没有独立的“只修改 desiredState”命令。无活动实例但意图仍为 RUNNING 时，不可借取消历史 FAILED / LOST 记录声称已停止意图；成功下线可清除意图。接口限制不能被文档中的泛化 Stop 描述掩盖。
 
-RUNNING / STOPPED desiredState
-  → 用户希望 REALTIME Task 持续运行还是保持停止？
-
-PENDING / RUNNING / RETRY_WAITING / ...
-  → 当前某个具体 Execution 正在发生什么？
-```
-
-三者禁止互相替代。
-
-## 2. Desired State
-
-REALTIME Task 新增：
+## Application Restart
 
 ```text
-DataSyncDesiredState
-├── STOPPED = 0
-└── RUNNING = 1
+旧进程活动 Execution / Attempt → LOST
+  → 扫描 PUBLISHED + REALTIME + desiredState=RUNNING 的 Task
+  → 没有活动 Execution 且当前资源校验通过
+  → 创建新 AUTO_RECOVERY Execution
 ```
 
-字段持久化在：
+活动集合见 [Execution Status](execution-retry-attempt.md#execution-status)。旧 LocalExecution 和根 Instance ID 不复活；新的根记录从 Attempt 1 开始，不跨进程续接旧 Attempt 序号。
 
-```text
-yak_ops_data_sync_task.desired_state
-```
+Boot 装配启动入口，DataSyncExecutionRecovery 清理旧进程状态，DataSyncService.restoreRealtimeDesiredState 执行业务恢复。每条恢复失败记录脱敏错误、保留 RUNNING 意图，并继续处理其他 Task；不无限创建新根记录。
 
-OFFLINE Task 固定为 STOPPED；Scheduler 继续通过 Schedule Definition 管理，不复用 desiredState。
+这只发生在启动协调阶段，不提供常驻 watchdog。desired=RUNNING 且无活动执行应作为待处理差异展示，不当成“正常运行”或“用户已停止”。
 
-## 3. User Commands
+## CDC Continuation
 
-### Start
+状态根目录为 `${yak.ops.home}/data/data-sync/realtime`；没有 yak.ops.home 时以工作目录为基准。identity 为 `{workspaceId}/{taskId}/v{definitionVersion}`，同一 identity 使用稳定 Debezium engine name 与状态目录。
 
-用户启动一个 PUBLISHED REALTIME Task：
+Data Sync 管目录 identity，连接器私有地管理 offsets.dat 与 schema-history.dat。本地 serverId allocator 保证当前进程活动租约不冲突并在执行结束后释放，不是多节点协调。
 
-```text
-desiredState = RUNNING
-        ↓
-create MANUAL Execution
-        ↓
-Realtime Runtime
-```
+同版本的新 Execution / Retry 复用既有状态范围；有效定义变化产生新版本与新状态范围。版本变化规则见 [Definition Version Contract](task-lifecycle.md#definition-version-contract)。不要仅因取消、失败、LOST 或产品版本升级就删除 CDC state。
 
-Desired State 和 Execution Root 在同一个 Business command 中处理。
+续传依赖有效的连接器状态和仍可用的 Source 日志。首次无状态或新版本从 initial snapshot 开始；同版本但状态丢失、损坏或源端历史日志不可用，不能保证按原 offset 续传，也不能声称所有异常都会安全自动回退到全量。
 
-如果 Execution 后续 FAILED / LOST，desiredState 不自动改回 STOPPED。
+容器替换后要续传，必须持久化 `${yak.ops.home}/data`；Docker 对应 `/opt/yak-ops/data`。仅持久化产品数据库不能替代 CDC state 文件。
 
-原因：
+Task definitionVersion 不包含被引用 Datasource 的连接修订。同 ID 原地改成另一个物理 Source，不会自动改变 state identity；当前没有 Datasource revision / fingerprint 或完整的引用变更保护，不承诺旧状态仍兼容。此风险需要独立能力设计，不能当作已解决。
 
-> 运行失败不等于用户改变了“我希望它运行”的意图。
+## Retry Relationship
 
-### Stop
+FAILED Attempt 的通用 Retry 留在原 Execution 内，root trigger 不变。启动自动恢复创建新 AUTO_RECOVERY 根记录，按当前已发布 Task 冻结输入；它不是旧 FAILED / LOST Execution 的 Retry。
 
-用户 Stop 当前 REALTIME Execution：
+RETRY_WAITING 在进程退出后成为 LOST。只有满足 desired-state 恢复条件的 REALTIME Task 才创建新根记录，OFFLINE 不恢复旧重试等待链。
 
-```text
-desiredState = STOPPED
-        ↓
-cancel active Execution / Attempt
-```
+## Delivery Semantics
 
-STOPPED 后应用启动不得自动恢复该 Task。
+继续采用 [YakFlow checkpoint 与 CDC 确认规则](../yak-flow/README.md#checkpoint-boundary)：Sink flush 完成后才能确认上游，持久化 offset 前仍可能重放，因此是 at-least-once。
 
-### Unpublish
+不声明 exactly-once、通用 CheckpointState 跨进程恢复、旧 Runtime 对象复活、分布式 ownership / leader election / fencing 或连续故障自动拉起。
 
-REALTIME Task 成功 Unpublish 时：
+## Persistence and Compatibility
 
-```text
-desiredState = STOPPED
-status = UNPUBLISHED
-```
+[现有 V4 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V4__realtime_desired_state.sql) 默认 desiredState=STOPPED；只有已发布 REALTIME Task 存在 PENDING / RUNNING / RETRY_WAITING 实例时回填 RUNNING。旧停止任务与 OFFLINE 保持 STOPPED。
 
-因此一个 UNPUBLISHED REALTIME Task 永远不会被 Auto Recovery 拉起。
+V4 同时为 AUTO_RECOVERY 保留根触发类型的存储语义。迁移冻结规则见 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不回改 V1 / V2 / V3。
 
-## 4. Application Restart
+## Code and Verification
 
-旧进程不能恢复 LocalExecution 对象。
+入口：[DataSyncServiceImpl](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/impl/DataSyncServiceImpl.java)。验证：[DataSyncRealtimeDesiredStateContractTest](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncRealtimeDesiredStateContractTest.java)、[DataSyncAutomationAcceptanceIT](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncAutomationAcceptanceIT.java) 和 [Automation E2E](../../e2e/data-sync/automation/README.md)。
 
-启动阶段分两步：
-
-```text
-Phase A
-PENDING / RUNNING / RETRY_WAITING Execution
-        ↓
-LOST
-
-Phase B
-PUBLISHED + REALTIME + desiredState=RUNNING
-        ↓
-no active Execution
-        ↓
-create new AUTO_RECOVERY Execution
-```
-
-旧 Execution 不复活。
-
-新的 Execution 拥有新的 Instance ID。
-
-## 5. CDC Continuation
-
-Auto Recovery 使用当前 PUBLISHED Task 的同一个：
-
-```text
-taskId
-definitionVersion
-```
-
-Realtime CDC state identity 仍然是：
-
-```text
-{workspaceId}/{taskId}/v{definitionVersion}
-```
-
-因此新的 AUTO_RECOVERY Execution：
-
-```text
-new Execution
-     ↓
-same task/version state directory
-     ↓
-reuse offsets.dat + schema-history.dat
-     ↓
-continue from completed Debezium offset
-```
-
-这不是：
-
-- 复活旧 LocalExecution。
-- Generic YakFlow checkpoint restore。
-- fresh snapshot 保证。
-- exactly-once。
-
-仍然是现有 at-least-once continuation contract。
-
-## 6. Root Trigger
-
-Auto Recovery 创建新的 Execution Root：
-
-```text
-triggerType = AUTO_RECOVERY
-```
-
-它不是 RETRY Attempt。
-
-例如：
-
-```text
-AUTO_RECOVERY Execution
-  ├── Attempt #1 FAILED
-  ├── RETRY_WAITING
-  └── Attempt #2 RUNNING
-```
-
-Root trigger 始终保持 AUTO_RECOVERY。
-
-Retry 仍然只发生在该 Execution 内部。
-
-## 7. Retry Relationship
-
-Generic Retry 与 Auto Recovery 解决不同问题：
-
-```text
-FAILED Attempt
-  → Retry / Attempt
-
-process restart / ownership loss
-  → Desired State / Auto Recovery
-```
-
-CANCELED 不 Retry，也不 Auto Recover，因为 Stop command 已把 desiredState 写成 STOPPED。
-
-RETRY_WAITING 在进程重启时会变 LOST；随后如果：
-
-```text
-desiredState = RUNNING
-```
-
-会创建新的 AUTO_RECOVERY Execution。
-
-不会跨进程继续原 Execution 的 Attempt 序号。
-
-## 8. First Upgrade Compatibility
-
-V4 Migration 新增：
-
-```text
-desired_state
-```
-
-默认值：
-
-```text
-STOPPED
-```
-
-为了不破坏升级前正在运行的 REALTIME Task，Migration 会识别：
-
-```text
-PUBLISHED REALTIME Task
-+
-PENDING / RUNNING / RETRY_WAITING Execution
-```
-
-并回填：
-
-```text
-desired_state = RUNNING
-```
-
-因此：
-
-- 升级前正在运行的 REALTIME Task → 重启后自动恢复。
-- 升级前已经停止的 REALTIME Task → 保持 STOPPED。
-- OFFLINE Task → 保持 STOPPED。
-
-## 9. Startup Failure
-
-Auto Recovery 逐 Task 执行。
-
-单个 Task 恢复失败：
-
-- 不阻止应用启动。
-- 记录脱敏错误。
-- desiredState 保持 RUNNING。
-- 不修改为 STOPPED。
-- 不无限创建新 Execution。
-
-PR5 不提供常驻 watchdog。
-
-后续 Operations Center 可以展示：
-
-```text
-desired = RUNNING
-actual = no active execution / latest FAILED or LOST
-```
-
-由用户决定手工启动、停止意图或排查外部依赖。
-
-## 10. Single-node Boundary
-
-PR5 仍然是单节点 Contract。
-
-不提供：
-
-- leader election。
-- multi-node fencing。
-- distributed desired-state reconciliation。
-- exactly-once ownership。
-- continuous recovery watchdog。
-
-在未来多节点 Runtime 中，Desired State 可以继续保留为产品意图层，但 reconciliation 必须增加唯一 owner / fencing。
-
-## 11. Persistence
-
-PR5 新增：
-
-```text
-V4__realtime_desired_state.sql
-```
-
-变化：
-
-- `yak_ops_data_sync_task.desired_state`。
-- realtime desired-state startup query index。
-- Execution trigger comment 增加 AUTO_RECOVERY。
-
-不修改：
-
-- `V1__baseline.sql`。
-- `V2__data_sync_schedule.sql`。
-- `V3__data_sync_execution_attempt.sql`。
-
-## 12. Acceptance
-
-PR5 至少证明：
-
-- 手工启动 REALTIME → desiredState=RUNNING。
-- Stop / Unpublish → desiredState=STOPPED。
-- OFFLINE 不使用 RUNNING desired state。
-- 启动恢复只扫描 PUBLISHED + REALTIME + RUNNING desired state。
-- 已有 Active Execution 时不重复恢复。
-- Auto Recovery 创建新 Execution。
-- Auto Recovery root trigger = AUTO_RECOVERY。
-- taskVersion 保持不变。
-- Realtime state identity 继续使用同 taskId + definitionVersion。
-- 一个 Task 恢复失败不阻断其它启动恢复。
+状态 identity 测试不证明真实 Binlog 续传；还需 MySqlCdcIntegrationIT 的真实连接器验证和产品重启 E2E。执行结果放对应 CI / 版本证据，不写入本契约。

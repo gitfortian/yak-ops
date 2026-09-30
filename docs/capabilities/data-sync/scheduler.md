@@ -1,386 +1,78 @@
 # Data Sync Scheduler Contract
 
-Status: v1.1 — Offline Schedule Persistence + Trigger + UI Closure
+Status: Active
 
-Depends On:
+Scope: OFFLINE Schedule 定义、业务触发与 Quartz 运行时边界。
 
-- [Data Sync Capability](./README.md)
-- [Yak Ops v1.1.0 Release Contract](../../release/v1.1.0.md)
-- [Yak Ops Architecture](../../../ARCHITECTURE.md)
+## Goal
 
-## 1. Goal
+Yak Ops 决定任务能否运行，Quartz 只决定何时到点。ScheduleEngine 是框架无关接口；Quartz 类型不得进入 Business Contract、DTO / VO、DAO Entity 或 YakFlow。
 
-v1.1 的 Scheduler 第一阶段只建立一个边界：
+## Schedule Definition
 
-> Yak Ops 管 Task 和运行语义，Quartz 只管什么时候到点。
+同一 Workspace / OFFLINE Task 最多一个 Schedule，`yak_ops_data_sync_schedule` 是定义和 enabled 状态的持久化来源。Quartz 当前使用 RAMJobStore，Trigger 不是业务事实来源。
 
-目标结构：
+ScheduleEngine 接收 scheduleId、workspaceId、taskId、cronExpression 和显式 timeZone。JobData 仅存三个稳定 ID；不保存 Task JSON、连接信息、凭证、映射或 CDC state。
 
-```text
-Data Sync Business
-        │
-        ├── DataSyncScheduleDefinition
-        ├── ScheduleEngine
-        └── DataSyncScheduleFireListener
-                 ↑
-                 │ framework-neutral
-                 │
-Boot / Quartz ───┘
-        │
-        ├── QuartzScheduleEngine
-        ├── QuartzDataSyncScheduleJob
-        └── QuartzSpringBeanJobFactory
-```
+Cron 使用 Quartz 语义，时区由后端 ZoneId 校验，不能依赖 JVM、宿主机或浏览器默认值。引擎接口提供校验、注册、修改、移除和 next-fire 查询，不负责授权、并发、实例生命周期或 Retry。
 
-Quartz 类型不得进入 Data Sync Business Contract、Task DTO/VO、DAO Entity 或 YakFlow。
+## Command Semantics
 
-## 2. Schedule Engine Contract
+以下路径相对于 `/api/v1/data-sync/tasks/{id}/schedule`：
 
-`ScheduleEngine` 只负责：
+| 命令 | 当前语义 |
+| --- | --- |
+| PUT | 保存 Cron / Time Zone；新 Schedule 默认 disabled；已有记录保留 enabled 状态 |
+| GET | 读取已有 Schedule 定义；不存在则返回对应业务错误，不生成虚构默认记录 |
+| POST /enable | 要求 OFFLINE + PUBLISHED 且 Schedule 已存在；校验后启用并注册 Trigger |
+| POST /disable | 标记 disabled，提交后移除 Trigger；不取消已创建的 Execution |
 
-- 注册 Cron。
-- 修改 Cron。
-- 移除 Cron。
-- 查询下一次触发时间。
+Schedule 定义可独立于 Task 发布状态保存；已有启用记录修改后在 commit 后更新 Runtime，并要求 Task 保持已发布。保存不会隐式启用一个未启用的 Schedule，也不会增加 Task definitionVersion。
 
-它不负责：
+Cron 不能为空。当前没有通过空 Cron 删除既有 Schedule 的语义；不要把前端“未配置”当成后端删除命令。Stop Execution 不代表停用以后到点触发的 Schedule。
 
-- Task Publish / Unpublish。
-- 判断 Task 是否可以运行。
-- 创建 Data Sync Instance。
-- `SKIP_IF_RUNNING`。
-- Retry / Attempt。
-- Realtime desired state。
-- Worker / 分布式资源调度。
-
-这些都继续由 Data Sync 产品层负责。
-
-## 3. Minimal Schedule Definition
-
-传给调度引擎的定义只包含：
+## Fire Boundary
 
 ```text
-scheduleId
-workspaceId
-taskId
-cronExpression
-timeZone
+Quartz Job（稳定 ID + scheduledFireTime）
+  → DataSyncScheduleFireListener
+  → 重读 Schedule，确认 enabled 且 taskId 匹配
+  → 重读 Task，确认 OFFLINE + PUBLISHED
+  → 检查活动 Execution
+       ├─ 存在 → SKIP，不建并发根记录
+       └─ 不存在 → 校验资源 / 映射 → 新 SCHEDULE Execution
 ```
 
-不允许包含：
+活动状态统一使用 [Execution Status](execution-retry-attempt.md#execution-status)，包括 RETRY_WAITING。JobData 不是执行授权来源；不能用 Quartz `@DisallowConcurrentExecution` 代替业务校验。
 
-- Task Definition JSON。
-- Datasource Connection。
-- Password / Token / SSH Key。
-- Runtime Connection。
-- Field Mapping。
-- CDC Offset / Schema History。
+当前策略固定 SKIP_IF_RUNNING，不提供 QUEUE / PARALLEL，也不把 skipped fire 自动变成补跑请求。Retry 在 Execution 内发生，不通过 Quartz refire 或新的 Cron Execution 实现。
 
-Quartz JobData 当前也只保存：
+## Misfire and Recovery
 
-```text
-scheduleId
-workspaceId
-taskId
-```
+Misfire 固定 DO_NOTHING。进程错过的计划时间不会在恢复后批量补跑。
 
-Quartz 是 Trigger Runtime，不是 Data Sync 业务数据库。
+启动从 DB 读取 enabled Schedule，校验关联 Task 和 Cron 后重新注册。成功下线在业务事务内关闭 Schedule，提交后移除 Trigger；删除 Task 同步删除其 Schedule 业务记录，提交后清理 Runtime。
 
-## 4. Cron / Time Zone
+DB 提交与 Quartz 注册不是原子事务。commit 后注册 / 移除失败可以留下定义与 Runtime 暂时不一致；不能承诺请求失败必然回滚已提交定义。启动重建也不是常驻自动修复循环；无效启用记录的恢复异常不能描述成逐条忽略。
 
-Cron 使用 Quartz Cron 语义。
+## Runtime Observation
 
-Time Zone 必须显式进入 Schedule Definition，不能隐式依赖：
+运维读模型查询 Quartz 的 nextFireTime，并按 Schedule timeZone 转换展示。未启用、Trigger 不存在或查询失败时可能没有该值，前端不能自行推算一个时间代替 Runtime 事实。普通 Schedule GET 不保证携带运行时 nextFireTime。
 
-- JVM 默认时区。
-- 宿主机时区。
-- 浏览器时区。
+## UI Ownership
 
-因此相同 Cron + Time Zone 在不同部署环境中应保持相同调度语义。
+OFFLINE 编辑器保存定义；运维中心负责 Enable / Disable 和运行态观察。保存顺序为 Task → Schedule，Save & Publish 为 Task → Schedule → Publish。跨 HTTP 调用不是一个原子事务，部分失败不能展示整体成功。
 
-## 5. Misfire
+从未创建 Schedule 且编辑器 Cron 留空时维持手动运行；保存 Schedule 不等于启用。具体控件与页面布局由前端 owner 维护，不在此复制。
 
-v1.1 第一阶段固定：
+## Persistence
 
-```text
-MISFIRE = DO_NOTHING
-```
+Schema 见 [V2 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__data_sync_schedule.sql)。它是现行持久化，不再是待实现目标。冻结和向前迁移遵循 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)。
 
-例如：
+没有启用 Quartz JDBC JobStore 或集群。后续采用 JobStore 时仍不能把 QRTZ 表当业务数据库；生产环境不得通过 initialize-schema=always 自动重建，Schema 必须由版本迁移管理。
 
-```text
-计划：02:00
-应用：01:50 - 02:10 不可用
-恢复：02:10
-```
+## Code and Verification
 
-本次 02:00 不自动补跑。
+[DataSyncServiceImpl](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/impl/DataSyncServiceImpl.java) 拥有保存、启停、onFire、commit 后 Runtime 更新和启动重建；[QuartzScheduleEngine](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/scheduler/QuartzScheduleEngine.java) 拥有 Cron、时区、Misfire 与 next-fire。
 
-原因：
-
-- 避免恢复后突然补跑大批离线任务。
-- 不把“补跑”偷偷混进 Scheduler Runtime。
-- 后续如果需要 Catch-up，必须作为明确产品策略进入 Data Sync Contract。
-
-## 6. Concurrency Ownership
-
-Quartz 不拥有 Data Sync 的并发策略。
-
-v1.1 目标策略：
-
-```text
-SKIP_IF_RUNNING
-```
-
-判断位置必须是：
-
-```text
-Quartz Fire
-    ↓
-Data Sync Business
-    ↓
-检查同 Task Active Instance
-    ├── YES → SKIP
-    └── NO  → 创建运行
-```
-
-不得用 Quartz `@DisallowConcurrentExecution` 代替 Data Sync 业务判断，因为后续 `QUEUE / PARALLEL` 也属于产品语义。
-
-## 7. Retry Ownership
-
-Quartz Fire 与 Retry 是两件事：
-
-```text
-Cron Fire
-   ↓
-Execution
-   ↓
-Attempt 1 FAILED
-   ↓
-Retry Policy
-   ↓
-Attempt 2
-```
-
-Quartz 只负责第一步。
-
-Retry 不使用 Quartz refire / Trigger 语义冒充 Data Sync Attempt，Retry Backoff 也不由 Quartz 持久化。
-
-完整身份与状态规则见 [Execution Retry / Attempt Contract](./execution-retry-attempt.md)。
-
-当 Retry Backend 引入 `RETRY_WAITING` 后，该状态仍属于 Active Execution；`SKIP_IF_RUNNING` 必须把等待 Retry 的 Execution 视为正在占用该 Task，避免下一个 Cron Fire 创建第二个并发 Execution。
-
-## 8. Fire Boundary
-
-Quartz 到点后转换为框架无关的：
-
-```text
-DataSyncScheduleFire
-```
-
-字段：
-
-```text
-scheduleId
-workspaceId
-taskId
-scheduledFireTime
-```
-
-然后通过 `DataSyncScheduleFireListener` 交回 Business。
-
-PR2 已由 `DataSyncServiceImpl` 实现该回调边界。
-
-到点后必须重新读取数据库并校验：
-
-```text
-Schedule exists + enabled
-        ↓
-Task exists + OFFLINE + PUBLISHED
-        ↓
-Active Instance?
-   ├── YES → SKIP
-   └── NO  → create Instance(triggerType=SCHEDULE)
-```
-
-Quartz JobData 不是执行授权来源；真正执行前始终以 Yak Ops DB 当前状态为准。
-
-## 9. Quartz Ownership
-
-Quartz 依赖只放在 `yak-ops-boot`。
-
-当前实现：
-
-```text
-ScheduleEngine
-      ↑
-QuartzScheduleEngine
-```
-
-`QuartzSpringBeanJobFactory` 只负责让 Quartz 创建的 Job 获得 Spring Bean，不承担业务规则。
-
-`QuartzDataSyncScheduleJob` 只负责：
-
-```text
-Quartz JobData
-   ↓
-DataSyncScheduleFire
-   ↓
-DataSyncScheduleFireListener
-```
-
-不允许直接访问：
-
-- DataSync Repository。
-- Datasource Repository。
-- YakFlow Runtime。
-- LocalExecutionEngine。
-
-## 10. Persistence Boundary
-
-PR2 新增：
-
-```text
-V2__data_sync_schedule.sql
-        ↓
-yak_ops_data_sync_schedule
-```
-
-一条 Offline Task 在同一个 Workspace 内最多存在一个 Schedule。
-
-持久化字段：
-
-```text
-id
-workspace_id
-task_id
-cron_expression
-time_zone
-enabled
-audit fields
-```
-
-新建 Schedule 默认 `enabled=false`；启用调度必须满足 Task = `OFFLINE + PUBLISHED`。
-
-后续持久化必须遵守：
-
-```text
-yak_ops_data_sync_schedule
-        =
-Data Sync Schedule Source of Truth
-```
-
-Quartz 自身的 JobStore 只能作为 Scheduler Runtime State。
-
-如果后续启用 Quartz JDBC JobStore：
-
-- Quartz 表属于 Runtime Infrastructure。
-- Schema 必须进入 Yak Ops Flyway Migration。
-- 禁止通过 `spring.quartz.jdbc.initialize-schema=always` 在生产环境自动重建表。
-- Data Sync 业务代码不得直接查询 `QRTZ_*`。
-
-`V1__baseline.sql` 保持冻结；Schedule Schema 从 `V2__data_sync_schedule.sql` 开始演进。
-
-## 11. PR2 Runtime Recovery
-
-当前 Quartz 仍使用 RAMJobStore，因此 Quartz Trigger 本身不是持久化 Source of Truth。
-
-应用启动后：
-
-```text
-Application Ready
-      ↓
-DataSyncService.restoreScheduleRuntime()
-      ↓
-query enabled schedules
-      ↓
-validate OFFLINE + PUBLISHED
-      ↓
-re-register Quartz Trigger
-```
-
-这保证应用重启后 Schedule Definition 不丢失，也不要求 PR2 提前引入 Quartz JDBC JobStore。
-
-Task 下线时会在同一业务事务中把 Schedule 标记为 disabled，并在 commit 后移除 Quartz Trigger。
-
-Task 删除时会同步删除 Schedule 业务记录，并在 commit 后清理 Quartz Runtime。
-
-## 12. PR2 HTTP Contract
-
-后端当前提供：
-
-```text
-PUT  /api/v1/data-sync/tasks/{id}/schedule
-GET  /api/v1/data-sync/tasks/{id}/schedule
-POST /api/v1/data-sync/tasks/{id}/schedule/enable
-POST /api/v1/data-sync/tasks/{id}/schedule/disable
-```
-
-Save 只保存 Cron + Time Zone，新 Schedule 默认不启用。
-
-## 13. PR2 Non-Goals
-
-本 PR 明确不做：
-
-- Schedule UI。
-- 可配置的 Concurrency Policy。
-- QUEUE / PARALLEL。
-- Retry / Attempt。
-- Quartz JDBC JobStore。
-- Scheduler Cluster。
-- Realtime Auto Recovery。
-
-当前 Scheduled Fire 在发现 Active Instance 时固定跳过，作为单机调度安全语义；可配置并发策略属于后续 PR。
-
-## 14. PR2 Verification
-
-至少证明：
-
-- Business Scheduler Contract 不依赖 Quartz。
-- Quartz 依赖只进入 Boot。
-- JobData 只有稳定 ID。
-- Cron 使用显式 Time Zone。
-- Misfire 固定为 DO_NOTHING。
-- Reschedule 可以更新 Cron。
-- Unschedule 幂等。
-- 不修改 V1 Flyway baseline。
-- V2 Schedule Schema / Entity / Repository 一致。
-- 新 Schedule 默认 disabled。
-- 只有 PUBLISHED OFFLINE Task 可以 enable。
-- Task unpublish 自动 disable + unschedule。
-- Scheduled Fire 创建 `triggerType=SCHEDULE` Instance。
-- Active Instance 存在时 Scheduled Fire 不重复创建。
-- 应用启动从 DB 恢复 enabled Schedule Runtime。
-
-
-## 15. v1.1 UI Ownership
-
-`Offline Sync Schedule Configuration UI Closure` 将既有 Schedule Backend 接入产品 UI，不改变 Scheduler Runtime 语义。
-
-职责固定为：
-
-```text
-Offline Sync Editor
-  ↓
-Schedule Definition
-  ├── Quartz Cron
-  └── IANA Time Zone
-
-Operations Center
-  ↓
-Schedule Runtime Control
-  ├── Enable
-  ├── Disable
-  └── Observe nextFireTime
-```
-
-规则：
-
-- 新建 / 编辑 OFFLINE Task 时可以配置 Cron + Time Zone。
-- Schedule 依赖稳定 `taskId`，因此前端保存顺序是 Task → Schedule。
-- Save & Publish 的顺序是 Task → Schedule → Publish。
-- Cron 留空且从未创建 Schedule 时表示仅手动运行。
-- Schedule Definition 保存不会隐式启用调度。
-- 只有 PUBLISHED OFFLINE Task 可以在 Operations Center 启用 Schedule。
-- Task 下线仍由后端自动 disable + unschedule。
-- Operations Center 不编辑 Cron / Time Zone，也不在前端计算 next fire。
+[Backend Acceptance](../../../.github/workflows/backend-acceptance.yml) 执行 QuartzScheduleEngineTest 与 DataSyncAutomationAcceptanceIT；业务替身测试不代替真实 Quartz 计时语义。[手工 Automation E2E](../../e2e/data-sync/automation/README.md) 验证产品链路。这里定义方法与边界，不记录某次通过结论。

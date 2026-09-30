@@ -1,566 +1,106 @@
 # Data Sync Execution Retry / Attempt Contract
 
-Status: v1.1 PR4 — Persistence + Runtime
+Status: Active
 
-Depends On:
+Scope: Execution / Attempt 身份、状态聚合、Retry、取消、指标和持久化兼容性。
 
-- [Data Sync Capability](./README.md)
-- [Data Sync Task Publication Lifecycle](./task-lifecycle.md)
-- [Data Sync Scheduler Contract](./scheduler.md)
-- [Yak Ops v1.1.0 Release Contract](../../release/v1.1.0.md)
-- [Yak Ops Architecture](../../../ARCHITECTURE.md)
-
-## 1. Goal
-
-v1.1 的 Retry 不把一次失败重新包装成一条新的独立 Task Instance。
-
-目标模型：
+## Identity
 
 ```text
 Task
-  ↓
-Execution
-  ├── Attempt #1
-  ├── Attempt #2
-  └── Attempt #3
+ ├─ Execution E1（现有 DataSyncInstance）
+ │    ├─ Attempt 1 FAILED
+ │    └─ Attempt 2 SUCCEEDED
+ └─ Execution E2
+      └─ Attempt 1 RUNNING
 ```
 
-Yak Ops 当前的 `DataSyncInstance` 从本 Contract 起定义为 **Execution 根身份**。
+一次手动运行、有效 Cron Fire 或启动自动恢复创建一个 Execution。Retry 只在该 Execution 内创建 attemptNo+1，不创建新的根记录，不复活旧 Attempt。最终失败后用户再次运行是新 Execution。
 
-当前已经存在的 v1.0 / v1.1 Instance 数据视为：
+Execution 的 workspaceId、taskId、taskName 快照、taskVersion、syncType、root trigger、definitionSnapshot 和 Retry Policy 在创建时固定。所有 Attempt 使用同一冻结输入，不读取最新 Task 定义。
+
+Attempt 拥有自身状态、指标、时间与脱敏错误。`(executionId, attemptNo)` 唯一，attemptNo 从 1 递增；不允许跨 Execution 移动或让终态 Attempt 回到 RUNNING。
+
+## Trigger Ownership
+
+新 Execution 的根触发来源为 MANUAL、SCHEDULE 或 AUTO_RECOVERY。RETRY 枚举存储值仅保留历史兼容，不是新 Execution 的正常创建来源。
+
+例如 SCHEDULE / AUTO_RECOVERY Execution 的第二个 Attempt 仍保留原根 trigger。自动恢复与同根 Retry 的区别见 [Realtime Desired State](realtime-desired-state.md)。
+
+## Execution Status
+
+| 层级 | 活动状态 | 终态 |
+| --- | --- | --- |
+| Execution | PENDING、RUNNING、RETRY_WAITING | SUCCEEDED、FAILED、CANCELED、LOST |
+| Attempt | PENDING、RUNNING | SUCCEEDED、FAILED、CANCELED、LOST |
+
+RETRY_WAITING 属于 Execution，不属于已经 FAILED 的 Attempt。等待 backoff 仍占用该 Task 的活动执行位置，调度跳过、禁止下线 / 删除和取消入口必须覆盖它。
 
 ```text
-Execution
-  └── implicit Attempt #1
+PENDING → Attempt RUNNING
+             ├─ 成功 → Execution SUCCEEDED
+             ├─ 失败且可重试 → RETRY_WAITING → 下一 Attempt
+             ├─ 失败且耗尽次数 → Execution FAILED
+             └─ 用户取消 → Execution CANCELED
+
+进程所有权丢失 → LOST
 ```
 
-PR3 冻结身份、状态与触发关系；PR4 已实现 Attempt Persistence + Runtime Retry。
+Execution 进入终态后不能自动追加 Attempt。连续 REALTIME Source 意外自然结束按失败处理，不把暂时无数据或异常结束当成功。
 
-当前实现：
+## Retry Policy
 
-```text
-Task.retryPolicy
-      ↓ freeze
-Execution(DataSyncInstance)
-      ↓
-Attempt #1
-      ↓ FAILED
-Execution = RETRY_WAITING
-      ↓ fixed backoff
-Attempt #2
-```
+`maxAttempts` 包含首次执行；默认 1 表示不自动重试，3 表示最多两次 Retry。`backoffSeconds` 是固定等待时间，默认 60 秒。请求范围与默认值由 DataSyncRetryPolicyDTO 维护。
 
-默认 `maxAttempts=1`，因此升级后历史任务不会自动改变执行行为。
+只有 FAILED 尝试进入通用 Retry 决策，SUCCEEDED / CANCELED / LOST 不自动重试。OFFLINE 与 REALTIME 共用生命周期；REALTIME Retry 复用既有 task/version CDC state。
 
-## 2. Terminology
+Backoff 使用进程内等待，不使用 Quartz，不是跨进程 durable timer。进程在 RETRY_WAITING 时退出，下次启动将旧根记录标记 LOST，不继续旧 Attempt 序号；需要恢复的 REALTIME Task 由独立 desired-state 协调创建新根记录。
 
-### Task
+## Cancel Semantics
 
-Task 描述“同步什么”。
+取消对象是整个 Execution，不是“跳过当前 Attempt 后继续 Retry”。PENDING / RETRY_WAITING 可以取消，后续等待不得再启动新 Attempt；RUNNING 通过本地注册表取消 Runtime，再收口 Execution / 当前活动 Attempt。
 
-Task 的 `definitionVersion` 仍然只描述可执行 Task Definition，不描述执行次数和 Retry 次数。
+若 RUNNING Execution 的本地 Runtime 引用已经丢失，当前取消路径将其标记 LOST，而不是假报成功取消。对已终态 Execution 重复取消只返回历史记录；不会复活、追加尝试，也不会借此修改当前 Task 的运行意图。
 
-### Execution
+## Definition Snapshot
 
-Execution 描述“一次外部运行请求”。
+快照保存稳定资源引用、任务类型 / 版本、表范围、写入方式和对应配置，不保存真实连接 JSON、密码、Token、SSH 私钥、CDC offsets、状态路径或 serverId 租约。
 
-Execution 的创建来源包括：
+每次 Attempt 执行时按快照中的 datasource ID 安全解析当前连接并校验 Catalog。冻结 Task 输入不等于冻结外部数据、表结构或 Datasource 连接；不能据此承诺重试幂等或数据源变更安全。
 
-```text
-MANUAL
-SCHEDULE
-future AUTO_RECOVERY
-```
+## Metrics Semantics
 
-一次手工 Run 创建一个 Execution。
+- 单个 Runtime / Attempt 内计数保持单调；readRows 统计进入 Channel 的事件，writeRows 统计 SinkWriter.write 成功返回的事件，不是事务提交证明。
+- Execution 只镜像当前或最终 Attempt 的计数。新 Attempt 开始时 readRows / writeRows 归零，因此同一个 Execution 跨 Attempt 可以下降。
+- 不把多个 Attempt 相加为业务同步量；失败前可能已提交部分数据，重试可能重新读取或写入。
+- REALTIME 计数是变更事件；一次 UPDATE 可以贡献前后两个事件，不直接等于 Source 表行数。
 
-一次 Cron Fire 在满足并发规则时创建一个 Execution。
+指标轮询和终态 flush 不应更改上述身份边界。详情通过 Attempt History 观察每次尝试，不伪造 checkpoint 时间或全局业务总量。
 
-用户在某个 Execution 已经最终失败后再次点击 Run：
+## Write Safety
 
-```text
-new Execution
-```
+Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow 写入语义](../yak-flow/README.md#jdbc-batch-connector)。APPEND 重放可能重复写；OVERWRITE 再次尝试会重新执行破坏性清空；UPSERT / CHANGELOG 的主键应用不构成端到端 exactly-once。
 
-不是继续旧 Execution 的 Attempt。
+默认不开自动重试，是兼容性和风险边界，不得在整理文档时改成默认多次执行。
 
-### Attempt
+## Persistence and Compatibility
 
-Attempt 描述“Execution 内部真正交给 Runtime 的一次执行尝试”。
+[现有 V3 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__data_sync_execution_attempt.sql) 保存 Task Retry Policy、Execution 的冻结策略 / 当前尝试 / 下次重试时间，以及 `yak_ops_data_sync_attempt`。
 
-```text
-Execution E1
-  ├── Attempt 1 FAILED
-  ├── Attempt 2 FAILED
-  └── Attempt 3 SUCCEEDED
-```
+`yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。V3 前的记录按单次执行解释；迁移没有为每条历史 Instance 回填实体 Attempt 行，所以历史 attempts 查询可以为空，不应伪造历史尝试。
 
-Retry 只创建新的 Attempt，不创建新的 Execution 根记录。
+旧 Task 默认回填 maxAttempts=1、backoffSeconds=60。Schema 由 DAO 维护，遵守 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不修改已冻结迁移或建立第二套 Task / Instance 模型。
 
-## 3. Existing Instance Compatibility
+## Operations Contract
 
-当前持久化表：
+列表一行对应一个 Execution，展示当前 / 最终 Attempt 信息；详情读取 `GET /api/v1/data-sync/instances/{id}/attempts` 获取尝试历史。Retry Policy 的请求契约由后端 DTO 维护，页面如何配置由前端 owner 负责；Attempt 观察与策略编辑是不同职责。
 
-```text
-yak_ops_data_sync_instance
-```
+## Current Limits
 
-继续作为 Execution Root。
+不提供指数退避、jitter、跨进程重试定时器、分布式 Attempt ownership 或 exactly-once。通用 Retry 不恢复 LOST；启动自动恢复有自己的新 Execution 身份和规则。
 
-不重命名表，不重建历史数据，不改变现有 Instance ID。
+## Code and Verification
 
-兼容规则：
+状态持久化：[DataSyncAttemptLifecycle](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/execution/lifecycle/DataSyncAttemptLifecycle.java) 与 [DataSyncInstanceRepositoryImpl](../../../yak-ops-dao/src/main/java/io/yak/ops/dao/repository/datasync/impl/DataSyncInstanceRepositoryImpl.java)。
 
-- 已有 Instance = 一个 Execution。
-- 在 Attempt 持久化正式引入以前，该 Execution 只有一个隐式 Attempt #1。
-- 现有 Instance API / Operations Center 路由继续使用 Instance 作为产品名称，内部语义逐步收口为 Execution Root。
-- 后续 Attempt 表必须引用现有 Instance ID，而不是反过来迁移 Instance 到新表。
-
-因此后续目标关系是：
-
-```text
-yak_ops_data_sync_instance
-        1
-        │
-        └──────── N
-          yak_ops_data_sync_attempt
-```
-
-PR3 不创建 `yak_ops_data_sync_attempt`；Schema 属于 Retry Backend follow-up PR。
-
-## 4. Execution Identity
-
-Execution 一旦创建，以下身份固定：
-
-- workspaceId。
-- taskId。
-- taskName snapshot。
-- taskVersion。
-- syncType。
-- root trigger type。
-- sanitized definition snapshot。
-
-Retry 不允许重新读取最新 Task Definition 作为新的执行输入。
-
-所有 Attempts 必须复用 Execution 创建时固定的：
-
-```text
-taskVersion
-definitionSnapshot
-```
-
-因此：
-
-> Retry 重试的是同一次 Execution，不是“拿当前 Task 再跑一次”。
-
-如果用户需要使用新的 Task Definition，必须创建新的 Execution。
-
-## 5. Attempt Identity
-
-每个 Attempt 至少需要稳定身份：
-
-```text
-attemptId
-executionId
-attemptNo
-status
-readRows
-writeRows
-startTime
-finishTime
-errorCode
-errorMessage
-```
-
-约束：
-
-- `attemptNo` 从 1 开始。
-- 同一 Execution 内严格递增。
-- `(executionId, attemptNo)` 唯一。
-- Attempt 不允许跨 Execution 移动。
-- 已终态 Attempt 不允许重新变成 RUNNING。
-- Retry 创建 `attemptNo + 1`，不得复活旧 Attempt。
-
-## 6. Trigger Ownership
-
-Execution Root 的 trigger type 表示“是谁创建了这次 Execution”。
-
-当前：
-
-```text
-MANUAL
-SCHEDULE
-```
-
-Retry 不是新的 Execution Root trigger。
-
-因此目标语义是：
-
-```text
-SCHEDULE Execution
-  ├── Attempt 1
-  ├── Attempt 2  ← retry
-  └── Attempt 3  ← retry
-```
-
-Execution 的 root trigger 仍然是：
-
-```text
-SCHEDULE
-```
-
-而不是 RETRY。
-
-现有 `DataSyncTriggerType.RETRY` 暂时保留用于兼容已有 API / 持久化枚举值，但 v1.1 Retry Contract 不再把它作为新 Execution Root 的正常创建方式。
-
-如果后续需要记录 Attempt 的启动原因，应由 Attempt 自己拥有明确字段，而不是修改 Execution Root trigger。
-
-## 7. Retry Policy
-
-v1.1 第一阶段 Retry Policy 使用显式、简单语义：
-
-```text
-maxAttempts
-backoffSeconds
-```
-
-其中：
-
-- `maxAttempts` 包含第一次执行。
-- `maxAttempts = 1` 表示不自动重试。
-- `maxAttempts = 3` 表示最多 Attempt 1 / 2 / 3，总计最多两次 Retry。
-- `backoffSeconds` 表示固定等待时间。
-- v1.1 不引入 exponential backoff / jitter / retry expression。
-
-示例：
-
-```text
-maxAttempts = 3
-backoffSeconds = 60
-
-Attempt 1 FAILED
-    ↓ wait 60s
-Attempt 2 FAILED
-    ↓ wait 60s
-Attempt 3 FAILED
-    ↓
-Execution FAILED
-```
-
-PR3 只定义 Policy Contract，不决定最终 DTO / Entity 字段形状。
-
-## 8. Retry Eligibility
-
-v1.1 Generic Retry 只处理：
-
-```text
-Attempt FAILED
-```
-
-以下状态不自动 Retry：
-
-```text
-SUCCEEDED
-CANCELED
-LOST
-```
-
-原因：
-
-- SUCCEEDED 已成功。
-- CANCELED 表示用户明确终止，禁止系统自动重新启动。
-- LOST 代表进程 / runtime ownership 丢失，恢复语义属于单独 Recovery Contract，不能偷偷等价成 Retry。
-
-REALTIME 的应用重启续传仍由：
-
-```text
-Desired State / Auto Recovery
-```
-
-负责，不通过 Generic Retry 混合实现。
-
-## 9. Execution State Aggregation
-
-当前 `DataSyncInstanceStatus` 直接表示单次 Runtime 结果。
-
-Attempt 模型落地后，Execution Status 变成 Attempt 状态的聚合结果。
-
-目标状态机：
-
-```text
-Execution PENDING
-   ↓
-Attempt 1 RUNNING
-   ↓
-   ├── SUCCEEDED
-   │      ↓
-   │   Execution SUCCEEDED
-   │
-   ├── FAILED + retry available
-   │      ↓
-   │   Execution RETRY_WAITING
-   │      ↓
-   │   Attempt N+1
-   │
-   ├── FAILED + no retry available
-   │      ↓
-   │   Execution FAILED
-   │
-   └── user cancel
-          ↓
-       Execution CANCELED
-```
-
-`RETRY_WAITING` 已在 PR4 进入 `DataSyncInstanceStatus` 与 V3 Schema。
-
-```text
-PENDING / RUNNING / RETRY_WAITING
-        =
-Active Execution
-```
-
-因此 Schedule 并发判断、Task Unpublish 阻断和 Operations Center Active 判断都会覆盖等待重试状态。
-
-## 10. Cancel Semantics
-
-Cancel 的对象是 Execution，不是“只取消当前 Attempt 然后继续 Retry”。
-
-用户执行 Stop / Cancel：
-
-```text
-Execution
-    ↓ cancel
-current Attempt → CANCELED
-    ↓
-pending retry → canceled
-    ↓
-Execution → CANCELED
-```
-
-硬规则：
-
-> CANCELED Execution 永远不能由自动 Retry 再次启动。
-
-用户想再次运行，必须显式创建新的 Execution。
-
-## 11. Scheduler / Concurrency Relationship
-
-PR2 当前 Scheduled Fire 在已有 Active Instance 时固定 Skip。
-
-Attempt 模型加入后：
-
-```text
-PENDING
-RUNNING
-RETRY_WAITING
-```
-
-都属于 Active Execution。
-
-因此未来 `SKIP_IF_RUNNING` 判断必须覆盖：
-
-```text
-RUNNING Attempt
-or
-waiting Retry
-```
-
-不能因为 Attempt 刚失败、正在 backoff，就让下一次 Cron Fire 创建第二个并发 Execution。
-
-## 12. Definition Snapshot
-
-Execution 的 `definitionSnapshot` 是所有 Attempts 的执行输入 Source of Truth。
-
-Attempts 不保存新的完整 Task Definition 副本。
-
-目标结构：
-
-```text
-Execution
-  taskVersion
-  definitionSnapshot
-      │
-      ├── Attempt 1
-      ├── Attempt 2
-      └── Attempt 3
-```
-
-Attempt 只保存 Runtime 结果与 Attempt-local diagnostics。
-
-数据源凭证仍然不进入：
-
-- Execution snapshot。
-- Attempt。
-- Retry Policy。
-- 日志。
-
-Runtime connection material 每次 Attempt 开始时仍按 Execution Snapshot 中的 datasource ID 从 Datasource capability 安全解析。
-
-## 13. Metrics Semantics
-
-Attempt 拥有自己的：
-
-```text
-readRows
-writeRows
-startTime
-finishTime
-error
-```
-
-Execution 层的运行指标不能把多个 Attempts 简单累加。
-
-原因：
-
-> Retry 可能重复读取 / 重复写入部分数据，直接求和会把业务同步量夸大。
-
-v1.1 目标展示规则：
-
-- Execution 列表显示当前 / 最终 Attempt 的指标。
-- Execution Detail 可以展开 Attempts。
-- 每个 Attempt 展示自己的完整指标。
-- 不把所有 Attempt 的 readRows / writeRows 当作“本次业务总同步量”。
-
-## 14. Final Result
-
-Execution 最终状态规则：
-
-```text
-任何 Attempt SUCCEEDED
-  → Execution SUCCEEDED
-
-最后一个允许的 Attempt FAILED
-  → Execution FAILED
-
-用户 Cancel
-  → Execution CANCELED
-
-Runtime ownership 丢失且无独立 Recovery 接管
-  → Execution LOST
-```
-
-一旦 Execution 进入最终终态：
-
-```text
-SUCCEEDED
-FAILED
-CANCELED
-LOST
-```
-
-不得再自动追加 Attempt。
-
-FAILED Execution 的“再次运行”是新 Execution。
-
-## 15. Persistence Target
-
-PR4 已新增：
-
-```text
-V3__data_sync_execution_attempt.sql
-```
-
-持久化方向：
-
-```text
-yak_ops_data_sync_instance
-  → Execution Root
-
-yak_ops_data_sync_attempt
-  → Attempt History
-```
-
-V3 同时完成：
-
-- `yak_ops_data_sync_task.retry_policy`：Task 级 Retry Policy JSON。
-- Execution Root：`max_attempts / backoff_seconds / current_attempt / next_retry_time`。
-- Execution Status：新增 `RETRY_WAITING`。
-- `yak_ops_data_sync_attempt`：Attempt 状态、指标、时间与失败诊断。
-- 已有 Task backfill 为 `maxAttempts=1 / backoffSeconds=60`，保持升级前不自动 Retry。
-
-禁止：
-
-- 回改 `V1__baseline.sql`。
-- 回改已发布 `V2__data_sync_schedule.sql`。
-- 为 Retry 复制一套第二 Task / Instance 模型。
-- 用 Quartz Job / Trigger 当 Attempt Persistence。
-- 让 YakFlow Runtime 自己决定产品 Retry Policy。
-
-## 16. Operations Center Contract
-
-目标展示：
-
-```text
-Execution #E1  SUCCEEDED
-  ├── Attempt 1  FAILED
-  ├── Attempt 2  FAILED
-  └── Attempt 3  SUCCEEDED
-```
-
-列表默认展示 Execution，不把每个 Attempt 平铺成独立任务记录。
-
-Execution Detail 再展示 Attempt History。
-
-至少需要：
-
-- Attempt No。
-- Status。
-- Start / Finish。
-- Duration。
-- readRows / writeRows。
-- Error。
-- 是否由 Retry 创建。
-
-PR3 不实现 UI。
-
-## 17. PR4 Runtime
-
-PR4 已实现：
-
-- OFFLINE / REALTIME FAILED Attempt 自动 Retry。
-- 固定 `backoffSeconds`。
-- Attempt #N 独立持久化。
-- Execution Root 不变。
-- root trigger 不变。
-- 每次 Retry 继续使用同一个 `definitionSnapshot`。
-- REALTIME Retry 继续复用同 Task + definitionVersion 的 CDC state。
-- Attempt metrics 独立持久化，Execution 只镜像当前 / 最终 Attempt 指标。
-- `GET /instances/{id}/attempts` 只读 Attempt History。
-- CANCELED / LOST 不自动 Retry。
-- RETRY_WAITING 可被用户 Cancel。
-- 应用重启时 PENDING / RUNNING Attempt 与 PENDING / RUNNING / RETRY_WAITING Execution 统一标记 LOST。
-
-Backoff 由当前进程内虚拟线程等待，不使用 Quartz。
-
-因此：
-
-> PR4 不提供跨进程 durable retry timer。
-
-应用在 RETRY_WAITING 时退出，下一次启动会标记 Execution LOST；跨进程恢复由后续 Recovery Contract 负责。
-
-## 18. PR4 Non-Goals
-
-本 PR 不做：
-
-- Retry Policy 配置 UI。
-- exponential backoff / jitter。
-- durable retry timer。
-- Quartz Retry Trigger。
-- 自动恢复 LOST。
-- Realtime Desired State / Auto Recovery。
-- Distributed Retry ownership / fencing。
-- Attempt Operations UI。
-
-## 19. Implementation Invariants
-
-真正实现 Retry 时必须证明：
-
-- Retry 不创建新的 Execution Root。
-- Retry 不改变 root trigger type。
-- Retry 复用同一个 definitionSnapshot。
-- maxAttempts 包含 Attempt #1。
-- CANCELED 不 Retry。
-- Generic LOST 不 Retry。
-- backoff 期间 Execution 仍被视为 Active。
-- 最后 Attempt 决定 FAILED 或 SUCCEEDED。
-- Retry 不依赖 Quartz。
+验证入口：[DataSyncAutomationAcceptanceIT](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncAutomationAcceptanceIT.java) 及 [验证导航](README.md#code-and-verification)。重点是根身份 / 快照不变、次数与 backoff、取消阻断、活动集合及跨 Attempt 指标语义；执行结果绑定实际提交，不在这里记通过流水。

@@ -2,264 +2,142 @@
 
 Status: Active
 
-Scope:
-- Current Yak Ops Datasource product architecture
-- Data Sync staged product task/instance architecture
-- YakFlow staged data-sync execution capability
-- Workspace business ownership boundary
-- Supporting Platform capability for Security/User, Workspace and User Preference
-- Module ownership and dependency direction
-
-Depends On:
-- `docs/engineering-context-model.md`
+Scope: 当前模块职责、代码归属与依赖方向。文档归属遵循 [Engineering Context Model](docs/engineering-context-model.md)。
 
 ## Principle
 
-Yak Ops currently exposes Datasource as its user-facing product, with Workspace as the shared business ownership boundary. Data Sync is now a staged product capability that owns task definitions and task instances, while YakFlow remains the execution capability underneath it.
+Datasource 管资源与连接，Data Sync 管同步任务和运行语义，YakFlow 管执行机制。Platform 提供身份、工作空间和用户偏好。能力边界不等同于页面菜单或 Maven 模块数量。
 
-Platform is the supporting product-context capability required to use Yak Ops. Inside Platform, Security answers who the user is, Workspace answers which business data boundary is active, and User Preference persists what the authenticated user prefers across logout, browsers and devices. These remain separate Java package and Service boundaries while sharing one physical Maven module.
-
-Architecture follows current ownership, not historical modules and not a future platform plan.
-
-HTTP is an application boundary. All Controller ownership belongs to `yak-ops-boot`; capability modules expose business capability to Boot and never own HTTP entry classes.
-
-Application runtime infrastructure is also a Boot boundary. DataSource/MyBatis-Plus runtime policy, OpenAPI/Swagger and MVC interceptor/filter registration belong to `yak-ops-boot`. Capability modules provide behavior and persistence contracts without assembling the final Spring application. Boot prefers Spring Boot/Starter auto-configuration over manually recreating framework beans.
+HTTP 入口与最终应用装配归 Boot。能力模块不依赖 Boot，不复制 HTTP、持久化或连接模型。行为细节由各能力 Contract 定义，本文件不维护第二套状态机或开发进度。
 
 ## Current Modules
 
 ### `yak-ops-common`
 
-Owns shared data contracts for Datasource, Workspace, User Preference and Security, plus the unified Result / ErrorCode / PageData contracts, request `WorkspaceContext` and the cross-domain `BusinessException` base. Security HTTP DTO / VO remain here when Boot and Security share them, but Security-specific error codes, exceptions and internal models do not.
+拥有跨模块共享 DTO / VO、Result / ErrorCode / PageData、请求 WorkspaceContext、BusinessException 及通用工具。领域私有异常和内部模型仍归所属能力；共享 HTTP 类型不能泄漏 DAO 或具体插件类型。
 
 ### `yak-ops-platform`
 
-Owns supporting product context: Security/User, Workspace and User Preference. Security owns user management, login/logout/current identity, HttpSession authentication state, authentication policy and the authentication interceptor implementation. Workspace owns Workspace lifecycle and membership. User Preference owns authenticated-user-scoped favorites and usage signals. These capabilities share one Maven module but remain separate package and Service boundaries.
+同一物理模块内保留 Security/User、Workspace、User Preference 的独立包和 Service 边界。Security 负责认证策略、HttpSession 登录态及认证拦截器实现；拦截器注册与 HTTP 暴露由 Boot 完成。
 
-Security does not own Controller, ControllerAdvice, OpenAPI configuration, connection-pool/MyBatis assembly or MVC interceptor registration. Boot exposes and wires the current Security HTTP capability by calling Security-owned services and registering Security-owned behavior.
+Security 使用 `io.yak.ops.security` 命名空间，领域错误与内部用户模型留在该边界。共享 HTTP DTO / VO 在 Common，用户 Entity / Repository 在 DAO；持久化枚举 `UserStatus` 由 Common 提供。面向 Boot 的身份与用户入口是 `LoginService`、`UserService`，用户管理不再复制一套具体服务。
 
-The Security capability inside Platform was migrated from `yak-framework/yak-security`.
-
-Security business/runtime code uses the `io.yak.ops.security` product namespace. `SecurityErrorCode`, `YakSecurityException`, `UserAccount` and `UserCheckType` are Security-owned domain contracts. Shared HTTP DTO / VO live in `io.yak.ops.common`, while user persistence is owned by `yak-ops-dao`. `UserStatus` temporarily remains Common because DAO persistence directly owns its MyBatis enum mapping. Security exposes exactly two stable Service entries to Boot: `LoginService` and `UserService`; user administration behavior is consolidated inside `UserServiceImpl` rather than split into a second concrete service.
+实现约束见 [Platform Rules](yak-ops-platform/PLATFORM_RULES.md) 和 [Security Rules](yak-ops-platform/SECURITY_RULES.md)。
 
 ### `yak-ops-dao`
 
-Owns shared database persistence infrastructure:
+拥有全部 Entity / Mapper / Repository、Mapper XML、Repository 基础设施、统一 Flyway 配置和迁移 SQL。业务实现可以内部使用 DAO 类型，Boot 不直接消费它们。
 
-- MyBatis-Plus Repository base contract
-- MyBatis-Plus Repository base implementation
-- persistence rules shared by concrete DAO code
-- the single Flyway configuration and schema history for all Yak Ops modules
-- all versioned SQL under `yak-ops-dao/src/main/resources/db/migration/yak-ops`
-
-Concrete Security user persistence, Workspace persistence, User Preference persistence, Datasource persistence and Data Sync task/instance persistence are owned here.
-
-BusinessImpl may use DAO-owned Entity/Repository internally. Entity and DAO Model do not cross the Business boundary into Boot.
-
-DAO owns persistence and schema migration, not final application DataSource/MyBatis runtime assembly. That assembly belongs to Boot.
+Schema 位于 `yak-ops-dao/src/main/resources/db/migration/yak-ops`。迁移冻结与向前演进遵循 [Flyway Rules](yak-ops-dao/FLYWAY_RULES.md)；最终 DataSource / MyBatis / 事务运行时由 Boot 装配。
 
 ### `yak-ops-spi`
 
-Reserved minimal extension boundary.
+保留的最小扩展边界；不为尚不存在的能力预建接口。
 
 ### `yak-ops-core`
 
-Reserved empty module.
+保留模块；不因为名称通用而把业务代码迁入。
 
 ### `yak-flow/yak-flow-api`
 
-Owns the stable YakFlow batch/stream-neutral data plane contracts: row changelog semantics, common row/schema types, boundedness, Source/Split/Reader/Enumerator contracts, Sink/Writer contracts and opaque checkpoint state.
-
-The API has no Spring, Debezium, JDBC or Yak Ops business dependency. Batch and streaming are not separate APIs: a Source declares `BOUNDED` or `CONTINUOUS_UNBOUNDED`, while CDC changes are represented by `RowKind` on `YakRow`.
-
-Current scope intentionally excludes runtime scheduling, Transform, Debezium integration, JDBC implementation, distributed execution and exactly-once coordination. Detailed constraints are defined in `yak-flow/YAK_FLOW_RULES.md`.
+拥有批流共用的 Source / Sink、Row / Schema / Logical Type、Boundedness 与不透明 CheckpointState 契约。只依赖 JDK，不引入 Spring、JDBC、Debezium 或产品业务类型。
 
 ### `yak-flow/yak-flow-runtime`
 
-Owns the first single-node YakFlow execution runtime. It connects one Source and one Sink through a bounded in-memory row channel, runs source and sink work independently, supports cancellation and coordinates source checkpoints with a channel barrier.
-
-The checkpoint barrier is an ordering boundary, not an exactly-once claim: Source state is captured before the barrier enters the channel, Sink flushes every preceding row before the checkpoint completes, and the runtime keeps the completed checkpoint in memory for the active execution. Durable checkpoint storage and restore-after-process-restart are not part of this phase.
-
-The Local Execution Engine depends on `yak-flow-api` only. It does not depend on Spring, Yak Ops Business/DAO, JDBC or Debezium, and it does not introduce distributed scheduling, worker discovery or resource management.
+通过 API 连接 Source、有限容量 Channel 和 Sink，拥有本地线程、取消、指标与 checkpoint barrier。只依赖 YakFlow API，不拥有 Task / Execution / Attempt 持久化、调度或产品重试策略。
 
 ### `yak-flow/yak-flow-connector-jdbc`
 
-Owns YakFlow bounded JDBC table transfer. The first acceptance path is MySQL Source to MySQL, PostgreSQL or Oracle Sink.
-
-The connector reuses the normalized `DataSourceConnection` and JDBC connection runtime from the existing Datasource plugin boundary. It owns synchronization-specific SQL generation, row reading, JDBC field compatibility, logical type conversion, bounded Source lifecycle and batched Sink writes. Datasource plugins continue to own connection parsing, Driver selection, SSH tunneling and Catalog discovery.
-
-Phase 3 intentionally requires the target table to exist. Auto-create DDL and schema evolution are not part of this module stage. Phase 4 extends the same JDBC Sink with an explicit changelog mode for idempotent CDC application by primary key.
+拥有同步 SQL、逻辑类型映射与兼容性、split、Reader、SinkWriter 及数据库方言。复用 Datasource Plugin API 的规范化连接和 JDBC 运行时，不复制凭证配置或 Driver 装载机制。
 
 ### `yak-flow/yak-flow-connector-cdc-mysql`
 
-Owns MySQL continuous change capture for YakFlow. Debezium is strictly an implementation detail inside this connector: Debezium Engine, Kafka Connect SourceRecord, source offsets and schema-history storage never cross the connector boundary.
+拥有 MySQL CDC 到 YakRow 的转换、Debezium Engine 生命周期，以及连接器私有的 offsets / schema history。Debezium 和 Kafka Connect 类型不得进入 API / Runtime。
 
-The connector performs Debezium `snapshot.mode=initial` followed by binlog streaming and converts `READ / CREATE / UPDATE / DELETE` events into the existing `YakRow + RowKind` contract. It uses file-backed Debezium offset and schema-history state under a caller-owned state directory.
-
-Checkpoint completion is downstream-aware. The Local Execution Engine captures Source state, places a barrier into the row channel, flushes the Sink, and only then invokes `SourceReader.notifyCheckpointComplete`. The MySQL CDC Reader uses that callback to acknowledge Debezium records, so a crash before downstream flush does not advance the persisted Debezium offset. This provides at-least-once recovery semantics; it does not claim exactly-once.
+上述四个模块的执行、写入、checkpoint 与续传边界统一见 [YakFlow Capability](docs/capabilities/yak-flow/README.md)，包组织与实现约束见 [YakFlow Rules](yak-flow/YAK_FLOW_RULES.md)。
 
 ### `yak-ops-business`
 
-Owns the product-business Service Layer for Datasource and Data Sync. Stable product capabilities expose one public Service Layer interface and keep Spring implementation, transactions, validation and DAO/Plugin orchestration in `impl`.
-
-The default naming is `XxxBusiness + XxxBusinessImpl`; a capability may explicitly choose `XxxService + XxxServiceImpl` in its nearest rules. A capability must not keep both names for the same boundary.
-
-Boot depends on stable Service Layer interfaces. Public contracts use shared DTO / VO types and do not expose DAO Entity, Mapper, Repository Query or concrete Plugin implementation details.
-
-Detailed rules are defined in `yak-ops-business/BUSINESS_RULES.md`.
+拥有产品 Service Layer：稳定接口面向 Boot，`impl` 负责事务、校验以及 DAO / Plugin 编排。默认命名与能力显式选用 Service 命名的规则见 [Business Rules](yak-ops-business/BUSINESS_RULES.md)，同一能力不并存 Business / Service 两套入口。
 
 ### `yak-ops-platform` / Workspace
 
-Owns Workspace creation, Workspace discovery, membership and membership validation through the single stable `WorkspaceService` boundary.
+`WorkspaceService` 拥有工作空间与成员关系；它不是 Security 角色模型。Boot 校验 `X-Workspace-Id` 的成员关系后绑定可信 WorkspaceContext；需要工作空间的能力显式要求该上下文。
 
-Workspace is not a Security role model. Security owns authenticated identity; Workspace owns the User ↔ Workspace membership relationship and supplies the ownership boundary used by future Workspace-scoped resources.
-
-The request Workspace ID is carried by `X-Workspace-Id`. Boot validates membership and binds the trusted value into Common `WorkspaceContext`. Missing Workspace context is globally allowed; a Workspace-scoped capability explicitly requires it.
+行为见 [Workspace](docs/capabilities/workspace/README.md)。
 
 ### `yak-ops-platform` / User Preference
 
-Owns user-scoped product preference persistence through the single stable `UserPreferenceService` boundary.
+`UserPreferenceService` 拥有用户级收藏与使用信号；不按 Workspace 隔离，也不保存菜单标签、路由、图标等产品注册信息。跨设备偏好的持久化来源是服务端，不是浏览器缓存。
 
-User Preference is not Workspace-scoped. Boot supplies the trusted authenticated user ID, while callers only choose a supported preference scene and stable scene-local item key. The current capability persists explicit favorite state and usage signals; it does not own menu labels, routes, icons or datasource display metadata.
-
-The persistence source of truth is `yak_ops_user_preference`. Browser storage may cache UI state but cannot replace server persistence for preferences that must survive logout and device changes.
+行为见 [User Preference](docs/capabilities/user-preference/README.md)。
 
 ### `yak-ops-business/yak-ops-business-datasource`
 
-Owns only the current Workspace-scoped Datasource product behavior:
+唯一稳定入口为 `DataSourceService`。拥有 Workspace 内资源管理、连接测试、只读 Catalog、内部 Plugin 路由和安全连接解析。Registry / SecretCodec 是内部机制，不作为 Boot 的第二套入口。
 
-- datasource CRUD, paging and detail inside the active Workspace
-- datasource connection testing
-- internal datasource plugin discovery, connection parsing and secret handling
-- read-only Catalog metadata access for saved Workspace datasources
-
-Datasource exposes exactly one public Service Layer entry: `DataSourceService`. Plugin discovery and secret handling are internal mechanisms behind `DataSourceServiceImpl`.
-
-The module exposes Catalog metadata through the existing DataSourceService boundary; it still does not own SQL execution, SQL audit, a duplicate Domain layer or a Gateway adapter layer.
-
-Datasource may use DAO persistence and the stable Datasource Plugin API only behind `DataSourceServiceImpl`. Datasource is a Workspace Resource: Service reads the trusted active Workspace from `WorkspaceContext`, while DAO queries scope resource access by `workspace_id + resource id/query`.
-
-Datasource does not own Controller, ControllerAdvice, connection-pool assembly or MyBatis runtime configuration. Boot exposes Datasource HTTP APIs and supplies application infrastructure.
+通过 Plugin API 使用 Provider，不直接耦合具体 JDBC 实现；不提供任意 SQL 执行、SQL 审计或重复的 Domain / Gateway 层。行为和实现约束分别见 [Datasource](docs/capabilities/datasource/README.md)、[Datasource Rules](yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md)。
 
 ### `yak-ops-business/yak-ops-business-data-sync`
 
-Owns Workspace-scoped Data Sync product definitions and execution-instance persistence contracts through the single stable `DataSyncService` boundary.
+唯一稳定产品入口为 `DataSyncService`。拥有定义、发布、Schedule 业务记录、Execution / Attempt 生命周期、产品 Retry 和 REALTIME desired-state 协调。
 
-The current product contract supports both `OFFLINE` and `REALTIME` task definitions. Both reuse the same Workspace-scoped Task persistence and source/target table contract, while `runtime_config` is interpreted by `sync_type`: OFFLINE stores bounded JDBC tuning and REALTIME stores CDC/checkpoint/write tuning. REALTIME currently accepts only MySQL Source and MySQL/PostgreSQL/Oracle Target, requires a Source primary key, and requires the Target primary-key field set to exactly match the Source primary-key field set under case-insensitive same-name mapping.
+职责划分：
 
-Data Sync depends on Datasource through the stable `DataSourceService` boundary for resource validation, Catalog reads and internal runtime connection resolution. It does not access Datasource DAO or Plugin Registry directly. The current executable product path can manually run both OFFLINE and REALTIME tasks through YakFlow Local Execution Engine, persist the shared instance lifecycle and Runtime counters, cancel active local executions and mark stale process-local executions LOST on startup.
+- `scheduler` 定义框架无关的 ScheduleEngine 与 Fire 回调；Quartz 实现在 Boot。
+- `execution/planning` 将冻结快照、Catalog 与安全连接解析为内存执行计划。
+- `execution/executor` 提交一次 Runtime 尝试并报告结果；`execution/lifecycle` 统一持久化状态、取消引用与启动 LOST 处理。
+- `execution/realtime` 拥有 CDC state identity 和进程内 serverId 分配；连接器拥有状态文件内容。
 
-REALTIME execution is currently MySQL CDC -> MySQL/PostgreSQL/Oracle JDBC CHANGELOG. `RealtimeSyncExecutionPlanner` resolves current Catalog schema and runtime connections after the Instance exists, while `RealtimeSyncExecutor` owns the process-local RUNNING/FAILED/CANCELED loop.
+通过 `DataSourceService` 读取 Catalog / 解析运行连接，不绕过该接口访问 Datasource DAO 或 Plugin Registry。运行计划可以间接持有凭证，但只能存在于内存，不能进入快照、响应或日志。
 
-Realtime CDC state is product-owned under `${yak.ops.home}/data/data-sync/realtime/{workspaceId}/{taskId}/v{definitionVersion}`. Debezium engine identity uses the same stable Workspace/Task/version scope, so a later Instance for the same definition reuses persisted offsets and schema history. A new definitionVersion gets a new state domain and therefore starts a fresh snapshot. MySQL replication `serverId` is allocated per active state domain by a single-node allocator and released when execution ends. Deployments that require continuation across container replacement must persist `${yak.ops.home}/data`; the Docker image exposes `/opt/yak-ops/data` as a volume.
-
-LocalExecution itself is still process-local: after an application restart, old active Executions become LOST rather than being resurrected. From v1.1 PR5, a PUBLISHED REALTIME Task whose desiredState remains RUNNING is reconciled into a new AUTO_RECOVERY Execution, which reuses the existing task/version REALTIME state domain. STOPPED tasks are not restarted.
-
-v1.1 introduces a framework-neutral Data Sync scheduling boundary under `io.yak.ops.business.datasync.scheduler`. `ScheduleEngine` only expresses Cron registration, reschedule, removal and next-fire queries; `DataSyncScheduleFireListener` is the callback boundary for later business triggering. Business does not import Quartz and does not delegate Task publication, concurrency, retry or Instance lifecycle semantics to the scheduler framework.
-
-The first Quartz implementation is application infrastructure owned by Boot. PR2 persists one Offline Schedule per Workspace/Task in `yak_ops_data_sync_schedule`; that business table is the scheduling source of truth, while the current Quartz RAMJobStore remains replaceable runtime state. Boot restores enabled schedules after application startup.
-
-Quartz fire events re-enter Data Sync Business through `DataSyncScheduleFireListener`. Business re-reads Schedule and Task state, requires OFFLINE + PUBLISHED, skips when an active Instance already exists, and creates a normal persisted Instance with `triggerType=SCHEDULE`. Task unpublish disables its Schedule and removes the runtime Trigger after commit. Distributed recovery and exactly-once coordination remain out of scope.
-
-v1.1 PR3 defines the retry identity boundary. PR4 implements it: the existing `yak_ops_data_sync_instance` remains the stable Execution root, while `yak_ops_data_sync_attempt` stores child Attempt history. Existing pre-V3 rows remain compatible as single-attempt executions. Task Retry Policy is frozen into each Execution as maxAttempts/backoffSeconds and all Attempts reuse the Execution's immutable taskVersion and sanitized definition snapshot.
-
-v1.1 PR5 adds REALTIME desired-state reconciliation. `yak_ops_data_sync_task.desired_state` stores user intent independently from publication and Execution status. Manual REALTIME start writes RUNNING; Stop and Unpublish write STOPPED. Application startup first lets `DataSyncExecutionRecovery` mark stale process-local executions LOST, then Boot invokes `DataSyncService.restoreRealtimeDesiredState()` to create a new `AUTO_RECOVERY` Execution for each PUBLISHED REALTIME Task whose desired state is RUNNING and which has no active Execution. The new Execution keeps the same taskId + definitionVersion state identity, so the existing Debezium offset/schema-history domain is reused. This is single-node at-least-once recovery, not LocalExecution resurrection, not generic Retry, and not distributed fencing.
-
-`DataSyncAttemptLifecycle` owns the consistent Execution/Attempt persistence transitions. OFFLINE and REALTIME executors own one-attempt runtime behavior and loop through the shared lifecycle on FAILED results. Retry does not create another root Instance, does not replace MANUAL/SCHEDULE trigger ownership, and does not belong to Quartz or YakFlow Runtime policy. RETRY_WAITING is an active Execution state; fixed backoff is process-local and application restart converts waiting executions to LOST rather than silently resuming generic Retry.
-
-The instance `definition_snapshot` must never contain datasource credentials, normalized connection JSON, passwords, SSH private keys, tokens or other secrets. Runtime connection material remains owned by Datasource and is resolved by datasource ID only at execution time. Realtime state paths and MySQL serverId leases are runtime-owned and are not persisted inside the definition snapshot.
+详细行为由 [Data Sync Capability](docs/capabilities/data-sync/README.md) 及其专题定义，实现约束见 [Data Sync Rules](yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md)。
 
 ### `yak-ops-plugins/yak-ops-plugin-datasource`
 
-Owns Datasource provider contracts and implementations.
+拥有 Provider SPI、运行时 Descriptor、连接解析、Driver 选择、连接测试和 Catalog。Provider 自己定义 canonical type / aliases；Common 与 Service 不维护数据库类型大全或 Provider switch。
 
-The active plugin surface is limited to:
-
-- plugin metadata and connection form
-- connection parsing and connectivity testing
-- Catalog metadata discovery
-
-SQL execution/query contracts are not part of the current plugin boundary.
-
-Datasource Providers are an open extension set. A Provider owns its stable string type, display name and compatibility aliases through the Plugin descriptor. Common and Service Layer code do not enumerate all supported database types; adding a Provider must not require a core enum change.
+Descriptor 是运行时元信息，不是前端动态表单协议。内置 Provider 由聚合模块装配，扩展边界见 [Plugin Rules](yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN_RULES.md)。
 
 ### `yak-ops-boot`
 
-Owns final application assembly, all HTTP Controllers, ControllerAdvice, health and global runtime configuration. `GlobalExceptionHandler` is the single HTTP exception outlet: capability modules throw `BusinessException` with structured `ErrorCode`, and Boot centrally maps those errors to HTTP status and the unified `Result` contract.
+拥有所有 HTTP Controller / ControllerAdvice、健康入口、全局运行配置与最终应用装配。Controller 位于 `io.yak.ops.boot.controller`，只依赖稳定 Service 和共享 DTO / VO。
 
-Boot runtime configuration follows a single-runtime contract:
+GlobalExceptionHandler 统一映射 BusinessException 与 ErrorCode；领域模块不创建第二套 HTTP 异常出口。运行时保持单一应用 DataSource、默认事务管理器、MyBatis-Plus 会话工厂与拦截器链、OpenAPI 文档。优先使用 Spring Boot / Starter 自动配置，不手工重建已提供的基础设施 Bean。
 
-- one application DataSource, created from `spring.datasource` by Spring Boot
-- one default transaction manager; Business/Security do not use capability-specific transaction-manager aliases
-- one MyBatis-Plus SqlSessionFactory / SqlSessionTemplate created by the Starter
-- one MyBatis-Plus interceptor chain; Security tenant isolation is table-scoped inside that shared chain
-- MVC authentication interceptor registration
-- one application OpenAPI document
-
-Boot must not manually recreate DataSource, SqlSessionFactory, SqlSessionTemplate, TransactionManager or ObjectMapper when Spring Boot already provides the required runtime behavior.
-
-Flyway schema history and migration SQL remain owned by `yak-ops-dao`; Boot supplies the runtime DataSource used by that persistence layer.
-
-Hard boundary:
-
-- every Yak Ops `@Controller` / `@RestController` lives in `yak-ops-boot`
-- every Yak Ops Controller package lives under `io.yak.ops.boot.controller`
-- Controller depends on stable Service Layer interfaces rather than Impl / DAO / Plugin internals
-- application-wide Spring infrastructure configuration lives in `yak-ops-boot`
-- Quartz integration and SchedulerFactoryBean customization live in `yak-ops-boot`; `org.quartz.*` does not enter Data Sync Business contracts
-- capability modules must not depend on Boot
+QuartzScheduleEngine、Quartz JobFactory、Job 以及启动恢复装配在 Boot。Job 只把稳定 ID 和触发时间交回业务；不直接查询 Repository 或提交 YakFlow。DAO 继续拥有 Schema，Quartz 不拥有业务状态。
 
 ### `yak-ops-ui`
 
-Owns the browser product. Data Integration currently exposes Datasource Management and Offline Sync. Offline Sync supports task definition plus manual run, instance list/detail and cancel; scheduling remains a later phase.
+拥有浏览器产品入口；具体目录、Shell 与页面职责见 [Frontend Architecture](yak-ops-ui/ARCHITECTURE.md)，不在后端架构中复制前端能力清单或视觉参数。
 
 ### `yak-ops-dist`
 
-Owns release packaging.
+拥有分发包与发布装配。发布过程和版本证据见 [Version Management](docs/release/README.md)，不进入普通能力实现的默认上下文。
 
 ### `yak-ops-bom`
 
-Owns Yak Ops dependency version alignment.
+拥有统一依赖版本；版本值从 BOM 读取，不在能力正文重复维护。
 
 ## External Framework Boundary
 
-Yak Ops no longer depends on `yak-framework`.
-
-The former Yak Common and Yak Security code required by the product is now owned inside this repository.
+Yak Ops 不依赖外部 `yak-framework`。现有 Common 与 Platform 能力由本仓库拥有，不重新引入已删除的框架层。
 
 ## Dependency Direction
 
 ```text
-UI
- ↓ HTTP
-Boot
- ├────────→ Platform ─────────────→ Common
- │              │
- │              ├─ Security / User
- │              ├─ Workspace
- │              ├─ User Preference
- │              └───────────────→ DAO ─→ Common
- └────────→ Business
-                ├─ DataSourceService ─→ DAO / Datasource Plugin API
-                └─ DataSyncService ───→ DataSourceService / YakFlow
-                                            ↑
-                                      Plugin Implementations
+UI → HTTP → Boot
+             ├─ Platform → DAO / Common
+             ├─ DataSourceService → DAO / Datasource Plugin API
+             └─ DataSyncService → DAO / DataSourceService / YakFlow
+
+YakFlow Runtime → YakFlow API
+YakFlow Connectors → YakFlow API / Datasource connection runtime
+Boot Quartz → Data Sync Scheduler Contract
 ```
 
-Boot owns protocol entry and application assembly.
-
-YakFlow API is an implementation-independent contract boundary. YakFlow Local Execution Engine depends on that API and provides the current single-node execution model. YakFlow JDBC Connector also depends on the API and reuses Datasource's normalized JDBC connection boundary. The MySQL CDC connector is wired into the Data Sync REALTIME execution path with task/version-scoped durable connector state. Generic LocalExecution resurrection, distributed recovery and exactly-once coordination remain later stages.
-
-Platform owns Security/User, Workspace and User Preference capability behavior. Business owns Datasource and Data Sync product behavior. DAO owns persistence and schema. None of them depend on Boot.
+产品业务与执行机制分离：Quartz 不决定产品 Retry；YakFlow 不持久化产品 Execution；连接器私有状态不冒充通用 Runtime 恢复。当前运行范围为单节点，不声明分布式 ownership 或 exactly-once。
 
 ## Refactor Rule
 
-```text
-Capability Contract
-→ current ownership
-→ nearest RULES
-→ current code
-→ minimal migration
-→ explicit verification
-```
-
-Do not split classes, add modules, or introduce roles only because a file is long.
+按 [AGENTS.md](AGENTS.md) 定位适用契约与规则；结构变更先核对直接消费者，再修改最小必要范围。不因文件长或名称相似而新增模块、对称角色或抽象层。

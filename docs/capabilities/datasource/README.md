@@ -85,7 +85,7 @@ The response only contains Provider-recommended advanced-property names. JDBC Pr
 
 Property keys are suggestions rather than a strict whitelist. Value normalization and validation remain owned by each Provider.
 
-Datasource does not publish Catalog or Summary product APIs.
+Datasource publishes read-only Catalog database / Schema / table / column APIs for saved Workspace-scoped datasources. Catalog access does not accept connection credentials; internal runtime connection resolution is never exposed through HTTP. See [DataSourceController](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/controller/datasource/v1/DataSourceController.java) and [Datasource Rules](../../../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md) for the backend boundary. Summary and arbitrary SQL execution APIs remain outside this capability.
 
 ## Frontend Structure
 
