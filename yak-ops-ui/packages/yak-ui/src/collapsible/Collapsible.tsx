@@ -78,7 +78,7 @@ export function CollapseSection({
     >
       <CollapsibleTrigger
         className={cn(
-          "group flex h-8 w-full cursor-pointer items-center gap-2 rounded border border-[var(--yak-components-collapse-section-border)] bg-[var(--yak-components-collapse-section-bg)] px-3 text-left text-[var(--yak-components-collapse-section-text)] transition-colors duration-150 hover:bg-[var(--yak-components-collapse-section-bg-hover)] focus-visible:border-[var(--yak-color-primary)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+          "group flex h-9 w-full cursor-pointer items-center gap-2 rounded border border-[var(--yak-components-collapse-section-border)] bg-[var(--yak-components-collapse-section-bg)] px-3 text-left text-[var(--yak-components-collapse-section-text)] transition-colors duration-150 hover:bg-[var(--yak-components-collapse-section-bg-hover)] focus-visible:border-[var(--yak-color-primary)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
           triggerClassName,
         )}
       >
