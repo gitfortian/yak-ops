@@ -1071,16 +1071,16 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               </div>
             ) : (
               <Table<DataSyncFieldMapping>
-                  columns={mappingColumns}
-                  dataSource={mapping?.mappings || []}
-                  rowKey="sourceName"
-                  loading={mappingLoading}
-                  bordered
-                  size="small"
-                  pagination={false}
-                  emptyText="暂无字段"
-                  scroll={{ x: 900 }}
-                />
+                columns={mappingColumns}
+                dataSource={mapping?.mappings || []}
+                rowKey="sourceName"
+                loading={mappingLoading}
+                bordered
+                size="small"
+                pagination={false}
+                emptyText="暂无字段"
+                scroll={{ x: 900 }}
+              />
             )}
           </CollapseSection>
 
