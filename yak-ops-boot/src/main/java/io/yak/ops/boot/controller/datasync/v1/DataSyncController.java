@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncOperationsDashboardDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
@@ -12,6 +13,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -76,6 +78,13 @@ public class DataSyncController {
     @PostMapping("/operations/tasks/page")
     public Result<PagingData<DataSyncTaskOperationVO>> taskOperationPage(@Valid @RequestBody DataSyncTaskQueryDTO dto) {
         return Result.success(dataSyncService.queryTaskOperationPage(dto));
+    }
+
+    @Operation(summary = "查询运维中心数据同步聚合指标")
+    @PostMapping("/operations/dashboard")
+    public Result<DataSyncOperationsDashboardVO> operationsDashboard(
+            @Valid @RequestBody DataSyncOperationsDashboardDTO dto) {
+        return Result.success(dataSyncService.queryOperationsDashboard(dto));
     }
 
     @Operation(summary = "上线数据同步任务")
