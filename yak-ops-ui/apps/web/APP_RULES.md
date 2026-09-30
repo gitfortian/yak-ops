@@ -1,113 +1,37 @@
 # Web App Rules
 
-Scope:
+Status: Active
 
-- `yak-ops-ui/apps/web/**`
+Scope: `yak-ops-ui/apps/web/**`。
 
-Owns:
-
-- Product domains
-- Router / Layout
-- Application context
-- Backend services
-- Theme
-- Web assets and public files
-
-## Root Structure
-
-```text
-app/
-service/
-public/
-utils/
-themes/
-types/
-hooks/
-context/
-config/
-constants/
-assets/
-```
-
-`apps/web` 本身就是 Web Root。
+目录与产品入口职责见 [Architecture](../../ARCHITECTURE.md)，通用限制见 [Frontend Rules](../../FRONTEND_RULES.md)。本文件只维护 App 层交互与状态约束。
 
 ## App Domain
 
-```text
-app/datasource
-app/data-sync
-app/offline-sync
-app/realtime-sync
-app/management
-├── users
-└── workspaces
-app/login
-```
-
-业务代码按 Domain 聚合，不建立全局 `pages / shared / components` 大桶。
+任务定义、Task Detail 与运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或 Execution 展示组件。Task Detail 留在数据集成内，只读展示当前 Task 的 Execution / Attempt 运行事实；Run / Start / Stop、Schedule Runtime 和跨 Task 观察仍由运维中心负责。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
 
 ## App Shell
 
-```text
-app/layout/
-├── AppLayout.tsx
-├── TopBar.tsx
-├── ProductSidebar.tsx
-├── ProductLauncher.tsx
-├── AllProductMenu.tsx
-└── navigation.ts
-```
+- 认证后产品复用同一参数化 AppLayout。数据集成、运维中心为 Workspace-scoped，管理中心不受当前 Workspace gate，也不显示 Workspace Switcher。
+- Workspace-scoped Outlet 按当前 Workspace 身份重建，防止列表、选择和表单状态跨空间泄漏。页面填充父容器，不自行用 `calc(100vh - ...)` 扣减 Shell 高度。
+- Router 只负责 URL 到产品入口的装配；Context 只持有应用级运行态。
+- `navigation.ts` 定义完整产品 Registry；User Preference 只存稳定 product id，不复制标签、路由和图标。
 
-- `AppLayout` 是认证后产品页面唯一的 viewport owner，也是 Global Product Launcher 状态 owner；通过 Product 参数服务数据集成和管理中心，不复制第二套 Shell。
-- TopBar、ProductSidebar、ProductLauncher 属于 Shell，不属于 Datasource 或 Management Domain。
-- 数据集成是 Workspace-scoped Product；管理中心是系统级 Product，不显示 Workspace Switcher，也不受 current Workspace gate。
-- `app/layout/navigation.ts` 是全局产品 Registry，拥有稳定 product id / label / route / icon；User Preference 只保存稳定 product id，不复制展示文案、路由或图标。
-- `所有产品` 是 ProductLauncher 自己的 `view-all` 入口，不允许混进真实产品数组；点击后只控制二级 AllProductMenu。
-- ProductLauncher 一级真实产品区只展示当前用户在 `PRODUCT_MENU` 场景标星的产品，并按服务端 `sortOrder` 排序；没有收藏时展示轻量空状态，不自动注入默认产品。
-- AllProductMenu 展示完整 Product Registry，并在每个产品右侧提供收藏星标；收藏成功后一级菜单必须立即同步新增，取消收藏后必须立即移除。
-- 产品收藏使用 `service/preference` 调用 User Preference API，显式省略 Workspace Header；服务端数据库是跨登录、跨设备偏好的 Source of Truth。
-- 收藏切换允许前端乐观更新；请求失败时只回滚当前产品的收藏状态，不覆盖其他已完成的收藏变更。
-- ProductLauncher 使用固定宽度 220px 的 Launcher Track；位移动画必须作用在 Track，而不是只作用在一级菜单。打开使用 `translateX(-220px) → translateX(0)` 和 `300ms ease-in-out`，关闭使用 `220ms ease-in-out`。
-- ProductSidebar 默认背景固定 `#FAFAFA`；二级深色面板关闭时不得残留覆盖默认 Sidebar。
-- ProductSidebar 菜单项使用整行布局，不使用圆角卡片；选中态背景为 `#DFE6FA`，右侧使用 `#1645D1` 2px 高亮边。
-- ProductSidebar 非选中项 hover 背景为 `#F2F2F2`；菜单图标保持 `#1645D1`，文字保持深色。
-- AllProductMenu 必须作为 Launcher Track 的绝对定位子元素，通过 `left: 100%` 紧贴一级菜单右边缘；打开宽度 765px、关闭宽度 0，通过 `overflow: hidden` 裁切内容；打开动画 `240ms ease-in-out`，关闭动画 `170ms ease-in-out`，背景固定 `#1c1e21`。
-- 完整 Launcher 关闭时，二级立即开始收缩，Launcher Track 延后 36ms 开始左滑；这是短暂错峰而不是等待二级完全结束后再关闭一级。两级必须共享 Track 位移，关闭全过程一级右边缘与二级左边缘保持相连，不允许出现中间空白。
-- 一级 `view-all` 在二级展开时使用 `#1c1e21` 激活背景；一级 / 二级可点击产品 hover 使用 `#282b2e`，文字与图标同步提亮。
-- 两级菜单都作为 overlay 覆盖页面，不允许改变 Sidebar / Outlet 布局，也不允许添加外层阴影。
-- TopBar 三杠菜单按钮必须显示 pointer cursor；打开后同一位置切换为 X 图标。
-- Launcher 必须支持 TopBar X、Escape 和路由变化关闭。
-- Launcher 打开时，页面内容区覆盖透明 Blank Area 捕获点击；无论二级是否打开，一次 Blank Area 点击都关闭完整 Launcher，视觉上仍由二级先收、一级紧跟。
-- 二级 AllProductMenu 只展示已有真实产品 / 路由；当前真实产品为数据集成和管理中心。
-- 管理中心 V1 路由为 `/management/users` 与 `/management/workspaces`；PR1 只建立 Product Surface 与导航壳，具体管理能力由后续 Capability PR 实现。
-- AppLayout 内的页面只填充可用容器，禁止通过 `calc(100vh - ...)` 或 `calc(100dvh - ...)` 自己扣减 Shell 高度。
+## Product Launcher
 
-## Must
+- 一级真实产品只显示 `PRODUCT_MENU` 中当前用户收藏、且 Registry 仍存在的产品，按服务端 `sortOrder` 排列；无收藏显示空态，不注入默认产品。
+- `所有产品` 是独立 `view-all` 入口，不混入真实产品数组。二级展示完整 Registry，收藏变更立即反映到一级。
+- 收藏请求由 `service/preference` 承担。允许乐观更新；失败只回滚对应产品，不覆盖其他已完成变更。跨登录、跨设备持久化由服务端负责。
+- 两级菜单是 overlay，不改变 Sidebar / Outlet 布局，不增加外层阴影。二级必须紧贴同一 Launcher Track 的右边缘；Track 承担共同位移，关闭先收二级、再短暂错峰滑动 Track，全程不能产生中间空隙。
+- 默认 Sidebar 不被关闭后的深色层残留遮挡。菜单触发器有 pointer，打开后原位切换为 X；X、Escape、路由变化、一次空白区点击都能关闭完整 Launcher。
+- 二级打开时 `view-all` 保持激活。具体宽度、配色和时序在 [ProductLauncher](app/layout/ProductLauncher.tsx) 与 [AllProductMenu](app/layout/AllProductMenu.tsx) 维护，不在 Architecture 再复制参数表。
 
-- Domain UI / state / presentation 放在 `app/<domain>`。
-- Data Sync 跨离线/实时复用的任务编辑器、Task Detail 与 Execution 展示能力收口在 `app/data-sync`；具体产品入口仍分别位于 `app/offline-sync` 与 `app/realtime-sync`。
-- 离线同步任务列表、Task Detail 入口和 legacy Instance detail redirect wrapper 收口在 `app/offline-sync`。
-- 实时同步任务列表、Task Detail 入口和 legacy Instance detail redirect wrapper 收口在 `app/realtime-sync`；Execution 列表/详情继续复用 `app/data-sync` 的共享实现。
-- Management Center 的用户与工作空间页面收口在 `app/management/users` 与 `app/management/workspaces`，后端调用分别进入 `service/user` 与 `service/workspace`。
-- Domain backend Contract / calls 放在 `service/<domain>`。
-- 依赖方向保持 `app → service → http`。
-- 通用 UI 从 `@yak-ops/yak-ui` 使用。
-- 管理型新增 / 编辑表单遵循 `FORM_RULES.md` 的 Compact Horizontal Form Contract。
-- Router 只负责 URL → Product Surface 映射。
-- Context 只拥有 App-wide runtime state。
-- HTTP transport 只存在于 `service/http`。
-- 原样静态资源进入 `public`；参与构建资源进入 `assets`。
+## Product Sidebar
 
-## Must Not
+菜单使用整行而非圆角卡片；选中态包含浅色背景、右侧高亮线和加粗文字，图标随选中状态变化。非选中项使用普通字重与轻量 hover；保留分组标签。
 
-- 重新创建 `src / pages / shared`。
-- 重新创建 `packages/datasource`。
-- 创建 `@yak-ops/datasource` alias。
-- Service 反向 import App。
-- App 直接 import `service/http`。
-- 在 `utils/hooks/types/constants` 放 Domain 私有实现。
-- 创建第二套 Theme Provider 或 HTTP Client。
+实际字体、间距与色值在 [ProductSidebar](app/layout/ProductSidebar.tsx) 维护；非选中图标跟随普通文字，选中图标使用高亮。
 
 ## Enforcement
 
-稳定目录和依赖方向由 `npm run architecture:check` 检查。
+依赖与目录检查见 [Tooling](../../docs/tooling.md)。Shell 验收需在真实页面检查：切换 Workspace 不泄漏局部状态；三类产品入口可达；收藏失败回滚隔离；完整菜单各关闭路径只需一次操作，动画期间两级不分离。

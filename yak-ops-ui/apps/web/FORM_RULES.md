@@ -1,49 +1,18 @@
 # Web Form Rules
 
-Scope:
+Status: Active
 
-- `yak-ops-ui/apps/web/app/**`
-- Product-level create / edit / configuration forms rendered with Yak UI primitives
+Scope: `apps/web/app/**` 中的产品新增、编辑和配置表单。
 
-Depends On:
-
-- `/yak-ops-ui/FRONTEND_RULES.md`
-- `/yak-ops-ui/apps/web/APP_RULES.md`
-- `/yak-ops-ui/packages/yak-ui/UI_RULES.md`
-
-## Principle
-
-Yak Ops management forms use Compact Horizontal Form by default.
-
-```text
-Label 104px        Control minmax(0, 1fr)
----------------    -----------------------
-用户名             [.....................]
-密码               [.....................]
-备注               [.....................]
-```
-
-Yak UI owns Input / Select / Field / Modal primitives. This contract only owns how product forms compose those primitives.
+本文件只定义产品如何组合控件；控件行为见 [Yak UI](../../packages/yak-ui/UI_RULES.md)，领域校验和提交状态由页面负责。
 
 ## Default Density
 
-Management create / edit forms default to:
+普通管理表单默认 Compact Horizontal Form：Label `104px`，Control `minmax(0, 1fr)`，列间距 `12px`，字段纵向间距 `10px`；Label 使用 `text-xs leading-4` 与 `pt-1.5` 顶部对齐。
 
-- Label column: `104px`
-- Label / Control gap: `12px` through `gap-3`
-- Vertical field gap: `10px` through `space-y-2.5`
-- Label typography: `text-xs leading-4`
-- Label top alignment: `pt-1.5`
-- Input / PasswordInput / Select: `size="small"`
-- Input / PasswordInput / SelectTrigger: `variant="outlined"`
-- Textarea: `size="small" + variant="outlined"`
-- Modal footer Button: `size="small"`
-
-Do not use medium controls in a management form without an explicit product reason.
+Input、PasswordInput、Select、Textarea 默认使用 `small + outlined`，底栏 Button 使用 `small`。不能只因为组件默认值是 medium 就采用 medium；特殊配置编辑器如需不同布局，应在领域规则中说明，不把局部参数提升成全局默认。
 
 ## Horizontal Field
-
-Default field structure:
 
 ```tsx
 <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3" invalid={Boolean(error)}>
@@ -60,135 +29,26 @@ Default field structure:
 </Field>
 ```
 
-The Label / Control grid belongs to the product form. Do not add a second FormItem / FormRow component system only to wrap this layout.
+Label / Control 网格归产品表单，不为包裹该布局另建 FormItem / FormRow 体系。
 
 ## Validation
 
-Required marker and validation presentation must use Yak UI:
-
-- `FieldLabel required`
-- `FieldRequiredMark`
-- `FieldError`
-- native `aria-invalid`
-
-Do not handwrite a red `*`, duplicate validation colors, or build a page-local error component.
-
-Validation content belongs to the owning domain form; validation presentation belongs to Yak UI.
+必填标记使用 FieldLabel / FieldRequiredMark，错误使用 FieldError 与控件语义关联；错误文字位于 Control 列下方。业务文案与校验逻辑留在领域，不手写红星、错误配色或第二套错误组件。
 
 ## Multi-control Row
 
-When one field needs multiple controls, keep the outer 104px Label / Control contract unchanged and compose inside the Control column.
-
-Example:
-
-```tsx
-<div className="grid grid-cols-[minmax(0,1fr)_146px] gap-2">
-  <Input size="small" variant="outlined" />
-  <Input size="small" variant="outlined" />
-</div>
-```
-
-Host + Port and similar structures must not redefine the whole form grid.
-
-## Textarea
-
-Simple management descriptions / remarks stay compact:
-
-```tsx
-<Textarea size="small" variant="outlined" rows={2} className="min-h-[56px] resize-none" />
-```
-
-Textarea uses the Yak UI native visual contract; pages do not recreate its border or focus treatment.
+Host + Port 等组合放进 Control 列，保持外层 Label 对齐。备注可使用双行紧凑 Textarea；具体最小高度、是否允许缩放由页面决定，不重建基础边框或焦点样式。
 
 ## Modal Form
 
-Create / Edit:
+新增/编辑使用 [Modal](../../packages/yak-ui/docs/modal.md)，破坏性确认使用 Dialog。短且稳定的表单可以显式 `centered`；长表单、Wizard、搜索或容易增长的内容保留默认顶部偏移。完整定位、关闭及滚动契约只在 Modal 文档维护。
 
-```text
-Modal
-→ compact horizontal fields
-→ small footer buttons
-```
-
-Destructive confirmation:
-
-```text
-Dialog
-```
-
-Compact management forms may use `bodyClassName="py-3"` to align with the Datasource form density.
-
-Short, stable-height create / edit forms may opt into `<Modal centered />` when the content comfortably fits the viewport without normal body scrolling.
-
-Use `centered` for:
-
-- simple compact forms with a small, predictable number of fields
-- short configuration forms whose height remains stable across normal validation states
-
-Keep the default top-offset Modal for:
-
-- long forms
-- multi-step Wizards
-- Table / search-result content
-- dynamic content that may grow significantly
-- forms that commonly need body scrolling
-
-Do not choose `centered` only for visual preference; content height and interaction stability decide the placement.
+记录选择弹窗的搜索 Input / Select 仍遵循 small + outlined；结果 Table 不强行塞进表单行布局。
 
 ## Select Value / Label
 
-Product forms must separate stored domain values from user-visible labels.
+值、标签及异步受控回显遵循 [Select Contract](../../packages/yak-ui/docs/select-motion.md#value--label)。表单只拥有领域选项及加载状态，不在 Trigger 复制一次查找标签逻辑。
 
-When a Select stores an ID, enum code, composite key or other domain value whose visible text differs:
+## Boundary
 
-- pass the value-to-label mapping through `Select.items`.
-- keep controlled `value` and `onValueChange` on the domain value.
-- when controlled Select options load asynchronously, use `null` for “当前暂无匹配值”; do not let `value` fall back to `undefined`, otherwise the Select can initialize as uncontrolled and fail to hydrate the later value.
-- let `SelectValue` render the visible label.
-- never display resource IDs or internal composite keys in the closed trigger when a human-readable label exists.
-- do not duplicate `options.find(...)` label lookup inside `SelectTrigger`.
-
-Typical examples:
-
-```text
-Datasource: value = datasourceId, label = datasourceName
-Workspace:  value = workspaceId,  label = workspaceName
-Table:      value = stable tableKey, label = schema.table
-```
-
-A Select may omit `items` only when `value === label` by design, such as a simple database or Schema name list.
-
-## Selection / Search Modal
-
-A modal whose main job is selecting records may contain Table or search results, but its form controls still follow this contract:
-
-- search Input is `small + outlined`
-- role / type Select is `small + outlined`
-- field rows use the same 104px Label / Control layout when labels are shown
-- result Table is not forced into a form-row layout
-
-## Must
-
-- use Compact Horizontal Form for ordinary management create / edit forms.
-- use Yak UI Field / Input / PasswordInput / Select / Textarea / Button / Modal / Dialog.
-- keep Label width stable at 104px across ordinary forms.
-- keep Control content inside `minmax(0, 1fr)`.
-- keep error text under the Control column.
-- prefer existing Yak UI tokens and variants over page-specific border/focus styling.
-- keep forms locally owned by their Domain.
-
-## Must Not
-
-- use vertical Label-above-Control layout as the default management form.
-- introduce page-specific Label widths without a real layout reason.
-- use medium controls only because they are the component default.
-- handwrite required markers or validation presentation.
-- create another Form runtime / schema / FormItem abstraction.
-- import Base UI directly from App code.
-- add Ant Design or another UI framework.
-
-## Current Baseline
-
-Datasource Create / Edit is the visual baseline for Compact Horizontal Form.
-
-Management User / Workspace forms are expected to follow the same density and alignment while keeping their own domain validation and behavior.
+普通管理表单不默认采用上下式 Label 布局，不随意创建局部 Label 宽度、动态 Schema 或第二套表单运行时。领域的字段依赖、校验、请求和提交生命周期不下沉到 Yak UI。
