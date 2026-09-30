@@ -7,7 +7,7 @@ Scope:
 
 ## Phase 4 Boundary
 
-The offline product owns Task definition and publication configuration. Operations Center owns manual execution, Stop and Instance runtime presentation.
+The offline product owns Task definition, publication configuration and Schedule definition. Operations Center owns manual execution, Schedule enable / disable, Stop and Instance runtime presentation.
 
 Must:
 
@@ -25,7 +25,7 @@ Must:
 - Expose OFFLINE write mode under `数据去向`, never under runtime tuning. Options are APPEND / OVERWRITE / UPSERT with APPEND as the default.
 - Use Yak UI `Alert` when OFFLINE write mode is `OVERWRITE`: warn that the target table is cleared before loading and original data is not automatically restored after a later sync failure. Keep APPEND / UPSERT as normal inline descriptions; backend Catalog validation remains the source of truth.
 - Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
-- Show a Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
+- Show the Split consistency Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
 - Use existing Yak UI primitives.
 - Keep the Offline Sync page definition-focused; do not expose a Task Instance Tab there.
 - Route historical Instance access to Operations Center with the current Task filter.
@@ -33,6 +33,10 @@ Must:
 - A manual Run in Operations Center creates a new Instance and navigates to the Operations Center Instance detail page.
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Run is an Operations Center action for PUBLISHED Tasks.
+- OFFLINE editor owns optional Schedule definition only: Quartz Cron expression + explicit IANA Time Zone. An empty Cron on a Task that has never created a Schedule means manual-only execution.
+- Persist Schedule only after Task persistence succeeds because Schedule identity depends on `taskId`; Save & Publish must persist Task, then Schedule, then publish.
+- Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly enables it in Operations Center.
+- An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable remains an Operations Center action.
 - Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
 - Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`.
 - Schema Select may omit `items` when the domain value is intentionally identical to the visible label. Database is not editable in Offline Sync when Datasource already binds it.
@@ -48,6 +52,6 @@ Must:
 
 Must Not:
 
-- Add scheduler / retry policy before their backend lifecycle exists.
+- Add configurable scheduler concurrency, misfire or catch-up policies beyond the frozen v1.1 backend contract.
 - Add filter SQL, split key, pre/post SQL, resource group or Transform.
 - Reimplement JDBC type compatibility in frontend code.

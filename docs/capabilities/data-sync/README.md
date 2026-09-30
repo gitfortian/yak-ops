@@ -125,8 +125,10 @@ PR2 已完成 Offline Schedule Persistence + Trigger：
 - Active Instance 存在时固定 skip，不创建并发实例。
 - Task unpublish 自动 disable + unschedule。
 - 应用启动按 DB enabled Schedule 恢复 Quartz Runtime。
+- OFFLINE 编辑页配置 Cron + IANA Time Zone；Schedule Definition 保存与 Schedule Runtime 启用分离。
+- Operations Center 对已存在 Schedule 提供 Enable / Disable，并直接展示后端 `nextFireTime`。
 
-Retry / Attempt、可配置并发策略和 Quartz JDBC JobStore 仍属于后续阶段。
+可配置并发策略和 Quartz JDBC JobStore 仍属于后续阶段。
 
 核心约束：
 
@@ -368,6 +370,7 @@ The editor contains only:
 - source datasource/table.
 - target datasource/table plus OFFLINE write mode.
 - read-only automatic field mapping result.
+- optional OFFLINE Schedule definition: Quartz Cron + IANA Time Zone.
 - YakFlow runtime tuning.
 
 Datasource scope rule:
@@ -500,6 +503,7 @@ The current product surface includes:
 - Workspace-scoped OFFLINE / REALTIME Task CRUD.
 - Task publication lifecycle backend with UNPUBLISHED / PUBLISHED state, publish/unpublish commands and status-gated update/delete/run.
 - OFFLINE / REALTIME Task lifecycle UI with publication status badges/filtering, publish/unpublish actions, active-instance Stop actions and explicit Save / Save & Publish editor flow.
+- OFFLINE Schedule UI with Cron / Time Zone definition in the editor and explicit Enable / Disable runtime control in Operations Center.
 - persisted Task Instance history with `syncType`, lifecycle status and sanitized definition snapshot.
 - shared Catalog-driven mapping validation.
 - OFFLINE manual execution, metrics, APPEND / OVERWRITE / UPSERT behavior and real MySQL -> MySQL/PostgreSQL/Oracle JDBC acceptance.
