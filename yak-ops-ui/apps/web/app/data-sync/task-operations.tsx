@@ -397,7 +397,7 @@ export function DataSyncTaskOperations({
           loading={loading}
           bordered
           size="medium"
-          scroll={{ x: 1260 }}
+          scroll={{ x: 1340 }}
           emptyText={realtime ? "暂无已上线实时同步任务" : "暂无已上线离线同步任务"}
           pagination={
             total > 0
