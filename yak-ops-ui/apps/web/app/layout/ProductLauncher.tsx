@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -176,20 +176,42 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
               favoriteProducts.map((item) => {
                 const Icon = item.icon;
 
+                const mutating = favoriteMutatingIds.has(item.id);
+
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    to={item.path}
-                    tabIndex={open ? 0 : -1}
-                    className="item group my-0.5 flex h-8 w-full cursor-pointer items-center rounded px-1.5 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                    onClick={onClose}
+                    className="item group my-0.5 flex h-8 w-full items-center rounded px-1.5 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-white"
                   >
-                    <Icon
-                      className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-white"
-                      strokeWidth={1.8}
-                    />
-                    <span className="product-name ml-2 min-w-0 flex-1 truncate">{item.label}</span>
-                  </Link>
+                    <Link
+                      to={item.path}
+                      tabIndex={open ? 0 : -1}
+                      className="flex h-full min-w-0 flex-1 cursor-pointer items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                      onClick={onClose}
+                    >
+                      <Icon
+                        className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-white"
+                        strokeWidth={1.8}
+                      />
+                      <span className="product-name ml-2 min-w-0 flex-1 truncate">{item.label}</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      aria-label={`取消收藏${item.label}`}
+                      disabled={mutating}
+                      tabIndex={open ? 0 : -1}
+                      className={[
+                        "ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-white/40 opacity-0",
+                        "transition-[background-color,color,opacity] hover:bg-white/8 hover:text-white group-hover:opacity-100",
+                        "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20",
+                        "disabled:cursor-default disabled:opacity-45",
+                      ].join(" ")}
+                      onClick={() => void toggleFavorite(item.id)}
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    </button>
+                  </div>
                 );
               })
             ) : (
