@@ -113,9 +113,7 @@ export function DataSyncExecutionDetailContent({
     record.errorMessage ||
     [...attempts].reverse().find((attempt) => attempt.errorMessage)?.errorMessage;
   const showAttemptHistory =
-    attempts.length > 1 ||
-    (record.currentAttempt || 1) > 1 ||
-    record.status === "RETRY_WAITING";
+    attempts.length > 1 || (record.currentAttempt || 1) > 1 || record.status === "RETRY_WAITING";
 
   return (
     <div className="space-y-4">
@@ -166,7 +164,8 @@ export function DataSyncExecutionDetailContent({
           </div>
         ) : record.status === "FAILED" ? (
           <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
-            写入计数表示 SinkWriter.write 已成功接收的累计行数，不代表整次执行成功，也不代表数据库事务已经提交。
+            写入计数表示 SinkWriter.write
+            已成功接收的累计行数，不代表整次执行成功，也不代表数据库事务已经提交。
           </div>
         ) : null}
       </DetailSection>
