@@ -39,6 +39,7 @@ import {
   DataSyncExecutionConfigContent,
   DataSyncExecutionDetailContent,
   dataSyncInstanceStatusMeta,
+  dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
 import { DataSyncExecutionLogPanel } from "./execution-log";
@@ -344,18 +345,25 @@ export function DataSyncTaskDetailPage({
                     <button
                       key={execution.id}
                       type="button"
-                      className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
+                      className={`w-full cursor-pointer rounded-md px-3 py-2.5 text-left transition-colors ${
                         selected ? "bg-[#f5f7ff]" : "bg-white hover:bg-[#f6f6f6]"
                       }`}
                       onClick={() => selectExecution(execution.id)}
                     >
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                      <span
-                        className="min-w-0 truncate text-xs text-[#98a2b3]"
-                        title={execution.startTime || execution.createTime}
-                      >
-                        {execution.startTime || execution.createTime || "-"}
-                      </span>
+                      <div className="flex items-center justify-between gap-3">
+                        <Badge tone={meta.tone}>{meta.label}</Badge>
+                        <span
+                          className="min-w-0 truncate text-xs text-[#98a2b3]"
+                          title={execution.startTime || execution.createTime}
+                        >
+                          {execution.startTime || execution.createTime || "-"}
+                        </span>
+                      </div>
+                      {realtime ? (
+                        <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
+                          {dataSyncTriggerText(execution.triggerType)}
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -406,17 +414,12 @@ export function DataSyncTaskDetailPage({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-6 mb-6 mt-5 space-y-4 max-md:mx-4">
               <SectionCard title="基本信息">
-                <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-md:grid-cols-1">
                   <InfoItem label="任务状态" inline>
                     <DataSyncTaskStatusBadge status={task.status} />
                   </InfoItem>
-                  {realtime ? (
-                    <InfoItem label="运行意图" inline>
-                      {desiredStateText}
-                    </InfoItem>
-                  ) : null}
-                  <InfoItem label={realtime ? "运行模式" : "调度"} inline>
-                    {realtime ? "MySQL CDC · 首次全量后持续消费 Binlog" : scheduleText}
+                  <InfoItem label={realtime ? "运行意图" : "调度"} inline>
+                    {realtime ? desiredStateText : scheduleText}
                   </InfoItem>
                 </div>
 
@@ -569,9 +572,7 @@ export function DataSyncTaskDetailPage({
                   {pathText(task.targetDatabase, task.targetSchema, task.targetTable)}
                 </div>
               </InfoItem>
-              <InfoItem label={realtime ? "运行模式" : "调度"}>
-                {realtime ? "MySQL CDC · 首次全量后持续消费 Binlog" : scheduleText}
-              </InfoItem>
+              {!realtime ? <InfoItem label="调度">{scheduleText}</InfoItem> : null}
 
               <InfoItem label="更新时间">{task.updateTime || task.createTime || "-"}</InfoItem>
               {task.remark ? <InfoItem label="备注">{task.remark}</InfoItem> : null}
