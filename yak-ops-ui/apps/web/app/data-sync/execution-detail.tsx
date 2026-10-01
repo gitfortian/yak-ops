@@ -258,51 +258,51 @@ export function DataSyncExecutionDetailContent({
               </summary>
               <div className="mt-4 border-t border-[#eef0f3] pt-4">
                 <div className="flex items-center gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-[#344054]">
-                  {snapshot.source.dataSourceName || "未知数据源"}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[#344054]">
+                      {snapshot.source.dataSourceName || "未知数据源"}
+                    </div>
+                    <div className="mt-1 text-xs text-[#667085]">
+                      {pathText(
+                        snapshot.source.database,
+                        snapshot.source.schema,
+                        snapshot.source.table,
+                      )}
+                    </div>
+                  </div>
+                  <ArrowRight size={18} className="shrink-0 text-[#98a2b3]" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[#344054]">
+                      {snapshot.target.dataSourceName || "未知数据源"}
+                    </div>
+                    <div className="mt-1 text-xs text-[#667085]">
+                      {pathText(
+                        snapshot.target.database,
+                        snapshot.target.schema,
+                        snapshot.target.table,
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-xs text-[#667085]">
-                  {pathText(
-                    snapshot.source.database,
-                    snapshot.source.schema,
-                    snapshot.source.table,
-                  )}
-                </div>
-              </div>
-              <ArrowRight size={18} className="shrink-0 text-[#98a2b3]" />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-[#344054]">
-                  {snapshot.target.dataSourceName || "未知数据源"}
-                </div>
-                <div className="mt-1 text-xs text-[#667085]">
-                  {pathText(
-                    snapshot.target.database,
-                    snapshot.target.schema,
-                    snapshot.target.table,
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {snapshot.runtimeConfig ? (
-              <div className="mt-5 grid grid-cols-4 gap-3 text-xs max-lg:grid-cols-2">
-                <div>Fetch Size：{snapshot.runtimeConfig.fetchSize}</div>
-                <div>读取批次：{snapshot.runtimeConfig.readBatchSize}</div>
-                <div>写入批次：{snapshot.runtimeConfig.writeBatchSize}</div>
-                <div>超时：{snapshot.runtimeConfig.timeoutSeconds}s</div>
-              </div>
-            ) : null}
+                {snapshot.runtimeConfig ? (
+                  <div className="mt-5 grid grid-cols-4 gap-3 text-xs max-lg:grid-cols-2">
+                    <div>Fetch Size：{snapshot.runtimeConfig.fetchSize}</div>
+                    <div>读取批次：{snapshot.runtimeConfig.readBatchSize}</div>
+                    <div>写入批次：{snapshot.runtimeConfig.writeBatchSize}</div>
+                    <div>超时：{snapshot.runtimeConfig.timeoutSeconds}s</div>
+                  </div>
+                ) : null}
 
-            {snapshot.realtimeConfig ? (
-              <div className="mt-5 grid grid-cols-5 gap-3 text-xs max-xl:grid-cols-3 max-lg:grid-cols-2">
-                <div>Checkpoint：{snapshot.realtimeConfig.checkpointIntervalSeconds}s</div>
-                <div>CDC 队列：{snapshot.realtimeConfig.queueCapacity}</div>
-                <div>读取批次：{snapshot.realtimeConfig.pollBatchSize}</div>
-                <div>写入批次：{snapshot.realtimeConfig.writeBatchSize}</div>
-                <div>超时：{snapshot.realtimeConfig.timeoutSeconds}s</div>
-              </div>
-            ) : null}
+                {snapshot.realtimeConfig ? (
+                  <div className="mt-5 grid grid-cols-5 gap-3 text-xs max-xl:grid-cols-3 max-lg:grid-cols-2">
+                    <div>Checkpoint：{snapshot.realtimeConfig.checkpointIntervalSeconds}s</div>
+                    <div>CDC 队列：{snapshot.realtimeConfig.queueCapacity}</div>
+                    <div>读取批次：{snapshot.realtimeConfig.pollBatchSize}</div>
+                    <div>写入批次：{snapshot.realtimeConfig.writeBatchSize}</div>
+                    <div>超时：{snapshot.realtimeConfig.timeoutSeconds}s</div>
+                  </div>
+                ) : null}
               </div>
             </details>
           </div>
