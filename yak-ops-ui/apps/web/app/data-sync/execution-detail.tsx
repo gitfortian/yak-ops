@@ -173,10 +173,7 @@ export function DataSyncExecutionConfigContent({
     );
     targetItems.push(["写入批次", realtimeConfig?.writeBatchSize?.toLocaleString() || "-"]);
     executionItems.push(
-      [
-        "Checkpoint 间隔",
-        realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-",
-      ],
+      ["Checkpoint 间隔", realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-"],
       ["超时", realtimeConfig ? `${realtimeConfig.timeoutSeconds}s` : "-"],
     );
   } else {
