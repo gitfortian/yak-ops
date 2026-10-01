@@ -24,6 +24,7 @@ Task Detail 的信息层级优先“执行结果 → 失败原因 → 指标 →
 - 一级真实产品只显示 `PRODUCT_MENU` 中当前用户收藏、且 Registry 仍存在的产品，按服务端 `sortOrder` 排列；无收藏显示空态，不注入默认产品。
 - `所有产品` 是独立 `view-all` 入口，不混入真实产品数组。二级展示完整 Registry，收藏变更立即反映到一级。
 - 收藏请求由 `service/preference` 承担。允许乐观更新；失败只回滚对应产品，不覆盖其他已完成变更。跨登录、跨设备持久化由服务端负责。
+- 一级收藏产品支持快速取消：鼠标悬停或键盘聚焦该 Item 时，右侧显示 `X`；点击只更新该产品的 `favorite=false`，不得触发产品导航或关闭 Launcher。一级与二级必须复用同一收藏 mutation 与 optimistic rollback，禁止维护第二套本地删除状态。
 - 两级菜单是 overlay，不改变 Sidebar / Outlet 布局，不增加外层阴影。二级必须紧贴同一 Launcher Track 的右边缘；Track 承担共同位移，关闭先收二级、再短暂错峰滑动 Track，全程不能产生中间空隙。
 - 默认 Sidebar 不被关闭后的深色层残留遮挡。菜单触发器有 pointer，打开后原位切换为 X；X、Escape、路由变化、一次空白区点击都能关闭完整 Launcher。
 - 二级打开时 `view-all` 保持激活。具体宽度、配色和时序在 [ProductLauncher](app/layout/ProductLauncher.tsx) 与 [AllProductMenu](app/layout/AllProductMenu.tsx) 维护，不在 Architecture 再复制参数表。
