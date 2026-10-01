@@ -57,12 +57,6 @@ const emptyDraft = (): CreateDraft => ({
 const syncEndpointText = (dataSourceName?: string, table?: string) =>
   [dataSourceName || "未知数据源", table].filter(Boolean).join(".") || "-";
 
-const writeModeText = (writeMode?: string) => {
-  if (writeMode === "OVERWRITE") return "覆盖";
-  if (writeMode === "UPSERT") return "更新插入";
-  return "追加";
-};
-
 export function OfflineSyncPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -265,16 +259,6 @@ export function OfflineSyncPage() {
       },
     },
     {
-      key: "writeMode",
-      title: "写入方式",
-      width: 110,
-      render: (_value, record) => (
-        <span className="text-xs font-medium text-[#475467]">
-          {writeModeText(record.writeMode)}
-        </span>
-      ),
-    },
-    {
       key: "schedule",
       title: "调度",
       width: 190,
@@ -415,7 +399,7 @@ export function OfflineSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1460 }}
+                scroll={{ x: 1350 }}
                 emptyText="还没有离线同步任务"
                 pagination={
                   total > 0
