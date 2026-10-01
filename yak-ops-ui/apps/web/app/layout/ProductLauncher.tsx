@@ -192,7 +192,9 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
                         className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-white"
                         strokeWidth={1.8}
                       />
-                      <span className="product-name ml-2 min-w-0 flex-1 truncate">{item.label}</span>
+                      <span className="product-name ml-2 min-w-0 flex-1 truncate">
+                        {item.label}
+                      </span>
                     </Link>
 
                     <button
