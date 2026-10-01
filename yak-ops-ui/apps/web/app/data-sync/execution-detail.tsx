@@ -113,7 +113,9 @@ export function DataSyncExecutionDetailContent({
     record.errorMessage ||
     [...attempts].reverse().find((attempt) => attempt.errorMessage)?.errorMessage;
   const showAttemptHistory =
-    attempts.length > 1 || (record.currentAttempt || 1) > 1 || record.status === "RETRY_WAITING";
+    attempts.length > 1 ||
+    (record.currentAttempt || 1) > 1 ||
+    record.status === "RETRY_WAITING";
 
   return (
     <div className="space-y-4">
