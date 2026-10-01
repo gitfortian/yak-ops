@@ -1,5 +1,4 @@
 import { Alert, Badge, SectionCard, Table, type BadgeProps } from "@yak-ops/yak-ui";
-import { ArrowRight, ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type {
@@ -56,9 +55,6 @@ export const dataSyncDurationText = (record: DataSyncInstanceRecord) => {
   return `${minutes}m ${seconds % 60}s`;
 };
 
-const pathText = (database?: string, schema?: string, table?: string) =>
-  [database, schema, table].filter(Boolean).join(".") || "-";
-
 interface DetailSectionProps {
   title: ReactNode;
   children: ReactNode;
@@ -90,6 +86,65 @@ function DetailSection({
   );
 }
 
+interface DataSyncExecutionConfigContentProps {
+  record: DataSyncInstanceRecord;
+  realtime: boolean;
+  sectionCard?: boolean;
+}
+
+export function DataSyncExecutionConfigContent({
+  record,
+  realtime,
+  sectionCard = false,
+}: DataSyncExecutionConfigContentProps) {
+  const snapshot = record.definitionSnapshot;
+  const runtimeConfig = snapshot?.runtimeConfig;
+  const realtimeConfig = snapshot?.realtimeConfig;
+  const hasConfig = realtime ? Boolean(realtimeConfig) : Boolean(runtimeConfig);
+  const configItems: Array<[string, string]> = realtime
+    ? [
+        ["Checkpoint 间隔", realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-"],
+        ["CDC 队列", realtimeConfig?.queueCapacity?.toLocaleString() || "-"],
+        ["读取批次", realtimeConfig?.pollBatchSize?.toLocaleString() || "-"],
+        ["写入批次", realtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
+        ["超时", realtimeConfig ? `${realtimeConfig.timeoutSeconds}s` : "-"],
+      ]
+    : [
+        ["Fetch Size", runtimeConfig?.fetchSize?.toLocaleString() || "-"],
+        ["读取批次", runtimeConfig?.readBatchSize?.toLocaleString() || "-"],
+        ["写入批次", runtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
+        ["Source 并行度", runtimeConfig?.sourceParallelism?.toLocaleString() || "-"],
+        [
+          "Split Size",
+          runtimeConfig?.splitSize == null ? "-" : runtimeConfig.splitSize.toLocaleString(),
+        ],
+        ["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"],
+      ];
+
+  return (
+    <DetailSection
+      title="运行参数"
+      sectionCard={sectionCard}
+      legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
+    >
+      <div className={sectionCard ? undefined : "p-5"}>
+        {hasConfig ? (
+          <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+            {configItems.map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
+                <div className="text-xs text-[#98a2b3]">{label}</div>
+                <div className="mt-1 text-sm font-medium text-[#344054]">{value}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center text-sm text-[#98a2b3]">暂无运行参数</div>
+        )}
+      </div>
+    </DetailSection>
+  );
+}
+
 interface DataSyncExecutionDetailContentProps {
   record: DataSyncInstanceRecord;
   attempts: DataSyncAttemptRecord[];
@@ -106,7 +161,6 @@ export function DataSyncExecutionDetailContent({
   sectionCard = false,
 }: DataSyncExecutionDetailContentProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
-  const snapshot = record.definitionSnapshot;
   const readLabel = realtime ? "读取事件" : "读取";
   const writeLabel = realtime ? "写入事件" : "写入";
   const failureMessage =
@@ -161,11 +215,6 @@ export function DataSyncExecutionDetailContent({
         {realtime ? (
           <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
             实时指标统计 YakFlow 变更事件；UPDATE 会产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
-          </div>
-        ) : record.status === "FAILED" ? (
-          <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
-            写入计数表示 SinkWriter.write
-            已成功接收的累计行数，不代表整次执行成功，也不代表数据库事务已经提交。
           </div>
         ) : null}
       </DetailSection>
@@ -239,74 +288,6 @@ export function DataSyncExecutionDetailContent({
               下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
             </div>
           ) : null}
-        </DetailSection>
-      ) : null}
-
-      {snapshot ? (
-        <DetailSection
-          title="本次执行配置"
-          sectionCard={sectionCard}
-          legacyClassName="rounded-lg border border-[#e6e8eb] bg-white"
-        >
-          <div className={sectionCard ? undefined : "p-5"}>
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-[#667085]">
-                <span>查看本次执行使用的数据源与运行参数</span>
-                <ChevronDown
-                  size={16}
-                  className="shrink-0 text-[#98a2b3] transition-transform group-open:rotate-180"
-                />
-              </summary>
-              <div className="mt-4 border-t border-[#eef0f3] pt-4">
-                <div className="flex items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[#344054]">
-                      {snapshot.source.dataSourceName || "未知数据源"}
-                    </div>
-                    <div className="mt-1 text-xs text-[#667085]">
-                      {pathText(
-                        snapshot.source.database,
-                        snapshot.source.schema,
-                        snapshot.source.table,
-                      )}
-                    </div>
-                  </div>
-                  <ArrowRight size={18} className="shrink-0 text-[#98a2b3]" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[#344054]">
-                      {snapshot.target.dataSourceName || "未知数据源"}
-                    </div>
-                    <div className="mt-1 text-xs text-[#667085]">
-                      {pathText(
-                        snapshot.target.database,
-                        snapshot.target.schema,
-                        snapshot.target.table,
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {snapshot.runtimeConfig ? (
-                  <div className="mt-5 grid grid-cols-4 gap-3 text-xs max-lg:grid-cols-2">
-                    <div>Fetch Size：{snapshot.runtimeConfig.fetchSize}</div>
-                    <div>读取批次：{snapshot.runtimeConfig.readBatchSize}</div>
-                    <div>写入批次：{snapshot.runtimeConfig.writeBatchSize}</div>
-                    <div>超时：{snapshot.runtimeConfig.timeoutSeconds}s</div>
-                  </div>
-                ) : null}
-
-                {snapshot.realtimeConfig ? (
-                  <div className="mt-5 grid grid-cols-5 gap-3 text-xs max-xl:grid-cols-3 max-lg:grid-cols-2">
-                    <div>Checkpoint：{snapshot.realtimeConfig.checkpointIntervalSeconds}s</div>
-                    <div>CDC 队列：{snapshot.realtimeConfig.queueCapacity}</div>
-                    <div>读取批次：{snapshot.realtimeConfig.pollBatchSize}</div>
-                    <div>写入批次：{snapshot.realtimeConfig.writeBatchSize}</div>
-                    <div>超时：{snapshot.realtimeConfig.timeoutSeconds}s</div>
-                  </div>
-                ) : null}
-              </div>
-            </details>
-          </div>
         </DetailSection>
       ) : null}
     </div>

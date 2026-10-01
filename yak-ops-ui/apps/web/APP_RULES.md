@@ -10,7 +10,7 @@ Scope: `yak-ops-ui/apps/web/**`。
 
 任务定义、Task Detail 与运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或 Execution 展示组件。Task Detail 留在数据集成内，只读展示当前 Task 的 Execution / Attempt 运行事实；离线 Task Detail 使用左侧 Execution 列表与右侧详情的 master-detail 布局，右侧 PageHeader 固定，详情区域独立滚动，当前 Execution 仍通过 URL 查询参数保持可恢复。OFFLINE Task 列表允许对已上线且无活动 Execution 的任务执行一次手工运行；Editor 和 Task Detail 不承载运行/停止命令，REALTIME Start / Stop 与 Schedule Runtime 也不因此迁入数据集成页面。跨 Task 观察仍由运维中心负责。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
 
-Task Detail 的信息层级优先“执行结果 → 失败原因 → 指标 → 排障细节”：主视图不直接展示内部 Execution ID；失败原因前置到执行概览；仅在存在真实重试或等待重试时展示重试记录；冻结的本次执行配置默认折叠。readRows / writeRows 继续遵循后端持久化指标语义，失败 Execution 的 writeRows 不得被解释为整次执行成功或数据库事务提交证明。
+Task Detail 的信息层级优先“执行结果 → 失败原因 → 指标 → 排障细节”：主视图不直接展示内部 Execution ID；失败原因前置到执行概览；仅在存在真实重试或等待重试时展示重试记录。选中 Execution 使用 `执行情况 / 执行配置 / 执行日志` 三个 Tab；`执行配置` 只展示该次冻结快照里的运行参数，例如 Fetch Size、读写批次、Source 并行度、Split Size、Checkpoint、CDC 队列与超时，不重复展示已在基本信息中出现的来源/目标数据源和表。readRows / writeRows 继续遵循后端持久化指标语义。
 
 ## App Shell
 
