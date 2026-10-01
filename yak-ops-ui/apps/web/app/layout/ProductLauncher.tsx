@@ -175,7 +175,6 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
             {favoriteProducts.length > 0 ? (
               favoriteProducts.map((item) => {
                 const Icon = item.icon;
-
                 const mutating = favoriteMutatingIds.has(item.id);
 
                 return (
