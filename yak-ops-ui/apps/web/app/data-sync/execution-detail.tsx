@@ -1,5 +1,5 @@
 import { Alert, Badge, SectionCard, Table, type BadgeProps } from "@yak-ops/yak-ui";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type {
@@ -109,6 +109,11 @@ export function DataSyncExecutionDetailContent({
   const snapshot = record.definitionSnapshot;
   const readLabel = realtime ? "读取事件" : "读取";
   const writeLabel = realtime ? "写入事件" : "写入";
+  const failureMessage =
+    record.errorMessage ||
+    [...attempts].reverse().find((attempt) => attempt.errorMessage)?.errorMessage;
+  const showAttemptHistory =
+    attempts.length > 1 || (record.currentAttempt || 1) > 1 || record.status === "RETRY_WAITING";
 
   return (
     <div className="space-y-4">
@@ -130,11 +135,20 @@ export function DataSyncExecutionDetailContent({
           <span className="text-xs text-[#98a2b3]">{dataSyncTriggerText(record.triggerType)}</span>
         </div>
 
+        {failureMessage ? (
+          <div className="mt-4 rounded-lg border border-[#fecdca] bg-[#fffbfa] px-4 py-3">
+            <div className="text-sm font-medium text-[#b42318]">失败原因</div>
+            <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-[#667085]">
+              {failureMessage}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-5 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
           {[
             [readLabel, (record.readRows ?? 0).toLocaleString()],
             [writeLabel, (record.writeRows ?? 0).toLocaleString()],
-            ["Attempt", `${record.currentAttempt || 1} / ${record.maxAttempts || 1}`],
+            ["尝试次数", `${record.currentAttempt || 1} / ${record.maxAttempts || 1}`],
             ["耗时", dataSyncDurationText(record)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
@@ -148,90 +162,105 @@ export function DataSyncExecutionDetailContent({
           <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
             实时指标统计 YakFlow 变更事件；UPDATE 会产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
           </div>
-        ) : null}
-      </DetailSection>
-
-      <DetailSection
-        title="Attempt 历史"
-        sectionCard={sectionCard}
-        legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
-      >
-        <Table<DataSyncAttemptRecord>
-          columns={[
-            {
-              key: "attemptNo",
-              title: "Attempt",
-              width: 90,
-              render: (_value, attempt) => `#${attempt.attemptNo}`,
-            },
-            {
-              key: "status",
-              title: "状态",
-              width: 110,
-              render: (_value, attempt) => {
-                const attemptMeta = dataSyncInstanceStatusMeta(attempt.status, realtime);
-                return <Badge tone={attemptMeta.tone}>{attemptMeta.label}</Badge>;
-              },
-            },
-            {
-              key: "time",
-              title: "开始 / 完成",
-              minWidth: 260,
-              render: (_value, attempt) => (
-                <div className="text-xs text-[#667085]">
-                  {attempt.startTime || attempt.createTime || "-"} →{" "}
-                  {attempt.finishTime || "运行中"}
-                </div>
-              ),
-            },
-            {
-              key: "metrics",
-              title: "读取 / 写入",
-              width: 140,
-              align: "right",
-              render: (_value, attempt) =>
-                `${(attempt.readRows ?? 0).toLocaleString()} / ${(attempt.writeRows ?? 0).toLocaleString()}`,
-            },
-            {
-              key: "error",
-              title: "错误",
-              minWidth: 220,
-              render: (_value, attempt) => (
-                <div
-                  className="max-w-[360px] truncate text-xs text-[#667085]"
-                  title={attempt.errorMessage || ""}
-                >
-                  {attempt.errorMessage || "-"}
-                </div>
-              ),
-            },
-          ]}
-          dataSource={attempts}
-          rowKey="id"
-          bordered
-          size="small"
-          pagination={false}
-          emptyText="旧实例或未执行实例暂无独立 Attempt 记录"
-          scroll={{ x: 900 }}
-        />
-        {record.status === "RETRY_WAITING" ? (
-          <div className="border-t border-[#eef0f3] px-4 py-3 text-xs text-[#b54708]">
-            下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
+        ) : record.status === "FAILED" ? (
+          <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
+            写入计数表示 SinkWriter.write 已成功接收的累计行数，不代表整次执行成功，也不代表数据库事务已经提交。
           </div>
         ) : null}
       </DetailSection>
 
+      {showAttemptHistory ? (
+        <DetailSection
+          title="重试记录"
+          sectionCard={sectionCard}
+          legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
+        >
+          <Table<DataSyncAttemptRecord>
+            columns={[
+              {
+                key: "attemptNo",
+                title: "次数",
+                width: 90,
+                render: (_value, attempt) => `#${attempt.attemptNo}`,
+              },
+              {
+                key: "status",
+                title: "状态",
+                width: 110,
+                render: (_value, attempt) => {
+                  const attemptMeta = dataSyncInstanceStatusMeta(attempt.status, realtime);
+                  return <Badge tone={attemptMeta.tone}>{attemptMeta.label}</Badge>;
+                },
+              },
+              {
+                key: "time",
+                title: "开始 / 完成",
+                minWidth: 260,
+                render: (_value, attempt) => (
+                  <div className="text-xs text-[#667085]">
+                    {attempt.startTime || attempt.createTime || "-"} →{" "}
+                    {attempt.finishTime || "运行中"}
+                  </div>
+                ),
+              },
+              {
+                key: "metrics",
+                title: "读取 / 写入",
+                width: 140,
+                align: "right",
+                render: (_value, attempt) =>
+                  `${(attempt.readRows ?? 0).toLocaleString()} / ${(attempt.writeRows ?? 0).toLocaleString()}`,
+              },
+              {
+                key: "error",
+                title: "错误",
+                minWidth: 220,
+                render: (_value, attempt) => (
+                  <div
+                    className="max-w-[360px] truncate text-xs text-[#667085]"
+                    title={attempt.errorMessage || ""}
+                  >
+                    {attempt.errorMessage || "-"}
+                  </div>
+                ),
+              },
+            ]}
+            dataSource={attempts}
+            rowKey="id"
+            bordered
+            size="small"
+            pagination={false}
+            emptyText="旧实例或未执行实例暂无独立 Attempt 记录"
+            scroll={{ x: 900 }}
+          />
+          {record.status === "RETRY_WAITING" ? (
+            <div className="border-t border-[#eef0f3] px-4 py-3 text-xs text-[#b54708]">
+              下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
+            </div>
+          ) : null}
+        </DetailSection>
+      ) : null}
+
       {snapshot ? (
         <DetailSection
-          title="任务配置快照"
+          title="本次执行配置"
           sectionCard={sectionCard}
           legacyClassName="rounded-lg border border-[#e6e8eb] bg-white"
         >
           <div className={sectionCard ? undefined : "p-5"}>
-            <div className="flex items-center gap-4">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-[#667085]">
+                <span>查看本次执行使用的数据源与运行参数</span>
+                <ChevronDown
+                  size={16}
+                  className="shrink-0 text-[#98a2b3] transition-transform group-open:rotate-180"
+                />
+              </summary>
+              <div className="mt-4 border-t border-[#eef0f3] pt-4">
+                <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[#344054]">
-                  {snapshot.source.dataSourceName || snapshot.source.dataSourceId}
+                  {snapshot.source.dataSourceName || "未知数据源"}
                 </div>
                 <div className="mt-1 text-xs text-[#667085]">
                   {pathText(
@@ -244,7 +273,7 @@ export function DataSyncExecutionDetailContent({
               <ArrowRight size={18} className="shrink-0 text-[#98a2b3]" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[#344054]">
-                  {snapshot.target.dataSourceName || snapshot.target.dataSourceId}
+                  {snapshot.target.dataSourceName || "未知数据源"}
                 </div>
                 <div className="mt-1 text-xs text-[#667085]">
                   {pathText(
@@ -274,17 +303,10 @@ export function DataSyncExecutionDetailContent({
                 <div>超时：{snapshot.realtimeConfig.timeoutSeconds}s</div>
               </div>
             ) : null}
+              </div>
+            </details>
           </div>
         </DetailSection>
-      ) : null}
-
-      {record.errorMessage ? (
-        <section className="rounded-lg border border-[#fecdca] bg-[#fffbfa] p-4">
-          <div className="text-sm font-medium text-[#b42318]">失败原因</div>
-          <div className="mt-2 whitespace-pre-wrap break-words text-sm text-[#667085]">
-            {record.errorMessage}
-          </div>
-        </section>
       ) : null}
     </div>
   );
