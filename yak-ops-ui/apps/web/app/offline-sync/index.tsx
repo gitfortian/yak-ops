@@ -54,8 +54,14 @@ const emptyDraft = (): CreateDraft => ({
   targetDataSourceId: "",
 });
 
-const pathText = (database?: string, schema?: string, table?: string) =>
-  [database, schema, table].filter(Boolean).join(".") || "-";
+const syncEndpointText = (dataSourceName?: string, table?: string) =>
+  [dataSourceName || "未知数据源", table].filter(Boolean).join(".") || "-";
+
+const writeModeText = (writeMode?: string) => {
+  if (writeMode === "OVERWRITE") return "覆盖";
+  if (writeMode === "UPSERT") return "更新插入";
+  return "追加";
+};
 
 export function OfflineSyncPage() {
   const navigate = useNavigate();
@@ -230,29 +236,22 @@ export function OfflineSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 400,
+      minWidth: 460,
       render: (_value, record) => {
         const source = dataSourceMap.get(record.sourceDataSourceId);
         const target = dataSourceMap.get(record.targetDataSourceId);
+        const sourceText = syncEndpointText(source?.name, record.sourceTable);
+        const targetText = syncEndpointText(target?.name, record.targetTable);
+
         return (
-          <div className="flex min-w-0 items-center gap-3 text-[13px]">
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">
-                {source?.name || "未知数据源"}
-              </div>
-              <div className="truncate text-xs text-[#667085]">
-                {pathText(record.sourceDatabase, record.sourceSchema, record.sourceTable)}
-              </div>
-            </div>
+          <div className="flex min-w-0 items-center gap-3 text-[13px] text-[#344054]">
+            <span className="min-w-0 flex-1 truncate" title={sourceText}>
+              {sourceText}
+            </span>
             <ArrowRight size={15} className="shrink-0 text-[#98a2b3]" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">
-                {target?.name || "未知数据源"}
-              </div>
-              <div className="truncate text-xs text-[#667085]">
-                {pathText(record.targetDatabase, record.targetSchema, record.targetTable)}
-              </div>
-            </div>
+            <span className="min-w-0 flex-1 truncate" title={targetText}>
+              {targetText}
+            </span>
           </div>
         );
       },
@@ -262,7 +261,9 @@ export function OfflineSyncPage() {
       title: "写入方式",
       width: 110,
       render: (_value, record) => (
-        <span className="text-xs font-medium text-[#475467]">{record.writeMode || "APPEND"}</span>
+        <span className="text-xs font-medium text-[#475467]">
+          {writeModeText(record.writeMode)}
+        </span>
       ),
     },
     {
@@ -271,17 +272,12 @@ export function OfflineSyncPage() {
       width: 190,
       render: (_value, record) =>
         record.scheduleCronExpression ? (
-          <div className="min-w-0">
-            <div className="truncate text-xs font-medium text-[#475467]">
-              Cron{record.scheduleTimeZone ? ` · ${record.scheduleTimeZone}` : ""}
-            </div>
-            <div
-              className="mt-0.5 truncate text-xs text-[#98a2b3]"
-              title={record.scheduleCronExpression}
-            >
-              {record.scheduleCronExpression}
-            </div>
-          </div>
+          <span
+            className="block truncate text-xs font-medium text-[#475467]"
+            title={record.scheduleCronExpression}
+          >
+            Cron: {record.scheduleCronExpression}
+          </span>
         ) : (
           <span className="text-xs text-[#98a2b3]">手动</span>
         ),
