@@ -59,13 +59,6 @@ const EXECUTION_STATUS_ITEMS = {
 const pathText = (database?: string, schema?: string, table?: string) =>
   [database, schema, table].filter(Boolean).join(".") || "-";
 
-const writeModeText = (writeMode?: string) => {
-  if (writeMode === "APPEND") return "追加";
-  if (writeMode === "OVERWRITE") return "覆盖";
-  if (writeMode === "UPSERT") return "更新插入";
-  return writeMode || "-";
-};
-
 function InfoItem({
   label,
   children,
@@ -266,7 +259,6 @@ export function DataSyncTaskDetailPage({
   }
 
   const totalPages = Math.max(1, Math.ceil(executionTotal / EXECUTION_PAGE_SIZE));
-  const retryPolicy = task.retryPolicy;
   const scheduleText = schedule
     ? `${schedule.cronExpression} · ${schedule.timeZone} · ${schedule.enabled ? "已开启" : "已关闭"}`
     : "仅手动";
@@ -414,20 +406,17 @@ export function DataSyncTaskDetailPage({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-6 mb-6 mt-5 space-y-4 max-md:mx-4">
               <SectionCard title="基本信息">
-                <div className="grid grid-cols-4 gap-x-6 gap-y-4 max-xl:grid-cols-2 max-md:grid-cols-1">
+                <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-lg:grid-cols-2 max-md:grid-cols-1">
                   <InfoItem label="任务状态" inline>
                     <DataSyncTaskStatusBadge status={task.status} />
                   </InfoItem>
-                  <InfoItem label={realtime ? "运行意图" : "写入方式"} inline>
-                    {realtime ? desiredStateText : writeModeText(task.writeMode)}
-                  </InfoItem>
+                  {realtime ? (
+                    <InfoItem label="运行意图" inline>
+                      {desiredStateText}
+                    </InfoItem>
+                  ) : null}
                   <InfoItem label={realtime ? "运行模式" : "调度"} inline>
                     {realtime ? "MySQL CDC · 首次全量后持续消费 Binlog" : scheduleText}
-                  </InfoItem>
-                  <InfoItem label="重试策略" inline>
-                    {retryPolicy
-                      ? `最多 ${retryPolicy.maxAttempts} 次 · Backoff ${retryPolicy.backoffSeconds}s`
-                      : "最多 1 次"}
                   </InfoItem>
                 </div>
 
@@ -466,7 +455,7 @@ export function DataSyncTaskDetailPage({
                 <Tabs value={activeTab} onValueChange={changeDetailTab}>
                   <TabsList>
                     <TabsTab value="status">执行情况</TabsTab>
-                    <TabsTab value="config">执行配置</TabsTab>
+                    <TabsTab value="config">配置快照</TabsTab>
                     <TabsTab value="log">执行日志</TabsTab>
                   </TabsList>
 
@@ -492,7 +481,7 @@ export function DataSyncTaskDetailPage({
                   <TabsPanel value="config" className="pt-3">
                     {executionLoading && !selectedExecution ? (
                       <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
-                        <Spinner size="large" label="加载执行配置" />
+                        <Spinner size="large" label="加载配置快照" />
                       </div>
                     ) : selectedExecution ? (
                       <DataSyncExecutionConfigContent
@@ -502,7 +491,7 @@ export function DataSyncTaskDetailPage({
                       />
                     ) : (
                       <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-                        选择左侧执行记录查看配置
+                        选择左侧执行记录查看配置快照
                       </div>
                     )}
                   </TabsPanel>
@@ -563,9 +552,7 @@ export function DataSyncTaskDetailPage({
               </InfoItem>
               <InfoItem label="任务版本">v{task.definitionVersion}</InfoItem>
               <InfoItem label="同步类型">{realtime ? "实时同步" : "离线同步"}</InfoItem>
-              <InfoItem label={realtime ? "运行意图" : "写入方式"}>
-                {realtime ? desiredStateText : writeModeText(task.writeMode)}
-              </InfoItem>
+              {realtime ? <InfoItem label="运行意图">{desiredStateText}</InfoItem> : null}
 
               <InfoItem label="来源数据源">
                 <div>{source?.name || "数据源加载失败"}</div>
@@ -586,11 +573,6 @@ export function DataSyncTaskDetailPage({
                 {realtime ? "MySQL CDC · 首次全量后持续消费 Binlog" : scheduleText}
               </InfoItem>
 
-              <InfoItem label="重试策略">
-                {retryPolicy
-                  ? `最多 ${retryPolicy.maxAttempts} 次 · Backoff ${retryPolicy.backoffSeconds}s`
-                  : "最多 1 次"}
-              </InfoItem>
               <InfoItem label="更新时间">{task.updateTime || task.createTime || "-"}</InfoItem>
               {task.remark ? <InfoItem label="备注">{task.remark}</InfoItem> : null}
             </div>
@@ -719,7 +701,7 @@ export function DataSyncTaskDetailPage({
               <Tabs value={activeTab} onValueChange={changeDetailTab}>
                 <TabsList>
                   <TabsTab value="status">执行情况</TabsTab>
-                  <TabsTab value="config">执行配置</TabsTab>
+                  <TabsTab value="config">配置快照</TabsTab>
                   <TabsTab value="log">执行日志</TabsTab>
                 </TabsList>
 
@@ -745,7 +727,7 @@ export function DataSyncTaskDetailPage({
                 <TabsPanel value="config" className="pt-3">
                   {executionLoading && !selectedExecution ? (
                     <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
-                      <Spinner size="large" label="加载执行配置" />
+                      <Spinner size="large" label="加载配置快照" />
                     </div>
                   ) : selectedExecution ? (
                     <DataSyncExecutionConfigContent
@@ -755,7 +737,7 @@ export function DataSyncTaskDetailPage({
                     />
                   ) : (
                     <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-                      选择左侧执行记录查看配置
+                      选择左侧执行记录查看配置快照
                     </div>
                   )}
                 </TabsPanel>
