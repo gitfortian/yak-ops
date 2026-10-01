@@ -8,7 +8,7 @@ Scope: `yak-ops-ui/apps/web/**`。
 
 ## App Domain
 
-任务定义、Task Detail 与运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或 Execution 展示组件。Task Detail 留在数据集成内，只读展示当前 Task 的 Execution / Attempt 运行事实；离线 Task Detail 使用左侧 Execution 列表与右侧详情的 master-detail 布局，右侧 PageHeader 固定，详情区域独立滚动，当前 Execution 仍通过 URL 查询参数保持可恢复。OFFLINE Task 列表允许对已上线且无活动 Execution 的任务执行一次手工运行；Editor 和 Task Detail 不承载运行/停止命令，REALTIME Start / Stop 与 Schedule Runtime 也不因此迁入数据集成页面。跨 Task 观察仍由运维中心负责。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
+任务定义、Task Detail 与运维入口分离，复用 `app/data-sync` 的共享实现，不复制离线/实时编辑器或 Execution 展示组件。Task Detail 留在数据集成内，只读展示当前 Task 的 Execution / Attempt 运行事实；离线与实时 Task Detail 统一使用左侧 Execution 列表与右侧详情的 master-detail 布局，右侧 PageHeader 固定，详情区域独立滚动，当前 Execution 仍通过 URL 查询参数保持可恢复。OFFLINE Task 列表允许对已上线且无活动 Execution 的任务执行一次手工运行；Editor 和 Task Detail 不承载运行/停止命令，REALTIME Start / Stop 与 Schedule Runtime 也不因此迁入数据集成页面。跨 Task 观察仍由运维中心负责。任务发布与执行语义见 [Data Sync Contract](../../../docs/capabilities/data-sync/README.md)；表单遵循 [Form Rules](FORM_RULES.md)。
 
 Task Detail 的信息层级优先“执行结果 → 失败原因 → 指标 → 排障细节”：主视图不直接展示内部 Execution ID；失败原因前置到执行概览；仅在存在真实重试或等待重试时展示重试记录。选中 Execution 使用 `执行情况 / 配置快照 / 执行日志` 三个 Tab；`配置快照` 必须读取该 Execution 的冻结 definitionSnapshot，而不是当前 Task 定义，并按 `数据来源 / 数据去向 / 执行策略` 分组。Source 只承载读端与 Connector Source 参数，Sink 只承载写端与 Connector Sink 参数，Execution Strategy 承载版本、Checkpoint、超时与 Retry 等运行策略；前端只基于现有 Snapshot 字段分组展示，不在本层发明新的后端配置模型。readRows / writeRows 继续遵循后端持久化指标语义。
 
