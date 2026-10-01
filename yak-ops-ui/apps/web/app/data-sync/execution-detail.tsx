@@ -97,9 +97,10 @@ export function DataSyncExecutionConfigContent({
   realtime,
   sectionCard = false,
 }: DataSyncExecutionConfigContentProps) {
+  const snapshot = record.definitionSnapshot;
   const runtimeConfig = snapshot?.runtimeConfig;
   const realtimeConfig = snapshot?.realtimeConfig;
-  const configItems = realtime
+  const configItems: Array<[string, string]> = realtime
     ? [
         ["Checkpoint 间隔", realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-"],
         ["CDC 队列", realtimeConfig?.queueCapacity?.toLocaleString() || "-"],
@@ -123,16 +124,21 @@ export function DataSyncExecutionConfigContent({
     <DetailSection
       title="运行参数"
       sectionCard={sectionCard}
-      legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
-      showLegacyTitle={false}
+      legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
     >
-      <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
-        {configItems.map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
-            <div className="text-xs text-[#98a2b3]">{label}</div>
-            <div className="mt-1 text-sm font-medium text-[#344054]">{value}</div>
+      <div className={sectionCard ? undefined : "p-5"}>
+        {snapshot ? (
+          <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+            {configItems.map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
+                <div className="text-xs text-[#98a2b3]">{label}</div>
+                <div className="mt-1 text-sm font-medium text-[#344054]">{value}</div>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div className="py-8 text-center text-sm text-[#98a2b3]">暂无执行配置</div>
+        )}
       </div>
     </DetailSection>
   );
@@ -154,7 +160,6 @@ export function DataSyncExecutionDetailContent({
   sectionCard = false,
 }: DataSyncExecutionDetailContentProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
-  const snapshot = record.definitionSnapshot;
   const readLabel = realtime ? "读取事件" : "读取";
   const writeLabel = realtime ? "写入事件" : "写入";
   const failureMessage =
@@ -282,22 +287,6 @@ export function DataSyncExecutionDetailContent({
               下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
             </div>
           ) : null}
-        </DetailSection>
-      ) : null}
-
-
-                {snapshot.realtimeConfig ? (
-                  <div className="mt-5 grid grid-cols-5 gap-3 text-xs max-xl:grid-cols-3 max-lg:grid-cols-2">
-                    <div>Checkpoint：{snapshot.realtimeConfig.checkpointIntervalSeconds}s</div>
-                    <div>CDC 队列：{snapshot.realtimeConfig.queueCapacity}</div>
-                    <div>读取批次：{snapshot.realtimeConfig.pollBatchSize}</div>
-                    <div>写入批次：{snapshot.realtimeConfig.writeBatchSize}</div>
-                    <div>超时：{snapshot.realtimeConfig.timeoutSeconds}s</div>
-                  </div>
-                ) : null}
-              </div>
-            </details>
-          </div>
         </DetailSection>
       ) : null}
     </div>
