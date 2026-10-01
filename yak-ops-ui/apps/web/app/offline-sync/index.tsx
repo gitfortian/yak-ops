@@ -16,7 +16,7 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ArrowRight, Plus } from "lucide-react";
+import { ChevronDown, Database, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -236,7 +236,7 @@ export function OfflineSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 460,
+      minWidth: 360,
       render: (_value, record) => {
         const source = dataSourceMap.get(record.sourceDataSourceId);
         const target = dataSourceMap.get(record.targetDataSourceId);
@@ -244,12 +244,20 @@ export function OfflineSyncPage() {
         const targetText = syncEndpointText(target?.name, record.targetTable);
 
         return (
-          <div className="flex min-w-0 items-center gap-3 text-[13px] text-[#344054]">
-            <span className="min-w-0 flex-1 truncate" title={sourceText}>
+          <div className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-x-2 text-[13px] text-[#344054]">
+            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
+            <span className="min-w-0 truncate" title={sourceText}>
               {sourceText}
             </span>
-            <ArrowRight size={15} className="shrink-0 text-[#98a2b3]" />
-            <span className="min-w-0 flex-1 truncate" title={targetText}>
+
+            <div className="flex h-4 flex-col items-center justify-center text-[#98a2b3]">
+              <span className="h-2 w-px bg-[#d0d5dd]" />
+              <ChevronDown size={11} className="-mt-0.5 shrink-0" strokeWidth={1.8} />
+            </div>
+            <span />
+
+            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
+            <span className="min-w-0 truncate" title={targetText}>
               {targetText}
             </span>
           </div>
