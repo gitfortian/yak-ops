@@ -100,6 +100,7 @@ export function DataSyncExecutionConfigContent({
   const snapshot = record.definitionSnapshot;
   const runtimeConfig = snapshot?.runtimeConfig;
   const realtimeConfig = snapshot?.realtimeConfig;
+  const hasConfig = realtime ? Boolean(realtimeConfig) : Boolean(runtimeConfig);
   const configItems: Array<[string, string]> = realtime
     ? [
         ["Checkpoint 间隔", realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-"],
@@ -127,7 +128,7 @@ export function DataSyncExecutionConfigContent({
       legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
     >
       <div className={sectionCard ? undefined : "p-5"}>
-        {snapshot ? (
+        {hasConfig ? (
           <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
             {configItems.map(([label, value]) => (
               <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
@@ -137,7 +138,7 @@ export function DataSyncExecutionConfigContent({
             ))}
           </div>
         ) : (
-          <div className="py-8 text-center text-sm text-[#98a2b3]">暂无执行配置</div>
+          <div className="py-8 text-center text-sm text-[#98a2b3]">暂无运行参数</div>
         )}
       </div>
     </DetailSection>
