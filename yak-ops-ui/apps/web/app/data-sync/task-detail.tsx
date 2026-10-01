@@ -412,38 +412,51 @@ export function DataSyncTaskDetailPage({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-6 mb-6 mt-5 space-y-4 max-md:mx-4">
               <SectionCard title="基本信息">
-                <div className="grid grid-cols-4 gap-x-6 gap-y-5 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+                <div className="grid grid-cols-4 gap-x-6 gap-y-4 max-xl:grid-cols-2 max-md:grid-cols-1">
                   <InfoItem label="任务状态" inline>
                     <DataSyncTaskStatusBadge status={task.status} />
                   </InfoItem>
-                  <InfoItem label="任务版本" inline>v{task.definitionVersion}</InfoItem>
-                  <InfoItem label="同步类型" inline>离线同步</InfoItem>
-                  <InfoItem label="写入方式" inline>{writeModeText(task.writeMode)}</InfoItem>
-
-                  <InfoItem label="来源数据源" inline>
-                    <div>{source?.name || task.sourceDataSourceId}</div>
-                    <div className="mt-0.5 text-xs text-[#667085]">
-                      {pathText(task.sourceDatabase, task.sourceSchema, task.sourceTable)}
-                    </div>
+                  <InfoItem label={realtime ? "运行意图" : "写入方式"} inline>
+                    {realtime ? desiredStateText : writeModeText(task.writeMode)}
                   </InfoItem>
-                  <div className="hidden items-center justify-center xl:flex">
-                    <ArrowRight size={18} className="text-[#98a2b3]" />
-                  </div>
-                  <InfoItem label="目标数据源" inline>
-                    <div>{target?.name || task.targetDataSourceId}</div>
-                    <div className="mt-0.5 text-xs text-[#667085]">
-                      {pathText(task.targetDatabase, task.targetSchema, task.targetTable)}
-                    </div>
+                  <InfoItem label={realtime ? "运行模式" : "调度"} inline>
+                    {realtime ? "MySQL CDC · 首次全量后持续消费 Binlog" : scheduleText}
                   </InfoItem>
-                  <InfoItem label="调度" inline>{scheduleText}</InfoItem>
-
                   <InfoItem label="重试策略" inline>
                     {retryPolicy
                       ? `最多 ${retryPolicy.maxAttempts} 次 · Backoff ${retryPolicy.backoffSeconds}s`
                       : "最多 1 次"}
                   </InfoItem>
-                  <InfoItem label="更新时间" inline>{task.updateTime || task.createTime || "-"}</InfoItem>
-                  {task.remark ? <InfoItem label="备注" inline>{task.remark}</InfoItem> : null}
+                </div>
+
+                <div className="mt-5 border-t border-[#eef0f3] pt-4">
+                  <div className="text-xs text-[#98a2b3]">同步链路</div>
+                  <div className="mt-3 flex items-center gap-4 max-md:flex-col max-md:items-stretch">
+                    <div className="min-w-0 flex-1 rounded-lg bg-[#fafafa] px-4 py-3">
+                      <div className="text-xs text-[#98a2b3]">来源</div>
+                      <div className="mt-1 text-sm font-medium text-[#344054]">
+                        {source?.name || "数据源加载失败"}
+                      </div>
+                      <div className="mt-1 break-all text-xs text-[#667085]">
+                        {pathText(task.sourceDatabase, task.sourceSchema, task.sourceTable)}
+                      </div>
+                    </div>
+                    <ArrowRight size={18} className="shrink-0 text-[#98a2b3] max-md:rotate-90" />
+                    <div className="min-w-0 flex-1 rounded-lg bg-[#fafafa] px-4 py-3">
+                      <div className="text-xs text-[#98a2b3]">目标</div>
+                      <div className="mt-1 text-sm font-medium text-[#344054]">
+                        {target?.name || "数据源加载失败"}
+                      </div>
+                      <div className="mt-1 break-all text-xs text-[#667085]">
+                        {pathText(task.targetDatabase, task.targetSchema, task.targetTable)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-[#eef0f3] pt-3 text-xs text-[#98a2b3]">
+                  <span>更新时间：{task.updateTime || task.createTime || "-"}</span>
+                  {task.remark ? <span className="break-words">备注：{task.remark}</span> : null}
                 </div>
               </SectionCard>
 
@@ -453,12 +466,6 @@ export function DataSyncTaskDetailPage({
                     <TabsTab value="status">执行情况</TabsTab>
                     <TabsTab value="log">执行日志</TabsTab>
                   </TabsList>
-
-                  {selectedExecution ? (
-                    <div className="mt-2 text-xs text-[#98a2b3]">
-                      Execution {selectedExecution.id}
-                    </div>
-                  ) : null}
 
                   <TabsPanel value="status" className="pt-3">
                     {executionLoading && !selectedExecution ? (
@@ -540,7 +547,7 @@ export function DataSyncTaskDetailPage({
               </InfoItem>
 
               <InfoItem label="来源数据源">
-                <div>{source?.name || task.sourceDataSourceId}</div>
+                <div>{source?.name || "数据源加载失败"}</div>
                 <div className="mt-0.5 text-xs text-[#667085]">
                   {pathText(task.sourceDatabase, task.sourceSchema, task.sourceTable)}
                 </div>
@@ -549,7 +556,7 @@ export function DataSyncTaskDetailPage({
                 <ArrowRight size={18} className="text-[#98a2b3]" />
               </div>
               <InfoItem label="目标数据源">
-                <div>{target?.name || task.targetDataSourceId}</div>
+                <div>{target?.name || "数据源加载失败"}</div>
                 <div className="mt-0.5 text-xs text-[#667085]">
                   {pathText(task.targetDatabase, task.targetSchema, task.targetTable)}
                 </div>
@@ -693,12 +700,6 @@ export function DataSyncTaskDetailPage({
                   <TabsTab value="status">执行情况</TabsTab>
                   <TabsTab value="log">执行日志</TabsTab>
                 </TabsList>
-
-                {selectedExecution ? (
-                  <div className="mt-2 text-xs text-[#98a2b3]">
-                    Execution {selectedExecution.id}
-                  </div>
-                ) : null}
 
                 <TabsPanel value="status" className="pt-3">
                   {executionLoading && !selectedExecution ? (

@@ -346,7 +346,7 @@ export function DataSyncInstanceDetailPage({
   return (
     <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
       <PageHeader
-        title={`${record.taskName} / ${record.id}`}
+        title={record.taskName}
         description={`任务版本 v${record.taskVersion} · ${dataSyncTriggerText(record.triggerType)}`}
         bordered
         className="bg-white px-6 max-md:px-4"

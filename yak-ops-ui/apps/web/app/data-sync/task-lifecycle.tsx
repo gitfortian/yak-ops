@@ -126,9 +126,7 @@ export function DataSyncTaskLifecycleActions({
             key: "run",
             label: "运行",
             className:
-              published && !activeInstance
-                ? "text-[var(--yak-color-primary)]"
-                : "text-[#667085]",
+              published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[#667085]",
             disabled: !published || Boolean(activeInstance),
             loading: actionKey === `${record.id}:run`,
             onClick: () => onRun(record),
