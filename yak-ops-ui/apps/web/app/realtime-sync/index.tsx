@@ -175,7 +175,6 @@ export function RealtimeSyncPage() {
     return () => window.clearTimeout(timer);
   }, [keyword, loadTasks]);
 
-
   useEffect(() => {
     const userIds = [
       ...new Set(
