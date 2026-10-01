@@ -490,52 +490,29 @@ export function DataSyncTaskDetailPage({
                   </TabsPanel>
 
                   <TabsPanel value="config" className="pt-3">
-
                     {executionLoading && !selectedExecution ? (
-
                       <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
-
                         <Spinner size="large" label="加载执行配置" />
-
                       </div>
-
                     ) : selectedExecution ? (
-
                       <DataSyncExecutionConfigContent
-
                         record={selectedExecution}
-
                         realtime={realtime}
-
                         sectionCard
-
                       />
-
                     ) : (
-
                       <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-
                         选择左侧执行记录查看配置
-
                       </div>
-
                     )}
-
                   </TabsPanel>
 
-
                   <TabsPanel value="log" className="pt-3">
-
                     <DataSyncExecutionLogPanel
-
                       record={selectedExecution}
-
                       active={activeTab === "log"}
-
                       sectionCard
-
                     />
-
                   </TabsPanel>
                 </Tabs>
               </section>
@@ -766,52 +743,29 @@ export function DataSyncTaskDetailPage({
                 </TabsPanel>
 
                 <TabsPanel value="config" className="pt-3">
-
                   {executionLoading && !selectedExecution ? (
-
                     <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white">
-
                       <Spinner size="large" label="加载执行配置" />
-
                     </div>
-
                   ) : selectedExecution ? (
-
                     <DataSyncExecutionConfigContent
-
                       record={selectedExecution}
-
                       realtime={realtime}
-
                       sectionCard
-
                     />
-
                   ) : (
-
                     <div className="flex min-h-56 items-center justify-center rounded-lg border border-[#e6e8eb] bg-white text-sm text-[#98a2b3]">
-
                       选择左侧执行记录查看配置
-
                     </div>
-
                   )}
-
                 </TabsPanel>
 
-
                 <TabsPanel value="log" className="pt-3">
-
                   <DataSyncExecutionLogPanel
-
                     record={selectedExecution}
-
                     active={activeTab === "log"}
-
                     sectionCard
-
                   />
-
                 </TabsPanel>
               </Tabs>
             </section>
