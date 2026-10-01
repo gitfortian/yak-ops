@@ -86,6 +86,38 @@ function DetailSection({
   );
 }
 
+type ConfigurationItem = [label: string, value: string];
+
+const endpointPathText = (database?: string, schema?: string, table?: string) =>
+  [database, schema, table].filter(Boolean).join(".") || "-";
+
+const dataSourceTypeText = (type?: string) => {
+  if (type === "MYSQL") return "MySQL";
+  if (type === "POSTGRESQL") return "PostgreSQL";
+  if (type === "ORACLE") return "Oracle";
+  return type || "-";
+};
+
+const writeModeText = (writeMode?: string) => {
+  if (writeMode === "OVERWRITE") return "覆盖";
+  if (writeMode === "UPSERT") return "更新插入";
+  if (writeMode === "APPEND") return "追加";
+  return writeMode || "-";
+};
+
+function ConfigurationGrid({ items }: { items: ConfigurationItem[] }) {
+  return (
+    <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+      {items.map(([label, value]) => (
+        <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
+          <div className="text-xs text-[#98a2b3]">{label}</div>
+          <div className="mt-1 break-words text-sm font-medium text-[#344054]">{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface DataSyncExecutionConfigContentProps {
   record: DataSyncInstanceRecord;
   realtime: boolean;
@@ -98,50 +130,103 @@ export function DataSyncExecutionConfigContent({
   sectionCard = false,
 }: DataSyncExecutionConfigContentProps) {
   const snapshot = record.definitionSnapshot;
-  const runtimeConfig = snapshot?.runtimeConfig;
-  const realtimeConfig = snapshot?.realtimeConfig;
-  const hasConfig = realtime ? Boolean(realtimeConfig) : Boolean(runtimeConfig);
-  const configItems: Array<[string, string]> = realtime
-    ? [
-        ["Checkpoint 间隔", realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-"],
-        ["CDC 队列", realtimeConfig?.queueCapacity?.toLocaleString() || "-"],
-        ["读取批次", realtimeConfig?.pollBatchSize?.toLocaleString() || "-"],
-        ["写入批次", realtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
-        ["超时", realtimeConfig ? `${realtimeConfig.timeoutSeconds}s` : "-"],
-      ]
-    : [
-        ["Fetch Size", runtimeConfig?.fetchSize?.toLocaleString() || "-"],
-        ["读取批次", runtimeConfig?.readBatchSize?.toLocaleString() || "-"],
-        ["写入批次", runtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
-        ["Source 并行度", runtimeConfig?.sourceParallelism?.toLocaleString() || "-"],
-        [
-          "Split Size",
-          runtimeConfig?.splitSize == null ? "-" : runtimeConfig.splitSize.toLocaleString(),
-        ],
-        ["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"],
-      ];
+  if (!snapshot) {
+    return (
+      <DetailSection
+        title="配置快照"
+        sectionCard={sectionCard}
+        legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
+      >
+        <div className="py-8 text-center text-sm text-[#98a2b3]">暂无配置快照</div>
+      </DetailSection>
+    );
+  }
+
+  const runtimeConfig = snapshot.runtimeConfig;
+  const realtimeConfig = snapshot.realtimeConfig;
+  const retryPolicy = snapshot.retryPolicy;
+  const sourceItems: ConfigurationItem[] = [
+    ["数据源", snapshot.source.dataSourceName || "未知数据源"],
+    ["类型", dataSourceTypeText(snapshot.source.dataSourceType)],
+    [
+      "数据表",
+      endpointPathText(snapshot.source.database, snapshot.source.schema, snapshot.source.table),
+    ],
+  ];
+  const targetItems: ConfigurationItem[] = [
+    ["数据源", snapshot.target.dataSourceName || "未知数据源"],
+    ["类型", dataSourceTypeText(snapshot.target.dataSourceType)],
+    [
+      "数据表",
+      endpointPathText(snapshot.target.database, snapshot.target.schema, snapshot.target.table),
+    ],
+  ];
+  const executionItems: ConfigurationItem[] = [
+    ["任务版本", `v${snapshot.taskVersion}`],
+    ["同步类型", realtime ? "实时同步" : "离线同步"],
+  ];
+
+  if (realtime) {
+    sourceItems.push(
+      ["CDC 队列", realtimeConfig?.queueCapacity?.toLocaleString() || "-"],
+      ["读取批次", realtimeConfig?.pollBatchSize?.toLocaleString() || "-"],
+    );
+    targetItems.push(["写入批次", realtimeConfig?.writeBatchSize?.toLocaleString() || "-"]);
+    executionItems.push(
+      [
+        "Checkpoint 间隔",
+        realtimeConfig ? `${realtimeConfig.checkpointIntervalSeconds}s` : "-",
+      ],
+      ["超时", realtimeConfig ? `${realtimeConfig.timeoutSeconds}s` : "-"],
+    );
+  } else {
+    sourceItems.push(
+      ["Fetch Size", runtimeConfig?.fetchSize?.toLocaleString() || "-"],
+      ["读取批次", runtimeConfig?.readBatchSize?.toLocaleString() || "-"],
+      ["Source 并行度", runtimeConfig?.sourceParallelism?.toLocaleString() || "-"],
+      [
+        "Split Size",
+        runtimeConfig?.splitSize == null ? "-" : runtimeConfig.splitSize.toLocaleString(),
+      ],
+    );
+    targetItems.push(
+      ["写入方式", writeModeText(snapshot.writeMode)],
+      ["写入批次", runtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
+    );
+    executionItems.push(["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"]);
+  }
+
+  executionItems.push(
+    ["最大尝试次数", (retryPolicy?.maxAttempts ?? record.maxAttempts ?? 1).toLocaleString()],
+    ["重试间隔", `${retryPolicy?.backoffSeconds ?? record.backoffSeconds ?? 0}s`],
+  );
 
   return (
-    <DetailSection
-      title="运行参数"
-      sectionCard={sectionCard}
-      legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
-    >
-      <div className={sectionCard ? undefined : "p-5"}>
-        {hasConfig ? (
-          <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
-            {configItems.map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
-                <div className="text-xs text-[#98a2b3]">{label}</div>
-                <div className="mt-1 text-sm font-medium text-[#344054]">{value}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="py-8 text-center text-sm text-[#98a2b3]">暂无运行参数</div>
-        )}
-      </div>
-    </DetailSection>
+    <div className="space-y-4">
+      <DetailSection
+        title="数据来源"
+        sectionCard={sectionCard}
+        legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
+      >
+        <ConfigurationGrid items={sourceItems} />
+      </DetailSection>
+
+      <DetailSection
+        title="数据去向"
+        sectionCard={sectionCard}
+        legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
+      >
+        <ConfigurationGrid items={targetItems} />
+      </DetailSection>
+
+      <DetailSection
+        title="执行策略"
+        sectionCard={sectionCard}
+        legacyClassName="rounded-lg border border-[#e6e8eb] bg-white p-5"
+      >
+        <ConfigurationGrid items={executionItems} />
+      </DetailSection>
+    </div>
   );
 }
 
