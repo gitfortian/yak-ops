@@ -77,33 +77,34 @@ export function DataSyncExecutionLogPanel({
     );
   }
 
-  const timeline = loading && events.length === 0 ? (
-    <div className="flex min-h-56 items-center justify-center">
-      <Spinner size="large" label="加载执行日志" />
-    </div>
-  ) : events.length === 0 ? (
-    emptyState
-  ) : (
-    <div className="max-h-[560px] overflow-y-auto">
-      {events.map((event) => (
-        <div
-          key={event.id}
-          className="grid grid-cols-[160px_72px_minmax(0,1fr)] gap-3 border-b border-[#f0f1f3] px-4 py-3 last:border-b-0 max-md:grid-cols-1 max-md:gap-1.5"
-        >
-          <span className="font-mono text-xs text-[#98a2b3]">{event.createTime || "-"}</span>
-          <div>
-            <Badge tone={levelTone(event.level)}>{event.level}</Badge>
-          </div>
-          <div className="min-w-0">
-            <div className="break-words text-[13px] leading-5 text-[#344054]">
-              {event.message}
+  const timeline =
+    loading && events.length === 0 ? (
+      <div className="flex min-h-56 items-center justify-center">
+        <Spinner size="large" label="加载执行日志" />
+      </div>
+    ) : events.length === 0 ? (
+      emptyState
+    ) : (
+      <div className="max-h-[560px] overflow-y-auto">
+        {events.map((event) => (
+          <div
+            key={event.id}
+            className="grid grid-cols-[160px_72px_minmax(0,1fr)] gap-3 border-b border-[#f0f1f3] px-4 py-3 last:border-b-0 max-md:grid-cols-1 max-md:gap-1.5"
+          >
+            <span className="font-mono text-xs text-[#98a2b3]">{event.createTime || "-"}</span>
+            <div>
+              <Badge tone={levelTone(event.level)}>{event.level}</Badge>
             </div>
-            <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">{event.eventType}</div>
+            <div className="min-w-0">
+              <div className="break-words text-[13px] leading-5 text-[#344054]">
+                {event.message}
+              </div>
+              <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">{event.eventType}</div>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+      </div>
+    );
 
   if (sectionCard) {
     return (
