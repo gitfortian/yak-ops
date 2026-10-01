@@ -27,6 +27,10 @@ Must:
 - In the REALTIME source section, show a Yak UI `Alert` that ROW Binlog and CDC account permissions are required; ordinary Datasource connection-test success does not prove CDC readiness.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Runtime start is not an editor action.
 - Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
+- Task list is a definition summary surface: show task/version, compact Source → Target, publication status, updater/update time and actions. Do not repeat the product-level `MySQL CDC` mode in every row.
+- Source / Target use the compact `Datasource Name.Table` form and the same vertical flow used by OFFLINE: Source first, lightweight downward connector, Target second. Do not repeat database/schema context in the list summary.
+- Resolve current-page `updateBy` values with one batch user lookup and render updater + update time as `更新信息`; historical `system` stays `SYSTEM`.
+- Fix the action column on the right through Yak UI Table `fixed: "right"`; do not rebuild sticky-column CSS in product code.
 - Task list keeps four stable action slots: 上线/下线、编辑、详情、删除. `详情` is always visible and opens `/realtime-sync/:taskId/detail` inside Data Integration.
 - UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除. PUBLISHED disables 编辑 / 删除; an active PENDING / RUNNING / RETRY_WAITING Execution also disables 下线 while 详情 remains available.
 - Start / Stop never execute from the Realtime Sync list, editor or Task Detail.

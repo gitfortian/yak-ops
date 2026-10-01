@@ -16,11 +16,12 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ArrowRight, Plus } from "lucide-react";
+import { ChevronDown, Database, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
+import { getUsersByIds, type UserRecord } from "@/service/user";
 import {
   deleteDataSyncTask,
   listDataSyncTasks,
@@ -57,8 +58,8 @@ const emptyDraft = (): CreateDraft => ({
   targetDataSourceId: "",
 });
 
-const pathText = (database?: string, schema?: string, table?: string) =>
-  [database, schema, table].filter(Boolean).join(".") || "-";
+const syncEndpointText = (dataSourceName?: string, table?: string) =>
+  [dataSourceName || "未知数据源", table].filter(Boolean).join(".") || "-";
 
 export function RealtimeSyncPage() {
   const navigate = useNavigate();
@@ -72,6 +73,7 @@ export function RealtimeSyncPage() {
     navigate(taskId ? `/realtime-sync/${taskId}/detail` : "/realtime-sync", { replace: true });
   }, [location.search, navigate]);
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
+  const [updateUsers, setUpdateUsers] = useState<UserRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -132,6 +134,10 @@ export function RealtimeSyncPage() {
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
     [dataSources],
   );
+  const updateUserMap = useMemo(
+    () => new Map(updateUsers.map((user) => [user.id, user] as const)),
+    [updateUsers],
+  );
 
   const loadDataSources = useCallback(async () => {
     setDataSourcesLoading(true);
@@ -168,6 +174,40 @@ export function RealtimeSyncPage() {
     const timer = window.setTimeout(() => void loadTasks(), keyword.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
   }, [keyword, loadTasks]);
+
+  useEffect(() => {
+    const userIds = [
+      ...new Set(
+        records
+          .map((record) => record.updateBy)
+          .filter((userId): userId is string => Boolean(userId && userId !== "system")),
+      ),
+    ];
+    if (userIds.length === 0) {
+      setUpdateUsers([]);
+      return;
+    }
+
+    let active = true;
+    void getUsersByIds(userIds)
+      .then((users) => {
+        if (active) setUpdateUsers(users);
+      })
+      .catch(() => {
+        if (active) setUpdateUsers([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [records]);
+
+  const updateOperatorText = (record: DataSyncTaskRecord) => {
+    if (!record.updateBy) return "-";
+    if (record.updateBy === "system") return "SYSTEM";
+    const user = updateUserMap.get(record.updateBy);
+    return user?.realName || user?.userName || "未知用户";
+  };
 
   const publishTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
@@ -221,38 +261,33 @@ export function RealtimeSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 450,
+      minWidth: 360,
       render: (_value, record) => {
         const source = dataSourceMap.get(record.sourceDataSourceId);
         const target = dataSourceMap.get(record.targetDataSourceId);
+        const sourceText = syncEndpointText(source?.name, record.sourceTable);
+        const targetText = syncEndpointText(target?.name, record.targetTable);
+
         return (
-          <div className="flex min-w-0 items-center gap-3 text-[13px]">
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">
-                {source?.name || "未知数据源"}
-              </div>
-              <div className="truncate text-xs text-[#667085]">
-                {pathText(record.sourceDatabase, record.sourceSchema, record.sourceTable)}
-              </div>
+          <div className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-x-2 text-[13px] text-[#344054]">
+            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
+            <span className="min-w-0 truncate" title={sourceText}>
+              {sourceText}
+            </span>
+
+            <div className="flex h-4 flex-col items-center justify-center text-[#98a2b3]">
+              <span className="h-2 w-px bg-[#d0d5dd]" />
+              <ChevronDown size={11} className="-mt-0.5 shrink-0" strokeWidth={1.8} />
             </div>
-            <ArrowRight size={15} className="shrink-0 text-[#98a2b3]" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-[#344054]">
-                {target?.name || "未知数据源"}
-              </div>
-              <div className="truncate text-xs text-[#667085]">
-                {pathText(record.targetDatabase, record.targetSchema, record.targetTable)}
-              </div>
-            </div>
+            <span />
+
+            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
+            <span className="min-w-0 truncate" title={targetText}>
+              {targetText}
+            </span>
           </div>
         );
       },
-    },
-    {
-      key: "mode",
-      title: "模式",
-      width: 120,
-      render: () => <span className="text-xs text-[#475467]">MySQL CDC</span>,
     },
     {
       key: "status",
@@ -262,14 +297,22 @@ export function RealtimeSyncPage() {
     },
     {
       key: "updated",
-      title: "更新时间",
-      width: 170,
-      render: (_value, record) => record.updateTime || "-",
+      title: "更新信息",
+      width: 180,
+      render: (_value, record) => (
+        <div className="min-w-0">
+          <div className="truncate text-xs font-medium text-[#475467]" title={record.updateBy}>
+            {updateOperatorText(record)}
+          </div>
+          <div className="mt-0.5 text-xs text-[#98a2b3]">{record.updateTime || "-"}</div>
+        </div>
+      ),
     },
     {
       key: "actions",
       title: "操作",
       width: 260,
+      fixed: "right",
       align: "center",
       render: (_value, record) => (
         <DataSyncTaskLifecycleActions
@@ -362,7 +405,7 @@ export function RealtimeSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1200 }}
+                scroll={{ x: 1120 }}
                 emptyText="还没有实时同步任务"
                 pagination={
                   total > 0
