@@ -24,9 +24,9 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 
 保存是 Task → 可选 OFFLINE Schedule；保存并上线是 Task → Schedule → Publish。Schedule 失败不继续 Publish，明确“任务已保存但调度失败”；Publish 失败保留已保存且未上线的任务，并返回可继续处理的编辑身份。保存不隐式启用调度，也不启动任务。
 
-新任务未配置 Cron 且没有历史 Schedule 时为手工运行；已有 Schedule 不能用清空 Cron 冒充删除。Cron / Time Zone 保存与运维中心启停分开，运行时间从后端读模型获取。
+新任务未配置 Cron 且没有历史 Schedule 时为手工运行；已有 Schedule 不能用清空 Cron 冒充删除。Cron / Time Zone 保存与任务列表启停分开，运行时间从后端读模型获取。
 
-OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户直接手输表达式；高级 Cron 仍可在 Picker 内原样保留。Time Zone 使用 Select，默认 `Asia/Shanghai`，并保留历史已有 IANA Zone 值。Picker 的“未来 5 次执行时间”只调用 Data Sync Schedule Preview API，不在前端自行计算 Quartz 触发时间。普通 Cron/Time Zone 帮助文案和 Schedule enable/disable Alert 不重复铺在定义表单；启停仍属于运维中心。
+OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户直接手输表达式；高级 Cron 仍可在 Picker 内原样保留。Time Zone 使用 Select，默认 `Asia/Shanghai`，并保留历史已有 IANA Zone 值。Picker 的“未来 5 次执行时间”只调用 Data Sync Schedule Preview API，不在前端自行计算 Quartz 触发时间。普通 Cron/Time Zone 帮助文案和 Schedule enable/disable Alert 不重复铺在定义表单；启停属于 OFFLINE Task list。
 
 ## Layout
 

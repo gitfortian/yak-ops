@@ -78,6 +78,9 @@ public class DataSyncTaskVO {
     /** OFFLINE 任务 Schedule 的显式 IANA Time Zone；未配置 Schedule 时为空。 */
     private String scheduleTimeZone;
 
+    /** OFFLINE 任务 Schedule 是否已启用；未配置 Schedule 时为空。 */
+    private Boolean scheduleEnabled;
+
     /** 任务创建时间。 */
     private LocalDateTime createTime;
 

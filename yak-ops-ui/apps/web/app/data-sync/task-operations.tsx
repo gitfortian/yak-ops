@@ -11,8 +11,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   cancelDataSyncInstance,
-  disableDataSyncSchedule,
-  enableDataSyncSchedule,
   listDataSyncOperationTasks,
   runDataSyncTask,
   type DataSyncInstanceRecord,
@@ -160,23 +158,6 @@ export function DataSyncTaskOperations({
     }
   };
 
-  const toggleSchedule = async (record: DataSyncTaskOperationRecord) => {
-    if (realtime || !record.schedule || actionKey) return;
-    setActionKey(`${record.id}:schedule`);
-    try {
-      if (record.schedule.enabled) {
-        await disableDataSyncSchedule(record.id);
-        toast.success("离线调度已关闭");
-      } else {
-        await enableDataSyncSchedule(record.id);
-        toast.success("离线调度已开启");
-      }
-      await loadTasks();
-    } finally {
-      setActionKey(undefined);
-    }
-  };
-
   const columns: TableColumns<DataSyncTaskOperationRecord> = [
     {
       key: "name",
@@ -302,14 +283,13 @@ export function DataSyncTaskOperations({
     {
       key: "actions",
       title: "操作",
-      width: 250,
+      width: 180,
       align: "center",
       render: (_value, record) => {
         const active = isActive(record.latestInstance);
         const actionLoading = active
           ? actionKey === `${record.id}:stop`
           : actionKey === `${record.id}:run`;
-        const scheduleLoading = actionKey === `${record.id}:schedule`;
         const startLabel =
           realtime && record.desiredState === "RUNNING" && !active
             ? "重新启动"
@@ -336,25 +316,6 @@ export function DataSyncTaskOperations({
             >
               {active ? "停止" : startLabel}
             </Button>
-            {!realtime && record.schedule ? (
-              <>
-                <span className="h-3 w-px bg-[#e4e7ec]" />
-                <Button
-                  variant="ghost"
-                  size="small"
-                  loading={scheduleLoading}
-                  disabled={Boolean(actionKey) && !scheduleLoading}
-                  className={
-                    record.schedule.enabled
-                      ? "px-1 text-xs font-normal text-[#d92d20]"
-                      : "px-1 text-xs font-normal text-[var(--yak-color-primary)]"
-                  }
-                  onClick={() => void toggleSchedule(record)}
-                >
-                  {record.schedule.enabled ? "关闭调度" : "开启调度"}
-                </Button>
-              </>
-            ) : null}
             <span className="h-3 w-px bg-[#e4e7ec]" />
             <Button
               variant="ghost"
@@ -397,7 +358,7 @@ export function DataSyncTaskOperations({
           loading={loading}
           bordered
           size="medium"
-          scroll={{ x: 1340 }}
+          scroll={{ x: 1270 }}
           emptyText={realtime ? "暂无已上线实时同步任务" : "暂无已上线离线同步任务"}
           pagination={
             total > 0
