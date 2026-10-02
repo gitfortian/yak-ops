@@ -662,7 +662,8 @@ export default function LoginCharacters({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      pointerPosition = event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
+      pointerPosition =
+        event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
       const rect = scene.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
 
@@ -774,11 +775,7 @@ export default function LoginCharacters({
       if (orangeEntryComplete) {
         orangeBodyPath.setAttribute(
           "d",
-          buildOrangeBodyPath(
-            orangeBodyX * freePoseWeight,
-            orangeBodyY * freePoseWeight,
-            inputMix,
-          ),
+          buildOrangeBodyPath(orangeBodyX * freePoseWeight, orangeBodyY * freePoseWeight, inputMix),
         );
         scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
       } else {
