@@ -86,6 +86,8 @@ const sizeClasses: Record<PickerSize, string> = {
   large: "text-[length:var(--yak-font-size-control-large)]",
 };
 
+const NESTED_SELECT_POSITIONER_CLASS = "!z-[70]";
+
 function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid min-h-8 grid-cols-[110px_minmax(0,1fr)] items-start gap-3">
@@ -252,7 +254,7 @@ function SingleMonthRuleEditor({
         <SelectTrigger variant="outlined" className="max-w-[220px]">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent positionerClassName={NESTED_SELECT_POSITIONER_CLASS}>
           {Object.entries(MONTH_RULE_KIND_ITEMS).map(([optionValue, label]) => (
             <SelectItem key={optionValue} value={optionValue}>
               <SelectItemText>{label}</SelectItemText>
@@ -289,7 +291,7 @@ function SingleMonthRuleEditor({
             <SelectTrigger variant="outlined" className="w-[120px]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent positionerClassName={NESTED_SELECT_POSITIONER_CLASS}>
               {(Object.entries(NTH_ITEMS) as Array<[string, string]>).map(
                 ([optionValue, label]) => (
                   <SelectItem key={optionValue} value={Number(optionValue)}>
@@ -343,7 +345,7 @@ function WeekdaySelect({
       <SelectTrigger variant="outlined" className="w-[140px]">
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent positionerClassName={NESTED_SELECT_POSITIONER_CLASS}>
         {WEEKDAY_ITEMS.map((item) => (
           <SelectItem key={item.value} value={String(item.value)}>
             <SelectItemText>{item.label}</SelectItemText>
@@ -414,7 +416,7 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
                 <SelectTrigger variant="outlined" className="max-w-[220px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent positionerClassName={NESTED_SELECT_POSITIONER_CLASS}>
                   {Object.entries(HOUR_MODE_ITEMS).map(([optionValue, label]) => (
                     <SelectItem key={optionValue} value={optionValue}>
                       <SelectItemText>{label}</SelectItemText>
@@ -608,7 +610,7 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
           <SelectTrigger variant="outlined" className="max-w-[220px]">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent positionerClassName={NESTED_SELECT_POSITIONER_CLASS}>
             {Object.entries(PERIOD_ITEMS).map(([optionValue, label]) => (
               <SelectItem key={optionValue} value={optionValue}>
                 <SelectItemText>{label}</SelectItemText>
