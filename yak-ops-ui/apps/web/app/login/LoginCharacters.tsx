@@ -207,7 +207,7 @@ function buildOrangeEntrancePath(progress: number) {
   }
 
   if (value <= 0.7) {
-    const phase = smoothstep((value - 0.54) / 0.12);
+    const phase = smoothstep((value - 0.54) / 0.16);
     const bounce = Math.sin(phase * Math.PI) * 30;
     const width = lerp(160, 220, phase);
     const height = lerp(20, 85, phase);
@@ -490,7 +490,7 @@ function OrangeCharacter() {
                     />
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M208 481Q208 479 210.5 479H250.5Q253 479 253 481C251 495 242.5 504 230.5 504C218.5 504 210 495 208 481Z"
+                      d="M208 481Q208 479 210.5 479H250.5Q253 479253 481C251 495 242.5 504 230.5 504C218.5 504 210 495 208 481Z"
                       fill="#171717"
                     />
                     <path
