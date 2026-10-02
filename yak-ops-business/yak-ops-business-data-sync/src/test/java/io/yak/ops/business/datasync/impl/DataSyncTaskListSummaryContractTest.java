@@ -53,6 +53,7 @@ class DataSyncTaskListSummaryContractTest {
         assertEquals("user-1", row.getUpdateBy());
         assertEquals("0 0 2 * * ?", row.getScheduleCronExpression());
         assertEquals("Asia/Shanghai", row.getScheduleTimeZone());
+        assertEquals(true, row.getScheduleEnabled());
     }
 
     private DataSyncTaskEntity task() {
@@ -77,6 +78,7 @@ class DataSyncTaskListSummaryContractTest {
         schedule.setTaskId("task-1");
         schedule.setCronExpression("0 0 2 * * ?");
         schedule.setTimeZone("Asia/Shanghai");
+        schedule.setEnabled(true);
         return schedule;
     }
 
