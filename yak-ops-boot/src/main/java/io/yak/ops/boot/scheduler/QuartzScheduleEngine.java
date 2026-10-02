@@ -5,10 +5,15 @@ import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import io.yak.ops.common.util.StringUtils;
 import jakarta.annotation.Resource;
+import java.text.ParseException;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.TimeZone;
+import org.quartz.CronExpression;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -97,6 +102,27 @@ public class QuartzScheduleEngine implements ScheduleEngine {
             return Optional.of(trigger.getNextFireTime().toInstant());
         } catch (SchedulerException exception) {
             throw new ScheduleEngineException("Quartz next fire time query failed: " + scheduleId, exception);
+        }
+    }
+
+    @Override
+    public List<Instant> previewNextFireTimes(String cronExpression, ZoneId timeZone, int count) {
+        if (count <= 0) throw new IllegalArgumentException("count must be greater than 0");
+        try {
+            CronExpression expression = new CronExpression(cronExpression);
+            expression.setTimeZone(TimeZone.getTimeZone(timeZone));
+
+            List<Instant> result = new ArrayList<>(count);
+            Date cursor = Date.from(Instant.now());
+            for (int index = 0; index < count; index++) {
+                Date next = expression.getNextValidTimeAfter(cursor);
+                if (next == null) break;
+                result.add(next.toInstant());
+                cursor = next;
+            }
+            return result;
+        } catch (ParseException | RuntimeException exception) {
+            throw new ScheduleEngineException("Quartz schedule preview failed", exception);
         }
     }
 
