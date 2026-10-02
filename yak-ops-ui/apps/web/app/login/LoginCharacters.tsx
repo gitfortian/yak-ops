@@ -15,6 +15,62 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+// Keep the original 60 Hz response rates, but integrate elapsed time rather than frames.
+function smoothMotion(current: number, target: number, rate: number, deltaMs: number) {
+  return current + (target - current) * (1 - Math.pow(1 - rate, deltaMs / (1000 / 60)));
+}
+
+// Exact underdamped spring step. Velocity is measured per second, not per frame.
+function stepOrangeSpring(position: number, velocity: number, target: number, deltaMs: number) {
+  const seconds = deltaMs / 1000;
+  const frequency = 9;
+  const damping = frequency * 0.82;
+  const dampedFrequency = frequency * Math.sqrt(1 - 0.82 ** 2);
+  const decay = Math.exp(-damping * seconds);
+  const cosine = Math.cos(dampedFrequency * seconds);
+  const sine = Math.sin(dampedFrequency * seconds);
+  const offset = position - target;
+
+  const drift = (velocity + damping * offset) / dampedFrequency;
+  const force = (damping * velocity + frequency ** 2 * offset) / dampedFrequency;
+
+  return {
+    position: target + decay * (offset * cosine + drift * sine),
+    velocity: decay * (velocity * cosine - force * sine),
+  };
+}
+
+function sampleMotionStops(progress: number, stops: readonly (readonly [number, number])[]) {
+  for (let index = 1; index < stops.length; index += 1) {
+    const [end, to] = stops[index];
+    const [start, from] = stops[index - 1];
+    if (progress <= end) return lerp(from, to, smoothstep((progress - start) / (end - start)));
+  }
+  return stops[stops.length - 1][1];
+}
+
+// Each edge uses the same bend, so the column keeps its width and fixed ground anchors.
+function buildBlackBodyPath(bend: number) {
+  if (bend === 0) return "M342 550V242H464V550Z";
+  return [
+    "M342 550",
+    `C342 448 ${svgPoint(342 + bend * 0.45)} 345 ${svgPoint(342 + bend)} 242`,
+    `H${svgPoint(464 + bend)}`,
+    `C${svgPoint(464 + bend * 0.45)} 345 464 448 464 550`,
+    "Z",
+  ].join(" ");
+}
+
+const BLACK_ENTRY_BEND_STOPS = [
+  [0, 0],
+  [0.26, -64],
+  [0.44, -28],
+  [0.5, 38],
+  [0.66, -16],
+  [0.82, 6],
+  [1, 0],
+] as const;
+
 function svgPoint(value: number) {
   return Number(value.toFixed(2));
 }
@@ -170,7 +226,8 @@ function buildOrangeEntrancePath(progress: number) {
   const value = clamp(progress, 0, 1);
 
   if (value <= 0.42) {
-    const phase = smoothstep(value / 0.42);
+    // Travel continuously into impact; easing to rest here makes the landing float.
+    const phase = value / 0.42;
     const centerX = quadraticBezier(92, 124, 232, phase);
     const centerY = quadraticBezier(520, 320, 520, phase);
     const width = lerp(30, 84, phase);
@@ -223,10 +280,25 @@ function buildOrangeEntrancePath(progress: number) {
     );
   }
 
-  const phase = smoothstep((value - 0.7) / 0.3);
-  const leftX = lerp(134, 65, phase);
-  const rightX = lerp(354, 415, phase);
-  const topY = lerp(465, ORANGE_BODY_TOP_Y, phase) - Math.sin(phase * Math.PI) * 7;
+  // Grow out of the rebound, overshoot once, then settle onto the PR1 resting shape.
+  const leftX = sampleMotionStops(value, [
+    [0.7, 134],
+    [0.86, 62],
+    [0.94, 66],
+    [1, 65],
+  ]);
+  const rightX = sampleMotionStops(value, [
+    [0.7, 354],
+    [0.86, 418],
+    [0.94, 414],
+    [1, 415],
+  ]);
+  const topY = sampleMotionStops(value, [
+    [0.7, 465],
+    [0.86, ORANGE_BODY_TOP_Y - 8],
+    [0.94, ORANGE_BODY_TOP_Y + 4],
+    [1, ORANGE_BODY_TOP_Y],
+  ]);
 
   return buildOrangeShapePath(leftX, rightX, 244, topY, 550, 0);
 }
@@ -324,7 +396,7 @@ function BlackCharacter() {
           <g className="yak-login-character--black__result">
             <g className="yak-login-character--black__focus">
               <g className="yak-login-character--black__body">
-                <path d="M342 550V242H464V550Z" fill="#191A20" />
+                <path data-black-body-path d="M342 550V242H464V550Z" fill="#191A20" />
                 <g className="yak-login-character--black__face">
                   <g className="yak-login-character--black__result-eyes">
                     <g className="yak-login-character--black__focus-eyes">
@@ -590,11 +662,17 @@ export default function LoginCharacters({
     const orangeEntryStartedAt = performance.now();
     let previousSceneState = sceneStateRef.current;
     let sceneStateStartedAt = orangeEntryStartedAt;
+    let previousFrameAt = orangeEntryStartedAt;
+    let entranceInterrupted = false;
 
     const purpleBodyPath = scene.querySelector<SVGPathElement>("[data-purple-body-path]");
+    const blackBodyPath = scene.querySelector<SVGPathElement>("[data-black-body-path]");
+    const blackEntry = scene.querySelector<SVGGElement>(".yak-login-character--black__entry");
+    // Use the actual CSS animation clock; do not duplicate its duration/delay in JavaScript.
+    const blackEntryAnimation = blackEntry?.getAnimations()[0];
     const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
     const yellowBodyPath = scene.querySelector<SVGPathElement>("[data-yellow-body-path]");
-    if (!purpleBodyPath || !orangeBodyPath || !yellowBodyPath) return;
+    if (!purpleBodyPath || !blackBodyPath || !orangeBodyPath || !yellowBodyPath) return;
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = scene.getBoundingClientRect();
@@ -605,13 +683,33 @@ export default function LoginCharacters({
     };
 
     const animate = (now: number) => {
-      const orangeEntryProgress = clamp(
-        (now - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS,
-        0,
-        1,
-      );
-      const orangeEntryComplete = orangeEntryProgress >= 1;
+      const elapsedMs = Math.max(0, now - previousFrameAt);
+      previousFrameAt = now;
+      // A suspended tab must not integrate seconds of old spring velocity on resume.
+      const deltaMs = elapsedMs > 250 ? 0 : Math.min(elapsedMs, 64);
+      if (elapsedMs > 250) {
+        orangeVelocityX = 0;
+        orangeVelocityY = 0;
+      }
       const activeSceneState = sceneStateRef.current;
+      if (
+        activeSceneState === "submitting" ||
+        activeSceneState === "success" ||
+        activeSceneState === "failure"
+      ) {
+        // A fast login takes priority over entrance choreography; retries must not replay it.
+        entranceInterrupted = true;
+        scene.dataset.entranceInterrupted = "true";
+      }
+      const blackEntryProgress = entranceInterrupted
+        ? 1
+        : (blackEntryAnimation?.effect?.getComputedTiming().progress ?? 1);
+      const blackBend = sampleMotionStops(blackEntryProgress, BLACK_ENTRY_BEND_STOPS);
+      blackBodyPath.setAttribute("d", buildBlackBodyPath(blackBend));
+      const orangeEntryProgress = entranceInterrupted
+        ? 1
+        : clamp((now - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS, 0, 1);
+      const orangeEntryComplete = orangeEntryProgress >= 1;
       if (activeSceneState !== previousSceneState) {
         previousSceneState = activeSceneState;
         sceneStateStartedAt = now;
@@ -630,35 +728,35 @@ export default function LoginCharacters({
       const purplePasswordBowTarget = passwordHidden
         ? getPurplePasswordBow(now - sceneStateStartedAt)
         : 0;
-      purpleX += (interactionTargetX - purpleX) * 0.075;
-      purpleY += (interactionTargetY - purpleY) * 0.075;
-      purplePasswordBow += (purplePasswordBowTarget - purplePasswordBow) * 0.1;
+      purpleX = smoothMotion(purpleX, interactionTargetX, 0.075, deltaMs);
+      purpleY = smoothMotion(purpleY, interactionTargetY, 0.075, deltaMs);
+      purplePasswordBow = smoothMotion(purplePasswordBow, purplePasswordBowTarget, 0.1, deltaMs);
 
       // Black observes while orange/purple look away; do not give every role the same pose.
       const blackTargetX = passwordShown ? 0.35 : interactionTargetX;
       const blackTargetY = passwordShown ? 0.12 : interactionTargetY;
-      blackX += (blackTargetX - blackX) * 0.042;
-      blackY += (blackTargetY - blackY) * 0.042;
+      blackX = smoothMotion(blackX, blackTargetX, 0.042, deltaMs);
+      blackY = smoothMotion(blackY, blackTargetY, 0.042, deltaMs);
 
       const orangeTargetX = orangeEntryComplete ? interactionTargetX : 0;
       const orangeTargetY = orangeEntryComplete ? interactionTargetY : 0;
 
-      orangeVelocityX += (orangeTargetX - orangeX) * 0.014;
-      orangeVelocityY += (orangeTargetY - orangeY) * 0.014;
-      orangeVelocityX *= 0.76;
-      orangeVelocityY *= 0.76;
-      orangeX += orangeVelocityX;
-      orangeY += orangeVelocityY;
-      orangeBodyX += (orangeTargetX - orangeBodyX) * 0.045;
-      orangeBodyY += (orangeTargetY - orangeBodyY) * 0.04;
+      const orangeSpringX = stepOrangeSpring(orangeX, orangeVelocityX, orangeTargetX, deltaMs);
+      const orangeSpringY = stepOrangeSpring(orangeY, orangeVelocityY, orangeTargetY, deltaMs);
+      orangeX = orangeSpringX.position;
+      orangeY = orangeSpringY.position;
+      orangeVelocityX = orangeSpringX.velocity;
+      orangeVelocityY = orangeSpringY.velocity;
+      orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
+      orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
 
-      yellowBodyX += (interactionTargetX - yellowBodyX) * 0.055;
-      yellowBodyY += (interactionTargetY - yellowBodyY) * 0.05;
-      yellowFaceX += (interactionTargetX - yellowFaceX) * 0.095;
-      yellowFaceY += (interactionTargetY - yellowFaceY) * 0.085;
+      yellowBodyX = smoothMotion(yellowBodyX, interactionTargetX, 0.055, deltaMs);
+      yellowBodyY = smoothMotion(yellowBodyY, interactionTargetY, 0.05, deltaMs);
+      yellowFaceX = smoothMotion(yellowFaceX, interactionTargetX, 0.095, deltaMs);
+      yellowFaceY = smoothMotion(yellowFaceY, interactionTargetY, 0.085, deltaMs);
 
       const orangeActivity = clamp(
-        Math.abs(orangeVelocityX) * 6 + Math.abs(orangeVelocityY) * 5,
+        Math.abs(orangeVelocityX) * 0.1 + Math.abs(orangeVelocityY) * (5 / 60),
         0,
         1,
       );
@@ -688,8 +786,9 @@ export default function LoginCharacters({
 
       scene.style.setProperty("--yak-black-lean", `${blackX * -4.5}deg`);
       scene.style.setProperty("--yak-black-stretch", String(1 - blackY * 0.018));
-      scene.style.setProperty("--yak-black-face-x", `${blackX * 5}px`);
+      scene.style.setProperty("--yak-black-face-x", `${blackX * 5 + blackBend * 0.81}px`);
       scene.style.setProperty("--yak-black-face-y", `${blackY * 2.5}px`);
+      scene.style.setProperty("--yak-black-face-rotate", `${blackBend * 0.09}deg`);
       scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2}px`);
       scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4}px`);
 
@@ -712,8 +811,13 @@ export default function LoginCharacters({
 
       scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY}px`);
-      orangeEyeScale += (orangeFacePose.eyeScale - orangeEyeScale) * 0.18;
-      orangeMouthRotate += (orangeFacePose.mouthRotate - orangeMouthRotate) * 0.16;
+      orangeEyeScale = smoothMotion(orangeEyeScale, orangeFacePose.eyeScale, 0.18, deltaMs);
+      orangeMouthRotate = smoothMotion(
+        orangeMouthRotate,
+        orangeFacePose.mouthRotate,
+        0.16,
+        deltaMs,
+      );
 
       scene.style.setProperty("--yak-orange-eye-x", `${orangeFacePose.eyeX}px`);
       scene.style.setProperty("--yak-orange-eye-y", `${orangeFacePose.eyeY}px`);
@@ -735,6 +839,7 @@ export default function LoginCharacters({
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.cancelAnimationFrame(frame);
+      delete scene.dataset.entranceInterrupted;
     };
   }, []);
 
