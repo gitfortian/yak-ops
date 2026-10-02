@@ -81,12 +81,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        run: |
-          if ! npm run format:check; then
-            file=apps/web/app/login/LoginCharacters.tsx
-            npx --no-install oxfmt --stdin-filepath "$file" < "$file" | diff -u "$file" - || true
-            exit 1
-          fi
+        run: npm run format:check
 
       - name: Frontend lint
         run: npm run lint
