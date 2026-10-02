@@ -165,6 +165,12 @@ class DataSyncOperationReadModelTest {
             public Optional<Instant> queryNextFireTime(String scheduleId) {
                 return Optional.of(Instant.parse("2026-09-30T18:00:00Z"));
             }
+
+            @Override
+            public List<Instant> previewNextFireTimes(
+                    String cronExpression, java.time.ZoneId timeZone, int count) {
+                return List.of();
+            }
         };
     }
 
