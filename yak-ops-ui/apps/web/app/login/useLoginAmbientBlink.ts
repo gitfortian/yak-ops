@@ -90,7 +90,7 @@ export function useLoginAmbientBlink(
 
     function tick(epoch: number) {
       if (epoch !== generation || disposed) return;
-      if (!canRun()) {
+      if (!scene || !canRun()) {
         stop();
         available = false;
         return;
