@@ -27,6 +27,7 @@ Base UI 是内部交互实现依赖，不是产品层 API。公共导出以 [src
 
 - Button / Spinner / 输入控件 / Combobox / 折叠控件：[基础控件](docs/controls.md)
 - Select 值与标签、弹层组合及动效：[Select](docs/select-motion.md)
+- Quartz Cron 可视化选择与高级表达式保留：[Cron Scheduler Picker](docs/cron-scheduler-picker.md)
 - Modal / Dialog / Drawer：[弹层](docs/modal.md)
 - Table / Pagination：[表格](docs/table.md)
 - PageHeader：[页面标题](docs/page-header.md)
