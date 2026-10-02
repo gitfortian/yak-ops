@@ -35,7 +35,8 @@
  * once a character has landed, grounded motion keeps the bottom edge fixed.
  * Steady-state grounded motion keeps the bottom edge fixed through anchored
  * skew/scale or direct SVG path deformation. Translation is reserved for
- * entrance choreography and the final success exit.
+ * entrance choreography, authored reference-pose offsets and the final success exit.
+ * Reference offsets keep the same y=550 ground line; pointer tracking cannot translate it.
  */
 
 .yak-login-character--purple__entry,
@@ -266,28 +267,6 @@
 
 .yak-login-characters.is-password-focus .yak-login-character--orange__focus {
   transform: skewX(-1.5deg) scaleY(1.008);
-}
-
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--purple__focus {
-  transform: none;
-}
-
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus {
-  transform: skewX(-3deg) scaleY(1.035);
-}
-
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--orange__focus {
-  transform: skewX(1.5deg) scaleY(0.972);
-}
-
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__focus-eyes,
-.yak-login-characters.is-password-focus.is-password-visible
-  .yak-login-character--yellow__focus-eyes {
-  transform: scaleX(1.08) scaleY(1.12);
-}
-
-.yak-login-characters.is-password-focus.is-password-visible .yak-login-character--black__pupil {
-  opacity: 1;
 }
 
 .yak-login-character--purple__result,
@@ -635,10 +614,111 @@
   animation: none;
 }
 
+/* Authored reveal pose: position and gaze are independent of pointer motion. */
+.yak-login-character--purple__reveal-face-pose,
+.yak-login-character--black__reveal-face-pose,
+.yak-login-character--orange__reveal-face-pose {
+  transform-box: view-box;
+  transform: translate(0, 0);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character__reveal-eyes {
+  display: none;
+}
+
+.yak-login-character__mouth--reveal {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .yak-login-characters[data-scene-state] .yak-login-character [class] {
     animation: none;
     transform: none;
     transition: none;
+  }
+}
+
+/* These are final poses, not motion: reduced motion keeps the same landmarks. */
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__breathe,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__breathe,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__breathe {
+  animation: none;
+  transform: none;
+}
+
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__body,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__body,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__face,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__face,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__face,
+.yak-login-characters.is-password-visible[data-scene-state]
+  .yak-login-character--purple__password-face-pose,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__eyes,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__eye-pose,
+.yak-login-characters.is-password-visible[data-scene-state]
+  .yak-login-character--orange__mouth-pose {
+  transform: none;
+}
+
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__focus {
+  transform-box: view-box;
+  transform-origin: 212px 550px;
+  transform: translateX(-2px) scale(1.055, 0.9777);
+}
+
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__focus {
+  transform: translateX(12px) scaleY(1.0065);
+}
+
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__focus {
+  transform-box: view-box;
+  transform-origin: 240px 550px;
+  transform: scaleY(1.0431);
+}
+
+.yak-login-characters.is-password-visible[data-scene-state]
+  .yak-login-character--purple__reveal-face-pose {
+  transform: translate(-44px, 8.5px);
+}
+
+.yak-login-characters.is-password-visible[data-scene-state]
+  .yak-login-character--black__reveal-face-pose {
+  transform: translate(-18.5px, 79px);
+}
+
+.yak-login-characters.is-password-visible[data-scene-state]
+  .yak-login-character--orange__reveal-face-pose {
+  transform-origin: 230px 473px;
+  transform: translate(-75px, -4px) rotate(4deg);
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--purple__eyes,
+.yak-login-characters.is-password-visible .yak-login-character--black__eyes {
+  visibility: hidden;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character__reveal-eyes {
+  display: inline;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--purple__mouth--idle {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character__mouth--reveal {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .yak-login-characters.is-password-visible .yak-login-character--purple__focus,
+  .yak-login-characters.is-password-visible .yak-login-character--black__focus,
+  .yak-login-characters.is-password-visible .yak-login-character--orange__focus,
+  .yak-login-characters.is-password-visible .yak-login-character--purple__body,
+  .yak-login-characters.is-password-visible .yak-login-character--black__body,
+  .yak-login-characters.is-password-visible .yak-login-character--purple__face,
+  .yak-login-characters.is-password-visible .yak-login-character--black__face,
+  .yak-login-characters.is-password-visible .yak-login-character--orange__face {
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }

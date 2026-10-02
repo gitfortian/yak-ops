@@ -5,9 +5,9 @@ import type { LoginSceneState } from "./login-interaction";
 const YELLOW_BODY_PATH =
   "M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404C590 456 590 505 590 550Z";
 const FACE_CENTER = { x: 520, y: 388 };
-const REST_POSE: YellowFacePose = { offsetX: 0, offsetY: 0, turn: 0 };
+const REST_POSE: YellowFacePose = { offsetX: 0, offsetY: 0, turn: 0, reveal: 0 };
 
-type YellowFacePose = { offsetX: number; offsetY: number; turn: number };
+type YellowFacePose = { offsetX: number; offsetY: number; turn: number; reveal: number };
 export type YellowPointer = { x: number; y: number };
 export interface YellowCharacterHandle {
   update: (pointer: YellowPointer | null, state: LoginSceneState, deltaMs: number) => void;
@@ -31,9 +31,11 @@ function toSvgPointer(svg: SVGSVGElement | null, pointer: YellowPointer | null) 
 // The neutral band works in both upper and lower half-planes, without angle wrapping.
 function resolveFaceTarget(state: LoginSceneState, pointer: YellowPointer | null): YellowFacePose {
   if (state === "userName" || state === "passwordHidden") {
-    return { offsetX: 12, offsetY: 2, turn: 1 };
+    return { offsetX: 12, offsetY: 2, turn: 1, reveal: 0 };
   }
-  if (state === "passwordVisible") return { offsetX: -12, offsetY: 4, turn: -1 };
+  if (state === "passwordVisible") {
+    return { offsetX: 0, offsetY: 0, turn: -1, reveal: 1 };
+  }
   if (state !== "idle" || !pointer) return REST_POSE;
 
   const dx = pointer.x - FACE_CENTER.x;
@@ -45,31 +47,49 @@ function resolveFaceTarget(state: LoginSceneState, pointer: YellowPointer | null
     offsetX: (dx / Math.hypot(dx, 180)) * 16,
     offsetY: (dy / Math.hypot(dy, 180)) * 22,
     turn: Math.sign(direction) * progress * progress * (3 - 2 * progress),
+    reveal: 0,
   };
 }
 
-// All three channels share a time constant. No independent eye/mouth pointer lag.
+// All channels share a time constant. No independent eye/mouth pointer lag.
 function stepFacePose(current: YellowFacePose, target: YellowFacePose, deltaMs: number) {
   const elapsed = Number.isFinite(deltaMs) ? clamp(deltaMs, 0, 64) : 0;
   const alpha = -Math.expm1(-elapsed / 125);
-  return {
+  const next = {
     offsetX: current.offsetX + (target.offsetX - current.offsetX) * alpha,
     offsetY: current.offsetY + (target.offsetY - current.offsetY) * alpha,
     turn: current.turn + (target.turn - current.turn) * alpha,
+    reveal: current.reveal + (target.reveal - current.reveal) * alpha,
   };
+  // A held reference pose has exact endpoints, including at fractional pixel scales.
+  if (
+    target.reveal === 1 &&
+    Math.max(
+      Math.abs(next.offsetX - target.offsetX),
+      Math.abs(next.offsetY - target.offsetY),
+      Math.abs(next.turn - target.turn),
+      Math.abs(next.reveal - target.reveal),
+    ) < 0.001
+  ) {
+    return target;
+  }
+  return next;
 }
 
 function faceGeometry(pose: YellowFacePose) {
   const turn = clamp(pose.turn, -1, 1);
-  const eyeX = FACE_CENTER.x - turn * 22;
-  const mouthX = FACE_CENTER.x + turn * 36;
+  const reveal = clamp(pose.reveal, 0, 1);
+  const eyeX = (FACE_CENTER.x - turn * 22) * (1 - reveal) + 510 * reveal;
+  const mouthX = (FACE_CENTER.x + turn * 36) * (1 - reveal) + 480 * reveal;
+  const halfWidth = 40 - reveal * 10;
+  const mouthY = 411 - reveal * 11;
   // Constrain the entire translation, not the eye alone, to preserve face cohesion.
   const offsetX = clamp(pose.offsetX, Math.max(-16, 480 - eyeX), Math.min(16, 560 - eyeX));
   const offsetY = clamp(pose.offsetY, -22, 22);
   return {
     transform: `translate(${offsetX.toFixed(3)} ${offsetY.toFixed(3)})`,
     eyeX: eyeX.toFixed(3),
-    mouth: `M${mouthX - 40} 411H${mouthX + 40}`,
+    mouth: `M${mouthX - halfWidth} ${mouthY}H${mouthX + halfWidth}`,
     success: `M${mouthX - 40} 407Q${mouthX} 425 ${mouthX + 40} 407`,
     failure: `M${mouthX - 40} 417Q${mouthX} 401 ${mouthX + 40} 417`,
   };

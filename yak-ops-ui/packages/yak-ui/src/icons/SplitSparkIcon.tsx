@@ -11,14 +11,8 @@ export interface SplitSparkIconProps extends SVGProps<SVGSVGElement> {
  * 分离式星芒图标。
  * 两个独立的实心路径，透明背景；颜色继承 currentColor。
  */
-export function SplitSparkIcon({
-  size = 24,
-  title,
-  ...props
-}: SplitSparkIconProps) {
-  const hasAccessibleName = Boolean(
-    title || props["aria-label"] || props["aria-labelledby"],
-  );
+export function SplitSparkIcon({ size = 24, title, ...props }: SplitSparkIconProps) {
+  const hasAccessibleName = Boolean(title || props["aria-label"] || props["aria-labelledby"]);
 
   return (
     <svg
