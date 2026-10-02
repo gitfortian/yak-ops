@@ -7,7 +7,7 @@ Scope:
 
 ## Phase 4 Boundary
 
-The offline product owns Task definition, publication configuration, Schedule definition, a manual Run shortcut on the published Task list, and Task-scoped read-only runtime detail. Operations Center remains the cross-Task observability surface; Stop and Schedule runtime controls are not moved into the Offline Sync definition pages.
+The offline product owns Task definition, publication configuration, Schedule definition, Schedule enable / disable on the Task list, a manual Run shortcut, and Task-scoped read-only runtime detail. Operations Center remains the cross-Task observability surface; Execution Stop is not moved into Offline Sync definition pages.
 
 Must:
 
@@ -39,8 +39,8 @@ Must:
 - Cron editing uses shared Yak UI `CronSchedulerPicker`: common schedules are configured visually and unsupported advanced Quartz expressions remain available in Advanced Cron mode. The picker may compose a product-owned future-fire preview, but Yak UI itself must not call Data Sync APIs.
 - Time Zone is selected rather than free-typed, defaults to `Asia/Shanghai`, and must preserve an already persisted valid zone even when it is outside the common option list. Future 5-fire preview comes from the backend Quartz preview endpoint and is never calculated in browser code.
 - Persist Schedule only after Task persistence succeeds because Schedule identity depends on `taskId`; Save & Publish must persist Task, then Schedule, then publish.
-- Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly enables it in Operations Center.
-- An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable remains an Operations Center action.
+- Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly starts it from the OFFLINE Task list.
+- An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable belongs to the OFFLINE Task list.
 - Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
 - Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`.
 - Schema Select may omit `items` when the domain value is intentionally identical to the visible label. Database is not editable in Offline Sync when Datasource already binds it.
@@ -49,12 +49,13 @@ Must:
 - Static enum Selects such as OFFLINE write mode stay simple and do not add search / refresh / footer without a real option-volume need.
 - Task list shows the persisted publication status as 已下线 / 已上线 and may filter by that status.
 - Task list is a definition summary surface: show task/version, Source → Target, Schedule definition summary, publication status, updater/update time and actions. Sink write mode is not a list-summary field; it belongs to the selected Execution's `配置快照`. Source / Target use the compact `Datasource Name.Table` form and do not repeat bound database/schema context already implied by the Datasource. Render the sync route as a compact vertical flow: Source on the first row, a lightweight downward connector in the icon column, and Target on the second row; both rows use the same neutral Datasource icon rather than database-specific branding. Runtime metrics such as Last Run / Next Run / Attempt / Retry / readRows / writeRows stay in Operations Center or Task Detail.
-- Task list Schedule summary renders only `Cron: <expression>` for scheduled tasks and `手动` when no Cron exists. Time Zone stays in editor/detail surfaces and is not repeated in the compact list summary; the list must not calculate next fire time or own Schedule enable / disable.
+- Task list Schedule summary renders `Cron: <expression>` plus the persisted enabled state (`已启动 / 未启动`) for scheduled tasks and `手动` when no Cron exists. Time Zone and next-fire stay in editor/detail or Operations observability surfaces. The Task list owns explicit Schedule `启动 / 停止`: starting requires a PUBLISHED Task; stopping does not cancel an already-created Execution.
 - Task list updater resolves current-page `updateBy` values with one batch user lookup; never issue one user request per row. Historical `system` stays SYSTEM.
 - Task list fixes the action column on the right through Yak UI Table `fixed: "right"`; product code must not rebuild sticky column CSS.
 - Task list keeps five stable action slots: 运行、上线/下线、编辑、详情、删除. `详情` is always visible and opens `/offline-sync/:taskId/detail` inside Data Integration.
 - `运行` is a manual shortcut for a PUBLISHED Task and creates a MANUAL Execution through the existing Run API. It is disabled while the Task is UNPUBLISHED or already has a PENDING / RUNNING / RETRY_WAITING Execution.
 - UNPUBLISHED Task enables 上线 / 编辑 / 详情 / 删除 while 运行 is disabled. PUBLISHED without an active Execution enables 运行 / 下线 / 详情 and disables 编辑 / 删除. An active Execution disables both 运行 and 下线 while 详情 remains available.
+- Schedule lifecycle is independent from Task publication but constrained by it: an UNPUBLISHED Task may show a saved Cron as 未启动 but cannot start it; PUBLISHED + configured Cron may start or stop Schedule from the Schedule column. Unpublishing a Task continues to disable its Schedule automatically.
 - Stop never executes from the Offline Sync list, editor or Task Detail; users inspect the created Execution from Task Detail after running.
 - Direct navigation to an editor for a PUBLISHED Task must not expose an editable form; guide the user back to the list to unpublish first.
 
