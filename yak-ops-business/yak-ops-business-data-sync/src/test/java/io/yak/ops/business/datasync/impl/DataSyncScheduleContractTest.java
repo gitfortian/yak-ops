@@ -14,6 +14,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
@@ -65,6 +66,21 @@ class DataSyncScheduleContractTest {
         assertEquals("task-1", added.get().getTaskId());
         assertEquals(1, engine.validated.get());
         assertEquals(0, engine.scheduled.get());
+    }
+
+    @Test
+    void shouldPreviewScheduleUsingRequestedTimezone() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        TestScheduleEngine engine = new TestScheduleEngine();
+        inject(service, "scheduleEngine", engine);
+
+        DataSyncSchedulePreviewVO preview = service.previewSchedule(scheduleDto());
+
+        assertEquals("0 0 2 * * ?", preview.getCronExpression());
+        assertEquals("Asia/Shanghai", preview.getTimeZone());
+        assertEquals(1, preview.getNextFireTimes().size());
+        assertEquals("2026-10-02T02:00", preview.getNextFireTimes().get(0).toString());
+        assertEquals(1, engine.previewed.get());
     }
 
     @Test
@@ -294,6 +310,7 @@ class DataSyncScheduleContractTest {
         private final AtomicInteger validated = new AtomicInteger();
         private final AtomicInteger scheduled = new AtomicInteger();
         private final AtomicInteger unscheduled = new AtomicInteger();
+        private final AtomicInteger previewed = new AtomicInteger();
         private final AtomicReference<DataSyncScheduleDefinition> lastDefinition = new AtomicReference<>();
 
         @Override
@@ -322,6 +339,12 @@ class DataSyncScheduleContractTest {
         @Override
         public Optional<Instant> queryNextFireTime(String scheduleId) {
             return Optional.empty();
+        }
+
+        @Override
+        public List<Instant> previewNextFireTimes(String cronExpression, ZoneId timeZone, int count) {
+            previewed.incrementAndGet();
+            return List.of(Instant.parse("2026-10-01T18:00:00Z"));
         }
     }
 }
