@@ -644,7 +644,8 @@
   transform: skewX(var(--yak-input-lean));
 }
 
-.yak-login-characters[data-scene-state] [data-character]
+.yak-login-characters[data-scene-state]
+  [data-character]
   .yak-login-character--purple__state-face-pose {
   transform-box: view-box;
   transform-origin: 304.5px 145px;
@@ -655,7 +656,8 @@
     skewX(calc(-1 * var(--yak-input-lean)));
 }
 
-.yak-login-characters[data-scene-state] [data-character]
+.yak-login-characters[data-scene-state]
+  [data-character]
   .yak-login-character--black__state-face-pose {
   transform-box: view-box;
   transform-origin: 403.5px 278px;
@@ -666,7 +668,8 @@
     skewX(calc(-1 * var(--yak-input-lean)));
 }
 
-.yak-login-characters[data-scene-state] [data-character]
+.yak-login-characters[data-scene-state]
+  [data-character]
   .yak-login-character--orange__state-face-pose {
   transform-box: view-box;
   transform-origin: 230px calc(460px + 13px * var(--yak-reveal-mix));
@@ -677,7 +680,8 @@
     rotate(calc(-11deg * var(--yak-input-mix) + 4deg * var(--yak-reveal-mix)));
 }
 
-.yak-login-characters[data-scene-state] [data-character]
+.yak-login-characters[data-scene-state]
+  [data-character]
   .yak-login-character--yellow__input-face-pose {
   transform-box: view-box;
   transform-origin: 520px 376px;
