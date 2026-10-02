@@ -1,7 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import "./login-characters.css";
-import type { LoginFocusState, LoginResultState } from "./login-interaction";
+import {
+  getPurplePasswordBow,
+  resolveLoginSceneState,
+  type LoginFocusState,
+  type LoginResultState,
+} from "./login-interaction";
 
 // Entrance, idle deformation and reduced motion share the same resting crown.
 const ORANGE_BODY_TOP_Y = 376;
@@ -269,11 +274,19 @@ function PurpleCharacter() {
                       </g>
                     </g>
                     <ellipse
-                      className="yak-login-character__mouth yak-login-character__mouth--default"
+                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--purple__mouth--idle"
                       cx="304.5"
                       cy="174"
                       rx="7.5"
                       ry="4.2"
+                      fill="#171717"
+                    />
+                    <ellipse
+                      className="yak-login-character__mouth yak-login-character--purple__mouth--input"
+                      cx="304.5"
+                      cy="176"
+                      rx="5.5"
+                      ry="11"
                       fill="#171717"
                     />
                     <path
@@ -511,9 +524,8 @@ export default function LoginCharacters({
   passwordVisible,
 }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
-  const focusStateRef = useRef(focusState);
-  const resultStateRef = useRef(resultState);
-  const passwordVisibleRef = useRef(passwordVisible);
+  const sceneState = resolveLoginSceneState(focusState, resultState, passwordVisible);
+  const sceneStateRef = useRef(sceneState);
   const [orangeBlinking, setOrangeBlinking] = useState(false);
 
   useLayoutEffect(() => {
@@ -527,20 +539,12 @@ export default function LoginCharacters({
     scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
   }, []);
 
-  useEffect(() => {
-    focusStateRef.current = focusState;
-  }, [focusState]);
+  useLayoutEffect(() => {
+    sceneStateRef.current = sceneState;
+  }, [sceneState]);
 
   useEffect(() => {
-    resultStateRef.current = resultState;
-  }, [resultState]);
-
-  useEffect(() => {
-    passwordVisibleRef.current = passwordVisible;
-  }, [passwordVisible]);
-
-  useEffect(() => {
-    if (focusState !== "idle" || resultState !== "idle") {
+    if (sceneState !== "idle" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setOrangeBlinking(false);
       return;
     }
@@ -557,7 +561,7 @@ export default function LoginCharacters({
       window.clearInterval(blinkTimer);
       window.clearTimeout(blinkEndTimer);
     };
-  }, [focusState, resultState]);
+  }, [sceneState]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -568,7 +572,6 @@ export default function LoginCharacters({
     let purpleX = 0;
     let purpleY = 0;
     let purplePasswordBow = 0;
-    let purplePasswordDirection = 0;
     let blackX = 0;
     let blackY = 0;
     let orangeX = 0;
@@ -585,6 +588,8 @@ export default function LoginCharacters({
     let yellowFaceY = 0;
     let frame = 0;
     const orangeEntryStartedAt = performance.now();
+    let previousSceneState = sceneStateRef.current;
+    let sceneStateStartedAt = orangeEntryStartedAt;
 
     const purpleBodyPath = scene.querySelector<SVGPathElement>("[data-purple-body-path]");
     const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
@@ -599,54 +604,41 @@ export default function LoginCharacters({
       targetY = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2), -1, 1);
     };
 
-    const animate = () => {
+    const animate = (now: number) => {
       const orangeEntryProgress = clamp(
-        (performance.now() - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS,
+        (now - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS,
         0,
         1,
       );
       const orangeEntryComplete = orangeEntryProgress >= 1;
-      const activeFocus = focusStateRef.current;
-      const activeResult = resultStateRef.current;
-      const passwordPeek = activeFocus === "userPassword" && passwordVisibleRef.current;
+      const activeSceneState = sceneStateRef.current;
+      if (activeSceneState !== previousSceneState) {
+        previousSceneState = activeSceneState;
+        sceneStateStartedAt = now;
+      }
+
+      const passwordHidden = activeSceneState === "passwordHidden";
+      const passwordShown = activeSceneState === "passwordVisible";
+      const inputFocused = activeSceneState === "userName" || passwordHidden;
       const interactionTargetX =
-        activeResult !== "idle"
-          ? 0
-          : activeFocus === "userName"
-            ? 1
-            : passwordPeek
-              ? 1.12
-              : activeFocus === "userPassword"
-                ? -0.82
-                : targetX;
+        activeSceneState === "idle" ? targetX : inputFocused ? 1 : passwordShown ? -0.82 : 0;
       const interactionTargetY =
-        activeResult !== "idle"
-          ? 0
-          : activeFocus === "userName"
-            ? 0.08
-            : passwordPeek
-              ? 0.02
-              : activeFocus === "userPassword"
-                ? 0.28
-                : targetY;
+        activeSceneState === "idle" ? targetY : inputFocused ? 0.08 : passwordShown ? 0.28 : 0;
 
-      const purplePasswordActive = activeResult === "idle" && activeFocus === "userPassword";
-      const purpleInteractionTargetX = purplePasswordActive ? 0 : interactionTargetX;
-      const purpleInteractionTargetY = purplePasswordActive ? 0 : interactionTargetY;
-      const purplePasswordBowTarget = purplePasswordActive ? 1 : 0;
-      const purplePasswordDirectionTarget = purplePasswordActive
-        ? passwordVisibleRef.current
-          ? -1
-          : 0.82
+      // The bow is an interruptible entry gesture, not the held password pose.
+      // No delayed callback can restore a stale focus/visibility state.
+      const purplePasswordBowTarget = passwordHidden
+        ? getPurplePasswordBow(now - sceneStateStartedAt)
         : 0;
-
-      purpleX += (purpleInteractionTargetX - purpleX) * 0.075;
-      purpleY += (purpleInteractionTargetY - purpleY) * 0.075;
+      purpleX += (interactionTargetX - purpleX) * 0.075;
+      purpleY += (interactionTargetY - purpleY) * 0.075;
       purplePasswordBow += (purplePasswordBowTarget - purplePasswordBow) * 0.1;
-      purplePasswordDirection += (purplePasswordDirectionTarget - purplePasswordDirection) * 0.09;
 
-      blackX += (interactionTargetX - blackX) * 0.042;
-      blackY += (interactionTargetY - blackY) * 0.042;
+      // Black observes while orange/purple look away; do not give every role the same pose.
+      const blackTargetX = passwordShown ? 0.35 : interactionTargetX;
+      const blackTargetY = passwordShown ? 0.12 : interactionTargetY;
+      blackX += (blackTargetX - blackX) * 0.042;
+      blackY += (blackTargetY - blackY) * 0.042;
 
       const orangeTargetX = orangeEntryComplete ? interactionTargetX : 0;
       const orangeTargetY = orangeEntryComplete ? interactionTargetY : 0;
@@ -671,16 +663,14 @@ export default function LoginCharacters({
         1,
       );
 
-      const purpleBowGeometry = resolvePurpleBowGeometry(
-        purplePasswordDirection,
-        purplePasswordBow,
-      );
-      const purplePointerLean = purplePasswordActive ? 0 : purpleX * -8;
-      const purplePointerStretch = purplePasswordActive ? 1 : 1 - purpleY * 0.04;
-      const purplePointerFaceX = purplePasswordActive ? 0 : purpleX * 10;
-      const purplePointerFaceY = purplePasswordActive ? 0 : purpleY * 5;
-      const purplePointerPupilX = purplePasswordActive ? 0 : purpleX * 4;
-      const purplePointerPupilY = purplePasswordActive ? 0 : purpleY * 2.5;
+      const purpleBowGeometry = resolvePurpleBowGeometry(0.82, purplePasswordBow);
+      const purpleHeldPoseWeight = 1 - purplePasswordBow;
+      const purplePointerLean = purpleX * -8 * purpleHeldPoseWeight;
+      const purplePointerStretch = 1 - purpleY * 0.04 * purpleHeldPoseWeight;
+      const purplePointerFaceX = purpleX * 10 * purpleHeldPoseWeight;
+      const purplePointerFaceY = purpleY * 5 * purpleHeldPoseWeight;
+      const purplePointerPupilX = purpleX * 4 * purpleHeldPoseWeight;
+      const purplePointerPupilY = purpleY * 2.5 * purpleHeldPoseWeight;
 
       purpleBodyPath.setAttribute("d", purpleBowGeometry.bodyPath);
       scene.style.setProperty("--yak-purple-lean", `${purplePointerLean}deg`);
@@ -717,8 +707,7 @@ export default function LoginCharacters({
         );
       }
 
-      const orangePointerPoseEnabled =
-        orangeEntryComplete && activeFocus === "idle" && activeResult === "idle";
+      const orangePointerPoseEnabled = orangeEntryComplete && activeSceneState === "idle";
       const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY, orangePointerPoseEnabled);
 
       scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX}px`);
@@ -749,33 +738,23 @@ export default function LoginCharacters({
     };
   }, []);
 
-  const focusClass =
-    resultState === "idle"
-      ? focusState === "userName"
-        ? "is-user-focus"
-        : focusState === "userPassword"
-          ? "is-password-focus"
-          : ""
-      : "";
-  const visibilityClass =
-    resultState === "idle" && focusState === "userPassword" && passwordVisible
-      ? "is-password-visible"
-      : "";
-  const resultClass =
-    resultState === "success"
-      ? "is-login-success"
-      : resultState === "failure"
-        ? "is-login-failure"
-        : "";
+  const sceneClass = {
+    idle: "",
+    userName: "is-user-focus is-input-focus",
+    passwordHidden: "is-password-focus is-input-focus",
+    passwordVisible: "is-password-focus is-password-visible",
+    submitting: "is-login-submitting",
+    failure: "is-login-failure",
+    success: "is-login-success",
+  }[sceneState];
   const orangeExpressionClass =
-    focusState === "idle" && resultState === "idle" && orangeBlinking
-      ? "is-orange-blink"
-      : "is-orange-happy";
+    sceneState === "idle" && orangeBlinking ? "is-orange-blink" : "is-orange-happy";
 
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${focusClass} ${visibilityClass} ${resultClass} ${orangeExpressionClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
+      className={`yak-login-characters ${sceneClass} ${orangeExpressionClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
+      data-scene-state={sceneState}
       aria-hidden="true"
     >
       {/* The SVG bottom is the shared ground; height also limits scale on short screens. */}

@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
 } from "@yak-ops/yak-ui";
 import { AlertCircle } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
@@ -32,9 +32,19 @@ interface LoginValues {
   userPassword: string;
 }
 
-function waitForMotion(duration: number) {
+function waitForMotion(duration: number, signal: AbortSignal) {
+  if (signal.aborted || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return Promise.resolve();
+  }
+
   return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, duration);
+    const finish = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, duration);
+    signal.addEventListener("abort", finish, { once: true });
   });
 }
 
@@ -117,9 +127,19 @@ export default function LoginPanel({
   });
   const [errors, setErrors] = useState<Partial<Record<keyof LoginValues, string>>>({});
   const [loading, setLoading] = useState(false);
+  const submissionRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Invalidate UI continuations; this does not cancel the authentication request.
+      submissionRef.current?.abort();
+      submissionRef.current = null;
+    };
+  }, []);
 
   const handleAccountLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submissionRef.current) return;
 
     const nextErrors: Partial<Record<keyof LoginValues, string>> = {};
     if (!values.userName.trim()) nextErrors.userName = "请输入用户名";
@@ -127,20 +147,24 @@ export default function LoginPanel({
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const submission = new AbortController();
+    submissionRef.current = submission;
     let loginSucceeded = false;
 
     try {
       setLoading(true);
-      onLoginResultChange("idle");
+      onLoginResultChange("submitting");
 
       await login({
         userName: values.userName.trim(),
         pw: values.userPassword,
       });
 
+      if (submission.signal.aborted) return;
       loginSucceeded = true;
       onLoginResultChange("success");
-      await waitForMotion(LOGIN_SUCCESS_MOTION_MS);
+      await waitForMotion(LOGIN_SUCCESS_MOTION_MS, submission.signal);
+      if (submission.signal.aborted) return;
       await onAuthenticated();
 
       notifyOnce("login-success", {
@@ -151,21 +175,31 @@ export default function LoginPanel({
         duration: 2,
       });
     } catch {
+      if (submission.signal.aborted) return;
       if (!loginSucceeded) {
         onLoginResultChange("failure");
-        await waitForMotion(LOGIN_FAILURE_MOTION_MS);
+        await waitForMotion(LOGIN_FAILURE_MOTION_MS, submission.signal);
+        if (submission.signal.aborted) return;
         onLoginResultChange("idle");
       } else {
         onLoginResultChange("idle");
       }
       // Global request handling surfaces HTTP, business and network failures once.
     } finally {
-      setLoading(false);
+      if (submissionRef.current === submission) {
+        submissionRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
   return (
-    <form className="space-y-5" noValidate onSubmit={(event) => void handleAccountLogin(event)}>
+    <form
+      className="space-y-5"
+      noValidate
+      aria-busy={loading}
+      onSubmit={(event) => void handleAccountLogin(event)}
+    >
       <div>
         <label
           htmlFor="login-username"
@@ -179,6 +213,7 @@ export default function LoginPanel({
           variant="outlined"
           autoComplete="username"
           placeholder="请输入用户名"
+          readOnly={loading}
           value={values.userName}
           aria-invalid={Boolean(errors.userName) || undefined}
           aria-describedby={errors.userName ? "login-username-error" : undefined}
@@ -196,7 +231,12 @@ export default function LoginPanel({
         ) : null}
       </div>
 
-      <div>
+      <div
+        onFocus={() => onFocusStateChange("userPassword")}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) onFocusStateChange("idle");
+        }}
+      >
         <label
           htmlFor="login-password"
           className="mb-2 block text-[13px] font-medium leading-5 text-[#344054]"
@@ -212,11 +252,10 @@ export default function LoginPanel({
           showPasswordLabel="显示密码"
           hidePasswordLabel="隐藏密码"
           onVisibilityChange={onPasswordVisibilityChange}
+          readOnly={loading}
           value={values.userPassword}
           aria-invalid={Boolean(errors.userPassword) || undefined}
           aria-describedby={errors.userPassword ? "login-password-error" : undefined}
-          onFocus={() => onFocusStateChange("userPassword")}
-          onBlur={() => onFocusStateChange("idle")}
           onChange={(event) => {
             setValues((current) => ({ ...current, userPassword: event.target.value }));
             if (errors.userPassword) {
