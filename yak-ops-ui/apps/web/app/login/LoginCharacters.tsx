@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import YellowCharacter, {
-  type YellowCharacterHandle,
-  type YellowPointer,
-} from "./YellowCharacter";
+import YellowCharacter, { type YellowCharacterHandle, type YellowPointer } from "./YellowCharacter";
 import "./login-characters.css";
 import {
   getPurplePasswordBow,
