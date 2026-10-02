@@ -168,6 +168,7 @@ jobs:
 
       - name: Build frontend distribution
         if: steps.changes.outputs.required == 'true'
+        working-directory: yak-ops-ui
         run: npm run build
 
       - name: Build Yak Ops distribution
