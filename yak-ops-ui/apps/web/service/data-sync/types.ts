@@ -93,6 +93,12 @@ export interface DataSyncScheduleSavePayload {
   timeZone: string;
 }
 
+export interface DataSyncSchedulePreview {
+  cronExpression: string;
+  timeZone: string;
+  nextFireTimes: string[];
+}
+
 export interface DataSyncTaskOperationRecord {
   id: string;
   name: string;
