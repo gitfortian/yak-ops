@@ -1256,6 +1256,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (schedule != null) {
             target.setScheduleCronExpression(schedule.getCronExpression());
             target.setScheduleTimeZone(schedule.getTimeZone());
+            target.setScheduleEnabled(Boolean.TRUE.equals(schedule.getEnabled()));
         }
         return target;
     }
