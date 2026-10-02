@@ -81,7 +81,12 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        run: npm run format:check
+        run: |
+          if ! npm run format:check; then
+            file=apps/web/app/login/LoginCharacters.tsx
+            npx --no-install oxfmt --stdin-filepath "$file" < "$file" | diff -u "$file" - || true
+            exit 1
+          fi
 
       - name: Frontend lint
         run: npm run lint
@@ -168,7 +173,6 @@ jobs:
 
       - name: Build frontend distribution
         if: steps.changes.outputs.required == 'true'
-        working-directory: yak-ops-ui
         run: npm run build
 
       - name: Build Yak Ops distribution
