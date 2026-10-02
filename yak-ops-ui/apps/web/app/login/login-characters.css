@@ -1,4 +1,7 @@
 .yak-login-characters {
+  --yak-input-mix: 0;
+  --yak-reveal-mix: 0;
+  --yak-input-lean: calc(-10deg * var(--yak-input-mix));
   --yak-purple-entry-duration: 1.16s;
   --yak-purple-entry-delay: 30ms;
   --yak-purple-lean: 0deg;
@@ -7,9 +10,6 @@
   --yak-purple-face-y: 0px;
   --yak-purple-pupil-x: 0px;
   --yak-purple-pupil-y: 0px;
-  --yak-purple-password-face-x: 0px;
-  --yak-purple-password-face-y: 0px;
-  --yak-purple-password-face-rotate: 0deg;
   --yak-black-lean: 0deg;
   --yak-black-stretch: 1;
   --yak-black-face-x: 0px;
@@ -55,7 +55,6 @@
 .yak-login-character--purple__breathe,
 .yak-login-character--purple__body,
 .yak-login-character--purple__face,
-.yak-login-character--purple__password-face-pose,
 .yak-login-character--purple__pupil,
 .yak-login-character--black__breathe,
 .yak-login-character--black__body,
@@ -89,7 +88,6 @@
 }
 
 .yak-login-character--purple__face,
-.yak-login-character--purple__password-face-pose,
 .yak-login-character--purple__focus-eyes,
 .yak-login-character--purple__eyes,
 .yak-login-character--purple__pupil,
@@ -130,11 +128,6 @@
   animation: yak-purple-face-enter var(--yak-purple-entry-duration) linear
     var(--yak-purple-entry-delay) both;
   transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
-}
-
-.yak-login-character--purple__password-face-pose {
-  transform: translate(var(--yak-purple-password-face-x), var(--yak-purple-password-face-y))
-    rotate(var(--yak-purple-password-face-rotate));
 }
 
 .yak-login-character--purple__pupil {
@@ -222,16 +215,6 @@
   opacity: 1;
 }
 
-.yak-login-characters.is-password-focus .yak-login-character--orange__focus-eyes {
-  transform: none;
-}
-
-.yak-login-character--purple__focus,
-.yak-login-character--black__focus,
-.yak-login-character--orange__focus {
-  transition: transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
 .yak-login-character--purple__focus-eyes,
 .yak-login-character--black__focus-eyes,
 .yak-login-character--orange__focus-eyes,
@@ -243,30 +226,6 @@
 .yak-login-character--purple__pupil,
 .yak-login-character--black__pupil {
   transition: opacity 160ms ease;
-}
-
-.yak-login-characters.is-user-focus .yak-login-character--purple__focus {
-  transform: skewX(-2.5deg) scaleY(1.025);
-}
-
-.yak-login-characters.is-user-focus .yak-login-character--black__focus {
-  transform: skewX(-1.75deg) scaleY(1.016);
-}
-
-.yak-login-characters.is-user-focus .yak-login-character--orange__focus {
-  transform: skewX(-1.5deg) scaleY(1.008);
-}
-
-.yak-login-characters.is-password-focus .yak-login-character--purple__focus {
-  transform: none;
-}
-
-.yak-login-characters.is-password-focus .yak-login-character--black__focus {
-  transform: skewX(-1.75deg) scaleY(1.016);
-}
-
-.yak-login-characters.is-password-focus .yak-login-character--orange__focus {
-  transform: skewX(-1.5deg) scaleY(1.008);
 }
 
 .yak-login-character--purple__result,
@@ -614,15 +573,7 @@
   animation: none;
 }
 
-/* Authored reveal pose: position and gaze are independent of pointer motion. */
-.yak-login-character--purple__reveal-face-pose,
-.yak-login-character--black__reveal-face-pose,
-.yak-login-character--orange__reveal-face-pose {
-  transform-box: view-box;
-  transform: translate(0, 0);
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
+.yak-login-character__input-eyes,
 .yak-login-character__reveal-eyes {
   display: none;
 }
@@ -647,52 +598,6 @@
   transform: none;
 }
 
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__body,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__body,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__face,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__face,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__face,
-.yak-login-characters.is-password-visible[data-scene-state]
-  .yak-login-character--purple__password-face-pose,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__eyes,
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__eye-pose,
-.yak-login-characters.is-password-visible[data-scene-state]
-  .yak-login-character--orange__mouth-pose {
-  transform: none;
-}
-
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__focus {
-  transform-box: view-box;
-  transform-origin: 212px 550px;
-  transform: translateX(-2px) scale(1.055, 0.9777);
-}
-
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__focus {
-  transform: translateX(12px) scaleY(1.0065);
-}
-
-.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__focus {
-  transform-box: view-box;
-  transform-origin: 240px 550px;
-  transform: scaleY(1.0431);
-}
-
-.yak-login-characters.is-password-visible[data-scene-state]
-  .yak-login-character--purple__reveal-face-pose {
-  transform: translate(-44px, 8.5px);
-}
-
-.yak-login-characters.is-password-visible[data-scene-state]
-  .yak-login-character--black__reveal-face-pose {
-  transform: translate(-18.5px, 79px);
-}
-
-.yak-login-characters.is-password-visible[data-scene-state]
-  .yak-login-character--orange__reveal-face-pose {
-  transform-origin: 230px 473px;
-  transform: translate(-75px, -4px) rotate(4deg);
-}
-
 .yak-login-characters.is-password-visible .yak-login-character--purple__eyes,
 .yak-login-characters.is-password-visible .yak-login-character--black__eyes {
   visibility: hidden;
@@ -710,15 +615,91 @@
   opacity: 1;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .yak-login-characters.is-password-visible .yak-login-character--purple__focus,
-  .yak-login-characters.is-password-visible .yak-login-character--black__focus,
-  .yak-login-characters.is-password-visible .yak-login-character--orange__focus,
-  .yak-login-characters.is-password-visible .yak-login-character--purple__body,
-  .yak-login-characters.is-password-visible .yak-login-character--black__body,
-  .yak-login-characters.is-password-visible .yak-login-character--purple__face,
-  .yak-login-characters.is-password-visible .yak-login-character--black__face,
-  .yak-login-characters.is-password-visible .yak-login-character--orange__face {
-    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
+/* One scene-owned progress drives the three grounded skews and face counter-skews.
+ * These rules follow reduced-motion: geometry is retained, only interpolation is skipped.
+ */
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--purple__focus {
+  transform-box: view-box;
+  transform-origin: 212px 550px;
+  transform: translateX(calc(-2px * var(--yak-reveal-mix))) skewX(var(--yak-input-lean))
+    scale(calc(1 + 0.055 * var(--yak-reveal-mix)), calc(1 - 0.0223 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--black__focus {
+  transform-box: view-box;
+  transform-origin: 403px 550px;
+  transform: translateX(calc(12px * var(--yak-reveal-mix))) skewX(var(--yak-input-lean))
+    scaleY(calc(1 + 0.0065 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--orange__focus {
+  transform-box: view-box;
+  transform-origin: 240px 550px;
+  transform: scaleY(calc(1 + 0.0431 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--yellow__focus {
+  transform-box: view-box;
+  transform-origin: 520px 550px;
+  transform: skewX(var(--yak-input-lean));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--purple__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 304.5px 145px;
+  transform: translate(
+      calc(42px * var(--yak-input-mix) - 44px * var(--yak-reveal-mix)),
+      calc(-15px * var(--yak-input-mix) + 8.5px * var(--yak-reveal-mix))
+    )
+    skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--black__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 403.5px 278px;
+  transform: translate(
+      calc(45px * var(--yak-input-mix) - 18.5px * var(--yak-reveal-mix)),
+      calc(-16px * var(--yak-input-mix) + 79px * var(--yak-reveal-mix))
+    )
+    skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--orange__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 230px calc(460px + 13px * var(--yak-reveal-mix));
+  transform: translate(
+      calc(104px * var(--yak-input-mix) - 75px * var(--yak-reveal-mix)),
+      calc(-5px * var(--yak-input-mix) - 4px * var(--yak-reveal-mix))
+    )
+    rotate(calc(-11deg * var(--yak-input-mix) + 4deg * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--yellow__input-face-pose {
+  transform-box: view-box;
+  transform-origin: 520px 376px;
+  transform: translateY(calc(-16px * var(--yak-input-mix))) skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--purple__breathe,
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--black__breathe,
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--orange__breathe {
+  animation: none;
+  transform: none;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--purple__eyes,
+.yak-login-characters.is-input-focus .yak-login-character--black__eyes {
+  visibility: hidden;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character__input-eyes {
+  display: inline;
 }
