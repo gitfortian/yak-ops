@@ -58,6 +58,7 @@ export interface DataSyncTaskRecord {
   updateBy?: string;
   scheduleCronExpression?: string;
   scheduleTimeZone?: string;
+  scheduleEnabled?: boolean;
   createTime?: string;
   updateTime?: string;
 }
