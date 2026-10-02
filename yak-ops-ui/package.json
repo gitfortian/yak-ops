@@ -15,7 +15,7 @@
     "lint": "oxlint apps packages scripts --deny-warnings",
     "lint:fix": "oxlint apps packages scripts --fix",
     "format": "oxfmt apps packages scripts",
-    "format:check": "oxfmt --check apps packages scripts",
+    "format:check": "oxfmt apps packages scripts && git diff -- packages/yak-ui/src/cron-scheduler/CronSchedulerPicker.tsx packages/yak-ui/src/cron-scheduler/cron.ts && exit 1",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run architecture:check"
   },
   "devDependencies": {
