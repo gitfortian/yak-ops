@@ -19,10 +19,7 @@
   --yak-black-pupil-y: 0px;
   --yak-orange-face-x: 0px;
   --yak-orange-face-y: 0px;
-  --yak-orange-eye-x: 0px;
-  --yak-orange-eye-y: 0px;
-  --yak-orange-eye-scale: 1;
-  --yak-orange-mouth-rotate: 0deg;
+  --yak-orange-face-rotate: 0deg;
   --yak-orange-entry-face-opacity: 0;
 }
 
@@ -64,7 +61,6 @@
 .yak-login-character--orange__body,
 .yak-login-character--orange__face,
 .yak-login-character--orange__eyes,
-.yak-login-character--orange__eye-pose,
 .yak-login-character--orange__mouth-pose,
 .yak-login-character--yellow__face {
   transform-box: fill-box;
@@ -97,7 +93,6 @@
 .yak-login-character--black__pupil,
 .yak-login-character--orange__face,
 .yak-login-character--orange__eyes,
-.yak-login-character--orange__eye-pose,
 .yak-login-character--orange__mouth-pose,
 .yak-login-character--yellow__face {
   transform-origin: center;
@@ -151,29 +146,16 @@
   transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
 }
 
-.yak-login-character--orange__breathe {
-  animation: yak-orange-breathe 4.8s ease-in-out 1.15s infinite;
-}
-
 .yak-login-character--orange__body {
   transform: none;
 }
 
 .yak-login-character--orange__face {
   opacity: var(--yak-orange-entry-face-opacity);
-  transform: translate(var(--yak-orange-face-x), var(--yak-orange-face-y));
-}
-
-.yak-login-character--orange__eyes {
-  transform: translate(var(--yak-orange-eye-x), var(--yak-orange-eye-y));
-}
-
-.yak-login-character--orange__eye-pose {
-  transform: scale(var(--yak-orange-eye-scale));
-}
-
-.yak-login-character--orange__mouth-pose {
-  transform: rotate(var(--yak-orange-mouth-rotate));
+  transform-box: view-box;
+  transform-origin: 230px 460px;
+  transform: translate(var(--yak-orange-face-x), var(--yak-orange-face-y))
+    rotate(var(--yak-orange-face-rotate));
 }
 
 .yak-login-character--orange__eyes-open,
@@ -188,12 +170,10 @@
   opacity: 0;
 }
 
-.yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-open,
 .yak-login-characters.is-password-visible .yak-login-character--orange__eyes-open {
   opacity: 0;
 }
 
-.yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-blink,
 .yak-login-characters.is-password-visible .yak-login-character--orange__eyes-blink {
   opacity: 1;
 }
@@ -551,18 +531,26 @@
   }
 }
 
-@keyframes yak-orange-breathe {
+/* Ordinary blink compresses each eye around its own center, never the eye spacing.
+ * Password reveal keeps its separately authored closed-eye arcs.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-open circle {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: yak-orange-pointer-blink 180ms ease-in-out;
+  }
+}
+
+@keyframes yak-orange-pointer-blink {
   0%,
   100% {
     transform: scaleY(1);
   }
 
-  42% {
-    transform: scaleY(0.992);
-  }
-
-  68% {
-    transform: scaleY(1.014);
+  40%,
+  55% {
+    transform: scaleY(0.1);
   }
 }
 
