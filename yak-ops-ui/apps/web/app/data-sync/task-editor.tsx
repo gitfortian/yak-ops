@@ -588,6 +588,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
   const [scheduleExists, setScheduleExists] = useState(false);
 
+  const timeZoneItems = useMemo(
+    () =>
+      scheduleForm.timeZone && !COMMON_TIME_ZONE_ITEMS[scheduleForm.timeZone]
+        ? { ...COMMON_TIME_ZONE_ITEMS, [scheduleForm.timeZone]: scheduleForm.timeZone }
+        : COMMON_TIME_ZONE_ITEMS,
+    [scheduleForm.timeZone],
+  );
+
   const sourceCatalog = useCatalogOptions(
     form.sourceDataSourceId,
     form.sourceDatabase,
@@ -1199,43 +1207,45 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           {!realtime ? (
             <CollapseSection id="schedule" title="调度配置">
               <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
-                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
-                  <FieldLabel className="pt-1.5">Cron 表达式</FieldLabel>
-                  <div className="space-y-1">
-                    <Input
-                      size="small"
-                      variant="outlined"
-                      maxLength={128}
-                      value={scheduleForm.cronExpression}
-                      placeholder="例如 0 0 2 * * ?"
-                      onChange={(event) => patchSchedule("cronExpression", event.target.value)}
-                    />
-                    <div className="px-1 text-xs text-[#98a2b3]">
-                      {scheduleExists
-                        ? "已创建调度，Cron 不能为空；如需停止调度，请在运维中心关闭。"
-                        : "留空则不创建调度，任务仅支持手动运行。"}
-                    </div>
-                  </div>
+                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
+                  <FieldLabel required={scheduleRequired}>Cron 表达式</FieldLabel>
+                  <CronSchedulerPicker
+                    value={scheduleForm.cronExpression}
+                    allowClear={!scheduleExists}
+                    placeholder="点击配置 Cron"
+                    onValueChange={(value) => patchSchedule("cronExpression", value)}
+                    renderPanelExtra={(draftCronExpression) => (
+                      <ScheduleFireTimePreview
+                        cronExpression={draftCronExpression}
+                        timeZone={scheduleForm.timeZone}
+                      />
+                    )}
+                  />
                 </Field>
-                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
-                  <FieldLabel required={scheduleRequired} className="pt-1.5">
-                    时区
-                  </FieldLabel>
-                  <div className="space-y-1">
-                    <Input
-                      size="small"
-                      variant="outlined"
-                      maxLength={64}
-                      value={scheduleForm.timeZone}
-                      placeholder="Asia/Shanghai"
-                      onChange={(event) => patchSchedule("timeZone", event.target.value)}
-                    />
-                    <div className="px-1 text-xs text-[#98a2b3]">
-                      使用 IANA Time Zone，避免依赖浏览器或服务器默认时区。
-                    </div>
-                  </div>
+
+                <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
+                  <FieldLabel required={scheduleRequired}>时区</FieldLabel>
+                  <Select
+                    size="small"
+                    items={timeZoneItems}
+                    value={scheduleForm.timeZone}
+                    onValueChange={(value) =>
+                      patchSchedule("timeZone", String(value || "Asia/Shanghai"))
+                    }
+                  >
+                    <SelectTrigger variant="outlined">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(timeZoneItems).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          <SelectItemText>{label}</SelectItemText>
+                          <SelectItemIndicator />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
-                <Alert>这里只配置调度规则；任务上线后请在运维中心开启或关闭调度。</Alert>
               </div>
             </CollapseSection>
           ) : null}
