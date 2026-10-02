@@ -3,6 +3,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "./login-characters.css";
 import type { LoginFocusState, LoginResultState } from "./login-interaction";
 
+// Entrance, idle deformation and reduced motion share the same resting crown.
+const ORANGE_BODY_TOP_Y = 376;
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -105,15 +108,16 @@ function buildOrangeBodyPath(x: number, y: number, activity: number) {
   const motionLift = motion * 8;
   const sideLift = Math.abs(horizontal) * 5;
   const crownX = 244 + horizontal * 18;
-  const crownY = 392 - pointerLift - motionLift - sideLift;
+  const crownY = ORANGE_BODY_TOP_Y - pointerLift - motionLift - sideLift;
+  const sideY = svgPoint(ORANGE_BODY_TOP_Y + (550 - ORANGE_BODY_TOP_Y) * 0.42);
   const leftLift = Math.max(-horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
   const rightLift = Math.max(horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
 
   return [
     "M65 550",
-    `C65 458 ${svgPoint(142 + horizontal * 6)} ${svgPoint(392 - leftLift)}`,
+    `C65 ${sideY} ${svgPoint(142 + horizontal * 6)} ${svgPoint(ORANGE_BODY_TOP_Y - leftLift)}`,
     `${svgPoint(crownX)} ${svgPoint(crownY)}`,
-    `C${svgPoint(346 + horizontal * 6)} ${svgPoint(392 - rightLift)} 415 458 415 550`,
+    `C${svgPoint(346.05 + horizontal * 6)} ${svgPoint(ORANGE_BODY_TOP_Y - rightLift)} 415 ${sideY} 415 550`,
     "Z",
   ].join(" ");
 }
@@ -217,7 +221,7 @@ function buildOrangeEntrancePath(progress: number) {
   const phase = smoothstep((value - 0.7) / 0.3);
   const leftX = lerp(134, 65, phase);
   const rightX = lerp(354, 415, phase);
-  const topY = lerp(465, 392, phase) - Math.sin(phase * Math.PI) * 7;
+  const topY = lerp(465, ORANGE_BODY_TOP_Y, phase) - Math.sin(phase * Math.PI) * 7;
 
   return buildOrangeShapePath(leftX, rightX, 244, topY, 550, 0);
 }
@@ -427,19 +431,19 @@ function OrangeCharacter() {
                       <g className="yak-login-character--orange__eyes">
                         <g className="yak-login-character--orange__eye-pose">
                           <g className="yak-login-character--orange__eyes-open">
-                            <circle cx="190" cy="462" r="6.9" fill="#171717" />
-                            <circle cx="270" cy="462" r="6.9" fill="#171717" />
+                            <circle cx="190" cy="460" r="8" fill="#171717" />
+                            <circle cx="270" cy="460" r="8" fill="#171717" />
                           </g>
                           <g className="yak-login-character--orange__eyes-blink">
                             <path
-                              d="M181 463Q190 454 199 463"
+                              d="M181 461Q190 452 199 461"
                               fill="none"
                               stroke="#171717"
                               strokeWidth="4"
                               strokeLinecap="round"
                             />
                             <path
-                              d="M261 463Q270 454 279 463"
+                              d="M261 461Q270 452 279 461"
                               fill="none"
                               stroke="#171717"
                               strokeWidth="4"
@@ -453,19 +457,19 @@ function OrangeCharacter() {
                   <g className="yak-login-character--orange__mouth-pose">
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                      d="M213 491Q213 489 215 489H246Q248 489 248 491C246.8 501.5 240 508 230.5 508C221 508 214.2 501.5 213 491Z"
+                      d="M213 484Q213 482 215 482H246Q248 482 248 484C246.8 492.5 240 497 230.5 497C221 497 214.2 492.5 213 484Z"
                       fill="#171717"
                     />
                     <circle
                       className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--input"
                       cx="231"
-                      cy="496"
+                      cy="490"
                       r="6"
                       fill="#171717"
                     />
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--password"
-                      d="M214 494Q231 504 248 494"
+                      d="M214 488Q231 498 248 488"
                       fill="none"
                       stroke="#171717"
                       strokeWidth="4"
@@ -473,12 +477,12 @@ function OrangeCharacter() {
                     />
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M208 487Q208 485 210.5 485H250.5Q253 485 253 487C251 504 242.5 513 230.5 513C218.5 513 210 504 208 487Z"
+                      d="M208 481Q208 479 210.5 479H250.5Q253 479 253 481C251 495 242.5 504 230.5 504C218.5 504 210 495 208 481Z"
                       fill="#171717"
                     />
                     <path
                       className="yak-login-character__mouth yak-login-character__mouth--failure"
-                      d="M208 507Q230.5 486 253 507"
+                      d="M208 501Q230.5 480 253 501"
                       fill="none"
                       stroke="#171717"
                       strokeWidth="4"
@@ -771,12 +775,13 @@ export default function LoginCharacters({
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${focusClass} ${visibilityClass} ${resultClass} ${orangeExpressionClass} flex min-h-screen items-end justify-center overflow-hidden bg-[#efedf2]`}
+      className={`yak-login-characters ${focusClass} ${visibilityClass} ${resultClass} ${orangeExpressionClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
       aria-hidden="true"
     >
+      {/* The SVG bottom is the shared ground; height also limits scale on short screens. */}
       <svg
-        className="yak-login-characters__svg h-auto w-[min(88%,820px)]"
-        viewBox="0 0 720 580"
+        className="yak-login-characters__svg absolute bottom-[23%] left-1/2 block h-auto w-[min(88%,820px,92svh)] -translate-x-1/2"
+        viewBox="0 0 720 550"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
