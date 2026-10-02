@@ -407,7 +407,9 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
                 value={config.hourMode}
                 items={HOUR_MODE_ITEMS}
                 disabled={disabled}
-                onValueChange={(next) => patch({ hourMode: String(next || "range") as CronHourMode })}
+                onValueChange={(next) =>
+                  patch({ hourMode: String(next || "range") as CronHourMode })
+                }
               >
                 <SelectTrigger variant="outlined" className="max-w-[220px]">
                   <SelectValue />
@@ -463,7 +465,9 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
                         disabled={disabled}
                         onClick={() => {
                           const specifiedHours = toggleNumber(config.specifiedHours, hour);
-                          patch({ specifiedHours: specifiedHours.length ? specifiedHours : [hour] });
+                          patch({
+                            specifiedHours: specifiedHours.length ? specifiedHours : [hour],
+                          });
                         }}
                       >
                         {String(hour).padStart(2, "0")}
@@ -510,7 +514,10 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
                     active={config.weekdays.includes(item.value)}
                     disabled={disabled}
                     onClick={() => {
-                      const weekdays = toggleNumber(config.weekdays, item.value) as CronQuartzWeekday[];
+                      const weekdays = toggleNumber(
+                        config.weekdays,
+                        item.value,
+                      ) as CronQuartzWeekday[];
                       patch({ weekdays: weekdays.length ? weekdays : [item.value] });
                     }}
                   >
@@ -596,9 +603,7 @@ function VisualEditor({ config, disabled, onChange }: VisualEditorProps) {
           value={config.period}
           items={PERIOD_ITEMS}
           disabled={disabled}
-          onValueChange={(next) =>
-            patch({ period: String(next || "day") as CronSchedulePeriod })
-          }
+          onValueChange={(next) => patch({ period: String(next || "day") as CronSchedulePeriod })}
         >
           <SelectTrigger variant="outlined" className="max-w-[220px]">
             <SelectValue />
@@ -793,9 +798,7 @@ export function CronSchedulerPicker({
 
         <div className="border-t border-[var(--yak-components-control-border)] bg-white px-5 py-3">
           <div className="mb-3 flex min-w-0 items-center gap-2 rounded-[var(--yak-radius-control-small)] bg-[var(--yak-components-input-bg)] px-3 py-2">
-            <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">
-              Cron
-            </span>
+            <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">Cron</span>
             <code className="min-w-0 flex-1 break-all font-mono text-xs text-[var(--yak-components-input-text)]">
               {draftCron || "-"}
             </code>
