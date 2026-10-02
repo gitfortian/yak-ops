@@ -621,21 +621,9 @@ export default function LoginCharacters({
       const passwordShown = activeSceneState === "passwordVisible";
       const inputFocused = activeSceneState === "userName" || passwordHidden;
       const interactionTargetX =
-        activeSceneState === "idle"
-          ? targetX
-          : inputFocused
-            ? 1
-            : passwordShown
-              ? -0.82
-              : 0;
+        activeSceneState === "idle" ? targetX : inputFocused ? 1 : passwordShown ? -0.82 : 0;
       const interactionTargetY =
-        activeSceneState === "idle"
-          ? targetY
-          : inputFocused
-            ? 0.08
-            : passwordShown
-              ? 0.28
-              : 0;
+        activeSceneState === "idle" ? targetY : inputFocused ? 0.08 : passwordShown ? 0.28 : 0;
 
       // The bow is an interruptible entry gesture, not the held password pose.
       // No delayed callback can restore a stale focus/visibility state.
