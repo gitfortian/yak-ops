@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   CollapseSection,
+  CronSchedulerPicker,
   Field,
   FieldLabel,
   Input,
@@ -36,6 +37,7 @@ import {
   getDataSyncSchedule,
   getDataSyncTask,
   previewDataSyncMapping,
+  previewDataSyncSchedule,
   publishDataSyncTask,
   saveDataSyncSchedule,
   updateDataSyncTask,
@@ -105,6 +107,95 @@ const EMPTY_SCHEDULE: ScheduleForm = {
   cronExpression: "",
   timeZone: "Asia/Shanghai",
 };
+
+const COMMON_TIME_ZONE_ITEMS: Record<string, string> = {
+  "Asia/Shanghai": "Asia/Shanghai",
+  "Asia/Hong_Kong": "Asia/Hong_Kong",
+  "Asia/Taipei": "Asia/Taipei",
+  "Asia/Tokyo": "Asia/Tokyo",
+  "Asia/Seoul": "Asia/Seoul",
+  "Asia/Singapore": "Asia/Singapore",
+  UTC: "UTC",
+  "Europe/London": "Europe/London",
+  "America/New_York": "America/New_York",
+  "America/Los_Angeles": "America/Los_Angeles",
+};
+
+function formatFireTime(value: string) {
+  return value.replace("T", " ").replace(/\.\d+$/, "");
+}
+
+function ScheduleFireTimePreview({
+  cronExpression,
+  timeZone,
+}: {
+  cronExpression: string;
+  timeZone: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [times, setTimes] = useState<string[]>([]);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const cron = cronExpression.trim();
+    const zone = timeZone.trim();
+    if (!cron || !zone) {
+      setLoading(false);
+      setTimes([]);
+      setError(false);
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(false);
+      void previewDataSyncSchedule({ cronExpression: cron, timeZone: zone })
+        .then((result) => {
+          if (!active) return;
+          setTimes(result.nextFireTimes || []);
+        })
+        .catch(() => {
+          if (!active) return;
+          setTimes([]);
+          setError(true);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [cronExpression, timeZone]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-[#344054]">未来 5 次执行时间</div>
+        <div className="text-[11px] text-[#98a2b3]">{timeZone}</div>
+      </div>
+
+      {loading ? (
+        <div className="mt-2 text-xs text-[#98a2b3]">正在计算...</div>
+      ) : error ? (
+        <div className="mt-2 text-xs text-[#d92d20]">当前 Cron 或时区无法预览</div>
+      ) : times.length > 0 ? (
+        <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1.5 max-sm:grid-cols-1">
+          {times.map((time, index) => (
+            <div key={time} className="font-mono text-xs text-[#667085]">
+              {index + 1}. {formatFireTime(time)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-[#98a2b3]">暂无未来触发时间</div>
+      )}
+    </div>
+  );
+}
 
 const EMPTY_FORM: EditorForm = {
   name: "",
