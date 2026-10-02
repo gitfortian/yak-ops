@@ -14,6 +14,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -103,6 +104,12 @@ public class DataSyncController {
     @PostMapping("/tasks/{id}/run")
     public Result<DataSyncInstanceVO> runTask(@PathVariable("id") String id) {
         return Result.success(dataSyncService.runTask(id));
+    }
+
+    @Operation(summary = "预览离线同步调度未来触发时间")
+    @PostMapping("/schedules/preview")
+    public Result<DataSyncSchedulePreviewVO> previewSchedule(@Valid @RequestBody DataSyncScheduleDTO dto) {
+        return Result.success(dataSyncService.previewSchedule(dto));
     }
 
     @Operation(summary = "保存离线同步任务调度")
