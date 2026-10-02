@@ -21,6 +21,7 @@ The component owns only Cron editing interaction. It does not call APIs, calcula
 - Clear emits an empty string when `allowClear` is enabled.
 - `renderPanelExtra(draftCronExpression)` is the composition slot for product-owned preview or supporting content. It receives the current uncommitted draft and must not be used by Yak UI to perform network requests.
 - The popup uses Yak UI controls and Base UI lifecycle only; it must not depend on Ant Design or product services.
+- Selects rendered inside the Cron popup must raise their portaled positioner above the Cron Popover surface. Keep this override local to Cron Scheduler Picker; do not raise the global Select z-index.
 - Future-fire preview belongs to the consuming product because it must use the product scheduler's real timezone and runtime semantics.
 
 ## Visual Subset
