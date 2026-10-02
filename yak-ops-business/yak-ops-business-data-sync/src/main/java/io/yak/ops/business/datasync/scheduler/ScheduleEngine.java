@@ -1,6 +1,8 @@
 package io.yak.ops.business.datasync.scheduler;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,4 +24,6 @@ public interface ScheduleEngine {
     void unschedule(String scheduleId);
 
     Optional<Instant> queryNextFireTime(String scheduleId);
+
+    List<Instant> previewNextFireTimes(String cronExpression, ZoneId timeZone, int count);
 }
