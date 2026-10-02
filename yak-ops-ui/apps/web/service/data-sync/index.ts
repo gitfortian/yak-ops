@@ -11,6 +11,7 @@ import type {
   DataSyncMappingPreviewPayload,
   DataSyncOperationsDashboard,
   DataSyncOperationsDashboardPayload,
+  DataSyncSchedulePreview,
   DataSyncScheduleRecord,
   DataSyncScheduleSavePayload,
   DataSyncTaskOperationPageResult,
@@ -120,6 +121,15 @@ export const saveDataSyncSchedule = (
   HttpUtils.putData<DataSyncScheduleRecord>(
     `${DATA_SYNC_API_PREFIX}/tasks/${id}/schedule`,
     payload,
+  );
+
+export const previewDataSyncSchedule = (
+  payload: DataSyncScheduleSavePayload,
+): Promise<DataSyncSchedulePreview> =>
+  HttpUtils.postData<DataSyncSchedulePreview>(
+    `${DATA_SYNC_API_PREFIX}/schedules/preview`,
+    payload,
+    { skipErrorHandler: true },
   );
 
 export const enableDataSyncSchedule = (id: string): Promise<DataSyncScheduleRecord> =>
