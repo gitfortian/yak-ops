@@ -68,9 +68,9 @@ DB 提交与 Quartz 注册不是原子事务。commit 后注册 / 移除失败�
 
 ## UI Ownership
 
-OFFLINE 编辑器保存定义；运维中心负责 Enable / Disable 和运行态观察。编辑器使用 Yak UI Cron Scheduler Picker 生成/保留 Quartz Cron，Time Zone 使用选择控件并默认 Asia/Shanghai；Picker 内的未来 5 次时间通过后端 Preview API 获取。保存顺序为 Task → Schedule，Save & Publish 为 Task → Schedule → Publish。跨 HTTP 调用不是一个原子事务，部分失败不能展示整体成功。
+OFFLINE 编辑器保存 Schedule 定义；OFFLINE Task list 负责显式 Enable / Disable；运维中心只负责跨 Task 运行态观察。编辑器使用 Yak UI Cron Scheduler Picker 生成/保留 Quartz Cron，Time Zone 使用选择控件并默认 Asia/Shanghai；Picker 内的未来 5 次时间通过后端 Preview API 获取。保存顺序为 Task → Schedule，Save & Publish 为 Task → Schedule → Publish。保存/上线不隐式启动 Schedule，用户从 Task list 明确启动。跨 HTTP 调用不是一个原子事务，部分失败不能展示整体成功。
 
-从未创建 Schedule 且编辑器 Cron 留空时维持手动运行；保存 Schedule 不等于启用。具体控件与页面布局由前端 owner 维护，不在此复制。
+从未创建 Schedule 且编辑器 Cron 留空时维持手动运行；保存 Schedule 不等于启用。Task 下线继续自动 disable Schedule；重新上线不会自动恢复 enable，需要在 Task list 再次显式启动。具体控件与页面布局由前端 owner 维护，不在此复制。
 
 ## Persistence
 
