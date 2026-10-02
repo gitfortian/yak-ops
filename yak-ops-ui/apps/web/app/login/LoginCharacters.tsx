@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import YellowCharacter, {
+  type YellowCharacterHandle,
+  type YellowPointer,
+} from "./YellowCharacter";
 import "./login-characters.css";
 import {
   getPurplePasswordBow,
@@ -135,29 +139,6 @@ function resolvePurpleBowGeometry(direction: number, bow: number) {
     faceY: (leftTopY + rightTopY) / 2 - 102,
     faceRotate,
   };
-}
-
-function buildYellowBodyPath(x: number, y: number) {
-  const bend = clamp(x, -1, 1) * 30;
-  const vertical = clamp(y, -1, 1);
-
-  const topY = 318 + vertical * 10;
-  const shoulderY = 352 + vertical * 5;
-  const rightShoulderY = 349 + vertical * 6;
-  const rightSideY = 404 + vertical * 3;
-
-  return [
-    "M450 550",
-    "V407",
-    `C${svgPoint(450 + bend * 0.08)} ${svgPoint(shoulderY)}`,
-    `${svgPoint(481 + bend * 0.55)} ${svgPoint(topY)}`,
-    `${svgPoint(524 + bend)} ${svgPoint(topY)}`,
-    `C${svgPoint(565 + bend)} ${svgPoint(topY)}`,
-    `${svgPoint(590 + bend * 0.65)} ${svgPoint(rightShoulderY)}`,
-    `${svgPoint(590 + bend * 0.3)} ${svgPoint(rightSideY)}`,
-    `C${svgPoint(590 + bend * 0.12)} 456 590 505 590 550`,
-    "Z",
-  ].join(" ");
 }
 
 function buildOrangeBodyPath(x: number, y: number, activity: number) {
@@ -446,61 +427,6 @@ function BlackCharacter() {
   );
 }
 
-function YellowCharacter() {
-  return (
-    <g data-character="yellow" className="yak-login-character yak-login-character--yellow">
-      <g className="yak-login-character--yellow__entry">
-        <g className="yak-login-character--yellow__breathe">
-          <g className="yak-login-character--yellow__result">
-            <g className="yak-login-character--yellow__focus">
-              <g className="yak-login-character--yellow__body">
-                <path
-                  data-yellow-body-path
-                  d="M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404C590 456 590 505 590 550Z"
-                  fill="#F3D30B"
-                />
-                <g className="yak-login-character--yellow__face">
-                  <g className="yak-login-character--yellow__result-eyes">
-                    <g className="yak-login-character--yellow__focus-eyes">
-                      <g className="yak-login-character--yellow__eyes">
-                        <circle cx="532" cy="376" r="5.4" fill="#171717" />
-                      </g>
-                    </g>
-                  </g>
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d="M563 411H625"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d="M562 406Q592 424 625 408"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d="M562 417Q592 401 625 416"
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                </g>
-              </g>
-            </g>
-          </g>
-        </g>
-      </g>
-    </g>
-  );
-}
-
 function OrangeCharacter() {
   return (
     <g data-character="orange" className="yak-login-character yak-login-character--orange">
@@ -596,6 +522,7 @@ export default function LoginCharacters({
   passwordVisible,
 }: LoginCharactersProps) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
+  const yellowRef = useRef<YellowCharacterHandle | null>(null);
   const sceneState = resolveLoginSceneState(focusState, resultState, passwordVisible);
   const sceneStateRef = useRef(sceneState);
   const [orangeBlinking, setOrangeBlinking] = useState(false);
@@ -654,10 +581,7 @@ export default function LoginCharacters({
     let orangeBodyY = 0;
     let orangeEyeScale = 1;
     let orangeMouthRotate = 0;
-    let yellowBodyX = 0;
-    let yellowBodyY = 0;
-    let yellowFaceX = 0;
-    let yellowFaceY = 0;
+    let yellowPointer: YellowPointer | null = null;
     let frame = 0;
     const orangeEntryStartedAt = performance.now();
     let previousSceneState = sceneStateRef.current;
@@ -671,10 +595,20 @@ export default function LoginCharacters({
     // Use the actual CSS animation clock; do not duplicate its duration/delay in JavaScript.
     const blackEntryAnimation = blackEntry?.getAnimations()[0];
     const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
-    const yellowBodyPath = scene.querySelector<SVGPathElement>("[data-yellow-body-path]");
-    if (!purpleBodyPath || !blackBodyPath || !orangeBodyPath || !yellowBodyPath) return;
+    if (!purpleBodyPath || !blackBodyPath || !orangeBodyPath) return;
+
+    const clearYellowPointer = () => {
+      yellowPointer = null;
+    };
+    const handlePointerOut = (event: PointerEvent) => {
+      if (!event.relatedTarget) clearYellowPointer();
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) clearYellowPointer();
+    };
 
     const handlePointerMove = (event: PointerEvent) => {
+      yellowPointer = event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
       const rect = scene.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
 
@@ -750,11 +684,6 @@ export default function LoginCharacters({
       orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
       orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
 
-      yellowBodyX = smoothMotion(yellowBodyX, interactionTargetX, 0.055, deltaMs);
-      yellowBodyY = smoothMotion(yellowBodyY, interactionTargetY, 0.05, deltaMs);
-      yellowFaceX = smoothMotion(yellowFaceX, interactionTargetX, 0.095, deltaMs);
-      yellowFaceY = smoothMotion(yellowFaceY, interactionTargetY, 0.085, deltaMs);
-
       const orangeActivity = clamp(
         Math.abs(orangeVelocityX) * 0.1 + Math.abs(orangeVelocityY) * (5 / 60),
         0,
@@ -824,20 +753,22 @@ export default function LoginCharacters({
       scene.style.setProperty("--yak-orange-eye-scale", String(orangeEyeScale));
       scene.style.setProperty("--yak-orange-mouth-rotate", `${orangeMouthRotate}deg`);
 
-      yellowBodyPath.setAttribute("d", buildYellowBodyPath(yellowBodyX, yellowBodyY));
-      scene.style.setProperty("--yak-yellow-face-x", `${yellowFaceX * 10}px`);
-      scene.style.setProperty("--yak-yellow-face-y", `${yellowFaceY * 4}px`);
-      scene.style.setProperty("--yak-yellow-eye-x", `${yellowFaceX * 4}px`);
-      scene.style.setProperty("--yak-yellow-eye-y", `${yellowFaceY * 2}px`);
+      yellowRef.current?.update(yellowPointer, activeSceneState, deltaMs);
 
       frame = window.requestAnimationFrame(animate);
     };
 
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerout", handlePointerOut);
+    window.addEventListener("blur", clearYellowPointer);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     frame = window.requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerout", handlePointerOut);
+      window.removeEventListener("blur", clearYellowPointer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.cancelAnimationFrame(frame);
       delete scene.dataset.entranceInterrupted;
     };
@@ -871,7 +802,7 @@ export default function LoginCharacters({
       >
         <PurpleCharacter />
         <BlackCharacter />
-        <YellowCharacter />
+        <YellowCharacter ref={yellowRef} sceneState={sceneState} />
         <OrangeCharacter />
       </svg>
     </div>
