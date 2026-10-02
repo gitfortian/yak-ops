@@ -219,7 +219,6 @@ export function OfflineSyncPage() {
     }
   };
 
-
   const enableSchedule = async (record: DataSyncTaskRecord) => {
     if (actionKey || !record.scheduleCronExpression || !isPublishedTask(record)) return;
     setActionKey(`${record.id}:schedule-enable`);
@@ -311,16 +310,12 @@ export function OfflineSyncPage() {
               Cron: {record.scheduleCronExpression}
             </div>
             <div className="mt-1 flex items-center gap-1.5">
-              <Badge tone={enabled ? "success" : "neutral"}>
-                {enabled ? "已启动" : "未启动"}
-              </Badge>
+              <Badge tone={enabled ? "success" : "neutral"}>{enabled ? "已启动" : "未启动"}</Badge>
               <Button
                 variant="ghost"
                 size="small"
                 loading={scheduleLoading}
-                disabled={
-                  (Boolean(actionKey) && !scheduleLoading) || (!enabled && !published)
-                }
+                disabled={(Boolean(actionKey) && !scheduleLoading) || (!enabled && !published)}
                 className={
                   enabled
                     ? "px-1 text-xs font-normal text-[#d92d20]"
