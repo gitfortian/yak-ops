@@ -23,13 +23,27 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         />
       </section>
 
-      <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-14">
+      <section
+        aria-labelledby="login-title"
+        className="flex min-h-screen min-w-0 items-center justify-center bg-white px-6 py-10 sm:px-10 lg:px-14"
+      >
         <div className="w-full max-w-[380px]">
           <div className="mb-8 text-center">
-            <h1 className="m-0 text-[32px] font-bold leading-[1.15] tracking-[-0.025em] text-[#0f172a]">
-              Welcome back!
+            <img
+              src="/logo.png"
+              alt="Yak Ops"
+              draggable={false}
+              className="mx-auto mb-6 h-8 w-auto max-w-full select-none object-contain"
+            />
+            <h1
+              id="login-title"
+              className="m-0 text-balance text-[28px] font-bold leading-tight tracking-tight text-[var(--yak-components-page-header-title)]"
+            >
+              欢迎回到 Yak Ops
             </h1>
-            <p className="mt-2.5 text-[14px] text-[#64748b]">Please enter your details</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--yak-components-button-ghost-text)]">
+              登录后，开始管理你的数据任务。
+            </p>
           </div>
 
           <LoginPanel
