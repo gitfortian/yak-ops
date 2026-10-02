@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 
 import YellowCharacter, { type YellowCharacterHandle, type YellowPointer } from "./YellowCharacter";
 import "./login-characters.css";
@@ -7,6 +7,7 @@ import {
   type LoginFocusState,
   type LoginResultState,
 } from "./login-interaction";
+import { useLoginAmbientBlink } from "./useLoginAmbientBlink";
 
 // Entrance, idle deformation and reduced motion share the same resting crown.
 const ORANGE_BODY_TOP_Y = 376;
@@ -550,7 +551,7 @@ export default function LoginCharacters({
   const yellowRef = useRef<YellowCharacterHandle | null>(null);
   const sceneState = resolveLoginSceneState(focusState, resultState, passwordVisible);
   const sceneStateRef = useRef(sceneState);
-  const [orangeBlinking, setOrangeBlinking] = useState(false);
+  useLoginAmbientBlink(sceneRef, sceneState);
 
   useLayoutEffect(() => {
     const scene = sceneRef.current;
@@ -591,31 +592,6 @@ export default function LoginCharacters({
     applyReducedScenePose();
     media.addEventListener("change", applyReducedScenePose);
     return () => media.removeEventListener("change", applyReducedScenePose);
-  }, [sceneState]);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let blinkTimer = 0;
-    let blinkEndTimer = 0;
-    const resetBlink = () => {
-      window.clearInterval(blinkTimer);
-      window.clearTimeout(blinkEndTimer);
-      setOrangeBlinking(false);
-      if (sceneState !== "idle" || media.matches || document.hidden) return;
-      blinkTimer = window.setInterval(() => {
-        setOrangeBlinking(true);
-        blinkEndTimer = window.setTimeout(() => setOrangeBlinking(false), 180);
-      }, 4600);
-    };
-    resetBlink();
-    media.addEventListener("change", resetBlink);
-    document.addEventListener("visibilitychange", resetBlink);
-    return () => {
-      window.clearInterval(blinkTimer);
-      window.clearTimeout(blinkEndTimer);
-      media.removeEventListener("change", resetBlink);
-      document.removeEventListener("visibilitychange", resetBlink);
-    };
   }, [sceneState]);
 
   useEffect(() => {
@@ -823,13 +799,11 @@ export default function LoginCharacters({
     failure: "is-login-failure",
     success: "is-login-success",
   }[sceneState];
-  const orangeExpressionClass =
-    sceneState === "idle" && orangeBlinking ? "is-orange-blink" : "is-orange-happy";
 
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${sceneClass} ${orangeExpressionClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
+      className={`yak-login-characters ${sceneClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
       data-scene-state={sceneState}
       aria-hidden="true"
     >

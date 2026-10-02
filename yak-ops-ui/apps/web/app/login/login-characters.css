@@ -531,29 +531,6 @@
   }
 }
 
-/* Ordinary blink compresses each eye around its own center, never the eye spacing.
- * Password reveal keeps its separately authored closed-eye arcs.
- */
-@media (prefers-reduced-motion: no-preference) {
-  .yak-login-characters.is-orange-blink .yak-login-character--orange__eyes-open circle {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: yak-orange-pointer-blink 180ms ease-in-out;
-  }
-}
-
-@keyframes yak-orange-pointer-blink {
-  0%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  40%,
-  55% {
-    transform: scaleY(0.1);
-  }
-}
-
 .yak-login-characters[data-entrance-interrupted] .yak-login-character--purple__entry,
 .yak-login-characters[data-entrance-interrupted] .yak-login-character--black__entry,
 .yak-login-characters[data-entrance-interrupted] .yak-login-character--yellow__entry,
