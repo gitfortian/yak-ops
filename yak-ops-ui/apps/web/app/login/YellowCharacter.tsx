@@ -10,7 +10,12 @@ const REST_POSE: YellowFacePose = { offsetX: 0, offsetY: 0, turn: 0, reveal: 0 }
 type YellowFacePose = { offsetX: number; offsetY: number; turn: number; reveal: number };
 export type YellowPointer = { x: number; y: number };
 export interface YellowCharacterHandle {
-  update: (pointer: YellowPointer | null, state: LoginSceneState, deltaMs: number) => void;
+  update: (
+    pointer: YellowPointer | null,
+    state: LoginSceneState,
+    deltaMs: number,
+    inputMix: number,
+  ) => void;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -30,9 +35,6 @@ function toSvgPointer(svg: SVGSVGElement | null, pointer: YellowPointer | null) 
 // turn is a left/right pose coordinate, not a rotation of the whole face.
 // The neutral band works in both upper and lower half-planes, without angle wrapping.
 function resolveFaceTarget(state: LoginSceneState, pointer: YellowPointer | null): YellowFacePose {
-  if (state === "userName" || state === "passwordHidden") {
-    return { offsetX: 12, offsetY: 2, turn: 1, reveal: 0 };
-  }
   if (state === "passwordVisible") {
     return { offsetX: 0, offsetY: 0, turn: -1, reveal: 1 };
   }
@@ -52,7 +54,12 @@ function resolveFaceTarget(state: LoginSceneState, pointer: YellowPointer | null
 }
 
 // All channels share a time constant. No independent eye/mouth pointer lag.
-function stepFacePose(current: YellowFacePose, target: YellowFacePose, deltaMs: number) {
+function stepFacePose(
+  current: YellowFacePose,
+  target: YellowFacePose,
+  deltaMs: number,
+  settleInput = false,
+) {
   const elapsed = Number.isFinite(deltaMs) ? clamp(deltaMs, 0, 64) : 0;
   const alpha = -Math.expm1(-elapsed / 125);
   const next = {
@@ -63,7 +70,7 @@ function stepFacePose(current: YellowFacePose, target: YellowFacePose, deltaMs: 
   };
   // A held reference pose has exact endpoints, including at fractional pixel scales.
   if (
-    target.reveal === 1 &&
+    (target.reveal === 1 || settleInput) &&
     Math.max(
       Math.abs(next.offsetX - target.offsetX),
       Math.abs(next.offsetY - target.offsetY),
@@ -76,16 +83,23 @@ function stepFacePose(current: YellowFacePose, target: YellowFacePose, deltaMs: 
   return next;
 }
 
-function faceGeometry(pose: YellowFacePose) {
+function faceGeometry(pose: YellowFacePose, inputMix = 0) {
   const turn = clamp(pose.turn, -1, 1);
   const reveal = clamp(pose.reveal, 0, 1);
-  const eyeX = (FACE_CENTER.x - turn * 22) * (1 - reveal) + 510 * reveal;
-  const mouthX = (FACE_CENTER.x + turn * 36) * (1 - reveal) + 480 * reveal;
-  const halfWidth = 40 - reveal * 10;
-  const mouthY = 411 - reveal * 11;
+  const input = clamp(inputMix, 0, 1) * (1 - reveal);
+  const eyeX =
+    ((FACE_CENTER.x - turn * 22) * (1 - reveal) + 510 * reveal) * (1 - input) + 554 * input;
+  const mouthX =
+    ((FACE_CENTER.x + turn * 36) * (1 - reveal) + 480 * reveal) * (1 - input) + 579 * input;
+  const halfWidth = (40 - reveal * 10) * (1 - input) + 25 * input;
+  const mouthY = (411 - reveal * 11) * (1 - input) + 400 * input;
   // Constrain the entire translation, not the eye alone, to preserve face cohesion.
-  const offsetX = clamp(pose.offsetX, Math.max(-16, 480 - eyeX), Math.min(16, 560 - eyeX));
-  const offsetY = clamp(pose.offsetY, -22, 22);
+  const offsetX = clamp(
+    pose.offsetX * (1 - input),
+    Math.max(-16, 480 - eyeX),
+    Math.min(16, 560 - eyeX),
+  );
+  const offsetY = clamp(pose.offsetY * (1 - input), -22, 22);
   return {
     transform: `translate(${offsetX.toFixed(3)} ${offsetY.toFixed(3)})`,
     eyeX: eyeX.toFixed(3),
@@ -108,8 +122,8 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     const poseRef = useRef<YellowFacePose>(REST_POSE);
     const reducedMotionRef = useRef<MediaQueryList | null>(null);
 
-    const paint = useCallback((pose: YellowFacePose) => {
-      const geometry = faceGeometry(pose);
+    const paint = useCallback((pose: YellowFacePose, inputMix = 0) => {
+      const geometry = faceGeometry(pose, inputMix);
       faceRef.current?.setAttribute("transform", geometry.transform);
       eyeRef.current?.setAttribute("cx", geometry.eyeX);
       mouthRef.current?.setAttribute("d", geometry.mouth);
@@ -120,7 +134,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     useImperativeHandle(
       ref,
       () => ({
-        update(pointer, state, deltaMs) {
+        update(pointer, state, deltaMs, inputMix) {
           if (reducedMotionRef.current?.matches) return;
           // Use the root SVG's matrix: entrance/result and face transforms are not input.
           const point =
@@ -128,8 +142,8 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
               ? toSvgPointer(rootRef.current?.ownerSVGElement ?? null, pointer)
               : null;
           const target = resolveFaceTarget(state, point);
-          poseRef.current = stepFacePose(poseRef.current, target, deltaMs);
-          paint(poseRef.current);
+          poseRef.current = stepFacePose(poseRef.current, target, deltaMs, state === "inputFocus");
+          paint(poseRef.current, inputMix);
         },
       }),
       [paint],
@@ -141,7 +155,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
       const resetReducedPose = () => {
         if (!media.matches) return;
         poseRef.current = resolveFaceTarget(sceneState, null);
-        paint(poseRef.current);
+        paint(poseRef.current, sceneState === "inputFocus" ? 1 : 0);
       };
       resetReducedPose();
       media.addEventListener("change", resetReducedPose);
@@ -156,51 +170,55 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
       >
         <g className="yak-login-character--yellow__entry">
           <g className="yak-login-character--yellow__result">
-            <path data-yellow-body-path d={YELLOW_BODY_PATH} fill="#F3D30B" />
-            <g
-              ref={faceRef}
-              className="yak-login-character--yellow__face"
-              transform={REST_FACE.transform}
-            >
-              <g className="yak-login-character--yellow__result-eyes">
-                <g className="yak-login-character--yellow__focus-eyes">
-                  <circle
-                    ref={eyeRef}
-                    data-yellow-eye
-                    cx={REST_FACE.eyeX}
-                    cy="376"
-                    r="5.4"
-                    fill="#171717"
+            <g className="yak-login-character--yellow__focus">
+              <path data-yellow-body-path d={YELLOW_BODY_PATH} fill="#F3D30B" />
+              <g className="yak-login-character--yellow__input-face-pose">
+                <g
+                  ref={faceRef}
+                  className="yak-login-character--yellow__face"
+                  transform={REST_FACE.transform}
+                >
+                  <g className="yak-login-character--yellow__result-eyes">
+                    <g className="yak-login-character--yellow__focus-eyes">
+                      <circle
+                        ref={eyeRef}
+                        data-yellow-eye
+                        cx={REST_FACE.eyeX}
+                        cy="376"
+                        r="5.4"
+                        fill="#171717"
+                      />
+                    </g>
+                  </g>
+                  <path
+                    ref={mouthRef}
+                    className="yak-login-character__mouth yak-login-character__mouth--default"
+                    d={REST_FACE.mouth}
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    ref={successRef}
+                    className="yak-login-character__mouth yak-login-character__mouth--success"
+                    d={REST_FACE.success}
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    ref={failureRef}
+                    className="yak-login-character__mouth yak-login-character__mouth--failure"
+                    d={REST_FACE.failure}
+                    fill="none"
+                    stroke="#171717"
+                    strokeWidth="4"
+                    strokeLinecap="round"
                   />
                 </g>
               </g>
-              <path
-                ref={mouthRef}
-                className="yak-login-character__mouth yak-login-character__mouth--default"
-                d={REST_FACE.mouth}
-                fill="none"
-                stroke="#171717"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              <path
-                ref={successRef}
-                className="yak-login-character__mouth yak-login-character__mouth--success"
-                d={REST_FACE.success}
-                fill="none"
-                stroke="#171717"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              <path
-                ref={failureRef}
-                className="yak-login-character__mouth yak-login-character__mouth--failure"
-                d={REST_FACE.failure}
-                fill="none"
-                stroke="#171717"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
             </g>
           </g>
         </g>
