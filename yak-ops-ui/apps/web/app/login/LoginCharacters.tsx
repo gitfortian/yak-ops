@@ -78,52 +78,50 @@ function svgPoint(value: number) {
   return Number(value.toFixed(2));
 }
 
-function resolveOrangeFacePose(x: number, y: number, pointerPoseEnabled: boolean) {
-  if (!pointerPoseEnabled) {
-    return {
-      faceX: x * 34,
-      faceY: y * 14,
-      eyeX: x * 6,
-      eyeY: y * 3,
-      eyeScale: 1,
-      mouthRotate: 0,
-    };
-  }
+// Resolve against the resting face in the root SVG, never against animated face bounds.
+function resolveOrangePointerTarget(svg: SVGSVGElement | null, pointer: YellowPointer | null) {
+  const rest = { x: 0, y: 0 };
+  if (!svg || !pointer || !svg.getClientRects().length) return rest;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return rest;
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) return rest;
+  const point = new DOMPoint(pointer.x, pointer.y).matrixTransform(matrix.inverse());
+  const dx = point.x - 230;
+  const dy = point.y - 460;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return rest;
+  return { x: dx / Math.hypot(dx, 180), y: dy / Math.hypot(dy, 160) };
+}
 
+function resolveOrangeFacePose(x: number, y: number) {
   const horizontal = clamp(x, -1, 1);
   const vertical = clamp(y, -1, 1);
-  const edgeLift = Math.abs(horizontal) * (5 + Math.max(0, -vertical) * 6);
-
   return {
-    faceX: horizontal * 48,
-    faceY: vertical * 19 - edgeLift,
-    eyeX: horizontal * 3,
-    eyeY: vertical * 1.5,
-    eyeScale: 1 - Math.max(-horizontal, 0) * 0.22,
-    mouthRotate: horizontal * 7,
+    faceX: horizontal * 68,
+    faceY: vertical * (28 - Math.abs(horizontal) * 12) - Math.abs(horizontal) * 6,
+    // Left gaze lifts the left eye; right gaze lifts the right. Rotate the whole smile.
+    faceRotate: -horizontal * 11,
   };
 }
 
-function buildOrangeBodyPath(x: number, y: number, activity: number, inputMix = 0) {
+function buildOrangeBodyPath(x: number, y: number, inputMix = 0) {
   const topY = ORANGE_BODY_TOP_Y - inputMix * 8;
   const horizontal = clamp(x, -1, 1);
   const vertical = clamp(y, -1, 1);
-  const motion = clamp(activity, 0, 1);
 
-  const pointerLift = Math.max(0, -vertical) * 14;
-  const motionLift = motion * 8;
-  const sideLift = Math.abs(horizontal) * 5;
-  const crownX = 244 + horizontal * 18;
-  const crownY = topY - pointerLift - motionLift - sideLift;
+  // The face leads; the crown only follows gently. No speed-driven pumping or whole-body sway.
+  const pointerLift = Math.max(0, -vertical) * 8;
+  const crownX = 244 + horizontal * 6;
+  const crownY = topY - pointerLift;
   const sideY = svgPoint(topY + (550 - topY) * 0.42);
-  const leftLift = Math.max(-horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
-  const rightLift = Math.max(horizontal, 0) * 14 + Math.max(0, -vertical) * 7 + motion * 4;
+  const leftLift = Math.max(-horizontal, 0) * 4 + pointerLift * 0.5;
+  const rightLift = Math.max(horizontal, 0) * 4 + pointerLift * 0.5;
 
   return [
     "M65 550",
-    `C65 ${sideY} ${svgPoint(142 + horizontal * 6)} ${svgPoint(topY - leftLift)}`,
+    `C65 ${sideY} ${svgPoint(142 + horizontal * 2)} ${svgPoint(topY - leftLift)}`,
     `${svgPoint(crownX)} ${svgPoint(crownY)}`,
-    `C${svgPoint(346.05 + horizontal * 6)} ${svgPoint(topY - rightLift)} 415 ${sideY} 415 550`,
+    `C${svgPoint(346.05 + horizontal * 2)} ${svgPoint(topY - rightLift)} 415 ${sideY} 415 550`,
     "Z",
   ].join(" ");
 }
@@ -468,27 +466,25 @@ function OrangeCharacter() {
                     <g className="yak-login-character--orange__result-eyes">
                       <g className="yak-login-character--orange__focus-eyes">
                         <g className="yak-login-character--orange__eyes">
-                          <g className="yak-login-character--orange__eye-pose">
-                            <g className="yak-login-character--orange__eyes-open">
-                              <circle cx="190" cy="460" r="8" fill="#171717" />
-                              <circle cx="270" cy="460" r="8" fill="#171717" />
-                            </g>
-                            <g className="yak-login-character--orange__eyes-blink">
-                              <path
-                                d="M181 461Q190 452 199 461"
-                                fill="none"
-                                stroke="#171717"
-                                strokeWidth="4"
-                                strokeLinecap="round"
-                              />
-                              <path
-                                d="M261 461Q270 452 279 461"
-                                fill="none"
-                                stroke="#171717"
-                                strokeWidth="4"
-                                strokeLinecap="round"
-                              />
-                            </g>
+                          <g className="yak-login-character--orange__eyes-open">
+                            <circle cx="190" cy="460" r="8" fill="#171717" />
+                            <circle cx="270" cy="460" r="8" fill="#171717" />
+                          </g>
+                          <g className="yak-login-character--orange__eyes-blink">
+                            <path
+                              d="M181 461Q190 452 199 461"
+                              fill="none"
+                              stroke="#171717"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M261 461Q270 452 279 461"
+                              fill="none"
+                              stroke="#171717"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
                           </g>
                         </g>
                       </g>
@@ -496,7 +492,7 @@ function OrangeCharacter() {
                     <g className="yak-login-character--orange__mouth-pose">
                       <path
                         className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                        d="M213 484Q213 482 215 482H246Q248 482 248 484C246.8 492.5 240 497 230.5 497C221 497 214.2 492.5 213 484Z"
+                        d="M213 475Q213 473 215 473H246Q248 473 248 475C246.8 483.5 240 488 230.5 488C221 488 214.2 483.5 213 475Z"
                         fill="#171717"
                       />
                       <circle
@@ -581,7 +577,7 @@ export default function LoginCharacters({
           ?.setAttribute("d", buildBlackBodyPath(0, input ? 1 : 0));
         sceneRef.current
           ?.querySelector("[data-orange-body-path]")
-          ?.setAttribute("d", buildOrangeBodyPath(0, 0, 0, input ? 1 : 0));
+          ?.setAttribute("d", buildOrangeBodyPath(0, 0, input ? 1 : 0));
         sceneRef.current?.style.setProperty(
           "--yak-input-mix",
           sceneState === "inputFocus" ? "1" : "0",
@@ -598,22 +594,27 @@ export default function LoginCharacters({
   }, [sceneState]);
 
   useEffect(() => {
-    if (sceneState !== "idle" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setOrangeBlinking(false);
-      return;
-    }
-
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let blinkTimer = 0;
     let blinkEndTimer = 0;
-    const blinkTimer = window.setInterval(() => {
-      setOrangeBlinking(true);
-      blinkEndTimer = window.setTimeout(() => {
-        setOrangeBlinking(false);
-      }, 180);
-    }, 4600);
-
+    const resetBlink = () => {
+      window.clearInterval(blinkTimer);
+      window.clearTimeout(blinkEndTimer);
+      setOrangeBlinking(false);
+      if (sceneState !== "idle" || media.matches || document.hidden) return;
+      blinkTimer = window.setInterval(() => {
+        setOrangeBlinking(true);
+        blinkEndTimer = window.setTimeout(() => setOrangeBlinking(false), 180);
+      }, 4600);
+    };
+    resetBlink();
+    media.addEventListener("change", resetBlink);
+    document.addEventListener("visibilitychange", resetBlink);
     return () => {
       window.clearInterval(blinkTimer);
       window.clearTimeout(blinkEndTimer);
+      media.removeEventListener("change", resetBlink);
+      document.removeEventListener("visibilitychange", resetBlink);
     };
   }, [sceneState]);
 
@@ -635,9 +636,7 @@ export default function LoginCharacters({
     let orangeVelocityY = 0;
     let orangeBodyX = 0;
     let orangeBodyY = 0;
-    let orangeEyeScale = 1;
-    let orangeMouthRotate = 0;
-    let yellowPointer: YellowPointer | null = null;
+    let pointerPosition: YellowPointer | null = null;
     let frame = 0;
     const orangeEntryStartedAt = performance.now();
     let previousFrameAt = orangeEntryStartedAt;
@@ -648,21 +647,23 @@ export default function LoginCharacters({
     const blackEntry = scene.querySelector<SVGGElement>(".yak-login-character--black__entry");
     // Use the actual CSS animation clock; do not duplicate its duration/delay in JavaScript.
     const blackEntryAnimation = blackEntry?.getAnimations()[0];
+    const svg = scene.querySelector<SVGSVGElement>("svg");
     const orangeBodyPath = scene.querySelector<SVGPathElement>("[data-orange-body-path]");
     if (!purpleBodyPath || !blackBodyPath || !orangeBodyPath) return;
 
-    const clearYellowPointer = () => {
-      yellowPointer = null;
+    const clearPointerPosition = () => {
+      pointerPosition = null;
     };
     const handlePointerOut = (event: PointerEvent) => {
-      if (!event.relatedTarget) clearYellowPointer();
+      if (!event.relatedTarget) clearPointerPosition();
     };
     const handleVisibilityChange = () => {
-      if (document.hidden) clearYellowPointer();
+      if (document.hidden) clearPointerPosition();
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      yellowPointer = event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
+      pointerPosition =
+        event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
       const rect = scene.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
 
@@ -674,6 +675,15 @@ export default function LoginCharacters({
     const animate = (now: number) => {
       if (motionPreference.matches) {
         previousFrameAt = now;
+        orangeX = 0;
+        orangeY = 0;
+        orangeVelocityX = 0;
+        orangeVelocityY = 0;
+        orangeBodyX = 0;
+        orangeBodyY = 0;
+        scene.style.setProperty("--yak-orange-face-x", "0px");
+        scene.style.setProperty("--yak-orange-face-y", "0px");
+        scene.style.setProperty("--yak-orange-face-rotate", "0deg");
         inputMix = sceneStateRef.current === "inputFocus" ? 1 : 0;
         revealMix = sceneStateRef.current === "passwordVisible" ? 1 : 0;
         scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
@@ -728,8 +738,12 @@ export default function LoginCharacters({
       blackX = smoothMotion(blackX, interactionTargetX, 0.042, deltaMs);
       blackY = smoothMotion(blackY, interactionTargetY, 0.042, deltaMs);
 
-      const orangeTargetX = orangeEntryComplete ? interactionTargetX : 0;
-      const orangeTargetY = orangeEntryComplete ? interactionTargetY : 0;
+      const orangeTarget = resolveOrangePointerTarget(
+        svg,
+        orangeEntryComplete && activeSceneState === "idle" ? pointerPosition : null,
+      );
+      const orangeTargetX = orangeTarget.x;
+      const orangeTargetY = orangeTarget.y;
 
       const orangeSpringX = stepOrangeSpring(orangeX, orangeVelocityX, orangeTargetX, deltaMs);
       const orangeSpringY = stepOrangeSpring(orangeY, orangeVelocityY, orangeTargetY, deltaMs);
@@ -739,12 +753,6 @@ export default function LoginCharacters({
       orangeVelocityY = orangeSpringY.velocity;
       orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
       orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
-
-      const orangeActivity = clamp(
-        Math.abs(orangeVelocityX) * 0.1 + Math.abs(orangeVelocityY) * (5 / 60),
-        0,
-        1,
-      );
 
       scene.style.setProperty("--yak-purple-lean", `${purpleX * -8 * pointerWeight}deg`);
       scene.style.setProperty("--yak-purple-stretch", String(1 - purpleY * 0.04 * pointerWeight));
@@ -767,12 +775,7 @@ export default function LoginCharacters({
       if (orangeEntryComplete) {
         orangeBodyPath.setAttribute(
           "d",
-          buildOrangeBodyPath(
-            orangeBodyX * freePoseWeight,
-            orangeBodyY * freePoseWeight,
-            orangeActivity * freePoseWeight,
-            inputMix,
-          ),
+          buildOrangeBodyPath(orangeBodyX * freePoseWeight, orangeBodyY * freePoseWeight, inputMix),
         );
         scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
       } else {
@@ -783,45 +786,29 @@ export default function LoginCharacters({
         );
       }
 
-      const orangePointerPoseEnabled = orangeEntryComplete && activeSceneState === "idle";
-      const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY, orangePointerPoseEnabled);
-
+      const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY);
       scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX * pointerWeight}px`);
       scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY * pointerWeight}px`);
-      orangeEyeScale = smoothMotion(orangeEyeScale, orangeFacePose.eyeScale, 0.18, deltaMs);
-      orangeMouthRotate = smoothMotion(
-        orangeMouthRotate,
-        orangeFacePose.mouthRotate,
-        0.16,
-        deltaMs,
+      scene.style.setProperty(
+        "--yak-orange-face-rotate",
+        `${orangeFacePose.faceRotate * pointerWeight}deg`,
       );
 
-      scene.style.setProperty("--yak-orange-eye-x", `${orangeFacePose.eyeX * pointerWeight}px`);
-      scene.style.setProperty("--yak-orange-eye-y", `${orangeFacePose.eyeY * pointerWeight}px`);
-      scene.style.setProperty(
-        "--yak-orange-eye-scale",
-        String(1 + (orangeEyeScale - 1) * pointerWeight),
-      );
-      scene.style.setProperty(
-        "--yak-orange-mouth-rotate",
-        `${orangeMouthRotate * pointerWeight}deg`,
-      );
-
-      yellowRef.current?.update(yellowPointer, activeSceneState, deltaMs, inputMix);
+      yellowRef.current?.update(pointerPosition, activeSceneState, deltaMs, inputMix);
 
       frame = window.requestAnimationFrame(animate);
     };
 
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("pointerout", handlePointerOut);
-    window.addEventListener("blur", clearYellowPointer);
+    window.addEventListener("blur", clearPointerPosition);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     frame = window.requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerout", handlePointerOut);
-      window.removeEventListener("blur", clearYellowPointer);
+      window.removeEventListener("blur", clearPointerPosition);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.cancelAnimationFrame(frame);
       delete scene.dataset.entranceInterrupted;
