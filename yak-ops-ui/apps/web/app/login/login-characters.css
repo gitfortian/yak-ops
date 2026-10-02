@@ -681,8 +681,7 @@
   .yak-login-character--yellow__input-face-pose {
   transform-box: view-box;
   transform-origin: 520px 376px;
-  transform: translateY(calc(-16px * var(--yak-input-mix)))
-    skewX(calc(-1 * var(--yak-input-lean)));
+  transform: translateY(calc(-16px * var(--yak-input-mix))) skewX(calc(-1 * var(--yak-input-lean)));
 }
 
 .yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--purple__breathe,

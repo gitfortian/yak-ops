@@ -802,7 +802,10 @@ export default function LoginCharacters({
         "--yak-orange-eye-scale",
         String(1 + (orangeEyeScale - 1) * pointerWeight),
       );
-      scene.style.setProperty("--yak-orange-mouth-rotate", `${orangeMouthRotate * pointerWeight}deg`);
+      scene.style.setProperty(
+        "--yak-orange-mouth-rotate",
+        `${orangeMouthRotate * pointerWeight}deg`,
+      );
 
       yellowRef.current?.update(yellowPointer, activeSceneState, deltaMs, inputMix);
 
