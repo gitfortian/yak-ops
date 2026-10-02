@@ -635,6 +635,7 @@ export interface CronSchedulerPickerProps {
   size?: PickerSize;
   variant?: PickerVariant;
   allowClear?: boolean;
+  renderPanelExtra?: (draftCronExpression: string) => ReactNode;
 }
 
 export function CronSchedulerPicker({
@@ -648,6 +649,7 @@ export function CronSchedulerPicker({
   size = "small",
   variant = "outlined",
   allowClear = true,
+  renderPanelExtra,
 }: CronSchedulerPickerProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<PickerMode>("visual");
@@ -795,6 +797,12 @@ export function CronSchedulerPicker({
             </TabsPanel>
           </Tabs>
         </div>
+
+        {renderPanelExtra ? (
+          <div className="border-t border-[var(--yak-components-control-border)] px-5 py-4">
+            {renderPanelExtra(draftCron)}
+          </div>
+        ) : null}
 
         <div className="border-t border-[var(--yak-components-control-border)] bg-white px-5 py-3">
           <div className="mb-3 flex min-w-0 items-center gap-2 rounded-[var(--yak-radius-control-small)] bg-[var(--yak-components-input-bg)] px-3 py-2">
