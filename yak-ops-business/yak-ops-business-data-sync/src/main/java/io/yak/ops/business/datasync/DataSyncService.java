@@ -11,6 +11,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -54,6 +55,8 @@ public interface DataSyncService {
     DataSyncInstanceVO runTask(String id);
 
     DataSyncScheduleVO saveSchedule(String taskId, DataSyncScheduleDTO dto);
+
+    DataSyncSchedulePreviewVO previewSchedule(DataSyncScheduleDTO dto);
 
     DataSyncScheduleVO querySchedule(String taskId);
 
