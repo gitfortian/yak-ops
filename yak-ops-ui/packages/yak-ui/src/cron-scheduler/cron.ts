@@ -257,12 +257,7 @@ export function parseCron(cron?: string): CronScheduleConfig | undefined {
             ? parseNumber(plainHourRange[2], 0, 23)
             : parseNumber(hour, 0, 23);
 
-      if (
-        interval &&
-        startMinute !== undefined &&
-        fromHour !== undefined &&
-        toHour !== undefined
-      ) {
+      if (interval && startMinute !== undefined && fromHour !== undefined && toHour !== undefined) {
         return {
           ...base,
           period: "minute",
