@@ -9,6 +9,8 @@ import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import java.lang.reflect.Field;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -64,6 +66,21 @@ class QuartzScheduleEngineTest {
         assertEquals("Asia/Shanghai", trigger.getTimeZone().getID());
         assertEquals(CronTrigger.MISFIRE_INSTRUCTION_DO_NOTHING, trigger.getMisfireInstruction());
         assertTrue(engine.queryNextFireTime("schedule-1").isPresent());
+    }
+
+    @Test
+    void shouldPreviewNextFiveFireTimesWithExplicitTimezone() {
+        ZoneId timeZone = ZoneId.of("Asia/Shanghai");
+
+        List<java.time.Instant> preview = engine.previewNextFireTimes("0 0 2 * * ?", timeZone, 5);
+
+        assertEquals(5, preview.size());
+        assertTrue(preview.stream()
+                .map(instant -> ZonedDateTime.ofInstant(instant, timeZone))
+                .allMatch(time -> time.getHour() == 2 && time.getMinute() == 0 && time.getSecond() == 0));
+        for (int index = 1; index < preview.size(); index++) {
+            assertTrue(preview.get(index).isAfter(preview.get(index - 1)));
+        }
     }
 
     @Test

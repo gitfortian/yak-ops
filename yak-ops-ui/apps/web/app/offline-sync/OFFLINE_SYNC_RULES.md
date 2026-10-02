@@ -36,6 +36,8 @@ Must:
 - Display readRows / writeRows only from the persisted Instance; frontend must not estimate progress.
 - The editor exposes Save and Save & Publish. Save persists an UNPUBLISHED Task; Save & Publish explicitly composes save then publish and returns to the Task list. Runtime execution is not an editor action.
 - OFFLINE editor owns optional Schedule definition only: Quartz Cron expression + explicit IANA Time Zone. An empty Cron on a Task that has never created a Schedule means manual-only execution.
+- Cron editing uses shared Yak UI `CronSchedulerPicker`: common schedules are configured visually and unsupported advanced Quartz expressions remain available in Advanced Cron mode. The picker may compose a product-owned future-fire preview, but Yak UI itself must not call Data Sync APIs.
+- Time Zone is selected rather than free-typed, defaults to `Asia/Shanghai`, and must preserve an already persisted valid zone even when it is outside the common option list. Future 5-fire preview comes from the backend Quartz preview endpoint and is never calculated in browser code.
 - Persist Schedule only after Task persistence succeeds because Schedule identity depends on `taskId`; Save & Publish must persist Task, then Schedule, then publish.
 - Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly enables it in Operations Center.
 - An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable remains an Operations Center action.

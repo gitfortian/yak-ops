@@ -41,6 +41,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsTrendPointVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -443,6 +444,33 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             }
         }
         return toScheduleVO(schedule);
+    }
+
+    @Override
+    public DataSyncSchedulePreviewVO previewSchedule(DataSyncScheduleDTO dto) {
+        if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE);
+
+        String cronExpression = StringUtils.trimToNull(dto.getCronExpression());
+        String timeZone = normalizeTimeZone(dto.getTimeZone());
+        if (cronExpression == null) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "Cron 表达式不能为空");
+        }
+
+        ZoneId zoneId = ZoneId.of(timeZone);
+        List<LocalDateTime> nextFireTimes;
+        try {
+            nextFireTimes = scheduleEngine.previewNextFireTimes(cronExpression, zoneId, 5).stream()
+                    .map(instant -> LocalDateTime.ofInstant(instant, zoneId))
+                    .toList();
+        } catch (ScheduleEngineException | IllegalArgumentException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE, "Cron 表达式不合法", exception);
+        }
+
+        DataSyncSchedulePreviewVO result = new DataSyncSchedulePreviewVO();
+        result.setCronExpression(cronExpression);
+        result.setTimeZone(timeZone);
+        result.setNextFireTimes(nextFireTimes);
+        return result;
     }
 
     @Override

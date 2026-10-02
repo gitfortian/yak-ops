@@ -19,6 +19,7 @@ The component owns only Cron editing interaction. It does not call APIs, calcula
 - Existing expressions outside the visual subset open in Advanced Cron mode and are preserved as raw text.
 - Confirm commits the current draft. Cancel, Escape, or dismissing the popup leaves the caller's value unchanged.
 - Clear emits an empty string when `allowClear` is enabled.
+- `renderPanelExtra(draftCronExpression)` is the composition slot for product-owned preview or supporting content. It receives the current uncommitted draft and must not be used by Yak UI to perform network requests.
 - The popup uses Yak UI controls and Base UI lifecycle only; it must not depend on Ant Design or product services.
 - Future-fire preview belongs to the consuming product because it must use the product scheduler's real timezone and runtime semantics.
 

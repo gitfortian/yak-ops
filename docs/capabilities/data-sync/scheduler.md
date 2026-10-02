@@ -14,7 +14,7 @@ Yak Ops 决定任务能否运行，Quartz 只决定何时到点。ScheduleEngine
 
 ScheduleEngine 接收 scheduleId、workspaceId、taskId、cronExpression 和显式 timeZone。JobData 仅存三个稳定 ID；不保存 Task JSON、连接信息、凭证、映射或 CDC state。
 
-Cron 使用 Quartz 语义，时区由后端 ZoneId 校验，不能依赖 JVM、宿主机或浏览器默认值。引擎接口提供校验、注册、修改、移除和 next-fire 查询，不负责授权、并发、实例生命周期或 Retry。
+Cron 使用 Quartz 语义，时区由后端 ZoneId 校验，不能依赖 JVM、宿主机或浏览器默认值。引擎接口提供校验、注册、修改、移除、next-fire 查询和未来触发时间预览，不负责授权、并发、实例生命周期或 Retry。预览必须复用 Quartz CronExpression + 显式 ZoneId，不能在前端或 Business 层用另一套 Cron 解释器估算。
 
 ## Command Semantics
 
@@ -27,6 +27,13 @@ Cron 使用 Quartz 语义，时区由后端 ZoneId 校验，不能依赖 JVM、�
 | POST /enable | 要求 OFFLINE + PUBLISHED 且 Schedule 已存在；校验后启用并注册 Trigger |
 | POST /disable | 标记 disabled，提交后移除 Trigger；不取消已创建的 Execution |
 
+独立预览接口：
+
+```text
+POST /api/v1/data-sync/schedules/preview
+```
+
+输入未持久化的 Cron + Time Zone，固定返回未来 5 次触发时间；不要求 Task 已创建，也不创建或修改 Schedule / Quartz Trigger。
 Schedule 定义可独立于 Task 发布状态保存；已有启用记录修改后在 commit 后更新 Runtime，并要求 Task 保持已发布。保存不会隐式启用一个未启用的 Schedule，也不会增加 Task definitionVersion。
 
 Cron 不能为空。当前没有通过空 Cron 删除既有 Schedule 的语义；不要把前端“未配置”当成后端删除命令。Stop Execution 不代表停用以后到点触发的 Schedule。
@@ -61,7 +68,7 @@ DB 提交与 Quartz 注册不是原子事务。commit 后注册 / 移除失败�
 
 ## UI Ownership
 
-OFFLINE 编辑器保存定义；运维中心负责 Enable / Disable 和运行态观察。保存顺序为 Task → Schedule，Save & Publish 为 Task → Schedule → Publish。跨 HTTP 调用不是一个原子事务，部分失败不能展示整体成功。
+OFFLINE 编辑器保存定义；运维中心负责 Enable / Disable 和运行态观察。编辑器使用 Yak UI Cron Scheduler Picker 生成/保留 Quartz Cron，Time Zone 使用选择控件并默认 Asia/Shanghai；Picker 内的未来 5 次时间通过后端 Preview API 获取。保存顺序为 Task → Schedule，Save & Publish 为 Task → Schedule → Publish。跨 HTTP 调用不是一个原子事务，部分失败不能展示整体成功。
 
 从未创建 Schedule 且编辑器 Cron 留空时维持手动运行；保存 Schedule 不等于启用。具体控件与页面布局由前端 owner 维护，不在此复制。
 
