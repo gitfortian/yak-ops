@@ -8,6 +8,7 @@ package io.yak.ops.business.datasync.execution.trace;
  */
 public record ExecutionTraceSummarySnapshot(
         int attemptNo,
+        boolean available,
         boolean complete,
         long sourceSplitCount,
         long sourceFinishedSplitCount,
