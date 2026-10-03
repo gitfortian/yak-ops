@@ -23,12 +23,14 @@ interface DataSyncExecutionLogPanelProps {
   record?: DataSyncInstanceRecord;
   active: boolean;
   sectionCard?: boolean;
+  embedded?: boolean;
 }
 
 export function DataSyncExecutionLogPanel({
   record,
   active,
   sectionCard = false,
+  embedded = false,
 }: DataSyncExecutionLogPanelProps) {
   const executionId = record?.id;
   const live = isActiveDataSyncInstance(record);
@@ -70,6 +72,7 @@ export function DataSyncExecutionLogPanel({
   );
 
   if (!record) {
+    if (embedded) return emptyState;
     return sectionCard ? (
       <SectionCard title="事件时间线">{emptyState}</SectionCard>
     ) : (
@@ -105,6 +108,18 @@ export function DataSyncExecutionLogPanel({
         ))}
       </div>
     );
+
+  if (embedded) {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#98a2b3]">
+          <span>{events.length} 条事件</span>
+          {live ? <span className="text-[#667085]">运行中 · 2s 自动刷新</span> : null}
+        </div>
+        {timeline}
+      </div>
+    );
+  }
 
   if (sectionCard) {
     return (
