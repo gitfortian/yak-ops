@@ -2,7 +2,8 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Let enlarged text grow the page instead of collapsing the illustration. */
+  grid-template-rows: auto minmax(16rem, 1fr);
   gap: clamp(1rem, 3svh, 2rem);
   height: 100%;
   min-height: 100svh;
@@ -64,17 +65,11 @@
   --yak-login-scene-ground-gap: clamp(2.5rem, 18svh, 14rem);
   --yak-login-scene-headroom: clamp(1.25rem, 3svh, 2rem);
   /* Both artwork and shadow resolve these units against this allocated grid row. */
-  --yak-login-scene-art-width: min(
-    88%,
-    820px,
-    max(
-      0px,
-      calc(
-        (100cqh - var(--yak-login-scene-ground-gap) - var(--yak-login-scene-headroom)) *
-          720 / 550
-      )
-    )
+  --yak-login-scene-art-height: max(
+    0px,
+    calc(100cqh - var(--yak-login-scene-ground-gap) - var(--yak-login-scene-headroom))
   );
+  --yak-login-scene-art-width: min(88%, 820px, calc(var(--yak-login-scene-art-height) * 720 / 550));
   position: relative;
   min-width: 0;
   min-height: 0;
