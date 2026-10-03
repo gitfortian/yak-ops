@@ -40,8 +40,7 @@ public final class JdbcSink implements Sink {
         this(config, writeSchema, JdbcConnectionRuntime.getInstance(), RuntimeTraceListener.noop());
     }
 
-    public JdbcSink(
-            JdbcSinkConfig config, YakTableSchema writeSchema, RuntimeTraceListener traceListener) {
+    public JdbcSink(JdbcSinkConfig config, YakTableSchema writeSchema, RuntimeTraceListener traceListener) {
         this(config, writeSchema, JdbcConnectionRuntime.getInstance(), traceListener);
     }
 
@@ -50,9 +49,7 @@ public final class JdbcSink implements Sink {
     }
 
     public JdbcSink(
-            JdbcSinkConfig config,
-            JdbcConnectionProvider connectionProvider,
-            RuntimeTraceListener traceListener) {
+            JdbcSinkConfig config, JdbcConnectionProvider connectionProvider, RuntimeTraceListener traceListener) {
         this(config, null, connectionProvider, traceListener);
     }
 
