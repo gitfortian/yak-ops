@@ -17,6 +17,7 @@ type YellowFacePose = { offsetX: number; offsetY: number; turn: number; reveal: 
 export type YellowPointer = { x: number; y: number };
 export interface YellowCharacterHandle {
   setEntrance: (pose: YellowEntrancePose | null) => void;
+  setFailureWave: (wave: number) => void;
   update: (
     pointer: YellowPointer | null,
     state: LoginSceneState,
@@ -115,6 +116,14 @@ function faceGeometry(pose: YellowFacePose, inputMix = 0) {
   };
 }
 
+// The static path is also the exact start/end of the one-shot mouth reaction.
+function failureMouthPath(wave = 0) {
+  const amount = Number.isFinite(wave) ? clamp(wave, -1, 1) * 6 : 0;
+  if (amount === 0) return "M545 410C556 400 563 400 572 403S584 406 591 401";
+  // Keep endpoints and the join fixed. S preserves the cubic tangent while controls undulate.
+  return `M545 410C556 ${400 + amount} 563 ${400 - amount} 572 403S584 ${406 + amount} 591 401`;
+}
+
 const REST_FACE = faceGeometry(REST_POSE);
 
 export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }>(
@@ -129,6 +138,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     const eyeRef = useRef<SVGCircleElement | null>(null);
     const mouthRef = useRef<SVGPathElement | null>(null);
     const successRef = useRef<SVGPathElement | null>(null);
+    const failureMouthRef = useRef<SVGPathElement | null>(null);
     const poseRef = useRef<YellowFacePose>(REST_POSE);
     const reducedMotionRef = useRef<MediaQueryList | null>(null);
 
@@ -144,6 +154,9 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     useImperativeHandle(
       ref,
       () => ({
+        setFailureWave(wave) {
+          failureMouthRef.current?.setAttribute("d", failureMouthPath(wave));
+        },
         setEntrance(entrance) {
           bodyRef.current?.setAttribute("d", entrance?.path ?? YELLOW_BODY_PATH);
           clipPathRef.current?.setAttribute("d", entrance?.path ?? YELLOW_BODY_PATH);
@@ -265,8 +278,9 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
           <path data-failure-body d={YELLOW_BODY_PATH} fill="#F3D30B" />
           <circle data-pose-eye="failure" cx="532" cy="388" r="5.4" fill="#171717" />
           <path
+            ref={failureMouthRef}
             data-failure-mouth
-            d="M545 410C556 400 563 400 572 403S584 406 591 401"
+            d={failureMouthPath()}
             fill="none"
             stroke="#171717"
             strokeWidth="4"
