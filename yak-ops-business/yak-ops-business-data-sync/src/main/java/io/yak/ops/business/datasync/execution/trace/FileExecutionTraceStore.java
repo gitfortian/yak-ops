@@ -18,7 +18,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -106,7 +105,8 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
         Path summaryFile = directory.resolve(SUMMARY_FILE);
         if (Files.isRegularFile(summaryFile)) {
             try {
-                return JSONUtils.parseObject(Files.readString(summaryFile, StandardCharsets.UTF_8), ExecutionTraceSummarySnapshot.class);
+                return JSONUtils.parseObject(
+                        Files.readString(summaryFile, StandardCharsets.UTF_8), ExecutionTraceSummarySnapshot.class);
             } catch (IOException | RuntimeException exception) {
                 LOG.warn(
                         "Runtime Trace Summary 读取失败，workspaceId={}, executionId={}, attempt={}, error={}",
@@ -162,9 +162,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
                     if (record == null || !matches(record, side, normalizedStatus)) continue;
                     if (records.size() >= pageSize) {
                         return new ExecutionTracePage(
-                                List.copyOf(records),
-                                TraceCursor.encode(segmentIndex, currentLine),
-                                true);
+                                List.copyOf(records), TraceCursor.encode(segmentIndex, currentLine), true);
                     }
                     records.add(record);
                 }
@@ -185,7 +183,8 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
         return rootDirectory;
     }
 
-    private ExecutionTraceRecord toRecord(RuntimeTraceEvent event, String attemptId, int attemptNo, Map<String, String> sourceSqlBySplit) {
+    private ExecutionTraceRecord toRecord(
+            RuntimeTraceEvent event, String attemptId, int attemptNo, Map<String, String> sourceSqlBySplit) {
         if (event instanceof JdbcSourceSplitTraceEvent source) {
             String sql = StringUtils.trimToNull(source.sql());
             if (sql != null) sourceSqlBySplit.put(source.splitId(), sql);
@@ -332,10 +331,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
         try {
             return JSONUtils.parseObject(line, ExecutionTraceRecord.class);
         } catch (RuntimeException exception) {
-            LOG.warn(
-                    "Runtime Trace JSONL 记录解析失败，file={}, error={}",
-                    segment.getFileName(),
-                    safeMessage(exception));
+            LOG.warn("Runtime Trace JSONL 记录解析失败，file={}, error={}", segment.getFileName(), safeMessage(exception));
             return null;
         }
     }
