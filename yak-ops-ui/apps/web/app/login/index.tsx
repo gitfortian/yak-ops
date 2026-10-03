@@ -35,20 +35,20 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           <div className="flex min-h-0 flex-1 items-center py-12">
             <div className="w-full">
               <div className="mb-6 text-center">
-              <SplitSparkIcon
-                size={40}
-                className="mx-auto mb-5 text-[var(--yak-components-page-header-title)]"
-              />
-              <h1
-                id="login-title"
-                className="m-0 text-balance text-[28px] font-bold leading-tight tracking-tight text-[var(--yak-components-page-header-title)]"
-              >
-                Welcome back!
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-[var(--yak-components-button-ghost-text)]">
-                Please enter your details.
-              </p>
-            </div>
+                <SplitSparkIcon
+                  size={40}
+                  className="mx-auto mb-5 text-[var(--yak-components-page-header-title)]"
+                />
+                <h1
+                  id="login-title"
+                  className="m-0 text-balance text-[28px] font-bold leading-tight tracking-tight text-[var(--yak-components-page-header-title)]"
+                >
+                  Welcome back!
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-[var(--yak-components-button-ghost-text)]">
+                  Please enter your details.
+                </p>
+              </div>
 
               <LoginPanel
                 onAuthenticated={onAuthenticated}
