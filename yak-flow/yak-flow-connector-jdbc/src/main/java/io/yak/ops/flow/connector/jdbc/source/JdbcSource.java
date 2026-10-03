@@ -38,9 +38,7 @@ public final class JdbcSource implements Source<JdbcSourceSplit> {
     }
 
     public JdbcSource(
-            JdbcSourceConfig config,
-            JdbcConnectionProvider connectionProvider,
-            RuntimeTraceListener traceListener) {
+            JdbcSourceConfig config, JdbcConnectionProvider connectionProvider, RuntimeTraceListener traceListener) {
         this.config = Objects.requireNonNull(config, "config must not be null");
         this.connectionProvider = Objects.requireNonNull(connectionProvider, "connectionProvider must not be null");
         this.traceListener = Objects.requireNonNull(traceListener, "traceListener must not be null");
