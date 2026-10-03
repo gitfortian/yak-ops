@@ -55,6 +55,33 @@ splitSize 是目标行数，不保证均匀分布。每个 split 是独立读取
 
 标识符必须由方言引用，不接受任意用户 SQL。不提供自动建表、DDL 传播或 Schema 演进。
 
+## Runtime Trace
+
+YakFlow API 提供 JDK-only 的 `RuntimeTraceEvent / RuntimeTraceListener` 诊断旁路。Trace 不拥有产品 Execution / Attempt 持久化，也不改变 Source / Sink 成败；Connector 通过 best-effort `emit` 派发事件，Listener 自身异常必须被隔离，不能反向导致数据同步失败。
+
+JDBC bounded Source 当前暴露：
+
+```text
+SOURCE_SPLIT_PLANNED
+SOURCE_SPLIT_STARTED
+SOURCE_SPLIT_FINISHED
+SOURCE_SPLIT_FAILED
+```
+
+Split 诊断包含稳定 splitId、数值范围、生成的 SELECT 模板、仅由 Connector 生成的范围参数、Reader Worker、读取行数与从 Reader open 到完成 / 失败的总耗时。耗时不是单独 `executeQuery()` 的耗时，不能把返回 ResultSet 的时间冒充完整读取时间。
+
+JDBC bounded INSERT / UPSERT Sink 当前暴露：
+
+```text
+SINK_OPENED
+SINK_BATCH_COMMITTED
+SINK_BATCH_FAILED
+```
+
+Writer 打开事件只暴露 SQL 模板、Batch Size、Save Mode / Write Mode；每个事务批次记录 batchNo、rows、executeBatch 与 commit 耗时。Trace 禁止记录 YakRow 字段值或 Sink bind 参数，错误事件只携带阶段、异常类型和异常消息。异常消息在进入持久化或产品展示前仍必须由上层执行统一脱敏。
+
+本阶段只建立 Trace Contract 与 JDBC 事件来源，不提供文件 / Object Storage 持久化、HTTP API、前端诊断页、Trace 查询索引或生命周期清理。CHANGELOG 的细粒度 Batch Trace 也不属于当前 bounded 离线诊断闭环。
+
 ## MySQL CDC Connector
 
 Debezium Engine 为连接器私有实现，依赖版本由 BOM 维护。snapshot.mode=initial 先执行初始快照，再消费 binlog。

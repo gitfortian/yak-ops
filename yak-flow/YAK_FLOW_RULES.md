@@ -16,6 +16,8 @@ API 保持 JDK-only：用 Boundedness 表达生命周期，用 YakRow / RowKind 
 
 Spring、JDBC、Debezium、Kafka Connect 和产品 DTO 不进入 API。数据库原生类型转换归 Connector，通用逻辑类型及参数归 API；不要为尚不存在的 Transform / DAG 扩张契约。
 
+Runtime Trace 只在 API 定义最小 Event / Listener 协议，JDBC SQL、Split 范围、Batch 等具体事件结构留在 Connector。Trace 是 best-effort 诊断旁路：不得持久化产品状态、不得记录业务行值 / Sink bind 参数，也不得因为 Listener 失败改变数据流结果。
+
 ## Local Execution Engine
 
 只依赖 API，线程和 Channel 保持有界。Reader 并行度不决定 split 数量，Enumerator 分配与 Sink 写入仍串行。具体范围和 checkpoint 限制以 Capability 为准。
