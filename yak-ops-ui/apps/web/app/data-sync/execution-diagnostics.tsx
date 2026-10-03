@@ -77,7 +77,9 @@ function MetricCard({
   return (
     <div className="min-w-0 rounded-lg border border-[#eef0f3] bg-white px-4 py-3">
       <div className="text-xs text-[#98a2b3]">{label}</div>
-      <div className="mt-1 truncate text-xl font-semibold tracking-tight text-[#242731]">{value}</div>
+      <div className="mt-1 truncate text-xl font-semibold tracking-tight text-[#242731]">
+        {value}
+      </div>
       {hint ? <div className="mt-1 truncate text-[11px] text-[#98a2b3]">{hint}</div> : null}
     </div>
   );
@@ -504,8 +506,16 @@ export function DataSyncExecutionDiagnostics({
           )}
           {live ? <span className="text-xs text-[#98a2b3]">运行中 · 汇总 2s 自动刷新</span> : null}
         </div>
-        <Button size="small" variant="ghost" disabled={loading} onClick={() => void loadDiagnostics()}>
-          <RefreshCw size={14} className={loading ? "animate-spin motion-reduce:animate-none" : undefined} />
+        <Button
+          size="small"
+          variant="ghost"
+          disabled={loading}
+          onClick={() => void loadDiagnostics()}
+        >
+          <RefreshCw
+            size={14}
+            className={loading ? "animate-spin motion-reduce:animate-none" : undefined}
+          />
           刷新
         </Button>
       </div>
@@ -607,7 +617,9 @@ export function DataSyncExecutionDiagnostics({
           <div className="mt-4 rounded-lg border border-[#eef0f3] bg-[#fafafa] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-[#344054]">{rangeText(selectedSource)}</div>
+                <div className="text-sm font-semibold text-[#344054]">
+                  {rangeText(selectedSource)}
+                </div>
                 <div className="mt-1 font-mono text-[11px] text-[#98a2b3]">
                   {selectedSource.workerName || "-"}
                 </div>
