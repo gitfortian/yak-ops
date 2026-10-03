@@ -52,6 +52,33 @@ Catalog 字段先投影为 YakColumn，再复用 [JDBC 逻辑兼容规则](../ya
 
 写入事务、split 与重放限制见 YakFlow；离线无跨进程断点续跑保证。Cron 和 Retry 不改变所选写入语义。
 
+### Offline Runtime Trace
+
+离线 Attempt 将 YakFlow JDBC Runtime Trace 作为诊断旁路写入 `yak.ops.home/data/data-sync/execution-traces/{workspaceId}/{executionId}/attempt-{n}`。目录不进入 Data Sync 数据库，也不增加 Trace 明细表；容器部署如果希望保留历史诊断文件，必须像 Realtime CDC state 一样持久化 `yak.ops.home/data`。
+
+每个 Attempt 使用有界异步队列接收 Trace Event，并按 32MB 生成滚动 JSONL 文件：
+
+```text
+attempt-1/
+├── summary.json
+├── trace-000001.jsonl
+└── trace-000002.jsonl
+```
+
+Trace Store 是 best-effort：队列拥塞、磁盘或 JSONL 写入失败只能增加 droppedEventCount / Server WARN，不能反向把原本成功的数据同步改成失败。Summary 记录 Source Split、Sink Batch、SQL 模板、行数与耗时汇总；详细 JSONL 不记录 YakRow 业务字段值或 Sink bind 参数，错误消息进入文件前统一经过 SensitiveUtils 脱敏。
+
+读取接口只支持 OFFLINE Execution，并默认读取当前 Attempt；可显式指定已存在的 Attempt 序号：
+
+```text
+GET /api/v1/data-sync/instances/{id}/trace/summary
+GET /api/v1/data-sync/instances/{id}/trace/source
+GET /api/v1/data-sync/instances/{id}/trace/sink
+```
+
+Source / Sink 明细使用 Cursor 分页，pageSize 默认 50、最大 200，可按 SUCCESS / FAILED 过滤。Source API 只返回 Split FINISHED / FAILED 终态，Sink API 只返回 Batch COMMITTED / FAILED 终态；内部 JSONL 仍保留 PLANNED / STARTED / SINK_OPENED，用于 Summary 重建和未来诊断扩展。
+
+Trace 的 Source rows 是 Connector 在 Split 终态观察到的读取量，Sink rows 是成功提交 Batch 的行数；它们是诊断事实，不替代 Execution / Attempt 的 readRows / writeRows 产品指标，也不能解释成 exactly-once 业务行数。当前不提供 Trace retention、对象存储、全文检索或 REALTIME Trace。
+
 ## Realtime Execution
 
 Source 仅支持 MySQL CDC，Target 支持 MySQL / PostgreSQL / Oracle。Source 必须有主键；Target 主键字段集合必须与 Source 在不区分大小写的同名映射下完全一致，顺序可不同，缺失、额外或不同主键均拒绝。
