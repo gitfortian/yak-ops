@@ -157,8 +157,9 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
             String sql = split.isRangeSplit()
                     ? dialect.selectRangeSql(split.table(), config.schema(), split.splitColumn())
                     : dialect.selectSql(split.table(), config.schema());
-            List<Long> parameters =
-                    split.isRangeSplit() ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive()) : List.of();
+            List<Long> parameters = split.isRangeSplit()
+                    ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive())
+                    : List.of();
             traceListener.emit(new JdbcSourceSplitTraceEvent(
                     Instant.now(),
                     JdbcTraceEventType.SOURCE_SPLIT_PLANNED,
