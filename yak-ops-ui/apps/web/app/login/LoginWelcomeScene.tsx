@@ -13,21 +13,20 @@ export default function LoginWelcomeScene(props: ComponentProps<typeof LoginChar
         <div className="yak-login-welcome-scene__glow yak-login-welcome-scene__glow--right" />
 
         <div className="yak-login-welcome-scene__bubbles">
-          {Array.from({ length: 7 }, (_, index) => (
-            <span
-              key={index}
-              className={`yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--${index + 1}`}
-            />
-          ))}
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--1" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--2" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--3" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--4" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--5" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--6" />
+          <span className="yak-login-welcome-scene__bubble yak-login-welcome-scene__bubble--7" />
         </div>
 
         <div className="yak-login-welcome-scene__sparkles">
-          {Array.from({ length: 4 }, (_, index) => (
-            <span
-              key={index}
-              className={`yak-login-welcome-scene__spark yak-login-welcome-scene__spark--${index + 1}`}
-            />
-          ))}
+          <span className="yak-login-welcome-scene__spark yak-login-welcome-scene__spark--1" />
+          <span className="yak-login-welcome-scene__spark yak-login-welcome-scene__spark--2" />
+          <span className="yak-login-welcome-scene__spark yak-login-welcome-scene__spark--3" />
+          <span className="yak-login-welcome-scene__spark yak-login-welcome-scene__spark--4" />
         </div>
       </div>
 
