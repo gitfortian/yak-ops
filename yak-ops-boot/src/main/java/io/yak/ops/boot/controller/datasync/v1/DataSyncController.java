@@ -169,8 +169,7 @@ public class DataSyncController {
     @Operation(summary = "查询离线同步Execution Runtime Trace汇总")
     @GetMapping("/instances/{id}/trace/summary")
     public Result<DataSyncTraceSummaryVO> executionTraceSummary(
-            @PathVariable("id") String id,
-            @RequestParam(value = "attemptNo", required = false) Integer attemptNo) {
+            @PathVariable("id") String id, @RequestParam(value = "attemptNo", required = false) Integer attemptNo) {
         return Result.success(dataSyncService.queryExecutionTraceSummary(id, attemptNo));
     }
 
