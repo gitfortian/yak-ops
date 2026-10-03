@@ -2,27 +2,21 @@ import {
   Button,
   Field,
   FieldError,
-  FieldLabel,
+  FloatingLabelField,
   Input,
   PasswordInput,
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverTitle,
-  PopoverTrigger,
 } from "@yak-ops/yak-ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { notifyOnce } from "@/utils/notification";
 import { login } from "../../service/auth";
+import LoginPasswordEye from "./LoginPasswordEye";
 import {
   LOGIN_FAILURE_MOTION_MS,
   LOGIN_SUCCESS_MOTION_MS,
   type LoginFocusState,
   type LoginResultState,
 } from "./login-interaction";
-
-const WECHAT_QR_CODE_SRC = "/wechat_qr.png";
 
 interface LoginPanelProps {
   onAuthenticated: () => Promise<void>;
@@ -52,59 +46,12 @@ function waitForMotion(duration: number, signal: AbortSignal) {
   });
 }
 
-function WeChatQrHelp() {
-  const [qrCodeAvailable, setQrCodeAvailable] = useState(true);
-
-  return (
-    <div className="mt-5 text-center text-xs leading-5 text-[var(--yak-components-button-ghost-text)]">
-      需要账号？{" "}
-      <Popover>
-        <PopoverTrigger
-          type="button"
-          openOnHover
-          delay={120}
-          closeDelay={120}
-          className="cursor-pointer rounded-sm border-0 bg-transparent px-1 py-0.5 font-medium text-[var(--yak-color-primary)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--yak-color-primary)]"
-        >
-          扫码获取
-        </PopoverTrigger>
-        <PopoverContent side="top" className="w-52 max-w-[calc(100vw-2rem)] p-3">
-          <PopoverTitle className="sr-only">获取账号和密码</PopoverTitle>
-          <div className="flex flex-col items-center gap-2">
-            {qrCodeAvailable ? (
-              <img
-                src={WECHAT_QR_CODE_SRC}
-                alt="微信公众号二维码"
-                width={160}
-                height={160}
-                className="h-40 w-40 max-w-full rounded-xl object-contain"
-                onError={() => setQrCodeAvailable(false)}
-              />
-            ) : (
-              <div className="flex h-40 w-40 max-w-full items-center justify-center px-3 text-center text-xs leading-5">
-                二维码暂时无法加载，请联系管理员获取账号。
-              </div>
-            )}
-            <PopoverDescription className="m-0 text-center text-xs leading-5">
-              关注公众号，发送 <strong>9527</strong> 获取账号和密码。
-            </PopoverDescription>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
 export default function LoginPanel({
   onAuthenticated,
   onFocusStateChange,
   onLoginResultChange,
   onPasswordVisibilityChange,
 }: LoginPanelProps) {
-  const [values, setValues] = useState<LoginValues>({
-    userName: "",
-    userPassword: "",
-  });
   const [errors, setErrors] = useState<Partial<Record<keyof LoginValues, string>>>({});
   const [loading, setLoading] = useState(false);
   const submissionRef = useRef<AbortController | null>(null);
@@ -123,9 +70,12 @@ export default function LoginPanel({
     event.preventDefault();
     if (submissionRef.current) return;
 
+    // Read the native values at submission, including silent browser/password-manager autofill.
+    const userName = usernameRef.current?.value.trim() ?? "";
+    const userPassword = passwordRef.current?.value ?? "";
     const nextErrors: Partial<Record<keyof LoginValues, string>> = {};
-    if (!values.userName.trim()) nextErrors.userName = "请输入用户名";
-    if (!values.userPassword) nextErrors.userPassword = "请输入密码";
+    if (!userName) nextErrors.userName = "请输入用户名";
+    if (!userPassword) nextErrors.userPassword = "请输入密码";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       const firstInvalidInput = nextErrors.userName ? usernameRef.current : passwordRef.current;
@@ -142,8 +92,8 @@ export default function LoginPanel({
       onLoginResultChange("submitting");
 
       await login({
-        userName: values.userName.trim(),
-        pw: values.userPassword,
+        userName,
+        pw: userPassword,
       });
 
       if (submission.signal.aborted) return;
@@ -188,33 +138,30 @@ export default function LoginPanel({
         onSubmit={(event) => void handleAccountLogin(event)}
       >
         <Field name="userName" invalid={Boolean(errors.userName)} className="!gap-0">
-          <FieldLabel htmlFor="login-username" className="mb-2">
-            用户名
-          </FieldLabel>
-          <Input
-            ref={usernameRef}
-            id="login-username"
-            name="userName"
-            size="large"
-            variant="outlined"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="请输入用户名"
-            readOnly={loading}
-            value={values.userName}
-            aria-required="true"
-            aria-invalid={Boolean(errors.userName) || undefined}
-            aria-describedby={errors.userName ? "login-username-error" : undefined}
-            onFocus={() => onFocusStateChange("userName")}
-            onBlur={() => onFocusStateChange("idle")}
-            onChange={(event) => {
-              setValues((current) => ({ ...current, userName: event.target.value }));
-              if (errors.userName) {
-                setErrors((current) => ({ ...current, userName: undefined }));
-              }
-            }}
-          />
+          <FloatingLabelField htmlFor="login-username" label="用户名">
+            <Input
+              ref={usernameRef}
+              id="login-username"
+              name="userName"
+              size="large"
+              variant="underlined"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              readOnly={loading}
+              defaultValue=""
+              aria-required="true"
+              aria-invalid={Boolean(errors.userName) || undefined}
+              aria-describedby={errors.userName ? "login-username-error" : undefined}
+              onFocus={() => onFocusStateChange("userName")}
+              onBlur={() => onFocusStateChange("idle")}
+              onChange={() => {
+                if (errors.userName) {
+                  setErrors((current) => ({ ...current, userName: undefined }));
+                }
+              }}
+            />
+          </FloatingLabelField>
           <div className="grid min-h-6 items-start pt-1" aria-live="polite" aria-atomic="true">
             <FieldError id="login-username-error" match={Boolean(errors.userName)}>
               {errors.userName}
@@ -231,35 +178,33 @@ export default function LoginPanel({
             if (!event.currentTarget.contains(event.relatedTarget)) onFocusStateChange("idle");
           }}
         >
-          <FieldLabel htmlFor="login-password" className="mb-2">
-            密码
-          </FieldLabel>
-          <PasswordInput
-            ref={passwordRef}
-            id="login-password"
-            name="userPassword"
-            size="large"
-            variant="outlined"
-            autoComplete="current-password"
-            placeholder="请输入密码"
-            showPasswordLabel="显示密码"
-            hidePasswordLabel="隐藏密码"
-            onVisibilityChange={onPasswordVisibilityChange}
-            readOnly={loading}
-            value={values.userPassword}
-            aria-required="true"
-            aria-invalid={Boolean(errors.userPassword) || undefined}
-            aria-describedby={errors.userPassword ? "login-password-error" : undefined}
-            onChange={(event) => {
-              setValues((current) => ({ ...current, userPassword: event.target.value }));
-              if (errors.userPassword) {
-                setErrors((current) => ({
-                  ...current,
-                  userPassword: undefined,
-                }));
-              }
-            }}
-          />
+          <FloatingLabelField htmlFor="login-password" label="密码">
+            <PasswordInput
+              ref={passwordRef}
+              id="login-password"
+              name="userPassword"
+              size="large"
+              variant="underlined"
+              autoComplete="current-password"
+              showPasswordLabel="显示密码"
+              hidePasswordLabel="隐藏密码"
+              onVisibilityChange={onPasswordVisibilityChange}
+              renderVisibilityIcon={(visible) => <LoginPasswordEye visible={visible} />}
+              readOnly={loading}
+              defaultValue=""
+              aria-required="true"
+              aria-invalid={Boolean(errors.userPassword) || undefined}
+              aria-describedby={errors.userPassword ? "login-password-error" : undefined}
+              onChange={() => {
+                if (errors.userPassword) {
+                  setErrors((current) => ({
+                    ...current,
+                    userPassword: undefined,
+                  }));
+                }
+              }}
+            />
+          </FloatingLabelField>
           <div className="grid min-h-6 items-start pt-1" aria-live="polite" aria-atomic="true">
             <FieldError id="login-password-error" match={Boolean(errors.userPassword)}>
               {errors.userPassword}
@@ -272,12 +217,11 @@ export default function LoginPanel({
           size="large"
           type="submit"
           loading={loading}
-          className="mt-2 w-full"
+          className="login-form-submit mt-6 w-full"
+          style={{ borderRadius: "var(--yak-radius-full)" }}
         >
           登录
         </Button>
-
-        <WeChatQrHelp />
       </form>
       {/* Outside the busy form so the status can be announced while it is submitting. */}
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
