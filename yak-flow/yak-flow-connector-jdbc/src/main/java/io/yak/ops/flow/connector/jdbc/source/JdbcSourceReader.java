@@ -184,9 +184,8 @@ final class JdbcSourceReader implements SourceReader<JdbcSourceSplit> {
             Exception exception) {
         JdbcSourceSplit split = currentSplit;
         if (split == null) return;
-        List<Long> parameters = split.isRangeSplit()
-                ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive())
-                : List.of();
+        List<Long> parameters =
+                split.isRangeSplit() ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive()) : List.of();
         traceListener.emit(new JdbcSourceSplitTraceEvent(
                 Instant.now(),
                 eventType,
