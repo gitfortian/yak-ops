@@ -6,7 +6,7 @@ type Character = "purple" | "black" | "yellow" | "orange";
 type BlinkSlot = { character: Character; dueAt: number };
 
 const BLINK_CHARACTERS: Record<LoginSceneState, readonly Character[]> = {
-  idle: ["orange"],
+  idle: ["purple", "black", "orange"],
   inputFocus: ["purple", "black", "yellow", "orange"],
   passwordVisible: ["purple", "black", "yellow"],
   submitting: [],
@@ -23,7 +23,7 @@ function randomBetween(min: number, max: number) {
 function getBlinkEyes(scene: HTMLElement, character: Character, state: LoginSceneState) {
   const root = scene.querySelector(`[data-character="${character}"]`);
   if (!root) return [];
-  const pose = state === "passwordVisible" ? "reveal" : "input";
+  const pose = state === "idle" ? "idle" : state === "passwordVisible" ? "reveal" : "input";
   const selector =
     character === "purple" || character === "black"
       ? `[data-pose-eye="${pose}"]`
@@ -58,9 +58,10 @@ export function useLoginAmbientBlink(
     let generation = 0;
     let disposed = false;
     let available = false;
-    const idle = sceneState === "idle";
-    // Allow the reference pose to settle before its first independently timed blink.
-    const firstDelay = () => (idle ? 4600 : randomBetween(1500, 3300));
+    const fixedIdle = (character: Character) => sceneState === "idle" && character === "orange";
+    // Blue/black idle gaze is random too; orange alone retains its existing fixed cadence.
+    const firstDelay = (character: Character) =>
+      fixedIdle(character) ? 4600 : randomBetween(1500, 3300);
     const canRun = () =>
       !disposed &&
       !media.matches &&
@@ -100,13 +101,25 @@ export function useLoginAmbientBlink(
         if (slot.dueAt > now) continue;
         // A throttled/blocked page must not replay a backlog of overdue blinks.
         if (now - slot.dueAt > 1000) {
-          slot.dueAt = now + firstDelay();
+          slot.dueAt = now + firstDelay(slot.character);
           continue;
         }
+        const root = scene.querySelector(`[data-character="${slot.character}"]`);
+        const entry = root?.querySelector(`.yak-login-character--${slot.character}__entry`);
+        const entering =
+          sceneState === "idle" &&
+          entry?.getAnimations().some((animation) => {
+            const timing = animation.effect?.getComputedTiming();
+            return timing?.progress !== 1;
+          });
         const eyes = getBlinkEyes(scene, slot.character, sceneState);
+        if (entering || !eyes.length) {
+          slot.dueAt = now + firstDelay(slot.character);
+          continue;
+        }
         slot.dueAt = Infinity;
         let remaining = eyes.length;
-        const duration = idle ? 180 : randomBetween(140, 200);
+        const duration = fixedIdle(slot.character) ? 180 : randomBetween(140, 200);
         const startTime = document.timeline.currentTime;
         for (const { element, origin } of eyes) {
           const animation = element.animate(
@@ -132,8 +145,10 @@ export function useLoginAmbientBlink(
             if (epoch !== generation || !canRun()) return;
             remaining -= 1;
             if (remaining === 0) {
-              // Preserve orange's idle cadence; authored poses draw a fresh delay after each blink.
-              slot.dueAt = idle ? now + 4600 : performance.now() + randomBetween(3500, 8000);
+              // Only orange idle uses start-to-start cadence; all other slots re-sample after closing.
+              slot.dueAt = fixedIdle(slot.character)
+                ? now + 4600
+                : performance.now() + randomBetween(3500, 8000);
               schedule(epoch);
             }
           };
@@ -147,7 +162,7 @@ export function useLoginAmbientBlink(
       available = canRun();
       if (!available) return;
       const now = performance.now();
-      slots = characters.map((character) => ({ character, dueAt: now + firstDelay() }));
+      slots = characters.map((character) => ({ character, dueAt: now + firstDelay(character) }));
       schedule(generation);
     };
     // Stop when the responsive layout hides the illustration; resizing a visible one does not reset it.

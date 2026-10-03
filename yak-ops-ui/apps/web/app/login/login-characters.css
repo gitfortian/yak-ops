@@ -4,14 +4,12 @@
   --yak-input-lean: calc(-10deg * var(--yak-input-mix));
   --yak-purple-entry-duration: 1.16s;
   --yak-purple-entry-delay: 30ms;
-  --yak-purple-lean: 0deg;
-  --yak-purple-stretch: 1;
+  --yak-purple-gaze-rotate: 0deg;
   --yak-purple-face-x: 0px;
   --yak-purple-face-y: 0px;
   --yak-purple-pupil-x: 0px;
   --yak-purple-pupil-y: 0px;
-  --yak-black-lean: 0deg;
-  --yak-black-stretch: 1;
+  --yak-black-gaze-rotate: 0deg;
   --yak-black-face-x: 0px;
   --yak-black-face-y: 0px;
   --yak-black-face-rotate: 0deg;
@@ -111,12 +109,8 @@
   animation: yak-yellow-enter 1.34s cubic-bezier(0.22, 1, 0.36, 1) 190ms both;
 }
 
-.yak-login-character--purple__breathe {
-  animation: yak-purple-breathe 4.4s ease-in-out 1.45s infinite;
-}
-
 .yak-login-character--purple__body {
-  transform: skewX(var(--yak-purple-lean)) scaleY(var(--yak-purple-stretch));
+  transform: skewX(0deg) scaleY(1);
 }
 
 .yak-login-character--purple__face {
@@ -129,12 +123,8 @@
   transform: translate(var(--yak-purple-pupil-x), var(--yak-purple-pupil-y));
 }
 
-.yak-login-character--black__breathe {
-  animation: yak-black-breathe 5.4s ease-in-out 1.7s infinite;
-}
-
 .yak-login-character--black__body {
-  transform: skewX(var(--yak-black-lean)) scaleY(var(--yak-black-stretch));
+  transform: skewX(0deg) scaleY(1);
 }
 
 .yak-login-character--black__face {
@@ -144,6 +134,19 @@
 
 .yak-login-character--black__pupil {
   transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
+}
+
+/* Eye-group rotation is independent of entrance, authored poses and local blink transforms. */
+.yak-login-character--purple__pointer-face {
+  transform-box: view-box;
+  transform-origin: 304.5px 145px;
+  transform: rotate(var(--yak-purple-gaze-rotate));
+}
+
+.yak-login-character--black__pointer-face {
+  transform-box: view-box;
+  transform-origin: 403.5px 278px;
+  transform: rotate(var(--yak-black-gaze-rotate));
 }
 
 .yak-login-character--orange__body {
@@ -506,28 +509,6 @@
 
   100% {
     transform: translateX(0) rotate(0deg) scaleX(1) scaleY(1);
-  }
-}
-
-@keyframes yak-purple-breathe {
-  0%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  50% {
-    transform: scaleY(1.014);
-  }
-}
-
-@keyframes yak-black-breathe {
-  0%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  50% {
-    transform: scaleY(1.006);
   }
 }
 

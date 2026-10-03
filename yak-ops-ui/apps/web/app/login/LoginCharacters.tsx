@@ -264,6 +264,81 @@ function buildPurpleBodyPath(inputMix: number) {
     : PURPLE_DEFAULT_BODY_PATH;
 }
 
+// Ordinary gaze has its own fixed anchors; authored input/reveal geometry stays separate.
+const POINTER_EYES = {
+  purple: { x: 304.5, y: 145, halfGap: 30.5, radius: 5.5, pupilRadius: 2.3 },
+  black: { x: 403.5, y: 278, halfGap: 24.5, radius: 8.5, pupilRadius: 3.4 },
+} as const;
+type PointerCharacter = keyof typeof POINTER_EYES;
+
+function resolvePointerEyeTarget(
+  svg: SVGSVGElement | null,
+  pointer: YellowPointer | null,
+  character: PointerCharacter,
+) {
+  const rest = { x: 0, y: 0 };
+  if (!svg || !pointer || !svg.getClientRects().length) return rest;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return rest;
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) return rest;
+  const point = new DOMPoint(pointer.x, pointer.y).matrixTransform(matrix.inverse());
+  const anchor = POINTER_EYES[character];
+  const dx = point.x - anchor.x;
+  const dy = point.y - anchor.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return rest;
+  return { x: dx / Math.hypot(dx, 160), y: dy / Math.hypot(dy, 140) };
+}
+
+// Rigid face travel preserves eye spacing. Only the pupil moves inside each clipped white.
+function resolvePointerEyePose(character: PointerCharacter, x: number, y: number) {
+  const horizontal = clamp(x, -1, 1);
+  const vertical = clamp(y, -1, 1);
+  const purple = character === "purple";
+  const rotate = horizontal * (purple ? 3.5 : -4);
+  const radians = (rotate * Math.PI) / 180;
+  const norm = Math.max(1, Math.hypot(horizontal, vertical));
+  const { radius, pupilRadius } = POINTER_EYES[character];
+  const travel = radius - pupilRadius - 0.2;
+  // Counter-rotate the gaze vector so a rolled face still looks toward the actual pointer.
+  return {
+    x: horizontal * (purple ? 50 : 25),
+    y: vertical * (purple ? 24 : 18),
+    rotate,
+    pupilX: ((horizontal * Math.cos(radians) + vertical * Math.sin(radians)) / norm) * travel,
+    pupilY: ((vertical * Math.cos(radians) - horizontal * Math.sin(radians)) / norm) * travel,
+  };
+}
+
+function PointerEyes({ character }: { character: PointerCharacter }) {
+  const clipId = useId();
+  const { x, y, halfGap, radius, pupilRadius } = POINTER_EYES[character];
+  return (
+    <g className={`yak-login-character--${character}__eyes`}>
+      {[x - halfGap, x + halfGap].map((cx, index) => (
+        <g key={cx}>
+          <defs>
+            <clipPath id={`${clipId}-idle-${index}`} clipPathUnits="userSpaceOnUse">
+              <circle cx={cx} cy={y} r={radius} />
+            </clipPath>
+          </defs>
+          <circle data-pose-eye="idle" cx={cx} cy={y} r={radius} fill="#FFFFFF" />
+          <g clipPath={`url(#${clipId}-idle-${index})`}>
+            <circle
+              data-pose-pupil="idle"
+              className={`yak-login-character--${character}__pupil`}
+              cx={cx}
+              cy={y}
+              r={pupilRadius}
+              fill="#171717"
+            />
+          </g>
+        </g>
+      ))}
+    </g>
+  );
+}
+
 // Authored gaze is independent of face position and ordinary pointer tracking.
 function CharacterPoseEyes({
   character,
@@ -315,71 +390,56 @@ function PurpleCharacter() {
               <g className="yak-login-character--purple__body">
                 <path data-purple-body-path d={PURPLE_DEFAULT_BODY_PATH} fill="#6128F5" />
                 <g className="yak-login-character--purple__face">
-                  <g className="yak-login-character--purple__state-face-pose">
-                    <g className="yak-login-character--purple__result-eyes">
-                      <g className="yak-login-character--purple__focus-eyes">
-                        <g className="yak-login-character--purple__eyes">
-                          <circle cx="274" cy="145" r="5.5" fill="#FFFFFF" />
-                          <circle
-                            className="yak-login-character--purple__pupil"
-                            cx="274"
-                            cy="145"
-                            r="2.3"
-                            fill="#171717"
-                          />
-                          <circle cx="335" cy="145" r="5.5" fill="#FFFFFF" />
-                          <circle
-                            className="yak-login-character--purple__pupil"
-                            cx="335"
-                            cy="145"
-                            r="2.3"
-                            fill="#171717"
-                          />
+                  <g className="yak-login-character--purple__pointer-face">
+                    <g className="yak-login-character--purple__state-face-pose">
+                      <g className="yak-login-character--purple__result-eyes">
+                        <g className="yak-login-character--purple__focus-eyes">
+                          <PointerEyes character="purple" />
+                          <CharacterPoseEyes character="purple" pose="input" />
+                          <CharacterPoseEyes character="purple" pose="reveal" />
                         </g>
-                        <CharacterPoseEyes character="purple" pose="input" />
-                        <CharacterPoseEyes character="purple" pose="reveal" />
                       </g>
+                      <ellipse
+                        className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--purple__mouth--idle"
+                        cx="304.5"
+                        cy="174"
+                        rx="7.5"
+                        ry="4.2"
+                        fill="#171717"
+                      />
+                      <ellipse
+                        className="yak-login-character__mouth yak-login-character--purple__mouth--input"
+                        cx="304.5"
+                        cy="158"
+                        rx="4"
+                        ry="16"
+                        fill="#171717"
+                      />
+                      <path
+                        className="yak-login-character__mouth yak-login-character__mouth--reveal"
+                        d="M292 169Q304.5 157 317 169"
+                        fill="none"
+                        stroke="#171717"
+                        strokeWidth="5"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        className="yak-login-character__mouth yak-login-character__mouth--success"
+                        d="M292 169Q304.5 187 317 169"
+                        fill="none"
+                        stroke="#171717"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        className="yak-login-character__mouth yak-login-character__mouth--failure"
+                        d="M292 181Q304.5 168 317 181"
+                        fill="none"
+                        stroke="#171717"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
                     </g>
-                    <ellipse
-                      className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--purple__mouth--idle"
-                      cx="304.5"
-                      cy="174"
-                      rx="7.5"
-                      ry="4.2"
-                      fill="#171717"
-                    />
-                    <ellipse
-                      className="yak-login-character__mouth yak-login-character--purple__mouth--input"
-                      cx="304.5"
-                      cy="158"
-                      rx="4"
-                      ry="16"
-                      fill="#171717"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--reveal"
-                      d="M292 169Q304.5 157 317 169"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="5"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M292 169Q304.5 187 317 169"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--failure"
-                      d="M292 181Q304.5 168 317 181"
-                      fill="none"
-                      stroke="#171717"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
                   </g>
                 </g>
               </g>
@@ -401,47 +461,32 @@ function BlackCharacter() {
               <g className="yak-login-character--black__body">
                 <path data-black-body-path d="M342 550V242H464V550Z" fill="#191A20" />
                 <g className="yak-login-character--black__face">
-                  <g className="yak-login-character--black__state-face-pose">
-                    <g className="yak-login-character--black__result-eyes">
-                      <g className="yak-login-character--black__focus-eyes">
-                        <g className="yak-login-character--black__eyes">
-                          <circle cx="379" cy="278" r="8.5" fill="#FFFFFF" />
-                          <circle
-                            className="yak-login-character--black__pupil"
-                            cx="379"
-                            cy="278"
-                            r="3.4"
-                            fill="#171717"
-                          />
-                          <circle cx="428" cy="278" r="8.5" fill="#FFFFFF" />
-                          <circle
-                            className="yak-login-character--black__pupil"
-                            cx="428"
-                            cy="278"
-                            r="3.4"
-                            fill="#171717"
-                          />
+                  <g className="yak-login-character--black__pointer-face">
+                    <g className="yak-login-character--black__state-face-pose">
+                      <g className="yak-login-character--black__result-eyes">
+                        <g className="yak-login-character--black__focus-eyes">
+                          <PointerEyes character="black" />
+                          <CharacterPoseEyes character="black" pose="input" />
+                          <CharacterPoseEyes character="black" pose="reveal" />
                         </g>
-                        <CharacterPoseEyes character="black" pose="input" />
-                        <CharacterPoseEyes character="black" pose="reveal" />
                       </g>
+                      <path
+                        className="yak-login-character__mouth yak-login-character__mouth--success"
+                        d="M391 309Q403.5 324 416 309"
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        className="yak-login-character__mouth yak-login-character__mouth--failure"
+                        d="M391 320Q403.5 307 416 320"
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
                     </g>
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--success"
-                      d="M391 309Q403.5 324 416 309"
-                      fill="none"
-                      stroke="#FFFFFF"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="yak-login-character__mouth yak-login-character__mouth--failure"
-                      d="M391 320Q403.5 307 416 320"
-                      fill="none"
-                      stroke="#FFFFFF"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
                   </g>
                 </g>
               </g>
@@ -596,10 +641,8 @@ export default function LoginCharacters({
 
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!scene) return;
 
-    let targetX = 0;
-    let targetY = 0;
     let purpleX = 0;
     let purpleY = 0;
     let inputMix = 0;
@@ -620,6 +663,8 @@ export default function LoginCharacters({
 
     const purpleBodyPath = scene.querySelector<SVGPathElement>("[data-purple-body-path]");
     const blackBodyPath = scene.querySelector<SVGPathElement>("[data-black-body-path]");
+    const purpleEntry = scene.querySelector<SVGGElement>(".yak-login-character--purple__entry");
+    const purpleEntryAnimation = purpleEntry?.getAnimations()[0];
     const blackEntry = scene.querySelector<SVGGElement>(".yak-login-character--black__entry");
     // Use the actual CSS animation clock; do not duplicate its duration/delay in JavaScript.
     const blackEntryAnimation = blackEntry?.getAnimations()[0];
@@ -640,30 +685,13 @@ export default function LoginCharacters({
     const handlePointerMove = (event: PointerEvent) => {
       pointerPosition =
         event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
-      const rect = scene.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-
-      targetX = clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width / 2), -1, 1);
-      targetY = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2), -1, 1);
     };
 
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const animate = (now: number) => {
+      frame = 0;
       if (motionPreference.matches) {
-        previousFrameAt = now;
-        orangeX = 0;
-        orangeY = 0;
-        orangeVelocityX = 0;
-        orangeVelocityY = 0;
-        orangeBodyX = 0;
-        orangeBodyY = 0;
-        scene.style.setProperty("--yak-orange-face-x", "0px");
-        scene.style.setProperty("--yak-orange-face-y", "0px");
-        scene.style.setProperty("--yak-orange-face-rotate", "0deg");
-        inputMix = sceneStateRef.current === "inputFocus" ? 1 : 0;
-        revealMix = sceneStateRef.current === "passwordVisible" ? 1 : 0;
-        scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
-        frame = window.requestAnimationFrame(animate);
+        handleMotionPreference();
         return;
       }
       const elapsedMs = Math.max(0, now - previousFrameAt);
@@ -707,12 +735,24 @@ export default function LoginCharacters({
         ? 1
         : clamp((now - orangeEntryStartedAt) / ORANGE_ENTRY_DURATION_MS, 0, 1);
       const orangeEntryComplete = orangeEntryProgress >= 1;
-      const interactionTargetX = activeSceneState === "idle" ? targetX : 0;
-      const interactionTargetY = activeSceneState === "idle" ? targetY : 0;
-      purpleX = smoothMotion(purpleX, interactionTargetX, 0.075, deltaMs);
-      purpleY = smoothMotion(purpleY, interactionTargetY, 0.075, deltaMs);
-      blackX = smoothMotion(blackX, interactionTargetX, 0.042, deltaMs);
-      blackY = smoothMotion(blackY, interactionTargetY, 0.042, deltaMs);
+      const purpleEntryComplete =
+        entranceInterrupted ||
+        (purpleEntryAnimation?.effect?.getComputedTiming().progress ?? 1) >= 1;
+      const idlePointer = activeSceneState === "idle" ? pointerPosition : null;
+      const purpleTarget = resolvePointerEyeTarget(
+        svg,
+        purpleEntryComplete ? idlePointer : null,
+        "purple",
+      );
+      const blackTarget = resolvePointerEyeTarget(
+        svg,
+        blackEntryProgress >= 1 ? idlePointer : null,
+        "black",
+      );
+      purpleX = smoothMotion(purpleX, purpleTarget.x, 0.12, deltaMs);
+      purpleY = smoothMotion(purpleY, purpleTarget.y, 0.12, deltaMs);
+      blackX = smoothMotion(blackX, blackTarget.x, 0.12, deltaMs);
+      blackY = smoothMotion(blackY, blackTarget.y, 0.12, deltaMs);
 
       const orangeTarget = resolveOrangePointerTarget(
         svg,
@@ -730,23 +770,26 @@ export default function LoginCharacters({
       orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
       orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
 
-      scene.style.setProperty("--yak-purple-lean", `${purpleX * -8 * pointerWeight}deg`);
-      scene.style.setProperty("--yak-purple-stretch", String(1 - purpleY * 0.04 * pointerWeight));
-      scene.style.setProperty("--yak-purple-face-x", `${purpleX * 10 * pointerWeight}px`);
-      scene.style.setProperty("--yak-purple-face-y", `${purpleY * 5 * pointerWeight}px`);
-      scene.style.setProperty("--yak-purple-pupil-x", `${purpleX * 4 * pointerWeight}px`);
-      scene.style.setProperty("--yak-purple-pupil-y", `${purpleY * 2.5 * pointerWeight}px`);
+      const purplePose = resolvePointerEyePose("purple", purpleX, purpleY);
+      const blackPose = resolvePointerEyePose("black", blackX, blackY);
+      scene.style.setProperty("--yak-purple-face-x", `${purplePose.x * pointerWeight}px`);
+      scene.style.setProperty("--yak-purple-face-y", `${purplePose.y * pointerWeight}px`);
+      scene.style.setProperty(
+        "--yak-purple-gaze-rotate",
+        `${purplePose.rotate * pointerWeight}deg`,
+      );
+      scene.style.setProperty("--yak-purple-pupil-x", `${purplePose.pupilX * pointerWeight}px`);
+      scene.style.setProperty("--yak-purple-pupil-y", `${purplePose.pupilY * pointerWeight}px`);
 
-      scene.style.setProperty("--yak-black-lean", `${blackX * -4.5 * pointerWeight}deg`);
-      scene.style.setProperty("--yak-black-stretch", String(1 - blackY * 0.018 * pointerWeight));
       scene.style.setProperty(
         "--yak-black-face-x",
-        `${(blackX * 5 + blackBend * 0.81) * pointerWeight}px`,
+        `${(blackPose.x + blackBend * 0.81) * pointerWeight}px`,
       );
-      scene.style.setProperty("--yak-black-face-y", `${blackY * 2.5 * pointerWeight}px`);
+      scene.style.setProperty("--yak-black-face-y", `${blackPose.y * pointerWeight}px`);
       scene.style.setProperty("--yak-black-face-rotate", `${blackBend * 0.09}deg`);
-      scene.style.setProperty("--yak-black-pupil-x", `${blackX * 2.2 * pointerWeight}px`);
-      scene.style.setProperty("--yak-black-pupil-y", `${blackY * 1.4 * pointerWeight}px`);
+      scene.style.setProperty("--yak-black-gaze-rotate", `${blackPose.rotate * pointerWeight}deg`);
+      scene.style.setProperty("--yak-black-pupil-x", `${blackPose.pupilX * pointerWeight}px`);
+      scene.style.setProperty("--yak-black-pupil-y", `${blackPose.pupilY * pointerWeight}px`);
 
       if (orangeEntryComplete) {
         orangeBodyPath.setAttribute(
@@ -775,17 +818,63 @@ export default function LoginCharacters({
       frame = window.requestAnimationFrame(animate);
     };
 
+    const handleMotionPreference = () => {
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+      previousFrameAt = performance.now();
+      pointerPosition = null;
+      purpleX = 0;
+      purpleY = 0;
+      blackX = 0;
+      blackY = 0;
+      orangeX = 0;
+      orangeY = 0;
+      orangeVelocityX = 0;
+      orangeVelocityY = 0;
+      orangeBodyX = 0;
+      orangeBodyY = 0;
+      inputMix = sceneStateRef.current === "inputFocus" ? 1 : 0;
+      revealMix = sceneStateRef.current === "passwordVisible" ? 1 : 0;
+      scene.style.setProperty("--yak-input-mix", String(inputMix));
+      scene.style.setProperty("--yak-reveal-mix", String(revealMix));
+      for (const character of ["purple", "black", "orange"]) {
+        scene.style.setProperty(`--yak-${character}-face-x`, "0px");
+        scene.style.setProperty(`--yak-${character}-face-y`, "0px");
+      }
+      for (const character of ["purple", "black"]) {
+        scene.style.setProperty(`--yak-${character}-gaze-rotate`, "0deg");
+        scene.style.setProperty(`--yak-${character}-pupil-x`, "0px");
+        scene.style.setProperty(`--yak-${character}-pupil-y`, "0px");
+      }
+      scene.style.setProperty("--yak-black-face-rotate", "0deg");
+      scene.style.setProperty("--yak-orange-face-rotate", "0deg");
+      if (motionPreference.matches) {
+        // Media changes must not restart entrance or retain a stale pointer on return.
+        entranceInterrupted = true;
+        scene.dataset.entranceInterrupted = "true";
+        purpleBodyPath.setAttribute("d", buildPurpleBodyPath(inputMix));
+        blackBodyPath.setAttribute("d", buildBlackBodyPath(0, inputMix));
+        orangeBodyPath.setAttribute("d", buildOrangeBodyPath(0, 0, inputMix));
+        scene.style.setProperty("--yak-orange-entry-face-opacity", "1");
+      } else {
+        frame = window.requestAnimationFrame(animate);
+      }
+    };
+
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("pointerout", handlePointerOut);
     window.addEventListener("blur", clearPointerPosition);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    frame = window.requestAnimationFrame(animate);
+    motionPreference.addEventListener("change", handleMotionPreference);
+    if (motionPreference.matches) handleMotionPreference();
+    else frame = window.requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerout", handlePointerOut);
       window.removeEventListener("blur", clearPointerPosition);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      motionPreference.removeEventListener("change", handleMotionPreference);
       window.cancelAnimationFrame(frame);
       delete scene.dataset.entranceInterrupted;
     };
