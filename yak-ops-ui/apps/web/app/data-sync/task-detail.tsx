@@ -35,6 +35,7 @@ import {
   type DataSyncType,
 } from "@/service/data-sync";
 
+import { DataSyncExecutionDiagnostics } from "./execution-diagnostics";
 import {
   DataSyncExecutionConfigContent,
   DataSyncExecutionDetailContent,
@@ -459,7 +460,7 @@ export function DataSyncTaskDetailPage({
                   <TabsList>
                     <TabsTab value="status">执行情况</TabsTab>
                     <TabsTab value="config">配置快照</TabsTab>
-                    <TabsTab value="log">执行日志</TabsTab>
+                    <TabsTab value="log">{realtime ? "执行日志" : "执行诊断"}</TabsTab>
                   </TabsList>
 
                   <TabsPanel value="status" className="pt-3">
@@ -500,11 +501,19 @@ export function DataSyncTaskDetailPage({
                   </TabsPanel>
 
                   <TabsPanel value="log" className="pt-3">
-                    <DataSyncExecutionLogPanel
-                      record={selectedExecution}
-                      active={activeTab === "log"}
-                      sectionCard
-                    />
+                    {realtime ? (
+                      <DataSyncExecutionLogPanel
+                        record={selectedExecution}
+                        active={activeTab === "log"}
+                        sectionCard
+                      />
+                    ) : (
+                      <DataSyncExecutionDiagnostics
+                        record={selectedExecution}
+                        attempts={attempts}
+                        active={activeTab === "log"}
+                      />
+                    )}
                   </TabsPanel>
                 </Tabs>
               </section>
