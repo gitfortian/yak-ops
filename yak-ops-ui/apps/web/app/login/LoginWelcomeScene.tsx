@@ -30,10 +30,6 @@ export default function LoginWelcomeScene(props: ComponentProps<typeof LoginChar
         </div>
       </div>
 
-      <div className="yak-login-welcome-scene__copy">
-        <p className="yak-login-welcome-scene__brand">YAK OPS</p>
-      </div>
-
       <div className="yak-login-welcome-scene__stage">
         <div className="yak-login-welcome-scene__floor-aura" aria-hidden="true" />
         <div className="yak-login-welcome-scene__ground" aria-hidden="true" />
