@@ -6,6 +6,8 @@ import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistr
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlan;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlanner;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSession;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceStore;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -45,6 +47,9 @@ public class OfflineSyncExecutor {
 
     @Resource
     private DataSyncAttemptLifecycle attemptLifecycle;
+
+    @Resource
+    private ExecutionTraceStore executionTraceStore;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
         Thread.ofVirtual()
@@ -88,8 +93,10 @@ public class OfflineSyncExecutor {
         DataSyncAttemptEntity attempt = attemptLifecycle.createAttempt(workspaceId, instanceId, attemptNo);
         LocalExecution<?> execution = null;
         boolean started = false;
+        ExecutionTraceSession traceSession =
+                executionTraceStore.openSession(workspaceId, instanceId, attempt.getId(), attemptNo);
         try {
-            OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot);
+            OfflineSyncExecutionPlan plan = executionPlanner.plan(snapshot, traceSession.listener());
             execution = new LocalExecutionEngine()
                     .start(plan.source(), plan.sink(), plan.sourceSchema(), plan.sourceParallelism());
             executionRegistry.register(instanceId, execution);
@@ -186,6 +193,7 @@ public class OfflineSyncExecutor {
                     safeMessage(exception));
         } finally {
             if (execution != null) executionRegistry.remove(instanceId, execution);
+            traceSession.close();
         }
     }
 

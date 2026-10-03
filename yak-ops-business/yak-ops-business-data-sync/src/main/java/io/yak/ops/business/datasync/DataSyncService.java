@@ -13,8 +13,12 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTracePageVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTraceSummaryVO;
 import io.yak.ops.common.page.PagingData;
 import java.util.List;
 
@@ -75,6 +79,14 @@ public interface DataSyncService {
     List<DataSyncAttemptVO> queryAttempts(String instanceId);
 
     List<DataSyncExecutionEventVO> queryExecutionEvents(String instanceId);
+
+    DataSyncTraceSummaryVO queryExecutionTraceSummary(String instanceId, Integer attemptNo);
+
+    DataSyncTracePageVO<DataSyncSourceTraceVO> queryExecutionSourceTrace(
+            String instanceId, Integer attemptNo, Integer pageSize, String cursor, String status);
+
+    DataSyncTracePageVO<DataSyncSinkTraceVO> queryExecutionSinkTrace(
+            String instanceId, Integer attemptNo, Integer pageSize, String cursor, String status);
 
     PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto);
 

@@ -16,8 +16,12 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTracePageVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTraceSummaryVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -159,6 +164,35 @@ public class DataSyncController {
     @GetMapping("/instances/{id}/logs")
     public Result<List<DataSyncExecutionEventVO>> executionLogs(@PathVariable("id") String id) {
         return Result.success(dataSyncService.queryExecutionEvents(id));
+    }
+
+    @Operation(summary = "查询离线同步Execution Runtime Trace汇总")
+    @GetMapping("/instances/{id}/trace/summary")
+    public Result<DataSyncTraceSummaryVO> executionTraceSummary(
+            @PathVariable("id") String id, @RequestParam(value = "attemptNo", required = false) Integer attemptNo) {
+        return Result.success(dataSyncService.queryExecutionTraceSummary(id, attemptNo));
+    }
+
+    @Operation(summary = "Cursor分页查询离线同步Source Split诊断")
+    @GetMapping("/instances/{id}/trace/source")
+    public Result<DataSyncTracePageVO<DataSyncSourceTraceVO>> executionSourceTrace(
+            @PathVariable("id") String id,
+            @RequestParam(value = "attemptNo", required = false) Integer attemptNo,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "status", required = false) String status) {
+        return Result.success(dataSyncService.queryExecutionSourceTrace(id, attemptNo, pageSize, cursor, status));
+    }
+
+    @Operation(summary = "Cursor分页查询离线同步Sink Batch诊断")
+    @GetMapping("/instances/{id}/trace/sink")
+    public Result<DataSyncTracePageVO<DataSyncSinkTraceVO>> executionSinkTrace(
+            @PathVariable("id") String id,
+            @RequestParam(value = "attemptNo", required = false) Integer attemptNo,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "status", required = false) String status) {
+        return Result.success(dataSyncService.queryExecutionSinkTrace(id, attemptNo, pageSize, cursor, status));
     }
 
     @Operation(summary = "分页查询同步实例")
