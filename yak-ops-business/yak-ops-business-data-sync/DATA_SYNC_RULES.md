@@ -26,6 +26,7 @@ Datasource 校验、Catalog 和运行连接必须经过 DataSourceService。禁�
 | planning | 冻结快照 + Catalog / Connection 到执行计划；共用 SchemaResolver |
 | lifecycle | Execution / Attempt 状态迁移、进程内注册、取消和启动 LOST 处理 |
 | realtime | CDC state identity、目录和 MySQL serverId 资源 |
+| trace | Offline Attempt Runtime Trace 会话、文件持久化、Summary 和 Cursor 读取 |
 
 executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime 不反向依赖 executor。不要复制 offline/planning 与 realtime/planning 层级、逐类建包或重建 Manager / Coordinator。
 
@@ -66,6 +67,16 @@ Execution 产品日志复用 lifecycle owner 持久化有限状态事件，不�
 只记录低频生命周期事实，禁止把 metrics flush、每批 Source / Sink、SQL Debug 或任意 Logback 行写入事件表。用户可见 message 必须在持久化前经过 SensitiveUtils 脱敏并限制长度；事件表不得成为连接凭证或异常原文的旁路泄漏点。
 
 产品事件用于观察，不控制 Runtime 结果：事件持久化失败记录普通 Server Log，但不得反向把本可成功的 Execution / Attempt 改成失败。历史记录不做推断回填。
+
+## Runtime Trace Implementation
+
+Runtime Trace 与 Execution Event Table 是两套不同职责：产品 Event Table 只保存低频生命周期事实；Source Split / Sink Batch 诊断明细进入 trace 文件边界，禁止为了查询方便把高频 Batch Event 再写回 MySQL。
+
+Offline Executor 按 Attempt 打开 / 关闭 ExecutionTraceSession，同一个 Listener 同时交给 JDBC Source / Sink。Trace 会话使用有界异步队列，Listener 调用不能执行文件 I/O；队列满、Writer 失败或 Session 收口失败都不能改变 Runtime 终态。错误文本进入 Trace Record 前复用 SensitiveUtils，禁止记录 YakRow 字段值、Sink 参数或连接凭证。
+
+File Store 根目录从 yak.ops.home 下的 data/data-sync/execution-traces 解析，Workspace / Execution / Attempt 路径必须做 segment 校验，不能接受任意相对路径。JSONL 使用滚动分片，Summary 通过临时文件 + replace 收口；进程异常导致缺少 Summary 时允许从已落盘 JSONL best-effort 重建，不伪造 droppedEventCount。
+
+Trace 查询仍经 DataSyncService 校验 Workspace 与 OFFLINE Execution；HTTP 不直接暴露文件路径。明细使用受控 pageSize + Cursor 读取，禁止一次性把整个 Attempt Trace 加载进内存。Trace rows / durations 是诊断口径，不替代 Execution Metrics，也不从 Trace 反算吞吐时间序列。
 
 ## Scheduler and Recovery Implementation
 
