@@ -482,26 +482,43 @@
   display: inline;
 }
 
-/* Failure keeps an authored baseline outside the ordinary motion rig.
- * Only its private local-motion timeline may offset the face, close eyes or shape the mouth.
- * display:none also keeps these shapes out of normal/success transform bounding boxes.
+/* Both endpoint rigs stay measurable, but only one renderer is painted. Sibling branches
+ * never affect the normal rig's own transform-box. Bridge coordinates are in the root viewBox.
+ * Do not use display:none here: recovery samples the live hidden rig, not its neutral fallback.
  */
 .yak-login-character__failure-pose {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.yak-login-characters.is-login-failure [data-character-motion] {
+[data-failure-bridge] {
   display: none;
+  pointer-events: none;
 }
 
-/* The hidden rig must not keep old mouth transitions or success animations running. */
-.yak-login-characters.is-login-failure [data-character-motion] * {
+.yak-login-characters[data-failure-phase]:not([data-failure-phase="none"]) [data-character-motion] {
+  opacity: 0;
+}
+
+.yak-login-characters[data-failure-phase="hold"] .yak-login-character__failure-pose {
+  opacity: 1;
+}
+
+.yak-login-characters:is(
+    [data-failure-phase="enter"],
+    [data-failure-phase="recover"],
+    [data-failure-phase="frozen"]
+  )
+  [data-failure-bridge] {
+  display: inline;
+}
+
+/* Hidden mouth transitions must not introduce a second clock at the handoff endpoint. */
+.yak-login-characters[data-failure-phase]:not([data-failure-phase="none"])
+  [data-character-motion]
+  * {
   animation: none;
   transition: none;
-}
-
-.yak-login-characters.is-login-failure .yak-login-character__failure-pose {
-  display: inline;
 }
 
 /* Explicit SVG coordinates own the extra face transform; never use changing face bounds. */

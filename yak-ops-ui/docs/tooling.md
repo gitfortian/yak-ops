@@ -46,6 +46,8 @@ npm run build
 
 当前前端没有独立自动化测试 gate。引入测试体系需要明确 Contract 与 Tooling，不在普通文档整理中增加框架或放宽现有门禁。编译与静态检查不能证明弹层定位、焦点、动画或真实业务链路。
 
+针对登录失败衔接的纯几何回归可在 `yak-ops-ui/` 执行 `node scripts/verify-login-failure-transition.mjs`。它使用已有 TypeScript 与 Node assert，检查路径拓扑、地面、端点、动态目标与中断重接；不是新增测试框架或默认 CI gate，也不能证明 DOM 采样、浏览器动画、焦点或真实认证。
+
 ## Verification Record
 
 组件文档中的验收步骤描述可重复执行的方法，不表示已经通过。一次结果放在 PR / CI；发布结果放对应版本证据，并按 [Engineering Context Model](../../docs/engineering-context-model.md#evidence-chain) 记录提交、环境、执行范围和证据。局部样式夹具、真实 React 运行时、产品 E2E 分开报告；未执行、失败和 skipped 不写成完整验收通过。

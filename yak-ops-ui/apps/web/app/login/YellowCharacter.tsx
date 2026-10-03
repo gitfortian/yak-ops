@@ -287,6 +287,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
             strokeLinecap="round"
           />
         </g>
+        <g data-failure-bridge />
       </g>
     );
   },
