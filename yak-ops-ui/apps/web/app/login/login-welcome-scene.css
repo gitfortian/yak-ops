@@ -2,7 +2,9 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: minmax(16rem, 1fr);
+  /* Keep the former copy slot as quiet headroom so removing copy does not resize the characters. */
+  grid-template-rows: clamp(4.875rem, calc(8svh + 1.875rem), 7.375rem) minmax(16rem, 1fr);
+  gap: clamp(1rem, 3svh, 2rem);
   height: 100%;
   min-height: 100svh;
   overflow: hidden;
@@ -215,6 +217,7 @@
   --yak-login-scene-art-width: min(88%, 820px, calc(var(--yak-login-scene-art-height) * 720 / 550));
   position: relative;
   z-index: 1;
+  grid-row: 2;
   min-width: 0;
   min-height: 0;
   container-type: size;
@@ -343,6 +346,10 @@
 }
 
 @media (max-height: 700px) {
+  .yak-login-welcome-scene {
+    grid-template-rows: 3.5rem minmax(16rem, 1fr);
+  }
+
   .yak-login-welcome-scene__floor-aura {
     bottom: calc(var(--yak-login-scene-ground-gap) - 5rem);
     height: clamp(8rem, 26cqh, 12rem);
