@@ -8,7 +8,7 @@ export type LoginSceneState =
   | "failure"
   | "success";
 
-export const LOGIN_FAILURE_MOTION_MS = 700;
+export const LOGIN_FAILURE_MOTION_MS = 980;
 export const LOGIN_SUCCESS_MOTION_MS = 960;
 
 // Resolve once so CSS expressions and the animation loop have the same priority.
