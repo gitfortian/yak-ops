@@ -240,7 +240,6 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
                     null,
                     null,
                     null,
-                    null,
                     null);
         }
         if (event instanceof JdbcSinkBatchTraceEvent batch) {
