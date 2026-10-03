@@ -234,8 +234,7 @@
 }
 
 .yak-login-character--purple__mouth--input,
-.yak-login-character__mouth--success,
-.yak-login-character__mouth--failure {
+.yak-login-character__mouth--success {
   opacity: 0;
 }
 
@@ -253,21 +252,12 @@
   animation-play-state: paused;
 }
 
-.yak-login-characters.is-login-failure .yak-login-character__mouth--default,
 .yak-login-characters.is-login-success .yak-login-character__mouth--default {
   opacity: 0;
 }
 
-.yak-login-characters.is-login-failure .yak-login-character__mouth--failure,
 .yak-login-characters.is-login-success .yak-login-character__mouth--success {
   opacity: 1;
-}
-
-.yak-login-characters.is-login-failure .yak-login-character--purple__result-eyes,
-.yak-login-characters.is-login-failure .yak-login-character--black__result-eyes,
-.yak-login-characters.is-login-failure .yak-login-character--orange__result-eyes,
-.yak-login-characters.is-login-failure .yak-login-character--yellow__result-eyes {
-  transform: scaleY(0.18);
 }
 
 .yak-login-characters.is-login-success .yak-login-character--purple__result-eyes,
@@ -275,25 +265,6 @@
 .yak-login-characters.is-login-success .yak-login-character--orange__result-eyes,
 .yak-login-characters.is-login-success .yak-login-character--yellow__result-eyes {
   transform: scaleY(0.55);
-}
-
-.yak-login-characters.is-login-failure .yak-login-character--purple__result,
-.yak-login-characters.is-login-failure .yak-login-character--black__result,
-.yak-login-characters.is-login-failure .yak-login-character--orange__result,
-.yak-login-characters.is-login-failure .yak-login-character--yellow__result {
-  animation: yak-login-result-failure 620ms ease-in-out;
-}
-
-.yak-login-characters.is-login-failure .yak-login-character--black__result {
-  animation-delay: 20ms;
-}
-
-.yak-login-characters.is-login-failure .yak-login-character--orange__result {
-  animation-delay: 35ms;
-}
-
-.yak-login-characters.is-login-failure .yak-login-character--yellow__result {
-  animation-delay: 50ms;
 }
 
 .yak-login-characters.is-login-success .yak-login-character--purple__result,
@@ -313,33 +284,6 @@
 
 .yak-login-characters.is-login-success .yak-login-character--yellow__result {
   animation-delay: 110ms;
-}
-
-@keyframes yak-login-result-failure {
-  0%,
-  100% {
-    transform: skewX(0deg) scaleY(1);
-  }
-
-  16% {
-    transform: skewX(5deg) scaleY(0.92);
-  }
-
-  32% {
-    transform: skewX(-5deg) scaleY(0.86);
-  }
-
-  48% {
-    transform: skewX(4deg) scaleY(0.9);
-  }
-
-  64% {
-    transform: skewX(-3deg) scaleY(0.95);
-  }
-
-  80% {
-    transform: skewX(1.5deg) scaleY(0.98);
-  }
 }
 
 @keyframes yak-login-result-success {
@@ -535,5 +479,27 @@
 }
 
 .yak-login-characters.is-input-focus .yak-login-character__input-eyes {
+  display: inline;
+}
+
+/* Failure is an authored snapshot, not a paused frame of the motion rig.
+ * Keep it outside every pointer, focus, entrance and result transform. No transition.
+ * display:none also keeps these shapes out of normal/success transform bounding boxes.
+ */
+.yak-login-character__failure-pose {
+  display: none;
+}
+
+.yak-login-characters.is-login-failure [data-character-motion] {
+  display: none;
+}
+
+/* The hidden rig must not keep old mouth transitions or success animations running. */
+.yak-login-characters.is-login-failure [data-character-motion] * {
+  animation: none;
+  transition: none;
+}
+
+.yak-login-characters.is-login-failure .yak-login-character__failure-pose {
   display: inline;
 }
