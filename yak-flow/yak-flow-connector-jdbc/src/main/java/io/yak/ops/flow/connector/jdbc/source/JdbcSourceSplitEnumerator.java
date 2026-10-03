@@ -10,9 +10,9 @@ import io.yak.ops.flow.connector.jdbc.trace.JdbcSourceSplitTraceEvent;
 import io.yak.ops.flow.connector.jdbc.trace.JdbcTraceEventType;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import java.math.BigInteger;
-import java.time.Instant;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -157,9 +157,8 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
             String sql = split.isRangeSplit()
                     ? dialect.selectRangeSql(split.table(), config.schema(), split.splitColumn())
                     : dialect.selectSql(split.table(), config.schema());
-            List<Long> parameters = split.isRangeSplit()
-                    ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive())
-                    : List.of();
+            List<Long> parameters =
+                    split.isRangeSplit() ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive()) : List.of();
             traceListener.emit(new JdbcSourceSplitTraceEvent(
                     Instant.now(),
                     JdbcTraceEventType.SOURCE_SPLIT_PLANNED,
