@@ -9,6 +9,11 @@ import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTracePage;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceRecord;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSide;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceStore;
+import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSummarySnapshot;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
@@ -43,8 +48,12 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTracePageVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTraceSummaryVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
@@ -111,6 +120,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private static final Logger LOG = LoggerFactory.getLogger(DataSyncServiceImpl.class);
     private static final Set<String> REALTIME_TARGET_TYPES = Set.of("MYSQL", "POSTGRE_SQL", "ORACLE");
+    private static final int DEFAULT_TRACE_PAGE_SIZE = 50;
 
     @Resource
     private DataSyncTaskRepository taskRepository;
@@ -144,6 +154,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncAttemptLifecycle attemptLifecycle;
+
+    @Resource
+    private ExecutionTraceStore executionTraceStore;
 
     @Resource
     private ScheduleEngine scheduleEngine;
@@ -667,6 +680,48 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     @Override
+    public DataSyncTraceSummaryVO queryExecutionTraceSummary(String instanceId, Integer attemptNo) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncInstanceEntity instance = requireOfflineTraceInstance(workspaceId, instanceId);
+        int resolvedAttemptNo = resolveTraceAttemptNo(instance, attemptNo);
+        return toTraceSummaryVO(executionTraceStore.querySummary(workspaceId, instanceId, resolvedAttemptNo));
+    }
+
+    @Override
+    public DataSyncTracePageVO<DataSyncSourceTraceVO> queryExecutionSourceTrace(
+            String instanceId, Integer attemptNo, Integer pageSize, String cursor, String status) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncInstanceEntity instance = requireOfflineTraceInstance(workspaceId, instanceId);
+        int resolvedAttemptNo = resolveTraceAttemptNo(instance, attemptNo);
+        ExecutionTracePage page = queryTracePage(
+                workspaceId,
+                instanceId,
+                resolvedAttemptNo,
+                ExecutionTraceSide.SOURCE,
+                pageSize,
+                cursor,
+                status);
+        return toSourceTracePageVO(page);
+    }
+
+    @Override
+    public DataSyncTracePageVO<DataSyncSinkTraceVO> queryExecutionSinkTrace(
+            String instanceId, Integer attemptNo, Integer pageSize, String cursor, String status) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSyncInstanceEntity instance = requireOfflineTraceInstance(workspaceId, instanceId);
+        int resolvedAttemptNo = resolveTraceAttemptNo(instance, attemptNo);
+        ExecutionTracePage page = queryTracePage(
+                workspaceId,
+                instanceId,
+                resolvedAttemptNo,
+                ExecutionTraceSide.SINK,
+                pageSize,
+                cursor,
+                status);
+        return toSinkTracePageVO(page);
+    }
+
+    @Override
     public PagingData<DataSyncInstanceVO> queryInstancePage(DataSyncInstanceQueryDTO dto) {
         if (dto == null) throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY);
         if (CollectionUtils.isNotEmpty(dto.getSorts())) {
@@ -746,6 +801,119 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
 
         return toInstanceVO(requireInstance(workspaceId, id), true);
+    }
+
+    private DataSyncInstanceEntity requireOfflineTraceInstance(String workspaceId, String instanceId) {
+        DataSyncInstanceEntity instance = requireInstance(workspaceId, instanceId);
+        if (instance.getSyncType() != DataSyncType.OFFLINE) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, "Runtime Trace 当前仅支持离线同步");
+        }
+        return instance;
+    }
+
+    private int resolveTraceAttemptNo(DataSyncInstanceEntity instance, Integer attemptNo) {
+        int currentAttempt = instance.getCurrentAttempt() == null ? 1 : Math.max(1, instance.getCurrentAttempt());
+        int resolved = attemptNo == null ? currentAttempt : attemptNo;
+        if (resolved <= 0 || resolved > currentAttempt) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, "Attempt 序号不合法");
+        }
+        return resolved;
+    }
+
+    private ExecutionTracePage queryTracePage(
+            String workspaceId,
+            String instanceId,
+            int attemptNo,
+            ExecutionTraceSide side,
+            Integer pageSize,
+            String cursor,
+            String status) {
+        int resolvedPageSize = pageSize == null ? DEFAULT_TRACE_PAGE_SIZE : pageSize;
+        try {
+            return executionTraceStore.queryPage(
+                    workspaceId,
+                    instanceId,
+                    attemptNo,
+                    side,
+                    resolvedPageSize,
+                    StringUtils.trimToNull(cursor),
+                    StringUtils.trimToNull(status));
+        } catch (IllegalArgumentException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_QUERY, exception.getMessage(), exception);
+        }
+    }
+
+    private DataSyncTraceSummaryVO toTraceSummaryVO(ExecutionTraceSummarySnapshot source) {
+        DataSyncTraceSummaryVO target = new DataSyncTraceSummaryVO();
+        target.setAttemptNo(source.attemptNo());
+        target.setAvailable(source.available());
+        target.setComplete(source.complete());
+        target.setSourceSplitCount(source.sourceSplitCount());
+        target.setSourceFinishedSplitCount(source.sourceFinishedSplitCount());
+        target.setSourceFailedSplitCount(source.sourceFailedSplitCount());
+        target.setSourceRows(source.sourceRows());
+        target.setSourceSplitDurationMillis(source.sourceSplitDurationMillis());
+        target.setSinkSql(source.sinkSql());
+        target.setSinkBatchSize(source.sinkBatchSize());
+        target.setSinkSaveMode(source.sinkSaveMode());
+        target.setSinkWriteMode(source.sinkWriteMode());
+        target.setSinkCommittedBatchCount(source.sinkCommittedBatchCount());
+        target.setSinkFailedBatchCount(source.sinkFailedBatchCount());
+        target.setSinkRows(source.sinkRows());
+        target.setSinkExecuteDurationMillis(source.sinkExecuteDurationMillis());
+        target.setSinkCommitDurationMillis(source.sinkCommitDurationMillis());
+        target.setErrorCount(source.errorCount());
+        target.setDroppedEventCount(source.droppedEventCount());
+        return target;
+    }
+
+    private DataSyncTracePageVO<DataSyncSourceTraceVO> toSourceTracePageVO(ExecutionTracePage source) {
+        DataSyncTracePageVO<DataSyncSourceTraceVO> target = new DataSyncTracePageVO<>();
+        target.setRecords(source.records().stream().map(this::toSourceTraceVO).toList());
+        target.setNextCursor(source.nextCursor());
+        target.setHasMore(source.hasMore());
+        return target;
+    }
+
+    private DataSyncTracePageVO<DataSyncSinkTraceVO> toSinkTracePageVO(ExecutionTracePage source) {
+        DataSyncTracePageVO<DataSyncSinkTraceVO> target = new DataSyncTracePageVO<>();
+        target.setRecords(source.records().stream().map(this::toSinkTraceVO).toList());
+        target.setNextCursor(source.nextCursor());
+        target.setHasMore(source.hasMore());
+        return target;
+    }
+
+    private DataSyncSourceTraceVO toSourceTraceVO(ExecutionTraceRecord source) {
+        DataSyncSourceTraceVO target = new DataSyncSourceTraceVO();
+        target.setTimestamp(source.timestamp());
+        target.setSplitId(source.splitId());
+        target.setWorkerName(source.workerName());
+        target.setSql(source.sql());
+        target.setParameters(source.parameters());
+        target.setSplitColumn(source.splitColumn());
+        target.setLowerBoundInclusive(source.lowerBoundInclusive());
+        target.setUpperBoundInclusive(source.upperBoundInclusive());
+        target.setRows(source.rows());
+        target.setDurationMillis(source.durationMillis());
+        target.setStatus(source.type().endsWith("_FAILED") ? "FAILED" : "SUCCESS");
+        target.setFailureStage(source.failureStage());
+        target.setErrorType(source.errorType());
+        target.setErrorMessage(source.errorMessage());
+        return target;
+    }
+
+    private DataSyncSinkTraceVO toSinkTraceVO(ExecutionTraceRecord source) {
+        DataSyncSinkTraceVO target = new DataSyncSinkTraceVO();
+        target.setTimestamp(source.timestamp());
+        target.setBatchNo(source.batchNo());
+        target.setRows(source.rows());
+        target.setExecuteDurationMillis(source.executeDurationMillis());
+        target.setCommitDurationMillis(source.commitDurationMillis());
+        target.setStatus(source.type().endsWith("_FAILED") ? "FAILED" : "SUCCESS");
+        target.setFailureStage(source.failureStage());
+        target.setErrorType(source.errorType());
+        target.setErrorMessage(source.errorMessage());
+        return target;
     }
 
     private DataSyncInstanceVO createInstance(
