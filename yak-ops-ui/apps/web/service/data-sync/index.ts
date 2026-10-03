@@ -14,11 +14,16 @@ import type {
   DataSyncSchedulePreview,
   DataSyncScheduleRecord,
   DataSyncScheduleSavePayload,
+  DataSyncSinkTraceRecord,
+  DataSyncSourceTraceRecord,
   DataSyncTaskOperationPageResult,
   DataSyncTaskPageParams,
   DataSyncTaskPageResult,
   DataSyncTaskRecord,
   DataSyncTaskSavePayload,
+  DataSyncTracePage,
+  DataSyncTraceQuery,
+  DataSyncTraceSummary,
 } from "./types";
 
 export type * from "./types";
@@ -95,6 +100,40 @@ export const listDataSyncAttempts = (id: string): Promise<DataSyncAttemptRecord[
 
 export const listDataSyncExecutionEvents = (id: string): Promise<DataSyncExecutionEventRecord[]> =>
   HttpUtils.getData<DataSyncExecutionEventRecord[]>(`${DATA_SYNC_API_PREFIX}/instances/${id}/logs`);
+
+const traceQuery = (query?: DataSyncTraceQuery) => {
+  const params = new URLSearchParams();
+  if (query?.attemptNo) params.set("attemptNo", String(query.attemptNo));
+  if (query?.pageSize) params.set("pageSize", String(query.pageSize));
+  if (query?.cursor) params.set("cursor", query.cursor);
+  if (query?.status) params.set("status", query.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+};
+
+export const getDataSyncTraceSummary = (
+  id: string,
+  attemptNo?: number,
+): Promise<DataSyncTraceSummary> =>
+  HttpUtils.getData<DataSyncTraceSummary>(
+    `${DATA_SYNC_API_PREFIX}/instances/${id}/trace/summary${traceQuery({ attemptNo })}`,
+  );
+
+export const listDataSyncSourceTrace = (
+  id: string,
+  query?: DataSyncTraceQuery,
+): Promise<DataSyncTracePage<DataSyncSourceTraceRecord>> =>
+  HttpUtils.getData<DataSyncTracePage<DataSyncSourceTraceRecord>>(
+    `${DATA_SYNC_API_PREFIX}/instances/${id}/trace/source${traceQuery(query)}`,
+  );
+
+export const listDataSyncSinkTrace = (
+  id: string,
+  query?: DataSyncTraceQuery,
+): Promise<DataSyncTracePage<DataSyncSinkTraceRecord>> =>
+  HttpUtils.getData<DataSyncTracePage<DataSyncSinkTraceRecord>>(
+    `${DATA_SYNC_API_PREFIX}/instances/${id}/trace/sink${traceQuery(query)}`,
+  );
 
 const DATA_SYNC_SCHEDULE_NOT_FOUND_CODE = 42015;
 
