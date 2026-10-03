@@ -158,11 +158,11 @@ function sampleBlack(time: number): EntrancePose {
     bend === 0
       ? BLACK_DEFAULT_BODY_PATH
       : [
-        "M342 550",
-        `C342 448 ${point(342 + bend * 0.45)} 345 ${point(342 + bend)} 242`,
-        `H${point(464 + bend)}`,
-        `C${point(464 + bend * 0.45)} 345 464 448 464 550Z`,
-      ].join(" ");
+          "M342 550",
+          `C342 448 ${point(342 + bend * 0.45)} 345 ${point(342 + bend)} 242`,
+          `H${point(464 + bend)}`,
+          `C${point(464 + bend * 0.45)} 345 464 448 464 550Z`,
+        ].join(" ");
   const lean = stops(time, [
     [0, 0],
     [530, 0],
@@ -174,9 +174,7 @@ function sampleBlack(time: number): EntrancePose {
   return {
     path,
     transform:
-      time < 530
-        ? rotation(403, 396, angle, dx, dy)
-        : `matrix(1,0,${skew},1,${-550 * skew},0)`,
+      time < 530 ? rotation(403, 396, angle, dx, dy) : `matrix(1,0,${skew},1,${-550 * skew},0)`,
     faceTransform: rotation(403.5, 278, bend * 0.09, bend * 0.81),
     faceOpacity: 1,
   };
@@ -184,14 +182,7 @@ function sampleBlack(time: number): EntrancePose {
 
 // Four cubic segments share topology from a flying bean to a grounded half-disc.
 // The lower two segments flatten continuously before the first grounded frame.
-function orangeMorph(
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-  angle: number,
-  morph: number,
-) {
+function orangeMorph(cx: number, cy: number, rx: number, ry: number, angle: number, morph: number) {
   const k = 0.55228475;
   const bean = [
     [-1, 0],
@@ -266,8 +257,7 @@ function sampleOrange(time: number): EntrancePose {
     [1010, 1],
   ]);
   return {
-    path:
-      time >= 1010 ? ORANGE_REST_PATH : orangeMorph(240, 550, 175 * scale, 174 * scale, 0, 1),
+    path: time >= 1010 ? ORANGE_REST_PATH : orangeMorph(240, 550, 175 * scale, 174 * scale, 0, 1),
     transform: IDENTITY,
     faceTransform: groundScale(scale),
     faceOpacity: ramp(time, 450, 545),

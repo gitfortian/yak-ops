@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 import type { LoginSceneState } from "./login-interaction";
 
