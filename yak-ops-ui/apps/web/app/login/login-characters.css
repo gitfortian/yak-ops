@@ -2,8 +2,6 @@
   --yak-input-mix: 0;
   --yak-reveal-mix: 0;
   --yak-input-lean: calc(-10deg * var(--yak-input-mix));
-  --yak-purple-entry-duration: 1.16s;
-  --yak-purple-entry-delay: 30ms;
   --yak-purple-gaze-rotate: 0deg;
   --yak-purple-face-x: 0px;
   --yak-purple-face-y: 0px;
@@ -18,7 +16,7 @@
   --yak-orange-face-x: 0px;
   --yak-orange-face-y: 0px;
   --yak-orange-face-rotate: 0deg;
-  --yak-orange-entry-face-opacity: 0;
+  --yak-orange-entry-face-opacity: 1;
 }
 
 .yak-login-characters__svg {
@@ -96,26 +94,11 @@
   transform-origin: center;
 }
 
-.yak-login-character--purple__entry {
-  animation: yak-purple-enter var(--yak-purple-entry-duration) cubic-bezier(0.45, 0, 0.35, 1)
-    var(--yak-purple-entry-delay) both;
-}
-
-.yak-login-character--black__entry {
-  animation: yak-black-enter 1.18s ease-in-out 30ms both;
-}
-
-.yak-login-character--yellow__entry {
-  animation: yak-yellow-enter 1.34s cubic-bezier(0.22, 1, 0.36, 1) 190ms both;
-}
-
 .yak-login-character--purple__body {
   transform: skewX(0deg) scaleY(1);
 }
 
 .yak-login-character--purple__face {
-  animation: yak-purple-face-enter var(--yak-purple-entry-duration) linear
-    var(--yak-purple-entry-delay) both;
   transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
 }
 
@@ -414,109 +397,14 @@
   transform-origin: 520px 550px;
 }
 
-@keyframes yak-purple-face-enter {
-  0%,
-  48% {
-    opacity: 0;
-  }
-
-  72%,
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes yak-purple-enter {
-  0% {
-    transform: translate(-92px, -74px) rotate(-42deg) scaleX(1) scaleY(0.43);
-  }
-
-  28% {
-    transform: translate(-16px, -12px) rotate(8deg) scaleX(1) scaleY(0.43);
-  }
-
-  38% {
-    transform: translate(0, 0) rotate(0deg) scaleX(1.02) scaleY(0.43);
-  }
-
-  64% {
-    transform: translate(0, 0) rotate(0deg) scaleX(0.985) scaleY(1.045);
-  }
-
-  82% {
-    transform: translate(0, 0) rotate(0deg) scaleX(1.008) scaleY(0.985);
-  }
-
-  100% {
-    transform: translate(0, 0) rotate(0deg) scaleX(1) scaleY(1);
-  }
-}
-
-@keyframes yak-black-enter {
-  0% {
-    transform: translateY(-330px) rotate(-10deg) scaleX(0.96) scaleY(1);
-  }
-
-  26% {
-    transform: translateY(-235px) rotate(18deg) scaleX(0.98) scaleY(1);
-  }
-
-  44% {
-    transform: translateY(-64px) rotate(-24deg) scaleX(0.98) scaleY(1.02);
-  }
-
-  50% {
-    transform: translateY(0) rotate(0deg) scaleX(1.16) scaleY(0.78);
-  }
-
-  66% {
-    transform: translateY(-18px) rotate(0deg) scaleX(0.96) scaleY(1.055);
-  }
-
-  82% {
-    transform: translateY(0) rotate(0deg) scaleX(1.04) scaleY(0.965);
-  }
-
-  100% {
-    transform: translateY(0) rotate(0deg) scaleX(1) scaleY(1);
-  }
-}
-
-@keyframes yak-yellow-enter {
-  0% {
-    transform: translateX(34px) rotate(7deg) scaleX(0.86) scaleY(0.42);
-  }
-
-  34% {
-    transform: translateX(24px) rotate(5deg) scaleX(0.9) scaleY(0.48);
-  }
-
-  56% {
-    transform: translateX(4px) rotate(1deg) scaleX(0.96) scaleY(1.12);
-  }
-
-  70% {
-    transform: translateX(0) rotate(0deg) scaleX(1.045) scaleY(0.92);
-  }
-
-  84% {
-    transform: scaleX(0.985) scaleY(1.045);
-  }
-
-  94% {
-    transform: scaleX(1.008) scaleY(0.99);
-  }
-
-  100% {
-    transform: translateX(0) rotate(0deg) scaleX(1) scaleY(1);
-  }
-}
-
-.yak-login-characters[data-entrance-interrupted] .yak-login-character--purple__entry,
-.yak-login-characters[data-entrance-interrupted] .yak-login-character--black__entry,
-.yak-login-characters[data-entrance-interrupted] .yak-login-character--yellow__entry,
-.yak-login-characters[data-entrance-interrupted] .yak-login-character--purple__face {
-  animation: none;
+/* One root-SVG sampler owns entry transforms; do not rebase them to animated bounds. */
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+[data-entrance-face] {
+  transform-box: view-box;
+  transform-origin: 0 0;
 }
 
 .yak-login-character__input-eyes,

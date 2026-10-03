@@ -1,5 +1,6 @@
 import { useLayoutEffect, type RefObject } from "react";
 
+import { LOGIN_ENTRANCE_COMPLETE_EVENT } from "./login-entrance";
 import type { LoginSceneState } from "./login-interaction";
 
 type Character = "purple" | "black" | "yellow" | "orange";
@@ -67,6 +68,7 @@ export function useLoginAmbientBlink(
       !media.matches &&
       !document.hidden &&
       scene.isConnected &&
+      scene.dataset.entranceState !== "playing" &&
       scene.dataset.sceneState === sceneState &&
       scene.getClientRects().length > 0;
 
@@ -104,16 +106,8 @@ export function useLoginAmbientBlink(
           slot.dueAt = now + firstDelay(slot.character);
           continue;
         }
-        const root = scene.querySelector(`[data-character="${slot.character}"]`);
-        const entry = root?.querySelector(`.yak-login-character--${slot.character}__entry`);
-        const entering =
-          sceneState === "idle" &&
-          entry?.getAnimations().some((animation) => {
-            const timing = animation.effect?.getComputedTiming();
-            return timing?.progress !== 1;
-          });
         const eyes = getBlinkEyes(scene, slot.character, sceneState);
-        if (entering || !eyes.length) {
+        if (!eyes.length) {
           slot.dueAt = now + firstDelay(slot.character);
           continue;
         }
@@ -169,6 +163,7 @@ export function useLoginAmbientBlink(
     const observer = new ResizeObserver(() => {
       if (canRun() !== available) reset();
     });
+    scene.addEventListener(LOGIN_ENTRANCE_COMPLETE_EVENT, reset);
     reset();
     observer.observe(scene);
     media.addEventListener("change", reset);
@@ -177,6 +172,7 @@ export function useLoginAmbientBlink(
       disposed = true;
       stop();
       observer.disconnect();
+      scene.removeEventListener(LOGIN_ENTRANCE_COMPLETE_EVENT, reset);
       media.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", reset);
     };

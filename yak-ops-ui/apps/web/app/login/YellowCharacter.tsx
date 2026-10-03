@@ -1,15 +1,22 @@
-import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 import type { LoginSceneState } from "./login-interaction";
 
-const YELLOW_BODY_PATH =
-  "M450 550V407C450 352 481 318 524 318C565 318 590 349 590 404C590 456 590 505 590 550Z";
+import { LOGIN_ENTRANCE_START, YELLOW_BODY_PATH, type YellowEntrancePose } from "./login-entrance";
 const FACE_CENTER = { x: 520, y: 388 };
 const REST_POSE: YellowFacePose = { offsetX: 0, offsetY: 0, turn: 0, reveal: 0 };
 
 type YellowFacePose = { offsetX: number; offsetY: number; turn: number; reveal: number };
 export type YellowPointer = { x: number; y: number };
 export interface YellowCharacterHandle {
+  setEntrance: (pose: YellowEntrancePose | null) => void;
   update: (
     pointer: YellowPointer | null,
     state: LoginSceneState,
@@ -114,6 +121,11 @@ const REST_FACE = faceGeometry(REST_POSE);
 export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }>(
   function YellowCharacter({ sceneState }, ref) {
     const rootRef = useRef<SVGGElement | null>(null);
+    const entranceClipId = useId();
+    const clipPathRef = useRef<SVGPathElement | null>(null);
+    const bodyRef = useRef<SVGPathElement | null>(null);
+    const extraEyeRef = useRef<SVGCircleElement | null>(null);
+    const inputMixRef = useRef(0);
     const faceRef = useRef<SVGGElement | null>(null);
     const eyeRef = useRef<SVGCircleElement | null>(null);
     const mouthRef = useRef<SVGPathElement | null>(null);
@@ -123,6 +135,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     const reducedMotionRef = useRef<MediaQueryList | null>(null);
 
     const paint = useCallback((pose: YellowFacePose, inputMix = 0) => {
+      inputMixRef.current = inputMix;
       const geometry = faceGeometry(pose, inputMix);
       faceRef.current?.setAttribute("transform", geometry.transform);
       eyeRef.current?.setAttribute("cx", geometry.eyeX);
@@ -134,6 +147,21 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     useImperativeHandle(
       ref,
       () => ({
+        setEntrance(entrance) {
+          bodyRef.current?.setAttribute("d", entrance?.path ?? YELLOW_BODY_PATH);
+          clipPathRef.current?.setAttribute("d", entrance?.path ?? YELLOW_BODY_PATH);
+          eyeRef.current?.setAttribute("cy", String(entrance?.eyeY ?? 376));
+          extraEyeRef.current?.setAttribute("opacity", String(entrance?.extraEyeOpacity ?? 0));
+          if (!entrance) {
+            paint(poseRef.current, inputMixRef.current);
+            return;
+          }
+          faceRef.current?.setAttribute("transform", "translate(0 0)");
+          eyeRef.current?.setAttribute("cx", String(entrance.eyeX));
+          extraEyeRef.current?.setAttribute("cx", String(entrance.extraEyeX));
+          extraEyeRef.current?.setAttribute("cy", String(entrance.eyeY));
+          mouthRef.current?.setAttribute("d", entrance.mouth);
+        },
         update(pointer, state, deltaMs, inputMix) {
           if (reducedMotionRef.current?.matches) return;
           // Use the root SVG's matrix: entrance/result and face transforms are not input.
@@ -154,6 +182,9 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
       reducedMotionRef.current = media;
       const resetReducedPose = () => {
         if (!media.matches) return;
+        bodyRef.current?.setAttribute("d", YELLOW_BODY_PATH);
+        eyeRef.current?.setAttribute("cy", "376");
+        extraEyeRef.current?.setAttribute("opacity", "0");
         poseRef.current = resolveFaceTarget(sceneState, null);
         paint(poseRef.current, sceneState === "inputFocus" ? 1 : 0);
       };
@@ -171,7 +202,17 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
         <g className="yak-login-character--yellow__entry">
           <g className="yak-login-character--yellow__result">
             <g className="yak-login-character--yellow__focus">
-              <path data-yellow-body-path d={YELLOW_BODY_PATH} fill="#F3D30B" />
+              <defs>
+                <clipPath id={entranceClipId} clipPathUnits="userSpaceOnUse">
+                  <path ref={clipPathRef} d={LOGIN_ENTRANCE_START.yellow.path} />
+                </clipPath>
+              </defs>
+              <path
+                ref={bodyRef}
+                data-yellow-body-path
+                d={LOGIN_ENTRANCE_START.yellow.path}
+                fill="#F3D30B"
+              />
               <g className="yak-login-character--yellow__input-face-pose">
                 <g
                   ref={faceRef}
@@ -183,17 +224,27 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
                       <circle
                         ref={eyeRef}
                         data-yellow-eye
-                        cx={REST_FACE.eyeX}
-                        cy="376"
+                        cx={LOGIN_ENTRANCE_START.yellow.eyeX}
+                        cy={LOGIN_ENTRANCE_START.yellow.eyeY}
                         r="5.4"
                         fill="#171717"
+                      />
+                      <circle
+                        ref={extraEyeRef}
+                        data-yellow-entrance-eye
+                        clipPath={`url(#${entranceClipId})`}
+                        cx={LOGIN_ENTRANCE_START.yellow.extraEyeX}
+                        cy={LOGIN_ENTRANCE_START.yellow.eyeY}
+                        r="5.4"
+                        fill="#171717"
+                        opacity="0"
                       />
                     </g>
                   </g>
                   <path
                     ref={mouthRef}
                     className="yak-login-character__mouth yak-login-character__mouth--default"
-                    d={REST_FACE.mouth}
+                    d={LOGIN_ENTRANCE_START.yellow.mouth}
                     fill="none"
                     stroke="#171717"
                     strokeWidth="4"
