@@ -5,20 +5,27 @@ import io.yak.ops.flow.api.row.YakDataType;
 import io.yak.ops.flow.api.row.YakRow;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.api.sink.SinkWriter;
+import io.yak.ops.flow.api.trace.RuntimeTraceListener;
 import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcSinkBatchTraceEvent;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcSinkOpenedTraceEvent;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcTraceEventType;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcTraceFailureStage;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Types;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * JDBC Sink Writer：bounded 模式执行 INSERT / UPSERT batch，CDC 模式按主键顺序应用 changelog 并按批次提交事务。
@@ -32,22 +39,26 @@ final class JdbcSinkWriter implements SinkWriter {
     private final YakTableSchema schema;
     private final JdbcConnectionProvider connectionProvider;
     private final JdbcDialect dialect;
+    private final RuntimeTraceListener traceListener;
     private final List<Integer> primaryKeyIndexes = new ArrayList<>();
 
     private Connection connection;
     private PreparedStatement writeStatement;
     private PreparedStatement deleteStatement;
     private int pendingRows;
+    private long batchSequence;
 
     JdbcSinkWriter(
             JdbcSinkConfig config,
             YakTableSchema schema,
             JdbcConnectionProvider connectionProvider,
-            JdbcDialect dialect) {
+            JdbcDialect dialect,
+            RuntimeTraceListener traceListener) {
         this.config = config;
         this.schema = schema;
         this.connectionProvider = connectionProvider;
         this.dialect = dialect;
+        this.traceListener = traceListener;
         for (String primaryKey : schema.primaryKeys()) {
             int index = -1;
             for (int i = 0; i < schema.columnCount(); i++) {
@@ -82,6 +93,12 @@ final class JdbcSinkWriter implements SinkWriter {
             deleteStatement = connection.prepareStatement(dialect.deleteSql(config.table(), schema));
             deleteStatement.setQueryTimeout(config.timeoutSeconds());
         }
+        traceListener.emit(new JdbcSinkOpenedTraceEvent(
+                Instant.now(),
+                writeSql,
+                config.batchSize(),
+                config.saveMode().name(),
+                config.writeMode().name()));
     }
 
     @Override
@@ -197,15 +214,79 @@ final class JdbcSinkWriter implements SinkWriter {
 
     private void executeBoundedBatch() throws Exception {
         if (pendingRows == 0) return;
-        writeStatement.executeBatch();
-        connection.commit();
-        pendingRows = 0;
+
+        long batchNo = ++batchSequence;
+        int batchRows = pendingRows;
+        long executeStartNanos = System.nanoTime();
+        long executeDurationMillis;
+        try {
+            writeStatement.executeBatch();
+            executeDurationMillis = elapsedMillis(executeStartNanos);
+        } catch (Exception exception) {
+            emitBatchFailure(
+                    batchNo,
+                    batchRows,
+                    elapsedMillis(executeStartNanos),
+                    0L,
+                    JdbcTraceFailureStage.SINK_WRITE,
+                    exception);
+            throw exception;
+        }
+
+        long commitStartNanos = System.nanoTime();
+        try {
+            connection.commit();
+            long commitDurationMillis = elapsedMillis(commitStartNanos);
+            traceListener.emit(new JdbcSinkBatchTraceEvent(
+                    Instant.now(),
+                    JdbcTraceEventType.SINK_BATCH_COMMITTED,
+                    batchNo,
+                    batchRows,
+                    executeDurationMillis,
+                    commitDurationMillis,
+                    null,
+                    null,
+                    null));
+            pendingRows = 0;
+        } catch (Exception exception) {
+            emitBatchFailure(
+                    batchNo,
+                    batchRows,
+                    executeDurationMillis,
+                    elapsedMillis(commitStartNanos),
+                    JdbcTraceFailureStage.SINK_COMMIT,
+                    exception);
+            throw exception;
+        }
     }
 
     private void commitChangelog() throws Exception {
         if (pendingRows == 0) return;
         connection.commit();
         pendingRows = 0;
+    }
+
+    private void emitBatchFailure(
+            long batchNo,
+            long rows,
+            long executeDurationMillis,
+            long commitDurationMillis,
+            JdbcTraceFailureStage stage,
+            Exception exception) {
+        traceListener.emit(new JdbcSinkBatchTraceEvent(
+                Instant.now(),
+                JdbcTraceEventType.SINK_BATCH_FAILED,
+                batchNo,
+                rows,
+                executeDurationMillis,
+                commitDurationMillis,
+                stage,
+                exception.getClass().getName(),
+                exception.getMessage()));
+    }
+
+    private long elapsedMillis(long startNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(Math.max(0L, System.nanoTime() - startNanos));
     }
 
     private void validateArity(YakRow row) {
