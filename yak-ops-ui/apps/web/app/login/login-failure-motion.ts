@@ -1,7 +1,10 @@
 import { LOGIN_FAILURE_MOTION_MS } from "./login-interaction";
 
-// Visual feedback ends before the existing form-owned failure window. No timers or state writes.
-export const LOGIN_FAILURE_LOCAL_MOTION_MS = LOGIN_FAILURE_MOTION_MS - 100;
+// Keep the authored 600ms motion + 100ms hold in one proportionally scaled feedback window.
+// Keyframes below stay in authored time; changing the form-owned duration retimes every phase.
+const AUTHORED_FAILURE_MOTION_MS = 600;
+const FAILURE_TIME_SCALE = LOGIN_FAILURE_MOTION_MS / (AUTHORED_FAILURE_MOTION_MS + 100);
+export const LOGIN_FAILURE_LOCAL_MOTION_MS = AUTHORED_FAILURE_MOTION_MS * FAILURE_TIME_SCALE;
 
 export type LoginFailureMotion = {
   complete: boolean;
@@ -44,7 +47,7 @@ export function sampleLoginFailureMotion(elapsedMs: number): LoginFailureMotion 
   if (!Number.isFinite(elapsedMs) || elapsedMs >= LOGIN_FAILURE_LOCAL_MOTION_MS) {
     return REST_MOTION;
   }
-  const time = Math.max(0, elapsedMs);
+  const time = Math.max(0, elapsedMs) / FAILURE_TIME_SCALE;
   const purpleX = sampleStops(time, [
     [0, 0],
     [50, 0],
