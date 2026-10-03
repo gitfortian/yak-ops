@@ -90,7 +90,7 @@ jobs:
             esac
 
             case "${file}" in
-              pom.xml|mvnw|mvnw.cmd|.mvn/*|yak-ops-bom/*|yak-ops-common/src/main/java/io/yak/ops/common/*datasync*|yak-ops-dao/src/main/java/io/yak/ops/dao/*datasync*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V4__*|yak-ops-business/yak-ops-business-data-sync/*|yak-ops-business/yak-ops-business-data-sync/**/*|yak-ops-boot/src/main/java/io/yak/ops/boot/scheduler/*|yak-ops-boot/src/main/java/io/yak/ops/boot/config/*|.github/workflows/backend-acceptance.yml)
+              pom.xml|mvnw|mvnw.cmd|.mvn/*|yak-ops-bom/*|yak-ops-common/src/main/java/io/yak/ops/common/*datasync*|yak-ops-dao/src/main/java/io/yak/ops/dao/*datasync*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V4__*|yak-ops-dao/src/main/resources/db/migration/yak-ops/V5__*|yak-ops-business/yak-ops-business-data-sync/*|yak-ops-business/yak-ops-business-data-sync/**/*|yak-ops-boot/src/main/java/io/yak/ops/boot/scheduler/*|yak-ops-boot/src/main/java/io/yak/ops/boot/config/*|.github/workflows/backend-acceptance.yml)
                 automation=true
                 ;;
             esac
