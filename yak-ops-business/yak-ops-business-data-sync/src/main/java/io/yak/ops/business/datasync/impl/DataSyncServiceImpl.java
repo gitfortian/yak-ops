@@ -694,13 +694,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncInstanceEntity instance = requireOfflineTraceInstance(workspaceId, instanceId);
         int resolvedAttemptNo = resolveTraceAttemptNo(instance, attemptNo);
         ExecutionTracePage page = queryTracePage(
-                workspaceId,
-                instanceId,
-                resolvedAttemptNo,
-                ExecutionTraceSide.SOURCE,
-                pageSize,
-                cursor,
-                status);
+                workspaceId, instanceId, resolvedAttemptNo, ExecutionTraceSide.SOURCE, pageSize, cursor, status);
         return toSourceTracePageVO(page);
     }
 
@@ -711,13 +705,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncInstanceEntity instance = requireOfflineTraceInstance(workspaceId, instanceId);
         int resolvedAttemptNo = resolveTraceAttemptNo(instance, attemptNo);
         ExecutionTracePage page = queryTracePage(
-                workspaceId,
-                instanceId,
-                resolvedAttemptNo,
-                ExecutionTraceSide.SINK,
-                pageSize,
-                cursor,
-                status);
+                workspaceId, instanceId, resolvedAttemptNo, ExecutionTraceSide.SINK, pageSize, cursor, status);
         return toSinkTracePageVO(page);
     }
 
