@@ -34,8 +34,7 @@ public record JdbcSinkBatchTraceEvent(
     public JdbcSinkBatchTraceEvent {
         Objects.requireNonNull(timestamp, "timestamp must not be null");
         Objects.requireNonNull(eventType, "eventType must not be null");
-        if (eventType != JdbcTraceEventType.SINK_BATCH_COMMITTED
-                && eventType != JdbcTraceEventType.SINK_BATCH_FAILED) {
+        if (eventType != JdbcTraceEventType.SINK_BATCH_COMMITTED && eventType != JdbcTraceEventType.SINK_BATCH_FAILED) {
             throw new IllegalArgumentException("eventType must be a SINK_BATCH event");
         }
         if (batchNo <= 0) throw new IllegalArgumentException("batchNo must be greater than 0");
