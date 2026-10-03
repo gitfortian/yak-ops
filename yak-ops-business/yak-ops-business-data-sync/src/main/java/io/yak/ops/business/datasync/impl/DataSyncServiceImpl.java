@@ -575,50 +575,55 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     public synchronized void onFire(DataSyncScheduleFire fire) {
         if (fire == null) throw new DataSyncException(DataSyncErrorCode.INVALID_SCHEDULE);
 
-        DataSyncScheduleEntity schedule = scheduleRepository
-                .queryById(fire.workspaceId(), fire.scheduleId())
-                .orElse(null);
-        if (schedule == null
-                || !Boolean.TRUE.equals(schedule.getEnabled())
-                || !Objects.equals(schedule.getTaskId(), fire.taskId())) {
-            LOG.info(
-                    "离线调度触发已忽略，workspaceId={}, taskId={}, scheduleId={}",
-                    fire.workspaceId(),
-                    fire.taskId(),
-                    fire.scheduleId());
-            return;
-        }
+        WorkspaceContext.bind(fire.workspaceId());
+        try {
+            DataSyncScheduleEntity schedule = scheduleRepository
+                    .queryById(fire.workspaceId(), fire.scheduleId())
+                    .orElse(null);
+            if (schedule == null
+                    || !Boolean.TRUE.equals(schedule.getEnabled())
+                    || !Objects.equals(schedule.getTaskId(), fire.taskId())) {
+                LOG.info(
+                        "离线调度触发已忽略，workspaceId={}, taskId={}, scheduleId={}",
+                        fire.workspaceId(),
+                        fire.taskId(),
+                        fire.scheduleId());
+                return;
+            }
 
-        DataSyncTaskEntity task =
-                taskRepository.queryById(fire.workspaceId(), fire.taskId()).orElse(null);
-        if (task == null
-                || task.getSyncType() != DataSyncType.OFFLINE
-                || task.getStatus() != DataSyncTaskStatus.PUBLISHED) {
-            LOG.info(
-                    "离线调度触发因任务状态已忽略，workspaceId={}, taskId={}, scheduleId={}",
-                    fire.workspaceId(),
-                    fire.taskId(),
-                    fire.scheduleId());
-            return;
-        }
-        if (instanceRepository.existsActiveByTask(fire.workspaceId(), fire.taskId())) {
-            LOG.info(
-                    "离线调度触发因已有运行实例跳过，workspaceId={}, taskId={}, scheduleId={}",
-                    fire.workspaceId(),
-                    fire.taskId(),
-                    fire.scheduleId());
-            return;
-        }
+            DataSyncTaskEntity task =
+                    taskRepository.queryById(fire.workspaceId(), fire.taskId()).orElse(null);
+            if (task == null
+                    || task.getSyncType() != DataSyncType.OFFLINE
+                    || task.getStatus() != DataSyncTaskStatus.PUBLISHED) {
+                LOG.info(
+                        "离线调度触发因任务状态已忽略，workspaceId={}, taskId={}, scheduleId={}",
+                        fire.workspaceId(),
+                        fire.taskId(),
+                        fire.scheduleId());
+                return;
+            }
+            if (instanceRepository.existsActiveByTask(fire.workspaceId(), fire.taskId())) {
+                LOG.info(
+                        "离线调度触发因已有运行实例跳过，workspaceId={}, taskId={}, scheduleId={}",
+                        fire.workspaceId(),
+                        fire.taskId(),
+                        fire.scheduleId());
+                return;
+            }
 
-        DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
-        DataSyncInstanceVO instance =
-                createInstance(fire.workspaceId(), task, resolvedScope, DataSyncTriggerType.SCHEDULE);
-        LOG.info(
-                "离线调度已创建同步实例，workspaceId={}, taskId={}, scheduleId={}, instanceId={}",
-                fire.workspaceId(),
-                fire.taskId(),
-                fire.scheduleId(),
-                instance.getId());
+            DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+            DataSyncInstanceVO instance =
+                    createInstance(fire.workspaceId(), task, resolvedScope, DataSyncTriggerType.SCHEDULE);
+            LOG.info(
+                    "离线调度已创建同步实例，workspaceId={}, taskId={}, scheduleId={}, instanceId={}",
+                    fire.workspaceId(),
+                    fire.taskId(),
+                    fire.scheduleId(),
+                    instance.getId());
+        } finally {
+            WorkspaceContext.clear();
+        }
     }
 
     @Override
