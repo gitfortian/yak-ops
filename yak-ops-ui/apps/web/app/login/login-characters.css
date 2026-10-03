@@ -482,8 +482,8 @@
   display: inline;
 }
 
-/* Failure is an authored snapshot, not a paused frame of the motion rig.
- * Keep it outside every pointer, focus, entrance and result transform. No transition.
+/* Failure keeps an authored baseline outside the ordinary motion rig.
+ * Only its private local-motion timeline may offset the face, close eyes or shape the mouth.
  * display:none also keeps these shapes out of normal/success transform bounding boxes.
  */
 .yak-login-character__failure-pose {
@@ -502,4 +502,10 @@
 
 .yak-login-characters.is-login-failure .yak-login-character__failure-pose {
   display: inline;
+}
+
+/* Explicit SVG coordinates own the extra face transform; never use changing face bounds. */
+.yak-login-characters [data-failure-motion] {
+  transform-box: view-box;
+  transform-origin: 0 0;
 }

@@ -9,6 +9,11 @@ import {
 } from "./login-interaction";
 import { useLoginAmbientBlink } from "./useLoginAmbientBlink";
 import {
+  LOGIN_FAILURE_LOCAL_MOTION_MS,
+  sampleLoginFailureMotion,
+  type LoginFailureMotion,
+} from "./login-failure-motion";
+import {
   BLACK_DEFAULT_BODY_PATH,
   buildOrangeBodyPath,
   LOGIN_ENTRANCE_COMPLETE_EVENT,
@@ -226,7 +231,7 @@ function CharacterPoseEyes({
   );
 }
 
-// Failure is a mutually exclusive, static drawing outside the motion rig.
+// Failure keeps its authored geometry outside the ordinary motion rig.
 // Hidden branches use display:none so they cannot shift the other states' SVG bounds.
 function PurpleCharacter() {
   return (
@@ -303,16 +308,18 @@ function PurpleCharacter() {
           d="M212 550L220 377L168 250L206 74L410 117L386 231L418 303L404 550Z"
           fill="#6128F5"
         />
-        <g data-failure-face transform="rotate(4 330 148)">
-          <CharacterPoseEyes character="purple" pose="failure" />
-          <path
-            data-failure-mouth
-            d="M319 175Q330 164 341 175"
-            fill="none"
-            stroke="#171717"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
+        <g data-failure-motion="purple">
+          <g data-failure-face transform="rotate(4 330 148)">
+            <CharacterPoseEyes character="purple" pose="failure" />
+            <path
+              data-failure-mouth
+              d="M319 175Q330 164 341 175"
+              fill="none"
+              stroke="#171717"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
+          </g>
         </g>
       </g>
     </g>
@@ -492,10 +499,24 @@ export default function LoginCharacters({
     complete: false,
   });
   const finishEntranceRef = useRef<(() => void) | null>(null);
+  const failureMotionRef = useRef<{ startedAt: number | null; complete: boolean }>({
+    startedAt: null,
+    complete: true,
+  });
+  const refreshFailureMotionRef = useRef<(() => void) | null>(null);
   useLoginAmbientBlink(sceneRef, sceneState);
 
   useLayoutEffect(() => {
     sceneStateRef.current = sceneState;
+    // Field/visibility changes within failure must not restart this one-shot reaction.
+    if (sceneState === "failure") {
+      if (failureMotionRef.current.startedAt === null) {
+        failureMotionRef.current = { startedAt: performance.now(), complete: false };
+      }
+    } else {
+      failureMotionRef.current = { startedAt: null, complete: true };
+    }
+    refreshFailureMotionRef.current?.();
     if (sceneState !== "idle") finishEntranceRef.current?.();
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const applyReducedScenePose = () => {
@@ -543,6 +564,8 @@ export default function LoginCharacters({
     let orangeBodyY = 0;
     let pointerPosition: YellowPointer | null = null;
     let frame = 0;
+    let disposed = false;
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (entranceRef.current.startedAt === null) entranceRef.current.startedAt = performance.now();
     const startedAt = entranceRef.current.startedAt;
     let previousFrameAt = performance.now();
@@ -582,6 +605,59 @@ export default function LoginCharacters({
       if (!entranceRef.current.complete) finishEntrance();
     };
 
+    const failureFace = scene.querySelector<SVGGElement>('[data-failure-motion="purple"]');
+    const failureEyes = (["black", "orange"] as const).flatMap((character) =>
+      Array.from(
+        scene.querySelectorAll<SVGGraphicsElement>(
+          `[data-failure-pose="${character}"] [data-pose-eye="failure"]`,
+        ),
+      ).flatMap((eye) => {
+        const element = character === "black" ? eye.parentElement : eye;
+        const y = Number(eye.getAttribute("cy"));
+        return element && Number.isFinite(y) ? [{ character, element, y }] : [];
+      }),
+    );
+    const paintFailureMotion = (motion: LoginFailureMotion) => {
+      if (motion.purpleX === 0 && motion.purpleRotate === 0) {
+        failureFace?.removeAttribute("transform");
+      } else {
+        failureFace?.setAttribute(
+          "transform",
+          `translate(${motion.purpleX} 0) rotate(${motion.purpleRotate} 330 148)`,
+        );
+      }
+      for (const { character, element, y } of failureEyes) {
+        const open = character === "black" ? motion.blackOpen : motion.orangeOpen;
+        if (open === 1) element.removeAttribute("transform");
+        else element.setAttribute("transform", `matrix(1 0 0 ${open} 0 ${y * (1 - open)})`);
+      }
+      yellowRef.current?.setFailureWave(motion.yellowWave);
+    };
+    const finishFailureMotion = () => {
+      failureMotionRef.current.complete = true;
+      paintFailureMotion(sampleLoginFailureMotion(LOGIN_FAILURE_LOCAL_MOTION_MS));
+    };
+    const refreshFailureMotion = (now = performance.now()) => {
+      if (disposed) return;
+      const motion = failureMotionRef.current;
+      if (
+        sceneStateRef.current !== "failure" ||
+        motion.complete ||
+        motion.startedAt === null ||
+        motionPreference.matches ||
+        document.hidden ||
+        !scene.getClientRects().length
+      ) {
+        finishFailureMotion();
+        return;
+      }
+      const sampled = sampleLoginFailureMotion(now - motion.startedAt);
+      paintFailureMotion(sampled);
+      motion.complete = sampled.complete;
+    };
+    refreshFailureMotionRef.current = refreshFailureMotion;
+    refreshFailureMotion();
+
     const clearPointerPosition = () => {
       pointerPosition = null;
     };
@@ -591,6 +667,7 @@ export default function LoginCharacters({
     const handleVisibilityChange = () => {
       if (document.hidden) {
         clearPointerPosition();
+        finishFailureMotion();
         if (!entranceRef.current.complete) finishEntrance();
       }
     };
@@ -600,8 +677,8 @@ export default function LoginCharacters({
         event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
     };
 
-    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const animate = (now: number) => {
+      if (disposed) return;
       frame = 0;
       if (motionPreference.matches) {
         handleMotionPreference();
@@ -616,6 +693,7 @@ export default function LoginCharacters({
         orangeVelocityY = 0;
       }
       const activeSceneState = sceneStateRef.current;
+      if (!failureMotionRef.current.complete) refreshFailureMotion(now);
       // One clock blends mutually exclusive authored poses. Field-to-field focus is unchanged.
       const inputTarget = activeSceneState === "inputFocus" ? 1 : 0;
       const revealTarget = activeSceneState === "passwordVisible" ? 1 : 0;
@@ -699,6 +777,7 @@ export default function LoginCharacters({
     };
 
     const handleMotionPreference = () => {
+      if (motionPreference.matches) finishFailureMotion();
       window.cancelAnimationFrame(frame);
       frame = 0;
       previousFrameAt = performance.now();
@@ -740,6 +819,7 @@ export default function LoginCharacters({
     };
 
     const resizeObserver = new ResizeObserver(() => {
+      if (!scene.getClientRects().length) finishFailureMotion();
       if (!scene.getClientRects().length && !entranceRef.current.complete) {
         pointerPosition = null;
         finishEntrance();
@@ -766,6 +846,10 @@ export default function LoginCharacters({
     else frame = window.requestAnimationFrame(animate);
 
     return () => {
+      disposed = true;
+      // Clean the drawing without resetting the attempt during StrictMode effect replay.
+      paintFailureMotion(sampleLoginFailureMotion(LOGIN_FAILURE_LOCAL_MOTION_MS));
+      refreshFailureMotionRef.current = null;
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerout", handlePointerOut);
       window.removeEventListener("blur", clearPointerPosition);
