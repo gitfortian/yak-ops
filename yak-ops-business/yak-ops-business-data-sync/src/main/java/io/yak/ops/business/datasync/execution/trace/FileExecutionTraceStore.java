@@ -344,10 +344,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList();
         } catch (IOException exception) {
-            LOG.warn(
-                    "Runtime Trace 分片目录读取失败，directory={}, error={}",
-                    directory.getFileName(),
-                    safeMessage(exception));
+            LOG.warn("Runtime Trace 分片目录读取失败，directory={}, error={}", directory.getFileName(), safeMessage(exception));
             return List.of();
         }
     }
@@ -372,11 +369,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
             try {
-                Files.move(
-                        temporary,
-                        target,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException exception) {
                 Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -400,9 +393,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
     private TraceKey traceKey(String workspaceId, String executionId, int attemptNo) {
         if (attemptNo <= 0) throw new IllegalArgumentException("attemptNo must be greater than 0");
         return new TraceKey(
-                requireSegment(workspaceId, "workspaceId"),
-                requireSegment(executionId, "executionId"),
-                attemptNo);
+                requireSegment(workspaceId, "workspaceId"), requireSegment(executionId, "executionId"), attemptNo);
     }
 
     private String requireSegment(String value, String field) {
@@ -415,26 +406,7 @@ public class FileExecutionTraceStore implements ExecutionTraceStore {
     }
 
     private ExecutionTraceSummarySnapshot emptySummary(int attemptNo) {
-        return new ExecutionTraceSummarySnapshot(
-                attemptNo,
-                false,
-                false,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                null,
-                null,
-                null,
-                null,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L);
+        return ExecutionTraceSummarySnapshot.empty(attemptNo);
     }
 
     private String safeMessage(Throwable throwable) {
