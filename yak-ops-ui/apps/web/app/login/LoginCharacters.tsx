@@ -6,8 +6,10 @@ import {
   resolveLoginSceneState,
   type LoginFocusState,
   type LoginResultState,
+  type LoginSceneState,
 } from "./login-interaction";
 import { useLoginAmbientBlink } from "./useLoginAmbientBlink";
+import { createLoginFailureTransition, type FailureSnapshot } from "./login-failure-transition";
 import {
   LOGIN_FAILURE_LOCAL_MOTION_MS,
   sampleLoginFailureMotion,
@@ -232,7 +234,7 @@ function CharacterPoseEyes({
 }
 
 // Failure keeps its authored geometry outside the ordinary motion rig.
-// Hidden branches use display:none so they cannot shift the other states' SVG bounds.
+// A failure-only bridge reads both rigs in root SVG coordinates; neither rig is reparented.
 function PurpleCharacter() {
   return (
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
@@ -322,6 +324,7 @@ function PurpleCharacter() {
           </g>
         </g>
       </g>
+      <g data-failure-bridge />
     </g>
   );
 }
@@ -375,6 +378,7 @@ function BlackCharacter() {
         <path data-failure-body d="M354 550V305H482V550Z" fill="#191A20" />
         <CharacterPoseEyes character="black" pose="failure" />
       </g>
+      <g data-failure-bridge />
     </g>
   );
 }
@@ -475,6 +479,7 @@ function OrangeCharacter() {
           />
         </g>
       </g>
+      <g data-failure-bridge />
     </g>
   );
 }
@@ -494,6 +499,12 @@ export default function LoginCharacters({
   const yellowRef = useRef<YellowCharacterHandle | null>(null);
   const sceneState = resolveLoginSceneState(focusState, resultState, passwordVisible);
   const sceneStateRef = useRef(sceneState);
+  const recoveryState = resolveLoginSceneState(focusState, "idle", passwordVisible);
+  const recoveryStateRef = useRef(recoveryState);
+  const transitionId = useId();
+  const transitionRef = useRef<ReturnType<typeof createLoginFailureTransition> | null>(null);
+  const beforeStateRef = useRef<FailureSnapshot | null>(null);
+  const syncSceneRef = useRef<(() => void) | null>(null);
   const entranceRef = useRef<{ startedAt: number | null; complete: boolean }>({
     startedAt: null,
     complete: false,
@@ -504,10 +515,19 @@ export default function LoginCharacters({
     complete: true,
   });
   const refreshFailureMotionRef = useRef<(() => void) | null>(null);
+  // Snapshot before the old blink effect is cancelled. Classes are changed only by syncScene,
+  // so this is the actual outgoing geometry (including a half blink), not the next state's rig.
+  useLayoutEffect(
+    () => () => {
+      beforeStateRef.current = transitionRef.current?.captureVisible() ?? null;
+    },
+    [sceneState],
+  );
   useLoginAmbientBlink(sceneRef, sceneState);
 
   useLayoutEffect(() => {
     sceneStateRef.current = sceneState;
+    recoveryStateRef.current = recoveryState;
     // Field/visibility changes within failure must not restart this one-shot reaction.
     if (sceneState === "failure") {
       if (failureMotionRef.current.startedAt === null) {
@@ -516,6 +536,7 @@ export default function LoginCharacters({
     } else {
       failureMotionRef.current = { startedAt: null, complete: true };
     }
+    syncSceneRef.current?.();
     refreshFailureMotionRef.current?.();
     if (sceneState !== "idle") finishEntranceRef.current?.();
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -544,7 +565,7 @@ export default function LoginCharacters({
     applyReducedScenePose();
     media.addEventListener("change", applyReducedScenePose);
     return () => media.removeEventListener("change", applyReducedScenePose);
-  }, [sceneState]);
+  }, [sceneState, recoveryState]);
 
   useLayoutEffect(() => {
     const scene = sceneRef.current;
@@ -658,6 +679,65 @@ export default function LoginCharacters({
     refreshFailureMotionRef.current = refreshFailureMotion;
     refreshFailureMotion();
 
+    const transition = createLoginFailureTransition(scene, transitionId);
+    transitionRef.current = transition;
+    let previousSceneState: LoginSceneState | undefined;
+    let normalSceneState: LoginSceneState = "idle";
+    const applySceneClass = (state: LoginSceneState, result: LoginSceneState) => {
+      scene.classList.remove(
+        "is-input-focus",
+        "is-password-focus",
+        "is-password-visible",
+        "is-login-submitting",
+        "is-login-failure",
+        "is-login-success",
+      );
+      if (state === "inputFocus") scene.classList.add("is-input-focus");
+      if (state === "passwordVisible")
+        scene.classList.add("is-password-focus", "is-password-visible");
+      if (result === "submitting") scene.classList.add("is-login-submitting");
+      if (result === "failure") scene.classList.add("is-login-failure");
+      if (result === "success") scene.classList.add("is-login-success");
+      scene.dataset.poseState = state;
+    };
+    const syncScene = () => {
+      const next = sceneStateRef.current;
+      const changed = next !== previousSceneState;
+      const canAnimate =
+        !motionPreference.matches && !document.hidden && scene.getClientRects().length > 0;
+      if (changed) {
+        const before = beforeStateRef.current ?? transition.captureVisible();
+        beforeStateRef.current = null;
+        if (next === "failure") {
+          // Entry shares the existing failure clock; it does not extend the form's feedback lock.
+          if (canAnimate)
+            transition.begin(
+              "enter",
+              before,
+              failureMotionRef.current.startedAt ?? performance.now(),
+            );
+          else transition.settle(true);
+        } else if (next === "success") {
+          transition.settle(false);
+        } else if (next === "submitting") {
+          // A retry can interrupt recovery. Freeze that exact drawing, not a neutral rig.
+          if (transition.active() && canAnimate)
+            transition.begin("frozen", before, performance.now());
+          else transition.settle(false);
+        } else if (previousSceneState === "failure" || transition.active()) {
+          // Rebase only on a semantic target change, not on pointer events or field identity.
+          if (canAnimate) transition.begin("recover", before, performance.now());
+          else transition.settle(false);
+        }
+      }
+      if (next !== "submitting")
+        normalSceneState = next === "failure" ? recoveryStateRef.current : next;
+      applySceneClass(normalSceneState, next);
+      previousSceneState = next;
+    };
+    syncSceneRef.current = syncScene;
+    syncScene();
+
     const clearPointerPosition = () => {
       pointerPosition = null;
     };
@@ -668,6 +748,7 @@ export default function LoginCharacters({
       if (document.hidden) {
         clearPointerPosition();
         finishFailureMotion();
+        transition.settle(sceneStateRef.current === "failure");
         if (!entranceRef.current.complete) finishEntrance();
       }
     };
@@ -694,90 +775,106 @@ export default function LoginCharacters({
       }
       const activeSceneState = sceneStateRef.current;
       if (!failureMotionRef.current.complete) refreshFailureMotion(now);
-      // One clock blends mutually exclusive authored poses. Field-to-field focus is unchanged.
-      const inputTarget = activeSceneState === "inputFocus" ? 1 : 0;
-      const revealTarget = activeSceneState === "passwordVisible" ? 1 : 0;
-      inputMix = smoothMotion(inputMix, inputTarget, 0.2, deltaMs);
-      revealMix = smoothMotion(revealMix, revealTarget, 0.2, deltaMs);
-      if (Math.abs(inputMix - inputTarget) < 0.001) inputMix = inputTarget;
-      if (Math.abs(revealMix - revealTarget) < 0.001) revealMix = revealTarget;
-      scene.style.setProperty("--yak-input-mix", String(inputMix));
-      scene.style.setProperty("--yak-reveal-mix", String(revealMix));
-      const freePoseWeight = Math.max(0, 1 - inputMix - revealMix);
-      const pointerWeight = freePoseWeight;
-      if (!entranceRef.current.complete) {
-        const pose = sampleLoginEntrance(now - startedAt);
-        if (pose.complete || activeSceneState !== "idle") finishEntrance();
-        else paintEntrance(pose);
-      }
-      const entering = !entranceRef.current.complete;
-      if (!entering) {
-        purpleBodyPath.setAttribute("d", buildPurpleBodyPath(inputMix));
-        blackBodyPath.setAttribute("d", buildBlackBodyPath(inputMix));
-      }
-      const idlePointer = !entering && activeSceneState === "idle" ? pointerPosition : null;
-      const purpleTarget = resolvePointerEyeTarget(svg, idlePointer, "purple");
-      const blackTarget = resolvePointerEyeTarget(svg, idlePointer, "black");
-      purpleX = smoothMotion(purpleX, purpleTarget.x, 0.12, deltaMs);
-      purpleY = smoothMotion(purpleY, purpleTarget.y, 0.12, deltaMs);
-      blackX = smoothMotion(blackX, blackTarget.x, 0.12, deltaMs);
-      blackY = smoothMotion(blackY, blackTarget.y, 0.12, deltaMs);
+      // Submitting holds the last visible pose. Failure prepares the *live* recovery rig
+      // behind the bridge, including the original springs/velocities; it never targets null
+      // merely because an authentication result is covering the ordinary renderer.
+      if (activeSceneState !== "submitting") {
+        const motionSceneState =
+          activeSceneState === "failure" ? recoveryStateRef.current : activeSceneState;
+        // One clock blends mutually exclusive authored poses. Field-to-field focus is unchanged.
+        const inputTarget = motionSceneState === "inputFocus" ? 1 : 0;
+        const revealTarget = motionSceneState === "passwordVisible" ? 1 : 0;
+        inputMix = smoothMotion(inputMix, inputTarget, 0.2, deltaMs);
+        revealMix = smoothMotion(revealMix, revealTarget, 0.2, deltaMs);
+        if (Math.abs(inputMix - inputTarget) < 0.001) inputMix = inputTarget;
+        if (Math.abs(revealMix - revealTarget) < 0.001) revealMix = revealTarget;
+        scene.style.setProperty("--yak-input-mix", String(inputMix));
+        scene.style.setProperty("--yak-reveal-mix", String(revealMix));
+        const freePoseWeight = Math.max(0, 1 - inputMix - revealMix);
+        const pointerWeight = freePoseWeight;
+        if (!entranceRef.current.complete) {
+          const pose = sampleLoginEntrance(now - startedAt);
+          if (pose.complete || motionSceneState !== "idle") finishEntrance();
+          else paintEntrance(pose);
+        }
+        const entering = !entranceRef.current.complete;
+        if (!entering) {
+          purpleBodyPath.setAttribute("d", buildPurpleBodyPath(inputMix));
+          blackBodyPath.setAttribute("d", buildBlackBodyPath(inputMix));
+        }
+        const idlePointer = !entering && motionSceneState === "idle" ? pointerPosition : null;
+        const purpleTarget = resolvePointerEyeTarget(svg, idlePointer, "purple");
+        const blackTarget = resolvePointerEyeTarget(svg, idlePointer, "black");
+        purpleX = smoothMotion(purpleX, purpleTarget.x, 0.12, deltaMs);
+        purpleY = smoothMotion(purpleY, purpleTarget.y, 0.12, deltaMs);
+        blackX = smoothMotion(blackX, blackTarget.x, 0.12, deltaMs);
+        blackY = smoothMotion(blackY, blackTarget.y, 0.12, deltaMs);
 
-      const orangeTarget = resolveOrangePointerTarget(svg, idlePointer);
-      const orangeTargetX = orangeTarget.x;
-      const orangeTargetY = orangeTarget.y;
+        const orangeTarget = resolveOrangePointerTarget(svg, idlePointer);
+        const orangeTargetX = orangeTarget.x;
+        const orangeTargetY = orangeTarget.y;
 
-      const orangeSpringX = stepOrangeSpring(orangeX, orangeVelocityX, orangeTargetX, deltaMs);
-      const orangeSpringY = stepOrangeSpring(orangeY, orangeVelocityY, orangeTargetY, deltaMs);
-      orangeX = orangeSpringX.position;
-      orangeY = orangeSpringY.position;
-      orangeVelocityX = orangeSpringX.velocity;
-      orangeVelocityY = orangeSpringY.velocity;
-      orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
-      orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
+        const orangeSpringX = stepOrangeSpring(orangeX, orangeVelocityX, orangeTargetX, deltaMs);
+        const orangeSpringY = stepOrangeSpring(orangeY, orangeVelocityY, orangeTargetY, deltaMs);
+        orangeX = orangeSpringX.position;
+        orangeY = orangeSpringY.position;
+        orangeVelocityX = orangeSpringX.velocity;
+        orangeVelocityY = orangeSpringY.velocity;
+        orangeBodyX = smoothMotion(orangeBodyX, orangeTargetX, 0.045, deltaMs);
+        orangeBodyY = smoothMotion(orangeBodyY, orangeTargetY, 0.04, deltaMs);
 
-      const purplePose = resolvePointerEyePose("purple", purpleX, purpleY);
-      const blackPose = resolvePointerEyePose("black", blackX, blackY);
-      scene.style.setProperty("--yak-purple-face-x", `${purplePose.x * pointerWeight}px`);
-      scene.style.setProperty("--yak-purple-face-y", `${purplePose.y * pointerWeight}px`);
-      scene.style.setProperty(
-        "--yak-purple-gaze-rotate",
-        `${purplePose.rotate * pointerWeight}deg`,
-      );
-      scene.style.setProperty("--yak-purple-pupil-x", `${purplePose.pupilX * pointerWeight}px`);
-      scene.style.setProperty("--yak-purple-pupil-y", `${purplePose.pupilY * pointerWeight}px`);
-
-      scene.style.setProperty("--yak-black-face-x", `${blackPose.x * pointerWeight}px`);
-      scene.style.setProperty("--yak-black-face-y", `${blackPose.y * pointerWeight}px`);
-      scene.style.setProperty("--yak-black-face-rotate", "0deg");
-      scene.style.setProperty("--yak-black-gaze-rotate", `${blackPose.rotate * pointerWeight}deg`);
-      scene.style.setProperty("--yak-black-pupil-x", `${blackPose.pupilX * pointerWeight}px`);
-      scene.style.setProperty("--yak-black-pupil-y", `${blackPose.pupilY * pointerWeight}px`);
-
-      if (!entering) {
-        orangeBodyPath.setAttribute(
-          "d",
-          buildOrangeBodyPath(orangeBodyX * freePoseWeight, orangeBodyY * freePoseWeight, inputMix),
+        const purplePose = resolvePointerEyePose("purple", purpleX, purpleY);
+        const blackPose = resolvePointerEyePose("black", blackX, blackY);
+        scene.style.setProperty("--yak-purple-face-x", `${purplePose.x * pointerWeight}px`);
+        scene.style.setProperty("--yak-purple-face-y", `${purplePose.y * pointerWeight}px`);
+        scene.style.setProperty(
+          "--yak-purple-gaze-rotate",
+          `${purplePose.rotate * pointerWeight}deg`,
         );
-      }
+        scene.style.setProperty("--yak-purple-pupil-x", `${purplePose.pupilX * pointerWeight}px`);
+        scene.style.setProperty("--yak-purple-pupil-y", `${purplePose.pupilY * pointerWeight}px`);
 
-      const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY);
-      scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX * pointerWeight}px`);
-      scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY * pointerWeight}px`);
-      scene.style.setProperty(
-        "--yak-orange-face-rotate",
-        `${orangeFacePose.faceRotate * pointerWeight}deg`,
-      );
+        scene.style.setProperty("--yak-black-face-x", `${blackPose.x * pointerWeight}px`);
+        scene.style.setProperty("--yak-black-face-y", `${blackPose.y * pointerWeight}px`);
+        scene.style.setProperty("--yak-black-face-rotate", "0deg");
+        scene.style.setProperty(
+          "--yak-black-gaze-rotate",
+          `${blackPose.rotate * pointerWeight}deg`,
+        );
+        scene.style.setProperty("--yak-black-pupil-x", `${blackPose.pupilX * pointerWeight}px`);
+        scene.style.setProperty("--yak-black-pupil-y", `${blackPose.pupilY * pointerWeight}px`);
 
-      if (!entering) {
-        yellowRef.current?.update(pointerPosition, activeSceneState, deltaMs, inputMix);
+        if (!entering) {
+          orangeBodyPath.setAttribute(
+            "d",
+            buildOrangeBodyPath(
+              orangeBodyX * freePoseWeight,
+              orangeBodyY * freePoseWeight,
+              inputMix,
+            ),
+          );
+        }
+
+        const orangeFacePose = resolveOrangeFacePose(orangeX, orangeY);
+        scene.style.setProperty("--yak-orange-face-x", `${orangeFacePose.faceX * pointerWeight}px`);
+        scene.style.setProperty("--yak-orange-face-y", `${orangeFacePose.faceY * pointerWeight}px`);
+        scene.style.setProperty(
+          "--yak-orange-face-rotate",
+          `${orangeFacePose.faceRotate * pointerWeight}deg`,
+        );
+
+        if (!entering) {
+          yellowRef.current?.update(pointerPosition, motionSceneState, deltaMs, inputMix);
+        }
       }
+      transition.paint(now);
 
       frame = window.requestAnimationFrame(animate);
     };
 
     const handleMotionPreference = () => {
       if (motionPreference.matches) finishFailureMotion();
+      transition.settle(sceneStateRef.current === "failure");
       window.cancelAnimationFrame(frame);
       frame = 0;
       previousFrameAt = performance.now();
@@ -819,7 +916,10 @@ export default function LoginCharacters({
     };
 
     const resizeObserver = new ResizeObserver(() => {
-      if (!scene.getClientRects().length) finishFailureMotion();
+      if (!scene.getClientRects().length) {
+        finishFailureMotion();
+        transition.settle(sceneStateRef.current === "failure");
+      }
       if (!scene.getClientRects().length && !entranceRef.current.complete) {
         pointerPosition = null;
         finishEntrance();
@@ -847,6 +947,9 @@ export default function LoginCharacters({
 
     return () => {
       disposed = true;
+      transition.dispose();
+      transitionRef.current = null;
+      syncSceneRef.current = null;
       // Clean the drawing without resetting the attempt during StrictMode effect replay.
       paintFailureMotion(sampleLoginFailureMotion(LOGIN_FAILURE_LOCAL_MOTION_MS));
       refreshFailureMotionRef.current = null;
@@ -859,21 +962,12 @@ export default function LoginCharacters({
       resizeObserver.disconnect();
       finishEntranceRef.current = null;
     };
-  }, []);
-
-  const sceneClass = {
-    idle: "",
-    inputFocus: "is-input-focus",
-    passwordVisible: "is-password-focus is-password-visible",
-    submitting: "is-login-submitting",
-    failure: "is-login-failure",
-    success: "is-login-success",
-  }[sceneState];
+  }, [transitionId]);
 
   return (
     <div
       ref={sceneRef}
-      className={`yak-login-characters ${sceneClass} relative min-h-screen overflow-hidden bg-[#efedf2]`}
+      className="yak-login-characters relative min-h-screen overflow-hidden bg-[#efedf2]"
       data-scene-state={sceneState}
       data-entrance-state="playing"
       aria-hidden="true"
