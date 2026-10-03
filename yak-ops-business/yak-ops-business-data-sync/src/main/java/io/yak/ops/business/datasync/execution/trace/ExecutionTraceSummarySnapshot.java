@@ -25,4 +25,10 @@ public record ExecutionTraceSummarySnapshot(
         long sinkExecuteDurationMillis,
         long sinkCommitDurationMillis,
         long errorCount,
-        long droppedEventCount) {}
+        long droppedEventCount) {
+
+    public static ExecutionTraceSummarySnapshot empty(int attemptNo) {
+        return new ExecutionTraceSummarySnapshot(
+                attemptNo, false, false, 0L, 0L, 0L, 0L, 0L, null, null, null, null, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+    }
+}
