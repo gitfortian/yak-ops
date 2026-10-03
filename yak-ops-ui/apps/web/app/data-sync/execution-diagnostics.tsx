@@ -65,15 +65,7 @@ const rangeText = (record: DataSyncSourceTraceRecord) => {
   return `${record.splitColumn} [${record.lowerBoundInclusive ?? "-"}, ${record.upperBoundInclusive ?? "-"}]`;
 };
 
-function MetricCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-[#eef0f3] bg-white px-4 py-3">
       <div className="text-xs text-[#98a2b3]">{label}</div>
@@ -167,25 +159,22 @@ export function DataSyncExecutionDiagnostics({
     [attempts],
   );
 
-  const loadFailures = useCallback(
-    async (id: string, currentAttemptNo: number) => {
-      const [sourceResult, sinkResult] = await Promise.all([
-        listDataSyncSourceTrace(id, {
-          attemptNo: currentAttemptNo,
-          pageSize: 10,
-          status: "FAILED",
-        }),
-        listDataSyncSinkTrace(id, {
-          attemptNo: currentAttemptNo,
-          pageSize: 10,
-          status: "FAILED",
-        }),
-      ]);
-      setSourceFailures(sourceResult?.records || []);
-      setSinkFailures(sinkResult?.records || []);
-    },
-    [],
-  );
+  const loadFailures = useCallback(async (id: string, currentAttemptNo: number) => {
+    const [sourceResult, sinkResult] = await Promise.all([
+      listDataSyncSourceTrace(id, {
+        attemptNo: currentAttemptNo,
+        pageSize: 10,
+        status: "FAILED",
+      }),
+      listDataSyncSinkTrace(id, {
+        attemptNo: currentAttemptNo,
+        pageSize: 10,
+        status: "FAILED",
+      }),
+    ]);
+    setSourceFailures(sourceResult?.records || []);
+    setSinkFailures(sinkResult?.records || []);
+  }, []);
 
   const loadDiagnostics = useCallback(
     async (silent = false) => {
@@ -234,14 +223,7 @@ export function DataSyncExecutionDiagnostics({
     if ((value?.errorCount || 0) > 0 && sourceFailures.length + sinkFailures.length === 0) {
       await loadFailures(executionId, attemptNo);
     }
-  }, [
-    active,
-    attemptNo,
-    executionId,
-    loadFailures,
-    sinkFailures.length,
-    sourceFailures.length,
-  ]);
+  }, [active, attemptNo, executionId, loadFailures, sinkFailures.length, sourceFailures.length]);
 
   useEffect(() => {
     setAttemptNo(defaultAttemptNo);
@@ -444,7 +426,8 @@ export function DataSyncExecutionDiagnostics({
     return (
       <div className="space-y-4">
         <Alert>
-          当前 Execution 没有 Runtime Trace。它可能创建于诊断能力上线前，或 Trace Store 未能创建会话。
+          当前 Execution 没有 Runtime Trace。它可能创建于诊断能力上线前，或 Trace Store
+          未能创建会话。
         </Alert>
         {lifecycleSection}
       </div>
@@ -521,11 +504,7 @@ export function DataSyncExecutionDiagnostics({
       </div>
 
       <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-        <MetricCard
-          label="Source 读取"
-          value={formatCount(summary?.sourceRows)}
-          hint="rows"
-        />
+        <MetricCard label="Source 读取" value={formatCount(summary?.sourceRows)} hint="rows" />
         <MetricCard
           label="Target 写入"
           value={formatCount(summary?.sinkRows)}
@@ -551,8 +530,8 @@ export function DataSyncExecutionDiagnostics({
 
       {(summary?.droppedEventCount || 0) > 0 ? (
         <Alert>
-          有 {formatCount(summary?.droppedEventCount)} 条 Runtime Trace 事件未记录。数据同步结果不受影响，
-          但本次诊断明细可能不完整。
+          有 {formatCount(summary?.droppedEventCount)} 条 Runtime Trace
+          事件未记录。数据同步结果不受影响， 但本次诊断明细可能不完整。
         </Alert>
       ) : null}
 
