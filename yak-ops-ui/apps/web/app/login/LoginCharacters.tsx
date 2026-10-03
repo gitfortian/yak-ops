@@ -173,45 +173,66 @@ function CharacterPoseEyes({
   pose,
 }: {
   character: "purple" | "black";
-  pose: "input" | "reveal";
+  pose: "input" | "reveal" | "failure";
 }) {
   const clipId = useId();
   const purple = character === "purple";
   const input = pose === "input";
-  const centers = purple ? [274, input ? 335 : 331] : [379, 411];
-  const y = purple ? 145 : 278;
+  const failure = pose === "failure";
+  const centers = failure
+    ? purple
+      ? [300, 360]
+      : [404, 437]
+    : purple
+      ? [274, input ? 335 : 331]
+      : [379, 411];
+  const y = failure ? (purple ? 148 : 355) : purple ? 145 : 278;
   const rx = purple ? 5.5 : 9;
-  const ry = input ? rx : purple ? 6 : 10;
+  const ry = failure ? (purple ? 6 : 8.5) : input ? rx : purple ? 6 : 10;
 
   return (
     <g className={`yak-login-character__${pose}-eyes`}>
-      {centers.map((x, index) => (
-        <g key={x}>
-          <defs>
-            <clipPath id={`${clipId}-${index}`} clipPathUnits="userSpaceOnUse">
-              <ellipse cx={x} cy={y} rx={rx} ry={ry} />
-            </clipPath>
-          </defs>
-          <ellipse data-pose-eye={pose} cx={x} cy={y} rx={rx} ry={ry} fill="#FFFFFF" />
-          <g clipPath={`url(#${clipId}-${index})`}>
-            <circle
-              data-pose-pupil={pose}
-              cx={x + (input ? 2.8 : purple ? 3 : 1.5)}
-              cy={y - (input || purple ? 0 : 5)}
-              r={input ? (purple ? 2.5 : 4.2) : purple ? 3.2 : 7}
-              fill="#171717"
-            />
+      {centers.map((x, index) => {
+        let pupilX = x + (input ? 2.8 : purple ? 3 : 1.5);
+        let pupilY = y - (input || purple ? 0 : 5);
+        let pupilRadius = input ? (purple ? 2.5 : 4.2) : purple ? 3.2 : 7;
+        if (failure) {
+          // The shortened black character glances upward with an asymmetric white crescent.
+          pupilX = x + (purple ? 3 : index === 0 ? 1 : 4.5);
+          pupilY = y - (purple ? 0 : index === 0 ? 1.5 : 4);
+          pupilRadius = purple ? 3.2 : index === 0 ? 5.8 : 7;
+        }
+        return (
+          <g key={x}>
+            <defs>
+              <clipPath id={`${clipId}-${index}`} clipPathUnits="userSpaceOnUse">
+                <ellipse cx={x} cy={y} rx={rx} ry={ry} />
+              </clipPath>
+            </defs>
+            <ellipse data-pose-eye={pose} cx={x} cy={y} rx={rx} ry={ry} fill="#FFFFFF" />
+            <g clipPath={`url(#${clipId}-${index})`}>
+              <circle
+                data-pose-pupil={pose}
+                cx={pupilX}
+                cy={pupilY}
+                r={pupilRadius}
+                fill="#171717"
+              />
+            </g>
           </g>
-        </g>
-      ))}
+        );
+      })}
     </g>
   );
 }
 
+// Failure is a mutually exclusive, static drawing outside the motion rig.
+// Hidden branches use display:none so they cannot shift the other states' SVG bounds.
 function PurpleCharacter() {
   return (
     <g data-character="purple" className="yak-login-character yak-login-character--purple">
       <g
+        data-character-motion
         className="yak-login-character--purple__entry"
         transform={LOGIN_ENTRANCE_START.purple.transform}
       >
@@ -267,14 +288,6 @@ function PurpleCharacter() {
                           strokeWidth="3"
                           strokeLinecap="round"
                         />
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--failure"
-                          d="M292 181Q304.5 168 317 181"
-                          fill="none"
-                          stroke="#171717"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
                       </g>
                     </g>
                   </g>
@@ -282,6 +295,24 @@ function PurpleCharacter() {
               </g>
             </g>
           </g>
+        </g>
+      </g>
+      <g className="yak-login-character__failure-pose" data-failure-pose="purple">
+        <path
+          data-failure-body
+          d="M212 550L220 377L168 250L206 74L410 117L386 231L418 303L404 550Z"
+          fill="#6128F5"
+        />
+        <g data-failure-face transform="rotate(4 330 148)">
+          <CharacterPoseEyes character="purple" pose="failure" />
+          <path
+            data-failure-mouth
+            d="M319 175Q330 164 341 175"
+            fill="none"
+            stroke="#171717"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
         </g>
       </g>
     </g>
@@ -292,6 +323,7 @@ function BlackCharacter() {
   return (
     <g data-character="black" className="yak-login-character yak-login-character--black">
       <g
+        data-character-motion
         className="yak-login-character--black__entry"
         transform={LOGIN_ENTRANCE_START.black.transform}
       >
@@ -323,14 +355,6 @@ function BlackCharacter() {
                           strokeWidth="3"
                           strokeLinecap="round"
                         />
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--failure"
-                          d="M391 320Q403.5 307 416 320"
-                          fill="none"
-                          stroke="#FFFFFF"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
                       </g>
                     </g>
                   </g>
@@ -340,6 +364,10 @@ function BlackCharacter() {
           </g>
         </g>
       </g>
+      <g className="yak-login-character__failure-pose" data-failure-pose="black">
+        <path data-failure-body d="M354 550V305H482V550Z" fill="#191A20" />
+        <CharacterPoseEyes character="black" pose="failure" />
+      </g>
     </g>
   );
 }
@@ -348,6 +376,7 @@ function OrangeCharacter() {
   return (
     <g data-character="orange" className="yak-login-character yak-login-character--orange">
       <g
+        data-character-motion
         className="yak-login-character--orange__entry"
         transform={LOGIN_ENTRANCE_START.orange.transform}
       >
@@ -415,14 +444,6 @@ function OrangeCharacter() {
                           d="M208 481Q208 479 210.5 479H250.5Q253 479 253 481C251 495 242.5 504 230.5 504C218.5 504 210 495 208 481Z"
                           fill="#171717"
                         />
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--failure"
-                          d="M208 501Q230.5 480 253 501"
-                          fill="none"
-                          stroke="#171717"
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                        />
                       </g>
                     </g>
                   </g>
@@ -430,6 +451,21 @@ function OrangeCharacter() {
               </g>
             </g>
           </g>
+        </g>
+      </g>
+      <g className="yak-login-character__failure-pose" data-failure-pose="orange">
+        <path data-failure-body d={buildOrangeBodyPath(0, 0)} fill="#FF7D2A" />
+        <g data-failure-face transform="rotate(6 310 500)">
+          <circle data-pose-eye="failure" cx="270" cy="500" r="8" fill="#171717" />
+          <circle data-pose-eye="failure" cx="350" cy="500" r="8" fill="#171717" />
+          <path
+            data-failure-mouth
+            d="M298 526Q310 514 322 526"
+            fill="none"
+            stroke="#171717"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
         </g>
       </g>
     </g>

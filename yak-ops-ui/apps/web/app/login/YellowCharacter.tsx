@@ -112,7 +112,6 @@ function faceGeometry(pose: YellowFacePose, inputMix = 0) {
     eyeX: eyeX.toFixed(3),
     mouth: `M${mouthX - halfWidth} ${mouthY}H${mouthX + halfWidth}`,
     success: `M${mouthX - 40} 407Q${mouthX} 425 ${mouthX + 40} 407`,
-    failure: `M${mouthX - 40} 417Q${mouthX} 401 ${mouthX + 40} 417`,
   };
 }
 
@@ -130,7 +129,6 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     const eyeRef = useRef<SVGCircleElement | null>(null);
     const mouthRef = useRef<SVGPathElement | null>(null);
     const successRef = useRef<SVGPathElement | null>(null);
-    const failureRef = useRef<SVGPathElement | null>(null);
     const poseRef = useRef<YellowFacePose>(REST_POSE);
     const reducedMotionRef = useRef<MediaQueryList | null>(null);
 
@@ -141,7 +139,6 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
       eyeRef.current?.setAttribute("cx", geometry.eyeX);
       mouthRef.current?.setAttribute("d", geometry.mouth);
       successRef.current?.setAttribute("d", geometry.success);
-      failureRef.current?.setAttribute("d", geometry.failure);
     }, []);
 
     useImperativeHandle(
@@ -199,7 +196,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
         data-character="yellow"
         className="yak-login-character yak-login-character--yellow"
       >
-        <g className="yak-login-character--yellow__entry">
+        <g data-character-motion className="yak-login-character--yellow__entry">
           <g className="yak-login-character--yellow__result">
             <g className="yak-login-character--yellow__focus">
               <defs>
@@ -259,19 +256,22 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
                     strokeWidth="4"
                     strokeLinecap="round"
                   />
-                  <path
-                    ref={failureRef}
-                    className="yak-login-character__mouth yak-login-character__mouth--failure"
-                    d={REST_FACE.failure}
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
                 </g>
               </g>
             </g>
           </g>
+        </g>
+        <g className="yak-login-character__failure-pose" data-failure-pose="yellow">
+          <path data-failure-body d={YELLOW_BODY_PATH} fill="#F3D30B" />
+          <circle data-pose-eye="failure" cx="532" cy="388" r="5.4" fill="#171717" />
+          <path
+            data-failure-mouth
+            d="M545 410C556 400 563 400 572 403S584 406 591 401"
+            fill="none"
+            stroke="#171717"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
         </g>
       </g>
     );
