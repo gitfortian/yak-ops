@@ -284,6 +284,72 @@ export interface DataSyncExecutionEventRecord {
   createTime?: string;
 }
 
+export type DataSyncTraceStatus = "SUCCESS" | "FAILED";
+
+export interface DataSyncTraceSummary {
+  attemptNo: number;
+  available: boolean;
+  complete: boolean;
+  sourceSplitCount: number;
+  sourceFinishedSplitCount: number;
+  sourceFailedSplitCount: number;
+  sourceRows: number;
+  sourceSplitDurationMillis: number;
+  sinkSql?: string;
+  sinkBatchSize?: number;
+  sinkSaveMode?: string;
+  sinkWriteMode?: string;
+  sinkCommittedBatchCount: number;
+  sinkFailedBatchCount: number;
+  sinkRows: number;
+  sinkExecuteDurationMillis: number;
+  sinkCommitDurationMillis: number;
+  errorCount: number;
+  droppedEventCount: number;
+}
+
+export interface DataSyncSourceTraceRecord {
+  timestamp: string;
+  splitId: string;
+  workerName?: string;
+  sql?: string;
+  parameters?: number[];
+  splitColumn?: string;
+  lowerBoundInclusive?: number;
+  upperBoundInclusive?: number;
+  rows?: number;
+  durationMillis?: number;
+  status: DataSyncTraceStatus | string;
+  failureStage?: string;
+  errorType?: string;
+  errorMessage?: string;
+}
+
+export interface DataSyncSinkTraceRecord {
+  timestamp: string;
+  batchNo: number;
+  rows?: number;
+  executeDurationMillis?: number;
+  commitDurationMillis?: number;
+  status: DataSyncTraceStatus | string;
+  failureStage?: string;
+  errorType?: string;
+  errorMessage?: string;
+}
+
+export interface DataSyncTracePage<T> {
+  records: T[];
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
+export interface DataSyncTraceQuery {
+  attemptNo?: number;
+  pageSize?: number;
+  cursor?: string;
+  status?: DataSyncTraceStatus;
+}
+
 export type DataSyncOperationsRange = "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
 
 export interface DataSyncOperationsDashboardPayload {
