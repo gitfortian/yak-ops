@@ -15,8 +15,7 @@ import java.util.Objects;
  * @author weifuwan
  * @since 2026-10-03
  */
-public record JdbcSinkOpenedTraceEvent(
-        Instant timestamp, String sql, int batchSize, String saveMode, String writeMode)
+public record JdbcSinkOpenedTraceEvent(Instant timestamp, String sql, int batchSize, String saveMode, String writeMode)
         implements RuntimeTraceEvent {
 
     public JdbcSinkOpenedTraceEvent {
