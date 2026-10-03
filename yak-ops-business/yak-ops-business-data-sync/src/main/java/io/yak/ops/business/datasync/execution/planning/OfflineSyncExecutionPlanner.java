@@ -9,6 +9,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.util.ObjectUtils;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.api.trace.RuntimeTraceListener;
 import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
@@ -34,7 +35,12 @@ public class OfflineSyncExecutionPlanner {
     private DataSourceService dataSourceService;
 
     public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
+        return plan(snapshot, RuntimeTraceListener.noop());
+    }
+
+    public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot, RuntimeTraceListener traceListener) {
         ObjectUtils.requireNonNull(snapshot, "definition snapshot must not be null");
+        ObjectUtils.requireNonNull(traceListener, "trace listener must not be null");
         DataSyncEndpointSnapshotVO sourceEndpoint =
                 ObjectUtils.requireNonNull(snapshot.getSource(), "source endpoint must not be null");
         DataSyncEndpointSnapshotVO targetEndpoint =
@@ -54,14 +60,16 @@ public class OfflineSyncExecutionPlanner {
         DataSourceConnection targetConnection =
                 dataSourceService.resolveRuntimeConnection(targetEndpoint.getDataSourceId());
 
-        JdbcSource source = new JdbcSource(new JdbcSourceConfig(
-                sourceConnection,
-                tablePathValue(sourceEndpoint),
-                sourceSchema,
-                runtimeConfig.getFetchSize(),
-                runtimeConfig.getReadBatchSize(),
-                runtimeConfig.getTimeoutSeconds(),
-                runtimeConfig.getSplitSize()));
+        JdbcSource source = new JdbcSource(
+                new JdbcSourceConfig(
+                        sourceConnection,
+                        tablePathValue(sourceEndpoint),
+                        sourceSchema,
+                        runtimeConfig.getFetchSize(),
+                        runtimeConfig.getReadBatchSize(),
+                        runtimeConfig.getTimeoutSeconds(),
+                        runtimeConfig.getSplitSize()),
+                traceListener);
         JdbcSink sink = new JdbcSink(
                 new JdbcSinkConfig(
                         targetConnection,
@@ -70,7 +78,8 @@ public class OfflineSyncExecutionPlanner {
                         runtimeConfig.getTimeoutSeconds(),
                         saveMode(snapshot.getWriteMode()),
                         writeMode(snapshot.getWriteMode())),
-                targetWriteSchema);
+                targetWriteSchema,
+                traceListener);
         return new OfflineSyncExecutionPlan(source, sink, sourceSchema, runtimeConfig.getSourceParallelism());
     }
 
