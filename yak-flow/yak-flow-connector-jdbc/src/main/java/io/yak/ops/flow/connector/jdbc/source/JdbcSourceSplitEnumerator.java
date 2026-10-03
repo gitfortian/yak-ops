@@ -2,11 +2,15 @@ package io.yak.ops.flow.connector.jdbc.source;
 
 import io.yak.ops.flow.api.checkpoint.CheckpointState;
 import io.yak.ops.flow.api.source.SourceSplitEnumerator;
+import io.yak.ops.flow.api.trace.RuntimeTraceListener;
 import io.yak.ops.flow.connector.jdbc.JdbcNumericSplitConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcSourceSplitTraceEvent;
+import io.yak.ops.flow.connector.jdbc.trace.JdbcTraceEventType;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -27,13 +31,20 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
     private final JdbcSourceConfig config;
     private final JdbcConnectionProvider connectionProvider;
     private final JdbcDialect dialect;
+    private final RuntimeTraceListener traceListener;
     private List<JdbcSourceSplit> splits;
     private int nextSplitIndex;
+    private boolean plannedTraceEmitted;
 
-    JdbcSourceSplitEnumerator(JdbcSourceConfig config, JdbcConnectionProvider connectionProvider, JdbcDialect dialect) {
+    JdbcSourceSplitEnumerator(
+            JdbcSourceConfig config,
+            JdbcConnectionProvider connectionProvider,
+            JdbcDialect dialect,
+            RuntimeTraceListener traceListener) {
         this.config = config;
         this.connectionProvider = connectionProvider;
         this.dialect = dialect;
+        this.traceListener = traceListener;
         if (config.splitConfig() != null) {
             splits = createSplits(config.splitConfig());
         } else if (config.splitSize() == null) {
@@ -43,8 +54,10 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
 
     @Override
     public void start() throws Exception {
-        if (splits != null) return;
-        splits = createDynamicSplits();
+        if (splits == null) {
+            splits = createDynamicSplits();
+        }
+        emitPlannedTrace();
     }
 
     @Override
@@ -136,6 +149,34 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
 
     private List<JdbcSourceSplit> wholeTableSplit() {
         return List.of(new JdbcSourceSplit(config.table()));
+    }
+
+    private void emitPlannedTrace() {
+        if (plannedTraceEmitted) return;
+        for (JdbcSourceSplit split : splits) {
+            String sql = split.isRangeSplit()
+                    ? dialect.selectRangeSql(split.table(), config.schema(), split.splitColumn())
+                    : dialect.selectSql(split.table(), config.schema());
+            List<Long> parameters = split.isRangeSplit()
+                    ? List.of(split.lowerBoundInclusive(), split.upperBoundInclusive())
+                    : List.of();
+            traceListener.emit(new JdbcSourceSplitTraceEvent(
+                    Instant.now(),
+                    JdbcTraceEventType.SOURCE_SPLIT_PLANNED,
+                    split.splitId(),
+                    null,
+                    sql,
+                    parameters,
+                    split.splitColumn(),
+                    split.lowerBoundInclusive(),
+                    split.upperBoundInclusive(),
+                    0L,
+                    0L,
+                    null,
+                    null,
+                    null));
+        }
+        plannedTraceEmitted = true;
     }
 
     private void requireStarted() {
