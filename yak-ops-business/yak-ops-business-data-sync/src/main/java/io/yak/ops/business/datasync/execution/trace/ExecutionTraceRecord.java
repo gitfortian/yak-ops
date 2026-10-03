@@ -19,6 +19,9 @@ import java.util.List;
  * @param splitColumn 数值 Split 字段
  * @param lowerBoundInclusive Split 下界
  * @param upperBoundInclusive Split 上界
+ * @param batchSize Sink 配置的 Batch Size
+ * @param saveMode Sink Save Mode
+ * @param writeMode Sink Write Mode
  * @param batchNo Sink Batch 序号
  * @param rows 当前 Split / Batch 行数
  * @param durationMillis Source Split 总耗时
@@ -44,6 +47,9 @@ public record ExecutionTraceRecord(
         String splitColumn,
         Long lowerBoundInclusive,
         Long upperBoundInclusive,
+        Integer batchSize,
+        String saveMode,
+        String writeMode,
         Long batchNo,
         Long rows,
         Long durationMillis,
