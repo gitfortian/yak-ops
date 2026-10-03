@@ -3,6 +3,8 @@ package io.yak.ops.business.datasync.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.business.datasource.DataSourceService;
@@ -135,12 +137,37 @@ class DataSyncScheduleContractTest {
             }
         });
 
+        WorkspaceContext.clear();
         service.onFire(new DataSyncScheduleFire("schedule-1", "workspace-1", "task-1", Instant.now()));
 
         assertEquals(1, instanceAdds.get());
         assertEquals(DataSyncTriggerType.SCHEDULE, capturedInstance.get().getTriggerType());
         assertEquals(DataSyncInstanceStatus.PENDING, capturedInstance.get().getStatus());
         assertEquals(capturedInstance.get().getId(), submittedInstanceId.get());
+        assertNull(WorkspaceContext.getWorkspaceId());
+    }
+
+    @Test
+    void shouldClearWorkspaceContextWhenScheduledFireFails() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicInteger instanceAdds = new AtomicInteger();
+
+        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(
+                service,
+                "scheduleRepository",
+                scheduleRepository(schedule(true), new AtomicReference<>(), new AtomicReference<>()));
+        inject(service, "instanceRepository", instanceRepository(false, instanceAdds, new AtomicReference<>()));
+        inject(service, "dataSourceService", failingDataSourceService());
+
+        WorkspaceContext.clear();
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.onFire(
+                        new DataSyncScheduleFire("schedule-1", "workspace-1", "task-1", Instant.now())));
+
+        assertEquals(0, instanceAdds.get());
+        assertNull(WorkspaceContext.getWorkspaceId());
     }
 
     @Test
@@ -270,9 +297,26 @@ class DataSyncScheduleContractTest {
                 new Class<?>[] {DataSourceService.class},
                 (proxy, method, args) -> {
                     if ("queryDataSource".equals(method.getName())) {
+                        assertEquals("workspace-1", WorkspaceContext.requireWorkspaceId());
                         return "source".equals(args[0]) ? source : target;
                     }
-                    if ("queryCatalogColumns".equals(method.getName())) return columns;
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        assertEquals("workspace-1", WorkspaceContext.requireWorkspaceId());
+                        return columns;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private DataSourceService failingDataSourceService() {
+        return (DataSourceService) Proxy.newProxyInstance(
+                DataSourceService.class.getClassLoader(),
+                new Class<?>[] {DataSourceService.class},
+                (proxy, method, args) -> {
+                    if ("queryDataSource".equals(method.getName())) {
+                        assertEquals("workspace-1", WorkspaceContext.requireWorkspaceId());
+                        throw new IllegalStateException("scheduled fire datasource failure");
+                    }
                     throw new UnsupportedOperationException(method.getName());
                 });
     }
