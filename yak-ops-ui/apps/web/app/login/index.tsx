@@ -32,8 +32,9 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         className="flex min-h-screen min-w-0 flex-col items-center bg-white px-6 py-8 sm:px-10 lg:px-14"
       >
         <div className="flex w-full max-w-[400px] flex-1 flex-col">
-          <div className="pb-8 pt-4 sm:pt-[clamp(2rem,5vh,3rem)]">
-            <div className="mb-6 text-center">
+          <div className="flex min-h-0 flex-1 items-center py-12">
+            <div className="w-full">
+              <div className="mb-6 text-center">
               <SplitSparkIcon
                 size={40}
                 className="mx-auto mb-5 text-[var(--yak-components-page-header-title)]"
@@ -49,14 +50,15 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               </p>
             </div>
 
-            <LoginPanel
-              onAuthenticated={onAuthenticated}
-              onFocusStateChange={setFocusState}
-              onLoginResultChange={setResultState}
-              onPasswordVisibilityChange={setPasswordVisible}
-            />
+              <LoginPanel
+                onAuthenticated={onAuthenticated}
+                onFocusStateChange={setFocusState}
+                onLoginResultChange={setResultState}
+                onPasswordVisibilityChange={setPasswordVisible}
+              />
+            </div>
           </div>
-          <div className="mt-auto pt-8">
+          <div className="shrink-0 pt-6">
             <WeChatQrHelp />
           </div>
         </div>
