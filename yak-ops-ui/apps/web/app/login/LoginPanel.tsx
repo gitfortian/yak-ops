@@ -162,7 +162,7 @@ export default function LoginPanel({
               }}
             />
           </FloatingLabelField>
-          <div className="grid min-h-6 items-start pt-1" aria-live="polite" aria-atomic="true">
+          <div className="grid min-h-5 items-start pt-1" aria-live="polite" aria-atomic="true">
             <FieldError id="login-username-error" match={Boolean(errors.userName)}>
               {errors.userName}
             </FieldError>
@@ -172,7 +172,7 @@ export default function LoginPanel({
         <Field
           name="userPassword"
           invalid={Boolean(errors.userPassword)}
-          className="mt-2 !gap-0"
+          className="mt-1 !gap-0"
           onFocus={() => onFocusStateChange("userPassword")}
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) onFocusStateChange("idle");
@@ -205,7 +205,7 @@ export default function LoginPanel({
               }}
             />
           </FloatingLabelField>
-          <div className="grid min-h-6 items-start pt-1" aria-live="polite" aria-atomic="true">
+          <div className="grid min-h-5 items-start pt-1" aria-live="polite" aria-atomic="true">
             <FieldError id="login-password-error" match={Boolean(errors.userPassword)}>
               {errors.userPassword}
             </FieldError>
