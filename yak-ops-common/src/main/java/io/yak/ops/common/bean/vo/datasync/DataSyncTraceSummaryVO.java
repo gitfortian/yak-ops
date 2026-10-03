@@ -14,6 +14,9 @@ public class DataSyncTraceSummaryVO {
     /** Attempt 序号。 */
     private Integer attemptNo;
 
+    /** 当前 Attempt 是否存在 Runtime Trace。 */
+    private Boolean available;
+
     /** Trace 是否已经完成收口。 */
     private Boolean complete;
 
