@@ -1,8 +1,8 @@
 import { SplitSparkIcon } from "@yak-ops/yak-ui";
 import { useState } from "react";
 
-import LoginCharacters from "./LoginCharacters";
 import LoginPanel from "./LoginPanel";
+import LoginWelcomeScene from "./LoginWelcomeScene";
 import WeChatQrHelp from "./WeChatQrHelp";
 import type { LoginFocusState, LoginResultState } from "./login-interaction";
 
@@ -20,7 +20,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   return (
     <main className="h-full min-h-screen overflow-y-auto bg-white md:grid md:grid-cols-[7fr_5fr]">
       <section className="hidden min-h-screen overflow-hidden md:block">
-        <LoginCharacters
+        <LoginWelcomeScene
           focusState={focusState}
           resultState={resultState}
           passwordVisible={passwordVisible}
