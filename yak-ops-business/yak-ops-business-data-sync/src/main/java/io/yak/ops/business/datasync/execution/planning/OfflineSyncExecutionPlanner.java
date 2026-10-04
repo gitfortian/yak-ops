@@ -1,8 +1,6 @@
 package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
@@ -19,7 +17,6 @@ import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
-import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,6 +30,9 @@ public class OfflineSyncExecutionPlanner {
 
     @Resource
     private DataSourceService dataSourceService;
+
+    @Resource
+    private TargetTableRuntimePreparer targetTableRuntimePreparer;
 
     public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
         return plan(snapshot, RuntimeTraceListener.noop());
@@ -48,12 +48,10 @@ public class OfflineSyncExecutionPlanner {
         DataSyncRuntimeConfigVO runtimeConfig =
                 ObjectUtils.requireNonNull(snapshot.getRuntimeConfig(), "runtime config must not be null");
 
-        List<DataSourceCatalogColumnVO> sourceColumns =
-                dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
-        List<DataSourceCatalogColumnVO> targetColumns =
-                dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
-        YakTableSchema sourceSchema = DataSyncSchemaResolver.sourceSchema(sourceColumns);
-        YakTableSchema targetWriteSchema = DataSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
+        TargetTablePreparation targetPreparation =
+                targetTableRuntimePreparer.prepare(snapshot, runtimeConfig.getTimeoutSeconds());
+        YakTableSchema sourceSchema = targetPreparation.sourceSchema();
+        YakTableSchema targetWriteSchema = targetPreparation.targetWriteSchema();
 
         DataSourceConnection sourceConnection =
                 dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId());
@@ -106,14 +104,6 @@ public class OfflineSyncExecutionPlanner {
             throw new IllegalArgumentException("unsupported offline write mode: " + writeMode, exception);
         }
         return resolved == DataSyncWriteMode.UPSERT ? JdbcWriteMode.UPSERT : JdbcWriteMode.INSERT;
-    }
-
-    private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {
-        DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(endpoint.getDatabase());
-        path.setSchema(endpoint.getSchema());
-        path.setTable(endpoint.getTable());
-        return path;
     }
 
     private DataSourceTablePath tablePathValue(DataSyncEndpointSnapshotVO endpoint) {
