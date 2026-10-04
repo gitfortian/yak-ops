@@ -14,6 +14,11 @@ import io.yak.ops.business.datasync.execution.trace.ExecutionTraceRecord;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSide;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceStore;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSummarySnapshot;
+import io.yak.ops.business.datasync.schema.LogicalTable;
+import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
+import io.yak.ops.business.datasync.schema.TargetColumnPlan;
+import io.yak.ops.business.datasync.schema.TargetTablePlan;
+import io.yak.ops.business.datasync.schema.TargetTablePlanner;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
@@ -101,6 +106,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,6 +148,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSourceService dataSourceService;
+
+    @Resource
+    private TargetTablePlanner targetTablePlanner;
 
     @Resource
     private OfflineSyncExecutor offlineSyncExecutor;
