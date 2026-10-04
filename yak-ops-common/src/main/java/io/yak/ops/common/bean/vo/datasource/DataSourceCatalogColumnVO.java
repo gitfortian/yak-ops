@@ -35,6 +35,9 @@ public class DataSourceCatalogColumnVO {
     /** 字段是否属于主键。 */
     private Boolean primaryKey;
 
+    /** 复合主键顺序，对应 JDBC KEY_SEQ；非主键或驱动未提供时为空。 */
+    private Integer primaryKeyPosition;
+
     /** 数据库字段备注或 Comment；数据库未配置时可能为空。 */
     private String remarks;
 }
