@@ -55,19 +55,75 @@ public class RealtimeSyncExecutor {
     private DataSyncAttemptLifecycle attemptLifecycle;
 
     public void submit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
-        Thread.ofVirtual()
-                .name("yak-realtime-sync-" + instanceId)
-                .start(() -> execute(workspaceId, instanceId, snapshot));
+        start(
+                workspaceId,
+                instanceId,
+                snapshot,
+                1,
+                maxAttempts(snapshot),
+                backoffSeconds(snapshot),
+                DataSyncInstanceStatus.PENDING,
+                null);
     }
 
-    private void execute(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
+    public void resumeRetry(
+            String workspaceId,
+            String instanceId,
+            DataSyncDefinitionSnapshotVO snapshot,
+            int nextAttemptNo,
+            int maxAttempts,
+            int backoffSeconds,
+            LocalDateTime nextRetryTime) {
+        if (nextAttemptNo < 2 || maxAttempts < nextAttemptNo || nextRetryTime == null) {
+            throw new IllegalArgumentException("invalid durable retry recovery state");
+        }
+        start(
+                workspaceId,
+                instanceId,
+                snapshot,
+                nextAttemptNo,
+                maxAttempts,
+                Math.max(0, backoffSeconds),
+                DataSyncInstanceStatus.RETRY_WAITING,
+                nextRetryTime);
+    }
+
+    private void start(
+            String workspaceId,
+            String instanceId,
+            DataSyncDefinitionSnapshotVO snapshot,
+            int firstAttemptNo,
+            int maxAttempts,
+            int backoffSeconds,
+            DataSyncInstanceStatus expectedExecutionStatus,
+            LocalDateTime initialRetryTime) {
+        Thread.ofVirtual()
+                .name("yak-realtime-sync-" + instanceId)
+                .start(() -> execute(
+                        workspaceId,
+                        instanceId,
+                        snapshot,
+                        firstAttemptNo,
+                        maxAttempts,
+                        backoffSeconds,
+                        expectedExecutionStatus,
+                        initialRetryTime));
+    }
+
+    private void execute(
+            String workspaceId,
+            String instanceId,
+            DataSyncDefinitionSnapshotVO snapshot,
+            int firstAttemptNo,
+            int maxAttempts,
+            int backoffSeconds,
+            DataSyncInstanceStatus expectedExecutionStatus,
+            LocalDateTime initialRetryTime) {
         WorkspaceContext.bind(workspaceId);
         try {
-            int maxAttempts = maxAttempts(snapshot);
-            int backoffSeconds = backoffSeconds(snapshot);
-            DataSyncInstanceStatus expectedExecutionStatus = DataSyncInstanceStatus.PENDING;
+            if (initialRetryTime != null && !waitForRetry(workspaceId, instanceId, initialRetryTime)) return;
 
-            for (int attemptNo = 1; attemptNo <= maxAttempts; attemptNo++) {
+            for (int attemptNo = firstAttemptNo; attemptNo <= maxAttempts; attemptNo++) {
                 DataSyncRetryDecision decision = executeAttempt(
                         workspaceId,
                         instanceId,

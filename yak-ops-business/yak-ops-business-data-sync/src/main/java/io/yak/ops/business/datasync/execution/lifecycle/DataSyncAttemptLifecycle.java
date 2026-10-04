@@ -273,6 +273,17 @@ public class DataSyncAttemptLifecycle {
                 "目标执行计划已准备");
     }
 
+    public void recordRetryRecoveryScheduled(
+            String workspaceId, String executionId, int nextAttemptNo, LocalDateTime nextRetryTime) {
+        appendEvent(
+                workspaceId,
+                executionId,
+                null,
+                DataSyncExecutionEventLevel.WARN,
+                DataSyncExecutionEventType.RETRY_WAITING,
+                "应用重启后恢复等待重试，将从 Attempt #" + nextAttemptNo + " 继续，计划时间=" + nextRetryTime);
+    }
+
     public void recordAutoRecoveryStarted(String workspaceId, String executionId) {
         appendEvent(
                 workspaceId,

@@ -283,10 +283,7 @@ public class DataSyncInstanceRepositoryImpl extends BaseRepositoryImpl<DataSyncI
                 Wrappers.<DataSyncInstanceEntity>lambdaUpdate()
                         .in(
                                 DataSyncInstanceEntity::getStatus,
-                                List.of(
-                                        DataSyncInstanceStatus.PENDING,
-                                        DataSyncInstanceStatus.RUNNING,
-                                        DataSyncInstanceStatus.RETRY_WAITING))
+                                List.of(DataSyncInstanceStatus.PENDING, DataSyncInstanceStatus.RUNNING))
                         .set(DataSyncInstanceEntity::getNextRetryTime, null));
     }
 

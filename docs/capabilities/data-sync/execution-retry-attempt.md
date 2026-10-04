@@ -54,7 +54,24 @@ Execution 进入终态后不能自动追加 Attempt。连续 REALTIME Source 意
 
 只有 FAILED 尝试进入通用 Retry 决策，SUCCEEDED / CANCELED / LOST 不自动重试。OFFLINE 与 REALTIME 共用生命周期；REALTIME Retry 复用既有 task/version CDC state。
 
-Backoff 使用进程内等待，不使用 Quartz，不是跨进程 durable timer。进程在 RETRY_WAITING 时退出，下次启动将旧根记录标记 LOST，不继续旧 Attempt 序号；需要恢复的 REALTIME Task 由独立 desired-state 协调创建新根记录。
+v1.2 起，Backoff 的计划时间使用 Execution 已持久化的 `nextRetryTime`。运行进程内仍使用轻量等待，不使用 Quartz；但进程在 `RETRY_WAITING` 期间退出后，启动恢复会保留原 Execution Root，并从已持久化的 `currentAttempt / maxAttempts / backoffSeconds / nextRetryTime / definitionSnapshot` 恢复同一 Retry Chain。
+
+启动恢复规则：
+
+```text
+PENDING / RUNNING
+→ LocalExecution 所有权已经丢失
+→ LOST
+
+RETRY_WAITING
+→ 保留原 executionId / root trigger / taskVersion / definitionSnapshot
+→ 等到 nextRetryTime（已过期则立即继续）
+→ 创建下一 Attempt
+```
+
+恢复时以已持久化 Attempt History 防止重复使用 attemptNo；如果等待重试记录缺少快照、计划时间、同步类型或已经没有剩余 Attempt，则该 Execution 收口为 LOST，而不是创建一个不受控的新根记录。
+
+REALTIME desired-state 启动恢复在 Durable Retry 之后执行；保留的 `RETRY_WAITING` 仍属于 Active Execution，因此不会再创建重复的 `AUTO_RECOVERY` 根记录。
 
 ## Cancel Semantics
 
@@ -107,10 +124,12 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 ## Current Limits
 
-不提供指数退避、jitter、跨进程重试定时器、分布式 Attempt ownership 或 exactly-once。通用 Retry 不恢复 LOST；启动自动恢复有自己的新 Execution 身份和规则。
+不提供指数退避、jitter、Quartz Retry、分布式 Attempt ownership、跨节点接管或 exactly-once。Durable Retry 只恢复明确持久化的 `RETRY_WAITING`；已经进入 LOST / FAILED / CANCELED 的 Execution 不会被通用 Retry 复活。
+
+当前仍是 single-node 恢复模型：没有 leader election、fencing、分布式 lease 或多实例竞争协调。
 
 ## Code and Verification
 
 状态持久化：[DataSyncAttemptLifecycle](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/execution/lifecycle/DataSyncAttemptLifecycle.java) 与 [DataSyncInstanceRepositoryImpl](../../../yak-ops-dao/src/main/java/io/yak/ops/dao/repository/datasync/impl/DataSyncInstanceRepositoryImpl.java)。
 
-验证入口：[DataSyncAutomationAcceptanceIT](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncAutomationAcceptanceIT.java) 及 [验证导航](README.md#code-and-verification)。重点是根身份 / 快照不变、次数与 backoff、取消阻断、活动集合及跨 Attempt 指标语义；执行结果绑定实际提交，不在这里记通过流水。
+验证入口：[DataSyncAutomationAcceptanceIT](../../../yak-ops-business/yak-ops-business-data-sync/src/test/java/io/yak/ops/business/datasync/impl/DataSyncAutomationAcceptanceIT.java) 及 [验证导航](README.md#code-and-verification)。重点是根身份 / 快照不变、次数与 backoff、取消阻断、RETRY_WAITING 跨进程恢复、活动集合及跨 Attempt 指标语义；执行结果绑定实际提交，不在这里记通过流水。

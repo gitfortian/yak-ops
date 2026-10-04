@@ -1,6 +1,7 @@
 package io.yak.ops.boot.config;
 
 import io.yak.ops.business.datasync.DataSyncService;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRecovery;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +16,11 @@ import org.springframework.context.annotation.Configuration;
 public class DataSyncRecoveryConfiguration {
 
     @Bean
-    ApplicationRunner realtimeDesiredStateRecovery(DataSyncService dataSyncService) {
-        return arguments -> dataSyncService.restoreRealtimeDesiredState();
+    ApplicationRunner dataSyncRecovery(
+            DataSyncExecutionRecovery executionRecovery, DataSyncService dataSyncService) {
+        return arguments -> {
+            executionRecovery.recoverExecutions();
+            dataSyncService.restoreRealtimeDesiredState();
+        };
     }
 }

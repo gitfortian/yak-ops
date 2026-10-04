@@ -577,6 +577,71 @@ function RealtimeRuntimeFields({ config, onChange }: RealtimeRuntimeFieldsProps)
   );
 }
 
+interface RetryPolicyFieldsProps {
+  config: DataSyncRetryPolicy;
+  onChange: (key: keyof DataSyncRetryPolicy, value: string) => void;
+}
+
+function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
+  const retryEnabled = config.maxAttempts > 1;
+
+  return (
+    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
+        <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
+          <FieldLabel className="pt-1.5">最大执行次数</FieldLabel>
+          <div className="space-y-1">
+            <Input
+              type="number"
+              min={1}
+              max={10}
+              step={1}
+              size="small"
+              variant="outlined"
+              value={String(config.maxAttempts)}
+              onChange={(event) => onChange("maxAttempts", event.target.value)}
+            />
+            <div className="px-1 text-xs text-[#98a2b3]">
+              包含首次执行，1 表示失败后不自动重试。
+            </div>
+          </div>
+        </Field>
+
+        <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
+          <FieldLabel className="pt-1.5">重试间隔（秒）</FieldLabel>
+          <div className="space-y-1">
+            <Input
+              type="number"
+              min={0}
+              max={3600}
+              step={1}
+              size="small"
+              variant="outlined"
+              disabled={!retryEnabled}
+              value={String(config.backoffSeconds)}
+              onChange={(event) => onChange("backoffSeconds", event.target.value)}
+            />
+            <div className="px-1 text-xs text-[#98a2b3]">
+              {retryEnabled
+                ? `失败后最多自动重试 ${config.maxAttempts - 1} 次，每次固定等待 ${config.backoffSeconds} 秒。`
+                : "当前关闭自动重试。"}
+            </div>
+          </div>
+        </Field>
+      </div>
+
+      {retryEnabled ? (
+        <div className="mt-3">
+          <Alert>
+            自动重试会复用同一个 Execution 的冻结任务快照。APPEND 可能重复写入，OVERWRITE 会再次清空目标表；
+            当前语义仍不是 exactly-once。
+          </Alert>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPreview }) {
   if (!preview) return null;
 
@@ -925,6 +990,17 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     }));
   };
 
+  const patchRetry = (key: keyof DataSyncRetryPolicy, value: string) => {
+    const parsed = Number(value);
+    setForm((current) => ({
+      ...current,
+      retryPolicy: {
+        ...current.retryPolicy,
+        [key]: Number.isFinite(parsed) ? parsed : 0,
+      },
+    }));
+  };
+
   const patchOptionalSplitSize = (value: string) => {
     const parsed = Number(value);
     setForm((current) => ({
@@ -977,9 +1053,17 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const scheduleRequired = scheduleExists || scheduleConfigured;
   const scheduleValid =
     realtime || !scheduleRequired || (scheduleConfigured && Boolean(scheduleForm.timeZone.trim()));
+  const retryPolicyValid =
+    Number.isInteger(form.retryPolicy.maxAttempts) &&
+    form.retryPolicy.maxAttempts >= 1 &&
+    form.retryPolicy.maxAttempts <= 10 &&
+    Number.isInteger(form.retryPolicy.backoffSeconds) &&
+    form.retryPolicy.backoffSeconds >= 0 &&
+    form.retryPolicy.backoffSeconds <= 3600;
   const canSave =
     !published &&
     scheduleValid &&
+    retryPolicyValid &&
     form.name.trim() &&
     mapping?.compatible &&
     !mappingLoading &&
@@ -1394,6 +1478,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             </CollapseSection>
           ) : null}
 
+          <CollapseSection id="retry" title="重试策略" defaultOpen={false}>
+            <RetryPolicyFields config={form.retryPolicy} onChange={patchRetry} />
+          </CollapseSection>
+
           <CollapseSection id="runtime" title="运行参数" defaultOpen={false}>
             <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
@@ -1425,6 +1513,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             ["target", "数据去向"],
             ["mapping", "Schema 预览"],
             ...(realtime ? [] : [["schedule", "调度配置"]]),
+            ["retry", "重试策略"],
             ["runtime", "运行参数"],
           ].map(([anchor, label]) => (
             <a

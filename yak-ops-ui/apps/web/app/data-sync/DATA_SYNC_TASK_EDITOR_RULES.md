@@ -15,7 +15,9 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - REALTIME Source 只展示 MySQL，Target 只展示 MySQL / PostgreSQL / Oracle；最终拓扑、主键和兼容性由后端校验。
 - Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。
 - 只读展示后端自动同名映射，不在前端重建 JDBC 类型兼容或 Transform。修改依赖字段后重新查询，过期结果不得覆盖当前选择。
-- OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。已有 retryPolicy 随任务加载/保存，不因缺少专用配置 UI 而丢失。
+- OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
+- Retry Policy 使用共享“重试策略”折叠区配置：`maxAttempts` 范围 1～10，包含首次执行；1 表示关闭自动重试。启用重试时 `backoffSeconds` 范围 0～3600，表示固定等待秒数。前端只做同范围输入校验，最终仍由后端 DTO 校验。
+- Retry Policy 同时适用于 OFFLINE / REALTIME，并随 Task 定义保存及 Execution definitionSnapshot 冻结。页面不得增加第二个 enabled 字段，也不得把 Retry 做成 Quartz / Schedule 配置。
 - 不暴露 Debezium 状态目录、offset、schema history 或 serverId。
 
 ## Save / Publish
@@ -30,7 +32,7 @@ OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户�
 
 ## Layout
 
-编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开，运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。
+编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开；重试策略、运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。
 
 OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部滚动；右侧锚点导航在滚动区外，不能跟随内容滚走。REALTIME 当前保持原页面滚动方式，不把离线布局描述为两种模式都已采用。具体列宽与断点归 [task-editor.tsx](task-editor.tsx)，不照抄普通管理 Modal 的密度覆盖配置页。
 
