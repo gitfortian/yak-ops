@@ -25,17 +25,12 @@ import org.springframework.stereotype.Component;
 public class TargetTablePlanner {
 
     public TargetTablePlan plan(
-            LogicalTable logicalTable,
-            String targetType,
-            String database,
-            String schema,
-            String table) {
+            LogicalTable logicalTable, String targetType, String database, String schema, String table) {
         Objects.requireNonNull(logicalTable, "logicalTable must not be null");
 
         String canonicalType = JdbcDialects.canonicalType(targetType);
         JdbcDialect dialect = JdbcDialects.forType(canonicalType);
-        DataSourceTablePath targetPath =
-                new DataSourceTablePath(normalize(database), normalize(schema), table);
+        DataSourceTablePath targetPath = new DataSourceTablePath(normalize(database), normalize(schema), table);
         YakTableSchema runtimeSchema = logicalTable.toRuntimeSchema();
 
         Map<String, Integer> primaryKeyPositions = primaryKeyPositions(logicalTable.primaryKeys());
@@ -59,8 +54,8 @@ public class TargetTablePlanner {
                     unsupportedReason = "字段 " + column.name() + " 映射为 " + nativeType + "，不能直接作为目标主键";
                 }
             } catch (UnsupportedOperationException exception) {
-                unsupportedReason = "字段 " + column.name() + "（" + column.dataType().kind() + "）："
-                        + exception.getMessage();
+                unsupportedReason =
+                        "字段 " + column.name() + "（" + column.dataType().kind() + "）：" + exception.getMessage();
             }
 
             if (warning != null) {
