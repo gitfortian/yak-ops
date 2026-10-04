@@ -85,7 +85,11 @@ The response only contains Provider-recommended advanced-property names. JDBC Pr
 
 Property keys are suggestions rather than a strict whitelist. Value normalization and validation remain owned by each Provider.
 
-Datasource publishes read-only Catalog database / Schema / table / column APIs for saved Workspace-scoped datasources. Catalog access does not accept connection credentials; internal runtime connection resolution is never exposed through HTTP. See [DataSourceController](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/controller/datasource/v1/DataSourceController.java) and [Datasource Rules](../../../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md) for the backend boundary. Summary and arbitrary SQL execution APIs remain outside this capability.
+Datasource publishes read-only Catalog database / Schema / table / column APIs for saved Workspace-scoped datasources. Catalog access does not accept connection credentials; internal runtime connection resolution is never exposed through HTTP.
+
+For product consumers that need one exact table identity, the internal Catalog contract also provides `findTable(DataSourceTablePath)` and DataSourceService provides `queryCatalogTable(...)`. This exact lookup is not exposed as a new HTTP endpoint in v1.2 PR2; it exists so Data Sync schema introspection does not depend on fuzzy table search.
+
+Column metadata now preserves JDBC composite-primary-key order through `primaryKeyPosition` / `KEY_SEQ` in addition to the existing `primaryKey` membership flag. See [DataSourceController](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/controller/datasource/v1/DataSourceController.java) and [Datasource Rules](../../../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md) for the backend boundary. Summary and arbitrary SQL execution APIs remain outside this capability.
 
 ## Frontend Structure
 
