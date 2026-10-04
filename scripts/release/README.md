@@ -49,6 +49,29 @@ bash scripts/release/check-release-metadata.sh v1.1.0
 
 普通 Quality Check 会执行该检查，避免版本漂移重新进入 `main`。
 
+## Release Migration 检查
+
+开发阶段允许当前未发布 Product Version 存在多个 Draft Migration；进入 Release Freeze 后必须先按 [Flyway Rules](../../yak-ops-dao/FLYWAY_RULES.md) 收口，再执行正式 Release Gate。
+
+检查 Release Migration：
+
+```bash
+bash scripts/release/check-release-migration.sh 1.1.0
+```
+
+脚本会机械验证：
+
+- `V1__baseline.sql` 仍是首个冻结基线。
+- Flyway Version 连续且不重复。
+- 除 Baseline 外，正式历史只使用 `V{flywayVersion}__v{major}_{minor}_{patch}.sql`。
+- 当前 Product Version 最多一个 Release Migration。
+- 当前版本存在 Release Migration 时，它必须是最高 Flyway Version。
+- 不允许 Draft / Feature 命名的 Migration 遗留到 Release Gate。
+- 不允许高于目标 Product Version 的未来 Release Migration 混入当前候选版本。
+- Product Version 没有 Schema 变化时允许不新增 Migration。
+
+正式 Release Gate 会在版本元数据校验后自动执行该检查。Draft checksum 在开发阶段发生变化时应重建可重建数据库，不使用 Flyway repair 掩盖历史差异。
+
 ## Distribution 构建与验证
 
 先构建 Frontend：
