@@ -601,9 +601,7 @@ function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
               value={String(config.maxAttempts)}
               onChange={(event) => onChange("maxAttempts", event.target.value)}
             />
-            <div className="px-1 text-xs text-[#98a2b3]">
-              包含首次执行，1 表示失败后不自动重试。
-            </div>
+            <div className="px-1 text-xs text-[#98a2b3]">包含首次执行，1 表示失败后不自动重试。</div>
           </div>
         </Field>
 
