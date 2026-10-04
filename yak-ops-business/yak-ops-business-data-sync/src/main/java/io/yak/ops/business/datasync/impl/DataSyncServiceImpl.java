@@ -1278,9 +1278,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
 
         DataSourceTablePathDTO targetPath = tablePath(
-                resolvedScope.getTargetDatabase(),
-                resolvedScope.getTargetSchema(),
-                resolvedScope.getTargetTable());
+                resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
         boolean targetExists = dataSourceService
                 .findCatalogTable(targetDataSourceId, targetPath)
                 .isPresent();
