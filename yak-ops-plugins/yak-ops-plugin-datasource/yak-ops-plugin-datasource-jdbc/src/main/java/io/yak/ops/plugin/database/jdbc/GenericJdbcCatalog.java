@@ -271,8 +271,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
         }
     }
 
-    private Map<String, Integer> primaryKeys(
-            DatabaseMetaData metadata, String database, String schema, String table) {
+    private Map<String, Integer> primaryKeys(DatabaseMetaData metadata, String database, String schema, String table) {
         try (ResultSet resultSet = metadata.getPrimaryKeys(database, schema, table)) {
             Map<String, Integer> keys = new LinkedHashMap<>();
             while (resultSet.next()) {
