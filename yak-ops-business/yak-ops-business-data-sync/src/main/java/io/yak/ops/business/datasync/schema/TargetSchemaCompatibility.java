@@ -45,6 +45,7 @@ public final class TargetSchemaCompatibility {
                 issues.add("目标表缺少字段：" + source.name());
                 continue;
             }
+            mappedTargetNames.add(target.getName().toLowerCase(Locale.ROOT));
 
             DataSourceColumn targetColumn = DataSyncCatalogColumns.toColumn(target, index + 1);
             if (targetColumn == null) {
@@ -68,7 +69,6 @@ public final class TargetSchemaCompatibility {
                 continue;
             }
             mappedTargetColumns.add(targetColumn);
-            mappedTargetNames.add(target.getName().toLowerCase(Locale.ROOT));
         }
 
         for (DataSourceCatalogColumnVO target : targetColumns) {
