@@ -38,7 +38,7 @@ class TargetTableRuntimePreparerTest {
 
         TargetTablePreparation result = preparer.prepare(snapshot(false), 30);
 
-        assertFalse(result.created());
+        assertFalse(result.targetCreated());
         assertEquals(List.of("id"), result.targetWriteSchema().primaryKeys());
         assertEquals(0, creates.get());
     }
@@ -67,7 +67,7 @@ class TargetTableRuntimePreparerTest {
 
         TargetTablePreparation result = preparer.prepare(snapshot(true), 30);
 
-        assertTrue(result.created());
+        assertTrue(result.targetCreated());
         assertEquals(1, creates.get());
         assertEquals(2, result.targetWriteSchema().columnCount());
         assertEquals(List.of("id"), result.targetWriteSchema().primaryKeys());
