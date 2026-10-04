@@ -49,6 +49,11 @@ public final class JdbcSink implements Sink {
     }
 
     public JdbcSink(
+            JdbcSinkConfig config, YakTableSchema writeSchema, JdbcConnectionProvider connectionProvider) {
+        this(config, writeSchema, connectionProvider, RuntimeTraceListener.noop());
+    }
+
+    public JdbcSink(
             JdbcSinkConfig config, JdbcConnectionProvider connectionProvider, RuntimeTraceListener traceListener) {
         this(config, null, connectionProvider, traceListener);
     }
