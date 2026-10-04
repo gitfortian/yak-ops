@@ -14,6 +14,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Datasource 管理对 Boot 暴露的唯一稳定 Service Contract。
@@ -62,7 +63,10 @@ public interface DataSourceService {
     /** 查询已保存数据源的表 / 视图元数据。 */
     List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
 
-    /** 精确查询已保存数据源指定表 / 视图的元数据。 */
+    /** 精确查询已保存数据源指定表 / 视图的元数据；不存在时返回空。 */
+    Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto);
+
+    /** 精确查询已保存数据源指定表 / 视图的元数据；不存在时抛出业务异常。 */
     DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto);
 
     /** 查询已保存数据源指定表的字段元数据。 */
