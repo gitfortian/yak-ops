@@ -1143,6 +1143,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || !Objects.equals(entity.getTargetDatabase(), resolvedScope.getTargetDatabase())
                 || !Objects.equals(entity.getTargetSchema(), resolvedScope.getTargetSchema())
                 || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
+                || autoCreateTable(entity) != Boolean.TRUE.equals(dto.getAutoCreateTable())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
                 || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
                 || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
@@ -1164,6 +1165,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setTargetDatabase(resolvedScope.getTargetDatabase());
         entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(dto.getTargetTable().trim());
+        entity.setAutoCreateTable(Boolean.TRUE.equals(dto.getAutoCreateTable()));
         entity.setWriteMode(requireWriteMode(dto.getWriteMode()));
         entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
         entity.setRetryPolicy(retryPolicyJson(dto));
@@ -1277,9 +1279,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
         DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
-        if (!preview.isCompatible()) {
-            throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
+        if (preview.isCompatible()) return;
+
+        if (Boolean.TRUE.equals(dto.getAutoCreateTable())
+                && !preview.isTargetTableExists()
+                && !preview.getUnsupportedReasons().isEmpty()) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
+                    String.join("；", preview.getUnsupportedReasons()));
         }
+        throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
@@ -1293,6 +1302,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
+        snapshot.setAutoCreateTable(autoCreateTable(task));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
@@ -1441,6 +1451,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncWriteMode taskWriteMode(DataSyncTaskEntity task) {
         return task.getWriteMode() == null ? DataSyncWriteMode.APPEND : task.getWriteMode();
+    }
+
+    private boolean autoCreateTable(DataSyncTaskEntity task) {
+        return Boolean.TRUE.equals(task.getAutoCreateTable());
     }
 
     private DataSyncTaskStatus taskStatus(DataSyncTaskEntity task) {
@@ -1597,6 +1611,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         target.setStatus(taskStatus(source).name());
         target.setDesiredState(taskDesiredState(source).name());
         target.setWriteMode(taskWriteMode(source).name());
+        target.setAutoCreateTable(autoCreateTable(source));
         target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
