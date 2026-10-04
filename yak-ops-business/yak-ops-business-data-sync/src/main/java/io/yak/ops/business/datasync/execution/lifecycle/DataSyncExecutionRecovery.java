@@ -58,20 +58,14 @@ public class DataSyncExecutionRecovery {
         LocalDateTime now = DateUtils.now();
 
         int attempts = attemptRepository.markActiveAsLost(
-                now,
-                DataSyncErrorCode.EXECUTION_LOST.getCode(),
-                DataSyncErrorCode.EXECUTION_LOST.getMessage());
+                now, DataSyncErrorCode.EXECUTION_LOST.getCode(), DataSyncErrorCode.EXECUTION_LOST.getMessage());
         int executions = instanceRepository.markActiveAsLost(
-                now,
-                DataSyncErrorCode.EXECUTION_LOST.getCode(),
-                DataSyncErrorCode.EXECUTION_LOST.getMessage());
+                now, DataSyncErrorCode.EXECUTION_LOST.getCode(), DataSyncErrorCode.EXECUTION_LOST.getMessage());
 
         activeExecutions.stream()
                 .filter(this::runtimeExecution)
                 .forEach(execution -> attemptLifecycle.recordExecutionLost(
-                        execution.getWorkspaceId(),
-                        execution.getId(),
-                        "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST"));
+                        execution.getWorkspaceId(), execution.getId(), "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST"));
 
         int retryScheduled = 0;
         int retryLost = 0;
@@ -106,7 +100,8 @@ public class DataSyncExecutionRecovery {
             DataSyncDefinitionSnapshotVO snapshot =
                     JSONUtils.parseObject(execution.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
             int maxAttempts = Math.max(1, execution.getMaxAttempts() == null ? 1 : execution.getMaxAttempts());
-            int backoffSeconds = Math.max(0, execution.getBackoffSeconds() == null ? 60 : execution.getBackoffSeconds());
+            int backoffSeconds =
+                    Math.max(0, execution.getBackoffSeconds() == null ? 60 : execution.getBackoffSeconds());
             int currentAttempt = Math.max(1, execution.getCurrentAttempt() == null ? 1 : execution.getCurrentAttempt());
             int nextAttemptNo = Math.max(currentAttempt, highestAttemptNo(execution)) + 1;
 
@@ -170,9 +165,7 @@ public class DataSyncExecutionRecovery {
                 detail);
         if (updated) {
             attemptLifecycle.recordExecutionLost(
-                    execution.getWorkspaceId(),
-                    execution.getId(),
-                    "应用启动无法恢复等待重试 Execution：" + detail);
+                    execution.getWorkspaceId(), execution.getId(), "应用启动无法恢复等待重试 Execution：" + detail);
         }
         LOG.warn(
                 "等待重试Execution恢复失败，workspaceId={}, executionId={}, error={}",
@@ -189,7 +182,9 @@ public class DataSyncExecutionRecovery {
     private String safeMessage(Throwable throwable) {
         String message = throwable == null ? null : throwable.getMessage();
         if (StringUtils.isBlank(message)) {
-            message = throwable == null ? "Durable Retry Recovery 失败" : throwable.getClass().getSimpleName();
+            message = throwable == null
+                    ? "Durable Retry Recovery 失败"
+                    : throwable.getClass().getSimpleName();
         }
         return SensitiveUtils.mask(message);
     }
