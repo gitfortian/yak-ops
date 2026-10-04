@@ -343,22 +343,63 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncMappingPreviewVO previewResolvedMapping(DataSyncMappingPreviewDTO dto) {
-        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
-                dto.getSourceDataSourceId(),
-                tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable()));
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                dto.getTargetDataSourceId(),
-                tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable()));
+        DataSourceTablePathDTO sourcePath =
+                tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable());
+        DataSourceTablePathDTO targetPath =
+                tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable());
+        List<DataSourceCatalogColumnVO> sourceColumns =
+                dataSourceService.queryCatalogColumns(dto.getSourceDataSourceId(), sourcePath);
 
+        boolean autoCreateTable = Boolean.TRUE.equals(dto.getAutoCreateTable());
+        if (autoCreateTable) {
+            Optional<io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO> targetTable =
+                    dataSourceService.findCatalogTable(dto.getTargetDataSourceId(), targetPath);
+            if (targetTable.isEmpty()) {
+                return previewAutoCreateMapping(dto, sourcePath, sourceColumns);
+            }
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(dto.getTargetDataSourceId(), targetPath);
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
 
         DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+        result.setTargetTableExists(true);
+        result.setAutoCreateTable(autoCreateTable);
         result.setMappings(sourceColumns.stream()
                 .map(source ->
                         toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
                 .toList());
         result.setCompatible(!sourceColumns.isEmpty()
                 && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
+        return result;
+    }
+
+    private DataSyncMappingPreviewVO previewAutoCreateMapping(
+            DataSyncMappingPreviewDTO dto,
+            DataSourceTablePathDTO sourcePath,
+            List<DataSourceCatalogColumnVO> sourceColumns) {
+        LogicalTable logicalTable = LogicalTableNormalizer.fromCatalog(
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath),
+                sourceColumns);
+        DataSourceVO targetDataSource = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
+        TargetTablePlan plan = targetTablePlanner.plan(
+                logicalTable,
+                targetDataSource.getDbType(),
+                dto.getTargetDatabase(),
+                dto.getTargetSchema(),
+                dto.getTargetTable());
+
+        DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+        result.setTargetTableExists(false);
+        result.setAutoCreateTable(true);
+        result.setCreateTableSql(plan.createTableSql());
+        result.setWarnings(plan.warnings());
+        result.setUnsupportedReasons(plan.unsupportedReasons());
+        result.setMappings(sourceColumns.stream()
+                .map(source -> toAutoCreateFieldMapping(source, findPlanColumn(plan, source.getName())))
+                .toList());
+        result.setCompatible(!sourceColumns.isEmpty() && plan.supported());
         return result;
     }
 
@@ -1306,6 +1347,30 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         path.setSchema(StringUtils.trimToNull(schema));
         path.setTable(tableName);
         return path;
+    }
+
+    private TargetColumnPlan findPlanColumn(TargetTablePlan plan, String name) {
+        if (name == null) return null;
+        return plan.columns().stream()
+                .filter(column -> column.name().equalsIgnoreCase(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private DataSyncFieldMappingVO toAutoCreateFieldMapping(
+            DataSourceCatalogColumnVO source, TargetColumnPlan target) {
+        DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
+        mapping.setSourceName(source.getName());
+        mapping.setSourceType(source.getTypeName());
+        mapping.setTargetName(target == null ? source.getName() : target.name());
+        mapping.setTargetType(target == null ? null : target.nativeType());
+        mapping.setCompatible(target != null && target.supported());
+        if (target == null) {
+            mapping.setMessage("目标建表规划缺少字段");
+        } else if (!target.supported()) {
+            mapping.setMessage(target.unsupportedReason());
+        }
+        return mapping;
     }
 
     private DataSyncFieldMappingVO toFieldMapping(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
