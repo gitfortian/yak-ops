@@ -46,7 +46,10 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - `LogicalTableNormalizer` 负责 Catalog → LogicalTable 的纯归一；JDBC 类型统一复用 `JdbcSchemaMapper`。
 - Catalog composite primary key 必须使用 `primaryKeyPosition / KEY_SEQ` 保留顺序，不能按字段 ordinal 猜测。
 - Logical Table persistence 仍归 DAO；schema 包不直接持有 Entity / Mapper。
-- Target Native Type / CREATE TABLE SQL 归后续 Target Planner / JDBC Dialect，不写进 LogicalTable。
+- `TargetTablePlanner` 只消费 LogicalTable + Target Type / Path，聚合产品级 warning / unsupported，不连接数据库、不执行 DDL。
+- Target Native Type / identifier quote / CREATE TABLE SQL 归 YakFlow `JdbcDialect`；Data Sync 不复制 MySQL / PostgreSQL / Oracle 类型映射。
+- Target Plan 出现 blocking unsupported 时必须保持 `createTableSql=null`，不能生成部分 DDL 或静默降级。
+- Target Table comment / column comment 当前只作为 Plan 元数据保留，不在 PR3 拼接数据库特有 COMMENT DDL。
 - 已冻结到 Task snapshot 的 Schema 不得因后续 Logical Table 编辑而改变历史 Execution。
 
 具体产品语义见 [Schema / Logical Table Contract](../../docs/capabilities/data-sync/schema-logical-table.md)。
