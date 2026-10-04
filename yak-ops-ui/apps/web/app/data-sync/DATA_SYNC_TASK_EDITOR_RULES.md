@@ -38,7 +38,7 @@ OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部
 
 ## Risk Presentation
 
-持久风险使用 [Alert](../../../../packages/yak-ui/docs/alert.md)：未上线前置条件、OVERWRITE、Split 快照限制、CDC 前置条件及执行定义变化后的重新快照。普通帮助保留说明文字；不将“保存成功”当成同步结果。
+持久风险使用 [Alert](../../../../packages/yak-ui/docs/alert.md)：未上线前置条件、OVERWRITE、Split 快照限制、CDC 前置条件及执行定义变化后的重新快照。普通帮助文案默认不展示，优先通过字段名称、控件、Placeholder、状态与校验结果表达；只有数据风险、执行前置条件、阻断原因或重要执行差异允许额外提示，并遵循 [Frontend Rules](../../../FRONTEND_RULES.md#ui-copy-minimalism)。不将“保存成功”当成同步结果。
 
 ## Verification
 
