@@ -74,8 +74,7 @@ public record LogicalTable(
      */
     public YakTableSchema toRuntimeSchema() {
         List<YakColumn> runtimeColumns = columns.stream()
-                .map(column -> new YakColumn(
-                        column.name(), column.dataType(), column.nullable(), column.length()))
+                .map(column -> new YakColumn(column.name(), column.dataType(), column.nullable(), column.length()))
                 .toList();
         return new YakTableSchema(runtimeColumns, primaryKeys);
     }
