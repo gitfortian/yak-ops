@@ -18,9 +18,6 @@ public interface TargetTableDdlExecutor {
      * @return 实际执行的 CREATE TABLE SQL
      */
     String createTable(
-            DataSourceConnection connection,
-            DataSourceTablePath table,
-            YakTableSchema schema,
-            int timeoutSeconds)
+            DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema, int timeoutSeconds)
             throws Exception;
 }
