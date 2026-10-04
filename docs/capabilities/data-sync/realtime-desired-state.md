@@ -55,7 +55,9 @@ Task definitionVersion 不包含被引用 Datasource 的连接修订。同 ID �
 
 FAILED Attempt 的通用 Retry 留在原 Execution 内，root trigger 不变。启动自动恢复创建新 AUTO_RECOVERY 根记录，按当前已发布 Task 冻结输入；它不是旧 FAILED / LOST Execution 的 Retry。
 
-RETRY_WAITING 在进程退出后成为 LOST。只有满足 desired-state 恢复条件的 REALTIME Task 才创建新根记录，OFFLINE 不恢复旧重试等待链。
+v1.2 起，`RETRY_WAITING` 不再因为进程退出直接变成 LOST。它由 Durable Retry Recovery 保留原 Execution Root，并从持久化的 nextRetryTime 继续同一 Attempt Chain；OFFLINE 与 REALTIME 都遵循该规则。
+
+PENDING / RUNNING 仍表示旧进程持有的 Runtime 已丢失，因此启动时标记 LOST。REALTIME desired-state 协调只在 Durable Retry Recovery 完成后运行；如果任务已经存在 RETRY_WAITING / PENDING / RUNNING Active Execution，则不会创建新的 AUTO_RECOVERY Execution。
 
 ## Delivery Semantics
 
