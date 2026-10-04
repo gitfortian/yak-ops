@@ -8,9 +8,12 @@ import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 校验产品 LogicalTable 是否可以直接写入一个已存在 JDBC 目标表。
@@ -32,6 +35,7 @@ public final class TargetSchemaCompatibility {
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
         List<DataSourceColumn> mappedTargetColumns = new ArrayList<>(logicalTable.columns().size());
         List<String> issues = new ArrayList<>();
+        Set<String> mappedTargetNames = new HashSet<>();
 
         for (int index = 0; index < logicalTable.columns().size(); index++) {
             LogicalColumn source = logicalTable.columns().get(index);
@@ -64,6 +68,15 @@ public final class TargetSchemaCompatibility {
                 continue;
             }
             mappedTargetColumns.add(targetColumn);
+            mappedTargetNames.add(target.getName().toLowerCase(Locale.ROOT));
+        }
+
+        for (DataSourceCatalogColumnVO target : targetColumns) {
+            if (target == null || target.getName() == null) continue;
+            if (mappedTargetNames.contains(target.getName().toLowerCase(Locale.ROOT))) continue;
+            if (!Boolean.TRUE.equals(target.getNullable())) {
+                issues.add("目标表存在来源未映射的必填字段：" + target.getName());
+            }
         }
 
         if (!issues.isEmpty()) {
