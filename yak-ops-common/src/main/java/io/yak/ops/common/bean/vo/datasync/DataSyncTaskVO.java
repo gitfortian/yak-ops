@@ -54,6 +54,9 @@ public class DataSyncTaskVO {
     /** 目标物理表名称。 */
     private String targetTable;
 
+    /** 目标表不存在时是否允许按 LogicalTable 自动建表。 */
+    private Boolean autoCreateTable;
+
     /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;
 
