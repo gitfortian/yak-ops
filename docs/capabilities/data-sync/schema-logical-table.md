@@ -222,25 +222,42 @@ YakTableSchema
 
 ## 8. Source Import Boundary
 
-后续 Source Metadata Introspection PR 应复用当前链路：
+PR2 已实现 Source Metadata Introspection + Logical Type Normalization：
 
 ~~~text
-Datasource Catalog DataSourceColumn
+Datasource Catalog exact table metadata
+        +
+Datasource Catalog columns
+        ↓
+SourceTableIntrospector
+        ↓
+LogicalTableNormalizer
         ↓
 JdbcSchemaMapper / YakDataType
-        ↓
-LogicalColumn
         ↓
 LogicalTable
 ~~~
 
-不能：
+Datasource Catalog 现在提供精确 `findTable(DataSourceTablePath)`，DataSourceService 内部提供 `queryCatalogTable(...)`，Data Sync 不再通过 table keyword 搜索结果猜测表备注或对象身份。
 
-- 在 Data Sync Service 再写一份 JDBC type switch。
-- 按数据库产品名维护一份新的逻辑类型枚举。
+字段归一规则：
+
+- 字段按 Catalog `ordinalPosition` 恢复稳定顺序。
+- JDBC `typeName / jdbcType / size / scale` 只作为物理输入。
+- Logical Type 唯一通过现有 `JdbcSchemaMapper` 归一，不在 Data Sync 再写 JDBC type switch。
+- STRING / BINARY capacity 继续由 YakColumn length 表达。
+- DECIMAL precision / scale 继续由 YakDecimalType 表达。
+- table remarks / column remarks 作为初始 comment，空白备注归一为 null。
+- Catalog 额外保留 JDBC `KEY_SEQ` 为 `primaryKeyPosition`，复合主键按 KEY_SEQ 顺序进入 LogicalTable，不按字段物理顺序猜测。
+
+禁止：
+
+- 按数据库产品名维护新的逻辑类型枚举。
 - 用 Source native typeName 直接决定 Target DDL。
+- Source introspection 读取或暴露 Runtime credential。
+- Catalog import 阶段直接持久化或执行 Target DDL。
 
-表 remarks / column remarks 可以作为初始 comment；没有 remarks 时保持 null，不自动生成文案。
+当前没有新增 Logical Table HTTP API。现有 Catalog Column 响应增加 `primaryKeyPosition`，用于保留复合主键顺序。
 
 ## 9. Target Planning Boundary
 
@@ -284,7 +301,9 @@ PR1 完成后只有 Schema / Logical Table Contract。
 
 ~~~text
 Logical Table Persistence = NOT IMPLEMENTED
-Catalog Import / Refresh = NOT IMPLEMENTED
+Source Metadata Introspection = IMPLEMENTED
+Logical Type Normalization = IMPLEMENTED
+Catalog Refresh / Diff = NOT IMPLEMENTED
 Target Table Planner = NOT IMPLEMENTED
 Auto Create Table = NOT IMPLEMENTED
 Schema Preview UI = NOT IMPLEMENTED
@@ -305,4 +324,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-真实 Catalog Import、跨库 Target Type Mapping 与 Auto Create Table 验收分别属于后续 PR。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为；跨库 Target Type Mapping、持久化与 Auto Create Table 验收分别属于后续 PR。
