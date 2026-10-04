@@ -14,6 +14,11 @@ import io.yak.ops.business.datasync.execution.trace.ExecutionTraceRecord;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSide;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceStore;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSummarySnapshot;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
+import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
+import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
+import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
 import io.yak.ops.business.datasync.schema.TargetColumnPlan;
@@ -21,11 +26,6 @@ import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
 import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
 import io.yak.ops.business.datasync.schema.TargetTablePlan;
 import io.yak.ops.business.datasync.schema.TargetTablePlanner;
-import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
-import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
-import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
-import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
-import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
@@ -374,8 +374,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 dataSourceService.queryCatalogColumns(dto.getTargetDataSourceId(), targetPath);
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
         LogicalTable sourceLogicalTable = LogicalTableNormalizer.fromCatalog(
-                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath),
-                sourceColumns);
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath), sourceColumns);
         TargetSchemaCompatibilityResult compatibility =
                 TargetSchemaCompatibility.check(sourceLogicalTable, targetColumns);
 
@@ -398,8 +397,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             DataSourceTablePathDTO sourcePath,
             List<DataSourceCatalogColumnVO> sourceColumns) {
         LogicalTable logicalTable = LogicalTableNormalizer.fromCatalog(
-                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath),
-                sourceColumns);
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath), sourceColumns);
         DataSourceVO targetDataSource = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
         TargetTablePlan plan = targetTablePlanner.plan(
                 logicalTable,
