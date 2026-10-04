@@ -65,9 +65,9 @@ RETRY_WAITING 在进程退出后成为 LOST。只有满足 desired-state 恢复�
 
 ## Persistence and Compatibility
 
-[现有 V4 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V4__realtime_desired_state.sql) 默认 desiredState=STOPPED；只有已发布 REALTIME Task 存在 PENDING / RUNNING / RETRY_WAITING 实例时回填 RUNNING。旧停止任务与 OFFLINE 保持 STOPPED。
+[v1.1.0 Release Migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__v1_1_0.sql) 的 Realtime Desired State / Auto Recovery section 默认 desiredState=STOPPED；只有已发布 REALTIME Task 存在 PENDING / RUNNING / RETRY_WAITING 实例时回填 RUNNING。旧停止任务与 OFFLINE 保持 STOPPED。
 
-V4 同时为 AUTO_RECOVERY 保留根触发类型的存储语义。迁移冻结规则见 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不回改 V1 / V2 / V3。
+同一 Release Migration 同时为 AUTO_RECOVERY 保留根触发类型的存储语义。Draft / Release Migration 生命周期和冻结规则见 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)。
 
 ## Code and Verification
 

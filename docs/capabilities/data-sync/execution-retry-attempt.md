@@ -85,7 +85,7 @@ Execution Detail 的“执行日志”数据源是产品生命周期事件，不
 
 `GET /api/v1/data-sync/instances/{id}/logs` 先验证当前 Workspace 对该 Execution 的可见性，再按 createTime / id 顺序返回事件。事件记录属于可观察性：写入失败会记录 Server Log，但不能把原本可成功的数据同步改判为失败。
 
-V5 只从迁移生效后开始记录新事件，不回填历史 Execution。旧 Execution 因此可以返回空事件列表；不能用当前状态反推并伪造过去时间线。
+v1.1.0 Release Migration 只从迁移生效后开始记录新的 Execution 产品事件，不回填历史 Execution。旧 Execution 因此可以返回空事件列表；不能用当前状态反推并伪造过去时间线。
 
 ## Write Safety
 
@@ -95,9 +95,9 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 ## Persistence and Compatibility
 
-[现有 V3 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V3__data_sync_execution_attempt.sql) 保存 Task Retry Policy、Execution 的冻结策略 / 当前尝试 / 下次重试时间，以及 `yak_ops_data_sync_attempt`。
+[v1.1.0 Release Migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__v1_1_0.sql) 的 Execution Retry / Attempt section 保存 Task Retry Policy、Execution 的冻结策略 / 当前尝试 / 下次重试时间，以及 `yak_ops_data_sync_attempt`；Execution Product Event section 同时新增 `yak_ops_data_sync_execution_event`。
 
-`yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。V3 前的记录按单次执行解释；迁移没有为每条历史 Instance 回填实体 Attempt 行，所以历史 attempts 查询可以为空，不应伪造历史尝试。V5 新增 `yak_ops_data_sync_execution_event` 保存后续产品事件，同样不回填旧运行历史。
+`yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。v1.1.0 以前的历史记录按单次执行解释；Migration 没有为历史 Instance 回填实体 Attempt 行，也不为历史 Execution 伪造产品事件，因此旧 attempts / logs 可以为空。
 
 旧 Task 默认回填 maxAttempts=1、backoffSeconds=60。Schema 由 DAO 维护，遵守 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不修改已冻结迁移或建立第二套 Task / Instance 模型。
 

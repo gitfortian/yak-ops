@@ -110,6 +110,9 @@ jobs:
       - name: Verify release metadata
         run: bash scripts/release/check-release-metadata.sh "v${RELEASE_VERSION}"
 
+      - name: Verify release migration contract
+        run: bash scripts/release/check-release-migration.sh "${RELEASE_VERSION}"
+
       - name: Install frontend dependencies
         working-directory: yak-ops-ui
         run: npm ci --prefer-offline --no-audit --no-fund

@@ -74,7 +74,7 @@ OFFLINE 编辑器保存 Schedule 定义；OFFLINE Task list 负责显式 Enable 
 
 ## Persistence
 
-Schema 见 [V2 migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__data_sync_schedule.sql)。它是现行持久化，不再是待实现目标。冻结和向前迁移遵循 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)。
+Schema 位于 [v1.1.0 Release Migration](../../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V2__v1_1_0.sql) 的 Offline Schedule section。它是现行持久化，不再是待实现目标。Draft / Release Migration 生命周期和冻结规则见 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)。
 
 没有启用 Quartz JDBC JobStore 或集群。后续采用 JobStore 时仍不能把 QRTZ 表当业务数据库；生产环境不得通过 initialize-schema=always 自动重建，Schema 必须由版本迁移管理。
 
