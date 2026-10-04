@@ -3,7 +3,6 @@ package io.yak.ops.business.datasync.schema;
 import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.flow.api.row.YakColumn;
-import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
@@ -33,7 +32,8 @@ public final class TargetSchemaCompatibility {
         Objects.requireNonNull(targetColumns, "targetColumns must not be null");
 
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
-        List<DataSourceColumn> mappedTargetColumns = new ArrayList<>(logicalTable.columns().size());
+        List<DataSourceColumn> mappedTargetColumns =
+                new ArrayList<>(logicalTable.columns().size());
         List<String> issues = new ArrayList<>();
         Set<String> mappedTargetNames = new HashSet<>();
 
@@ -52,7 +52,8 @@ public final class TargetSchemaCompatibility {
                 continue;
             }
 
-            YakColumn sourceColumn = new YakColumn(source.name(), source.dataType(), source.nullable(), source.length());
+            YakColumn sourceColumn =
+                    new YakColumn(source.name(), source.dataType(), source.nullable(), source.length());
             YakColumn targetYakColumn;
             try {
                 targetYakColumn = JdbcSchemaMapper.toYakColumn(targetColumn);
@@ -62,8 +63,8 @@ public final class TargetSchemaCompatibility {
             }
 
             if (!JdbcSchemaCompatibility.isCompatible(sourceColumn, targetYakColumn)) {
-                issues.add("目标字段不兼容：" + source.name() + "（"
-                        + source.dataType().kind() + " → " + targetYakColumn.dataType().kind() + "）");
+                issues.add("目标字段不兼容：" + source.name() + "（" + source.dataType().kind() + " → "
+                        + targetYakColumn.dataType().kind() + "）");
                 continue;
             }
             mappedTargetColumns.add(targetColumn);
