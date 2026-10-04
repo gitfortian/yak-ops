@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
@@ -19,6 +20,7 @@ import java.sql.Types;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class RealtimeSyncExecutionPlannerTest {
@@ -26,7 +28,9 @@ class RealtimeSyncExecutionPlannerTest {
     @Test
     void shouldBuildMySqlCdcToJdbcChangelogPlan() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
-        injectDataSourceService(planner, dataSourceService());
+        DataSourceService dataSourceService = dataSourceService();
+        injectDataSourceService(planner, dataSourceService);
+        injectTargetTableRuntimePreparer(planner, targetTableRuntimePreparer(dataSourceService));
         injectStateManager(planner, new RealtimeSyncStateManager());
 
         RealtimeSyncExecutionPlan plan =
@@ -44,7 +48,9 @@ class RealtimeSyncExecutionPlannerTest {
     @Test
     void shouldRejectNonRealtimeSnapshot() throws Exception {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
-        injectDataSourceService(planner, dataSourceService());
+        DataSourceService dataSourceService = dataSourceService();
+        injectDataSourceService(planner, dataSourceService);
+        injectTargetTableRuntimePreparer(planner, targetTableRuntimePreparer(dataSourceService));
         injectStateManager(planner, new RealtimeSyncStateManager());
 
         assertThrows(
@@ -59,6 +65,13 @@ class RealtimeSyncExecutionPlannerTest {
         field.set(planner, service);
     }
 
+    private void injectTargetTableRuntimePreparer(
+            RealtimeSyncExecutionPlanner planner, TargetTableRuntimePreparer preparer) throws Exception {
+        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("targetTableRuntimePreparer");
+        field.setAccessible(true);
+        field.set(planner, preparer);
+    }
+
     private void injectStateManager(RealtimeSyncExecutionPlanner planner, RealtimeSyncStateManager stateManager)
             throws Exception {
         Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("stateManager");
@@ -66,9 +79,19 @@ class RealtimeSyncExecutionPlannerTest {
         field.set(planner, stateManager);
     }
 
+    private TargetTableRuntimePreparer targetTableRuntimePreparer(DataSourceService dataSourceService) throws Exception {
+        TargetTableRuntimePreparer preparer = new TargetTableRuntimePreparer();
+        Field field = TargetTableRuntimePreparer.class.getDeclaredField("dataSourceService");
+        field.setAccessible(true);
+        field.set(preparer, dataSourceService);
+        return preparer;
+    }
+
     private DataSourceService dataSourceService() {
         DataSourceConnection sourceConnection = connection("MYSQL", "source_db");
         DataSourceConnection targetConnection = connection("POSTGRE_SQL", "target_db");
+        DataSourceCatalogTableVO sourceTable = catalogTable("source_db", "source_user");
+        DataSourceCatalogTableVO targetTable = catalogTable("target_db", "target_user");
         List<DataSourceCatalogColumnVO> sourceColumns =
                 List.of(column("id", Types.BIGINT, 1, true), column("name", Types.VARCHAR, 2, false));
         List<DataSourceCatalogColumnVO> targetColumns =
@@ -78,6 +101,12 @@ class RealtimeSyncExecutionPlannerTest {
                 DataSourceService.class.getClassLoader(),
                 new Class<?>[] {DataSourceService.class},
                 (proxy, method, args) -> {
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return Optional.of("source".equals(args[0]) ? sourceTable : targetTable);
+                    }
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceTable : targetTable;
+                    }
                     if ("queryCatalogColumns".equals(method.getName())) {
                         return "source".equals(args[0]) ? sourceColumns : targetColumns;
                     }
@@ -86,6 +115,14 @@ class RealtimeSyncExecutionPlannerTest {
                     }
                     throw new UnsupportedOperationException(method.getName());
                 });
+    }
+
+    private DataSourceCatalogTableVO catalogTable(String database, String table) {
+        DataSourceCatalogTableVO value = new DataSourceCatalogTableVO();
+        value.setDatabase(database);
+        value.setName(table);
+        value.setType("TABLE");
+        return value;
     }
 
     private JdbcConnectionProperties connection(String type, String database) {
