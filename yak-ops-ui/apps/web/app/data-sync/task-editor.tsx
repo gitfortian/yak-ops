@@ -601,7 +601,9 @@ function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
               value={String(config.maxAttempts)}
               onChange={(event) => onChange("maxAttempts", event.target.value)}
             />
-            <div className="px-1 text-xs text-[#98a2b3]">包含首次执行，1 表示失败后不自动重试。</div>
+            <div className="px-1 text-xs text-[#98a2b3]">
+              包含首次执行，1 表示失败后不自动重试。
+            </div>
           </div>
         </Field>
 
@@ -631,8 +633,8 @@ function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
       {retryEnabled ? (
         <div className="mt-3">
           <Alert>
-            自动重试会复用同一个 Execution 的冻结任务快照。APPEND 可能重复写入，OVERWRITE 会再次清空目标表；
-            当前语义仍不是 exactly-once。
+            自动重试会复用同一个 Execution 的冻结任务快照。APPEND 可能重复写入，OVERWRITE
+            会再次清空目标表； 当前语义仍不是 exactly-once。
           </Alert>
         </div>
       ) : null}
@@ -1338,8 +1340,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   </div>
                   {form.autoCreateTable ? (
                     <Alert>
-                      自动建表仅在目标表不存在且 Schema 规划可执行时生效；已有目标表只做兼容性校验，不会
-                      ALTER、DROP 或覆盖表结构。
+                      自动建表仅在目标表不存在且 Schema
+                      规划可执行时生效；已有目标表只做兼容性校验，不会 ALTER、DROP 或覆盖表结构。
                     </Alert>
                   ) : null}
                 </div>
