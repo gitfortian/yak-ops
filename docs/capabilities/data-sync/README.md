@@ -59,7 +59,7 @@ Target Table Plan
 
 LogicalTable 复用 YakFlow Logical Type，不维护第二套类型枚举；同时拥有 Runtime 不需要的 comment / schemaVersion 等产品元数据。
 
-v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization、Target Table Planner 与 Auto Create Table Runtime。Planner 可以针对 MySQL / PostgreSQL / Oracle 生成 Native Type、warning / unsupported diagnostics 和 CREATE TABLE SQL；Runtime 仅在 Task 显式开启且目标表缺失时执行受控 CREATE TABLE，建表后重新读取 Catalog 并做 Schema Compatibility。Logical Table persistence、Catalog refresh / diff 与 Schema Preview UI 尚未实现。
+v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization、Target Table Planner、Auto Create Table Runtime 与 Schema Preview UI。Task Editor 直接消费后端 Preview Contract：目标表已存在时展示真实 Target Schema Compatibility；目标表缺失且显式开启 Auto Create 时展示计划 Native Type、warning / unsupported 与只读 CREATE TABLE SQL。Runtime 仍会在执行前重新读取真实 Catalog，只有目标表缺失、autoCreateTable=true 且计划 supported 时才执行受控 CREATE TABLE。Logical Table persistence 与 Catalog refresh / diff 尚未实现。
 
 ## Offline Execution
 
@@ -134,7 +134,7 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility 与显式 Auto Create Table Runtime；尚未提供 Logical Table persistence、Catalog refresh / diff、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
+当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime 与 Schema Preview UI；尚未提供 Logical Table persistence、Catalog refresh / diff、DDL Sync / Automatic Schema Evolution、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
 
 发布、Retry、Schedule 和启动自动恢复是已有能力，不再列为“后续阶段”。通用 YakFlow checkpoint 跨进程恢复和常驻恢复 watchdog 仍不具备。
 
