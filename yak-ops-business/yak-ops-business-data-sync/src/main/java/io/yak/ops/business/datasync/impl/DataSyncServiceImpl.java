@@ -17,6 +17,8 @@ import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSummarySnapsho
 import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
 import io.yak.ops.business.datasync.schema.TargetColumnPlan;
+import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
+import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
 import io.yak.ops.business.datasync.schema.TargetTablePlan;
 import io.yak.ops.business.datasync.schema.TargetTablePlanner;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleDefinition;
@@ -362,16 +364,23 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(dto.getTargetDataSourceId(), targetPath);
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
+        LogicalTable sourceLogicalTable = LogicalTableNormalizer.fromCatalog(
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath),
+                sourceColumns);
+        TargetSchemaCompatibilityResult compatibility =
+                TargetSchemaCompatibility.check(sourceLogicalTable, targetColumns);
 
         DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
         result.setTargetTableExists(true);
         result.setAutoCreateTable(autoCreateTable);
+        result.setUnsupportedReasons(compatibility.issues());
         result.setMappings(sourceColumns.stream()
                 .map(source ->
                         toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
                 .toList());
         result.setCompatible(!sourceColumns.isEmpty()
-                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
+                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible)
+                && compatibility.compatible());
         return result;
     }
 
