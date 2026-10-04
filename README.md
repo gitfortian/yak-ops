@@ -35,9 +35,10 @@ Management Center
 - [架构](ARCHITECTURE.md)
 - [版本管理](docs/release/README.md)
 - [v1.0.0 Release Contract](docs/release/v1.0.0.md)
-- [v1.1.0 Release Contract](docs/release/v1.1.0.md)（范围冻结，等待人工 E2E）
+- [v1.1.0 Release Contract](docs/release/v1.1.0.md)（Released）
 - [v1.1.0 Release Readiness](docs/release/v1.1.0-readiness.md)
 - [v1.1.0 Release Notes](docs/release/v1.1.0-release-notes.md)
+- [v1.2.0 Release Contract](docs/release/v1.2.0.md)（Planning / Scope Open）
 - [Data Sync 手工 E2E](docs/e2e/data-sync/README.md)
 
 ## Distribution
