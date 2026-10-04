@@ -324,26 +324,37 @@ P0 / P1 的判断以是否阻断当前版本安全部署和核心主链路为准
 
 ## 9. Database Migration Freeze
 
-`v1.0.0` 是 Yak Ops 第一个数据库 Migration 历史冻结点。
+Yak Ops 把开发期 Schema 演进与正式用户升级历史分开管理。
 
-在 `v1.0.0` 正式发布以前：
-
-- 当前 rebuildable early-stage database 可以继续整理 baseline。
-- 允许在明确没有共享稳定环境依赖的前提下收口 `V1__baseline.sql`。
-
-从 `v1.0.0` 正式发布开始：
-
-- `V1__baseline.sql` 永久冻结。
-- 禁止修改已发布 Migration 的语义。
-- 后续数据库变化使用新的 Flyway Migration：
+`v1.0.0` 是第一个正式 Migration 冻结点：
 
 ```text
-V2__*.sql
-V3__*.sql
-V4__*.sql
+v1.0.0
+└── V1__baseline.sql
 ```
 
-不能通过回改 `V1__baseline.sql` 修复已发布环境。
+从 v1.1.0 开始，每个 Product Version **最多新增一个**正式 Release Migration：
+
+```text
+v1.0.0 → V1__baseline.sql
+v1.1.0 → V2__v1_1_0.sql
+v1.1.1 → no migration, if Schema is unchanged
+v1.2.0 → V3__v1_2_0.sql
+```
+
+开发期间允许为当前未发布版本按能力创建多个 Draft Migration；在 Release Freeze 阶段，如果这些 Migration 尚未发布且没有不可重建共享环境依赖，则必须先 squash 为 0 或 1 个 Release Migration，再进入正式 Release Gate。
+
+必须：
+
+- 已发布 Migration 永久冻结，禁止修改、rename、删除、重排或参与后续 squash。
+- 已进入不可重建共享环境并需要保留升级历史的 Migration 同样视为冻结。
+- Draft Migration 只进入可重建的开发 / E2E 环境；Draft checksum 变化后重建数据库，不用 Flyway repair 掩盖差异。
+- Release Migration 使用 `V{flywayVersion}__v{major}_{minor}_{patch}.sql`。
+- 一个 Release Migration 可以包含该版本多个 Schema 主题，但应按能力注释分段并保持经过验证的 SQL 顺序。
+- 没有 Schema 变化的 Product Version 不创建空 Migration。
+- 正式 Release Gate 必须通过 `scripts/release/check-release-migration.sh <version>`，确认没有遗留 Draft、没有同版本多个 Release Migration，也没有超过目标 Product Version 的未来 Migration。
+
+Product Version 与 Flyway Version 彼此独立；Release Migration 文件名负责建立两者的可追溯关系。
 
 ## 10. Release Evidence
 
