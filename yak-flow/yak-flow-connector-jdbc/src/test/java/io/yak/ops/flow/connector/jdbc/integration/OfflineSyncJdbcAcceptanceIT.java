@@ -11,6 +11,7 @@ import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
+import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialects;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
@@ -225,14 +226,14 @@ class OfflineSyncJdbcAcceptanceIT {
         try (var connection = DIRECT_CONNECTION.open(mysqlConnection(), 10);
                 var statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS target_mysql");
-            statement.execute(
-                    "CREATE TABLE target_mysql (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL, amount DECIMAL(10,2))");
+            statement.execute(JdbcDialects.forType("MYSQL")
+                    .createTableSql(new DataSourceTablePath(MYSQL_DATABASE, null, "target_mysql"), SCHEMA));
         }
         try (var connection = DIRECT_CONNECTION.open(postgresConnection(), 10);
                 var statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS target_pg");
-            statement.execute(
-                    "CREATE TABLE target_pg (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL, amount DECIMAL(10,2))");
+            statement.execute(JdbcDialects.forType("POSTGRE_SQL")
+                    .createTableSql(new DataSourceTablePath("yakflow", "public", "target_pg"), SCHEMA));
         }
         try (var connection = DIRECT_CONNECTION.open(oracleConnection(), 10);
                 var statement = connection.createStatement()) {
@@ -241,8 +242,8 @@ class OfflineSyncJdbcAcceptanceIT {
             } catch (Exception ignored) {
                 // 首次验收时目标表不存在。
             }
-            statement.execute(
-                    "CREATE TABLE \"target_oracle\" (\"id\" NUMBER(19) PRIMARY KEY, \"name\" VARCHAR2(100) NOT NULL, \"amount\" NUMBER(10,2))");
+            statement.execute(JdbcDialects.forType("ORACLE")
+                    .createTableSql(new DataSourceTablePath(null, null, "target_oracle"), SCHEMA));
         }
     }
 
