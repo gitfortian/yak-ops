@@ -158,9 +158,7 @@ public class TargetTableRuntimePreparer {
                 throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求目标表存在主键");
             }
             if (!sourceColumnNames(sourceLogicalTable).containsAll(targetPrimaryKeys)) {
-                throw new DataSyncException(
-                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                        "UPSERT 写入要求来源包含目标表全部主键字段");
+                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求来源包含目标表全部主键字段");
             }
         }
     }
