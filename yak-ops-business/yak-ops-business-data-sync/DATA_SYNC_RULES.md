@@ -110,6 +110,9 @@ Trace 查询仍经 DataSyncService 校验 Workspace 与 OFFLINE Execution；HTTP
 - onFire 重读数据库，不能直接信任 Quartz JobData 的授权或状态；Schedule / Runtime 边界见 [Scheduler](../../docs/capabilities/data-sync/scheduler.md)。
 - Runtime 更新安排在提交后，但不能把它描述为与 DB 原子提交。不得用 Quartz Refire 实现产品 Retry。
 - 启动恢复遍历跨 Workspace 任务时，显式绑定所属 Workspace，并在 finally 清理，不能泄漏上下文到下一任务。
+- 启动恢复必须区分 Runtime ownership 与 durable wait：PENDING / RUNNING 标 LOST；RETRY_WAITING 保留原 Execution，并用持久化 currentAttempt / nextRetryTime / definitionSnapshot 恢复下一 Attempt。
+- Durable Retry 恢复必须先于 REALTIME desired-state AUTO_RECOVERY；保留的 RETRY_WAITING 是 Active Execution，禁止为同一 Task 再创建第二个根 Execution。
+- RETRY_WAITING 恢复失败时只允许把该根 Execution 收口 LOST；不得绕过原 root trigger / taskVersion 新建“补偿 Retry”根记录。
 - REALTIME 目录和 serverId 生命周期留在 realtime；offset / schema-history 内容留在连接器。恢复条件与限制见 [Realtime Contract](../../docs/capabilities/data-sync/realtime-desired-state.md)。
 
 ## Secret and Persistence Boundary
