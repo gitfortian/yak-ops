@@ -1206,12 +1206,23 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         resolvedScope.getSourceDatabase(),
                         resolvedScope.getSourceSchema(),
                         resolvedScope.getSourceTable()));
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                targetDataSourceId,
-                tablePath(
-                        resolvedScope.getTargetDatabase(),
-                        resolvedScope.getTargetSchema(),
-                        resolvedScope.getTargetTable()));
+        DataSourceTablePathDTO targetPath = tablePath(
+                resolvedScope.getTargetDatabase(),
+                resolvedScope.getTargetSchema(),
+                resolvedScope.getTargetTable());
+
+        if (Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())
+                && dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isEmpty()) {
+            if (DataSyncCatalogColumns.primaryKeyNames(sourceColumns).isEmpty()) {
+                throw new DataSyncException(
+                        DataSyncErrorCode.INVALID_TASK,
+                        "UPSERT 自动建表要求来源表包含主键");
+            }
+            return;
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         List<DataSourceCatalogColumnVO> targetPrimaryKeys = targetColumns.stream()
                 .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
                 .toList();
@@ -1249,12 +1260,17 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
         }
 
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                targetDataSourceId,
-                tablePath(
-                        resolvedScope.getTargetDatabase(),
-                        resolvedScope.getTargetSchema(),
-                        resolvedScope.getTargetTable()));
+        DataSourceTablePathDTO targetPath = tablePath(
+                resolvedScope.getTargetDatabase(),
+                resolvedScope.getTargetSchema(),
+                resolvedScope.getTargetTable());
+        if (Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())
+                && dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isEmpty()) {
+            return;
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
         if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与来源表主键一致");
