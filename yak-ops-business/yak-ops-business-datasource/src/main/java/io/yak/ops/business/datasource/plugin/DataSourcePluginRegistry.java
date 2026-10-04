@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.function.Function;
 import org.slf4j.Logger;
@@ -131,6 +132,11 @@ public class DataSourcePluginRegistry {
     public List<DataSourceTable> catalogTables(
             String pluginType, String connectionJson, int timeoutSeconds, DataSourceCatalogQuery query) {
         return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listTables(query));
+    }
+
+    public Optional<DataSourceTable> catalogTable(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceTablePath tablePath) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.findTable(tablePath));
     }
 
     public List<DataSourceColumn> catalogColumns(
