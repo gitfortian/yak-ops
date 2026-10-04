@@ -32,23 +32,76 @@ Security、Datasource、Boot、Business、Core、SPI 和 Plugin 模块不得创�
 
 ## Baseline Mode
 
-当前以已发布 v1.0.0 的 `V1__baseline.sql` 为冻结基线，已有 V2 / V3 / V4 向前迁移。不再允许把迁移历史重新合并回 V1，也不能以本地开发库可重建为由改写共享迁移。
+已发布的 `v1.0.0` 使用 `V1__baseline.sql` 作为永久冻结基线。v1.1.0 在正式发布前把未发布、只用于可重建开发 / E2E 环境的 V2 ~ V5 Draft Migration 收口为唯一的 `V2__v1_1_0.sql` Release Migration。
 
-- 保持 V1 以及已经发布或进入共享环境的迁移内容、顺序和校验和。
-- 后续结构修复、新增或删除均使用高于当前最大版本的新迁移，不重写、重排或删除已有历史。
-- 新环境从同一条迁移链初始化；升级环境保留 flyway_schema_history，不依赖清库或修补校验和掩盖不兼容。
-- 已删除能力的表或基础数据通过显式向前迁移清理，不能删除负责创建它们的历史脚本。
+Migration 是否允许修改取决于它是否已经成为共享历史，而不是取决于文件编号：
+
+- 已正式发布的 Migration 永久冻结，保持内容、顺序、文件名和 checksum。
+- 已进入不可重建共享环境并需要继续保留升级历史的 Migration，同样视为冻结。
+- 当前未发布 Product Version 的 Draft Migration 只允许服务可重建开发 / E2E 环境，可以在 Release Freeze 前调整、删除或 squash。
+- Draft Migration 发生 checksum 变化时，开发环境应重建数据库；禁止用 Flyway `repair` 掩盖不兼容历史。
+- 新环境从正式 Release Migration 链初始化；已发布升级环境保留 `flyway_schema_history`，后续只做 forward migration。
+- 已删除能力的表或基础数据通过新的正式 Release Migration 清理，不能回改负责创建它们的已发布 Migration。
+
+## Draft Migration vs Release Migration
+
+Yak Ops 区分开发过程和正式发布历史：
+
+```text
+Development
+  ↓
+Draft Migrations
+  ↓
+Release Freeze
+  ↓
+0 or 1 Release Migration for the Product Version
+  ↓
+Publish
+  ↓
+Immutable
+```
+
+### Draft Migration
+
+同一个尚未发布的 Product Version 开发期间允许存在多个 Draft Migration：
+
+- Draft 可以按能力 / PR 拆分，便于并行开发、Review 与联调。
+- Draft 文件沿用 `V{version}__{lower_snake_description}.sql`，一个 Draft 聚焦一个明确开发主题。
+- Draft 只允许进入可以清库重建的开发 / E2E 环境。
+- Draft 不代表最终用户升级历史，不要求长期保留它的 Flyway checksum。
+- Draft 调整后统一重建对应开发数据库，不通过 `repair` 把旧 checksum 强行修成新 checksum。
+
+### Release Migration
+
+进入 Release Freeze 后，同一个尚未发布 Product Version 的 Draft Migration 应收口为**最多一个**正式 Release Migration：
+
+```text
+V1__baseline.sql
+V2__v1_1_0.sql
+V3__v1_2_0.sql
+```
+
+规则：
+
+- Product Version 没有 Schema 变化时不创建空 Migration。
+- 有 Schema 变化时，同一 Product Version 最多一个正式 Release Migration。
+- 正式文件名使用 `V{flywayVersion}__v{major}_{minor}_{patch}.sql`。
+- 一个 Release Migration 可以包含多个 Schema 主题，但必须使用清晰注释分段。
+- Squash 应保留已验证 Draft SQL 的执行顺序和语义，不借 Release Freeze 顺手重写业务 Schema。
+- Release Migration 的 Flyway Version 必须高于最后一个已发布 Migration。
+- Release Migration 一旦发布或进入不可重建共享环境，永久冻结，不得 rename、删除、重排、修改或参与后续 squash。
+- 正式 Release Gate 使用 `scripts/release/check-release-migration.sh` 机械拒绝未收口 Draft、同版本多个 Release Migration，以及高于目标 Product Version 的未来 Migration。
+
+Product Version 与 Flyway Version 是两个不同概念；文件名中的 `v1_1_0` 只记录该 Flyway Migration 属于哪个 Product Release。
 
 ## Migration Contract
 
 - 所有数据库结构变化统一由 Flyway 管理。
-- 文件命名使用 `V{version}__{lower_snake_description}.sql`。
-- 一个 Migration 只处理一个明确变更主题。
-- 新版本必须高于当前最大版本。
-- 禁止为不同模块分配 V1000 / V2000 等版本段；所有能力共享一条连续版本序列。
+- 禁止为不同模块分配 V1000 / V2000 等版本段；所有能力共享一条连续 Flyway Version 序列。
 - 禁止用 `IF EXISTS / IF NOT EXISTS` 掩盖异常 Schema。
 - 删除表 / 字段、修改字段类型等破坏性变化必须明确评估数据迁移与回滚风险。
-- Schema 演进只引入当前产品需要的结构和基础数据；清理废弃能力时保留完整迁移历史。
+- Schema 演进只引入当前产品需要的结构和基础数据。
+- Draft / Release 的修改权限严格遵守上一节状态模型，不以“本地能修”作为改写共享历史的理由。
 
 ## Table Contract
 
