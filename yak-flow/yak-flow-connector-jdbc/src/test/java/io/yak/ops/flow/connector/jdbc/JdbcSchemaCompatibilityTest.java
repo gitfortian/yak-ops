@@ -59,6 +59,32 @@ class JdbcSchemaCompatibilityTest {
     }
 
     @Test
+    void shouldRejectNullableSourceForRequiredTarget() {
+        assertFalse(JdbcSchemaCompatibility.isCompatible(
+                new YakColumn("source", YakTypes.STRING, true, 100),
+                new YakColumn("target", YakTypes.STRING, false, 100)));
+        assertTrue(JdbcSchemaCompatibility.isCompatible(
+                new YakColumn("source", YakTypes.STRING, false, 100),
+                new YakColumn("target", YakTypes.STRING, true, 100)));
+    }
+
+    @Test
+    void shouldAllowBooleanToNumericTargetForCrossDatabasePlanning() {
+        assertTrue(JdbcSchemaCompatibility.isCompatible(
+                column("source", YakTypes.BOOLEAN), column("target", YakTypes.INTEGER)));
+        assertTrue(JdbcSchemaCompatibility.isCompatible(
+                column("source", YakTypes.BOOLEAN), column("target", YakTypes.decimal(1, 0))));
+        assertFalse(JdbcSchemaCompatibility.isCompatible(
+                column("source", YakTypes.BOOLEAN), column("target", YakTypes.decimal(1, 1))));
+    }
+
+    @Test
+    void shouldAllowDateToTimestampTarget() {
+        assertTrue(JdbcSchemaCompatibility.isCompatible(
+                column("source", YakTypes.DATE), column("target", YakTypes.TIMESTAMP)));
+    }
+
+    @Test
     void shouldAllowFloatToDoubleOnly() {
         assertTrue(JdbcSchemaCompatibility.isCompatible(
                 column("source", YakTypes.FLOAT), column("target", YakTypes.DOUBLE)));
