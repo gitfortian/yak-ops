@@ -28,7 +28,7 @@ Runtime readRows 在 Source batch 成功进入 Channel 后增加；writeRows 在
 
 ## JDBC Schema Compatibility
 
-Catalog 元信息先由 JdbcSchemaMapper 转换为 YakColumn，JdbcSchemaCompatibility 只接收逻辑类型；不支持映射的 JDBC 类型不能静默判为兼容。
+Catalog 元信息先由 JdbcSchemaMapper 转换为 YakColumn，JdbcSchemaCompatibility 只接收逻辑类型；不支持映射的 JDBC 类型不能静默判为兼容。Source 允许 NULL 而 Target NOT NULL 时直接不兼容。
 
 兼容边界：同类型按已知容量判断；允许整数扩宽、容量足够的整数 → DECIMAL，以及 FLOAT → DOUBLE；拒绝整数缩窄和未经声明的跨族转换。
 
