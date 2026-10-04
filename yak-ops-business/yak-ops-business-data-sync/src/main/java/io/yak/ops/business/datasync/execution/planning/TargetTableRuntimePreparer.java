@@ -126,25 +126,20 @@ public class TargetTableRuntimePreparer {
                 return false;
             }
             throw new DataSyncException(
-                    DataSyncErrorCode.TARGET_TABLE_CREATE_FAILED,
-                    exception.getMessage(),
-                    exception);
+                    DataSyncErrorCode.TARGET_TABLE_CREATE_FAILED, exception.getMessage(), exception);
         }
     }
 
     private LogicalTable sourceLogicalTable(DataSyncEndpointSnapshotVO endpoint) {
         DataSourceTablePathDTO path = tablePath(endpoint);
-        DataSourceCatalogTableVO table =
-                dataSourceService.queryCatalogTable(endpoint.getDataSourceId(), path);
+        DataSourceCatalogTableVO table = dataSourceService.queryCatalogTable(endpoint.getDataSourceId(), path);
         List<DataSourceCatalogColumnVO> columns =
                 dataSourceService.queryCatalogColumns(endpoint.getDataSourceId(), path);
         return LogicalTableNormalizer.fromCatalog(table, columns);
     }
 
     private void validatePrimaryKeyContract(
-            DataSyncDefinitionSnapshotVO snapshot,
-            LogicalTable sourceLogicalTable,
-            YakTableSchema targetWriteSchema) {
+            DataSyncDefinitionSnapshotVO snapshot, LogicalTable sourceLogicalTable, YakTableSchema targetWriteSchema) {
         Set<String> sourcePrimaryKeys = normalizedKeys(sourceLogicalTable.primaryKeys());
         Set<String> targetPrimaryKeys = normalizedKeys(targetWriteSchema.primaryKeys());
 
@@ -153,18 +148,14 @@ public class TargetTableRuntimePreparer {
                 throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步来源表必须包含主键");
             }
             if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
-                throw new DataSyncException(
-                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                        "实时同步目标表主键必须与来源表主键一致");
+                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步目标表主键必须与来源表主键一致");
             }
             return;
         }
 
         if (DataSyncWriteMode.UPSERT.name().equals(snapshot.getWriteMode())) {
             if (targetPrimaryKeys.isEmpty()) {
-                throw new DataSyncException(
-                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                        "UPSERT 写入要求目标表存在主键");
+                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求目标表存在主键");
             }
             if (!sourceColumnNames(sourceLogicalTable).containsAll(targetPrimaryKeys)) {
                 throw new DataSyncException(
