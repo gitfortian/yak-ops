@@ -65,8 +65,7 @@ public class TargetTableRuntimePreparer {
         if (targetTable.isEmpty()) {
             if (!Boolean.TRUE.equals(snapshot.getAutoCreateTable())) {
                 throw new DataSyncException(
-                        DataSyncErrorCode.TARGET_TABLE_NOT_FOUND,
-                        targetEndpoint.getTable() + "；请先创建目标表或开启自动建表");
+                        DataSyncErrorCode.TARGET_TABLE_NOT_FOUND, targetEndpoint.getTable() + "；请先创建目标表或开启自动建表");
             }
             created = createTargetTable(sourceLogicalTable, targetEndpoint, targetPath, timeoutSeconds);
             targetTable = dataSourceService.findCatalogTable(targetEndpoint.getDataSourceId(), targetPath);
@@ -83,8 +82,7 @@ public class TargetTableRuntimePreparer {
                 TargetSchemaCompatibility.check(sourceLogicalTable, targetColumns);
         if (!compatibility.compatible()) {
             throw new DataSyncException(
-                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                    String.join("；", compatibility.issues()));
+                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, String.join("；", compatibility.issues()));
         }
 
         validatePrimaryKeyContract(snapshot, sourceLogicalTable, compatibility.targetWriteSchema());
@@ -111,8 +109,7 @@ public class TargetTableRuntimePreparer {
                 targetPath.getTable());
         if (!plan.supported()) {
             throw new DataSyncException(
-                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                    String.join("；", plan.unsupportedReasons()));
+                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, String.join("；", plan.unsupportedReasons()));
         }
 
         try {
