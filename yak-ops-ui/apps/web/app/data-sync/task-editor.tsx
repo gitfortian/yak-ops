@@ -43,6 +43,7 @@ import {
   saveDataSyncSchedule,
   updateDataSyncTask,
   type DataSyncFieldMapping,
+  type DataSyncMappingConfig,
   type DataSyncMappingPreview,
   type DataSyncRealtimeConfig,
   type DataSyncRetryPolicy,
@@ -67,6 +68,7 @@ interface EditorForm {
   targetSchema: string;
   targetTable: string;
   autoCreateTable: boolean;
+  mapping?: DataSyncMappingConfig;
   runtimeConfig: DataSyncRuntimeConfig;
   realtimeConfig: DataSyncRealtimeConfig;
   retryPolicy: DataSyncRetryPolicy;
@@ -212,6 +214,7 @@ const EMPTY_FORM: EditorForm = {
   targetSchema: "",
   targetTable: "",
   autoCreateTable: false,
+  mapping: undefined,
   runtimeConfig: EMPTY_RUNTIME,
   realtimeConfig: EMPTY_REALTIME,
   retryPolicy: EMPTY_RETRY_POLICY,
@@ -840,6 +843,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           targetSchema: task.targetSchema || "",
           targetTable: task.targetTable,
           autoCreateTable: Boolean(task.autoCreateTable),
+          mapping: task.mapping,
           runtimeConfig: task.runtimeConfig || { ...EMPTY_RUNTIME },
           realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
           retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
@@ -953,7 +957,22 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   ];
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) =>
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (
+        key === "sourceDataSourceId" ||
+        key === "sourceDatabase" ||
+        key === "sourceSchema" ||
+        key === "sourceTable" ||
+        key === "targetDataSourceId" ||
+        key === "targetDatabase" ||
+        key === "targetSchema" ||
+        key === "targetTable"
+      ) {
+        next.mapping = undefined;
+      }
+      return next;
+    });
 
   const patchRuntime = (key: keyof DataSyncRuntimeConfig, value: string) => {
     const parsed = Number(value);
@@ -1014,6 +1033,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetSchema: form.targetSchema || undefined,
       targetTable: form.targetTable,
       autoCreateTable: form.autoCreateTable,
+      mapping: form.mapping,
       retryPolicy: form.retryPolicy,
       remark: form.remark.trim() || undefined,
     };
