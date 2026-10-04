@@ -37,6 +37,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
@@ -353,12 +354,20 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 dataSourceService.queryCatalogColumns(dto.getSourceDataSourceId(), sourcePath);
 
         boolean autoCreateTable = Boolean.TRUE.equals(dto.getAutoCreateTable());
-        if (autoCreateTable) {
-            Optional<io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO> targetTable =
-                    dataSourceService.findCatalogTable(dto.getTargetDataSourceId(), targetPath);
-            if (targetTable.isEmpty()) {
+        Optional<DataSourceCatalogTableVO> targetTable =
+                dataSourceService.findCatalogTable(dto.getTargetDataSourceId(), targetPath);
+        if (targetTable.isEmpty()) {
+            if (autoCreateTable) {
                 return previewAutoCreateMapping(dto, sourcePath, sourceColumns);
             }
+            DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+            result.setTargetTableExists(false);
+            result.setAutoCreateTable(false);
+            result.setMappings(sourceColumns.stream()
+                    .map(source -> toFieldMapping(source, null))
+                    .toList());
+            result.setCompatible(false);
+            return result;
         }
 
         List<DataSourceCatalogColumnVO> targetColumns =
@@ -1306,12 +1315,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
         if (preview.isCompatible()) return;
 
-        if (Boolean.TRUE.equals(dto.getAutoCreateTable())
-                && !preview.isTargetTableExists()
-                && !preview.getUnsupportedReasons().isEmpty()) {
-            throw new DataSyncException(
-                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
-                    String.join("；", preview.getUnsupportedReasons()));
+        if (!preview.isTargetTableExists()) {
+            if (Boolean.TRUE.equals(dto.getAutoCreateTable())
+                    && !preview.getUnsupportedReasons().isEmpty()) {
+                throw new DataSyncException(
+                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
+                        String.join("；", preview.getUnsupportedReasons()));
+            }
+            throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
         }
         throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
     }
