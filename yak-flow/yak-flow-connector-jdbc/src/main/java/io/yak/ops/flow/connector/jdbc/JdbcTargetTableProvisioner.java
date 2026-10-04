@@ -36,10 +36,7 @@ public final class JdbcTargetTableProvisioner {
      * @return 实际执行的 CREATE TABLE SQL
      */
     public String createTable(
-            DataSourceConnection connection,
-            DataSourceTablePath table,
-            YakTableSchema schema,
-            int timeoutSeconds)
+            DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema, int timeoutSeconds)
             throws Exception {
         Objects.requireNonNull(connection, "connection must not be null");
         Objects.requireNonNull(table, "table must not be null");
