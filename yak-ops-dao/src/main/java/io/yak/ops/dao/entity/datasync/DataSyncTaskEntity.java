@@ -67,6 +67,9 @@ public class DataSyncTaskEntity extends BaseEntity {
     /** 目标表不存在时是否允许按 LogicalTable 自动建表；旧任务默认 false。 */
     private Boolean autoCreateTable;
 
+    /** 任务级字段映射 JSON；NULL 表示沿用大小写不敏感同名映射。 */
+    private String mappingConfig;
+
     /** 按 syncType 持久化的 YakFlow 运行参数 JSON，不包含数据源连接凭证。 */
     private String runtimeConfig;
 
