@@ -378,9 +378,10 @@ Task persistence 使用 v1.2 Draft Migration：
 
 ~~~text
 V3__data_sync_auto_create_table.sql
+V4__data_sync_column_mapping.sql
 ~~~
 
-该 Draft 只增加 `yak_ops_data_sync_task.auto_create_table`，默认 0。它属于未发布 v1.2 开发历史，Release Freeze 时按 Flyway Rules 与同版本其它 Draft 一起收口，不得修改已经发布的 V1 / V2。
+V3 增加 `yak_ops_data_sync_task.auto_create_table`，默认 0；V4 增加可空 `mapping_config`，NULL 保持旧任务的隐式同名映射语义。两者都属于未发布 v1.2 开发历史，Release Freeze 时按 Flyway Rules 与同版本其它 Draft 一起收口，不得修改已经发布的 V1 / V2。
 
 ## 11. Persistence Boundary
 
@@ -414,6 +415,8 @@ Auto Create Table Runtime = IMPLEMENTED
 Runtime Schema Compatibility Preflight = IMPLEMENTED
 Auto Create Table Preview API = IMPLEMENTED
 Schema Preview UI = IMPLEMENTED
+Task Column Mapping Contract / Persistence = IMPLEMENTED
+Mapping-Aware Schema Resolution / Runtime = NOT IMPLEMENTED
 DDL Sync = NOT IMPLEMENTED
 Automatic Schema Evolution = NOT IMPLEMENTED
 Multi-table Task = NOT IMPLEMENTED
