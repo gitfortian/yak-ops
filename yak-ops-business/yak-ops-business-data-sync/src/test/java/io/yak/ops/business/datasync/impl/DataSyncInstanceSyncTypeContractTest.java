@@ -9,6 +9,7 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -107,6 +108,8 @@ class DataSyncInstanceSyncTypeContractTest {
             List<DataSourceCatalogColumnVO> sourceColumns, List<DataSourceCatalogColumnVO> targetColumns) {
         DataSourceVO source = dataSource("source", "source_db", "MYSQL");
         DataSourceVO target = dataSource("target", "target_db", "MYSQL");
+        DataSourceCatalogTableVO sourceTable = catalogTable("source_db", "source_table");
+        DataSourceCatalogTableVO targetTable = catalogTable("target_db", "target_table");
 
         return (DataSourceService) Proxy.newProxyInstance(
                 DataSourceService.class.getClassLoader(),
@@ -115,11 +118,25 @@ class DataSyncInstanceSyncTypeContractTest {
                     if ("queryDataSource".equals(method.getName())) {
                         return "source".equals(args[0]) ? source : target;
                     }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return Optional.of("source".equals(args[0]) ? sourceTable : targetTable);
+                    }
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceTable : targetTable;
+                    }
                     if ("queryCatalogColumns".equals(method.getName())) {
                         return "source".equals(args[0]) ? sourceColumns : targetColumns;
                     }
                     throw new UnsupportedOperationException(method.getName());
                 });
+    }
+
+    private DataSourceCatalogTableVO catalogTable(String database, String table) {
+        DataSourceCatalogTableVO value = new DataSourceCatalogTableVO();
+        value.setDatabase(database);
+        value.setName(table);
+        value.setType("TABLE");
+        return value;
     }
 
     private DataSyncTaskEntity task() {

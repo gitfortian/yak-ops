@@ -7,6 +7,7 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
@@ -221,6 +222,8 @@ class DataSyncRealtimeDesiredStateContractTest {
     private DataSourceService dataSourceService() {
         DataSourceVO source = dataSource("source", "source_db");
         DataSourceVO target = dataSource("target", "target_db");
+        DataSourceCatalogTableVO sourceTable = catalogTable("source_db", "source_table");
+        DataSourceCatalogTableVO targetTable = catalogTable("target_db", "target_table");
         List<DataSourceCatalogColumnVO> columns = List.of(primaryKeyColumn("id"), column("name"));
 
         return (DataSourceService) Proxy.newProxyInstance(
@@ -230,9 +233,23 @@ class DataSyncRealtimeDesiredStateContractTest {
                     if ("queryDataSource".equals(method.getName())) {
                         return "source".equals(args[0]) ? source : target;
                     }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return Optional.of("source".equals(args[0]) ? sourceTable : targetTable);
+                    }
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceTable : targetTable;
+                    }
                     if ("queryCatalogColumns".equals(method.getName())) return columns;
                     throw new UnsupportedOperationException(method.getName());
                 });
+    }
+
+    private DataSourceCatalogTableVO catalogTable(String database, String table) {
+        DataSourceCatalogTableVO value = new DataSourceCatalogTableVO();
+        value.setDatabase(database);
+        value.setName(table);
+        value.setType("TABLE");
+        return value;
     }
 
     private DataSourceVO dataSource(String id, String database) {
