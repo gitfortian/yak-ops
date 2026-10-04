@@ -27,7 +27,7 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 
 ## Task Definition
 
-Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引用，不复制凭证。一个 Task 连接一张 Source 表与一张已存在的 Target 表；`syncType` 创建后不变。
+Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引用，不复制凭证。一个 Task 连接一张 Source 表与一张 Target 表；`syncType` 创建后不变。Target 默认必须已经存在，只有显式 `autoCreateTable=true` 时才允许在运行前创建缺失目标表。
 
 `runtime_config` 按类型解释：OFFLINE 使用 `DataSyncRuntimeConfig`，REALTIME 使用 `DataSyncRealtimeConfig`。Retry Policy 独立保存，创建 Execution 时冻结。`writeMode` 是任务语义，不放进 runtime tuning。
 
@@ -37,7 +37,7 @@ Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引�
 
 Datasource 已绑定的 database / schema 是权威范围；Task 不能覆盖已绑定层级，只有未绑定 schema 可由任务选择。映射预览、保存、发布和执行不得依赖前端校验结果。
 
-Source 字段按不区分大小写的同名规则映射到 Target。所有 Source 字段都要有兼容目标；不支持字段改名、表达式、自定义 SQL 或 Transform。Target 多余字段能否使用默认值等数据库约束，仍由实际写入校验，不能把预览通过当成写入必然成功。
+Source 字段按不区分大小写的同名规则映射到 Target。所有 Source 字段都要有兼容目标；不支持字段改名、表达式、自定义 SQL 或 Transform。Target 多余 nullable 字段允许存在；当前 Catalog 尚未稳定暴露 Column Default，因此多余 NOT NULL 字段保守判为不兼容，不能把数据库可能存在的默认值当成已验证事实。
 
 Catalog 字段先投影为 YakColumn，再复用 [JDBC 逻辑兼容规则](../yak-flow/README.md#jdbc-schema-compatibility)。Data Sync 不再定义另一套 `java.sql.Types` 分类或转换规则。
 
@@ -59,7 +59,7 @@ Target Table Plan
 
 LogicalTable 复用 YakFlow Logical Type，不维护第二套类型枚举；同时拥有 Runtime 不需要的 comment / schemaVersion 等产品元数据。
 
-v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization 与 Target Table Planner。Planner 可以针对 MySQL / PostgreSQL / Oracle 生成 Native Type、warning / unsupported diagnostics 和 CREATE TABLE SQL，但只负责规划，不执行 DDL。Logical Table persistence、Catalog refresh / diff、Auto Create Table Runtime 与 Schema Preview UI 尚未实现，因此现有 Task 运行语义不变，目标表仍必须预先存在。
+v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization、Target Table Planner 与 Auto Create Table Runtime。Planner 可以针对 MySQL / PostgreSQL / Oracle 生成 Native Type、warning / unsupported diagnostics 和 CREATE TABLE SQL；Runtime 仅在 Task 显式开启且目标表缺失时执行受控 CREATE TABLE，建表后重新读取 Catalog 并做 Schema Compatibility。Logical Table persistence、Catalog refresh / diff 与 Schema Preview UI 尚未实现。
 
 ## Offline Execution
 
@@ -69,7 +69,7 @@ v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalizati
 | --- | --- | --- |
 | APPEND | APPEND + INSERT | 保留原目标数据；重复运行可能重复写入 |
 | OVERWRITE | OVERWRITE + INSERT | 需要 TRUNCATE 权限；清空已提交后失败不能恢复旧数据 |
-| UPSERT | APPEND + UPSERT | Target 必须有主键，Source 映射包含全部目标主键字段 |
+| UPSERT | APPEND + UPSERT | Target 必须有主键，Source 映射包含全部目标主键字段；自动建表时复制 Source 主键 |
 
 写入事务、split 与重放限制见 YakFlow；离线无跨进程断点续跑保证。Cron 和 Retry 不改变所选写入语义。
 
@@ -102,7 +102,7 @@ Trace 的 Source rows 是 Connector 在 Split 终态观察到的读取量，Sink
 
 ## Realtime Execution
 
-Source 仅支持 MySQL CDC，Target 支持 MySQL / PostgreSQL / Oracle。Source 必须有主键；Target 主键字段集合必须与 Source 在不区分大小写的同名映射下完全一致，顺序可不同，缺失、额外或不同主键均拒绝。
+Source 仅支持 MySQL CDC，Target 支持 MySQL / PostgreSQL / Oracle。Source 必须有主键；Target 主键字段集合必须与 Source 在不区分大小写的同名映射下完全一致，顺序可不同，缺失、额外或不同主键均拒绝。自动建表开启时由 Source LogicalTable 主键生成目标主键，创建后仍重新 introspect 校验。
 
 Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普通追加 INSERT。读写指标表示变更事件，不等于业务表行数；一次 UPDATE 可以产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
 
@@ -134,7 +134,7 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization 与跨 MySQL / PostgreSQL / Oracle 的 Target Table DDL Planning；尚未提供 Logical Table persistence、Catalog refresh / diff、Auto Create Table Runtime、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
+当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility 与显式 Auto Create Table Runtime；尚未提供 Logical Table persistence、Catalog refresh / diff、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
 
 发布、Retry、Schedule 和启动自动恢复是已有能力，不再列为“后续阶段”。通用 YakFlow checkpoint 跨进程恢复和常驻恢复 watchdog 仍不具备。
 
