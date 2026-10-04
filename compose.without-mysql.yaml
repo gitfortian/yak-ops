@@ -1,6 +1,6 @@
 services:
   yak-ops-backend:
-    image: ${YAK_OPS_API_IMAGE:-weifuwan/yak-ops-api:1.1.0-SNAPSHOT}
+    image: ${YAK_OPS_API_IMAGE:-weifuwan/yak-ops-api:1.1.0}
     container_name: yak-ops-backend
     restart: unless-stopped
     build:
@@ -35,7 +35,7 @@ services:
       - yak-ops-network
 
   yak-ops-frontend:
-    image: ${YAK_OPS_IMAGE:-weifuwan/yak-ops:1.1.0-SNAPSHOT}
+    image: ${YAK_OPS_IMAGE:-weifuwan/yak-ops:1.1.0}
     container_name: yak-ops-frontend
     restart: unless-stopped
     build:
