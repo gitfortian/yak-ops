@@ -178,6 +178,23 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     @Override
+    public DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto) {
+        if (dto == null || !StringUtils.hasText(dto.getTable())) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
+        }
+        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
+        DataSourceTablePath tablePath = new DataSourceTablePath(
+                normalizeNullable(dto.getDatabase()),
+                normalizeNullable(dto.getSchema()),
+                dto.getTable().trim());
+        return pluginRegistry
+                .catalogTable(entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
+                .map(this::toCatalogTableVO)
+                .orElseThrow(() -> new DataSourceException(
+                        DataSourceErrorCode.CATALOG_QUERY_FAILED, "表不存在：" + dto.getTable().trim()));
+    }
+
+    @Override
     public List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto) {
         if (dto == null || !StringUtils.hasText(dto.getTable())) {
             throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
@@ -448,6 +465,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         target.setNullable(source.nullable());
         target.setOrdinalPosition(source.ordinalPosition());
         target.setPrimaryKey(source.primaryKey());
+        target.setPrimaryKeyPosition(source.primaryKeyPosition());
         target.setRemarks(source.remarks());
         return target;
     }
