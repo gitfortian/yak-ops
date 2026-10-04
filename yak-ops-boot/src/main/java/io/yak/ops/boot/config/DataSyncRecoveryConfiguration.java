@@ -16,8 +16,7 @@ import org.springframework.context.annotation.Configuration;
 public class DataSyncRecoveryConfiguration {
 
     @Bean
-    ApplicationRunner dataSyncRecovery(
-            DataSyncExecutionRecovery executionRecovery, DataSyncService dataSyncService) {
+    ApplicationRunner dataSyncRecovery(DataSyncExecutionRecovery executionRecovery, DataSyncService dataSyncService) {
         return arguments -> {
             executionRecovery.recoverExecutions();
             dataSyncService.restoreRealtimeDesiredState();
