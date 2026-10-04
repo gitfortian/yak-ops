@@ -1229,8 +1229,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 resolvedScope.getTargetSchema(),
                 resolvedScope.getTargetTable());
 
-        if (Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())
-                && dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isEmpty()) {
+        boolean targetExists =
+                dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isPresent();
+        if (!targetExists) {
+            if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
+                throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
+            }
             if (DataSyncCatalogColumns.primaryKeyNames(sourceColumns).isEmpty()) {
                 throw new DataSyncException(
                         DataSyncErrorCode.INVALID_TASK,
@@ -1282,8 +1286,12 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 resolvedScope.getTargetDatabase(),
                 resolvedScope.getTargetSchema(),
                 resolvedScope.getTargetTable());
-        if (Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())
-                && dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isEmpty()) {
+        boolean targetExists =
+                dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isPresent();
+        if (!targetExists) {
+            if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
+                throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
+            }
             return;
         }
 
