@@ -21,6 +21,20 @@ Scope: `yak-ops-ui/apps/**`、`yak-ops-ui/packages/**`、`yak-ops-ui/scripts/**`
 - 持续风险提示、瞬时结果与字段错误的选用遵循 [Alert](packages/yak-ui/docs/alert.md)，不要手写另一套提示条。
 - 修改行为时维护对应权威契约及验证入口，不把实施进展追加到通用规则。
 
+## UI Copy Minimalism
+
+产品页面默认禁止新增解释性、帮助性、教程性或重复性文案。优先通过字段名称、控件类型、Placeholder、Disabled / Loading / Empty 状态、Field Error 与真实业务状态表达语义。
+
+只有以下情况允许增加额外文案：
+
+- 缺失信息可能造成数据丢失或不可逆操作。
+- 用户必须知道的执行前置条件，或不提示会导致对实际执行结果产生明显错误理解。
+- 当前操作被阻断，且控件状态或 Field Error 无法准确表达原因。
+
+额外文案必须按需出现、紧邻相关操作并保持最短。禁止重复解释 Label / Select / Input / Switch 已经表达的含义；禁止把后端实现细节、技术契约或内部机制直接铺在普通业务表单中；禁止仅因“帮助用户理解”而增加持久说明；禁止用 Label + Description + Helper Text + Alert 重复表达同一语义。
+
+当交互本身能够表达含义时，不增加额外文案。
+
 ## Must Not
 
 - 恢复 `apps/web/src`、`apps/web/pages`、`apps/web/shared` 或根 `src/public/types/mock`。

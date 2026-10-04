@@ -22,13 +22,14 @@ Must:
 - Display backend mapping / Schema Preview as the source of truth.
 - Keep mapping read-only and same-name in this phase; frontend must not reimplement JDBC type mapping or compatibility.
 - Expose `autoCreateTable` as an explicit Task-definition Switch under `数据去向`; default false and preserve the persisted value when editing.
-- With Auto Create disabled, target table stays Catalog-select-only. With Auto Create enabled, users may still select an existing Catalog table or enter a new target table name directly.
+- The target table stays one field labeled `目标表`: Auto Create disabled renders the Catalog Select only; Auto Create enabled replaces that Select with a controlled Input for the target table name. Never render Select and Input at the same time.
+- Switching Auto Create from disabled to enabled preserves the currently selected target table name in the Input. Switching back keeps the name only when that exact table exists in the current Catalog scope; otherwise clear it so the user must choose an existing table.
 - Schema Preview must distinguish target exists / missing + disabled / missing + auto-create, and render backend `warnings`, `unsupportedReasons` and read-only `createTableSql` when provided.
 - Warnings are non-blocking; backend `compatible=false` or any blocking unsupported result disables Save / Save & Publish through the same preview compatibility boundary.
-- Explain that Save does not execute DDL and Runtime re-checks the target before CREATE; existing targets are never ALTERed / DROPed by this feature.
+- Save does not execute DDL and Runtime re-checks the target before CREATE; existing targets are never ALTERed / DROPed by this feature. This is implementation behavior and must not be rendered as persistent helper copy in the normal form.
 - Disable save while the current mapping / Schema Preview is incompatible.
 - Expose OFFLINE write mode under `数据去向`, never under runtime tuning. Options are APPEND / OVERWRITE / UPSERT with APPEND as the default.
-- Use Yak UI `Alert` when OFFLINE write mode is `OVERWRITE`: warn that the target table is cleared before loading and original data is not automatically restored after a later sync failure. Keep APPEND / UPSERT as normal inline descriptions; backend Catalog validation remains the source of truth.
+- Use Yak UI `Alert` when OFFLINE write mode is `OVERWRITE`: warn that the target table is cleared before loading and original data is not automatically restored after a later sync failure. APPEND / UPSERT do not render persistent helper text; backend Catalog validation remains the source of truth.
 - Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
 - Show the Split consistency Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
 - Use existing Yak UI primitives.
@@ -50,7 +51,7 @@ Must:
 - Schedule definition save must never implicitly enable scheduling. A newly created Schedule remains disabled until the user explicitly starts it from the OFFLINE Task list.
 - An existing Schedule cannot be removed by clearing Cron in the editor; Cron remains required once the Schedule exists. Runtime enable / disable belongs to the OFFLINE Task list.
 - Datasource Select uses `value = datasourceId` and `label = datasourceName`; it must pass the value-label map through `Select.items`.
-- Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`. The only exception is Target + explicit Auto Create, where a separate controlled target-table-name Input may represent a table not yet present in Catalog.
+- Table Select uses a stable composite `tableKey` as value and a human-readable table path as label; it must pass the value-label map through `Select.items`. Target + explicit Auto Create switches the same `目标表` field to a controlled Input that may represent a table not yet present in Catalog.
 - Schema Select may omit `items` when the domain value is intentionally identical to the visible label. Database is not editable in Offline Sync when Datasource already binds it.
 - Datasource / Schema / Table are dynamic resource Selects: their popup uses Yak UI Select Search composition with local keyword filtering and an explicit refresh action.
 - Datasource Select footer exposes “新增数据源” as a product-owned action and routes to Datasource create; Schema / Table do not invent create actions.

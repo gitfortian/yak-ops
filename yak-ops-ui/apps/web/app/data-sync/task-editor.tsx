@@ -371,6 +371,7 @@ interface TableSectionProps {
   table: string;
   catalog: CatalogOptions;
   allowCustomTable?: boolean;
+  tableFieldLabel?: string;
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
   onTableNameChange?: (value: string) => void;
@@ -385,6 +386,7 @@ function TableSection({
   table,
   catalog,
   allowCustomTable = false,
+  tableFieldLabel = "表",
   onSchemaChange,
   onTableChange,
   onTableNameChange,
@@ -427,54 +429,48 @@ function TableSection({
           </Field>
         ) : null}
 
-        <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel required={!allowCustomTable}>{allowCustomTable ? "已有表" : "表"}</FieldLabel>
-          <DataSyncSearchableSelect
-            value={tableValue}
-            options={tableOptions}
-            disabled={tableDisabled}
-            placeholder={
-              !dataSourceId
-                ? "请先选择数据源"
-                : requiresSchema && !schema
-                  ? "请先选择 Schema"
-                  : catalog.loading
-                    ? "正在读取 Catalog..."
-                    : allowCustomTable
-                      ? "可选择已有表"
+        <Field
+          className={`grid grid-cols-[112px_minmax(0,1fr)] ${
+            allowCustomTable ? "items-start" : "items-center"
+          } !gap-3`}
+        >
+          <FieldLabel required className={allowCustomTable ? "pt-1.5" : undefined}>
+            {tableFieldLabel}
+          </FieldLabel>
+          {allowCustomTable ? (
+            <Input
+              size="small"
+              variant="outlined"
+              value={table}
+              disabled={tableDisabled}
+              placeholder="请输入目标表名"
+              onChange={(event) => onTableNameChange?.(event.target.value)}
+            />
+          ) : (
+            <DataSyncSearchableSelect
+              value={tableValue}
+              options={tableOptions}
+              disabled={tableDisabled}
+              placeholder={
+                !dataSourceId
+                  ? "请先选择数据源"
+                  : requiresSchema && !schema
+                    ? "请先选择 Schema"
+                    : catalog.loading
+                      ? "正在读取 Catalog..."
                       : "请选择表"
-            }
-            searchPlaceholder="搜索表"
-            emptyText="暂无表"
-            refreshing={catalog.loading}
-            onRefresh={catalog.refresh}
-            onValueChange={(value) => {
-              const selected = catalog.tables.find((item) => tableKey(item) === value);
-              if (selected) onTableChange(selected);
-            }}
-          />
+              }
+              searchPlaceholder="搜索表"
+              emptyText="暂无表"
+              refreshing={catalog.loading}
+              onRefresh={catalog.refresh}
+              onValueChange={(value) => {
+                const selected = catalog.tables.find((item) => tableKey(item) === value);
+                if (selected) onTableChange(selected);
+              }}
+            />
+          )}
         </Field>
-
-        {allowCustomTable ? (
-          <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
-            <FieldLabel required className="pt-1.5">
-              目标表名
-            </FieldLabel>
-            <div className="space-y-1">
-              <Input
-                size="small"
-                variant="outlined"
-                value={table}
-                disabled={tableDisabled}
-                placeholder="输入已有或待创建的目标表名"
-                onChange={(event) => onTableNameChange?.(event.target.value)}
-              />
-              <div className="px-1 text-xs text-[#98a2b3]">
-                可以直接输入不存在的新表名；选择上方已有表会自动回填。
-              </div>
-            </div>
-          </Field>
-        ) : null}
         {children}
       </div>
     </div>
@@ -485,12 +481,6 @@ const WRITE_MODE_ITEMS: Record<DataSyncWriteMode, string> = {
   APPEND: "追加写入",
   OVERWRITE: "覆盖写入",
   UPSERT: "更新写入",
-};
-
-const WRITE_MODE_DESCRIPTION: Record<DataSyncWriteMode, string> = {
-  APPEND: "保留目标已有数据，继续新增本次同步数据",
-  OVERWRITE: "运行前清空目标表，再写入本次全量数据",
-  UPSERT: "按目标主键更新已有数据，不存在则新增；要求目标表存在主键",
 };
 
 interface OfflineRuntimeFieldsProps {
@@ -1312,6 +1302,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               table={form.targetTable}
               catalog={targetCatalog}
               allowCustomTable={form.autoCreateTable}
+              tableFieldLabel="目标表"
               onTableNameChange={(value) => patch("targetTable", value)}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
@@ -1325,26 +1316,32 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 }))
               }
             >
-              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
-                <FieldLabel className="pt-0.5">自动建表</FieldLabel>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      size="small"
-                      checked={form.autoCreateTable}
-                      onCheckedChange={(checked) => patch("autoCreateTable", Boolean(checked))}
-                    />
-                    <div className="text-xs text-[#667085]">
-                      目标表不存在时，按当前 Source Schema 自动创建
-                    </div>
-                  </div>
-                  {form.autoCreateTable ? (
-                    <Alert>
-                      自动建表仅在目标表不存在且 Schema
-                      规划可执行时生效；已有目标表只做兼容性校验，不会 ALTER、DROP 或覆盖表结构。
-                    </Alert>
-                  ) : null}
-                </div>
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                <FieldLabel>自动建表</FieldLabel>
+                <Switch
+                  size="small"
+                  checked={form.autoCreateTable}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => {
+                      const autoCreateTable = Boolean(checked);
+                      if (autoCreateTable) {
+                        return { ...current, autoCreateTable };
+                      }
+                      const currentTableExists =
+                        selectedTableKey(
+                          targetCatalog.tables,
+                          current.targetDatabase,
+                          current.targetSchema,
+                          current.targetTable,
+                        ) !== null;
+                      return {
+                        ...current,
+                        autoCreateTable,
+                        targetTable: currentTableExists ? current.targetTable : "",
+                      };
+                    })
+                  }
+                />
               </Field>
 
               {!realtime ? (
@@ -1352,7 +1349,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   <FieldLabel required className="pt-1.5">
                     写入方式
                   </FieldLabel>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <Select
                       size="small"
                       items={WRITE_MODE_ITEMS}
@@ -1377,11 +1374,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     </Select>
                     {form.writeMode === "OVERWRITE" ? (
                       <Alert>覆盖写入会先清空目标表，同步失败时原数据不会自动恢复。</Alert>
-                    ) : (
-                      <div className="px-1 text-xs text-[#98a2b3]">
-                        {WRITE_MODE_DESCRIPTION[form.writeMode]}
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </Field>
               ) : null}
