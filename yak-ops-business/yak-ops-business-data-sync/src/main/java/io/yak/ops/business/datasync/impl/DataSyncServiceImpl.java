@@ -1223,20 +1223,17 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         resolvedScope.getSourceSchema(),
                         resolvedScope.getSourceTable()));
         DataSourceTablePathDTO targetPath = tablePath(
-                resolvedScope.getTargetDatabase(),
-                resolvedScope.getTargetSchema(),
-                resolvedScope.getTargetTable());
+                resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
 
-        boolean targetExists =
-                dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isPresent();
+        boolean targetExists = dataSourceService
+                .findCatalogTable(targetDataSourceId, targetPath)
+                .isPresent();
         if (!targetExists) {
             if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
                 throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
             }
             if (DataSyncCatalogColumns.primaryKeyNames(sourceColumns).isEmpty()) {
-                throw new DataSyncException(
-                        DataSyncErrorCode.INVALID_TASK,
-                        "UPSERT 自动建表要求来源表包含主键");
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 自动建表要求来源表包含主键");
             }
             return;
         }
@@ -1284,8 +1281,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 resolvedScope.getTargetDatabase(),
                 resolvedScope.getTargetSchema(),
                 resolvedScope.getTargetTable());
-        boolean targetExists =
-                dataSourceService.findCatalogTable(targetDataSourceId, targetPath).isPresent();
+        boolean targetExists = dataSourceService
+                .findCatalogTable(targetDataSourceId, targetPath)
+                .isPresent();
         if (!targetExists) {
             if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
                 throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
@@ -1409,8 +1407,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 .orElse(null);
     }
 
-    private DataSyncFieldMappingVO toAutoCreateFieldMapping(
-            DataSourceCatalogColumnVO source, TargetColumnPlan target) {
+    private DataSyncFieldMappingVO toAutoCreateFieldMapping(DataSourceCatalogColumnVO source, TargetColumnPlan target) {
         DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
         mapping.setSourceName(source.getName());
         mapping.setSourceType(source.getTypeName());
