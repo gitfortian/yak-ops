@@ -80,7 +80,7 @@ Schema 位于 `yak-ops-dao/src/main/resources/db/migration/yak-ops`。迁移冻�
 
 ### `yak-ops-business/yak-ops-business-data-sync`
 
-唯一稳定产品入口为 `DataSyncService`。拥有定义、发布、Schedule 业务记录、Execution / Attempt 生命周期、产品 Retry 和 REALTIME desired-state 协调。
+唯一稳定产品入口为 `DataSyncService`。拥有定义、发布、Schedule 业务记录、Execution / Attempt 生命周期、产品 Retry 和 REALTIME desired-state 协调；v1.2 起同时拥有产品级 Logical Table Schema Contract。
 
 职责划分：
 
@@ -88,6 +88,7 @@ Schema 位于 `yak-ops-dao/src/main/resources/db/migration/yak-ops`。迁移冻�
 - `execution/planning` 将冻结快照、Catalog 与安全连接解析为内存执行计划。
 - `execution/executor` 提交一次 Runtime 尝试并报告结果；`execution/lifecycle` 统一持久化状态、取消引用与启动 LOST 处理。
 - `execution/realtime` 拥有 CDC state identity 和进程内 serverId 分配；连接器拥有状态文件内容。
+- `schema` 拥有产品级 LogicalTable / LogicalColumn；复用 YakFlow Logical Type，但不把 Workspace、Comment、Schema Version 等产品元数据下沉到 Runtime。
 
 通过 `DataSourceService` 读取 Catalog / 解析运行连接，不绕过该接口访问 Datasource DAO 或 Plugin Registry。运行计划可以间接持有凭证，但只能存在于内存，不能进入快照、响应或日志。
 

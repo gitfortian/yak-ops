@@ -30,10 +30,10 @@ Scope:
 当前候选版本：
 
 ```text
-1.2.0 — Planning / Scope Open
+1.2.0 — Development / Scope Open
 ```
 
-v1.2.0 规划入口：
+v1.2.0 开发入口：
 
 - [v1.2.0 Release Contract](./v1.2.0.md)
 

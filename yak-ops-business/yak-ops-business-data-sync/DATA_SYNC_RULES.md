@@ -32,6 +32,22 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 
 测试按对应职责组织；直接代码入口见 [execution 目录](src/main/java/io/yak/ops/business/datasync/execution)。
 
+## Schema Package
+
+`io.yak.ops.business.datasync.schema` 拥有 Data Sync 产品级 Logical Table 内存契约。
+
+规则：
+
+- LogicalTable / LogicalColumn 是产品 Schema，不是 Datasource Catalog DTO，也不是 YakFlow Runtime Entity。
+- 逻辑类型必须复用 YakFlow `YakDataType`；禁止在 Data Sync 新建数据库类型大全或第二套 logical type enum。
+- Source `typeName / jdbcType` 只用于 Catalog import / compatibility，不作为 Logical Schema canonical type。
+- Logical Table 可以投影为 `YakTableSchema`，但 comment / schemaVersion / 产品资源身份不进入 Runtime。
+- Logical Table persistence 仍归 DAO；schema 包不直接持有 Entity / Mapper。
+- Target Native Type / CREATE TABLE SQL 归后续 Target Planner / JDBC Dialect，不写进 LogicalTable。
+- 已冻结到 Task snapshot 的 Schema 不得因后续 Logical Table 编辑而改变历史 Execution。
+
+具体产品语义见 [Schema / Logical Table Contract](../../docs/capabilities/data-sync/schema-logical-table.md)。
+
 ## Task and Mapping Implementation
 
 - 通过 WorkspaceContext.requireWorkspaceId 获取产品请求范围；所有 Task / Schedule / Execution / Attempt 访问必须带 workspaceId，不能仅凭资源 ID 查询。
