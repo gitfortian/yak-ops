@@ -2,8 +2,6 @@ package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
@@ -20,7 +18,6 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.time.Duration;
-import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,6 +36,9 @@ public class RealtimeSyncExecutionPlanner {
     private DataSourceService dataSourceService;
 
     @Resource
+    private TargetTableRuntimePreparer targetTableRuntimePreparer;
+
+    @Resource
     private RealtimeSyncStateManager stateManager;
 
     public RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
@@ -55,12 +55,10 @@ public class RealtimeSyncExecutionPlanner {
         DataSyncRealtimeConfigVO realtimeConfig =
                 ObjectUtils.requireNonNull(snapshot.getRealtimeConfig(), "realtime config must not be null");
 
-        List<DataSourceCatalogColumnVO> sourceColumns =
-                dataSourceService.queryCatalogColumns(sourceEndpoint.getDataSourceId(), tablePath(sourceEndpoint));
-        List<DataSourceCatalogColumnVO> targetColumns =
-                dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), tablePath(targetEndpoint));
-        YakTableSchema sourceSchema = DataSyncSchemaResolver.sourceSchema(sourceColumns);
-        YakTableSchema targetWriteSchema = DataSyncSchemaResolver.targetWriteSchema(sourceColumns, targetColumns);
+        TargetTablePreparation targetPreparation =
+                targetTableRuntimePreparer.prepare(snapshot, realtimeConfig.getTimeoutSeconds());
+        YakTableSchema sourceSchema = targetPreparation.sourceSchema();
+        YakTableSchema targetWriteSchema = targetPreparation.targetWriteSchema();
 
         JdbcConnectionProperties sourceConnection =
                 requireMySqlConnection(dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId()));
@@ -95,14 +93,6 @@ public class RealtimeSyncExecutionPlanner {
             throw new IllegalArgumentException("realtime sync source runtime connection must be MYSQL JDBC");
         }
         return jdbcConnection;
-    }
-
-    private DataSourceTablePathDTO tablePath(DataSyncEndpointSnapshotVO endpoint) {
-        DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(endpoint.getDatabase());
-        path.setSchema(endpoint.getSchema());
-        path.setTable(endpoint.getTable());
-        return path;
     }
 
     private DataSourceTablePath tablePathValue(DataSyncEndpointSnapshotVO endpoint) {
