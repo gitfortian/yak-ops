@@ -29,7 +29,7 @@ Scope:
 当前候选版本：
 
 ```text
-1.1.0 — Scope Frozen / Awaiting Manual E2E
+1.1.0 — Scope Frozen / Acceptance Complete / Awaiting Version Finalization
 ```
 
 候选材料：
