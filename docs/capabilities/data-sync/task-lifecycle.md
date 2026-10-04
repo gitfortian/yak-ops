@@ -50,7 +50,9 @@ Stop / Cancel 属于 Execution 契约。成功下线对 Schedule 和 desiredStat
 
 ## Definition Version Contract
 
-比较规范化后的可执行定义，而不是每次 PUT 都加一。后端 `executableDefinitionChanged` 比较：Source / Target 数据源 ID 与表范围、writeMode、`autoCreateTable`、对应 runtimeConfig，以及规范化后的 **retryPolicy**。
+比较规范化后的可执行定义，而不是每次 PUT 都加一。后端 `executableDefinitionChanged` 比较：Source / Target 数据源 ID 与表范围、writeMode、`autoCreateTable`、任务级 **mapping**、对应 runtimeConfig，以及规范化后的 **retryPolicy**。
+
+`mapping=null` 保持旧任务的隐式同名映射语义；显式 `mapping.columns` 按规范化后的 source / target 与数组顺序参与版本比较。Mapping 一旦冻结进 Execution definitionSnapshot，Retry / Auto Recovery 不重新读取 Task 当前 Mapping。
 
 name / remark、无实质变化的更新、发布 / 下线、运行 / 取消不增加版本。Schedule 单独持久化，修改 Cron / Time Zone 不调用 Task 版本比较。
 
