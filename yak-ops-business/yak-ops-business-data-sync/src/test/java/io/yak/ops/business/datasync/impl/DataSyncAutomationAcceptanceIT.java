@@ -9,6 +9,7 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRecovery;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
 import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
@@ -22,6 +23,8 @@ import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
+import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
@@ -145,6 +148,66 @@ class DataSyncAutomationAcceptanceIT {
         assertFalse(second.retry());
         assertEquals(DataSyncInstanceStatus.FAILED, executionStatus.get());
         assertEquals(2, attemptFailures.get());
+    }
+
+    @Test
+    void shouldRecoverRetryWaitingExecutionWithSameRootAfterRestart() throws Exception {
+        DataSyncInstanceEntity execution = execution(DataSyncInstanceStatus.RETRY_WAITING);
+        execution.setTaskId("task-offline");
+        execution.setTaskVersion(3);
+        execution.setSyncType(DataSyncType.OFFLINE);
+        execution.setMaxAttempts(3);
+        execution.setBackoffSeconds(30);
+        execution.setCurrentAttempt(1);
+        execution.setNextRetryTime(LocalDateTime.now().minusSeconds(1));
+
+        DataSyncDefinitionSnapshotVO snapshot = new DataSyncDefinitionSnapshotVO();
+        snapshot.setTaskId("task-offline");
+        snapshot.setTaskVersion(3);
+        snapshot.setSyncType(DataSyncType.OFFLINE.name());
+        execution.setDefinitionSnapshot(JSONUtils.toJson(snapshot));
+
+        DataSyncAttemptEntity firstAttempt = new DataSyncAttemptEntity();
+        firstAttempt.setId("attempt-1");
+        firstAttempt.setWorkspaceId("workspace-1");
+        firstAttempt.setExecutionId("execution-1");
+        firstAttempt.setAttemptNo(1);
+        firstAttempt.setStatus(DataSyncAttemptStatus.FAILED);
+
+        AtomicReference<String> resumedExecutionId = new AtomicReference<>();
+        AtomicInteger resumedAttempt = new AtomicInteger();
+        AtomicReference<LocalDateTime> resumedAt = new AtomicReference<>();
+
+        DataSyncExecutionRecovery recovery = new DataSyncExecutionRecovery();
+        inject(recovery, "instanceRepository", durableRetryInstanceRepository(execution));
+        inject(recovery, "attemptRepository", durableRetryAttemptRepository(firstAttempt));
+        inject(recovery, "attemptLifecycle", new NoopRecoveryAttemptLifecycle());
+        inject(
+                recovery,
+                "offlineSyncExecutor",
+                new OfflineSyncExecutor() {
+                    @Override
+                    public void resumeRetry(
+                            String workspaceId,
+                            String instanceId,
+                            DataSyncDefinitionSnapshotVO recoveredSnapshot,
+                            int nextAttemptNo,
+                            int maxAttempts,
+                            int backoffSeconds,
+                            LocalDateTime nextRetryTime) {
+                        resumedExecutionId.set(instanceId);
+                        resumedAttempt.set(nextAttemptNo);
+                        resumedAt.set(nextRetryTime);
+                    }
+                });
+        inject(recovery, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
+
+        recovery.recoverExecutions();
+
+        assertEquals("execution-1", resumedExecutionId.get());
+        assertEquals(2, resumedAttempt.get());
+        assertEquals(execution.getNextRetryTime(), resumedAt.get());
+        assertEquals(DataSyncInstanceStatus.RETRY_WAITING, execution.getStatus());
     }
 
     @Test
@@ -322,6 +385,28 @@ class DataSyncAutomationAcceptanceIT {
                 });
     }
 
+    private DataSyncInstanceRepository durableRetryInstanceRepository(DataSyncInstanceEntity execution) {
+        return (DataSyncInstanceRepository) Proxy.newProxyInstance(
+                DataSyncInstanceRepository.class.getClassLoader(),
+                new Class<?>[] {DataSyncInstanceRepository.class},
+                (proxy, method, args) -> {
+                    if ("queryActive".equals(method.getName())) return List.of(execution);
+                    if ("markActiveAsLost".equals(method.getName())) return 0;
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private DataSyncAttemptRepository durableRetryAttemptRepository(DataSyncAttemptEntity attempt) {
+        return (DataSyncAttemptRepository) Proxy.newProxyInstance(
+                DataSyncAttemptRepository.class.getClassLoader(),
+                new Class<?>[] {DataSyncAttemptRepository.class},
+                (proxy, method, args) -> {
+                    if ("markActiveAsLost".equals(method.getName())) return 0;
+                    if ("queryByExecution".equals(method.getName())) return List.of(attempt);
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
     private DataSyncAttemptRepository canceledAttemptRepository(AtomicInteger cancels) {
         return (DataSyncAttemptRepository) Proxy.newProxyInstance(
                 DataSyncAttemptRepository.class.getClassLoader(),
@@ -425,6 +510,16 @@ class DataSyncAutomationAcceptanceIT {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static final class NoopRecoveryAttemptLifecycle extends DataSyncAttemptLifecycle {
+
+        @Override
+        public void recordRetryRecoveryScheduled(
+                String workspaceId, String executionId, int nextAttemptNo, LocalDateTime nextRetryTime) {}
+
+        @Override
+        public void recordExecutionLost(String workspaceId, String executionId, String message) {}
     }
 
     private static final class NoopOfflineSyncExecutor extends OfflineSyncExecutor {
