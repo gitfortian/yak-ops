@@ -22,7 +22,7 @@ on:
       release_version:
         description: Stable product version to validate and release.
         required: true
-        default: "1.1.0"
+        default: "1.2.0"
         type: string
       manual_e2e_confirmed:
         description: All required Manual E2E listed in this version's readiness document passed.

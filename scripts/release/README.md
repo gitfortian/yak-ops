@@ -9,7 +9,7 @@
 准备新版本：
 
 ```bash
-bash scripts/release/prepare-release-version.sh 1.1.0
+bash scripts/release/prepare-release-version.sh 1.2.0-SNAPSHOT
 ```
 
 该命令统一更新：
