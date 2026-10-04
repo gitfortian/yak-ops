@@ -18,9 +18,12 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
@@ -120,12 +123,37 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     }
 
     @Override
+    public Optional<DataSourceTable> findTable(DataSourceTablePath tablePath) {
+        String database = metadataCatalog(tablePath.database());
+        String schema = metadataSchema(tablePath.schema(), true);
+        try (Connection opened = openConnection()) {
+            DatabaseMetaData metadata = opened.getMetaData();
+            String tableNamePattern = exactTableNamePattern(metadata, tablePath.table());
+            try (ResultSet resultSet = metadata.getTables(database, schema, tableNamePattern, tableTypes())) {
+                while (resultSet.next()) {
+                    String name = resultSet.getString("TABLE_NAME");
+                    if (name == null || !name.equalsIgnoreCase(tablePath.table())) continue;
+                    return Optional.of(new DataSourceTable(
+                            resultSet.getString("TABLE_CAT"),
+                            resultSet.getString("TABLE_SCHEM"),
+                            name,
+                            resultSet.getString("TABLE_TYPE"),
+                            resultSet.getString("REMARKS")));
+                }
+                return Optional.empty();
+            }
+        } catch (Exception exception) {
+            throw catalogError("读取表元数据失败", exception);
+        }
+    }
+
+    @Override
     public List<DataSourceColumn> listColumns(DataSourceTablePath tablePath) {
         String database = metadataCatalog(tablePath.database());
         String schema = metadataSchema(tablePath.schema(), true);
         try (Connection opened = openConnection()) {
             DatabaseMetaData metadata = opened.getMetaData();
-            Set<String> primaryKeys = primaryKeys(metadata, database, schema, tablePath.table());
+            Map<String, Integer> primaryKeys = primaryKeys(metadata, database, schema, tablePath.table());
             List<DataSourceColumn> columns = new ArrayList<>();
             try (ResultSet resultSet = metadata.getColumns(database, schema, tablePath.table(), "%")) {
                 while (resultSet.next()) {
@@ -138,7 +166,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
                             nullableInteger(resultSet, "DECIMAL_DIGITS"),
                             resultSet.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls,
                             resultSet.getInt("ORDINAL_POSITION"),
-                            primaryKeys.contains(name),
+                            primaryKeys.containsKey(name),
+                            primaryKeys.get(name),
                             resultSet.getString("REMARKS")));
                 }
             }
@@ -213,7 +242,15 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
     private String tableNamePattern(DatabaseMetaData metadata, String keyword) throws SQLException {
         if (keyword == null) return "%";
-        String normalized = keyword;
+        return "%" + normalizeTablePattern(metadata, keyword) + "%";
+    }
+
+    private String exactTableNamePattern(DatabaseMetaData metadata, String table) throws SQLException {
+        return normalizeTablePattern(metadata, table);
+    }
+
+    private String normalizeTablePattern(DatabaseMetaData metadata, String value) throws SQLException {
+        String normalized = value;
         if (metadata.storesUpperCaseIdentifiers()) normalized = normalized.toUpperCase(Locale.ROOT);
         else if (metadata.storesLowerCaseIdentifiers()) normalized = normalized.toLowerCase(Locale.ROOT);
 
@@ -223,7 +260,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             normalized = normalized.replace("%", escape + "%");
             normalized = normalized.replace("_", escape + "_");
         }
-        return "%" + normalized + "%";
+        return normalized;
     }
 
     private ResultSet schemas(DatabaseMetaData metadata, String database) throws SQLException {
@@ -234,13 +271,18 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
         }
     }
 
-    private Set<String> primaryKeys(DatabaseMetaData metadata, String database, String schema, String table) {
+    private Map<String, Integer> primaryKeys(
+            DatabaseMetaData metadata, String database, String schema, String table) {
         try (ResultSet resultSet = metadata.getPrimaryKeys(database, schema, table)) {
-            Set<String> keys = new LinkedHashSet<>();
-            while (resultSet.next()) keys.add(resultSet.getString("COLUMN_NAME"));
+            Map<String, Integer> keys = new LinkedHashMap<>();
+            while (resultSet.next()) {
+                String name = resultSet.getString("COLUMN_NAME");
+                Integer position = nullableInteger(resultSet, "KEY_SEQ");
+                if (name != null) keys.put(name, position);
+            }
             return keys;
         } catch (Exception ignored) {
-            return Collections.emptySet();
+            return Collections.emptyMap();
         }
     }
 
