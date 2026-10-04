@@ -60,6 +60,7 @@ public final class DataSyncCatalogColumns {
                 Boolean.TRUE.equals(column.getNullable()),
                 ordinal,
                 Boolean.TRUE.equals(column.getPrimaryKey()),
+                column.getPrimaryKeyPosition(),
                 column.getRemarks());
     }
 }
