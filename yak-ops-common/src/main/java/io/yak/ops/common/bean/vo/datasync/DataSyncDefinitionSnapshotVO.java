@@ -34,6 +34,9 @@ public class DataSyncDefinitionSnapshotVO {
     /** 实例启动时固化的目标数据源与表路径，不包含连接凭证。 */
     private DataSyncEndpointSnapshotVO target;
 
+    /** Execution 创建时固化的目标表自动创建策略。 */
+    private Boolean autoCreateTable;
+
     /** Execution 创建时固化的 Retry Policy；所有 Attempt 共用。 */
     private DataSyncRetryPolicyVO retryPolicy;
 
