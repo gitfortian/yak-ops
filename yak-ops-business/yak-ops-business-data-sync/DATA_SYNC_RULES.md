@@ -42,6 +42,9 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - 逻辑类型必须复用 YakFlow `YakDataType`；禁止在 Data Sync 新建数据库类型大全或第二套 logical type enum。
 - Source `typeName / jdbcType` 只用于 Catalog import / compatibility，不作为 Logical Schema canonical type。
 - Logical Table 可以投影为 `YakTableSchema`，但 comment / schemaVersion / 产品资源身份不进入 Runtime。
+- `SourceTableIntrospector` 只能通过 `DataSourceService.queryCatalogTable / queryCatalogColumns` 读取物理元数据，不能绕过 Service 访问 Plugin Registry 或 Runtime connection。
+- `LogicalTableNormalizer` 负责 Catalog → LogicalTable 的纯归一；JDBC 类型统一复用 `JdbcSchemaMapper`。
+- Catalog composite primary key 必须使用 `primaryKeyPosition / KEY_SEQ` 保留顺序，不能按字段 ordinal 猜测。
 - Logical Table persistence 仍归 DAO；schema 包不直接持有 Entity / Mapper。
 - Target Native Type / CREATE TABLE SQL 归后续 Target Planner / JDBC Dialect，不写进 LogicalTable。
 - 已冻结到 Task snapshot 的 Schema 不得因后续 Logical Table 编辑而改变历史 Execution。
