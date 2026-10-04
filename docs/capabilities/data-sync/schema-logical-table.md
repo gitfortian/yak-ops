@@ -321,9 +321,70 @@ TargetTablePlan
 
 Table / Column comment 当前只保留在 TargetTablePlan 产品元数据中，PR3 不生成各数据库不同语法的 COMMENT DDL。
 
-## 10. Persistence Boundary
+## 10. Auto Create Table Runtime
 
-PR1 只建立 Contract，不新增 Flyway Migration。
+PR4 在 PR3 的 TargetTablePlan 之上增加受控 Runtime Preflight：
+
+~~~text
+Execution Attempt
+      ↓
+TargetTableRuntimePreparer
+      ↓
+target exists?
+  ├─ yes
+  │   ↓
+  │ TargetSchemaCompatibility
+  │   ↓
+  │ compatible → continue
+  │ incompatible → fail
+  │
+  └─ no
+      ↓
+    autoCreateTable?
+      ├─ false → TARGET_TABLE_NOT_FOUND
+      └─ true
+          ↓
+        TargetTablePlanner
+          ↓
+        supported?
+          ├─ no → TARGET_SCHEMA_INCOMPATIBLE
+          └─ yes
+              ↓
+            JdbcTargetTableProvisioner
+              ↓
+            CREATE TABLE
+              ↓
+            re-introspect Catalog
+              ↓
+            TargetSchemaCompatibility
+~~~
+
+安全规则：
+
+- `autoCreateTable` 属于 Task Definition，默认 `false`；旧任务升级后保持原有“目标表必须存在”行为。
+- 修改 `autoCreateTable` 推进 Task `definitionVersion`，Execution 创建时冻结进 `definitionSnapshot`；Retry / Auto Recovery 不读取 Task 当前值覆盖历史 Execution。
+- 保存 / 发布 / 运行都重新检查真实外部 Catalog，不依赖前端预览结果。
+- 目标表已经存在时永远不执行 CREATE、DROP 或 ALTER，只做兼容性检查。
+- 目标表不存在且开启自动建表时，只执行 YakFlow JDBC Dialect 从受控 TablePath + YakTableSchema 生成的 CREATE TABLE，不接受任意用户 SQL。
+- CREATE TABLE 后必须重新 introspect 目标 Catalog，再做兼容性与主键校验；不能因为 DDL 执行成功就直接相信计划。
+- 并发建表时，如果本次 CREATE 失败但随后精确 Catalog 已发现目标表，按并发创建处理并继续重新校验，而不是盲目重试 DDL。
+- Target Schema 必须包含全部 Source 同名字段并满足 JdbcSchemaCompatibility。
+- Source nullable 字段不能写入 Target NOT NULL 字段。
+- Target 多余字段只有在 nullable 时允许；当前 Catalog 尚未稳定暴露 COLUMN DEFAULT，因此多余的 NOT NULL 字段按不兼容保守拒绝。
+- REALTIME 继续要求 Source / Target 主键集合一致；UPSERT 继续要求 Target 有主键且 Source 包含全部目标主键。
+- PR4 不提供 COMMENT DDL、INDEX、FOREIGN KEY、ALTER、DROP、DDL Sync 或 Automatic Schema Evolution。
+
+Task persistence 使用 v1.2 Draft Migration：
+
+~~~text
+V3__data_sync_auto_create_table.sql
+~~~
+
+该 Draft 只增加 `yak_ops_data_sync_task.auto_create_table`，默认 0。它属于未发布 v1.2 开发历史，Release Freeze 时按 Flyway Rules 与同版本其它 Draft 一起收口，不得修改已经发布的 V1 / V2。
+
+## 11. Persistence Boundary
+
+Logical Table persistence 仍未实现。
 
 后续持久化实现必须满足：
 
@@ -337,7 +398,7 @@ PR1 只建立 Contract，不新增 Flyway Migration。
 
 具体 Entity / Mapper / Migration 由后续实现 PR 决定，不能在 Contract 阶段提前锁死物理表设计。
 
-## 11. Current v1.2 Boundary
+## 12. Current v1.2 Boundary
 
 PR1 完成后只有 Schema / Logical Table Contract。
 
@@ -349,16 +410,18 @@ Catalog Refresh / Diff = NOT IMPLEMENTED
 Target Table Planner = IMPLEMENTED
 MySQL / PostgreSQL / Oracle Target Dialect = IMPLEMENTED
 CREATE TABLE DDL Planning = IMPLEMENTED
-Auto Create Table Runtime = NOT IMPLEMENTED
+Auto Create Table Runtime = IMPLEMENTED
+Runtime Schema Compatibility Preflight = IMPLEMENTED
+Auto Create Table Preview API = IMPLEMENTED
 Schema Preview UI = NOT IMPLEMENTED
 DDL Sync = NOT IMPLEMENTED
 Automatic Schema Evolution = NOT IMPLEMENTED
 Multi-table Task = NOT IMPLEMENTED
 ~~~
 
-现有 OFFLINE / REALTIME Task 仍要求目标表预先存在，本 PR 不改变任何运行行为。
+OFFLINE / REALTIME Task 默认仍要求目标表预先存在；只有 Task Definition 显式 `autoCreateTable=true` 且 Target Plan supported 时，Runtime 才允许创建缺失目标表。
 
-## 12. Verification
+## 13. Verification
 
 Contract test 至少验证：
 
@@ -368,4 +431,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划，并在 OfflineSyncJdbcAcceptanceIT 中实际对 MySQL / PostgreSQL / Oracle 执行生成的 CREATE TABLE SQL。Logical Table persistence 与 Auto Create Table Runtime 仍属于后续 PR。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTableRuntimePreparer Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。Logical Table persistence 与 Schema Preview UI 仍属于后续 PR。
