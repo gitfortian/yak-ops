@@ -160,6 +160,7 @@ export function DataSyncExecutionConfigContent({
       "数据表",
       endpointPathText(snapshot.target.database, snapshot.target.schema, snapshot.target.table),
     ],
+    ["自动建表", snapshot.autoCreateTable ? "开启" : "关闭"],
   ];
   const executionItems: ConfigurationItem[] = [
     ["任务版本", `v${snapshot.taskVersion}`],
