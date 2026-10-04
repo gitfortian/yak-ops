@@ -19,10 +19,7 @@ public class JdbcTargetTableDdlExecutor implements TargetTableDdlExecutor {
 
     @Override
     public String createTable(
-            DataSourceConnection connection,
-            DataSourceTablePath table,
-            YakTableSchema schema,
-            int timeoutSeconds)
+            DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema, int timeoutSeconds)
             throws Exception {
         return provisioner.createTable(connection, table, schema, timeoutSeconds);
     }
