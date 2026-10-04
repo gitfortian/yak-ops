@@ -612,8 +612,8 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
         <Alert>
           <div className="space-y-1">
             <div className="font-medium">Schema 规划提示</div>
-            {warnings.map((warning) => (
-              <div key={warning}>• {warning}</div>
+            {warnings.map((warning, index) => (
+              <div key={`${index}-${warning}`}>• {warning}</div>
             ))}
           </div>
         </Alert>
@@ -626,8 +626,8 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
         >
           <div className="font-medium">当前 Schema 无法直接同步</div>
           <div className="mt-1 space-y-1">
-            {unsupportedReasons.map((reason) => (
-              <div key={reason}>• {reason}</div>
+            {unsupportedReasons.map((reason, index) => (
+              <div key={`${index}-${reason}`}>• {reason}</div>
             ))}
           </div>
         </div>
@@ -840,6 +840,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   useEffect(() => {
     if (!mappingPayload) {
       setMapping(undefined);
+      setMappingLoading(false);
       return;
     }
     let active = true;
