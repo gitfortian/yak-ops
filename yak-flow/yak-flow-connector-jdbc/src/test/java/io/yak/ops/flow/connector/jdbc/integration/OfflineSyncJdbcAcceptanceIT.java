@@ -10,8 +10,8 @@ import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.flow.connector.jdbc.JdbcSaveMode;
 import io.yak.ops.flow.connector.jdbc.JdbcSinkConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
+import io.yak.ops.flow.connector.jdbc.JdbcTargetTableProvisioner;
 import io.yak.ops.flow.connector.jdbc.JdbcWriteMode;
-import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialects;
 import io.yak.ops.flow.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.flow.connector.jdbc.source.JdbcSource;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
@@ -125,6 +125,53 @@ class OfflineSyncJdbcAcceptanceIT {
                 "SELECT \"id\", \"name\", \"amount\" FROM \"target_oracle\" ORDER BY \"id\"");
     }
 
+    @Test
+    void shouldWriteBooleanToOracleProvisionedTarget() throws Exception {
+        YakTableSchema logicalSchema = new YakTableSchema(
+                List.of(
+                        new YakColumn("id", YakTypes.BIGINT, false, null),
+                        new YakColumn("active", YakTypes.BOOLEAN, false, null)),
+                List.of("id"));
+        DataSourceTablePath targetTable = new DataSourceTablePath(null, null, "target_oracle_boolean");
+
+        try (var connection = DIRECT_CONNECTION.open(oracleConnection(), 10);
+                var statement = connection.createStatement()) {
+            try {
+                statement.execute("DROP TABLE \"target_oracle_boolean\" PURGE");
+            } catch (Exception ignored) {
+                // 首次验收时目标表不存在。
+            }
+        }
+
+        new JdbcTargetTableProvisioner(DIRECT_CONNECTION)
+                .createTable(oracleConnection(), targetTable, logicalSchema, 10);
+
+        YakTableSchema targetWriteSchema = new YakTableSchema(
+                List.of(
+                        new YakColumn("id", YakTypes.decimal(19, 0), false, null),
+                        new YakColumn("active", YakTypes.decimal(1, 0), false, null)),
+                List.of("id"));
+        JdbcSink sink = new JdbcSink(
+                new JdbcSinkConfig(oracleConnection(), targetTable, 10, 10, JdbcSaveMode.APPEND),
+                targetWriteSchema,
+                DIRECT_CONNECTION);
+        try (var writer = sink.createWriter(targetWriteSchema)) {
+            writer.open();
+            writer.write(List.of(new YakRow(RowKind.INSERT, List.of(1L, true))));
+            writer.flush();
+        }
+
+        try (var connection = DIRECT_CONNECTION.open(oracleConnection(), 10);
+                var statement = connection.createStatement();
+                var resultSet = statement.executeQuery(
+                        "SELECT \"id\", \"active\" FROM \"target_oracle_boolean\"")) {
+            assertEquals(true, resultSet.next());
+            assertEquals(1L, resultSet.getLong(1));
+            assertEquals(1, resultSet.getInt(2));
+            assertEquals(false, resultSet.next());
+        }
+    }
+
     private void executeTarget(
             DataSourceConnection target, DataSourceTablePath targetTable, String staleInsertSql, String query)
             throws Exception {
@@ -226,14 +273,10 @@ class OfflineSyncJdbcAcceptanceIT {
         try (var connection = DIRECT_CONNECTION.open(mysqlConnection(), 10);
                 var statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS target_mysql");
-            statement.execute(JdbcDialects.forType("MYSQL")
-                    .createTableSql(new DataSourceTablePath(MYSQL_DATABASE, null, "target_mysql"), SCHEMA));
         }
         try (var connection = DIRECT_CONNECTION.open(postgresConnection(), 10);
                 var statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS target_pg");
-            statement.execute(JdbcDialects.forType("POSTGRE_SQL")
-                    .createTableSql(new DataSourceTablePath("yakflow", "public", "target_pg"), SCHEMA));
         }
         try (var connection = DIRECT_CONNECTION.open(oracleConnection(), 10);
                 var statement = connection.createStatement()) {
@@ -242,9 +285,15 @@ class OfflineSyncJdbcAcceptanceIT {
             } catch (Exception ignored) {
                 // 首次验收时目标表不存在。
             }
-            statement.execute(JdbcDialects.forType("ORACLE")
-                    .createTableSql(new DataSourceTablePath(null, null, "target_oracle"), SCHEMA));
         }
+
+        JdbcTargetTableProvisioner provisioner = new JdbcTargetTableProvisioner(DIRECT_CONNECTION);
+        provisioner.createTable(
+                mysqlConnection(), new DataSourceTablePath(MYSQL_DATABASE, null, "target_mysql"), SCHEMA, 10);
+        provisioner.createTable(
+                postgresConnection(), new DataSourceTablePath("yakflow", "public", "target_pg"), SCHEMA, 10);
+        provisioner.createTable(
+                oracleConnection(), new DataSourceTablePath(null, null, "target_oracle"), SCHEMA, 10);
     }
 
     private static DataSourceConnection mysqlConnection() {
