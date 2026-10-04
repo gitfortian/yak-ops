@@ -76,6 +76,8 @@ public interface DataSyncInstanceRepository extends BaseRepository<DataSyncInsta
 
     /**
      * 应用启动恢复专用：把所有 Workspace 中遗留的 PENDING / RUNNING 实例统一标记为 LOST。
+     *
+     * <p>RETRY_WAITING 已持久化 nextRetryTime，必须保留给 Durable Retry Recovery，不能在这里收口为 LOST。</p>
      */
     int markActiveAsLost(LocalDateTime finishTime, Integer errorCode, String errorMessage);
 }
