@@ -166,8 +166,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
                             nullableInteger(resultSet, "DECIMAL_DIGITS"),
                             resultSet.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls,
                             resultSet.getInt("ORDINAL_POSITION"),
-                            primaryKeys.containsKey(name),
-                            primaryKeys.get(name),
+                            primaryKeys.containsKey(normalizeKey(name)),
+                            primaryKeys.get(normalizeKey(name)),
                             resultSet.getString("REMARKS")));
                 }
             }
@@ -242,25 +242,25 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
     private String tableNamePattern(DatabaseMetaData metadata, String keyword) throws SQLException {
         if (keyword == null) return "%";
-        return "%" + normalizeTablePattern(metadata, keyword) + "%";
+        String normalized = keyword;
+        if (metadata.storesUpperCaseIdentifiers()) normalized = normalized.toUpperCase(Locale.ROOT);
+        else if (metadata.storesLowerCaseIdentifiers()) normalized = normalized.toLowerCase(Locale.ROOT);
+        return "%" + escapeTablePattern(metadata, normalized) + "%";
     }
 
     private String exactTableNamePattern(DatabaseMetaData metadata, String table) throws SQLException {
-        return normalizeTablePattern(metadata, table);
+        return escapeTablePattern(metadata, table);
     }
 
-    private String normalizeTablePattern(DatabaseMetaData metadata, String value) throws SQLException {
-        String normalized = value;
-        if (metadata.storesUpperCaseIdentifiers()) normalized = normalized.toUpperCase(Locale.ROOT);
-        else if (metadata.storesLowerCaseIdentifiers()) normalized = normalized.toLowerCase(Locale.ROOT);
-
+    private String escapeTablePattern(DatabaseMetaData metadata, String value) throws SQLException {
+        String escaped = value;
         String escape = StringUtils.trimToNull(metadata.getSearchStringEscape());
         if (escape != null) {
-            normalized = normalized.replace(escape, escape + escape);
-            normalized = normalized.replace("%", escape + "%");
-            normalized = normalized.replace("_", escape + "_");
+            escaped = escaped.replace(escape, escape + escape);
+            escaped = escaped.replace("%", escape + "%");
+            escaped = escaped.replace("_", escape + "_");
         }
-        return normalized;
+        return escaped;
     }
 
     private ResultSet schemas(DatabaseMetaData metadata, String database) throws SQLException {
@@ -278,12 +278,16 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             while (resultSet.next()) {
                 String name = resultSet.getString("COLUMN_NAME");
                 Integer position = nullableInteger(resultSet, "KEY_SEQ");
-                if (name != null) keys.put(name, position);
+                if (name != null) keys.put(normalizeKey(name), position);
             }
             return keys;
         } catch (Exception ignored) {
             return Collections.emptyMap();
         }
+    }
+
+    private String normalizeKey(String value) {
+        return value == null ? null : value.toLowerCase(Locale.ROOT);
     }
 
     private Integer nullableInteger(ResultSet resultSet, String column) throws SQLException {
