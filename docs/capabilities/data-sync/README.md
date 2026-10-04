@@ -37,7 +37,23 @@ Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引�
 
 Datasource 已绑定的 database / schema 是权威范围；Task 不能覆盖已绑定层级，只有未绑定 schema 可由任务选择。映射预览、保存、发布和执行不得依赖前端校验结果。
 
-Source 字段按不区分大小写的同名规则映射到 Target。所有 Source 字段都要有兼容目标；不支持字段改名、表达式、自定义 SQL 或 Transform。Target 多余 nullable 字段允许存在；当前 Catalog 尚未稳定暴露 Column Default，因此多余 NOT NULL 字段保守判为不兼容，不能把数据库可能存在的默认值当成已验证事实。
+Task 现在拥有可冻结的任务级 Column Mapping Contract：
+
+```text
+mapping = null
+→ 沿用系统默认的大小写不敏感同名映射
+
+mapping.columns[]
+→ source + target 的显式一对一映射
+→ 来源字段与目标字段分别大小写不敏感唯一
+→ 数组顺序属于 Task Definition
+```
+
+显式 Mapping 不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
+
+当前 PR 只建立 Contract + Persistence，不改变既有 Mapping Resolver / Runtime。为保证该 PR 可独立合并且不会出现“保存了但执行忽略”的半成品，显式 Mapping 当前必须完整等价于后端解析出的同名映射。字段改名、字段子集和自定义目标顺序真正参与 Schema Preview / Runtime 由后续 Mapping-Aware Schema Resolution 实现。
+
+Target 多余 nullable 字段允许存在；当前 Catalog 尚未稳定暴露 Column Default，因此多余 NOT NULL 字段保守判为不兼容，不能把数据库可能存在的默认值当成已验证事实。
 
 Catalog 字段先投影为 YakColumn，再复用 [JDBC 逻辑兼容规则](../yak-flow/README.md#jdbc-schema-compatibility)。Data Sync 不再定义另一套 `java.sql.Types` 分类或转换规则。
 
