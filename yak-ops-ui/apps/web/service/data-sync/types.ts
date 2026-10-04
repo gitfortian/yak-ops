@@ -50,6 +50,7 @@ export interface DataSyncTaskRecord {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
+  autoCreateTable?: boolean;
   runtimeConfig?: DataSyncRuntimeConfig;
   realtimeConfig?: DataSyncRealtimeConfig;
   retryPolicy?: DataSyncRetryPolicy;
@@ -127,6 +128,7 @@ interface DataSyncTaskSaveBase {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
+  autoCreateTable?: boolean;
   retryPolicy?: DataSyncRetryPolicy;
   remark?: string;
 }
@@ -154,6 +156,7 @@ export interface DataSyncMappingPreviewPayload {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
+  autoCreateTable?: boolean;
 }
 
 export interface DataSyncFieldMapping {
@@ -167,6 +170,11 @@ export interface DataSyncFieldMapping {
 
 export interface DataSyncMappingPreview {
   compatible: boolean;
+  targetTableExists: boolean;
+  autoCreateTable: boolean;
+  createTableSql?: string;
+  warnings: string[];
+  unsupportedReasons: string[];
   mappings: DataSyncFieldMapping[];
 }
 
@@ -195,6 +203,7 @@ export interface DataSyncDefinitionSnapshot {
   taskVersion: number;
   syncType?: DataSyncType | string;
   writeMode?: DataSyncWriteMode | string;
+  autoCreateTable?: boolean;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;
