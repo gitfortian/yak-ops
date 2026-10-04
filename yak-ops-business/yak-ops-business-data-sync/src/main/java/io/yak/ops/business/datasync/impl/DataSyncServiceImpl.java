@@ -1335,7 +1335,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
         Set<String> sources = new HashSet<>();
         Set<String> targets = new HashSet<>();
-        List<DataSyncColumnMappingDTO> columns = new ArrayList<>(mapping.getColumns().size());
+        List<DataSyncColumnMappingDTO> columns =
+                new ArrayList<>(mapping.getColumns().size());
         for (DataSyncColumnMappingDTO item : mapping.getColumns()) {
             String source = StringUtils.trimToNull(item == null ? null : item.getSource());
             String target = StringUtils.trimToNull(item == null ? null : item.getTarget());
