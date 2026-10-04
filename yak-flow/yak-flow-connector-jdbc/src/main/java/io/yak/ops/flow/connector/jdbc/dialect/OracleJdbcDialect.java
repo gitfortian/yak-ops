@@ -28,6 +28,46 @@ final class OracleJdbcDialect implements JdbcDialect {
     }
 
     @Override
+    public JdbcNativeType nativeType(YakColumn column) {
+        return switch (column.dataType().kind()) {
+            case BOOLEAN -> JdbcNativeType.of("NUMBER(1)");
+            case TINYINT -> JdbcNativeType.of("NUMBER(3)");
+            case SMALLINT -> JdbcNativeType.of("NUMBER(5)");
+            case INTEGER -> JdbcNativeType.of("NUMBER(10)");
+            case BIGINT -> JdbcNativeType.of("NUMBER(19)");
+            case FLOAT -> JdbcNativeType.of("BINARY_FLOAT");
+            case DOUBLE -> JdbcNativeType.of("BINARY_DOUBLE");
+            case DECIMAL -> JdbcDialectTypeMappings.decimal(column, "NUMBER", 38, 38);
+            case STRING -> stringType(column.length());
+            case BINARY -> binaryType(column.length());
+            case DATE -> JdbcNativeType.of("DATE");
+            case TIME -> throw new UnsupportedOperationException("Oracle 没有独立 TIME 列类型");
+            case TIMESTAMP -> JdbcNativeType.of("TIMESTAMP(6)");
+            case TIMESTAMP_WITH_TIME_ZONE -> JdbcNativeType.of("TIMESTAMP(6) WITH TIME ZONE");
+        };
+    }
+
+    private JdbcNativeType stringType(Integer length) {
+        if (JdbcDialectTypeMappings.knownLength(length) && length <= 4000) {
+            return JdbcNativeType.of("VARCHAR2(" + length + " CHAR)");
+        }
+        String warning = JdbcDialectTypeMappings.knownLength(length)
+                ? "STRING length=" + length + " 超过 VARCHAR2(4000 CHAR)，目标使用 CLOB"
+                : "STRING length 未知，目标使用 CLOB";
+        return JdbcNativeType.nonKey("CLOB", warning);
+    }
+
+    private JdbcNativeType binaryType(Integer length) {
+        if (JdbcDialectTypeMappings.knownLength(length) && length <= 2000) {
+            return JdbcNativeType.of("RAW(" + length + ")");
+        }
+        String warning = JdbcDialectTypeMappings.knownLength(length)
+                ? "BINARY length=" + length + " 超过 RAW(2000)，目标使用 BLOB"
+                : "BINARY length 未知，目标使用 BLOB";
+        return JdbcNativeType.nonKey("BLOB", warning);
+    }
+
+    @Override
     public String upsertSql(DataSourceTablePath table, YakTableSchema schema) {
         requirePrimaryKey(schema);
         List<String> primaryKeys = schema.primaryKeys();

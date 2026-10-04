@@ -53,7 +53,11 @@ splitSize 是目标行数，不保证均匀分布。每个 split 是独立读取
 
 拒绝 OVERWRITE + UPSERT / CHANGELOG。目标表必须存在，TRUNCATE 失败不静默退化为 DELETE；写入 / flush 失败回滚尚未提交的数据，不能撤销已提交批次。MySQL 使用 ON DUPLICATE KEY UPDATE、PostgreSQL 使用 ON CONFLICT、Oracle 使用 MERGE；只有主键的表可以采用匹配时无操作路径。
 
-标识符必须由方言引用，不接受任意用户 SQL。不提供自动建表、DDL 传播或 Schema 演进。
+标识符必须由方言引用，不接受任意用户 SQL。
+
+v1.2 PR3 起，JDBC Dialect 额外提供 Logical Type → Target Native Type 与 `CREATE TABLE` DDL **规划**，供 Data Sync TargetTablePlanner 消费。该能力只生成 SQL，不打开连接、不判断表存在性、不执行建表，因此当前 Runtime 仍不提供 Auto Create Table。
+
+真实 JDBC Acceptance 的目标表初始化直接执行 Dialect 生成的 CREATE TABLE SQL，验证 MySQL / PostgreSQL / Oracle DDL 可被对应数据库接受。DDL propagation 与 Schema Evolution 仍不提供。
 
 ## Runtime Trace
 

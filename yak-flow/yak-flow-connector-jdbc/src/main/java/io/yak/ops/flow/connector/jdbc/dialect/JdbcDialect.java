@@ -6,7 +6,7 @@ import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import java.util.stream.Collectors;
 
 /**
- * YakFlow JDBC Connector 的数据库 SQL 方言边界，只处理标识符与当前批量同步需要的固定 SQL。
+ * YakFlow JDBC Connector 的数据库 SQL 方言边界，统一拥有标识符、运行 SQL 与目标表 DDL / 原生类型映射。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -16,6 +16,38 @@ public interface JdbcDialect {
     String quoteIdentifier(String identifier);
 
     String qualifiedTable(DataSourceTablePath table);
+
+    /**
+     * 把 YakFlow 逻辑字段映射为当前数据库可用于目标表 DDL 的原生类型。
+     *
+     * @param column 逻辑字段
+     * @return 原生类型规划
+     */
+    JdbcNativeType nativeType(YakColumn column);
+
+    /**
+     * 生成一张目标表的 CREATE TABLE SQL；只生成，不执行。
+     *
+     * @param table 目标表路径
+     * @param schema 目标逻辑 Schema
+     * @return CREATE TABLE SQL
+     */
+    default String createTableSql(DataSourceTablePath table, YakTableSchema schema) {
+        String definitions = schema.columns().stream()
+                .map(column -> {
+                    String nullable = column.nullable() ? "" : " NOT NULL";
+                    return quoteIdentifier(column.name()) + " "
+                            + nativeType(column).ddl() + nullable;
+                })
+                .collect(Collectors.joining(", "));
+
+        if (!schema.primaryKeys().isEmpty()) {
+            String primaryKeys =
+                    schema.primaryKeys().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
+            definitions += ", PRIMARY KEY (" + primaryKeys + ")";
+        }
+        return "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")";
+    }
 
     default String selectSql(DataSourceTablePath table, YakTableSchema schema) {
         return selectSql(table, schema, null);

@@ -59,7 +59,7 @@ Target Table Plan
 
 LogicalTable 复用 YakFlow Logical Type，不维护第二套类型枚举；同时拥有 Runtime 不需要的 comment / schemaVersion 等产品元数据。
 
-本阶段只建立 Contract。Logical Table persistence、Catalog import / refresh、Target Table Planner、Auto Create Table 与 Schema Preview UI 尚未实现，因此现有 Task 运行语义不变，目标表仍必须预先存在。
+v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization 与 Target Table Planner。Planner 可以针对 MySQL / PostgreSQL / Oracle 生成 Native Type、warning / unsupported diagnostics 和 CREATE TABLE SQL，但只负责规划，不执行 DDL。Logical Table persistence、Catalog refresh / diff、Auto Create Table Runtime 与 Schema Preview UI 尚未实现，因此现有 Task 运行语义不变，目标表仍必须预先存在。
 
 ## Offline Execution
 
@@ -134,7 +134,7 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。v1.2 已建立 Schema / Logical Table 产品契约，但尚未提供 Logical Table persistence、Catalog import / refresh、自动建表、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
+当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization 与跨 MySQL / PostgreSQL / Oracle 的 Target Table DDL Planning；尚未提供 Logical Table persistence、Catalog refresh / diff、Auto Create Table Runtime、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
 
 发布、Retry、Schedule 和启动自动恢复是已有能力，不再列为“后续阶段”。通用 YakFlow checkpoint 跨进程恢复和常驻恢复 watchdog 仍不具备。
 

@@ -261,7 +261,7 @@ Datasource Catalog 现在提供精确 `findTable(DataSourceTablePath)`，DataSou
 
 ## 9. Target Planning Boundary
 
-后续 Target Table Planner 接收的是 Logical Table，而不是 Source physical column list：
+PR3 已实现 Target Table Planner + MySQL / PostgreSQL / Oracle JDBC Dialect DDL planning：
 
 ~~~text
 LogicalTable
@@ -270,14 +270,56 @@ Target Datasource Type
       +
 Target Table Path
         ↓
-TargetTablePlan
+TargetTablePlanner
         ↓
-Dialect DDL
+JdbcDialect
+        ↓
+TargetTablePlan
+├── native column types
+├── primary key order
+├── warnings
+├── unsupported reasons
+└── CREATE TABLE SQL
 ~~~
 
-Target Plan 才负责 Logical Type → Target Native Type、Identifier quote、physical path、Primary Key DDL、CREATE TABLE SQL 与兼容性诊断。
+职责边界：
 
-Logical Table 不保存最终 Target DDL，避免把产品元数据绑死到某个数据库方言。
+- Data Sync `TargetTablePlanner` 负责产品级 Plan、schemaVersion、comment、warning / unsupported 聚合。
+- YakFlow JDBC `JdbcDialect` 负责 identifier quote、target path qualification、Logical Type → Native Type 和 CREATE TABLE SQL。
+- Logical Table 不保存最终 DDL，避免产品元数据绑定某个数据库方言。
+- Planner 不连接数据库、不判断目标表是否存在、不执行 DDL。
+- 任意阻塞型不兼容存在时，`TargetTablePlan.supported=false` 且 `createTableSql=null`，不能生成“部分可用”DDL。
+
+当前核心映射：
+
+| Logical Type | MySQL | PostgreSQL | Oracle |
+| --- | --- | --- | --- |
+| BOOLEAN | BOOLEAN | BOOLEAN | NUMBER(1) |
+| TINYINT | TINYINT | SMALLINT | NUMBER(3) |
+| SMALLINT | SMALLINT | SMALLINT | NUMBER(5) |
+| INTEGER | INT | INTEGER | NUMBER(10) |
+| BIGINT | BIGINT | BIGINT | NUMBER(19) |
+| FLOAT | FLOAT | REAL | BINARY_FLOAT |
+| DOUBLE | DOUBLE | DOUBLE PRECISION | BINARY_DOUBLE |
+| DECIMAL(p,s) | DECIMAL(p,s) | NUMERIC(p,s) | NUMBER(p,s) |
+| STRING(n) | VARCHAR(n) | VARCHAR(n) | VARCHAR2(n CHAR) |
+| BINARY(n) | VARBINARY(n) | BYTEA | RAW(n) |
+| DATE | DATE | DATE | DATE |
+| TIME | TIME(6) | TIME | unsupported |
+| TIMESTAMP | DATETIME(6) | TIMESTAMP | TIMESTAMP(6) |
+| TIMESTAMP_WITH_TIME_ZONE | unsupported | TIMESTAMP WITH TIME ZONE | TIMESTAMP(6) WITH TIME ZONE |
+
+容量 / 精度安全规则：
+
+- MySQL DECIMAL precision 最大 65、scale 最大 30；Oracle NUMBER precision 最大 38，超过时直接 unsupported。
+- DECIMAL precision / scale 不完整时使用数据库未限定精度类型并给 warning，不编造参数。
+- MySQL 大容量或未知 STRING / BINARY 分别安全放宽为 LONGTEXT / LONGBLOB。
+- PostgreSQL 未知 STRING 放宽为 TEXT，BINARY 使用 BYTEA。
+- Oracle 超过 VARCHAR2(4000 CHAR) / RAW(2000) 或未知容量时放宽为 CLOB / BLOB。
+- 由 LOB 类宽化得到的 LONGTEXT / LONGBLOB / CLOB / BLOB 在当前 Planner 中不能直接作为目标主键；该场景为 blocking unsupported。
+- MySQL 无法保留 TIMESTAMP_WITH_TIME_ZONE 语义；Oracle 没有独立 TIME 列类型，这两类当前直接 unsupported。
+
+Table / Column comment 当前只保留在 TargetTablePlan 产品元数据中，PR3 不生成各数据库不同语法的 COMMENT DDL。
 
 ## 10. Persistence Boundary
 
@@ -304,8 +346,10 @@ Logical Table Persistence = NOT IMPLEMENTED
 Source Metadata Introspection = IMPLEMENTED
 Logical Type Normalization = IMPLEMENTED
 Catalog Refresh / Diff = NOT IMPLEMENTED
-Target Table Planner = NOT IMPLEMENTED
-Auto Create Table = NOT IMPLEMENTED
+Target Table Planner = IMPLEMENTED
+MySQL / PostgreSQL / Oracle Target Dialect = IMPLEMENTED
+CREATE TABLE DDL Planning = IMPLEMENTED
+Auto Create Table Runtime = NOT IMPLEMENTED
 Schema Preview UI = NOT IMPLEMENTED
 DDL Sync = NOT IMPLEMENTED
 Automatic Schema Evolution = NOT IMPLEMENTED
@@ -324,4 +368,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为；跨库 Target Type Mapping、持久化与 Auto Create Table 验收分别属于后续 PR。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划，并在 OfflineSyncJdbcAcceptanceIT 中实际对 MySQL / PostgreSQL / Oracle 执行生成的 CREATE TABLE SQL。Logical Table persistence 与 Auto Create Table Runtime 仍属于后续 PR。

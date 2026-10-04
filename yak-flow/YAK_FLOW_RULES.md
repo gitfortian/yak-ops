@@ -42,6 +42,14 @@ Source / Split / Enumerator 保持内聚；MySQL `source` 管 YakFlow 生命周�
 
 target pre-write 与逐行 write 保持分离，遵循 [JDBC Batch Contract](../docs/capabilities/yak-flow/README.md#jdbc-batch-connector)。按事务批次提交，失败回滚未提交内容；不得把 OVERWRITE 宣称为原子替换或在 TRUNCATE 失败时偷偷执行 DELETE。
 
+JDBC `dialect` 同时拥有目标 Native Type 与 CREATE TABLE DDL 规划，复用同一套 identifier / table path 规则：
+
+- `JdbcNativeType` 表达原生类型、非阻塞 warning 和是否可直接作为主键。
+- `JdbcDialect#createTableSql` 只生成 DDL，不打开连接、不执行 SQL。
+- 不支持的语义必须抛出明确 UnsupportedOperationException，由产品 Planner 转成 blocking diagnostic；禁止静默缩窄类型。
+- 目标类型映射可以安全放宽容量，但必须对未知容量 / 精度给 warning。
+- Database-specific comment / index / foreign key / schema-evolution DDL 不在当前基础方言 Contract 内。
+
 ## MySQL CDC Connector
 
 Debezium 版本归 BOM；所有 Debezium / Kafka Connect 类型、offset 与 schema-history 内容留在 Connector。连接端点和 SSH 复用 Datasource runtime，不新增强制外部 Kafka 服务。

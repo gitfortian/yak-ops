@@ -28,6 +28,47 @@ final class MySqlJdbcDialect implements JdbcDialect {
     }
 
     @Override
+    public JdbcNativeType nativeType(YakColumn column) {
+        return switch (column.dataType().kind()) {
+            case BOOLEAN -> JdbcNativeType.of("BOOLEAN");
+            case TINYINT -> JdbcNativeType.of("TINYINT");
+            case SMALLINT -> JdbcNativeType.of("SMALLINT");
+            case INTEGER -> JdbcNativeType.of("INT");
+            case BIGINT -> JdbcNativeType.of("BIGINT");
+            case FLOAT -> JdbcNativeType.of("FLOAT");
+            case DOUBLE -> JdbcNativeType.of("DOUBLE");
+            case DECIMAL -> JdbcDialectTypeMappings.decimal(column, "DECIMAL", 65, 30);
+            case STRING -> stringType(column.length());
+            case BINARY -> binaryType(column.length());
+            case DATE -> JdbcNativeType.of("DATE");
+            case TIME -> JdbcNativeType.of("TIME(6)");
+            case TIMESTAMP -> JdbcNativeType.of("DATETIME(6)");
+            case TIMESTAMP_WITH_TIME_ZONE ->
+                throw new UnsupportedOperationException("MySQL 无法保留 TIMESTAMP_WITH_TIME_ZONE 语义");
+        };
+    }
+
+    private JdbcNativeType stringType(Integer length) {
+        if (JdbcDialectTypeMappings.knownLength(length) && length <= 16383) {
+            return JdbcNativeType.of("VARCHAR(" + length + ")");
+        }
+        String warning = JdbcDialectTypeMappings.knownLength(length)
+                ? "STRING length=" + length + " 超过保守 VARCHAR 容量，目标使用 LONGTEXT"
+                : "STRING length 未知，目标使用 LONGTEXT";
+        return JdbcNativeType.nonKey("LONGTEXT", warning);
+    }
+
+    private JdbcNativeType binaryType(Integer length) {
+        if (JdbcDialectTypeMappings.knownLength(length) && length <= 16383) {
+            return JdbcNativeType.of("VARBINARY(" + length + ")");
+        }
+        String warning = JdbcDialectTypeMappings.knownLength(length)
+                ? "BINARY length=" + length + " 超过保守 VARBINARY 容量，目标使用 LONGBLOB"
+                : "BINARY length 未知，目标使用 LONGBLOB";
+        return JdbcNativeType.nonKey("LONGBLOB", warning);
+    }
+
+    @Override
     public String upsertSql(DataSourceTablePath table, YakTableSchema schema) {
         requirePrimaryKey(schema);
         List<String> primaryKeys = schema.primaryKeys();
