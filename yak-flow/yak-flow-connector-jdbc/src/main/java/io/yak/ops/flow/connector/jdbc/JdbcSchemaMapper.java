@@ -32,14 +32,16 @@ public final class JdbcSchemaMapper {
                 .sorted(Comparator.comparingInt(DataSourceColumn::ordinalPosition))
                 .toList();
         List<YakColumn> columns = new ArrayList<>(ordered.size());
-        List<String> primaryKeys = new ArrayList<>();
-
         for (DataSourceColumn column : ordered) {
             columns.add(toYakColumn(column));
-            if (column.primaryKey()) {
-                primaryKeys.add(column.name());
-            }
         }
+
+        List<String> primaryKeys = ordered.stream()
+                .filter(DataSourceColumn::primaryKey)
+                .sorted(Comparator.comparingInt(JdbcSchemaMapper::primaryKeyOrder)
+                        .thenComparingInt(DataSourceColumn::ordinalPosition))
+                .map(DataSourceColumn::name)
+                .toList();
         return new YakTableSchema(columns, primaryKeys);
     }
 
@@ -78,6 +80,11 @@ public final class JdbcSchemaMapper {
                 throw new IllegalArgumentException(
                         "暂不支持 JDBC 字段类型：" + column.typeName() + " (" + column.jdbcType() + ")");
         };
+    }
+
+    private static int primaryKeyOrder(DataSourceColumn column) {
+        Integer position = column.primaryKeyPosition();
+        return position == null || position <= 0 ? Integer.MAX_VALUE : position;
     }
 
     private static boolean isLengthType(YakTypeKind kind) {
