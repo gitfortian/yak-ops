@@ -39,8 +39,7 @@ public final class TargetSchemaCompatibility {
 
         for (int index = 0; index < logicalTable.columns().size(); index++) {
             LogicalColumn source = logicalTable.columns().get(index);
-            DataSourceCatalogColumnVO target =
-                    DataSyncCatalogColumns.findByName(targetByName, source.name());
+            DataSourceCatalogColumnVO target = DataSyncCatalogColumns.findByName(targetByName, source.name());
             if (target == null) {
                 issues.add("目标表缺少字段：" + source.name());
                 continue;
@@ -53,8 +52,7 @@ public final class TargetSchemaCompatibility {
                 continue;
             }
 
-            YakColumn sourceColumn =
-                    new YakColumn(source.name(), source.dataType(), source.nullable(), source.length());
+            YakColumn sourceColumn = new YakColumn(source.name(), source.dataType(), source.nullable(), source.length());
             YakColumn targetYakColumn;
             try {
                 targetYakColumn = JdbcSchemaMapper.toYakColumn(targetColumn);
@@ -82,7 +80,6 @@ public final class TargetSchemaCompatibility {
         if (!issues.isEmpty()) {
             return new TargetSchemaCompatibilityResult(false, null, issues);
         }
-        return new TargetSchemaCompatibilityResult(
-                true, JdbcSchemaMapper.fromColumns(mappedTargetColumns), List.of());
+        return new TargetSchemaCompatibilityResult(true, JdbcSchemaMapper.fromColumns(mappedTargetColumns), List.of());
     }
 }
