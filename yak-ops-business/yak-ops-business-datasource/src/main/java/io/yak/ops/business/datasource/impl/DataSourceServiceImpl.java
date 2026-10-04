@@ -188,10 +188,12 @@ public class DataSourceServiceImpl implements DataSourceService {
                 normalizeNullable(dto.getSchema()),
                 dto.getTable().trim());
         return pluginRegistry
-                .catalogTable(entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
+                .catalogTable(
+                        entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
                 .map(this::toCatalogTableVO)
                 .orElseThrow(() -> new DataSourceException(
-                        DataSourceErrorCode.CATALOG_QUERY_FAILED, "表不存在：" + dto.getTable().trim()));
+                        DataSourceErrorCode.CATALOG_QUERY_FAILED,
+                        "表不存在：" + dto.getTable().trim()));
     }
 
     @Override
