@@ -1329,6 +1329,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (CollectionUtils.isEmpty(mapping.getColumns())) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射不能为空");
         }
+        if (mapping.getColumns().size() > 1024) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射不能超过 1024 项");
+        }
 
         Set<String> sources = new HashSet<>();
         Set<String> targets = new HashSet<>();
@@ -1629,6 +1632,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncTaskVO toTaskListVO(DataSyncTaskEntity source, DataSyncScheduleEntity schedule) {
         DataSyncTaskVO target = toTaskVO(source);
+        target.setMapping(null);
         if (schedule != null) {
             target.setScheduleCronExpression(schedule.getCronExpression());
             target.setScheduleTimeZone(schedule.getTimeZone());
