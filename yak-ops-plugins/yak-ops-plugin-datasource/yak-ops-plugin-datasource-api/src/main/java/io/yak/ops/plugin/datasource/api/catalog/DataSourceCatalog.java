@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.datasource.api.catalog;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 数据源 Catalog 元数据契约，只负责数据库、Schema、表和字段发现。
@@ -26,6 +27,14 @@ public interface DataSourceCatalog {
      * @param query Catalog 查询条件
      */
     List<DataSourceTable> listTables(DataSourceCatalogQuery query);
+
+    /**
+     * 精确查询指定表 / 视图元数据。
+     *
+     * @param tablePath 表完整定位信息
+     * @return 找到时返回表元数据
+     */
+    Optional<DataSourceTable> findTable(DataSourceTablePath tablePath);
 
     /**
      * 查询指定表的字段元数据。
