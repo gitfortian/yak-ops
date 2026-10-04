@@ -22,6 +22,7 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 | 运维中心聚合指标与时间范围 | [Operations Metrics Read Model](#operations-metrics-read-model) |
 | 离线 Cron、启停、触发校验与恢复 | [Scheduler](scheduler.md) |
 | 实时期望状态、进程重启与 CDC state | [Realtime Desired State](realtime-desired-state.md) |
+| Schema / Logical Table 产品模型与版本边界 | [Schema / Logical Table](schema-logical-table.md) |
 | 类型、split、写入与 checkpoint 机制 | [YakFlow](../yak-flow/README.md) |
 
 ## Task Definition
@@ -39,6 +40,26 @@ Datasource 已绑定的 database / schema 是权威范围；Task 不能覆盖已
 Source 字段按不区分大小写的同名规则映射到 Target。所有 Source 字段都要有兼容目标；不支持字段改名、表达式、自定义 SQL 或 Transform。Target 多余字段能否使用默认值等数据库约束，仍由实际写入校验，不能把预览通过当成写入必然成功。
 
 Catalog 字段先投影为 YakColumn，再复用 [JDBC 逻辑兼容规则](../yak-flow/README.md#jdbc-schema-compatibility)。Data Sync 不再定义另一套 `java.sql.Types` 分类或转换规则。
+
+## Schema / Logical Table
+
+v1.2 引入产品级 [Schema / Logical Table Contract](schema-logical-table.md)，用于把 Datasource Catalog 的物理数据库结构与 YakFlow Runtime Schema 分开。
+
+当前分层：
+
+```text
+Datasource Catalog
+        ↓
+LogicalTable
+        ↓
+YakTableSchema
+        ↓
+Target Table Plan
+```
+
+LogicalTable 复用 YakFlow Logical Type，不维护第二套类型枚举；同时拥有 Runtime 不需要的 comment / schemaVersion 等产品元数据。
+
+本阶段只建立 Contract。Logical Table persistence、Catalog import / refresh、Target Table Planner、Auto Create Table 与 Schema Preview UI 尚未实现，因此现有 Task 运行语义不变，目标表仍必须预先存在。
 
 ## Offline Execution
 
@@ -113,7 +134,7 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。未提供自动建表、逻辑建模、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
+当前为单节点、单表同步。v1.2 已建立 Schema / Logical Table 产品契约，但尚未提供 Logical Table persistence、Catalog import / refresh、自动建表、DDL 传播、Schema 演进、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
 
 发布、Retry、Schedule 和启动自动恢复是已有能力，不再列为“后续阶段”。通用 YakFlow checkpoint 跨进程恢复和常驻恢复 watchdog 仍不具备。
 
