@@ -57,7 +57,7 @@ public class DataSyncTaskVO {
     /** 目标表不存在时是否允许按 LogicalTable 自动建表。 */
     private Boolean autoCreateTable;
 
-    /** 任务级显式字段映射；为空时表示继续使用系统默认同名映射。 */
+    /** 任务详情 / 写入响应返回的显式字段映射；分页列表为空，配置为空时表示继续使用系统默认同名映射。 */
     private DataSyncMappingVO mapping;
 
     /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
