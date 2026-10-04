@@ -26,7 +26,7 @@ public final class JdbcTargetTableProvisioner {
         this(JdbcConnectionRuntime.getInstance());
     }
 
-    JdbcTargetTableProvisioner(JdbcConnectionProvider connectionProvider) {
+    public JdbcTargetTableProvisioner(JdbcConnectionProvider connectionProvider) {
         this.connectionProvider = Objects.requireNonNull(connectionProvider, "connectionProvider must not be null");
     }
 
