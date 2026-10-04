@@ -30,8 +30,7 @@ public final class LogicalTableNormalizer {
      * @param columns 物理字段元数据
      * @return schemaVersion=1 的逻辑表
      */
-    public static LogicalTable fromCatalog(
-            DataSourceCatalogTableVO table, List<DataSourceCatalogColumnVO> columns) {
+    public static LogicalTable fromCatalog(DataSourceCatalogTableVO table, List<DataSourceCatalogColumnVO> columns) {
         Objects.requireNonNull(table, "table must not be null");
         Objects.requireNonNull(columns, "columns must not be null");
 
@@ -67,11 +66,7 @@ public final class LogicalTableNormalizer {
 
         List<String> primaryKeys = JdbcSchemaMapper.fromColumns(jdbcColumns).primaryKeys();
         return new LogicalTable(
-                table.getName(),
-                StringUtils.trimToNull(table.getRemarks()),
-                1,
-                logicalColumns,
-                primaryKeys);
+                table.getName(), StringUtils.trimToNull(table.getRemarks()), 1, logicalColumns, primaryKeys);
     }
 
     private static int ordinal(DataSourceCatalogColumnVO column) {
