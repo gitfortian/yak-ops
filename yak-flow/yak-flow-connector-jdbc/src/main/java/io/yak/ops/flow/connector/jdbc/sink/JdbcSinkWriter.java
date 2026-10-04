@@ -307,7 +307,7 @@ final class JdbcSinkWriter implements SinkWriter {
             statement.setNull(parameterIndex, sqlType(dataType));
             return;
         }
-        if (dataType.kind() == io.yak.ops.flow.api.row.YakTypeKind.BOOLEAN && value instanceof Boolean bool) {
+        if (value instanceof Boolean bool) {
             statement.setBoolean(parameterIndex, bool);
             return;
         }
