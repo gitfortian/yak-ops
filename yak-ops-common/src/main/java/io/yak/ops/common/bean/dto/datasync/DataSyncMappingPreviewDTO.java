@@ -38,4 +38,7 @@ public class DataSyncMappingPreviewDTO {
     @NotBlank(message = "目标表不能为空")
     @Size(max = 128, message = "目标表名称不能超过 128 个字符")
     private String targetTable;
+
+    /** 目标表不存在时是否按当前 Logical Schema 预览自动建表。 */
+    private Boolean autoCreateTable = Boolean.FALSE;
 }

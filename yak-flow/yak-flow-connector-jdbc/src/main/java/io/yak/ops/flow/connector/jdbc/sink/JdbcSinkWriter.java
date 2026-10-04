@@ -307,6 +307,10 @@ final class JdbcSinkWriter implements SinkWriter {
             statement.setNull(parameterIndex, sqlType(dataType));
             return;
         }
+        if (value instanceof Boolean bool) {
+            statement.setBoolean(parameterIndex, bool);
+            return;
+        }
         if (value instanceof byte[] bytes) {
             statement.setBytes(parameterIndex, bytes);
             return;

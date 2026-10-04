@@ -19,6 +19,13 @@ import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
+import io.yak.ops.business.datasync.schema.LogicalTable;
+import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
+import io.yak.ops.business.datasync.schema.TargetColumnPlan;
+import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
+import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
+import io.yak.ops.business.datasync.schema.TargetTablePlan;
+import io.yak.ops.business.datasync.schema.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
@@ -30,6 +37,7 @@ import io.yak.ops.common.bean.dto.datasync.DataSyncScheduleDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
@@ -101,6 +109,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,6 +151,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSourceService dataSourceService;
+
+    @Resource
+    private TargetTablePlanner targetTablePlanner;
 
     @Resource
     private OfflineSyncExecutor offlineSyncExecutor;
@@ -334,22 +346,76 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncMappingPreviewVO previewResolvedMapping(DataSyncMappingPreviewDTO dto) {
-        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
-                dto.getSourceDataSourceId(),
-                tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable()));
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                dto.getTargetDataSourceId(),
-                tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable()));
+        DataSourceTablePathDTO sourcePath =
+                tablePath(dto.getSourceDatabase(), dto.getSourceSchema(), dto.getSourceTable());
+        DataSourceTablePathDTO targetPath =
+                tablePath(dto.getTargetDatabase(), dto.getTargetSchema(), dto.getTargetTable());
+        List<DataSourceCatalogColumnVO> sourceColumns =
+                dataSourceService.queryCatalogColumns(dto.getSourceDataSourceId(), sourcePath);
 
+        boolean autoCreateTable = Boolean.TRUE.equals(dto.getAutoCreateTable());
+        Optional<DataSourceCatalogTableVO> targetTable =
+                dataSourceService.findCatalogTable(dto.getTargetDataSourceId(), targetPath);
+        if (targetTable.isEmpty()) {
+            if (autoCreateTable) {
+                return previewAutoCreateMapping(dto, sourcePath, sourceColumns);
+            }
+            DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+            result.setTargetTableExists(false);
+            result.setAutoCreateTable(false);
+            result.setMappings(sourceColumns.stream()
+                    .map(source -> toFieldMapping(source, null))
+                    .toList());
+            result.setCompatible(false);
+            return result;
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(dto.getTargetDataSourceId(), targetPath);
         Map<String, DataSourceCatalogColumnVO> targetByName = DataSyncCatalogColumns.indexByName(targetColumns);
+        LogicalTable sourceLogicalTable = LogicalTableNormalizer.fromCatalog(
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath), sourceColumns);
+        TargetSchemaCompatibilityResult compatibility =
+                TargetSchemaCompatibility.check(sourceLogicalTable, targetColumns);
 
         DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+        result.setTargetTableExists(true);
+        result.setAutoCreateTable(autoCreateTable);
+        result.setUnsupportedReasons(compatibility.issues());
         result.setMappings(sourceColumns.stream()
                 .map(source ->
                         toFieldMapping(source, DataSyncCatalogColumns.findByName(targetByName, source.getName())))
                 .toList());
         result.setCompatible(!sourceColumns.isEmpty()
-                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible));
+                && result.getMappings().stream().allMatch(DataSyncFieldMappingVO::isCompatible)
+                && compatibility.compatible());
+        return result;
+    }
+
+    private DataSyncMappingPreviewVO previewAutoCreateMapping(
+            DataSyncMappingPreviewDTO dto,
+            DataSourceTablePathDTO sourcePath,
+            List<DataSourceCatalogColumnVO> sourceColumns) {
+        LogicalTable logicalTable = LogicalTableNormalizer.fromCatalog(
+                dataSourceService.queryCatalogTable(dto.getSourceDataSourceId(), sourcePath), sourceColumns);
+        DataSourceVO targetDataSource = dataSourceService.queryDataSource(dto.getTargetDataSourceId());
+        TargetTablePlan plan = targetTablePlanner.plan(
+                logicalTable,
+                targetDataSource.getDbType(),
+                dto.getTargetDatabase(),
+                dto.getTargetSchema(),
+                dto.getTargetTable());
+
+        DataSyncMappingPreviewVO result = new DataSyncMappingPreviewVO();
+        result.setTargetTableExists(false);
+        result.setAutoCreateTable(true);
+        result.setCreateTableSql(plan.createTableSql());
+        result.setWarnings(plan.warnings());
+        result.setUnsupportedReasons(plan.unsupportedReasons());
+        result.setMappings(sourceColumns.stream()
+                .map(source -> toAutoCreateFieldMapping(source, findPlanColumn(plan, source.getName())))
+                .toList());
+        result.setCompatible(!sourceColumns.isEmpty() && plan.supported());
         return result;
     }
 
@@ -1093,6 +1159,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || !Objects.equals(entity.getTargetDatabase(), resolvedScope.getTargetDatabase())
                 || !Objects.equals(entity.getTargetSchema(), resolvedScope.getTargetSchema())
                 || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
+                || autoCreateTable(entity) != Boolean.TRUE.equals(dto.getAutoCreateTable())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
                 || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
                 || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
@@ -1114,6 +1181,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setTargetDatabase(resolvedScope.getTargetDatabase());
         entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(dto.getTargetTable().trim());
+        entity.setAutoCreateTable(Boolean.TRUE.equals(dto.getAutoCreateTable()));
         entity.setWriteMode(requireWriteMode(dto.getWriteMode()));
         entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
         entity.setRetryPolicy(retryPolicyJson(dto));
@@ -1154,12 +1222,24 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         resolvedScope.getSourceDatabase(),
                         resolvedScope.getSourceSchema(),
                         resolvedScope.getSourceTable()));
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                targetDataSourceId,
-                tablePath(
-                        resolvedScope.getTargetDatabase(),
-                        resolvedScope.getTargetSchema(),
-                        resolvedScope.getTargetTable()));
+        DataSourceTablePathDTO targetPath = tablePath(
+                resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
+
+        boolean targetExists = dataSourceService
+                .findCatalogTable(targetDataSourceId, targetPath)
+                .isPresent();
+        if (!targetExists) {
+            if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
+                throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
+            }
+            if (DataSyncCatalogColumns.primaryKeyNames(sourceColumns).isEmpty()) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 自动建表要求来源表包含主键");
+            }
+            return;
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         List<DataSourceCatalogColumnVO> targetPrimaryKeys = targetColumns.stream()
                 .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
                 .toList();
@@ -1197,12 +1277,20 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
         }
 
-        List<DataSourceCatalogColumnVO> targetColumns = dataSourceService.queryCatalogColumns(
-                targetDataSourceId,
-                tablePath(
-                        resolvedScope.getTargetDatabase(),
-                        resolvedScope.getTargetSchema(),
-                        resolvedScope.getTargetTable()));
+        DataSourceTablePathDTO targetPath = tablePath(
+                resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
+        boolean targetExists = dataSourceService
+                .findCatalogTable(targetDataSourceId, targetPath)
+                .isPresent();
+        if (!targetExists) {
+            if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
+                throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
+            }
+            return;
+        }
+
+        List<DataSourceCatalogColumnVO> targetColumns =
+                dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
         if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与来源表主键一致");
@@ -1227,9 +1315,18 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
         DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
-        if (!preview.isCompatible()) {
-            throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
+        if (preview.isCompatible()) return;
+
+        if (!preview.isTargetTableExists()) {
+            if (Boolean.TRUE.equals(dto.getAutoCreateTable())
+                    && !preview.getUnsupportedReasons().isEmpty()) {
+                throw new DataSyncException(
+                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE,
+                        String.join("；", preview.getUnsupportedReasons()));
+            }
+            throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
         }
+        throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
@@ -1243,6 +1340,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
+        snapshot.setAutoCreateTable(autoCreateTable(task));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
@@ -1297,6 +1395,29 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         path.setSchema(StringUtils.trimToNull(schema));
         path.setTable(tableName);
         return path;
+    }
+
+    private TargetColumnPlan findPlanColumn(TargetTablePlan plan, String name) {
+        if (name == null) return null;
+        return plan.columns().stream()
+                .filter(column -> column.name().equalsIgnoreCase(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private DataSyncFieldMappingVO toAutoCreateFieldMapping(DataSourceCatalogColumnVO source, TargetColumnPlan target) {
+        DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
+        mapping.setSourceName(source.getName());
+        mapping.setSourceType(source.getTypeName());
+        mapping.setTargetName(target == null ? source.getName() : target.name());
+        mapping.setTargetType(target == null ? null : target.nativeType());
+        mapping.setCompatible(target != null && target.supported());
+        if (target == null) {
+            mapping.setMessage("目标建表规划缺少字段");
+        } else if (!target.supported()) {
+            mapping.setMessage(target.unsupportedReason());
+        }
+        return mapping;
     }
 
     private DataSyncFieldMappingVO toFieldMapping(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
@@ -1367,6 +1488,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncWriteMode taskWriteMode(DataSyncTaskEntity task) {
         return task.getWriteMode() == null ? DataSyncWriteMode.APPEND : task.getWriteMode();
+    }
+
+    private boolean autoCreateTable(DataSyncTaskEntity task) {
+        return Boolean.TRUE.equals(task.getAutoCreateTable());
     }
 
     private DataSyncTaskStatus taskStatus(DataSyncTaskEntity task) {
@@ -1523,6 +1648,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         target.setStatus(taskStatus(source).name());
         target.setDesiredState(taskDesiredState(source).name());
         target.setWriteMode(taskWriteMode(source).name());
+        target.setAutoCreateTable(autoCreateTable(source));
         target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));

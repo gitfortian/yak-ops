@@ -35,6 +35,7 @@ import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -178,7 +179,7 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     @Override
-    public DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto) {
+    public Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto) {
         if (dto == null || !StringUtils.hasText(dto.getTable())) {
             throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
         }
@@ -190,7 +191,12 @@ public class DataSourceServiceImpl implements DataSourceService {
         return pluginRegistry
                 .catalogTable(
                         entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
-                .map(this::toCatalogTableVO)
+                .map(this::toCatalogTableVO);
+    }
+
+    @Override
+    public DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto) {
+        return findCatalogTable(id, dto)
                 .orElseThrow(() -> new DataSourceException(
                         DataSourceErrorCode.CATALOG_QUERY_FAILED,
                         "表不存在：" + dto.getTable().trim()));

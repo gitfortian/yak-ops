@@ -31,7 +31,10 @@ public enum DataSyncErrorCode implements ErrorCode {
     INVALID_SCHEDULE(42016, "同步任务调度参数不合法"),
     SCHEDULE_PERSIST_FAILED(42017, "同步任务调度保存失败"),
     SCHEDULE_RUNTIME_FAILED(42018, "同步任务调度运行时同步失败"),
-    ATTEMPT_PERSIST_FAILED(42019, "同步执行Attempt状态保存失败");
+    ATTEMPT_PERSIST_FAILED(42019, "同步执行Attempt状态保存失败"),
+    TARGET_TABLE_NOT_FOUND(42020, "目标表不存在"),
+    TARGET_SCHEMA_INCOMPATIBLE(42021, "目标表结构不兼容"),
+    TARGET_TABLE_CREATE_FAILED(42022, "自动创建目标表失败");
 
     private final Integer code;
     private final String message;

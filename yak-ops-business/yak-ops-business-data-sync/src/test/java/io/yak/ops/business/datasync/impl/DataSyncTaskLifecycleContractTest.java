@@ -9,6 +9,7 @@ import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -140,6 +141,23 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     @Test
+    void shouldIncrementVersionWhenAutoCreateTableChanges() throws Exception {
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
+        task.setAutoCreateTable(false);
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSyncServiceImpl service = editableService(task, captured);
+        DataSyncTaskDTO dto = taskDto();
+        dto.setAutoCreateTable(true);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO updated = service.updateTask("task-1", dto);
+
+        assertEquals(4, updated.getDefinitionVersion());
+        assertEquals(true, updated.getAutoCreateTable());
+        assertEquals(true, captured.get().getAutoCreateTable());
+    }
+
+    @Test
     void shouldRejectUpdateForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
@@ -224,6 +242,18 @@ class DataSyncTaskLifecycleContractTest {
                 (proxy, method, args) -> {
                     if ("queryDataSource".equals(method.getName())) {
                         return "source".equals(args[0]) ? source : target;
+                    }
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        DataSourceCatalogTableVO table = new DataSourceCatalogTableVO();
+                        table.setName("source".equals(args[0]) ? "source_table" : "target_table");
+                        table.setType("TABLE");
+                        return table;
+                    }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        DataSourceCatalogTableVO table = new DataSourceCatalogTableVO();
+                        table.setName("target_table");
+                        table.setType("TABLE");
+                        return Optional.of(table);
                     }
                     if ("queryCatalogColumns".equals(method.getName())) return columns;
                     throw new UnsupportedOperationException(method.getName());

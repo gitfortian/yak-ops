@@ -16,6 +16,7 @@ public final class JdbcSchemaCompatibility {
 
     public static boolean isCompatible(YakColumn source, YakColumn target) {
         if (source == null || target == null) return false;
+        if (source.nullable() && !target.nullable()) return false;
 
         YakTypeKind sourceKind = source.dataType().kind();
         YakTypeKind targetKind = target.dataType().kind();
@@ -27,6 +28,15 @@ public final class JdbcSchemaCompatibility {
         }
         if (isInteger(sourceKind) && targetKind == YakTypeKind.DECIMAL) {
             return integerToDecimalCompatible(sourceKind, (YakDecimalType) target.dataType());
+        }
+        if (sourceKind == YakTypeKind.BOOLEAN && isInteger(targetKind)) {
+            return true;
+        }
+        if (sourceKind == YakTypeKind.BOOLEAN && targetKind == YakTypeKind.DECIMAL) {
+            return booleanToDecimalCompatible((YakDecimalType) target.dataType());
+        }
+        if (sourceKind == YakTypeKind.DATE && targetKind == YakTypeKind.TIMESTAMP) {
+            return true;
         }
         return sourceKind == YakTypeKind.FLOAT && targetKind == YakTypeKind.DOUBLE;
     }
@@ -40,6 +50,11 @@ public final class JdbcSchemaCompatibility {
             return decimalCompatible((YakDecimalType) source.dataType(), (YakDecimalType) target.dataType());
         }
         return true;
+    }
+
+    private static boolean booleanToDecimalCompatible(YakDecimalType target) {
+        if (knownScale(target.scale()) && target.scale() != 0) return false;
+        return !positive(target.precision()) || target.precision() >= 1;
     }
 
     private static boolean integerToDecimalCompatible(YakTypeKind sourceKind, YakDecimalType target) {

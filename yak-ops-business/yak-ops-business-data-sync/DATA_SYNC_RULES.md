@@ -49,8 +49,12 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - `TargetTablePlanner` 只消费 LogicalTable + Target Type / Path，聚合产品级 warning / unsupported，不连接数据库、不执行 DDL。
 - Target Native Type / identifier quote / CREATE TABLE SQL 归 YakFlow `JdbcDialect`；Data Sync 不复制 MySQL / PostgreSQL / Oracle 类型映射。
 - Target Plan 出现 blocking unsupported 时必须保持 `createTableSql=null`，不能生成部分 DDL 或静默降级。
-- Target Table comment / column comment 当前只作为 Plan 元数据保留，不在 PR3 拼接数据库特有 COMMENT DDL。
-- 已冻结到 Task snapshot 的 Schema 不得因后续 Logical Table 编辑而改变历史 Execution。
+- Target Table comment / column comment 当前只作为 Plan 元数据保留，不拼接数据库特有 COMMENT DDL。
+- `TargetSchemaCompatibility` 是保存预览与 Runtime Preflight 共用的目标结构兼容口径；Source nullable → Target NOT NULL、缺失 Source 字段、类型/容量不兼容、以及 Target 多余 NOT NULL 字段都必须拒绝。
+- `TargetTableRuntimePreparer` 每个 Attempt 重新读取 Catalog：目标存在只校验；目标缺失时只有 snapshot.autoCreateTable=true 且 Plan supported 才可调用 TargetTableDdlExecutor。
+- CREATE TABLE 后必须重新读取 Target Catalog 并再次做兼容性 / Primary Key 校验；禁止直接相信生成 DDL，也禁止自动 ALTER / DROP 已存在表。
+- `autoCreateTable` 是 Task 可执行定义，默认 false；变化必须推进 definitionVersion，Execution Snapshot 冻结后 Retry / Auto Recovery 复用该值。
+- 已冻结到 Task snapshot 的 Schema / auto-create policy 不得因后续 Task 编辑而改变历史 Execution。
 
 具体产品语义见 [Schema / Logical Table Contract](../../docs/capabilities/data-sync/schema-logical-table.md)。
 
@@ -58,7 +62,7 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 
 - 通过 WorkspaceContext.requireWorkspaceId 获取产品请求范围；所有 Task / Schedule / Execution / Attempt 访问必须带 workspaceId，不能仅凭资源 ID 查询。
 - Task 保存、发布、运行均按 [Task / Mapping Contract](../../docs/capabilities/data-sync/README.md#datasource-scope-and-mapping) 做服务端校验；前端值只在未绑定范围内参与选择。
-- 复用 DataSyncCatalogColumns 处理同名字段 / 主键集合，复用 DataSyncSchemaResolver 与 JdbcSchemaMapper 投影，再交 JdbcSchemaCompatibility 判断；不在 Service 再写一套类型能力表。
+- 复用 DataSyncCatalogColumns 处理同名字段 / 主键集合；保存预览与 Runtime 使用 TargetSchemaCompatibility，并继续复用 JdbcSchemaMapper / JdbcSchemaCompatibility，不在 Service 再写一套类型能力表。
 - 版本比较集中在可执行定义的规范化比较，不每次 PUT 加一；包括 retryPolicy，具体语义见 [Version Contract](../../docs/capabilities/data-sync/task-lifecycle.md#definition-version-contract)。
 - CRUD / 查询、发布与运行的副作用必须分开；不能在保存或发布方法里偷偷启动 YakFlow。
 

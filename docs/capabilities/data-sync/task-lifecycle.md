@@ -50,7 +50,7 @@ Stop / Cancel 属于 Execution 契约。成功下线对 Schedule 和 desiredStat
 
 ## Definition Version Contract
 
-比较规范化后的可执行定义，而不是每次 PUT 都加一。后端 `executableDefinitionChanged` 比较：Source / Target 数据源 ID 与表范围、writeMode、对应 runtimeConfig，以及规范化后的 **retryPolicy**。
+比较规范化后的可执行定义，而不是每次 PUT 都加一。后端 `executableDefinitionChanged` 比较：Source / Target 数据源 ID 与表范围、writeMode、`autoCreateTable`、对应 runtimeConfig，以及规范化后的 **retryPolicy**。
 
 name / remark、无实质变化的更新、发布 / 下线、运行 / 取消不增加版本。Schedule 单独持久化，修改 Cron / Time Zone 不调用 Task 版本比较。
 
@@ -62,7 +62,7 @@ name / remark、无实质变化的更新、发布 / 下线、运行 / 取消不�
 
 ## REALTIME Version and CDC State
 
-CDC state 使用 `{workspaceId}/{taskId}/v{definitionVersion}`。同版本的新 Execution 复用该范围；任何有效可执行定义变更，包括 runtime tuning 或 retryPolicy，都会形成新版本和新的 CDC state 范围。仅改元数据或发布状态不改变该 identity。
+CDC state 使用 `{workspaceId}/{taskId}/v{definitionVersion}`。同版本的新 Execution 复用该范围；任何有效可执行定义变更，包括 runtime tuning、retryPolicy 或 autoCreateTable，都会形成新版本和新的 CDC state 范围。仅改元数据或发布状态不改变该 identity。
 
 完整续传条件和“引用的数据源原地改连接不会自动增加任务版本”的风险见 [CDC Continuation](realtime-desired-state.md#cdc-continuation)。不承诺跨物理 Source 变更仍能安全复用旧状态。
 

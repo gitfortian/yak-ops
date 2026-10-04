@@ -64,6 +64,9 @@ public class DataSyncTaskDTO {
     @Size(max = 128, message = "目标表名称不能超过 128 个字符")
     private String targetTable;
 
+    /** 目标表不存在时是否允许按 LogicalTable 自动建表；默认关闭。 */
+    private Boolean autoCreateTable = Boolean.FALSE;
+
     /** OFFLINE 任务使用的 YakFlow 运行参数；REALTIME 任务忽略该字段。 */
     @Valid
     private DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
