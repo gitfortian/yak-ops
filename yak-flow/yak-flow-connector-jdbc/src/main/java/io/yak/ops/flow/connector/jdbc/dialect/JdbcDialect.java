@@ -36,14 +36,14 @@ public interface JdbcDialect {
         String definitions = schema.columns().stream()
                 .map(column -> {
                     String nullable = column.nullable() ? "" : " NOT NULL";
-                    return quoteIdentifier(column.name()) + " " + nativeType(column).ddl() + nullable;
+                    return quoteIdentifier(column.name()) + " "
+                            + nativeType(column).ddl() + nullable;
                 })
                 .collect(Collectors.joining(", "));
 
         if (!schema.primaryKeys().isEmpty()) {
-            String primaryKeys = schema.primaryKeys().stream()
-                    .map(this::quoteIdentifier)
-                    .collect(Collectors.joining(", "));
+            String primaryKeys =
+                    schema.primaryKeys().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
             definitions += ", PRIMARY KEY (" + primaryKeys + ")";
         }
         return "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")";
