@@ -15,6 +15,7 @@ import {
   SelectItemText,
   SelectTrigger,
   SelectValue,
+  Switch,
   Table,
   Textarea,
   toast,
@@ -65,6 +66,7 @@ interface EditorForm {
   targetDatabase: string;
   targetSchema: string;
   targetTable: string;
+  autoCreateTable: boolean;
   runtimeConfig: DataSyncRuntimeConfig;
   realtimeConfig: DataSyncRealtimeConfig;
   retryPolicy: DataSyncRetryPolicy;
@@ -209,6 +211,7 @@ const EMPTY_FORM: EditorForm = {
   targetDatabase: "",
   targetSchema: "",
   targetTable: "",
+  autoCreateTable: false,
   runtimeConfig: EMPTY_RUNTIME,
   realtimeConfig: EMPTY_REALTIME,
   retryPolicy: EMPTY_RETRY_POLICY,
@@ -367,8 +370,10 @@ interface TableSectionProps {
   schema: string;
   table: string;
   catalog: CatalogOptions;
+  allowCustomTable?: boolean;
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
+  onTableNameChange?: (value: string) => void;
 }
 
 function TableSection({
@@ -379,8 +384,10 @@ function TableSection({
   schema,
   table,
   catalog,
+  allowCustomTable = false,
   onSchemaChange,
   onTableChange,
+  onTableNameChange,
 }: TableSectionProps) {
   const tableValue = selectedTableKey(catalog.tables, database, schema, table);
   const schemaOptions = useMemo(
@@ -421,7 +428,7 @@ function TableSection({
         ) : null}
 
         <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel required>表</FieldLabel>
+          <FieldLabel required={!allowCustomTable}>{allowCustomTable ? "已有表" : "表"}</FieldLabel>
           <DataSyncSearchableSelect
             value={tableValue}
             options={tableOptions}
@@ -433,7 +440,9 @@ function TableSection({
                   ? "请先选择 Schema"
                   : catalog.loading
                     ? "正在读取 Catalog..."
-                    : "请选择表"
+                    : allowCustomTable
+                      ? "可选择已有表"
+                      : "请选择表"
             }
             searchPlaceholder="搜索表"
             emptyText="暂无表"
@@ -445,6 +454,27 @@ function TableSection({
             }}
           />
         </Field>
+
+        {allowCustomTable ? (
+          <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+            <FieldLabel required className="pt-1.5">
+              目标表名
+            </FieldLabel>
+            <div className="space-y-1">
+              <Input
+                size="small"
+                variant="outlined"
+                value={table}
+                disabled={tableDisabled}
+                placeholder="输入已有或待创建的目标表名"
+                onChange={(event) => onTableNameChange?.(event.target.value)}
+              />
+              <div className="px-1 text-xs text-[#98a2b3]">
+                可以直接输入不存在的新表名；选择上方已有表会自动回填。
+              </div>
+            </div>
+          </Field>
+        ) : null}
         {children}
       </div>
     </div>
@@ -680,6 +710,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           targetDatabase: task.targetDatabase || "",
           targetSchema: task.targetSchema || "",
           targetTable: task.targetTable,
+          autoCreateTable: Boolean(task.autoCreateTable),
           runtimeConfig: task.runtimeConfig || { ...EMPTY_RUNTIME },
           realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
           retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
@@ -716,6 +747,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             targetDatabase: form.targetDatabase || undefined,
             targetSchema: form.targetSchema || undefined,
             targetTable: form.targetTable,
+            autoCreateTable: form.autoCreateTable,
           }
         : undefined,
     [
@@ -727,6 +759,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       form.targetDatabase,
       form.targetSchema,
       form.targetTable,
+      form.autoCreateTable,
     ],
   );
 
@@ -838,6 +871,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetDatabase: form.targetDatabase || undefined,
       targetSchema: form.targetSchema || undefined,
       targetTable: form.targetTable,
+      autoCreateTable: form.autoCreateTable,
       retryPolicy: form.retryPolicy,
       remark: form.remark.trim() || undefined,
     };
