@@ -413,7 +413,7 @@ CREATE TABLE DDL Planning = IMPLEMENTED
 Auto Create Table Runtime = IMPLEMENTED
 Runtime Schema Compatibility Preflight = IMPLEMENTED
 Auto Create Table Preview API = IMPLEMENTED
-Schema Preview UI = NOT IMPLEMENTED
+Schema Preview UI = IMPLEMENTED
 DDL Sync = NOT IMPLEMENTED
 Automatic Schema Evolution = NOT IMPLEMENTED
 Multi-table Task = NOT IMPLEMENTED
@@ -431,4 +431,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTableRuntimePreparer Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。Logical Table persistence 与 Schema Preview UI 仍属于后续 PR。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTableRuntimePreparer Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。PR5 将后端 Preview Contract 暴露到 Task Editor：显式 Auto Create Switch、缺失目标表名输入、Target existence、field mapping、warning / unsupported 与只读 CREATE TABLE SQL；前端不复制 JDBC 类型或兼容算法。Logical Table persistence 仍属于后续能力。

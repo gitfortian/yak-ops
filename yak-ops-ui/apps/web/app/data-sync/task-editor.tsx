@@ -15,6 +15,7 @@ import {
   SelectItemText,
   SelectTrigger,
   SelectValue,
+  Switch,
   Table,
   Textarea,
   toast,
@@ -65,6 +66,7 @@ interface EditorForm {
   targetDatabase: string;
   targetSchema: string;
   targetTable: string;
+  autoCreateTable: boolean;
   runtimeConfig: DataSyncRuntimeConfig;
   realtimeConfig: DataSyncRealtimeConfig;
   retryPolicy: DataSyncRetryPolicy;
@@ -209,6 +211,7 @@ const EMPTY_FORM: EditorForm = {
   targetDatabase: "",
   targetSchema: "",
   targetTable: "",
+  autoCreateTable: false,
   runtimeConfig: EMPTY_RUNTIME,
   realtimeConfig: EMPTY_REALTIME,
   retryPolicy: EMPTY_RETRY_POLICY,
@@ -367,8 +370,10 @@ interface TableSectionProps {
   schema: string;
   table: string;
   catalog: CatalogOptions;
+  allowCustomTable?: boolean;
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
+  onTableNameChange?: (value: string) => void;
 }
 
 function TableSection({
@@ -379,8 +384,10 @@ function TableSection({
   schema,
   table,
   catalog,
+  allowCustomTable = false,
   onSchemaChange,
   onTableChange,
+  onTableNameChange,
 }: TableSectionProps) {
   const tableValue = selectedTableKey(catalog.tables, database, schema, table);
   const schemaOptions = useMemo(
@@ -421,7 +428,7 @@ function TableSection({
         ) : null}
 
         <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel required>表</FieldLabel>
+          <FieldLabel required={!allowCustomTable}>{allowCustomTable ? "已有表" : "表"}</FieldLabel>
           <DataSyncSearchableSelect
             value={tableValue}
             options={tableOptions}
@@ -433,7 +440,9 @@ function TableSection({
                   ? "请先选择 Schema"
                   : catalog.loading
                     ? "正在读取 Catalog..."
-                    : "请选择表"
+                    : allowCustomTable
+                      ? "可选择已有表"
+                      : "请选择表"
             }
             searchPlaceholder="搜索表"
             emptyText="暂无表"
@@ -445,6 +454,27 @@ function TableSection({
             }}
           />
         </Field>
+
+        {allowCustomTable ? (
+          <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+            <FieldLabel required className="pt-1.5">
+              目标表名
+            </FieldLabel>
+            <div className="space-y-1">
+              <Input
+                size="small"
+                variant="outlined"
+                value={table}
+                disabled={tableDisabled}
+                placeholder="输入已有或待创建的目标表名"
+                onChange={(event) => onTableNameChange?.(event.target.value)}
+              />
+              <div className="px-1 text-xs text-[#98a2b3]">
+                可以直接输入不存在的新表名；选择上方已有表会自动回填。
+              </div>
+            </div>
+          </Field>
+        ) : null}
         {children}
       </div>
     </div>
@@ -544,6 +574,80 @@ function RealtimeRuntimeFields({ config, onChange }: RealtimeRuntimeFieldsProps)
         </Field>
       ))}
     </>
+  );
+}
+
+function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPreview }) {
+  if (!preview) return null;
+
+  const warnings = preview.warnings || [];
+  const unsupportedReasons = preview.unsupportedReasons || [];
+  const targetBadge = preview.targetTableExists ? (
+    <Badge tone="success">目标表已存在</Badge>
+  ) : preview.autoCreateTable ? (
+    <Badge tone="warning">将自动建表</Badge>
+  ) : (
+    <Badge tone="danger">目标表不存在</Badge>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {targetBadge}
+        <Badge tone={preview.compatible ? "success" : "danger"}>
+          {preview.compatible ? "Schema 可兼容" : "Schema 不兼容"}
+        </Badge>
+      </div>
+
+      {!preview.targetTableExists && !preview.autoCreateTable ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-[#fecdca] bg-[#fff6f5] px-4 py-3 text-xs leading-5 text-[#b42318]"
+        >
+          目标表不存在。请选择已有目标表，或开启“自动建表”后输入待创建的目标表名。
+        </div>
+      ) : null}
+
+      {warnings.length > 0 ? (
+        <Alert>
+          <div className="space-y-1">
+            <div className="font-medium">Schema 规划提示</div>
+            {warnings.map((warning, index) => (
+              <div key={`${index}-${warning}`}>• {warning}</div>
+            ))}
+          </div>
+        </Alert>
+      ) : null}
+
+      {unsupportedReasons.length > 0 ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-[#fecdca] bg-[#fff6f5] px-4 py-3 text-xs leading-5 text-[#b42318]"
+        >
+          <div className="font-medium">当前 Schema 无法直接同步</div>
+          <div className="mt-1 space-y-1">
+            {unsupportedReasons.map((reason, index) => (
+              <div key={`${index}-${reason}`}>• {reason}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {preview.createTableSql ? (
+        <div className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
+          <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-2.5">
+            <div className="text-xs font-medium text-[#344054]">CREATE TABLE 预览</div>
+            <Badge tone="info">只读</Badge>
+          </div>
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words bg-[#f8f9fb] px-4 py-3 font-mono text-xs leading-5 text-[#475467]">
+            {preview.createTableSql}
+          </pre>
+          <div className="border-t border-[#eef0f3] px-4 py-2 text-[11px] text-[#98a2b3]">
+            保存任务不会执行 DDL；实际运行时会再次检查目标表与 Schema。
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -680,6 +784,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           targetDatabase: task.targetDatabase || "",
           targetSchema: task.targetSchema || "",
           targetTable: task.targetTable,
+          autoCreateTable: Boolean(task.autoCreateTable),
           runtimeConfig: task.runtimeConfig || { ...EMPTY_RUNTIME },
           realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
           retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
@@ -716,6 +821,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             targetDatabase: form.targetDatabase || undefined,
             targetSchema: form.targetSchema || undefined,
             targetTable: form.targetTable,
+            autoCreateTable: form.autoCreateTable,
           }
         : undefined,
     [
@@ -727,15 +833,18 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       form.targetDatabase,
       form.targetSchema,
       form.targetTable,
+      form.autoCreateTable,
     ],
   );
 
   useEffect(() => {
     if (!mappingPayload) {
       setMapping(undefined);
+      setMappingLoading(false);
       return;
     }
     let active = true;
+    setMapping(undefined);
     const timer = window.setTimeout(() => {
       setMappingLoading(true);
       void previewDataSyncMapping(mappingPayload)
@@ -838,6 +947,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetDatabase: form.targetDatabase || undefined,
       targetSchema: form.targetSchema || undefined,
       targetTable: form.targetTable,
+      autoCreateTable: form.autoCreateTable,
       retryPolicy: form.retryPolicy,
       remark: form.remark.trim() || undefined,
     };
@@ -1117,6 +1227,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               schema={form.targetSchema}
               table={form.targetTable}
               catalog={targetCatalog}
+              allowCustomTable={form.autoCreateTable}
+              onTableNameChange={(value) => patch("targetTable", value)}
               onSchemaChange={(value) =>
                 setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
               }
@@ -1129,6 +1241,28 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 }))
               }
             >
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+                <FieldLabel className="pt-0.5">自动建表</FieldLabel>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      size="small"
+                      checked={form.autoCreateTable}
+                      onCheckedChange={(checked) => patch("autoCreateTable", Boolean(checked))}
+                    />
+                    <div className="text-xs text-[#667085]">
+                      目标表不存在时，按当前 Source Schema 自动创建
+                    </div>
+                  </div>
+                  {form.autoCreateTable ? (
+                    <Alert>
+                      自动建表仅在目标表不存在且 Schema 规划可执行时生效；已有目标表只做兼容性校验，不会
+                      ALTER、DROP 或覆盖表结构。
+                    </Alert>
+                  ) : null}
+                </div>
+              </Field>
+
               {!realtime ? (
                 <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
                   <FieldLabel required className="pt-1.5">
@@ -1172,34 +1306,44 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
           <CollapseSection
             id="mapping"
-            title="字段映射"
+            title="Schema 预览"
             extra={
               mapping ? (
-                mapping.compatible ? (
-                  <Badge tone="success">字段兼容</Badge>
-                ) : (
-                  <Badge tone="danger">存在不兼容字段</Badge>
-                )
+                <div className="flex items-center gap-2">
+                  {mapping.targetTableExists ? (
+                    <Badge tone="success">目标表已存在</Badge>
+                  ) : mapping.autoCreateTable ? (
+                    <Badge tone="warning">将自动建表</Badge>
+                  ) : (
+                    <Badge tone="danger">目标表不存在</Badge>
+                  )}
+                  <Badge tone={mapping.compatible ? "success" : "danger"}>
+                    {mapping.compatible ? "兼容" : "不兼容"}
+                  </Badge>
+                </div>
               ) : undefined
             }
           >
             {!mappingPayload ? (
               <div className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-10 text-center text-sm text-[#98a2b3]">
-                请选择来源表和目标表
+                {form.autoCreateTable ? "请选择来源表并填写目标表名" : "请选择来源表和目标表"}
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg bg-white">
-                <Table<DataSyncFieldMapping>
-                  columns={mappingColumns}
-                  dataSource={mapping?.mappings || []}
-                  rowKey="sourceName"
-                  loading={mappingLoading}
-                  bordered
-                  size="small"
-                  pagination={false}
-                  emptyText="暂无字段"
-                  scroll={{ x: 900 }}
-                />
+              <div className="space-y-3">
+                <SchemaPreviewDiagnostics preview={mapping} />
+                <div className="overflow-hidden rounded-lg bg-white">
+                  <Table<DataSyncFieldMapping>
+                    columns={mappingColumns}
+                    dataSource={mapping?.mappings || []}
+                    rowKey="sourceName"
+                    loading={mappingLoading}
+                    bordered
+                    size="small"
+                    pagination={false}
+                    emptyText="暂无字段"
+                    scroll={{ x: 900 }}
+                  />
+                </div>
               </div>
             )}
           </CollapseSection>
@@ -1279,7 +1423,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             ["datasource", "数据源"],
             ["source", "数据来源"],
             ["target", "数据去向"],
-            ["mapping", "字段映射"],
+            ["mapping", "Schema 预览"],
             ...(realtime ? [] : [["schedule", "调度配置"]]),
             ["runtime", "运行参数"],
           ].map(([anchor, label]) => (
