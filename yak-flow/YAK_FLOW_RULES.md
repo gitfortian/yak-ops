@@ -49,6 +49,9 @@ JDBC `dialect` 同时拥有目标 Native Type 与 CREATE TABLE DDL 规划，复�
 - 不支持的语义必须抛出明确 UnsupportedOperationException，由产品 Planner 转成 blocking diagnostic；禁止静默缩窄类型。
 - 目标类型映射可以安全放宽容量，但必须对未知容量 / 精度给 warning。
 - Database-specific comment / index / foreign key / schema-evolution DDL 不在当前基础方言 Contract 内。
+- `JdbcTargetTableProvisioner` 是当前唯一 CREATE TABLE 执行入口；只接受受控 TablePath + YakTableSchema，不接受调用方传入 SQL 字符串。
+- Provisioner 只负责执行已规划 CREATE TABLE；是否允许自动创建、表存在性、Schema Compatibility 和并发创建后的 re-introspection 归 Data Sync。
+- Connector 禁止通过 Provisioner 执行 DROP / ALTER / COMMENT / INDEX 或其它任意 DDL。
 
 ## MySQL CDC Connector
 
