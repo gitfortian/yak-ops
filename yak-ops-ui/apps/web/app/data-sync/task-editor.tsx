@@ -25,11 +25,14 @@ import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { SchemaMappingEditor } from "@/app/data-sync/schema-mapping-editor";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import {
+  listDataSourceColumns,
   listDataSources,
   listDataSourceSchemas,
   listDataSourceTables,
+  type DataSourceCatalogColumn,
   type DataSourceCatalogTable,
   type DataSourceRecord,
 } from "@/service/datasource";
@@ -85,6 +88,12 @@ interface CatalogOptions {
   loading: boolean;
   refresh: () => void;
 }
+
+interface ColumnOptions {
+  columns: DataSourceCatalogColumn[];
+  loading: boolean;
+}
+
 
 const EMPTY_RUNTIME: DataSyncRuntimeConfig = {
   fetchSize: 500,
@@ -279,6 +288,48 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
   }, [dataSourceId, database, schema, refreshVersion]);
 
   return { schemas, tables, loading, refresh };
+}
+
+function useTableColumns(
+  dataSourceId: string,
+  database: string,
+  schema: string,
+  table: string,
+  enabled = true,
+): ColumnOptions {
+  const [columns, setColumns] = useState<DataSourceCatalogColumn[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !dataSourceId || !table) {
+      setColumns([]);
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    void listDataSourceColumns(dataSourceId, {
+      database: database || undefined,
+      schema: schema || undefined,
+      table,
+    })
+      .then((result) => {
+        if (active) setColumns(result || []);
+      })
+      .catch(() => {
+        if (active) setColumns([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dataSourceId, database, enabled, schema, table]);
+
+  return { columns, loading };
 }
 
 interface DataSourceEndpointCardProps {
@@ -781,6 +832,30 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   }, [dataSources, realtime]);
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
+  const sourceReady = Boolean(form.sourceDataSourceId && form.sourceTable);
+  const targetReady = Boolean(form.targetDataSourceId && form.targetTable);
+  const targetTableExistsInCatalog =
+    selectedTableKey(
+      targetCatalog.tables,
+      form.targetDatabase,
+      form.targetSchema,
+      form.targetTable,
+    ) !== null;
+  const targetDerived = form.autoCreateTable && !targetTableExistsInCatalog;
+  const sourceColumns = useTableColumns(
+    form.sourceDataSourceId,
+    form.sourceDatabase,
+    form.sourceSchema,
+    form.sourceTable,
+    sourceReady,
+  );
+  const targetColumns = useTableColumns(
+    form.targetDataSourceId,
+    form.targetDatabase,
+    form.targetSchema,
+    form.targetTable,
+    targetReady && !targetDerived && !targetCatalog.loading,
+  );
 
   const loadDataSources = useCallback(async () => {
     setDataSourcesLoading(true);
@@ -870,7 +945,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
   const mappingPayload = useMemo(
     () =>
-      form.sourceDataSourceId && form.sourceTable && form.targetDataSourceId && form.targetTable
+      form.sourceDataSourceId &&
+      form.sourceTable &&
+      form.targetDataSourceId &&
+      form.targetTable &&
+      (form.mapping === undefined || form.mapping.columns.length > 0)
         ? {
             sourceDataSourceId: form.sourceDataSourceId,
             sourceDatabase: form.sourceDatabase || undefined,
@@ -1128,7 +1207,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       : "新建离线同步任务";
   const pageDescription = realtime
     ? "MySQL CDC 单表实时同步 · 首次全量后持续消费 Binlog"
-    : "单表离线同步 · 自动同名字段映射";
+    : "单表离线同步 · Schema 字段映射";
 
   if (loading) {
     return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
@@ -1265,6 +1344,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     sourceDatabase: selected?.database || "",
                     sourceSchema: selected?.schema || "",
                     sourceTable: "",
+                    mapping: undefined,
                   }));
                 }}
               />
@@ -1283,6 +1363,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     targetDatabase: selected?.database || "",
                     targetSchema: selected?.schema || "",
                     targetTable: "",
+                    mapping: undefined,
                   }));
                 }}
               />
@@ -1298,7 +1379,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               table={form.sourceTable}
               catalog={sourceCatalog}
               onSchemaChange={(value) =>
-                setForm((current) => ({ ...current, sourceSchema: value, sourceTable: "" }))
+                setForm((current) => ({
+                  ...current,
+                  sourceSchema: value,
+                  sourceTable: "",
+                  mapping: undefined,
+                }))
               }
               onTableChange={(table) =>
                 setForm((current) => ({
@@ -1306,6 +1392,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   sourceDatabase: current.sourceDatabase || table.database || "",
                   sourceSchema: current.sourceSchema || table.schema || "",
                   sourceTable: table.name,
+                  mapping: undefined,
                 }))
               }
             >
@@ -1327,7 +1414,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               tableFieldLabel="目标表"
               onTableNameChange={(value) => patch("targetTable", value)}
               onSchemaChange={(value) =>
-                setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
+                setForm((current) => ({
+                  ...current,
+                  targetSchema: value,
+                  targetTable: "",
+                  mapping: undefined,
+                }))
               }
               onTableChange={(table) =>
                 setForm((current) => ({
@@ -1335,6 +1427,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   targetDatabase: current.targetDatabase || table.database || "",
                   targetSchema: current.targetSchema || table.schema || "",
                   targetTable: table.name,
+                  mapping: undefined,
                 }))
               }
             >
@@ -1347,7 +1440,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     setForm((current) => {
                       const autoCreateTable = Boolean(checked);
                       if (autoCreateTable) {
-                        return { ...current, autoCreateTable };
+                        return { ...current, autoCreateTable, mapping: undefined };
                       }
                       const currentTableExists =
                         selectedTableKey(
@@ -1360,6 +1453,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                         ...current,
                         autoCreateTable,
                         targetTable: currentTableExists ? current.targetTable : "",
+                        mapping: undefined,
                       };
                     })
                   }
@@ -1405,7 +1499,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
 
           <CollapseSection
             id="mapping"
-            title="Schema 预览"
+            title="Schema 映射"
             extra={
               mapping ? (
                 <div className="flex items-center gap-2">
@@ -1423,18 +1517,37 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               ) : undefined
             }
           >
-            {!mappingPayload ? (
-              <div className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-10 text-center text-sm text-[#98a2b3]">
-                {form.autoCreateTable ? "请选择来源表并填写目标表名" : "请选择来源表和目标表"}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <SchemaPreviewDiagnostics preview={mapping} />
+            <div className="space-y-3">
+              <SchemaMappingEditor
+                value={form.mapping}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    mapping: value,
+                  }))
+                }
+                sourceColumns={sourceColumns.columns}
+                targetColumns={targetColumns.columns}
+                sourceLoading={sourceColumns.loading}
+                targetLoading={targetColumns.loading}
+                sourceReady={sourceReady}
+                targetReady={targetReady}
+                targetDerived={targetDerived}
+                preview={mapping}
+              />
+
+              {form.mapping?.columns.length === 0 ? (
+                <Alert>至少保留一个字段映射后才能保存任务。</Alert>
+              ) : null}
+
+              <SchemaPreviewDiagnostics preview={mapping} />
+
+              {mappingPayload ? (
                 <div className="overflow-hidden rounded-lg bg-white">
                   <Table<DataSyncFieldMapping>
                     columns={mappingColumns}
                     dataSource={mapping?.mappings || []}
-                    rowKey="sourceName"
+                    rowKey={(record) => `${record.sourceName}::${record.targetName || ""}`}
                     loading={mappingLoading}
                     bordered
                     size="small"
@@ -1443,8 +1556,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                     scroll={{ x: 900 }}
                   />
                 </div>
-              </div>
-            )}
+              ) : null}
+            </div>
           </CollapseSection>
 
           {!realtime ? (
