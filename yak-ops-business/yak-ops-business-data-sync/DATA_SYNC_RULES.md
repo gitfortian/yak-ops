@@ -23,18 +23,18 @@ Datasource 校验、Catalog 和运行连接必须经过 DataSourceService。禁�
 | 包 | 职责 |
 | --- | --- |
 | executor | OFFLINE / REALTIME Runtime 提交、单次尝试、指标 flush 和终态处理 |
-| planning | 冻结快照 + Catalog / Connection 到执行计划；共用 SchemaResolver |
+| planning | 冻结快照 + Catalog / Connection 到执行计划；目标表 Preflight 归 `planning.target` |
 | lifecycle | Execution / Attempt 状态迁移、进程内注册、取消和启动 LOST 处理 |
 | realtime | CDC state identity、目录和 MySQL serverId 资源 |
 | trace | Offline Attempt Runtime Trace 会话、文件持久化、Summary 和 Cursor 读取 |
 
-executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime 不反向依赖 executor。不要复制 offline/planning 与 realtime/planning 层级、逐类建包或重建 Manager / Coordinator。
+executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime 不反向依赖 executor。不要复制 offline/planning 与 realtime/planning 层级、逐类建包或重建 Manager / Coordinator。`planning.target` 只收口 Target Runtime Preflight 及其 DDL 副作用边界，不再继续按单类拆子包。
 
 测试按对应职责组织；直接代码入口见 [execution 目录](src/main/java/io/yak/ops/business/datasync/execution)。
 
 ## Schema Package
 
-`io.yak.ops.business.datasync.schema` 拥有 Data Sync 产品级 Logical Table 内存契约。
+`io.yak.ops.business.datasync.schema` 拥有 Data Sync 产品级 Logical Table 内存契约。根包只保留 `LogicalTable / LogicalColumn`；`catalog` 负责物理 Catalog → Logical Schema，`mapping` 负责 Mapping Projection，`target` 负责目标表 Planning / Compatibility。不得按 `resolver / manager / service / model` 技术后缀继续建包。
 
 规则：
 
@@ -51,10 +51,12 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - Target Plan 出现 blocking unsupported 时必须保持 `createTableSql=null`，不能生成部分 DDL 或静默降级。
 - Target Table comment / column comment 当前只作为 Plan 元数据保留，不拼接数据库特有 COMMENT DDL。
 - `TargetSchemaCompatibility` 是保存预览与 Runtime Preflight 共用的目标结构兼容口径；Source nullable → Target NOT NULL、缺失 Source 字段、类型/容量不兼容、以及 Target 多余 NOT NULL 字段都必须拒绝。
-- `TargetTableRuntimePreparer` 每个 Attempt 重新读取 Catalog：目标存在只校验；目标缺失时只有 snapshot.autoCreateTable=true 且 Plan supported 才可调用 TargetTableDdlExecutor。
+- `TargetTablePreflight` 每个 Attempt 重新读取 Catalog：目标存在只校验；目标缺失时只有 snapshot.autoCreateTable=true 且 Plan supported 才可调用 TargetTableDdlExecutor。
 - CREATE TABLE 后必须重新读取 Target Catalog 并再次做兼容性 / Primary Key 校验；禁止直接相信生成 DDL，也禁止自动 ALTER / DROP 已存在表。
 - `autoCreateTable` 是 Task 可执行定义，默认 false；变化必须推进 definitionVersion，Execution Snapshot 冻结后 Retry / Auto Recovery 复用该值。
 - 已冻结到 Task snapshot 的 Schema / auto-create policy 不得因后续 Task 编辑而改变历史 Execution。
+
+新增 Schema 类型前必须通过 Abstraction Test：拥有独立规则 / 稳定结果，或被多个真实调用方以同一语义复用；否则优先放回现有 owner 或 private method。不要在 Business 内新增 `application` 包重复 Service Layer 语义。
 
 具体产品语义见 [Schema / Logical Table Contract](../../docs/capabilities/data-sync/schema-logical-table.md)。
 
@@ -70,6 +72,7 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - REALTIME Mapping 必须覆盖全部 Source PK，Target PK 按 Mapping 后的目标字段名比较；UPSERT Existing Target 要求 Mapping 覆盖全部目标 PK，UPSERT Auto Create 要求 Mapping 覆盖全部 Source PK。
 - 版本比较集中在可执行定义的规范化比较，不每次 PUT 加一；包括 mapping 与 retryPolicy，具体语义见 [Version Contract](../../docs/capabilities/data-sync/task-lifecycle.md#definition-version-contract)。
 - CRUD / 查询、发布与运行的副作用必须分开；不能在保存或发布方法里偷偷启动 YakFlow。
+- `DataSyncServiceImpl` 是稳定产品编排入口，不因为文件长度机械拆 Manager / Coordinator；已有 Schema / Execution owner 能承担的逻辑不得再以重复 private helper 复制。
 
 ## Execution and Metrics Implementation
 
