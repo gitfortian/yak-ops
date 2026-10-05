@@ -694,7 +694,6 @@ export function SchemaMappingEditor({
       )}
     </div>
   );
-
 }
 
 export default SchemaMappingEditor;
