@@ -15,10 +15,11 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - REALTIME Source 只展示 MySQL，Target 只展示 MySQL / PostgreSQL / Oracle；最终拓扑、主键和兼容性由后端校验。
 - Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。
 - Schema Mapping Editor 只负责字段选择、改名、重排和连线交互，不在前端重建 JDBC 类型兼容、主键契约或 Transform；每次 Mapping 变化都调用后端 Mapping Preview，兼容性、类型与 DDL 结果以后端为准。修改依赖字段后重新查询，过期结果不得覆盖当前选择。
+- Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因、规划警告与自动建表 DDL 等不可由映射画布直接表达的信息。
 - OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
 - Retry Policy 使用共享“重试策略”折叠区配置：`maxAttempts` 范围 1～10，包含首次执行；1 表示关闭自动重试。启用重试时 `backoffSeconds` 范围 0～3600，表示固定等待秒数。前端只做同范围输入校验，最终仍由后端 DTO 校验。
 - Retry Policy 同时适用于 OFFLINE / REALTIME，并随 Task 定义保存及 Execution definitionSnapshot 冻结。页面不得增加第二个 enabled 字段，也不得把 Retry 做成 Quartz / Schedule 配置。
-- Column Mapping Editor 支持同名映射、同序映射、单条添加、删除、清空、字段搜索、点击连接和拖拽连接。已有目标表只能选择真实 Catalog 目标字段；自动建表且目标表不存在时允许输入自定义目标字段名。编辑已有任务时 hydrate 已持久化 mapping；新任务 mapping 为空时 UI 按后端隐式同名语义展示，但只有用户修改后才物化为显式 mapping。Source / Target 数据源、Schema、表或自动建表模式变化时清空旧 Mapping，避免旧 Schema 身份被带到新范围。
+- Column Mapping Editor 支持同名映射、同行映射（按 Catalog 顺序）、单条添加 / 修改、删除、清空、字段搜索、点击连接和拖拽连接。已有目标表只能选择真实 Catalog 目标字段；自动建表且目标表不存在时允许输入自定义目标字段名。编辑已有任务时 hydrate 已持久化 mapping；新任务 mapping 为空时 UI 按后端隐式同名语义展示，但只有用户修改后才物化为显式 mapping。Source / Target 数据源、Schema、表或自动建表模式变化时清空旧 Mapping，避免旧 Schema 身份被带到新范围。
 - 清空 Mapping 只允许作为编辑中间态：前端不向 Preview / Save 发送空 columns，保存按钮保持不可用，至少恢复一条 Mapping 后才能保存。
 - 不暴露 Debezium 状态目录、offset、schema history 或 serverId。
 
@@ -35,6 +36,8 @@ OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户�
 ## Layout
 
 编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开；重试策略、运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。
+
+Schema Mapping Editor 保持历史字段映射的紧凑表格视觉：左右分别是“字段 / 类型”行，中间只承载映射连线；同一行映射优先使用水平直线，跨行映射才使用曲线。字段不得改回逐项大圆角 Card。常规小表不常驻搜索框；字段较多时再显示左右搜索。连线 Hover 可修改或删除映射，兼容性异常直接反映在线条状态上。
 
 OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部滚动；右侧锚点导航在滚动区外，不能跟随内容滚走。REALTIME 当前保持原页面滚动方式，不把离线布局描述为两种模式都已采用。具体列宽与断点归 [task-editor.tsx](task-editor.tsx)，不照抄普通管理 Modal 的密度覆盖配置页。
 
