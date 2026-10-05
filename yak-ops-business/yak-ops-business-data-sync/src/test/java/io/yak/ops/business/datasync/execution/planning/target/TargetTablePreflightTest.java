@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
-import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -174,6 +175,9 @@ class TargetTablePreflightTest {
     private TargetTablePreflight preparer(DataSourceService service, AtomicInteger creates) throws Exception {
         TargetTablePreflight preparer = new TargetTablePreflight();
         inject(preparer, "dataSourceService", service);
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        inject(sourceTableIntrospector, "dataSourceService", service);
+        inject(preparer, "sourceTableIntrospector", sourceTableIntrospector);
         inject(preparer, "targetTablePlanner", new TargetTablePlanner());
         inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
             creates.incrementAndGet();
@@ -393,7 +397,7 @@ class TargetTablePreflightTest {
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = TargetTablePreflight.class.getDeclaredField(fieldName);
+        Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
