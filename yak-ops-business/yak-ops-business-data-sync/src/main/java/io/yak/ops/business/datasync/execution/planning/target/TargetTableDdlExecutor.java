@@ -1,6 +1,6 @@
 package io.yak.ops.business.datasync.execution.planning.target;
 
-import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 
@@ -18,6 +18,6 @@ public interface TargetTableDdlExecutor {
      * @return 实际执行的 CREATE TABLE SQL
      */
     String createTable(
-            DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema, int timeoutSeconds)
+            DataSourceConnection connection, DataSourceTablePath table, LogicalTable logicalTable, int timeoutSeconds)
             throws Exception;
 }
