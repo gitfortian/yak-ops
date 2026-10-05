@@ -86,16 +86,18 @@ class DataSyncColumnMappingContractTest {
     }
 
     @Test
-    void shouldRejectRenamedMappingUntilMappingAwareRuntime() throws Exception {
-        DataSyncServiceImpl service = service(null, new AtomicReference<>());
+    void shouldPersistRenamedAndSubsetMapping() throws Exception {
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSyncServiceImpl service = service(null, captured, renamedDataSourceService());
 
         WorkspaceContext.bind("workspace-1");
-        DataSyncException exception = assertThrows(
-                DataSyncException.class,
-                () -> service.createTask(
-                        taskDto(mapping(columnMapping("id", "user_id"), columnMapping("name", "name")))));
+        DataSyncTaskVO created =
+                service.createTask(taskDto(mapping(columnMapping("id", "user_id"))));
 
-        assertEquals(DataSyncErrorCode.INVALID_TASK, exception.getErrorCode());
+        assertEquals(1, created.getMapping().getColumns().size());
+        assertEquals("id", created.getMapping().getColumns().get(0).getSource());
+        assertEquals("user_id", created.getMapping().getColumns().get(0).getTarget());
+        assertNotNull(captured.get().getMappingConfig());
     }
 
     @Test
@@ -125,9 +127,17 @@ class DataSyncColumnMappingContractTest {
 
     private DataSyncServiceImpl service(
             DataSyncTaskEntity existing, AtomicReference<DataSyncTaskEntity> captured) throws Exception {
+        return service(existing, captured, dataSourceService());
+    }
+
+    private DataSyncServiceImpl service(
+            DataSyncTaskEntity existing,
+            AtomicReference<DataSyncTaskEntity> captured,
+            DataSourceService dataSourceService)
+            throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         inject(service, "taskRepository", taskRepository(existing, captured));
-        inject(service, "dataSourceService", dataSourceService());
+        inject(service, "dataSourceService", dataSourceService);
         return service;
     }
 
@@ -159,6 +169,36 @@ class DataSyncColumnMappingContractTest {
                         DataSyncInstanceEntity entity = (DataSyncInstanceEntity) args[0];
                         captured.set(entity);
                         return entity;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private DataSourceService renamedDataSourceService() {
+        DataSourceVO source = dataSource("source", "source_db");
+        DataSourceVO target = dataSource("target", "target_db");
+        DataSourceCatalogTableVO sourceTable = catalogTable("source_db", "source_table");
+        DataSourceCatalogTableVO targetTable = catalogTable("target_db", "target_table");
+        List<DataSourceCatalogColumnVO> sourceColumns =
+                List.of(column("id", 1, true), column("name", 2, false));
+        List<DataSourceCatalogColumnVO> targetColumns =
+                List.of(column("user_id", 1, true), column("display_name", 2, false));
+
+        return (DataSourceService) Proxy.newProxyInstance(
+                DataSourceService.class.getClassLoader(),
+                new Class<?>[] {DataSourceService.class},
+                (proxy, method, args) -> {
+                    if ("queryDataSource".equals(method.getName())) {
+                        return "source".equals(args[0]) ? source : target;
+                    }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return Optional.of("source".equals(args[0]) ? sourceTable : targetTable);
+                    }
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceTable : targetTable;
+                    }
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        return "source".equals(args[0]) ? sourceColumns : targetColumns;
                     }
                     throw new UnsupportedOperationException(method.getName());
                 });
