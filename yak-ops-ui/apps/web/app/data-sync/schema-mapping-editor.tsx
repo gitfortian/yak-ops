@@ -113,12 +113,7 @@ const buildPositionMappings = (
     target: targetColumns[index].name,
   }));
 
-const connectionPath = (
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-) => {
+const connectionPath = (startX: number, startY: number, endX: number, endY: number) => {
   const distance = Math.abs(endX - startX);
   const controlOffset = Math.max(48, distance * 0.35);
   return [
@@ -203,10 +198,7 @@ export function SchemaMappingEditor({
   }, [baseTargetColumns, mappings, sourceMap]);
 
   const selectableTargetMap = useMemo(
-    () =>
-      new Map(
-        baseTargetColumns.map((column) => [normalizeFieldName(column.name), column]),
-      ),
+    () => new Map(baseTargetColumns.map((column) => [normalizeFieldName(column.name), column])),
     [baseTargetColumns],
   );
 
@@ -360,9 +352,7 @@ export function SchemaMappingEditor({
 
     const target = (
       document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null
-    )
-      ?.closest<HTMLElement>("[data-target-field]")
-      ?.dataset.targetField;
+    )?.closest<HTMLElement>("[data-target-field]")?.dataset.targetField;
 
     if (target) connectFields(drag.source, target);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -432,9 +422,7 @@ export function SchemaMappingEditor({
           if (role === "source") setSelectedSource(field);
           else if (selectedSource) connectFields(selectedSource, field);
         }}
-        onPointerDown={
-          role === "source" ? (event) => startDrag(event, field) : undefined
-        }
+        onPointerDown={role === "source" ? (event) => startDrag(event, field) : undefined}
       >
         {role === "target" ? (
           <span
@@ -557,11 +545,7 @@ export function SchemaMappingEditor({
             </PopoverContent>
           </Popover>
 
-          <Button
-            size="small"
-            disabled={mappings.length === 0}
-            onClick={() => commitMappings([])}
-          >
+          <Button size="small" disabled={mappings.length === 0} onClick={() => commitMappings([])}>
             清空
           </Button>
         </div>
@@ -627,12 +611,7 @@ export function SchemaMappingEditor({
 
             {drag ? (
               <path
-                d={connectionPath(
-                  drag.startX,
-                  drag.startY,
-                  drag.currentX,
-                  drag.currentY,
-                )}
+                d={connectionPath(drag.startX, drag.startY, drag.currentX, drag.currentY)}
                 fill="none"
                 stroke="var(--yak-color-primary)"
                 strokeWidth={2}
