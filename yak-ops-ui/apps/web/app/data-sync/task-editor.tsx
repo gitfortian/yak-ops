@@ -493,43 +493,44 @@ function TableSection({
           <FieldLabel required className={allowCustomTable ? "pt-1.5" : undefined}>
             {tableFieldLabel}
           </FieldLabel>
-          {allowCustomTable ? (
-            <div className="flex items-center gap-2">
-              <Input
-                size="small"
-                variant="outlined"
-                className="w-1/2 min-w-0 max-lg:w-auto max-lg:flex-1"
-                value={table}
-                disabled={tableDisabled}
-                placeholder="请输入目标表名"
-                onChange={(event) => onTableNameChange?.(event.target.value)}
-              />
-              {tableAction}
+          <div className="flex items-center gap-2">
+            <div className="w-1/2 min-w-0 max-lg:w-auto max-lg:flex-1">
+              {allowCustomTable ? (
+                <Input
+                  size="small"
+                  variant="outlined"
+                  value={table}
+                  disabled={tableDisabled}
+                  placeholder="请输入目标表名"
+                  onChange={(event) => onTableNameChange?.(event.target.value)}
+                />
+              ) : (
+                <DataSyncSearchableSelect
+                  value={tableValue}
+                  options={tableOptions}
+                  disabled={tableDisabled}
+                  placeholder={
+                    !dataSourceId
+                      ? "请先选择数据源"
+                      : requiresSchema && !schema
+                        ? "请先选择 Schema"
+                        : catalog.loading
+                          ? "正在读取 Catalog..."
+                          : "请选择表"
+                  }
+                  searchPlaceholder="搜索表"
+                  emptyText="暂无表"
+                  refreshing={catalog.loading}
+                  onRefresh={catalog.refresh}
+                  onValueChange={(value) => {
+                    const selected = catalog.tables.find((item) => tableKey(item) === value);
+                    if (selected) onTableChange(selected);
+                  }}
+                />
+              )}
             </div>
-          ) : (
-            <DataSyncSearchableSelect
-              value={tableValue}
-              options={tableOptions}
-              disabled={tableDisabled}
-              placeholder={
-                !dataSourceId
-                  ? "请先选择数据源"
-                  : requiresSchema && !schema
-                    ? "请先选择 Schema"
-                    : catalog.loading
-                      ? "正在读取 Catalog..."
-                      : "请选择表"
-              }
-              searchPlaceholder="搜索表"
-              emptyText="暂无表"
-              refreshing={catalog.loading}
-              onRefresh={catalog.refresh}
-              onValueChange={(value) => {
-                const selected = catalog.tables.find((item) => tableKey(item) === value);
-                if (selected) onTableChange(selected);
-              }}
-            />
-          )}
+            {allowCustomTable ? tableAction : null}
+          </div>
         </Field>
         {children}
       </div>
@@ -743,22 +744,156 @@ function previewDdlStatements(preview?: DataSyncMappingPreview) {
   return preview.createTableSql ? [preview.createTableSql] : [];
 }
 
+function findMatchingParenthesis(sql: string, openIndex: number) {
+  let depth = 0;
+  let quote: "'" | '"' | "`" | undefined;
+
+  for (let index = openIndex; index < sql.length; index += 1) {
+    const character = sql[index];
+    if (quote) {
+      if (character === quote) {
+        if (sql[index + 1] === quote) {
+          index += 1;
+        } else {
+          quote = undefined;
+        }
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  return -1;
+}
+
+function splitTopLevelDefinitions(body: string) {
+  const definitions: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote: "'" | '"' | "`" | undefined;
+
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (quote) {
+      if (character === quote) {
+        if (body[index + 1] === quote) {
+          index += 1;
+        } else {
+          quote = undefined;
+        }
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+    } else if (character === "," && depth === 0) {
+      definitions.push(body.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+
+  const tail = body.slice(start).trim();
+  if (tail) definitions.push(tail);
+  return definitions;
+}
+
+function normalizeNestedCommaSpacing(value: string) {
+  let result = "";
+  let depth = 0;
+  let quote: "'" | '"' | "`" | undefined;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote) {
+      result += character;
+      if (character === quote) {
+        if (value[index + 1] === quote) {
+          result += value[index + 1];
+          index += 1;
+        } else {
+          quote = undefined;
+        }
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      result += character;
+    } else if (character === "(") {
+      depth += 1;
+      result += character;
+    } else if (character === ")") {
+      depth -= 1;
+      result += character;
+    } else if (character === "," && depth > 0) {
+      result += ", ";
+      while (/\s/.test(value[index + 1] || "")) index += 1;
+    } else {
+      result += character;
+    }
+  }
+
+  return result;
+}
+
+function formatDdlStatement(statement: string) {
+  const sql = statement.trim().replace(/;\s*$/, "");
+  if (!/^CREATE\s+TABLE\b/i.test(sql)) return `${sql};`;
+
+  const openIndex = sql.indexOf("(");
+  if (openIndex < 0) return `${sql};`;
+
+  const closeIndex = findMatchingParenthesis(sql, openIndex);
+  if (closeIndex < 0) return `${sql};`;
+
+  const prefix = sql.slice(0, openIndex).trimEnd();
+  const body = sql.slice(openIndex + 1, closeIndex);
+  const suffix = sql.slice(closeIndex + 1).trim();
+  const definitions = splitTopLevelDefinitions(body).map(normalizeNestedCommaSpacing);
+
+  if (definitions.length === 0) return `${sql};`;
+
+  return [
+    `${prefix} (`,
+    ...definitions.map(
+      (definition, index) => `  ${definition}${index < definitions.length - 1 ? "," : ""}`,
+    ),
+    `)${suffix ? ` ${suffix}` : ""};`,
+  ].join("\n");
+}
+
 function SqlCodePreview({ statements }: { statements: string[] }) {
-  const sql = statements.map((statement) => `${statement.replace(/;\s*$/, "")};`).join("\n\n");
+  const sql = statements.map(formatDdlStatement).join("\n\n");
   const tokens = sql.match(SQL_TOKEN_PATTERN) || [sql];
 
   return (
-    <pre className="max-h-[360px] overflow-auto whitespace-pre bg-[#162044] px-4 py-3 font-mono text-xs leading-5 text-[#d0d5dd]">
+    <pre className="max-h-[360px] overflow-auto whitespace-pre bg-[#f8f9fb] px-4 py-3 font-mono text-xs leading-5 text-[#475467]">
       {tokens.map((token, index) => {
-        let className = "text-[#d0d5dd]";
+        let className = "text-[#475467]";
         if (token.startsWith("'")) {
-          className = "text-[#c3e88d]";
+          className = "text-[#027a48]";
         } else if (token.startsWith("`") || token.startsWith('"')) {
-          className = "text-[#89ddff]";
+          className = "font-medium text-[#162044]";
         } else if (/^\d/.test(token)) {
-          className = "text-[#f78c6c]";
+          className = "text-[#b54708]";
         } else if (SQL_KEYWORDS.has(token.toUpperCase())) {
-          className = "text-[#82aaff]";
+          className = "font-medium text-[#175cd3]";
+        } else if (/^[(),.;=]+$/.test(token)) {
+          className = "text-[#667085]";
         }
 
         return (
