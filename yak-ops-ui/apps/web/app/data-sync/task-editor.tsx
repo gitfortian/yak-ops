@@ -8,6 +8,10 @@ import {
   FieldLabel,
   Input,
   PageHeader,
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -422,6 +426,7 @@ interface TableSectionProps {
   catalog: CatalogOptions;
   allowCustomTable?: boolean;
   tableFieldLabel?: string;
+  tableAction?: ReactNode;
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
   onTableNameChange?: (value: string) => void;
@@ -437,6 +442,7 @@ function TableSection({
   catalog,
   allowCustomTable = false,
   tableFieldLabel = "表",
+  tableAction,
   onSchemaChange,
   onTableChange,
   onTableNameChange,
@@ -488,14 +494,18 @@ function TableSection({
             {tableFieldLabel}
           </FieldLabel>
           {allowCustomTable ? (
-            <Input
-              size="small"
-              variant="outlined"
-              value={table}
-              disabled={tableDisabled}
-              placeholder="请输入目标表名"
-              onChange={(event) => onTableNameChange?.(event.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                size="small"
+                variant="outlined"
+                className="w-1/2 min-w-0 max-lg:w-auto max-lg:flex-1"
+                value={table}
+                disabled={tableDisabled}
+                placeholder="请输入目标表名"
+                onChange={(event) => onTableNameChange?.(event.target.value)}
+              />
+              {tableAction}
+            </div>
           ) : (
             <DataSyncSearchableSelect
               value={tableValue}
@@ -682,25 +692,130 @@ function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
   );
 }
 
+const SQL_KEYWORDS = new Set([
+  "CREATE",
+  "TABLE",
+  "COMMENT",
+  "ON",
+  "IS",
+  "PRIMARY",
+  "KEY",
+  "NOT",
+  "NULL",
+  "BOOLEAN",
+  "TINYINT",
+  "SMALLINT",
+  "INTEGER",
+  "INT",
+  "BIGINT",
+  "FLOAT",
+  "DOUBLE",
+  "PRECISION",
+  "DECIMAL",
+  "NUMERIC",
+  "NUMBER",
+  "VARCHAR",
+  "VARCHAR2",
+  "TEXT",
+  "LONGTEXT",
+  "BINARY",
+  "VARBINARY",
+  "BYTEA",
+  "RAW",
+  "BLOB",
+  "LONGBLOB",
+  "CLOB",
+  "DATE",
+  "TIME",
+  "TIMESTAMP",
+  "WITH",
+  "ZONE",
+]);
+
+const SQL_TOKEN_PATTERN =
+  /'(?:''|[^'])*'|`(?:``|[^`])*`|"(?:""|[^"])*"|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|\s+|./g;
+
+function previewDdlStatements(preview?: DataSyncMappingPreview) {
+  if (!preview) return [];
+  if (preview.ddlStatements && preview.ddlStatements.length > 0) {
+    return preview.ddlStatements;
+  }
+  return preview.createTableSql ? [preview.createTableSql] : [];
+}
+
+function SqlCodePreview({ statements }: { statements: string[] }) {
+  const sql = statements.map((statement) => `${statement.replace(/;\s*$/, "")};`).join("\n\n");
+  const tokens = sql.match(SQL_TOKEN_PATTERN) || [sql];
+
+  return (
+    <pre className="max-h-[360px] overflow-auto whitespace-pre bg-[#162044] px-4 py-3 font-mono text-xs leading-5 text-[#d0d5dd]">
+      {tokens.map((token, index) => {
+        let className = "text-[#d0d5dd]";
+        if (token.startsWith("'")) {
+          className = "text-[#c3e88d]";
+        } else if (token.startsWith("`") || token.startsWith('"')) {
+          className = "text-[#89ddff]";
+        } else if (/^\d/.test(token)) {
+          className = "text-[#f78c6c]";
+        } else if (SQL_KEYWORDS.has(token.toUpperCase())) {
+          className = "text-[#82aaff]";
+        }
+
+        return (
+          <span key={`${index}-${token}`} className={className}>
+            {token}
+          </span>
+        );
+      })}
+    </pre>
+  );
+}
+
+function DdlPreviewPopover({
+  preview,
+  loading,
+}: {
+  preview?: DataSyncMappingPreview;
+  loading: boolean;
+}) {
+  const statements = previewDdlStatements(preview);
+  const disabled = loading || statements.length === 0;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        disabled={disabled}
+        render={
+          <Button size="small" disabled={disabled}>
+            DDL
+          </Button>
+        }
+      />
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-[720px] max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+      >
+        <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-2.5">
+          <PopoverTitle className="text-xs font-medium text-[#344054]">DDL 预览</PopoverTitle>
+          <Badge tone="info">只读</Badge>
+        </div>
+        <SqlCodePreview statements={statements} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPreview }) {
   if (!preview) return null;
 
   const warnings = preview.warnings || [];
   const unsupportedReasons = preview.unsupportedReasons || [];
-  const ddlStatements =
-    preview.ddlStatements && preview.ddlStatements.length > 0
-      ? preview.ddlStatements
-      : preview.createTableSql
-        ? [preview.createTableSql]
-        : [];
-  const ddlPreview = ddlStatements
-    .map((statement) => `${statement.replace(/;\s*$/, "")};`)
-    .join("\n\n");
   const hasDiagnostics =
     (!preview.targetTableExists && !preview.autoCreateTable) ||
     warnings.length > 0 ||
-    unsupportedReasons.length > 0 ||
-    ddlStatements.length > 0;
+    unsupportedReasons.length > 0;
 
   if (!hasDiagnostics) return null;
 
@@ -736,21 +851,6 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
             {unsupportedReasons.map((reason, index) => (
               <div key={`${index}-${reason}`}>• {reason}</div>
             ))}
-          </div>
-        </div>
-      ) : null}
-
-      {ddlStatements.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
-          <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-2.5">
-            <div className="text-xs font-medium text-[#344054]">DDL 预览</div>
-            <Badge tone="info">只读</Badge>
-          </div>
-          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words bg-[#f8f9fb] px-4 py-3 font-mono text-xs leading-5 text-[#475467]">
-            {ddlPreview}
-          </pre>
-          <div className="border-t border-[#eef0f3] px-4 py-2 text-[11px] text-[#98a2b3]">
-            保存任务不会执行 DDL；实际运行时会再次检查目标表与 Schema。
           </div>
         </div>
       ) : null}
@@ -1410,6 +1510,11 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               catalog={targetCatalog}
               allowCustomTable={form.autoCreateTable}
               tableFieldLabel="目标表"
+              tableAction={
+                targetDerived ? (
+                  <DdlPreviewPopover preview={mapping} loading={mappingLoading} />
+                ) : undefined
+              }
               onTableNameChange={(value) => patch("targetTable", value)}
               onSchemaChange={(value) =>
                 setForm((current) => ({

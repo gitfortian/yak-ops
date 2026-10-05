@@ -15,7 +15,7 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - REALTIME Source 只展示 MySQL，Target 只展示 MySQL / PostgreSQL / Oracle；最终拓扑、主键和兼容性由后端校验。
 - Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。
 - Schema Mapping Editor 只负责字段选择、改名、重排和连线交互，不在前端重建 JDBC 类型兼容、主键契约或 Transform；每次 Mapping 变化都调用后端 Mapping Preview，兼容性、类型与 DDL 结果以后端为准。修改依赖字段后重新查询，过期结果不得覆盖当前选择。同一 Source / Target Scope 内仅 Mapping 变化时，Preview 刷新不得先清空上一份有效结果造成 Header / Diagnostics 反复挂载；使用独立 loading 状态阻断保存并保持布局稳定。Scope 身份变化时才清空旧 Preview，避免跨表展示陈旧状态。
-- Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因、规划警告与自动建表 DDL 等不可由映射画布直接表达的信息。自动建表 Preview 必须展示后端返回的完整 ddlStatements（CREATE TABLE + 可能的 Comment DDL），不能只展示第一条 CREATE TABLE；createTableSql 仅作为旧响应兼容回退。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。
+- Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因与规划警告，不再铺开自动建表 DDL。自动建表 DDL 属于“数据去向 → 目标表”的辅助信息，只能通过目标表右侧的 Yak UI `DDL` Button 按需打开 Popover 查看。Popover 必须展示后端返回的完整 ddlStatements（CREATE TABLE + 可能的 Comment DDL），不能只展示第一条 CREATE TABLE；createTableSql 仅作为旧响应兼容回退。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。
 - OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
 - Retry Policy 使用共享“重试策略”折叠区配置：`maxAttempts` 范围 1～10，包含首次执行；1 表示关闭自动重试。启用重试时 `backoffSeconds` 范围 0～3600，表示固定等待秒数。前端只做同范围输入校验，最终仍由后端 DTO 校验。
 - Retry Policy 同时适用于 OFFLINE / REALTIME，并随 Task 定义保存及 Execution definitionSnapshot 冻结。页面不得增加第二个 enabled 字段，也不得把 Retry 做成 Quartz / Schedule 配置。
@@ -35,7 +35,7 @@ OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户�
 
 ## Layout
 
-编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开；重试策略、运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。
+编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开；重试策略、运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。自动建表时目标表 Input 在桌面端约占内容区 50%，右侧紧跟 `DDL` Button；窄屏恢复弹性宽度。DDL Popover 复用 Yak UI Popover，默认从按钮右侧打开，宽度约 720px、受视口约束，代码区设置 max-height 并独立滚动；SQL 只做轻量只读着色，不为预览引入 Monaco / CodeMirror / Prism / Shiki 等重依赖。
 
 Schema Mapping Editor 保持历史字段映射的紧凑表格视觉：左右分别是“字段 / 类型”行，中间只承载映射连线。左右字段必须共享同一个纵向滚动坐标系，不允许各自独立滚动；连接点由 Mapping Overlay 按字段行位置绘制，不得通过负 offset 把节点塞进字段列表的 overflow 区域。所有映射固定使用 SVG 直线：同行为水平线，跨行为斜线，不使用 Bezier 曲线。Connector 的视觉节点与命中区域必须分离：默认使用约 8px 的紧凑菱形，实际可交互 Hit Area 约 20px；Hover Connector 时显示白底轻边框的“+”连接反馈并使用 pointer cursor，不能把静态状态点当成唯一可操作提示。字段不得改回逐项大圆角 Card。常规小表不常驻搜索框；字段较多时再显示左右搜索。连线 Hover 的删除 / 修改操作必须复用 Yak UI Button，并保持从连线移动到按钮时 Hover 不闪退；兼容性异常直接反映在线条与端点状态上。
 
