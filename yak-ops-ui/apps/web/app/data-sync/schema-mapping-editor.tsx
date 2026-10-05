@@ -42,6 +42,7 @@ interface MappingGeometry {
 
 interface FieldNodeGeometry {
   key: string;
+  field: string;
   fieldKey: string;
   role: "source" | "target";
   x: number;
@@ -133,6 +134,7 @@ export function SchemaMappingEditor({
   const [targetKeyword, setTargetKeyword] = useState("");
   const [selectedSource, setSelectedSource] = useState<string>();
   const [hoveredMapping, setHoveredMapping] = useState<string>();
+  const [hoveredNode, setHoveredNode] = useState<string>();
   const [geometries, setGeometries] = useState<MappingGeometry[]>([]);
   const [fieldNodes, setFieldNodes] = useState<FieldNodeGeometry[]>([]);
   const [drag, setDrag] = useState<DragState>();
@@ -290,6 +292,7 @@ export function SchemaMappingEditor({
       const rect = element.getBoundingClientRect();
       nodes.push({
         key: `source::${fieldKey}`,
+        field: column.name,
         fieldKey,
         role: "source",
         x: rect.right - canvasRect.left,
@@ -303,6 +306,7 @@ export function SchemaMappingEditor({
       const rect = element.getBoundingClientRect();
       nodes.push({
         key: `target::${fieldKey}`,
+        field: column.name,
         fieldKey,
         role: "target",
         x: rect.left - canvasRect.left,
@@ -332,23 +336,59 @@ export function SchemaMappingEditor({
     };
   }, [calculateGeometry]);
 
+  const beginDrag = (
+    pointerId: number,
+    source: string,
+    startX: number,
+    startY: number,
+    currentX: number,
+    currentY: number,
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.setPointerCapture(pointerId);
+    setSelectedSource(source);
+    setDrag({
+      pointerId,
+      source,
+      startX,
+      startY,
+      currentX,
+      currentY,
+    });
+  };
+
   const startDrag = (event: ReactPointerEvent<HTMLButtonElement>, source: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const canvasRect = canvas.getBoundingClientRect();
     const sourceRect = event.currentTarget.getBoundingClientRect();
-
-    canvas.setPointerCapture(event.pointerId);
-    setSelectedSource(source);
-    setDrag({
-      pointerId: event.pointerId,
+    beginDrag(
+      event.pointerId,
       source,
-      startX: sourceRect.right - canvasRect.left,
-      startY: sourceRect.top - canvasRect.top + sourceRect.height / 2,
-      currentX: event.clientX - canvasRect.left,
-      currentY: event.clientY - canvasRect.top,
-    });
+      sourceRect.right - canvasRect.left,
+      sourceRect.top - canvasRect.top + sourceRect.height / 2,
+      event.clientX - canvasRect.left,
+      event.clientY - canvasRect.top,
+    );
+  };
+
+  const startNodeDrag = (event: ReactPointerEvent<SVGCircleElement>, node: FieldNodeGeometry) => {
+    const canvas = canvasRef.current;
+    if (!canvas || node.role !== "source") return;
+
+    event.stopPropagation();
+    const canvasRect = canvas.getBoundingClientRect();
+    beginDrag(
+      event.pointerId,
+      node.field,
+      node.x,
+      node.y,
+      event.clientX - canvasRect.left,
+      event.clientY - canvasRect.top,
+    );
   };
 
   const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -604,7 +644,7 @@ export function SchemaMappingEditor({
             onPointerUp={finishDrag}
             onPointerCancel={() => setDrag(undefined)}
           >
-            <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
+            <svg className="pointer-events-none absolute inset-0 z-30 h-full w-full overflow-visible">
               {geometries.map((geometry) => {
                 const active = hoveredMapping === geometry.key;
                 const detail = previewByMapping.get(geometry.key);
@@ -647,11 +687,12 @@ export function SchemaMappingEditor({
                     : mappingByTarget.get(node.fieldKey);
                 const key = mapping ? mappingKey(mapping) : undefined;
                 const detail = key ? previewByMapping.get(key) : undefined;
-                const active =
-                  key === hoveredMapping ||
-                  (node.role === "source" &&
-                    selectedSource &&
-                    normalizeFieldName(selectedSource) === node.fieldKey);
+                const nodeHovered = hoveredNode === node.key;
+                const selected =
+                  node.role === "source" &&
+                  selectedSource &&
+                  normalizeFieldName(selectedSource) === node.fieldKey;
+                const active = key === hoveredMapping || selected;
                 const fill =
                   detail && !detail.compatible
                     ? "#d92d20"
@@ -660,18 +701,72 @@ export function SchemaMappingEditor({
                       : "#cfd4dc";
 
                 return (
-                  <rect
-                    key={node.key}
-                    x={node.x - 3}
-                    y={node.y - 3}
-                    width={6}
-                    height={6}
-                    rx={0.5}
-                    fill={fill}
-                    stroke="#ffffff"
-                    strokeWidth={1}
-                    transform={`rotate(45 ${node.x} ${node.y})`}
-                  />
+                  <g key={node.key}>
+                    <rect
+                      x={node.x - 4}
+                      y={node.y - 4}
+                      width={8}
+                      height={8}
+                      rx={0.75}
+                      fill={fill}
+                      stroke="#ffffff"
+                      strokeWidth={1}
+                      transform={`rotate(45 ${node.x} ${node.y})`}
+                    />
+
+                    {nodeHovered ? (
+                      <g pointerEvents="none">
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r={9}
+                          fill="#ffffff"
+                          stroke="#dfe3e8"
+                          strokeWidth={1}
+                        />
+                        <line
+                          x1={node.x - 3.5}
+                          y1={node.y}
+                          x2={node.x + 3.5}
+                          y2={node.y}
+                          stroke="var(--yak-color-primary)"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                        />
+                        <line
+                          x1={node.x}
+                          y1={node.y - 3.5}
+                          x2={node.x}
+                          y2={node.y + 3.5}
+                          stroke="var(--yak-color-primary)"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                        />
+                      </g>
+                    ) : null}
+
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={10}
+                      fill="transparent"
+                      className="pointer-events-auto cursor-pointer"
+                      data-target-field={node.role === "target" ? node.field : undefined}
+                      onMouseEnter={() => setHoveredNode(node.key)}
+                      onMouseLeave={() => setHoveredNode(undefined)}
+                      onPointerDown={
+                        node.role === "source" ? (event) => startNodeDrag(event, node) : undefined
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (node.role === "source") {
+                          setSelectedSource(node.field);
+                        } else if (selectedSource) {
+                          connectFields(selectedSource, node.field);
+                        }
+                      }}
+                    />
+                  </g>
                 );
               })}
 
@@ -692,7 +787,7 @@ export function SchemaMappingEditor({
               hoveredMapping === geometry.key ? (
                 <div
                   key={geometry.key}
-                  className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md bg-white p-0.5 shadow-sm"
+                  className="absolute z-40 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md bg-white p-0.5 shadow-sm"
                   style={{ left: geometry.middleX, top: geometry.middleY }}
                   onMouseEnter={() => showMappingActions(geometry.key)}
                   onMouseLeave={hideMappingActions}
