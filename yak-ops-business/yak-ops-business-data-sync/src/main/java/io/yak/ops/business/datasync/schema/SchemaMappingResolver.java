@@ -43,11 +43,12 @@ public final class SchemaMappingResolver {
             targetBySource.put(normalize(sourceColumn.name()), mapping.target());
         }
 
-        boolean allPrimaryKeysMapped =
-                sourceTable.primaryKeys().stream().allMatch(primaryKey -> targetBySource.containsKey(normalize(primaryKey)));
+        boolean allPrimaryKeysMapped = sourceTable.primaryKeys().stream()
+                .allMatch(primaryKey -> targetBySource.containsKey(normalize(primaryKey)));
         List<String> sourcePrimaryKeys = allPrimaryKeysMapped
                 ? sourceTable.primaryKeys().stream()
-                        .map(primaryKey -> sourceByName.get(normalize(primaryKey)).name())
+                        .map(primaryKey ->
+                                sourceByName.get(normalize(primaryKey)).name())
                         .toList()
                 : List.of();
         List<String> targetPrimaryKeys = allPrimaryKeysMapped
