@@ -687,11 +687,20 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
 
   const warnings = preview.warnings || [];
   const unsupportedReasons = preview.unsupportedReasons || [];
+  const ddlStatements =
+    preview.ddlStatements && preview.ddlStatements.length > 0
+      ? preview.ddlStatements
+      : preview.createTableSql
+        ? [preview.createTableSql]
+        : [];
+  const ddlPreview = ddlStatements
+    .map((statement) => `${statement.replace(/;\s*$/, "")};`)
+    .join("\n\n");
   const hasDiagnostics =
     (!preview.targetTableExists && !preview.autoCreateTable) ||
     warnings.length > 0 ||
     unsupportedReasons.length > 0 ||
-    Boolean(preview.createTableSql);
+    ddlStatements.length > 0;
 
   if (!hasDiagnostics) return null;
 
@@ -731,14 +740,14 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
         </div>
       ) : null}
 
-      {preview.createTableSql ? (
+      {ddlStatements.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white">
           <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-2.5">
-            <div className="text-xs font-medium text-[#344054]">CREATE TABLE 预览</div>
+            <div className="text-xs font-medium text-[#344054]">DDL 预览</div>
             <Badge tone="info">只读</Badge>
           </div>
           <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words bg-[#f8f9fb] px-4 py-3 font-mono text-xs leading-5 text-[#475467]">
-            {preview.createTableSql}
+            {ddlPreview}
           </pre>
           <div className="border-t border-[#eef0f3] px-4 py-2 text-[11px] text-[#98a2b3]">
             保存任务不会执行 DDL；实际运行时会再次检查目标表与 Schema。
