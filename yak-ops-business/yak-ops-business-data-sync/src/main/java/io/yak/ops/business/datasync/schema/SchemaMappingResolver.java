@@ -71,8 +71,7 @@ public final class SchemaMappingResolver {
         for (LogicalColumn column : sourceTable.columns()) {
             LogicalColumn previous = result.put(normalize(column.name()), column);
             if (previous != null) {
-                throw new IllegalArgumentException(
-                        "来源表存在大小写不敏感重名字段：" + previous.name() + " / " + column.name());
+                throw new IllegalArgumentException("来源表存在大小写不敏感重名字段：" + previous.name() + " / " + column.name());
             }
         }
         return result;
