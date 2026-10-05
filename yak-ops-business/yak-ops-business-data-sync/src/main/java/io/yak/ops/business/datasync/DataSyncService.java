@@ -62,6 +62,7 @@ public interface DataSyncService {
 
     DataSyncSchedulePreviewVO previewSchedule(DataSyncScheduleDTO dto);
 
+    /** 查询离线同步任务调度；任务未配置调度时返回 {@code null}。 */
     DataSyncScheduleVO querySchedule(String taskId);
 
     DataSyncScheduleVO enableSchedule(String taskId);
