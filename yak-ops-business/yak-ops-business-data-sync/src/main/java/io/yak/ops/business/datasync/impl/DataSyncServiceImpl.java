@@ -381,9 +381,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             result.setAutoCreateTable(false);
             result.setMappings(resolvedMapping.columns().stream()
                     .map(mapping -> toFieldMapping(
-                            mapping,
-                            DataSyncCatalogColumns.findByName(sourceByName, mapping.source()),
-                            null))
+                            mapping, DataSyncCatalogColumns.findByName(sourceByName, mapping.source()), null))
                     .toList());
             result.setCompatible(false);
             return result;
@@ -1311,7 +1309,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
-        Set<String> mappedPrimaryKeys = normalizedKeys(resolvedMapping.targetTable().primaryKeys());
+        Set<String> mappedPrimaryKeys =
+                normalizedKeys(resolvedMapping.targetTable().primaryKeys());
         if (!mappedPrimaryKeys.equals(targetPrimaryKeys)) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与映射后的来源主键一致");
         }
