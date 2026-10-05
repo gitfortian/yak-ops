@@ -93,7 +93,7 @@ Target Table Plan
 
 LogicalTable 复用 YakFlow Logical Type，不维护第二套类型枚举；同时拥有 Runtime 不需要的 comment / schemaVersion 等产品元数据。
 
-v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization、Target Table Planner、Auto Create Table Runtime 与 Schema Preview UI。Task Editor 直接消费后端 Preview Contract：目标表已存在时展示真实 Target Schema Compatibility；目标表缺失且显式开启 Auto Create 时展示计划 Native Type、warning / unsupported 与只读 CREATE TABLE SQL。Runtime 仍会在执行前重新读取真实 Catalog，只有目标表缺失、autoCreateTable=true 且计划 supported 时才执行受控 CREATE TABLE。Logical Table persistence 与 Catalog refresh / diff 尚未实现。
+v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalization、Target Table Planner、Auto Create Table Runtime 与 Schema Preview UI。Task Editor 直接消费后端 Preview Contract：目标表已存在时展示真实 Target Schema Compatibility；目标表缺失且显式开启 Auto Create 时展示计划 Native Type、warning / unsupported 与只读完整 DDL。自动创建新表会保留 Source Catalog 中的 Table / Column comment，Mapping 改名后的目标字段继续继承原字段注释；MySQL 内联 Comment，PostgreSQL / Oracle 使用后续 COMMENT ON 语句。Runtime 仍会在执行前重新读取真实 Catalog，只有目标表缺失、autoCreateTable=true 且计划 supported 时才执行受控建表 DDL。Logical Table persistence 与 Catalog refresh / diff 尚未实现。
 
 ## Offline Execution
 
