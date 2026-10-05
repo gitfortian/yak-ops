@@ -869,8 +869,8 @@ function formatDdlStatement(statement: string) {
 
   return [
     `${prefix} (`,
-    ...definitions.map((definition, index) =>
-      `  ${definition}${index < definitions.length - 1 ? "," : ""}`,
+    ...definitions.map(
+      (definition, index) => `  ${definition}${index < definitions.length - 1 ? "," : ""}`,
     ),
     `)${suffix ? ` ${suffix}` : ""};`,
   ].join("\n");
