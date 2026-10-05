@@ -319,7 +319,7 @@ TargetTablePlan
 - 由 LOB 类宽化得到的 LONGTEXT / LONGBLOB / CLOB / BLOB 在当前 Planner 中不能直接作为目标主键；该场景为 blocking unsupported。
 - MySQL 无法保留 TIMESTAMP_WITH_TIME_ZONE 语义；Oracle 没有独立 TIME 列类型，这两类当前直接 unsupported。
 
-Table / Column comment 当前只保留在 TargetTablePlan 产品元数据中，PR3 不生成各数据库不同语法的 COMMENT DDL。
+Table / Column comment 继续保留在 TargetTablePlan 产品元数据中；自动建表 DDL 同步保留这些注释：MySQL 内联到 CREATE TABLE，PostgreSQL / Oracle 在 CREATE TABLE 后追加 COMMENT ON TABLE / COLUMN。
 
 ## 10. Auto Create Table Runtime
 
@@ -372,7 +372,8 @@ target exists?
 - Source nullable 字段不能写入 Target NOT NULL 字段。
 - Target 多余字段只有在 nullable 时允许；当前 Catalog 尚未稳定暴露 COLUMN DEFAULT，因此多余的 NOT NULL 字段按不兼容保守拒绝。
 - REALTIME 继续要求 Source / Target 主键集合一致；UPSERT 继续要求 Target 有主键且 Source 包含全部目标主键。
-- PR4 不提供 COMMENT DDL、INDEX、FOREIGN KEY、ALTER、DROP、DDL Sync 或 Automatic Schema Evolution。
+- 自动创建新表时保留 LogicalTable / LogicalColumn comment；只对本次新建表执行受控 Comment DDL，不对已存在目标表做 COMMENT / ALTER 同步。
+- 仍不提供 INDEX、FOREIGN KEY、ALTER、DROP、DDL Sync 或 Automatic Schema Evolution。
 
 Task persistence 使用 v1.2 Draft Migration：
 
@@ -437,7 +438,7 @@ Logical Type Normalization = IMPLEMENTED
 Catalog Refresh / Diff = NOT IMPLEMENTED
 Target Table Planner = IMPLEMENTED
 MySQL / PostgreSQL / Oracle Target Dialect = IMPLEMENTED
-CREATE TABLE DDL Planning = IMPLEMENTED
+CREATE TABLE + COMMENT DDL Planning = IMPLEMENTED
 Auto Create Table Runtime = IMPLEMENTED
 Runtime Schema Compatibility Preflight = IMPLEMENTED
 Auto Create Table Preview API = IMPLEMENTED
@@ -461,4 +462,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTablePreflight Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。PR5 将后端 Preview Contract 暴露到 Task Editor：显式 Auto Create Switch、缺失目标表名输入、Target existence、field mapping、warning / unsupported 与只读 CREATE TABLE SQL；前端不复制 JDBC 类型或兼容算法。Logical Table persistence 仍属于后续能力。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTablePreflight Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。自动建表 Comment DDL 同样由 JdbcDialect 规划并在真实三库验收中读回验证。PR5 将后端 Preview Contract 暴露到 Task Editor：显式 Auto Create Switch、缺失目标表名输入、Target existence、field mapping、warning / unsupported 与只读完整 DDL；前端不复制 JDBC 类型或兼容算法。Logical Table persistence 仍属于后续能力。
