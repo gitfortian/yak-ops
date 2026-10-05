@@ -59,6 +59,17 @@ class DataSyncAutoCreatePreviewContractTest {
         assertTrue(preview.getCreateTableSql().contains("\"display_name\""));
         assertTrue(preview.getCreateTableSql().contains("\"user_id\""));
         assertTrue(preview.getCreateTableSql().contains("PRIMARY KEY (\"user_id\")"));
+        assertEquals(4, preview.getDdlStatements().size());
+        assertEquals(preview.getCreateTableSql(), preview.getDdlStatements().getFirst());
+        assertEquals(
+                "COMMENT ON TABLE \"target_table\" IS '来源用户表'",
+                preview.getDdlStatements().get(1));
+        assertEquals(
+                "COMMENT ON COLUMN \"target_table\".\"display_name\" IS '用户名'",
+                preview.getDdlStatements().get(2));
+        assertEquals(
+                "COMMENT ON COLUMN \"target_table\".\"user_id\" IS '用户ID'",
+                preview.getDdlStatements().get(3));
     }
 
     @Test
@@ -106,9 +117,11 @@ class DataSyncAutoCreatePreviewContractTest {
     private DataSourceService dataSourceService() {
         DataSourceVO source = dataSource("source", "MYSQL", "source_db");
         DataSourceVO target = dataSource("target", "POSTGRE_SQL", "target_db");
-        List<DataSourceCatalogColumnVO> sourceColumns = List.of(
-                column("id", Types.BIGINT, 19, false, 1, true, 1),
-                column("name", Types.VARCHAR, 100, true, 2, false, null));
+        DataSourceCatalogColumnVO id = column("id", Types.BIGINT, 19, false, 1, true, 1);
+        id.setRemarks("用户ID");
+        DataSourceCatalogColumnVO name = column("name", Types.VARCHAR, 100, true, 2, false, null);
+        name.setRemarks("用户名");
+        List<DataSourceCatalogColumnVO> sourceColumns = List.of(id, name);
 
         return (DataSourceService) Proxy.newProxyInstance(
                 DataSourceService.class.getClassLoader(),
@@ -127,6 +140,7 @@ class DataSyncAutoCreatePreviewContractTest {
                         DataSourceCatalogTableVO table = new DataSourceCatalogTableVO();
                         table.setName("source_table");
                         table.setType("TABLE");
+                        table.setRemarks("来源用户表");
                         return table;
                     }
                     throw new UnsupportedOperationException(method.getName());
