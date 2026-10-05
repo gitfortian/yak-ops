@@ -4,6 +4,7 @@ import io.yak.ops.business.datasync.schema.LogicalColumn;
 import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcTargetTableDdlPlan;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialects;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcNativeType;
@@ -80,7 +81,9 @@ public class TargetTablePlanner {
                     unsupportedReason));
         }
 
-        String createTableSql = unsupported.isEmpty() ? dialect.createTableSql(targetPath, runtimeSchema) : null;
+        JdbcTargetTableDdlPlan ddlPlan = unsupported.isEmpty()
+                ? dialect.createTablePlan(targetPath, runtimeSchema, logicalTable.comment(), columnComments(logicalTable))
+                : null;
         return new TargetTablePlan(
                 canonicalType,
                 targetPath,
@@ -90,7 +93,18 @@ public class TargetTablePlanner {
                 logicalTable.primaryKeys(),
                 warnings,
                 unsupported,
-                createTableSql);
+                ddlPlan == null ? List.of() : ddlPlan.statements(),
+                ddlPlan == null ? null : ddlPlan.createTableSql());
+    }
+
+    private Map<String, String> columnComments(LogicalTable logicalTable) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (LogicalColumn column : logicalTable.columns()) {
+            if (column.comment() != null && !column.comment().isBlank()) {
+                result.put(column.name(), column.comment());
+            }
+        }
+        return result;
     }
 
     private Map<String, Integer> primaryKeyPositions(List<String> primaryKeys) {
