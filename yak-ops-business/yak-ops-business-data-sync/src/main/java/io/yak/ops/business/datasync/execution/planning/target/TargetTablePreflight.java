@@ -132,7 +132,7 @@ public class TargetTablePreflight {
             ddlExecutor.createTable(
                     dataSourceService.resolveRuntimeConnection(targetEndpoint.getDataSourceId()),
                     plan.targetPath(),
-                    targetLogicalTable.toRuntimeSchema(),
+                    targetLogicalTable,
                     timeoutSeconds);
             return true;
         } catch (Exception exception) {

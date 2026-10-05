@@ -21,8 +21,11 @@ public class DataSyncMappingPreviewVO {
     /** 本次预览是否允许目标表不存在时自动建表。 */
     private boolean autoCreateTable;
 
-    /** 目标表不存在且自动建表可行时生成的 CREATE TABLE SQL。 */
+    /** 目标表不存在且自动建表可行时生成的主 CREATE TABLE SQL。 */
     private String createTableSql;
+
+    /** 自动建表完整受控 DDL；第一条为 CREATE TABLE，后续可包含 Comment DDL。 */
+    private List<String> ddlStatements = List.of();
 
     /** 自动建表规划中的非阻塞提示。 */
     private List<String> warnings = List.of();

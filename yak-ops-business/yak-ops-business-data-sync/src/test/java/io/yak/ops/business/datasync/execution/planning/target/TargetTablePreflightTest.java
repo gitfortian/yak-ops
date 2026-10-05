@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
@@ -19,7 +20,6 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingVO;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
-import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.lang.reflect.Field;
@@ -134,11 +134,11 @@ class TargetTablePreflightTest {
     @Test
     void shouldAutoCreateMappedTargetSchema() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(false);
-        AtomicReference<YakTableSchema> createdSchema = new AtomicReference<>();
+        AtomicReference<LogicalTable> createdTable = new AtomicReference<>();
         TargetTablePreflight preparer =
                 preparer(mappedAutoCreateDataSourceService(targetExists), new AtomicInteger());
         inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
-            createdSchema.set(schema);
+            createdTable.set(schema);
             targetExists.set(true);
             return "CREATE TABLE";
         });
@@ -153,8 +153,12 @@ class TargetTablePreflightTest {
         assertTrue(result.targetCreated());
         assertEquals(
                 List.of("display_name", "user_id"),
-                createdSchema.get().columns().stream().map(column -> column.name()).toList());
-        assertEquals(List.of("user_id"), createdSchema.get().primaryKeys());
+                createdTable.get().columns().stream().map(column -> column.name()).toList());
+        assertEquals(List.of("user_id"), createdTable.get().primaryKeys());
+        assertEquals("来源用户表", createdTable.get().comment());
+        assertEquals(
+                List.of("用户名", "用户ID"),
+                createdTable.get().columns().stream().map(column -> column.comment()).toList());
         assertEquals(
                 List.of("name", "id"),
                 result.sourceSchema().columns().stream().map(column -> column.name()).toList());
@@ -187,9 +191,11 @@ class TargetTablePreflightTest {
     }
 
     private DataSourceService mappedAutoCreateDataSourceService(AtomicBoolean targetExists) {
-        List<DataSourceCatalogColumnVO> sourceColumns = List.of(
-                column("id", Types.BIGINT, 19, false, 1, true, 1),
-                column("name", Types.VARCHAR, 100, true, 2, false, null));
+        DataSourceCatalogColumnVO sourceId = column("id", Types.BIGINT, 19, false, 1, true, 1);
+        sourceId.setRemarks("用户ID");
+        DataSourceCatalogColumnVO sourceName = column("name", Types.VARCHAR, 100, true, 2, false, null);
+        sourceName.setRemarks("用户名");
+        List<DataSourceCatalogColumnVO> sourceColumns = List.of(sourceId, sourceName);
         List<DataSourceCatalogColumnVO> targetColumns = List.of(
                 column("user_id", Types.BIGINT, 19, false, 1, true, 1),
                 column("display_name", Types.VARCHAR, 100, true, 2, false, null));
@@ -200,7 +206,12 @@ class TargetTablePreflightTest {
                 (proxy, method, args) -> {
                     String dataSourceId = args != null && args.length > 0 ? String.valueOf(args[0]) : null;
                     if ("queryCatalogTable".equals(method.getName())) {
-                        return "source".equals(dataSourceId) ? table("source_table") : table("target_table");
+                        if ("source".equals(dataSourceId)) {
+                            DataSourceCatalogTableVO sourceTable = table("source_table");
+                            sourceTable.setRemarks("来源用户表");
+                            return sourceTable;
+                        }
+                        return table("target_table");
                     }
                     if ("findCatalogTable".equals(method.getName())) {
                         return targetExists.get() ? Optional.of(table("target_table")) : Optional.empty();
