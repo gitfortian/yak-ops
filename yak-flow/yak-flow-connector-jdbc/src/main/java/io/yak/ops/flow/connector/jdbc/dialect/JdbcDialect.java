@@ -2,7 +2,11 @@ package io.yak.ops.flow.connector.jdbc.dialect;
 
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcTargetTableDdlPlan;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +51,49 @@ public interface JdbcDialect {
             definitions += ", PRIMARY KEY (" + primaryKeys + ")";
         }
         return "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")";
+    }
+
+    /**
+     * 生成 CREATE TABLE 与 Comment DDL 的完整受控计划。
+     *
+     * <p>默认使用 COMMENT ON TABLE / COLUMN；需要内联 Comment 的数据库可以覆盖此方法。
+     *
+     * @param table 目标表路径
+     * @param schema 目标逻辑 Schema
+     * @param tableComment 表注释；为空时不生成 Comment DDL
+     * @param columnComments 字段名到字段注释；空注释会被忽略
+     * @return 完整 DDL 计划
+     */
+    default JdbcTargetTableDdlPlan createTablePlan(
+            DataSourceTablePath table,
+            YakTableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments) {
+        String createTableSql = createTableSql(table, schema);
+        List<String> statements = new ArrayList<>();
+        statements.add(createTableSql);
+
+        if (hasComment(tableComment)) {
+            statements.add("COMMENT ON TABLE " + qualifiedTable(table) + " IS " + stringLiteral(tableComment));
+        }
+
+        Map<String, String> comments = columnComments == null ? Map.of() : columnComments;
+        for (YakColumn column : schema.columns()) {
+            String comment = comments.get(column.name());
+            if (!hasComment(comment)) continue;
+            statements.add("COMMENT ON COLUMN " + qualifiedTable(table) + "." + quoteIdentifier(column.name())
+                    + " IS " + stringLiteral(comment));
+        }
+        return new JdbcTargetTableDdlPlan(createTableSql, statements);
+    }
+
+    default String stringLiteral(String value) {
+        if (value == null) throw new IllegalArgumentException("SQL literal value must not be null");
+        return "'" + value.replace("'", "''") + "'";
+    }
+
+    private boolean hasComment(String value) {
+        return value != null && !value.isBlank();
     }
 
     default String selectSql(DataSourceTablePath table, YakTableSchema schema) {
