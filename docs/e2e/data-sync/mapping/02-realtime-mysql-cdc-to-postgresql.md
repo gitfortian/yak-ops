@@ -58,7 +58,7 @@ CREATE TABLE e2e_mapping_realtime_target (
 1. 新建实时同步任务。
 2. Source 选择 `e2e_mapping_realtime_source`。
 3. Target 选择 `e2e_mapping_realtime_target`。
-4. 在“Schema 映射”中配置：
+4. 在“去向字段映射”中配置：
    - `name → display_name`
    - `id → user_id`
 5. 不映射 `note`。
