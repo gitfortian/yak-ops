@@ -1374,8 +1374,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private LogicalTable sourceLogicalTable(String sourceDataSourceId, DataSyncMappingPreviewDTO resolvedScope) {
         DataSourceTablePathDTO sourcePath = tablePath(
                 resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), resolvedScope.getSourceTable());
-        DataSourceCatalogTableVO sourceTable =
-                dataSourceService.queryCatalogTable(sourceDataSourceId, sourcePath);
+        DataSourceCatalogTableVO sourceTable = dataSourceService.queryCatalogTable(sourceDataSourceId, sourcePath);
         List<DataSourceCatalogColumnVO> sourceColumns =
                 dataSourceService.queryCatalogColumns(sourceDataSourceId, sourcePath);
         return LogicalTableNormalizer.fromCatalog(sourceTable, sourceColumns);
