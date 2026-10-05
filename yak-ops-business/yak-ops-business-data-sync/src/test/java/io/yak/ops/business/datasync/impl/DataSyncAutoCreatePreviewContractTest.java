@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.common.bean.dto.datasync.DataSyncColumnMappingDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -38,6 +40,28 @@ class DataSyncAutoCreatePreviewContractTest {
     }
 
     @Test
+    void shouldPreviewMappedTargetNamesAndOrderForAutoCreate() throws Exception {
+        DataSyncServiceImpl service = service();
+        DataSyncMappingPreviewDTO request = request(true);
+        request.setMapping(mapping(
+                columnMapping("name", "display_name"),
+                columnMapping("id", "user_id")));
+
+        DataSyncMappingPreviewVO preview = service.previewMapping(request);
+
+        assertTrue(preview.isCompatible());
+        assertEquals(
+                List.of("name", "id"),
+                preview.getMappings().stream().map(mapping -> mapping.getSourceName()).toList());
+        assertEquals(
+                List.of("display_name", "user_id"),
+                preview.getMappings().stream().map(mapping -> mapping.getTargetName()).toList());
+        assertTrue(preview.getCreateTableSql().contains("\"display_name\""));
+        assertTrue(preview.getCreateTableSql().contains("\"user_id\""));
+        assertTrue(preview.getCreateTableSql().contains("PRIMARY KEY (\"user_id\")"));
+    }
+
+    @Test
     void shouldReportMissingTargetWhenAutoCreateDisabled() throws Exception {
         DataSyncServiceImpl service = service();
 
@@ -64,6 +88,19 @@ class DataSyncAutoCreatePreviewContractTest {
         dto.setTargetTable("target_table");
         dto.setAutoCreateTable(autoCreateTable);
         return dto;
+    }
+
+    private DataSyncMappingDTO mapping(DataSyncColumnMappingDTO... columns) {
+        DataSyncMappingDTO mapping = new DataSyncMappingDTO();
+        mapping.setColumns(List.of(columns));
+        return mapping;
+    }
+
+    private DataSyncColumnMappingDTO columnMapping(String source, String target) {
+        DataSyncColumnMappingDTO mapping = new DataSyncColumnMappingDTO();
+        mapping.setSource(source);
+        mapping.setTarget(target);
+        return mapping;
     }
 
     private DataSourceService dataSourceService() {
