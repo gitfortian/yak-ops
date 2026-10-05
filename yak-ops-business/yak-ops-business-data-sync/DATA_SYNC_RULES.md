@@ -47,12 +47,12 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - Catalog composite primary key 必须使用 `primaryKeyPosition / KEY_SEQ` 保留顺序，不能按字段 ordinal 猜测。
 - Logical Table persistence 仍归 DAO；schema 包不直接持有 Entity / Mapper。
 - `TargetTablePlanner` 只消费 LogicalTable + Target Type / Path，聚合产品级 warning / unsupported，不连接数据库、不执行 DDL。
-- Target Native Type / identifier quote / CREATE TABLE SQL 归 YakFlow `JdbcDialect`；Data Sync 不复制 MySQL / PostgreSQL / Oracle 类型映射。
-- Target Plan 出现 blocking unsupported 时必须保持 `createTableSql=null`，不能生成部分 DDL 或静默降级。
-- Target Table comment / column comment 当前只作为 Plan 元数据保留，不拼接数据库特有 COMMENT DDL。
+- Target Native Type / identifier quote / CREATE TABLE + Comment DDL 归 YakFlow `JdbcDialect`；Data Sync 不复制 MySQL / PostgreSQL / Oracle 类型映射或注释语法。
+- Target Plan 出现 blocking unsupported 时必须保持 `createTableSql=null` 且 `ddlStatements=[]`，不能生成部分 DDL 或静默降级。
+- Target Table / Column comment 从 Source Catalog 进入 Logical Schema，Mapping 改名后继续跟随目标字段；自动创建新表时必须进入同一 Target DDL Plan。MySQL / PostgreSQL / Oracle 的具体 Comment 语法归 JdbcDialect。
 - `TargetSchemaCompatibility` 是保存预览与 Runtime Preflight 共用的目标结构兼容口径；Source nullable → Target NOT NULL、缺失 Source 字段、类型/容量不兼容、以及 Target 多余 NOT NULL 字段都必须拒绝。
 - `TargetTablePreflight` 每个 Attempt 重新读取 Catalog：目标存在只校验；目标缺失时只有 snapshot.autoCreateTable=true 且 Plan supported 才可调用 TargetTableDdlExecutor。
-- CREATE TABLE 后必须重新读取 Target Catalog 并再次做兼容性 / Primary Key 校验；禁止直接相信生成 DDL，也禁止自动 ALTER / DROP 已存在表。
+- CREATE TABLE + Comment DDL 后必须重新读取 Target Catalog 并再次做兼容性 / Primary Key 校验；禁止直接相信生成 DDL，也禁止自动 ALTER / DROP / COMMENT 已存在表。
 - `autoCreateTable` 是 Task 可执行定义，默认 false；变化必须推进 definitionVersion，Execution Snapshot 冻结后 Retry / Auto Recovery 复用该值。
 - 已冻结到 Task snapshot 的 Schema / auto-create policy 不得因后续 Task 编辑而改变历史 Execution。
 
