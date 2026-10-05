@@ -165,10 +165,15 @@ export function SchemaMappingEditor({
     [sourceColumns, targetColumns, targetDerived],
   );
 
-  const implicitMappings = useMemo(
-    () => buildSameNameMappings(sourceColumns, baseTargetColumns),
-    [baseTargetColumns, sourceColumns],
-  );
+  const implicitMappings = useMemo(() => {
+    const targets = new Map(
+      baseTargetColumns.map((column) => [normalizeFieldName(column.name), column.name]),
+    );
+    return sourceColumns.map((column) => ({
+      source: column.name,
+      target: targets.get(normalizeFieldName(column.name)) || column.name,
+    }));
+  }, [baseTargetColumns, sourceColumns]);
 
   const mappings = value?.columns ?? implicitMappings;
 
@@ -197,12 +202,12 @@ export function SchemaMappingEditor({
     return result;
   }, [baseTargetColumns, mappings, sourceMap]);
 
-  const targetMap = useMemo(
+  const selectableTargetMap = useMemo(
     () =>
       new Map(
-        displayTargetColumns.map((column) => [normalizeFieldName(column.name), column]),
+        baseTargetColumns.map((column) => [normalizeFieldName(column.name), column]),
       ),
-    [displayTargetColumns],
+    [baseTargetColumns],
   );
 
   const usedSources = useMemo(
@@ -239,7 +244,7 @@ export function SchemaMappingEditor({
       if (
         !sourceColumn ||
         !normalizedTarget ||
-        (!targetDerived && !targetMap.has(normalizeFieldName(normalizedTarget)))
+        (!targetDerived && !selectableTargetMap.has(normalizeFieldName(normalizedTarget)))
       ) {
         return;
       }
@@ -256,7 +261,7 @@ export function SchemaMappingEditor({
       commitMappings(next);
       setSelectedSource(undefined);
     },
-    [commitMappings, mappings, sourceMap, targetDerived, targetMap],
+    [commitMappings, mappings, selectableTargetMap, sourceMap, targetDerived],
   );
 
   const removeMapping = useCallback(
@@ -503,13 +508,12 @@ export function SchemaMappingEditor({
 
           <Popover open={addOpen} onOpenChange={setAddOpen}>
             <PopoverTrigger
-              render={
-                <Button size="small" disabled={!mappingReady}>
-                  <Plus size={14} />
-                  添加映射
-                </Button>
-              }
-            />
+              disabled={!mappingReady}
+              className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--yak-radius-control-small)] border border-transparent bg-[var(--yak-components-button-secondary-bg)] px-2.5 text-[length:var(--yak-font-size-control-small)] font-medium text-[var(--yak-components-button-secondary-text)] outline-none transition-colors hover:bg-[var(--yak-components-button-secondary-bg-hover)] focus-visible:ring-[3px] focus-visible:ring-[var(--yak-components-button-focus-ring)] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Plus size={14} />
+              添加映射
+            </PopoverTrigger>
             <PopoverContent align="end" className="w-[320px] space-y-3">
               <DataSyncSearchableSelect
                 value={addSource}
