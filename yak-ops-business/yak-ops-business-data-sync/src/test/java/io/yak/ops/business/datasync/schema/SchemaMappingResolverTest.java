@@ -47,6 +47,25 @@ class SchemaMappingResolverTest {
     }
 
     @Test
+    void shouldNotProjectPartialCompositePrimaryKey() {
+        LogicalTable source = new LogicalTable(
+                "orders",
+                "orders",
+                1,
+                List.of(
+                        new LogicalColumn("tenant_id", YakTypes.BIGINT, false, null, "tenant"),
+                        new LogicalColumn("id", YakTypes.BIGINT, false, null, "id"),
+                        new LogicalColumn("amount", YakTypes.INTEGER, true, null, "amount")),
+                List.of("tenant_id", "id"));
+
+        ResolvedSchemaMapping result =
+                resolver.resolve(source, List.of(new SchemaColumnMapping("id", "order_id")));
+
+        assertEquals(List.of(), result.sourceTable().primaryKeys());
+        assertEquals(List.of(), result.targetTable().primaryKeys());
+    }
+
+    @Test
     void shouldResolveSourceNameCaseInsensitively() {
         ResolvedSchemaMapping result =
                 resolver.resolve(sourceTable(), List.of(new SchemaColumnMapping("ID", "USER_ID")));
