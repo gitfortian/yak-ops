@@ -15,7 +15,7 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - REALTIME Source 只展示 MySQL，Target 只展示 MySQL / PostgreSQL / Oracle；最终拓扑、主键和兼容性由后端校验。
 - Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。
 - Schema Mapping Editor 只负责字段选择、改名、重排和连线交互，不在前端重建 JDBC 类型兼容、主键契约或 Transform；每次 Mapping 变化都调用后端 Mapping Preview，兼容性、类型与 DDL 结果以后端为准。修改依赖字段后重新查询，过期结果不得覆盖当前选择。同一 Source / Target Scope 内仅 Mapping 变化时，Preview 刷新不得先清空上一份有效结果造成 Header / Diagnostics 反复挂载；使用独立 loading 状态阻断保存并保持布局稳定。Scope 身份变化时才清空旧 Preview，避免跨表展示陈旧状态。
-- Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因、规划警告与自动建表 DDL 等不可由映射画布直接表达的信息。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。
+- Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因、规划警告与自动建表 DDL 等不可由映射画布直接表达的信息。自动建表 Preview 必须展示后端返回的完整 ddlStatements（CREATE TABLE + 可能的 Comment DDL），不能只展示第一条 CREATE TABLE；createTableSql 仅作为旧响应兼容回退。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。
 - OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
 - Retry Policy 使用共享“重试策略”折叠区配置：`maxAttempts` 范围 1～10，包含首次执行；1 表示关闭自动重试。启用重试时 `backoffSeconds` 范围 0～3600，表示固定等待秒数。前端只做同范围输入校验，最终仍由后端 DTO 校验。
 - Retry Policy 同时适用于 OFFLINE / REALTIME，并随 Task 定义保存及 Execution definitionSnapshot 冻结。页面不得增加第二个 enabled 字段，也不得把 Retry 做成 Quartz / Schedule 配置。
