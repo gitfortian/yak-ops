@@ -42,16 +42,16 @@ Source / Split / Enumerator 保持内聚；MySQL `source` 管 YakFlow 生命周�
 
 target pre-write 与逐行 write 保持分离，遵循 [JDBC Batch Contract](../docs/capabilities/yak-flow/README.md#jdbc-batch-connector)。按事务批次提交，失败回滚未提交内容；不得把 OVERWRITE 宣称为原子替换或在 TRUNCATE 失败时偷偷执行 DELETE。
 
-JDBC `dialect` 同时拥有目标 Native Type 与 CREATE TABLE DDL 规划，复用同一套 identifier / table path 规则：
+JDBC `dialect` 同时拥有目标 Native Type 与 CREATE TABLE / Comment DDL 规划，复用同一套 identifier / table path / literal escaping 规则：
 
 - `JdbcNativeType` 表达原生类型、非阻塞 warning 和是否可直接作为主键。
-- `JdbcDialect#createTableSql` 只生成 DDL，不打开连接、不执行 SQL。
+- `JdbcDialect#createTableSql` 保留单条 CREATE TABLE Contract；`createTablePlan` 生成按顺序执行的完整建表计划，第一条固定为 CREATE TABLE，后续可包含受控 Comment DDL。
 - 不支持的语义必须抛出明确 UnsupportedOperationException，由产品 Planner 转成 blocking diagnostic；禁止静默缩窄类型。
 - 目标类型映射可以安全放宽容量，但必须对未知容量 / 精度给 warning。
-- Database-specific comment / index / foreign key / schema-evolution DDL 不在当前基础方言 Contract 内。
-- `JdbcTargetTableProvisioner` 是当前唯一 CREATE TABLE 执行入口；只接受受控 TablePath + YakTableSchema，不接受调用方传入 SQL 字符串。
-- Provisioner 只负责执行已规划 CREATE TABLE；是否允许自动创建、表存在性、Schema Compatibility 和并发创建后的 re-introspection 归 Data Sync。
-- Connector 禁止通过 Provisioner 执行 DROP / ALTER / COMMENT / INDEX 或其它任意 DDL。
+- Table / Column Comment 属于当前建表元数据 Contract：MySQL 可内联，PostgreSQL / Oracle 可使用 COMMENT ON；INDEX / foreign key / schema-evolution DDL 仍不在当前基础方言 Contract 内。
+- `JdbcTargetTableProvisioner` 是当前唯一目标建表 DDL 执行入口；常规入口只接受受控 TablePath + YakTableSchema + Comment 元数据，由 JdbcDialect 生成计划，不接受用户 SQL 字符串。
+- Provisioner 只负责执行已规划 CREATE TABLE / Comment statements；是否允许自动创建、表存在性、Schema Compatibility 和并发创建后的 re-introspection 归 Data Sync。
+- Connector 禁止通过 Provisioner 执行 DROP / ALTER / INDEX 或其它任意用户 DDL；Comment 只允许作为目标新表 DDL Plan 的受控元数据语句执行。
 
 ## MySQL CDC Connector
 
