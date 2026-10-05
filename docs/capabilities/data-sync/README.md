@@ -51,6 +51,8 @@ mapping.columns[]
 
 显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
 
+Schema Mapping Editor 已直接消费该任务级 Mapping Contract：已有目标表支持同名 / 同序 / 手动连线、删除与字段搜索；自动建表目标不存在时允许重命名目标字段。前端只维护字段身份与顺序，不判断 JDBC 类型兼容或主键合法性，所有编辑结果继续通过后端 Mapping Preview 验证。
+
 Mapping-Aware Schema Resolution 把同一份有序 Mapping 投影为两套位置对齐的运行 Schema：
 
 ```text
