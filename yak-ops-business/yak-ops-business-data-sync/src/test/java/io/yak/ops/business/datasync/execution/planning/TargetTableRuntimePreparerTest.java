@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class TargetTableRuntimePreparerTest {
@@ -130,6 +131,35 @@ class TargetTableRuntimePreparerTest {
     }
 
     @Test
+    void shouldAutoCreateMappedTargetSchema() throws Exception {
+        AtomicBoolean targetExists = new AtomicBoolean(false);
+        AtomicReference<YakTableSchema> createdSchema = new AtomicReference<>();
+        TargetTableRuntimePreparer preparer =
+                preparer(mappedAutoCreateDataSourceService(targetExists), new AtomicInteger());
+        inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
+            createdSchema.set(schema);
+            targetExists.set(true);
+            return "CREATE TABLE";
+        });
+
+        DataSyncDefinitionSnapshotVO snapshot = snapshot(true);
+        snapshot.setMapping(mapping(
+                columnMapping("name", "display_name"),
+                columnMapping("id", "user_id")));
+
+        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+
+        assertTrue(result.targetCreated());
+        assertEquals(
+                List.of("display_name", "user_id"),
+                createdSchema.get().columns().stream().map(column -> column.name()).toList());
+        assertEquals(List.of("user_id"), createdSchema.get().primaryKeys());
+        assertEquals(
+                List.of("name", "id"),
+                result.sourceSchema().columns().stream().map(column -> column.name()).toList());
+    }
+
+    @Test
     void shouldRejectExistingIncompatibleTargetSchema() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(true);
         TargetTableRuntimePreparer preparer =
@@ -150,6 +180,35 @@ class TargetTableRuntimePreparerTest {
             return "CREATE TABLE";
         });
         return preparer;
+    }
+
+    private DataSourceService mappedAutoCreateDataSourceService(AtomicBoolean targetExists) {
+        List<DataSourceCatalogColumnVO> sourceColumns = List.of(
+                column("id", Types.BIGINT, 19, false, 1, true, 1),
+                column("name", Types.VARCHAR, 100, true, 2, false, null));
+        List<DataSourceCatalogColumnVO> targetColumns = List.of(
+                column("user_id", Types.BIGINT, 19, false, 1, true, 1),
+                column("display_name", Types.VARCHAR, 100, true, 2, false, null));
+
+        return (DataSourceService) Proxy.newProxyInstance(
+                DataSourceService.class.getClassLoader(),
+                new Class<?>[] {DataSourceService.class},
+                (proxy, method, args) -> {
+                    String dataSourceId = args != null && args.length > 0 ? String.valueOf(args[0]) : null;
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? table("source_table") : table("target_table");
+                    }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return targetExists.get() ? Optional.of(table("target_table")) : Optional.empty();
+                    }
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? sourceColumns : targetColumns;
+                    }
+                    if ("resolveRuntimeConnection".equals(method.getName())) {
+                        return connection();
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     private DataSourceService mappedDataSourceService() {
