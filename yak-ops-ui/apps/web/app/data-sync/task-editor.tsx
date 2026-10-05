@@ -703,6 +703,11 @@ const SQL_KEYWORDS = new Set([
   "KEY",
   "NOT",
   "NULL",
+  "WITH",
+  "ZONE",
+]);
+
+const SQL_TYPES = new Set([
   "BOOLEAN",
   "TINYINT",
   "SMALLINT",
@@ -729,8 +734,6 @@ const SQL_KEYWORDS = new Set([
   "DATE",
   "TIME",
   "TIMESTAMP",
-  "WITH",
-  "ZONE",
 ]);
 
 const SQL_TOKEN_PATTERN =
@@ -881,19 +884,22 @@ function SqlCodePreview({ statements }: { statements: string[] }) {
   const tokens = sql.match(SQL_TOKEN_PATTERN) || [sql];
 
   return (
-    <pre className="max-h-[360px] overflow-auto whitespace-pre bg-[#f8f9fb] px-4 py-3 font-mono text-xs leading-5 text-[#475467]">
+    <pre className="max-h-[360px] overflow-auto whitespace-pre bg-[#f5f5f5] px-4 py-3 font-mono text-xs leading-5 text-[#262626]">
       {tokens.map((token, index) => {
-        let className = "text-[#475467]";
+        const normalized = token.toUpperCase();
+        let className = "text-[#262626]";
         if (token.startsWith("'")) {
-          className = "text-[#027a48]";
+          className = "text-[#2f8f46]";
         } else if (token.startsWith("`") || token.startsWith('"')) {
-          className = "font-medium text-[#162044]";
+          className = "text-[#262626]";
         } else if (/^\d/.test(token)) {
-          className = "text-[#b54708]";
-        } else if (SQL_KEYWORDS.has(token.toUpperCase())) {
-          className = "font-medium text-[#175cd3]";
+          className = "text-[#d04a63]";
+        } else if (SQL_TYPES.has(normalized)) {
+          className = "text-[#7a5af8]";
+        } else if (SQL_KEYWORDS.has(normalized)) {
+          className = "text-[#c2416c]";
         } else if (/^[(),.;=]+$/.test(token)) {
-          className = "text-[#667085]";
+          className = "text-[#525252]";
         }
 
         return (
