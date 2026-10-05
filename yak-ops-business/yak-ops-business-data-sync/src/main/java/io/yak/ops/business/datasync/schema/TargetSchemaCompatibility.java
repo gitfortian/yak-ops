@@ -17,7 +17,7 @@ import java.util.Set;
 /**
  * 校验产品 LogicalTable 是否可以直接写入一个已存在 JDBC 目标表。
  *
- * <p>字段按 LogicalTable 顺序做同名匹配，类型兼容统一复用 JdbcSchemaCompatibility。</p>
+ * <p>调用方先把任务 Mapping 投影为目标命名的 LogicalTable；本类再按该 LogicalTable 顺序匹配真实目标字段，类型兼容统一复用 JdbcSchemaCompatibility。</p>
  *
  * @author weifuwan
  * @since 2026-10-04
