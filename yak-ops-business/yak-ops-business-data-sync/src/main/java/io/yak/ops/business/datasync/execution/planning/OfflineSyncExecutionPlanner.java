@@ -1,6 +1,8 @@
 package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.execution.planning.target.TargetTablePreflight;
+import io.yak.ops.business.datasync.execution.planning.target.TargetTablePreflightResult;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO;
@@ -32,7 +34,7 @@ public class OfflineSyncExecutionPlanner {
     private DataSourceService dataSourceService;
 
     @Resource
-    private TargetTableRuntimePreparer targetTableRuntimePreparer;
+    private TargetTablePreflight targetTablePreflight;
 
     public OfflineSyncExecutionPlan plan(DataSyncDefinitionSnapshotVO snapshot) {
         return plan(snapshot, RuntimeTraceListener.noop());
@@ -48,10 +50,10 @@ public class OfflineSyncExecutionPlanner {
         DataSyncRuntimeConfigVO runtimeConfig =
                 ObjectUtils.requireNonNull(snapshot.getRuntimeConfig(), "runtime config must not be null");
 
-        TargetTablePreparation targetPreparation =
-                targetTableRuntimePreparer.prepare(snapshot, runtimeConfig.getTimeoutSeconds());
-        YakTableSchema sourceSchema = targetPreparation.sourceSchema();
-        YakTableSchema targetWriteSchema = targetPreparation.targetWriteSchema();
+        TargetTablePreflightResult targetPreflight =
+                targetTablePreflight.prepare(snapshot, runtimeConfig.getTimeoutSeconds());
+        YakTableSchema sourceSchema = targetPreflight.sourceSchema();
+        YakTableSchema targetWriteSchema = targetPreflight.targetWriteSchema();
 
         DataSourceConnection sourceConnection =
                 dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId());
