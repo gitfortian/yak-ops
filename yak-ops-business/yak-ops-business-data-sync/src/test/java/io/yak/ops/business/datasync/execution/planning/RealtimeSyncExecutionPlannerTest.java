@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
+import io.yak.ops.business.datasync.execution.planning.target.TargetTablePreflight;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateNamespace;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
@@ -30,8 +32,8 @@ class RealtimeSyncExecutionPlannerTest {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         DataSourceService dataSourceService = dataSourceService();
         injectDataSourceService(planner, dataSourceService);
-        injectTargetTableRuntimePreparer(planner, targetTableRuntimePreparer(dataSourceService));
-        injectStateManager(planner, new RealtimeSyncStateManager());
+        injectTargetTablePreflight(planner, targetTablePreflight(dataSourceService));
+        injectStateNamespace(planner, new RealtimeSyncStateNamespace());
 
         RealtimeSyncExecutionPlan plan =
                 planner.plan("workspace-1", snapshot(DataSyncType.REALTIME.name()), 54021L);
@@ -50,8 +52,8 @@ class RealtimeSyncExecutionPlannerTest {
         RealtimeSyncExecutionPlanner planner = new RealtimeSyncExecutionPlanner();
         DataSourceService dataSourceService = dataSourceService();
         injectDataSourceService(planner, dataSourceService);
-        injectTargetTableRuntimePreparer(planner, targetTableRuntimePreparer(dataSourceService));
-        injectStateManager(planner, new RealtimeSyncStateManager());
+        injectTargetTablePreflight(planner, targetTablePreflight(dataSourceService));
+        injectStateNamespace(planner, new RealtimeSyncStateNamespace());
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -65,26 +67,35 @@ class RealtimeSyncExecutionPlannerTest {
         field.set(planner, service);
     }
 
-    private void injectTargetTableRuntimePreparer(
-            RealtimeSyncExecutionPlanner planner, TargetTableRuntimePreparer preparer) throws Exception {
-        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("targetTableRuntimePreparer");
+    private void injectTargetTablePreflight(
+            RealtimeSyncExecutionPlanner planner, TargetTablePreflight preparer) throws Exception {
+        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("targetTablePreflight");
         field.setAccessible(true);
         field.set(planner, preparer);
     }
 
-    private void injectStateManager(RealtimeSyncExecutionPlanner planner, RealtimeSyncStateManager stateManager)
+    private void injectStateNamespace(RealtimeSyncExecutionPlanner planner, RealtimeSyncStateNamespace stateNamespace)
             throws Exception {
-        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("stateManager");
+        Field field = RealtimeSyncExecutionPlanner.class.getDeclaredField("stateNamespace");
         field.setAccessible(true);
-        field.set(planner, stateManager);
+        field.set(planner, stateNamespace);
     }
 
-    private TargetTableRuntimePreparer targetTableRuntimePreparer(DataSourceService dataSourceService) throws Exception {
-        TargetTableRuntimePreparer preparer = new TargetTableRuntimePreparer();
-        Field field = TargetTableRuntimePreparer.class.getDeclaredField("dataSourceService");
-        field.setAccessible(true);
-        field.set(preparer, dataSourceService);
-        return preparer;
+    private TargetTablePreflight targetTablePreflight(DataSourceService dataSourceService) throws Exception {
+        TargetTablePreflight preflight = new TargetTablePreflight();
+        Field dataSourceField = TargetTablePreflight.class.getDeclaredField("dataSourceService");
+        dataSourceField.setAccessible(true);
+        dataSourceField.set(preflight, dataSourceService);
+
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        Field introspectorField = SourceTableIntrospector.class.getDeclaredField("dataSourceService");
+        introspectorField.setAccessible(true);
+        introspectorField.set(sourceTableIntrospector, dataSourceService);
+
+        Field sourceTableField = TargetTablePreflight.class.getDeclaredField("sourceTableIntrospector");
+        sourceTableField.setAccessible(true);
+        sourceTableField.set(preflight, sourceTableIntrospector);
+        return preflight;
     }
 
     private DataSourceService dataSourceService() {
