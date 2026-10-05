@@ -40,6 +40,14 @@ interface MappingGeometry {
   middleY: number;
 }
 
+interface FieldNodeGeometry {
+  key: string;
+  fieldKey: string;
+  role: "source" | "target";
+  x: number;
+  y: number;
+}
+
 interface DragState {
   pointerId: number;
   source: string;
@@ -104,21 +112,6 @@ const buildPositionMappings = (
     target: targetColumns[index].name,
   }));
 
-const connectionPath = (startX: number, startY: number, endX: number, endY: number) => {
-  if (Math.abs(startY - endY) < 1) {
-    return `M ${startX} ${startY} L ${endX} ${endY}`;
-  }
-
-  const distance = Math.abs(endX - startX);
-  const controlOffset = Math.max(48, distance * 0.35);
-  return [
-    `M ${startX} ${startY}`,
-    `C ${startX + controlOffset} ${startY},`,
-    `${endX - controlOffset} ${endY},`,
-    `${endX} ${endY}`,
-  ].join(" ");
-};
-
 export function SchemaMappingEditor({
   value,
   onChange,
@@ -134,12 +127,14 @@ export function SchemaMappingEditor({
   const canvasRef = useRef<HTMLDivElement>(null);
   const sourceRefs = useRef(new Map<string, HTMLButtonElement>());
   const targetRefs = useRef(new Map<string, HTMLButtonElement>());
+  const hoverClearTimerRef = useRef<number>();
 
   const [sourceKeyword, setSourceKeyword] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
   const [selectedSource, setSelectedSource] = useState<string>();
   const [hoveredMapping, setHoveredMapping] = useState<string>();
   const [geometries, setGeometries] = useState<MappingGeometry[]>([]);
+  const [fieldNodes, setFieldNodes] = useState<FieldNodeGeometry[]>([]);
   const [drag, setDrag] = useState<DragState>();
   const [addOpen, setAddOpen] = useState(false);
   const [addSource, setAddSource] = useState<string | null>(null);
@@ -196,15 +191,6 @@ export function SchemaMappingEditor({
   const selectableTargetMap = useMemo(
     () => new Map(baseTargetColumns.map((column) => [normalizeFieldName(column.name), column])),
     [baseTargetColumns],
-  );
-
-  const usedSources = useMemo(
-    () => new Set(mappings.map((item) => normalizeFieldName(item.source))),
-    [mappings],
-  );
-  const usedTargets = useMemo(
-    () => new Set(mappings.map((item) => normalizeFieldName(item.target))),
-    [mappings],
   );
 
   const visibleSources = useMemo(
@@ -266,6 +252,7 @@ export function SchemaMappingEditor({
     const canvas = canvasRef.current;
     if (!canvas) {
       setGeometries([]);
+      setFieldNodes([]);
       return;
     }
 
@@ -295,8 +282,37 @@ export function SchemaMappingEditor({
       ];
     });
 
+    const nodes: FieldNodeGeometry[] = [];
+    visibleSources.forEach((column) => {
+      const fieldKey = normalizeFieldName(column.name);
+      const element = sourceRefs.current.get(fieldKey);
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      nodes.push({
+        key: `source::${fieldKey}`,
+        fieldKey,
+        role: "source",
+        x: rect.right - canvasRect.left,
+        y: rect.top - canvasRect.top + rect.height / 2,
+      });
+    });
+    visibleTargets.forEach((column) => {
+      const fieldKey = normalizeFieldName(column.name);
+      const element = targetRefs.current.get(fieldKey);
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      nodes.push({
+        key: `target::${fieldKey}`,
+        fieldKey,
+        role: "target",
+        x: rect.left - canvasRect.left,
+        y: rect.top - canvasRect.top + rect.height / 2,
+      });
+    });
+
     setGeometries(next);
-  }, [mappings]);
+    setFieldNodes(nodes);
+  }, [mappings, visibleSources, visibleTargets]);
 
   useLayoutEffect(() => {
     calculateGeometry();
@@ -389,10 +405,43 @@ export function SchemaMappingEditor({
     [preview?.mappings],
   );
 
+  const mappingBySource = useMemo(
+    () => new Map(mappings.map((item) => [normalizeFieldName(item.source), item])),
+    [mappings],
+  );
+  const mappingByTarget = useMemo(
+    () => new Map(mappings.map((item) => [normalizeFieldName(item.target), item])),
+    [mappings],
+  );
+
+  const clearHoverTimer = useCallback(() => {
+    if (hoverClearTimerRef.current !== undefined) {
+      window.clearTimeout(hoverClearTimerRef.current);
+      hoverClearTimerRef.current = undefined;
+    }
+  }, []);
+
+  const showMappingActions = useCallback(
+    (key: string) => {
+      clearHoverTimer();
+      setHoveredMapping(key);
+    },
+    [clearHoverTimer],
+  );
+
+  const hideMappingActions = useCallback(() => {
+    clearHoverTimer();
+    hoverClearTimerRef.current = window.setTimeout(() => {
+      setHoveredMapping(undefined);
+      hoverClearTimerRef.current = undefined;
+    }, 80);
+  }, [clearHoverTimer]);
+
+  useEffect(() => clearHoverTimer, [clearHoverTimer]);
+
   const renderField = (column: DataSourceCatalogColumn, role: "source" | "target") => {
     const field = column.name;
     const fieldKey = normalizeFieldName(field);
-    const mapped = role === "source" ? usedSources.has(fieldKey) : usedTargets.has(fieldKey);
     const selected = role === "source" && selectedSource === field;
 
     return (
@@ -430,15 +479,6 @@ export function SchemaMappingEditor({
         <span className="truncate border-l border-[#eef0f3] px-3 text-xs text-[#475467]">
           {columnType(column)}
         </span>
-        <span
-          className={[
-            "absolute top-1/2 z-20 h-2 w-2 -translate-y-1/2 rotate-45 border border-white",
-            role === "source" ? "-right-1" : "-left-1",
-            mapped || selected
-              ? "bg-[var(--yak-color-primary)] shadow-[0_0_0_1px_var(--yak-color-primary)]"
-              : "bg-[#cfd4dc] shadow-[0_0_0_1px_#cfd4dc]",
-          ].join(" ")}
-        />
       </button>
     );
   };
@@ -556,138 +596,180 @@ export function SchemaMappingEditor({
           <Empty description="当前表暂无可映射字段" />
         </div>
       ) : (
-        <div
-          ref={canvasRef}
-          className="relative grid min-h-[320px] grid-cols-[minmax(280px,1fr)_minmax(160px,.65fr)_minmax(280px,1fr)] bg-white max-xl:grid-cols-[minmax(240px,1fr)_140px_minmax(240px,1fr)]"
-          onPointerMove={moveDrag}
-          onPointerUp={finishDrag}
-          onPointerCancel={() => setDrag(undefined)}
-        >
-          <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
-            {geometries.map((geometry) => {
-              const active = hoveredMapping === geometry.key;
-              const detail = previewByMapping.get(geometry.key);
-              const path = connectionPath(
-                geometry.startX,
-                geometry.startY,
-                geometry.endX,
-                geometry.endY,
-              );
+        <div className="max-h-[400px] overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
+          <div
+            ref={canvasRef}
+            className="relative grid min-h-[320px] grid-cols-[minmax(280px,1fr)_minmax(160px,.65fr)_minmax(280px,1fr)] bg-white max-xl:grid-cols-[minmax(240px,1fr)_140px_minmax(240px,1fr)]"
+            onPointerMove={moveDrag}
+            onPointerUp={finishDrag}
+            onPointerCancel={() => setDrag(undefined)}
+          >
+            <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
+              {geometries.map((geometry) => {
+                const active = hoveredMapping === geometry.key;
+                const detail = previewByMapping.get(geometry.key);
+                const stroke =
+                  detail && !detail.compatible
+                    ? "#d92d20"
+                    : active
+                      ? "var(--yak-color-primary)"
+                      : "#cfd4dc";
 
-              return (
-                <g key={geometry.key}>
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth={14}
-                    className="pointer-events-auto cursor-pointer"
-                    onMouseEnter={() => setHoveredMapping(geometry.key)}
-                    onMouseLeave={() => setHoveredMapping(undefined)}
+                return (
+                  <g key={geometry.key}>
+                    <line
+                      x1={geometry.startX}
+                      y1={geometry.startY}
+                      x2={geometry.endX}
+                      y2={geometry.endY}
+                      stroke="transparent"
+                      strokeWidth={14}
+                      className="pointer-events-auto cursor-pointer"
+                      onMouseEnter={() => showMappingActions(geometry.key)}
+                      onMouseLeave={hideMappingActions}
+                    />
+                    <line
+                      x1={geometry.startX}
+                      y1={geometry.startY}
+                      x2={geometry.endX}
+                      y2={geometry.endY}
+                      stroke={stroke}
+                      strokeWidth={active ? 2 : 1.2}
+                    />
+                  </g>
+                );
+              })}
+
+              {fieldNodes.map((node) => {
+                const mapping =
+                  node.role === "source"
+                    ? mappingBySource.get(node.fieldKey)
+                    : mappingByTarget.get(node.fieldKey);
+                const key = mapping ? mappingKey(mapping) : undefined;
+                const detail = key ? previewByMapping.get(key) : undefined;
+                const active =
+                  key === hoveredMapping ||
+                  (node.role === "source" &&
+                    selectedSource &&
+                    normalizeFieldName(selectedSource) === node.fieldKey);
+                const fill =
+                  detail && !detail.compatible
+                    ? "#d92d20"
+                    : active
+                      ? "var(--yak-color-primary)"
+                      : "#cfd4dc";
+
+                return (
+                  <rect
+                    key={node.key}
+                    x={node.x - 3}
+                    y={node.y - 3}
+                    width={6}
+                    height={6}
+                    rx={0.5}
+                    fill={fill}
+                    stroke="#ffffff"
+                    strokeWidth={1}
+                    transform={`rotate(45 ${node.x} ${node.y})`}
                   />
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={
-                      detail && !detail.compatible
-                        ? "#d92d20"
-                        : active
-                          ? "var(--yak-color-primary)"
-                          : "#cfd4dc"
-                    }
-                    strokeWidth={active ? 2 : 1.2}
-                  />
-                </g>
-              );
-            })}
+                );
+              })}
 
-            {drag ? (
-              <path
-                d={connectionPath(drag.startX, drag.startY, drag.currentX, drag.currentY)}
-                fill="none"
-                stroke="var(--yak-color-primary)"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-              />
-            ) : null}
-          </svg>
-
-          {geometries.map((geometry) =>
-            hoveredMapping === geometry.key ? (
-              <div
-                key={geometry.key}
-                className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md border border-[#e6e8eb] bg-white text-[11px] shadow-sm"
-                style={{ left: geometry.middleX, top: geometry.middleY }}
-                onMouseEnter={() => setHoveredMapping(geometry.key)}
-                onMouseLeave={() => setHoveredMapping(undefined)}
-              >
-                <button
-                  type="button"
-                  className="h-6 px-2 text-[#d92d20] hover:bg-[#fff6f5]"
-                  onClick={() => removeMapping(geometry.key)}
-                >
-                  删除
-                </button>
-                <button
-                  type="button"
-                  className="h-6 border-l border-[#eef0f3] px-2 text-[#475467] hover:bg-[#f8f9fb]"
-                  onClick={() => openMappingEditor(geometry.key)}
-                >
-                  修改
-                </button>
-              </div>
-            ) : null,
-          )}
-
-          <div className="relative z-20 self-start overflow-hidden border border-[#dfe3e8] bg-white">
-            <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-b border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
-              <div className="px-3">来源字段</div>
-              <div className="border-l border-[#dfe3e8] px-3">类型</div>
-            </div>
-            {showSearch ? (
-              <div className="border-b border-[#eef0f3] p-2">
-                <Input
-                  size="small"
-                  variant="outlined"
-                  value={sourceKeyword}
-                  placeholder="搜索来源字段"
-                  onChange={(event) => setSourceKeyword(event.target.value)}
+              {drag ? (
+                <line
+                  x1={drag.startX}
+                  y1={drag.startY}
+                  x2={drag.currentX}
+                  y2={drag.currentY}
+                  stroke="var(--yak-color-primary)"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
                 />
-              </div>
-            ) : null}
-            <div className="max-h-[360px] overflow-y-auto" onScroll={calculateGeometry}>
-              {visibleSources.length > 0 ? (
-                visibleSources.map((column) => renderField(column, "source"))
-              ) : (
-                <Empty className="min-h-32" description="没有匹配字段" />
-              )}
-            </div>
-          </div>
+              ) : null}
+            </svg>
 
-          <div className="relative z-0 min-h-[320px] bg-white" />
+            {geometries.map((geometry) =>
+              hoveredMapping === geometry.key ? (
+                <div
+                  key={geometry.key}
+                  className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md bg-white p-0.5 shadow-sm"
+                  style={{ left: geometry.middleX, top: geometry.middleY }}
+                  onMouseEnter={() => showMappingActions(geometry.key)}
+                  onMouseLeave={hideMappingActions}
+                >
+                  <Button
+                    size="small"
+                    variant="danger"
+                    className="!h-6 !px-2 !text-[11px]"
+                    onClick={() => removeMapping(geometry.key)}
+                  >
+                    删除
+                  </Button>
+                  <Button
+                    size="small"
+                    className="!h-6 !px-2 !text-[11px]"
+                    onClick={() => openMappingEditor(geometry.key)}
+                  >
+                    修改
+                  </Button>
+                </div>
+              ) : null,
+            )}
 
-          <div className="relative z-20 self-start overflow-hidden border border-[#dfe3e8] bg-white">
-            <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-b border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
-              <div className="px-3">目标字段</div>
-              <div className="border-l border-[#dfe3e8] px-3">类型</div>
-            </div>
-            {showSearch ? (
-              <div className="border-b border-[#eef0f3] p-2">
-                <Input
-                  size="small"
-                  variant="outlined"
-                  value={targetKeyword}
-                  placeholder="搜索目标字段"
-                  onChange={(event) => setTargetKeyword(event.target.value)}
-                />
+            <div className="relative z-20 self-start border-x border-b border-[#dfe3e8] bg-white">
+              <div className="sticky top-0 z-30 bg-white">
+                <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-y border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
+                  <div className="px-3">来源字段</div>
+                  <div className="border-l border-[#dfe3e8] px-3">类型</div>
+                </div>
+                {showSearch ? (
+                  <div className="border-b border-[#eef0f3] bg-white p-2">
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      value={sourceKeyword}
+                      placeholder="搜索来源字段"
+                      onChange={(event) => setSourceKeyword(event.target.value)}
+                    />
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-            <div className="max-h-[360px] overflow-y-auto" onScroll={calculateGeometry}>
-              {visibleTargets.length > 0 ? (
-                visibleTargets.map((column) => renderField(column, "target"))
-              ) : (
-                <Empty className="min-h-32" description="没有匹配字段" />
-              )}
+              <div>
+                {visibleSources.length > 0 ? (
+                  visibleSources.map((column) => renderField(column, "source"))
+                ) : (
+                  <Empty className="min-h-32" description="没有匹配字段" />
+                )}
+              </div>
+            </div>
+
+            <div className="relative z-0 min-h-[320px] bg-white" />
+
+            <div className="relative z-20 self-start border-x border-b border-[#dfe3e8] bg-white">
+              <div className="sticky top-0 z-30 bg-white">
+                <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-y border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
+                  <div className="px-3">目标字段</div>
+                  <div className="border-l border-[#dfe3e8] px-3">类型</div>
+                </div>
+                {showSearch ? (
+                  <div className="border-b border-[#eef0f3] bg-white p-2">
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      value={targetKeyword}
+                      placeholder="搜索目标字段"
+                      onChange={(event) => setTargetKeyword(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                {visibleTargets.length > 0 ? (
+                  visibleTargets.map((column) => renderField(column, "target"))
+                ) : (
+                  <Empty className="min-h-32" description="没有匹配字段" />
+                )}
+              </div>
             </div>
           </div>
         </div>

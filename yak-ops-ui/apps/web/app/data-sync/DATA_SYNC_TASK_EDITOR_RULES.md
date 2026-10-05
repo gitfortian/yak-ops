@@ -37,7 +37,7 @@ OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户�
 
 编辑区使用 [CollapseSection](../../../../packages/yak-ui/docs/controls.md#collapsesection)。基本信息、数据源、来源、去向、映射及 OFFLINE 调度默认展开；重试策略、运行参数默认收起。共享组件管理标题交互；数据同步内容继续保留白色 Card + border，不把业务内容外观改成共享组件默认规则。
 
-Schema Mapping Editor 保持历史字段映射的紧凑表格视觉：左右分别是“字段 / 类型”行，中间只承载映射连线；同一行映射优先使用水平直线，跨行映射才使用曲线。字段不得改回逐项大圆角 Card。常规小表不常驻搜索框；字段较多时再显示左右搜索。连线 Hover 可修改或删除映射，兼容性异常直接反映在线条状态上。
+Schema Mapping Editor 保持历史字段映射的紧凑表格视觉：左右分别是“字段 / 类型”行，中间只承载映射连线。左右字段必须共享同一个纵向滚动坐标系，不允许各自独立滚动；连接点由 Mapping Overlay 按字段行位置绘制，不得通过负 offset 把节点塞进字段列表的 overflow 区域。所有映射固定使用 SVG 直线：同行为水平线，跨行为斜线，不使用 Bezier 曲线。字段不得改回逐项大圆角 Card。常规小表不常驻搜索框；字段较多时再显示左右搜索。连线 Hover 的删除 / 修改操作必须复用 Yak UI Button，并保持从连线移动到按钮时 Hover 不闪退；兼容性异常直接反映在线条与端点状态上。
 
 OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部滚动；右侧锚点导航在滚动区外，不能跟随内容滚走。REALTIME 当前保持原页面滚动方式，不把离线布局描述为两种模式都已采用。具体列宽与断点归 [task-editor.tsx](task-editor.tsx)，不照抄普通管理 Modal 的密度覆盖配置页。
 
