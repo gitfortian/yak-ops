@@ -1312,7 +1312,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         Set<String> mappedPrimaryKeys =
                 normalizedKeys(resolvedMapping.targetTable().primaryKeys());
         if (!mappedPrimaryKeys.equals(targetPrimaryKeys)) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与映射后的来源主键一致");
+            String message = resolvedScope.getMapping() == null
+                    ? "实时同步目标表主键必须与来源表主键一致"
+                    : "实时同步目标表主键必须与映射后的来源主键一致";
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, message);
         }
     }
 
