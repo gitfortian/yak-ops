@@ -13,7 +13,7 @@ import java.util.Objects;
 /**
  * JDBC 目标表 DDL 执行边界。
  *
- * <p>只允许根据受控 DataSourceTablePath + YakTableSchema 通过 JdbcDialect 生成并执行 CREATE TABLE，
+ * <p>只允许根据受控 DataSourceTablePath + YakTableSchema + Comment 元数据通过 JdbcDialect 生成并执行目标表 DDL，
  * 不接受任意用户 SQL。</p>
  *
  * @author weifuwan
@@ -39,7 +39,8 @@ public final class JdbcTargetTableProvisioner {
     public String createTable(
             DataSourceConnection connection, DataSourceTablePath table, YakTableSchema schema, int timeoutSeconds)
             throws Exception {
-        return createTable(connection, table, schema, null, Map.of(), timeoutSeconds).createTableSql();
+        return createTable(connection, table, schema, null, Map.of(), timeoutSeconds)
+                .createTableSql();
     }
 
     /**
@@ -66,7 +67,7 @@ public final class JdbcTargetTableProvisioner {
     }
 
     /** 执行已经由 JdbcDialect 生成的受控建表计划。 */
-    public void executePlan(DataSourceConnection connection, JdbcTargetTableDdlPlan plan, int timeoutSeconds)
+    private void executePlan(DataSourceConnection connection, JdbcTargetTableDdlPlan plan, int timeoutSeconds)
             throws Exception {
         Objects.requireNonNull(connection, "connection must not be null");
         Objects.requireNonNull(plan, "plan must not be null");
