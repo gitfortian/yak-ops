@@ -1153,6 +1153,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
+        resolvedScope.setMapping(mappingConfig(task.getMappingConfig()));
         DataSyncWriteMode writeMode = taskWriteMode(task);
         validateWriteMode(task.getSyncType(), writeMode);
         if (task.getSyncType() == DataSyncType.REALTIME) {
@@ -1161,8 +1162,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             validateOfflineUpsertTarget(
                     task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
         }
-        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
-        validateExplicitMapping(mappingConfig(task.getMappingConfig()), preview);
+        requireCompatibleMapping(resolvedScope);
         return resolvedScope;
     }
 
@@ -1214,7 +1214,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private void validateTaskDefinition(
             DataSyncType syncType, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
         validateWriteMode(syncType, dto.getWriteMode());
-        normalizeMapping(dto.getMapping());
+        DataSyncMappingDTO mapping = normalizeMapping(dto.getMapping());
+        resolvedScope.setMapping(mapping);
         if (dto.getRetryPolicy() == null) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Retry Policy 不能为空");
         }
@@ -1240,12 +1241,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             DataSyncWriteMode writeMode) {
         if (writeMode != DataSyncWriteMode.UPSERT) return;
 
-        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
-                sourceDataSourceId,
-                tablePath(
-                        resolvedScope.getSourceDatabase(),
-                        resolvedScope.getSourceSchema(),
-                        resolvedScope.getSourceTable()));
+        LogicalTable sourceLogicalTable = sourceLogicalTable(sourceDataSourceId, resolvedScope);
+        ResolvedSchemaMapping resolvedMapping = resolveSchemaMapping(sourceLogicalTable, resolvedScope.getMapping());
         DataSourceTablePathDTO targetPath = tablePath(
                 resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
 
@@ -1256,26 +1253,26 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             if (!Boolean.TRUE.equals(resolvedScope.getAutoCreateTable())) {
                 throw new DataSyncException(DataSyncErrorCode.TARGET_TABLE_NOT_FOUND);
             }
-            if (DataSyncCatalogColumns.primaryKeyNames(sourceColumns).isEmpty()) {
+            if (sourceLogicalTable.primaryKeys().isEmpty()) {
                 throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 自动建表要求来源表包含主键");
+            }
+            if (!allPrimaryKeysMapped(sourceLogicalTable, resolvedMapping)) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 自动建表要求字段映射包含来源表全部主键");
             }
             return;
         }
 
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
-        List<DataSourceCatalogColumnVO> targetPrimaryKeys = targetColumns.stream()
-                .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
-                .toList();
+        Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
         if (targetPrimaryKeys.isEmpty()) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求目标表存在主键");
         }
-
-        Map<String, DataSourceCatalogColumnVO> sourceByName = DataSyncCatalogColumns.indexByName(sourceColumns);
-        if (targetPrimaryKeys.stream()
-                .anyMatch(
-                        primaryKey -> DataSyncCatalogColumns.findByName(sourceByName, primaryKey.getName()) == null)) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求来源包含目标表全部主键字段");
+        Set<String> mappedTargetColumns = resolvedMapping.targetTable().columns().stream()
+                .map(column -> column.name().toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+        if (!mappedTargetColumns.containsAll(targetPrimaryKeys)) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "UPSERT 写入要求字段映射包含目标表全部主键");
         }
     }
 
@@ -1290,15 +1287,13 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标数据源仅支持 MYSQL / POSTGRE_SQL / ORACLE");
         }
 
-        List<DataSourceCatalogColumnVO> sourceColumns = dataSourceService.queryCatalogColumns(
-                sourceDataSourceId,
-                tablePath(
-                        resolvedScope.getSourceDatabase(),
-                        resolvedScope.getSourceSchema(),
-                        resolvedScope.getSourceTable()));
-        Set<String> sourcePrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(sourceColumns);
-        if (sourcePrimaryKeys.isEmpty()) {
+        LogicalTable sourceLogicalTable = sourceLogicalTable(sourceDataSourceId, resolvedScope);
+        if (sourceLogicalTable.primaryKeys().isEmpty()) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
+        }
+        ResolvedSchemaMapping resolvedMapping = resolveSchemaMapping(sourceLogicalTable, resolvedScope.getMapping());
+        if (!allPrimaryKeysMapped(sourceLogicalTable, resolvedMapping)) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步字段映射必须包含来源表全部主键");
         }
 
         DataSourceTablePathDTO targetPath = tablePath(
@@ -1316,8 +1311,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetDataSourceId, targetPath);
         Set<String> targetPrimaryKeys = DataSyncCatalogColumns.primaryKeyNames(targetColumns);
-        if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与来源表主键一致");
+        Set<String> mappedPrimaryKeys = normalizedKeys(resolvedMapping.targetTable().primaryKeys());
+        if (!mappedPrimaryKeys.equals(targetPrimaryKeys)) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标表主键必须与映射后的来源主键一致");
         }
     }
 
@@ -1376,30 +1372,44 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return normalized;
     }
 
-    private void validateExplicitMapping(DataSyncMappingDTO mapping, DataSyncMappingPreviewVO preview) {
-        DataSyncMappingDTO normalized = normalizeMapping(mapping);
-        if (normalized == null) return;
+    private LogicalTable sourceLogicalTable(String sourceDataSourceId, DataSyncMappingPreviewDTO resolvedScope) {
+        DataSourceTablePathDTO sourcePath = tablePath(
+                resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), resolvedScope.getSourceTable());
+        DataSourceCatalogTableVO sourceTable =
+                dataSourceService.queryCatalogTable(sourceDataSourceId, sourcePath);
+        List<DataSourceCatalogColumnVO> sourceColumns =
+                dataSourceService.queryCatalogColumns(sourceDataSourceId, sourcePath);
+        return LogicalTableNormalizer.fromCatalog(sourceTable, sourceColumns);
+    }
 
-        if (preview == null || !preview.isCompatible()) {
-            throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
+    private ResolvedSchemaMapping resolveSchemaMapping(LogicalTable sourceLogicalTable, DataSyncMappingDTO mapping) {
+        try {
+            return schemaMappingResolver.resolve(sourceLogicalTable, schemaColumnMappings(mapping));
+        } catch (IllegalArgumentException exception) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, exception.getMessage(), exception);
         }
-        if (normalized.getColumns().size() != preview.getMappings().size()) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "当前字段映射必须完整覆盖来源字段");
-        }
+    }
 
-        Map<String, String> targetBySource = new HashMap<>();
-        for (DataSyncColumnMappingDTO column : normalized.getColumns()) {
-            targetBySource.put(column.getSource().toLowerCase(Locale.ROOT), column.getTarget());
-        }
-        for (DataSyncFieldMappingVO resolved : preview.getMappings()) {
-            String configuredTarget =
-                    targetBySource.get(resolved.getSourceName().toLowerCase(Locale.ROOT));
-            if (configuredTarget == null
-                    || resolved.getTargetName() == null
-                    || !configuredTarget.equalsIgnoreCase(resolved.getTargetName())) {
-                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "当前阶段显式字段映射必须与同名映射结果一致");
+    private List<SchemaColumnMapping> schemaColumnMappings(DataSyncMappingDTO mapping) {
+        if (mapping == null) return null;
+        return mapping.getColumns().stream()
+                .map(column -> new SchemaColumnMapping(column.getSource(), column.getTarget()))
+                .toList();
+    }
+
+    private boolean allPrimaryKeysMapped(LogicalTable sourceLogicalTable, ResolvedSchemaMapping resolvedMapping) {
+        return normalizedKeys(sourceLogicalTable.primaryKeys())
+                .equals(normalizedKeys(resolvedMapping.sourceTable().primaryKeys()));
+    }
+
+    private Set<String> normalizedKeys(List<String> keys) {
+        Set<String> result = new HashSet<>();
+        for (String key : keys) {
+            if (key != null && !key.isBlank()) {
+                result.add(key.toLowerCase(Locale.ROOT));
             }
         }
+        return result;
     }
 
     private String runtimeConfigJson(DataSyncType syncType, DataSyncTaskDTO dto) {
