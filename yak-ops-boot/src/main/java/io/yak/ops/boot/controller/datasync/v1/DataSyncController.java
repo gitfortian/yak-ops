@@ -207,7 +207,7 @@ public class DataSyncController {
         return Result.success(dataSyncService.cancelInstance(id));
     }
 
-    @Operation(summary = "预览来源与目标表字段自动映射")
+    @Operation(summary = "预览来源与目标表 Schema 映射")
     @PostMapping("/tasks/mapping-preview")
     public Result<DataSyncMappingPreviewVO> mappingPreview(@Valid @RequestBody DataSyncMappingPreviewDTO dto) {
         return Result.success(dataSyncService.previewMapping(dto));
