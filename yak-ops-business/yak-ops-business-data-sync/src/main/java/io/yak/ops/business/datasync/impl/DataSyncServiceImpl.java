@@ -1521,30 +1521,36 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 .orElse(null);
     }
 
-    private DataSyncFieldMappingVO toAutoCreateFieldMapping(DataSourceCatalogColumnVO source, TargetColumnPlan target) {
+    private DataSyncFieldMappingVO toAutoCreateFieldMapping(
+            SchemaColumnMapping resolved, DataSourceCatalogColumnVO source, TargetColumnPlan target) {
         DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
-        mapping.setSourceName(source.getName());
-        mapping.setSourceType(source.getTypeName());
-        mapping.setTargetName(target == null ? source.getName() : target.name());
+        mapping.setSourceName(source == null ? resolved.source() : source.getName());
+        mapping.setSourceType(source == null ? null : source.getTypeName());
+        mapping.setTargetName(target == null ? resolved.target() : target.name());
         mapping.setTargetType(target == null ? null : target.nativeType());
-        mapping.setCompatible(target != null && target.supported());
-        if (target == null) {
-            mapping.setMessage("目标建表规划缺少字段");
+        mapping.setCompatible(source != null && target != null && target.supported());
+        if (source == null) {
+            mapping.setMessage("来源表缺少映射字段");
+        } else if (target == null) {
+            mapping.setMessage("目标建表规划缺少映射字段");
         } else if (!target.supported()) {
             mapping.setMessage(target.unsupportedReason());
         }
         return mapping;
     }
 
-    private DataSyncFieldMappingVO toFieldMapping(DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
+    private DataSyncFieldMappingVO toFieldMapping(
+            SchemaColumnMapping resolved, DataSourceCatalogColumnVO source, DataSourceCatalogColumnVO target) {
         DataSyncFieldMappingVO mapping = new DataSyncFieldMappingVO();
-        mapping.setSourceName(source.getName());
-        mapping.setSourceType(source.getTypeName());
-        mapping.setTargetName(target == null ? null : target.getName());
+        mapping.setSourceName(source == null ? resolved.source() : source.getName());
+        mapping.setSourceType(source == null ? null : source.getTypeName());
+        mapping.setTargetName(target == null ? resolved.target() : target.getName());
         mapping.setTargetType(target == null ? null : target.getTypeName());
-        mapping.setCompatible(target != null && compatibleType(source, target));
-        if (target == null) {
-            mapping.setMessage("目标表缺少同名字段");
+        mapping.setCompatible(source != null && target != null && compatibleType(source, target));
+        if (source == null) {
+            mapping.setMessage("来源表缺少映射字段");
+        } else if (target == null) {
+            mapping.setMessage("目标表缺少映射字段：" + resolved.target());
         } else if (!mapping.isCompatible()) {
             mapping.setMessage("字段类型或容量不兼容");
         }
