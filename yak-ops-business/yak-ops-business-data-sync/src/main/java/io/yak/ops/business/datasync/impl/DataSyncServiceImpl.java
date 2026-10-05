@@ -27,7 +27,9 @@ import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
 import io.yak.ops.business.datasync.schema.TargetTablePlan;
 import io.yak.ops.business.datasync.schema.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncColumnMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
+import io.yak.ops.common.bean.dto.datasync.DataSyncMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncOperationsDashboardDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRealtimeConfigDTO;
@@ -40,12 +42,14 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncAttemptVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncColumnMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncExecutionEventVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncFieldMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncMappingPreviewVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsDashboardVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsFailureRankVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncOperationsStatusMetricVO;
@@ -106,7 +110,9 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -191,7 +197,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
-        requireCompatibleMapping(resolvedScope);
+        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
+        validateExplicitMapping(dto.getMapping(), preview);
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
         entity.setWorkspaceId(workspaceId);
@@ -232,7 +239,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
-        requireCompatibleMapping(resolvedScope);
+        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
+        validateExplicitMapping(dto.getMapping(), preview);
 
         boolean executableDefinitionChanged = executableDefinitionChanged(entity, dto, resolvedScope);
         entity.setName(name);
@@ -1141,7 +1149,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             validateOfflineUpsertTarget(
                     task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
         }
-        requireCompatibleMapping(resolvedScope);
+        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
+        validateExplicitMapping(mappingConfig(task.getMappingConfig()), preview);
         return resolvedScope;
     }
 
@@ -1161,6 +1170,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || !Objects.equals(entity.getTargetTable(), dto.getTargetTable().trim())
                 || autoCreateTable(entity) != Boolean.TRUE.equals(dto.getAutoCreateTable())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
+                || !jsonEquals(normalizedMappingConfigJson(entity.getMappingConfig()), mappingConfigJson(dto))
                 || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
                 || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
     }
@@ -1182,6 +1192,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         entity.setTargetSchema(resolvedScope.getTargetSchema());
         entity.setTargetTable(dto.getTargetTable().trim());
         entity.setAutoCreateTable(Boolean.TRUE.equals(dto.getAutoCreateTable()));
+        entity.setMappingConfig(mappingConfigJson(dto));
         entity.setWriteMode(requireWriteMode(dto.getWriteMode()));
         entity.setRuntimeConfig(runtimeConfigJson(entity.getSyncType(), dto));
         entity.setRetryPolicy(retryPolicyJson(dto));
@@ -1191,6 +1202,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private void validateTaskDefinition(
             DataSyncType syncType, DataSyncTaskDTO dto, DataSyncMappingPreviewDTO resolvedScope) {
         validateWriteMode(syncType, dto.getWriteMode());
+        normalizeMapping(dto.getMapping());
         if (dto.getRetryPolicy() == null) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Retry Policy 不能为空");
         }
@@ -1297,6 +1309,87 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
     }
 
+    private String mappingConfigJson(DataSyncTaskDTO dto) {
+        DataSyncMappingDTO mapping = normalizeMapping(dto.getMapping());
+        return mapping == null ? null : JSONUtils.toJson(mapping);
+    }
+
+    private String normalizedMappingConfigJson(String json) {
+        DataSyncMappingDTO mapping = mappingConfig(json);
+        return mapping == null ? null : JSONUtils.toJson(mapping);
+    }
+
+    private DataSyncMappingDTO mappingConfig(String json) {
+        if (StringUtils.isBlank(json)) return null;
+        return normalizeMapping(JSONUtils.parseObject(json, DataSyncMappingDTO.class));
+    }
+
+    private DataSyncMappingDTO normalizeMapping(DataSyncMappingDTO mapping) {
+        if (mapping == null) return null;
+        if (CollectionUtils.isEmpty(mapping.getColumns())) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射不能为空");
+        }
+        if (mapping.getColumns().size() > 1024) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射不能超过 1024 项");
+        }
+
+        Set<String> sources = new HashSet<>();
+        Set<String> targets = new HashSet<>();
+        List<DataSyncColumnMappingDTO> columns =
+                new ArrayList<>(mapping.getColumns().size());
+        for (DataSyncColumnMappingDTO item : mapping.getColumns()) {
+            String source = StringUtils.trimToNull(item == null ? null : item.getSource());
+            String target = StringUtils.trimToNull(item == null ? null : item.getTarget());
+            if (source == null || target == null) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射来源和目标不能为空");
+            }
+            if (source.length() > 128 || target.length() > 128) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "字段映射名称不能超过 128 个字符");
+            }
+            if (!sources.add(source.toLowerCase(Locale.ROOT))) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "来源字段不能重复映射：" + source);
+            }
+            if (!targets.add(target.toLowerCase(Locale.ROOT))) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "目标字段不能被重复映射：" + target);
+            }
+
+            DataSyncColumnMappingDTO normalized = new DataSyncColumnMappingDTO();
+            normalized.setSource(source);
+            normalized.setTarget(target);
+            columns.add(normalized);
+        }
+
+        DataSyncMappingDTO normalized = new DataSyncMappingDTO();
+        normalized.setColumns(List.copyOf(columns));
+        return normalized;
+    }
+
+    private void validateExplicitMapping(DataSyncMappingDTO mapping, DataSyncMappingPreviewVO preview) {
+        DataSyncMappingDTO normalized = normalizeMapping(mapping);
+        if (normalized == null) return;
+
+        if (preview == null || !preview.isCompatible()) {
+            throw new DataSyncException(DataSyncErrorCode.FIELD_MAPPING_INCOMPATIBLE);
+        }
+        if (normalized.getColumns().size() != preview.getMappings().size()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "当前字段映射必须完整覆盖来源字段");
+        }
+
+        Map<String, String> targetBySource = new HashMap<>();
+        for (DataSyncColumnMappingDTO column : normalized.getColumns()) {
+            targetBySource.put(column.getSource().toLowerCase(Locale.ROOT), column.getTarget());
+        }
+        for (DataSyncFieldMappingVO resolved : preview.getMappings()) {
+            String configuredTarget =
+                    targetBySource.get(resolved.getSourceName().toLowerCase(Locale.ROOT));
+            if (configuredTarget == null
+                    || resolved.getTargetName() == null
+                    || !configuredTarget.equalsIgnoreCase(resolved.getTargetName())) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "当前阶段显式字段映射必须与同名映射结果一致");
+            }
+        }
+    }
+
     private String runtimeConfigJson(DataSyncType syncType, DataSyncTaskDTO dto) {
         return syncType == DataSyncType.REALTIME
                 ? JSONUtils.toJson(dto.getRealtimeConfig())
@@ -1313,9 +1406,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return StringUtils.isBlank(json) ? JSONUtils.toJson(new DataSyncRetryPolicyDTO()) : json;
     }
 
-    private void requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
+    private DataSyncMappingPreviewVO requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
         DataSyncMappingPreviewVO preview = previewResolvedMapping(dto);
-        if (preview.isCompatible()) return;
+        if (preview.isCompatible()) return preview;
 
         if (!preview.isTargetTableExists()) {
             if (Boolean.TRUE.equals(dto.getAutoCreateTable())
@@ -1341,6 +1434,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
         snapshot.setAutoCreateTable(autoCreateTable(task));
+        snapshot.setMapping(toMappingVO(task.getMappingConfig()));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
         snapshot.setSource(endpointSnapshot(
                 source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
@@ -1539,6 +1633,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private DataSyncTaskVO toTaskListVO(DataSyncTaskEntity source, DataSyncScheduleEntity schedule) {
         DataSyncTaskVO target = toTaskVO(source);
+        target.setMapping(null);
         if (schedule != null) {
             target.setScheduleCronExpression(schedule.getCronExpression());
             target.setScheduleTimeZone(schedule.getTimeZone());
@@ -1641,6 +1736,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 "status",
                 "desiredState",
                 "writeMode",
+                "mappingConfig",
                 "runtimeConfig",
                 "retryPolicy");
         target.setSyncType(
@@ -1649,6 +1745,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         target.setDesiredState(taskDesiredState(source).name());
         target.setWriteMode(taskWriteMode(source).name());
         target.setAutoCreateTable(autoCreateTable(source));
+        target.setMapping(toMappingVO(source.getMappingConfig()));
         target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
@@ -1666,6 +1763,17 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncRealtimeConfigVO toRealtimeConfigVO(String json) {
         DataSyncRealtimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
         return BeanCopyUtils.copy(source, DataSyncRealtimeConfigVO.class);
+    }
+
+    private DataSyncMappingVO toMappingVO(String json) {
+        DataSyncMappingDTO source = mappingConfig(json);
+        if (source == null) return null;
+
+        DataSyncMappingVO target = new DataSyncMappingVO();
+        target.setColumns(source.getColumns().stream()
+                .map(item -> BeanCopyUtils.copy(item, DataSyncColumnMappingVO.class))
+                .toList());
+        return target;
     }
 
     private DataSyncRetryPolicyVO toRetryPolicyVO(String json) {

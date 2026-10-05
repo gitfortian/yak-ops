@@ -35,6 +35,15 @@ export interface DataSyncRetryPolicy {
   backoffSeconds: number;
 }
 
+export interface DataSyncColumnMapping {
+  source: string;
+  target: string;
+}
+
+export interface DataSyncMappingConfig {
+  columns: DataSyncColumnMapping[];
+}
+
 export interface DataSyncTaskRecord {
   id: string;
   name: string;
@@ -51,6 +60,7 @@ export interface DataSyncTaskRecord {
   targetSchema?: string;
   targetTable: string;
   autoCreateTable?: boolean;
+  mapping?: DataSyncMappingConfig;
   runtimeConfig?: DataSyncRuntimeConfig;
   realtimeConfig?: DataSyncRealtimeConfig;
   retryPolicy?: DataSyncRetryPolicy;
@@ -129,6 +139,7 @@ interface DataSyncTaskSaveBase {
   targetSchema?: string;
   targetTable: string;
   autoCreateTable?: boolean;
+  mapping?: DataSyncMappingConfig;
   retryPolicy?: DataSyncRetryPolicy;
   remark?: string;
 }
@@ -204,6 +215,7 @@ export interface DataSyncDefinitionSnapshot {
   syncType?: DataSyncType | string;
   writeMode?: DataSyncWriteMode | string;
   autoCreateTable?: boolean;
+  mapping?: DataSyncMappingConfig;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;

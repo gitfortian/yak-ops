@@ -37,6 +37,9 @@ public class DataSyncDefinitionSnapshotVO {
     /** Execution 创建时固化的目标表自动创建策略。 */
     private Boolean autoCreateTable;
 
+    /** Execution 创建时固化的任务级字段映射；为空表示沿用系统默认同名映射。 */
+    private DataSyncMappingVO mapping;
+
     /** Execution 创建时固化的 Retry Policy；所有 Attempt 共用。 */
     private DataSyncRetryPolicyVO retryPolicy;
 

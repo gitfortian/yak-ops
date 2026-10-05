@@ -67,6 +67,10 @@ public class DataSyncTaskDTO {
     /** 目标表不存在时是否允许按 LogicalTable 自动建表；默认关闭。 */
     private Boolean autoCreateTable = Boolean.FALSE;
 
+    /** 任务级显式字段映射；为空时继续使用系统默认同名映射。 */
+    @Valid
+    private DataSyncMappingDTO mapping;
+
     /** OFFLINE 任务使用的 YakFlow 运行参数；REALTIME 任务忽略该字段。 */
     @Valid
     private DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
