@@ -185,6 +185,7 @@ export interface DataSyncMappingPreview {
   targetTableExists: boolean;
   autoCreateTable: boolean;
   createTableSql?: string;
+  ddlStatements?: string[];
   warnings: string[];
   unsupportedReasons: string[];
   mappings: DataSyncFieldMapping[];
