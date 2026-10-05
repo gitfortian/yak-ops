@@ -3,7 +3,7 @@ package io.yak.ops.common.bean.vo.datasync;
 import lombok.Data;
 
 /**
- * 离线同步同名字段自动映射结果。
+ * 数据同步单个来源字段到目标字段的 Schema 映射预览结果。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -17,7 +17,7 @@ public class DataSyncFieldMappingVO {
     /** 来源数据库返回的原生字段类型名称。 */
     private String sourceType;
 
-    /** 同名匹配到的目标表字段名称；目标缺失该字段时为空。 */
+    /** 任务映射解析后的目标字段名称；目标物理字段缺失时仍保留配置名称。 */
     private String targetName;
 
     /** 目标数据库返回的原生字段类型名称；目标字段不存在时为空。 */
