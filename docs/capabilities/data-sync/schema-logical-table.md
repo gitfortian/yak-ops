@@ -405,7 +405,7 @@ SchemaMappingResolver
 - 显式 Mapping 的数组顺序就是 Runtime YakRow 的字段位置顺序。
 - Source 读取只包含被映射字段，因此字段子集不需要 Transform。
 - Target Compatibility 与 Auto Create Planner 只看到映射后的目标字段名。
-- Source PK 被映射时，Target LogicalTable 的 PK 名称按 Mapping 重命名；未映射 PK 不进入投影。
+- Source Primary Key 只有在**完整复合主键全部被映射**时才进入投影，Target LogicalTable 的 PK 名称按 Mapping 重命名；部分映射复合主键不会降级成新的单列 / 子集主键。
 - REALTIME 必须映射全部 Source PK；Existing Target 的真实 PK 集合必须等于映射后的 PK 集合。
 - UPSERT Auto Create 必须映射全部 Source PK，避免先创建无 PK 目标表后再失败。
 - Mapping 不改变 Logical Type，不承担 CAST / expression / computed column。
