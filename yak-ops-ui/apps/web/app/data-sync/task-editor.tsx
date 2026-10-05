@@ -1639,7 +1639,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             ["datasource", "数据源"],
             ["source", "数据来源"],
             ["target", "数据去向"],
-            ["mapping", "Schema 预览"],
+            ["mapping", "Schema 映射"],
             ...(realtime ? [] : [["schedule", "调度配置"]]),
             ["retry", "重试策略"],
             ["runtime", "运行参数"],
