@@ -27,9 +27,11 @@ class TargetTablePlannerTest {
                 .map(TargetColumnPlan::nativeType)
                 .toList());
         assertEquals(
-                "CREATE TABLE `yakflow`.`orders_copy` (`id` BIGINT NOT NULL, "
-                        + "`name` VARCHAR(100) NOT NULL, `amount` DECIMAL(18,2), PRIMARY KEY (`id`))",
+                "CREATE TABLE `yakflow`.`orders_copy` (`id` BIGINT NOT NULL COMMENT '主键', "
+                        + "`name` VARCHAR(100) NOT NULL COMMENT '名称', `amount` DECIMAL(18,2) COMMENT '金额', "
+                        + "PRIMARY KEY (`id`)) COMMENT='订单表'",
                 plan.createTableSql());
+        assertEquals(List.of(plan.createTableSql()), plan.ddlStatements());
     }
 
     @Test
@@ -40,6 +42,11 @@ class TargetTablePlannerTest {
         assertEquals("POSTGRE_SQL", plan.targetType());
         assertEquals("NUMERIC(18,2)", plan.columns().get(2).nativeType());
         assertTrue(plan.createTableSql().startsWith("CREATE TABLE \"public\".\"orders_copy\""));
+        assertEquals(5, plan.ddlStatements().size());
+        assertEquals("COMMENT ON TABLE \"public\".\"orders_copy\" IS '订单表'", plan.ddlStatements().get(1));
+        assertEquals(
+                "COMMENT ON COLUMN \"public\".\"orders_copy\".\"id\" IS '主键'",
+                plan.ddlStatements().get(2));
     }
 
     @Test
@@ -56,6 +63,7 @@ class TargetTablePlannerTest {
 
         assertFalse(plan.supported());
         assertNull(plan.createTableSql());
+        assertTrue(plan.ddlStatements().isEmpty());
         assertEquals(1, plan.unsupportedReasons().size());
         assertTrue(plan.unsupportedReasons().getFirst().contains("TIMESTAMP_WITH_TIME_ZONE"));
     }
@@ -74,6 +82,7 @@ class TargetTablePlannerTest {
         assertFalse(plan.supported());
         assertEquals("CLOB", plan.columns().getFirst().nativeType());
         assertNull(plan.createTableSql());
+        assertTrue(plan.ddlStatements().isEmpty());
         assertTrue(plan.unsupportedReasons().getFirst().contains("不能直接作为目标主键"));
         assertEquals(1, plan.warnings().size());
     }
