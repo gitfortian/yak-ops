@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.common.bean.dto.datasync.DataSyncColumnMappingDTO;
@@ -99,7 +100,7 @@ class DataSyncMappingPrimaryKeyContractTest {
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         inject(service, "taskRepository", taskRepository(captured));
-        inject(service, "dataSourceService", dataSourceService(targetExists));
+        injectDataSourceService(service, dataSourceService(targetExists));
         return service;
     }
 
@@ -211,6 +212,16 @@ class DataSyncMappingPrimaryKeyContractTest {
         column.setPrimaryKey(primaryKey);
         column.setPrimaryKeyPosition(primaryKeyPosition);
         return column;
+    }
+
+    private void injectDataSourceService(DataSyncServiceImpl service, DataSourceService dataSourceService)
+            throws Exception {
+        inject(service, "dataSourceService", dataSourceService);
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        Field field = SourceTableIntrospector.class.getDeclaredField("dataSourceService");
+        field.setAccessible(true);
+        field.set(sourceTableIntrospector, dataSourceService);
+        inject(service, "sourceTableIntrospector", sourceTableIntrospector);
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
