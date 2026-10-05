@@ -78,6 +78,18 @@ class MySqlCdcIntegrationIT {
                     new YakColumn("id", YakTypes.BIGINT, false, null),
                     new YakColumn("name", YakTypes.STRING, true, 100)),
             List.of("id"));
+
+    private static final YakTableSchema MAPPED_SOURCE_SCHEMA = new YakTableSchema(
+            List.of(
+                    new YakColumn("name", YakTypes.STRING, true, 100),
+                    new YakColumn("id", YakTypes.BIGINT, false, null)),
+            List.of("id"));
+
+    private static final YakTableSchema MAPPED_TARGET_SCHEMA = new YakTableSchema(
+            List.of(
+                    new YakColumn("display_name", YakTypes.STRING, true, 100),
+                    new YakColumn("user_id", YakTypes.BIGINT, false, null)),
+            List.of("user_id"));
     private static final JdbcConnectionProvider DIRECT_CONNECTION = (connection, timeoutSeconds) -> {
         Class.forName(connection.driverClassName());
         Properties properties = new Properties();
@@ -117,6 +129,52 @@ class MySqlCdcIntegrationIT {
     @Test
     void shouldSyncSnapshotBinlogAndResumeOffsetToOracle() throws Exception {
         executeAcceptance(oracleTarget(), 54023L);
+    }
+
+    @Test
+    void shouldSyncMappedPrimaryKeyAndChangelogToMysql() throws Exception {
+        executeMappedAcceptance(mysqlMappedTarget(), 54121L);
+    }
+
+    @Test
+    void shouldSyncMappedPrimaryKeyAndChangelogToPostgresql() throws Exception {
+        executeMappedAcceptance(postgresMappedTarget(), 54122L);
+    }
+
+    @Test
+    void shouldSyncMappedPrimaryKeyAndChangelogToOracle() throws Exception {
+        executeMappedAcceptance(oracleMappedTarget(), 54123L);
+    }
+
+    private void executeMappedAcceptance(Target target, long serverId) throws Exception {
+        resetMappedSource();
+        resetTarget(target);
+
+        Path targetStateDirectory = stateDirectory.resolve(target.name());
+        MySqlCdcSourceConfig sourceConfig = MySqlCdcSourceConfig.defaults(
+                sourceConnection(),
+                new DataSourceTablePath(MYSQL_DATABASE, null, "source_user_mapping"),
+                MAPPED_SOURCE_SCHEMA,
+                targetStateDirectory,
+                "source-user-mapping-cdc-" + target.name(),
+                serverId);
+
+        LocalExecution<?> execution = startMappedExecution(sourceConfig, target);
+        try {
+            awaitTarget(target, Map.of(1L, "alpha", 2L, "beta"));
+
+            executeSource(
+                    "INSERT INTO source_user_mapping(id, name, ignored_note) VALUES (3, 'gamma', 'ignored-3')");
+            executeSource(
+                    "UPDATE source_user_mapping SET name = 'alpha-v2', ignored_note = 'ignored-v2' WHERE id = 1");
+            executeSource("DELETE FROM source_user_mapping WHERE id = 2");
+
+            awaitTarget(target, Map.of(1L, "alpha-v2", 3L, "gamma"));
+            execution.checkpoint().get(20, TimeUnit.SECONDS);
+            awaitOffsetFile(targetStateDirectory);
+        } finally {
+            stopExecution(execution);
+        }
     }
 
     private void executeAcceptance(Target target, long serverId) throws Exception {
@@ -161,6 +219,19 @@ class MySqlCdcIntegrationIT {
         }
     }
 
+    private LocalExecution<?> startMappedExecution(MySqlCdcSourceConfig sourceConfig, Target target) {
+        JdbcSink sink = new JdbcSink(
+                new JdbcSinkConfig(
+                        target.connection(),
+                        target.table(),
+                        100,
+                        15,
+                        JdbcWriteMode.CHANGELOG),
+                DIRECT_CONNECTION);
+        return new LocalExecutionEngine(Duration.ofMillis(250))
+                .start(new MySqlCdcSource(sourceConfig), sink, MAPPED_TARGET_SCHEMA);
+    }
+
     private LocalExecution<?> startExecution(MySqlCdcSourceConfig sourceConfig, Target target) {
         JdbcSink sink = new JdbcSink(
                 new JdbcSinkConfig(
@@ -187,6 +258,18 @@ class MySqlCdcIntegrationIT {
             statement.execute("DROP TABLE IF EXISTS source_user");
             statement.execute("CREATE TABLE source_user (id BIGINT PRIMARY KEY, name VARCHAR(100))");
             statement.execute("INSERT INTO source_user(id, name) VALUES (1, 'alpha'), (2, 'beta')");
+        }
+    }
+
+    private void resetMappedSource() throws Exception {
+        try (var connection = DIRECT_CONNECTION.open(sourceConnection(), 15);
+                var statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS source_user_mapping");
+            statement.execute(
+                    "CREATE TABLE source_user_mapping (id BIGINT PRIMARY KEY, name VARCHAR(100), ignored_note VARCHAR(100))");
+            statement.execute(
+                    "INSERT INTO source_user_mapping(id, name, ignored_note) VALUES "
+                            + "(1, 'alpha', 'ignored-1'), (2, 'beta', 'ignored-2')");
         }
     }
 
@@ -274,6 +357,17 @@ class MySqlCdcIntegrationIT {
                 false);
     }
 
+    private Target mysqlMappedTarget() {
+        return new Target(
+                "mapped-mysql",
+                sourceConnection(),
+                new DataSourceTablePath(MYSQL_DATABASE, null, "target_mapping_mysql"),
+                "DROP TABLE IF EXISTS target_mapping_mysql",
+                "CREATE TABLE target_mapping_mysql (user_id BIGINT PRIMARY KEY, display_name VARCHAR(100))",
+                "SELECT user_id, display_name FROM target_mapping_mysql ORDER BY user_id",
+                false);
+    }
+
     private Target postgresTarget() {
         return new Target(
                 "postgresql",
@@ -291,6 +385,23 @@ class MySqlCdcIntegrationIT {
                 false);
     }
 
+    private Target postgresMappedTarget() {
+        return new Target(
+                "mapped-postgresql",
+                new TestConnection(
+                        "POSTGRE_SQL",
+                        POSTGRES.getJdbcUrl(),
+                        "org.postgresql.Driver",
+                        POSTGRES.getUsername(),
+                        POSTGRES.getPassword(),
+                        "yakflow"),
+                new DataSourceTablePath("yakflow", "public", "target_mapping_pg"),
+                "DROP TABLE IF EXISTS target_mapping_pg",
+                "CREATE TABLE target_mapping_pg (user_id BIGINT PRIMARY KEY, display_name VARCHAR(100))",
+                "SELECT user_id, display_name FROM target_mapping_pg ORDER BY user_id",
+                false);
+    }
+
     private Target oracleTarget() {
         String jdbcUrl = "jdbc:oracle:thin:@//" + ORACLE.getHost() + ":" + ORACLE.getMappedPort(1521) + "/FREEPDB1";
         return new Target(
@@ -300,6 +411,19 @@ class MySqlCdcIntegrationIT {
                 "DROP TABLE \"target_oracle\" PURGE",
                 "CREATE TABLE \"target_oracle\" (\"id\" NUMBER(19) PRIMARY KEY, \"name\" VARCHAR2(100))",
                 "SELECT \"id\", \"name\" FROM \"target_oracle\" ORDER BY \"id\"",
+                true);
+    }
+
+    private Target oracleMappedTarget() {
+        String jdbcUrl = "jdbc:oracle:thin:@//" + ORACLE.getHost() + ":" + ORACLE.getMappedPort(1521) + "/FREEPDB1";
+        return new Target(
+                "mapped-oracle",
+                new TestConnection("ORACLE", jdbcUrl, "oracle.jdbc.OracleDriver", "system", ORACLE_PASSWORD, null),
+                new DataSourceTablePath(null, null, "target_mapping_oracle"),
+                "DROP TABLE \"target_mapping_oracle\" PURGE",
+                "CREATE TABLE \"target_mapping_oracle\" "
+                        + "(\"user_id\" NUMBER(19) PRIMARY KEY, \"display_name\" VARCHAR2(100))",
+                "SELECT \"user_id\", \"display_name\" FROM \"target_mapping_oracle\" ORDER BY \"user_id\"",
                 true);
     }
 

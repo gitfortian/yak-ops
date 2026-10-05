@@ -73,6 +73,18 @@ class OfflineSyncJdbcAcceptanceIT {
                     new YakColumn("amount", YakTypes.decimal(10, 2), true, null)),
             List.of("id"));
 
+    private static final YakTableSchema MAPPED_SOURCE_SCHEMA = new YakTableSchema(
+            List.of(
+                    new YakColumn("name", YakTypes.STRING, false, 100),
+                    new YakColumn("id", YakTypes.BIGINT, false, null)),
+            List.of("id"));
+
+    private static final YakTableSchema MAPPED_TARGET_SCHEMA = new YakTableSchema(
+            List.of(
+                    new YakColumn("display_name", YakTypes.STRING, false, 100),
+                    new YakColumn("user_id", YakTypes.BIGINT, false, null)),
+            List.of("user_id"));
+
     private static final JdbcConnectionProvider DIRECT_CONNECTION = (connection, timeoutSeconds) -> {
         Class.forName(connection.driverClassName());
         Properties properties = new Properties();
@@ -126,6 +138,30 @@ class OfflineSyncJdbcAcceptanceIT {
     }
 
     @Test
+    void shouldSyncMappedSubsetAndReorderToMysql() throws Exception {
+        executeMappedTarget(
+                mysqlConnection(),
+                new DataSourceTablePath(MYSQL_DATABASE, null, "target_mapping_mysql"),
+                "SELECT display_name, user_id FROM target_mapping_mysql ORDER BY user_id");
+    }
+
+    @Test
+    void shouldSyncMappedSubsetAndReorderToPostgresql() throws Exception {
+        executeMappedTarget(
+                postgresConnection(),
+                new DataSourceTablePath("yakflow", "public", "target_mapping_pg"),
+                "SELECT display_name, user_id FROM target_mapping_pg ORDER BY user_id");
+    }
+
+    @Test
+    void shouldSyncMappedSubsetAndReorderToOracle() throws Exception {
+        executeMappedTarget(
+                oracleConnection(),
+                new DataSourceTablePath(null, null, "target_mapping_oracle"),
+                "SELECT \"display_name\", \"user_id\" FROM \"target_mapping_oracle\" ORDER BY \"user_id\"");
+    }
+
+    @Test
     void shouldWriteBooleanToOracleProvisionedTarget() throws Exception {
         YakTableSchema logicalSchema = new YakTableSchema(
                 List.of(
@@ -168,6 +204,39 @@ class OfflineSyncJdbcAcceptanceIT {
             assertEquals(true, resultSet.next());
             assertEquals(1L, resultSet.getLong(1));
             assertEquals(1, resultSet.getInt(2));
+            assertEquals(false, resultSet.next());
+        }
+    }
+
+    private void executeMappedTarget(
+            DataSourceConnection target, DataSourceTablePath targetTable, String query) throws Exception {
+        new JdbcTargetTableProvisioner(DIRECT_CONNECTION)
+                .createTable(target, targetTable, MAPPED_TARGET_SCHEMA, 10);
+
+        JdbcSource source = new JdbcSource(
+                new JdbcSourceConfig(
+                        mysqlConnection(),
+                        new DataSourceTablePath(MYSQL_DATABASE, null, "source_table"),
+                        MAPPED_SOURCE_SCHEMA,
+                        2,
+                        2,
+                        10,
+                        1L),
+                DIRECT_CONNECTION);
+        JdbcSink sink =
+                new JdbcSink(new JdbcSinkConfig(target, targetTable, 2, 10, JdbcSaveMode.APPEND), DIRECT_CONNECTION);
+        LocalExecution<?> execution =
+                new LocalExecutionEngine().start(source, sink, MAPPED_TARGET_SCHEMA, 2);
+
+        assertEquals(ExecutionStatus.SUCCEEDED, execution.await(Duration.ofSeconds(30)));
+        assertEquals(new ExecutionMetrics(3, 3), execution.metrics());
+
+        try (var connection = DIRECT_CONNECTION.open(target, 10);
+                var statement = connection.createStatement();
+                var resultSet = statement.executeQuery(query)) {
+            assertMappedRow(resultSet, "yak", 1L);
+            assertMappedRow(resultSet, "flow", 2L);
+            assertMappedRow(resultSet, "acceptance", 3L);
             assertEquals(false, resultSet.next());
         }
     }
@@ -320,6 +389,12 @@ class OfflineSyncJdbcAcceptanceIT {
         String jdbcUrl = "jdbc:oracle:thin:@//" + ORACLE.getHost() + ":" + ORACLE.getMappedPort(1521) + "/FREEPDB1";
         return new TestConnection(
                 "ORACLE", jdbcUrl, "oracle.jdbc.OracleDriver", "system", ORACLE_PASSWORD, null);
+    }
+
+    private static void assertMappedRow(java.sql.ResultSet resultSet, String name, long id) throws Exception {
+        assertEquals(true, resultSet.next());
+        assertEquals(name, resultSet.getString(1));
+        assertEquals(id, resultSet.getLong(2));
     }
 
     private static void assertRow(

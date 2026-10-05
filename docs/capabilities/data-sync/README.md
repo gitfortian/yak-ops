@@ -176,4 +176,4 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 入口为 [DataSyncServiceImpl](../../../yak-ops-business/yak-ops-business-data-sync/src/main/java/io/yak/ops/business/datasync/impl/DataSyncServiceImpl.java)；实现职责见 [Data Sync Rules](../../../yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md)。
 
-普通后端检查遵循 [Java Rules](../../../JAVA_RULES.md)，专项执行入口为 [Backend Acceptance](../../../.github/workflows/backend-acceptance.yml)。状态机 / Quartz 验证不代替真实 JDBC / CDC 验收，连接器验收也不代替 [产品手工 E2E](../../e2e/data-sync/README.md)。一次执行结果留在相应 PR / CI 或版本证据。
+普通后端检查遵循 [Java Rules](../../../JAVA_RULES.md)，专项执行入口为 [Backend Acceptance](../../../.github/workflows/backend-acceptance.yml)。Column Mapping 的真实数据库验收由 `OfflineSyncJdbcAcceptanceIT` 与 `MySqlCdcIntegrationIT` 共同覆盖：JDBC 验证 MySQL Source 到 MySQL / PostgreSQL / Oracle 的字段子集、重排和改名；CDC 验证映射后主键在三类 Target 上的 Snapshot、INSERT、UPDATE、DELETE。Mapping Contract、Schema Resolver 或 Runtime Planning 相关路径变化会触发 JDBC / CDC Acceptance。状态机 / Quartz 验证不代替真实 JDBC / CDC 验收，连接器验收也不代替 [产品手工 E2E](../../e2e/data-sync/README.md)。一次执行结果留在相应 PR / CI 或版本证据。
