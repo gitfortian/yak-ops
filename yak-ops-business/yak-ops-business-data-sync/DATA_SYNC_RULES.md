@@ -63,9 +63,11 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - 通过 WorkspaceContext.requireWorkspaceId 获取产品请求范围；所有 Task / Schedule / Execution / Attempt 访问必须带 workspaceId，不能仅凭资源 ID 查询。
 - Task 保存、发布、运行均按 [Task / Mapping Contract](../../docs/capabilities/data-sync/README.md#datasource-scope-and-mapping) 做服务端校验；前端值只在未绑定范围内参与选择。
 - Task `mapping_config` 为可空 JSON：NULL 表示旧行为的隐式同名映射；显式 Mapping 必须 trim 字段名，并保证 source / target 分别大小写不敏感唯一。Mapping 只保存字段身份，不保存表达式、SQL、类型转换或业务字段值。
-- 当前 Contract + Persistence 阶段不提前改变 Runtime Resolver；显式 Mapping 只有完整等价于当前后端同名映射时才允许保存 / 发布 / 运行。字段改名、字段子集和重排的 Runtime 语义由后续 Mapping-Aware Schema Resolution 收口。
+- SchemaMappingResolver 是显式 Mapping 的唯一 Schema 投影口径：Source Read Schema 保留来源字段名并按 Mapping 顺序 / 子集排列，Target Logical Schema 在相同位置使用目标字段名。禁止 Preview、Save Validation 与 Runtime 各自维护另一套 rename / reorder 算法。
+- 字段改名、字段子集和重排可以直接进入 Preview / Runtime，但不引入表达式、CAST、自定义 SQL 或 Transform；YakRow 值通过 Source / Target Schema 的位置对齐传递。
 - Mapping 是可执行定义：变化推进 definitionVersion，创建 Execution 时冻结进 definitionSnapshot；Retry / Auto Recovery 不读取 Task 最新 Mapping 覆盖历史根 Execution。
-- 复用 DataSyncCatalogColumns 处理同名字段 / 主键集合；保存预览与 Runtime 使用 TargetSchemaCompatibility，并继续复用 JdbcSchemaMapper / JdbcSchemaCompatibility，不在 Service 再写一套类型能力表。
+- TargetSchemaCompatibility 只消费已经投影成目标字段名的 LogicalTable；TargetTablePlanner / Auto Create DDL 同样消费映射后的 Target Logical Schema。继续复用 JdbcSchemaMapper / JdbcSchemaCompatibility，不在 Service 再写一套类型能力表。
+- REALTIME Mapping 必须覆盖全部 Source PK，Target PK 按 Mapping 后的目标字段名比较；UPSERT Existing Target 要求 Mapping 覆盖全部目标 PK，UPSERT Auto Create 要求 Mapping 覆盖全部 Source PK。
 - 版本比较集中在可执行定义的规范化比较，不每次 PUT 加一；包括 mapping 与 retryPolicy，具体语义见 [Version Contract](../../docs/capabilities/data-sync/task-lifecycle.md#definition-version-contract)。
 - CRUD / 查询、发布与运行的副作用必须分开；不能在保存或发布方法里偷偷启动 YakFlow。
 
