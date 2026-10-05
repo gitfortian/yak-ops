@@ -429,6 +429,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         result.setTargetTableExists(false);
         result.setAutoCreateTable(true);
         result.setCreateTableSql(plan.createTableSql());
+        result.setDdlStatements(plan.ddlStatements());
         result.setWarnings(plan.warnings());
         result.setUnsupportedReasons(plan.unsupportedReasons());
         result.setMappings(resolvedMapping.columns().stream()
