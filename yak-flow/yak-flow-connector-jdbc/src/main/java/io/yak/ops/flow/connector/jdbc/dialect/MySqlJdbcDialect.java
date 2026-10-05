@@ -2,8 +2,10 @@ package io.yak.ops.flow.connector.jdbc.dialect;
 
 import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.api.row.YakTableSchema;
+import io.yak.ops.flow.connector.jdbc.JdbcTargetTableDdlPlan;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +48,37 @@ final class MySqlJdbcDialect implements JdbcDialect {
             case TIMESTAMP_WITH_TIME_ZONE ->
                 throw new UnsupportedOperationException("MySQL 无法保留 TIMESTAMP_WITH_TIME_ZONE 语义");
         };
+    }
+
+    @Override
+    public JdbcTargetTableDdlPlan createTablePlan(
+            DataSourceTablePath table,
+            YakTableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments) {
+        Map<String, String> comments = columnComments == null ? Map.of() : columnComments;
+        String definitions = schema.columns().stream()
+                .map(column -> {
+                    String nullable = column.nullable() ? "" : " NOT NULL";
+                    String comment = comments.get(column.name());
+                    String commentClause =
+                            comment == null || comment.isBlank() ? "" : " COMMENT " + stringLiteral(comment);
+                    return quoteIdentifier(column.name()) + " "
+                            + nativeType(column).ddl() + nullable + commentClause;
+                })
+                .collect(Collectors.joining(", "));
+
+        if (!schema.primaryKeys().isEmpty()) {
+            String primaryKeys =
+                    schema.primaryKeys().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
+            definitions += ", PRIMARY KEY (" + primaryKeys + ")";
+        }
+
+        String tableCommentClause =
+                tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
+        String createTableSql =
+                "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
+        return new JdbcTargetTableDdlPlan(createTableSql, List.of(createTableSql));
     }
 
     private JdbcNativeType stringType(Integer length) {
