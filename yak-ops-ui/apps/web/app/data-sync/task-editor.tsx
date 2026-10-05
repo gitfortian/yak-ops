@@ -744,9 +744,7 @@ function previewDdlStatements(preview?: DataSyncMappingPreview) {
 }
 
 function SqlCodePreview({ statements }: { statements: string[] }) {
-  const sql = statements
-    .map((statement) => `${statement.replace(/;\s*$/, "")};`)
-    .join("\n\n");
+  const sql = statements.map((statement) => `${statement.replace(/;\s*$/, "")};`).join("\n\n");
   const tokens = sql.match(SQL_TOKEN_PATTERN) || [sql];
 
   return (
