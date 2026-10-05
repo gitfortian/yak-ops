@@ -383,6 +383,33 @@ V4__data_sync_column_mapping.sql
 
 V3 增加 `yak_ops_data_sync_task.auto_create_table`，默认 0；V4 增加可空 `mapping_config`，NULL 保持旧任务的隐式同名映射语义。两者都属于未发布 v1.2 开发历史，Release Freeze 时按 Flyway Rules 与同版本其它 Draft 一起收口，不得修改已经发布的 V1 / V2。
 
+## 10.1 Mapping-Aware Schema Projection
+
+Task Column Mapping 在进入 Target Compatibility / Planning / Runtime 前先投影为两张位置对齐的 Logical Schema：
+
+~~~text
+Source LogicalTable
+      +
+Task mapping.columns
+        ↓
+SchemaMappingResolver
+├── Source Read LogicalTable
+│   └── 来源字段名，按 Mapping 顺序 / 子集
+└── Target LogicalTable
+    └── 相同类型 / nullable / capacity，在同一位置使用目标字段名
+~~~
+
+规则：
+
+- `mapping=null` 继续生成全字段大小写不敏感同名映射。
+- 显式 Mapping 的数组顺序就是 Runtime YakRow 的字段位置顺序。
+- Source 读取只包含被映射字段，因此字段子集不需要 Transform。
+- Target Compatibility 与 Auto Create Planner 只看到映射后的目标字段名。
+- Source PK 被映射时，Target LogicalTable 的 PK 名称按 Mapping 重命名；未映射 PK 不进入投影。
+- REALTIME 必须映射全部 Source PK；Existing Target 的真实 PK 集合必须等于映射后的 PK 集合。
+- UPSERT Auto Create 必须映射全部 Source PK，避免先创建无 PK 目标表后再失败。
+- Mapping 不改变 Logical Type，不承担 CAST / expression / computed column。
+
 ## 11. Persistence Boundary
 
 Logical Table persistence 仍未实现。
@@ -416,7 +443,7 @@ Runtime Schema Compatibility Preflight = IMPLEMENTED
 Auto Create Table Preview API = IMPLEMENTED
 Schema Preview UI = IMPLEMENTED
 Task Column Mapping Contract / Persistence = IMPLEMENTED
-Mapping-Aware Schema Resolution / Runtime = NOT IMPLEMENTED
+Mapping-Aware Schema Resolution / Runtime = IMPLEMENTED
 DDL Sync = NOT IMPLEMENTED
 Automatic Schema Evolution = NOT IMPLEMENTED
 Multi-table Task = NOT IMPLEMENTED
