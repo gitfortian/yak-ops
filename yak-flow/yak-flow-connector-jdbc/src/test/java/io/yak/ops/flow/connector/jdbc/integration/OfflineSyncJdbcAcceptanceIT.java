@@ -162,6 +162,81 @@ class OfflineSyncJdbcAcceptanceIT {
     }
 
     @Test
+    void shouldPreserveCommentsAcrossProvisionedTargets() throws Exception {
+        String tableComment = "订单's table";
+        Map<String, String> columnComments = Map.of("id", "主键's id", "name", "订单名称");
+        JdbcTargetTableProvisioner provisioner = new JdbcTargetTableProvisioner(DIRECT_CONNECTION);
+
+        dropTable(mysqlConnection(), "DROP TABLE IF EXISTS target_comment_mysql");
+        provisioner.createTable(
+                mysqlConnection(),
+                new DataSourceTablePath(MYSQL_DATABASE, null, "target_comment_mysql"),
+                SCHEMA,
+                tableComment,
+                columnComments,
+                10);
+        assertSingleValue(
+                mysqlConnection(),
+                "SELECT TABLE_COMMENT FROM information_schema.TABLES "
+                        + "WHERE TABLE_SCHEMA = 'yakflow' AND TABLE_NAME = 'target_comment_mysql'",
+                tableComment);
+        assertSingleValue(
+                mysqlConnection(),
+                "SELECT COLUMN_COMMENT FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = 'yakflow' AND TABLE_NAME = 'target_comment_mysql' AND COLUMN_NAME = 'id'",
+                "主键's id");
+        assertSingleValue(
+                mysqlConnection(),
+                "SELECT COLUMN_COMMENT FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = 'yakflow' AND TABLE_NAME = 'target_comment_mysql' AND COLUMN_NAME = 'name'",
+                "订单名称");
+
+        dropTable(postgresConnection(), "DROP TABLE IF EXISTS \"public\".\"target_comment_pg\"");
+        provisioner.createTable(
+                postgresConnection(),
+                new DataSourceTablePath("yakflow", "public", "target_comment_pg"),
+                SCHEMA,
+                tableComment,
+                columnComments,
+                10);
+        assertSingleValue(
+                postgresConnection(),
+                "SELECT obj_description('public.target_comment_pg'::regclass, 'pg_class')",
+                tableComment);
+        assertSingleValue(
+                postgresConnection(),
+                "SELECT col_description('public.target_comment_pg'::regclass, 1)",
+                "主键's id");
+        assertSingleValue(
+                postgresConnection(),
+                "SELECT col_description('public.target_comment_pg'::regclass, 2)",
+                "订单名称");
+
+        dropTableIgnoringFailure(oracleConnection(), "DROP TABLE \"target_comment_oracle\" PURGE");
+        provisioner.createTable(
+                oracleConnection(),
+                new DataSourceTablePath(null, null, "target_comment_oracle"),
+                SCHEMA,
+                tableComment,
+                columnComments,
+                10);
+        assertSingleValue(
+                oracleConnection(),
+                "SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = 'target_comment_oracle'",
+                tableComment);
+        assertSingleValue(
+                oracleConnection(),
+                "SELECT COMMENTS FROM USER_COL_COMMENTS "
+                        + "WHERE TABLE_NAME = 'target_comment_oracle' AND COLUMN_NAME = 'id'",
+                "主键's id");
+        assertSingleValue(
+                oracleConnection(),
+                "SELECT COMMENTS FROM USER_COL_COMMENTS "
+                        + "WHERE TABLE_NAME = 'target_comment_oracle' AND COLUMN_NAME = 'name'",
+                "订单名称");
+    }
+
+    @Test
     void shouldWriteBooleanToOracleProvisionedTarget() throws Exception {
         YakTableSchema logicalSchema = new YakTableSchema(
                 List.of(
@@ -323,6 +398,31 @@ class OfflineSyncJdbcAcceptanceIT {
             assertRow(resultSet, 2L, "flow", new BigDecimal("20.50"));
             assertRow(resultSet, 3L, "acceptance", new BigDecimal("30.75"));
             assertEquals(false, resultSet.next());
+        }
+    }
+
+    private static void assertSingleValue(DataSourceConnection connection, String sql, String expected)
+            throws Exception {
+        try (var opened = DIRECT_CONNECTION.open(connection, 10);
+                var statement = opened.createStatement();
+                var resultSet = statement.executeQuery(sql)) {
+            assertEquals(true, resultSet.next());
+            assertEquals(expected, resultSet.getString(1));
+        }
+    }
+
+    private static void dropTable(DataSourceConnection connection, String sql) throws Exception {
+        try (var opened = DIRECT_CONNECTION.open(connection, 10);
+                var statement = opened.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    private static void dropTableIgnoringFailure(DataSourceConnection connection, String sql) throws Exception {
+        try {
+            dropTable(connection, sql);
+        } catch (Exception ignored) {
+            // 首次验收时目标表不存在。
         }
     }
 
