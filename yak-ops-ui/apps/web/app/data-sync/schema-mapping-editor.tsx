@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Empty,
   Input,
@@ -7,7 +6,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@yak-ops/yak-ui";
-import { Plus, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -114,6 +112,10 @@ const buildPositionMappings = (
   }));
 
 const connectionPath = (startX: number, startY: number, endX: number, endY: number) => {
+  if (Math.abs(startY - endY) < 1) {
+    return `M ${startX} ${startY} L ${endX} ${endY}`;
+  }
+
   const distance = Math.abs(endX - startX);
   const controlOffset = Math.max(48, distance * 0.35);
   return [
@@ -149,6 +151,7 @@ export function SchemaMappingEditor({
   const [addOpen, setAddOpen] = useState(false);
   const [addSource, setAddSource] = useState<string | null>(null);
   const [addTarget, setAddTarget] = useState<string | null>(null);
+  const [editingMappingKey, setEditingMappingKey] = useState<string>();
 
   const sourceMap = useMemo(
     () => new Map(sourceColumns.map((column) => [normalizeFieldName(column.name), column])),
@@ -223,6 +226,7 @@ export function SchemaMappingEditor({
   const mappingReady =
     sourceColumns.length > 0 && (targetDerived || displayTargetColumns.length > 0);
   const loading = sourceLoading || targetLoading;
+  const showSearch = sourceColumns.length > 12 || displayTargetColumns.length > 12;
 
   const commitMappings = useCallback(
     (columns: DataSyncColumnMapping[]) => onChange({ columns }),
@@ -230,7 +234,7 @@ export function SchemaMappingEditor({
   );
 
   const connectFields = useCallback(
-    (source: string, target: string) => {
+    (source: string, target: string, replacingKey?: string) => {
       const sourceColumn = sourceMap.get(normalizeFieldName(source));
       const normalizedTarget = target.trim();
       if (
@@ -245,6 +249,7 @@ export function SchemaMappingEditor({
       const targetKey = normalizeFieldName(normalizedTarget);
       const next = mappings.filter(
         (item) =>
+          mappingKey(item) !== replacingKey &&
           normalizeFieldName(item.source) !== sourceKey &&
           normalizeFieldName(item.target) !== targetKey,
       );
@@ -408,15 +413,12 @@ export function SchemaMappingEditor({
         type="button"
         data-target-field={role === "target" ? field : undefined}
         className={[
-          "relative z-10 mb-1 flex h-11 w-full touch-none cursor-pointer items-center rounded-lg border px-3 text-left transition-colors",
-          role === "source" ? "justify-between" : "gap-3",
+          "relative grid h-8 w-full touch-none cursor-pointer grid-cols-[minmax(0,1fr)_140px] items-center border-b border-[#eef0f3] bg-white text-left transition-colors last:border-b-0",
           selected
-            ? "border-[var(--yak-color-primary)] bg-[#f5f8ff]"
-            : mapped
-              ? "border-[#e4e7ec] bg-[#fafafa]"
-              : selectedSource && role === "target"
-                ? "border-[#d6e4ff] bg-[#f8faff] hover:border-[var(--yak-color-primary)]"
-                : "border-transparent bg-white hover:bg-[#f7f8fa]",
+            ? "bg-[#f5f8ff]"
+            : selectedSource && role === "target"
+              ? "hover:bg-[#f5f8ff]"
+              : "hover:bg-[#f8f9fb]",
         ].join(" ")}
         onClick={() => {
           if (role === "source") setSelectedSource(field);
@@ -424,131 +426,128 @@ export function SchemaMappingEditor({
         }}
         onPointerDown={role === "source" ? (event) => startDrag(event, field) : undefined}
       >
-        {role === "target" ? (
-          <span
-            className={[
-              "h-2.5 w-2.5 shrink-0 rounded-full border-2 border-white",
-              mapped
-                ? "bg-[var(--yak-color-primary)] shadow-[0_0_0_1px_var(--yak-color-primary)]"
-                : "bg-[#d0d5dd] shadow-[0_0_0_1px_#d0d5dd]",
-            ].join(" ")}
-          />
-        ) : null}
-
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className="block truncate text-xs font-medium text-[#344054]">{field}</span>
-            {column.primaryKey ? (
-              <span className="shrink-0 rounded bg-[#f2f4f7] px-1 py-0.5 text-[9px] font-medium text-[#667085]">
-                PK
-              </span>
-            ) : null}
-          </span>
-          <span className="block truncate text-[10px] text-[#98a2b3]">{columnType(column)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 px-3">
+          <span className="truncate text-xs text-[#344054]">{field}</span>
+          {column.primaryKey ? (
+            <span className="shrink-0 rounded bg-[#f2f4f7] px-1 py-0.5 text-[9px] font-medium text-[#667085]">
+              PK
+            </span>
+          ) : null}
         </span>
-
-        {role === "source" ? (
-          <span
-            className={[
-              "h-2.5 w-2.5 shrink-0 rounded-full border-2 border-white",
-              mapped || selected
-                ? "bg-[var(--yak-color-primary)] shadow-[0_0_0_1px_var(--yak-color-primary)]"
-                : "bg-[#d0d5dd] shadow-[0_0_0_1px_#d0d5dd]",
-            ].join(" ")}
-          />
-        ) : null}
+        <span className="truncate border-l border-[#eef0f3] px-3 text-xs text-[#475467]">
+          {columnType(column)}
+        </span>
+        <span
+          className={[
+            "absolute top-1/2 z-20 h-2 w-2 -translate-y-1/2 rotate-45 border border-white",
+            role === "source" ? "-right-1" : "-left-1",
+            mapped || selected
+              ? "bg-[var(--yak-color-primary)] shadow-[0_0_0_1px_var(--yak-color-primary)]"
+              : "bg-[#cfd4dc] shadow-[0_0_0_1px_#cfd4dc]",
+          ].join(" ")}
+        />
       </button>
     );
   };
 
-  const addMapping = () => {
-    if (!addSource || !addTarget?.trim()) return;
-    connectFields(addSource, addTarget);
+  const closeMappingEditor = () => {
+    setAddOpen(false);
     setAddSource(null);
     setAddTarget(null);
-    setAddOpen(false);
+    setEditingMappingKey(undefined);
+  };
+
+  const openMappingEditor = (key?: string) => {
+    const mapping = key ? mappings.find((item) => mappingKey(item) === key) : undefined;
+    setEditingMappingKey(key);
+    setAddSource(mapping?.source || null);
+    setAddTarget(mapping?.target || null);
+    setAddOpen(true);
+  };
+
+  const saveMapping = () => {
+    if (!addSource || !addTarget?.trim()) return;
+    connectFields(addSource, addTarget, editingMappingKey);
+    closeMappingEditor();
   };
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Badge tone={mappings.length > 0 ? "info" : "warning"}>已映射 {mappings.length} 项</Badge>
-          {targetDerived ? <Badge tone="warning">自动建表</Badge> : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="small"
+          variant="primary"
+          disabled={!mappingReady}
+          onClick={() => commitMappings(buildSameNameMappings(sourceColumns, baseTargetColumns))}
+        >
+          同名映射
+        </Button>
+        <Button
+          size="small"
+          disabled={!mappingReady}
+          onClick={() => commitMappings(buildPositionMappings(sourceColumns, baseTargetColumns))}
+        >
+          同行映射
+        </Button>
+        <Button size="small" disabled={mappings.length === 0} onClick={() => commitMappings([])}>
+          清空映射
+        </Button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="small"
-            variant="primary"
+        <Popover
+          open={addOpen}
+          onOpenChange={(open) => {
+            if (open) openMappingEditor();
+            else closeMappingEditor();
+          }}
+        >
+          <PopoverTrigger
             disabled={!mappingReady}
-            onClick={() => commitMappings(buildSameNameMappings(sourceColumns, baseTargetColumns))}
+            className="inline-flex h-7 cursor-pointer items-center justify-center rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-button-secondary-border)] bg-[var(--yak-components-button-secondary-bg)] px-2.5 text-[length:var(--yak-font-size-control-small)] font-medium text-[var(--yak-components-button-secondary-text)] outline-none transition-colors hover:bg-[var(--yak-components-button-secondary-bg-hover)] focus-visible:ring-[3px] focus-visible:ring-[var(--yak-components-button-focus-ring)] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            同名映射
-          </Button>
-          <Button
-            size="small"
-            disabled={!mappingReady}
-            onClick={() => commitMappings(buildPositionMappings(sourceColumns, baseTargetColumns))}
-          >
-            同序映射
-          </Button>
-
-          <Popover open={addOpen} onOpenChange={setAddOpen}>
-            <PopoverTrigger
-              disabled={!mappingReady}
-              className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--yak-radius-control-small)] border border-transparent bg-[var(--yak-components-button-secondary-bg)] px-2.5 text-[length:var(--yak-font-size-control-small)] font-medium text-[var(--yak-components-button-secondary-text)] outline-none transition-colors hover:bg-[var(--yak-components-button-secondary-bg-hover)] focus-visible:ring-[3px] focus-visible:ring-[var(--yak-components-button-focus-ring)] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <Plus size={14} />
-              添加映射
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[320px] space-y-3">
-              <DataSyncSearchableSelect
-                value={addSource}
-                options={sourceOptions}
-                placeholder="选择来源字段"
-                searchPlaceholder="搜索来源字段"
-                emptyText="暂无来源字段"
-                onValueChange={setAddSource}
+            手动编辑映射关系
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[320px] space-y-3">
+            <DataSyncSearchableSelect
+              value={addSource}
+              options={sourceOptions}
+              placeholder="选择来源字段"
+              searchPlaceholder="搜索来源字段"
+              emptyText="暂无来源字段"
+              onValueChange={setAddSource}
+            />
+            {targetDerived ? (
+              <Input
+                size="small"
+                variant="outlined"
+                value={addTarget || ""}
+                placeholder="输入目标字段名"
+                onChange={(event) => setAddTarget(event.target.value)}
               />
-              {targetDerived ? (
-                <Input
-                  size="small"
-                  variant="outlined"
-                  value={addTarget || ""}
-                  placeholder="输入目标字段名"
-                  onChange={(event) => setAddTarget(event.target.value)}
-                />
-              ) : (
-                <DataSyncSearchableSelect
-                  value={addTarget}
-                  options={targetOptions}
-                  placeholder="选择目标字段"
-                  searchPlaceholder="搜索目标字段"
-                  emptyText="暂无目标字段"
-                  onValueChange={setAddTarget}
-                />
-              )}
-              <div className="flex justify-end gap-2">
-                <Button size="small" onClick={() => setAddOpen(false)}>
-                  取消
-                </Button>
-                <Button
-                  size="small"
-                  variant="primary"
-                  disabled={!addSource || !addTarget?.trim()}
-                  onClick={addMapping}
-                >
-                  添加
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Button size="small" disabled={mappings.length === 0} onClick={() => commitMappings([])}>
-            清空
-          </Button>
-        </div>
+            ) : (
+              <DataSyncSearchableSelect
+                value={addTarget}
+                options={targetOptions}
+                placeholder="选择目标字段"
+                searchPlaceholder="搜索目标字段"
+                emptyText="暂无目标字段"
+                onValueChange={setAddTarget}
+              />
+            )}
+            <div className="flex justify-end gap-2">
+              <Button size="small" onClick={closeMappingEditor}>
+                取消
+              </Button>
+              <Button
+                size="small"
+                variant="primary"
+                disabled={!addSource || !addTarget?.trim()}
+                onClick={saveMapping}
+              >
+                {editingMappingKey ? "修改" : "添加"}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {!sourceReady || !targetReady ? (
@@ -566,12 +565,12 @@ export function SchemaMappingEditor({
       ) : (
         <div
           ref={canvasRef}
-          className="relative grid min-h-[420px] grid-cols-[minmax(240px,1fr)_150px_minmax(240px,1fr)] overflow-hidden rounded-lg border border-[#e6e8eb] bg-white max-xl:grid-cols-[minmax(220px,1fr)_120px_minmax(220px,1fr)]"
+          className="relative grid min-h-[320px] grid-cols-[minmax(280px,1fr)_minmax(160px,.65fr)_minmax(280px,1fr)] bg-white max-xl:grid-cols-[minmax(240px,1fr)_140px_minmax(240px,1fr)]"
           onPointerMove={moveDrag}
           onPointerUp={finishDrag}
           onPointerCancel={() => setDrag(undefined)}
         >
-          <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible">
+          <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
             {geometries.map((geometry) => {
               const active = hoveredMapping === geometry.key;
               const detail = previewByMapping.get(geometry.key);
@@ -601,9 +600,9 @@ export function SchemaMappingEditor({
                         ? "#d92d20"
                         : active
                           ? "var(--yak-color-primary)"
-                          : "#b8bec8"
+                          : "#cfd4dc"
                     }
-                    strokeWidth={active ? 2 : 1.4}
+                    strokeWidth={active ? 2 : 1.2}
                   />
                 </g>
               );
@@ -622,35 +621,48 @@ export function SchemaMappingEditor({
 
           {geometries.map((geometry) =>
             hoveredMapping === geometry.key ? (
-              <Button
+              <div
                 key={geometry.key}
-                size="small"
-                variant="danger"
-                aria-label="删除字段映射"
-                title="删除映射"
-                className="!absolute !z-20 !h-7 !w-7 !min-w-0 !rounded-full !border !border-[#f0f1f3] !bg-white !p-0 !text-[#d92d20] !shadow-sm"
-                style={{ left: geometry.middleX - 14, top: geometry.middleY - 14 }}
+                className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md border border-[#e6e8eb] bg-white text-[11px] shadow-sm"
+                style={{ left: geometry.middleX, top: geometry.middleY }}
                 onMouseEnter={() => setHoveredMapping(geometry.key)}
                 onMouseLeave={() => setHoveredMapping(undefined)}
-                onClick={() => removeMapping(geometry.key)}
               >
-                <Trash2 size={13} />
-              </Button>
+                <button
+                  type="button"
+                  className="h-6 px-2 text-[#d92d20] hover:bg-[#fff6f5]"
+                  onClick={() => removeMapping(geometry.key)}
+                >
+                  删除
+                </button>
+                <button
+                  type="button"
+                  className="h-6 border-l border-[#eef0f3] px-2 text-[#475467] hover:bg-[#f8f9fb]"
+                  onClick={() => openMappingEditor(geometry.key)}
+                >
+                  修改
+                </button>
+              </div>
             ) : null,
           )}
 
-          <div className="relative z-10 border-r border-[#eef0f2] bg-white">
-            <div className="border-b border-[#eef0f2] bg-[#f8f9fb] p-3">
-              <div className="mb-2 text-xs font-semibold text-[#344054]">来源字段</div>
-              <Input
-                size="small"
-                variant="outlined"
-                value={sourceKeyword}
-                placeholder="搜索来源字段"
-                onChange={(event) => setSourceKeyword(event.target.value)}
-              />
+          <div className="relative z-20 self-start overflow-hidden border border-[#dfe3e8] bg-white">
+            <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-b border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
+              <div className="px-3">来源字段</div>
+              <div className="border-l border-[#dfe3e8] px-3">类型</div>
             </div>
-            <div className="max-h-[360px] overflow-y-auto p-2" onScroll={calculateGeometry}>
+            {showSearch ? (
+              <div className="border-b border-[#eef0f3] p-2">
+                <Input
+                  size="small"
+                  variant="outlined"
+                  value={sourceKeyword}
+                  placeholder="搜索来源字段"
+                  onChange={(event) => setSourceKeyword(event.target.value)}
+                />
+              </div>
+            ) : null}
+            <div className="max-h-[360px] overflow-y-auto" onScroll={calculateGeometry}>
               {visibleSources.length > 0 ? (
                 visibleSources.map((column) => renderField(column, "source"))
               ) : (
@@ -659,29 +671,25 @@ export function SchemaMappingEditor({
             </div>
           </div>
 
-          <div className="relative z-0 border-r border-[#eef0f2] bg-[#fafbfc]">
-            <div className="flex h-[74px] items-center justify-center border-b border-[#eef0f2] text-[11px] text-[#98a2b3]">
-              映射关系
+          <div className="relative z-0 min-h-[320px] bg-white" />
+
+          <div className="relative z-20 self-start overflow-hidden border border-[#dfe3e8] bg-white">
+            <div className="grid h-8 grid-cols-[minmax(0,1fr)_140px] items-center border-b border-[#dfe3e8] bg-[#f4f5f7] text-xs font-semibold text-[#242731]">
+              <div className="px-3">目标字段</div>
+              <div className="border-l border-[#dfe3e8] px-3">类型</div>
             </div>
-            {mappings.length === 0 ? (
-              <div className="flex h-[320px] items-center justify-center px-4 text-center text-[11px] leading-5 text-[#98a2b3]">
-                点击来源字段后选择目标字段，或拖动节点建立映射
+            {showSearch ? (
+              <div className="border-b border-[#eef0f3] p-2">
+                <Input
+                  size="small"
+                  variant="outlined"
+                  value={targetKeyword}
+                  placeholder="搜索目标字段"
+                  onChange={(event) => setTargetKeyword(event.target.value)}
+                />
               </div>
             ) : null}
-          </div>
-
-          <div className="relative z-10 bg-white">
-            <div className="border-b border-[#eef0f2] bg-[#f8f9fb] p-3">
-              <div className="mb-2 text-xs font-semibold text-[#344054]">目标字段</div>
-              <Input
-                size="small"
-                variant="outlined"
-                value={targetKeyword}
-                placeholder="搜索目标字段"
-                onChange={(event) => setTargetKeyword(event.target.value)}
-              />
-            </div>
-            <div className="max-h-[360px] overflow-y-auto p-2" onScroll={calculateGeometry}>
+            <div className="max-h-[360px] overflow-y-auto" onScroll={calculateGeometry}>
               {visibleTargets.length > 0 ? (
                 visibleTargets.map((column) => renderField(column, "target"))
               ) : (
@@ -693,6 +701,7 @@ export function SchemaMappingEditor({
       )}
     </div>
   );
+
 }
 
 export default SchemaMappingEditor;
