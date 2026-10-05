@@ -65,10 +65,7 @@ public interface JdbcDialect {
      * @return 完整 DDL 计划
      */
     default JdbcTargetTableDdlPlan createTablePlan(
-            DataSourceTablePath table,
-            YakTableSchema schema,
-            String tableComment,
-            Map<String, String> columnComments) {
+            DataSourceTablePath table, YakTableSchema schema, String tableComment, Map<String, String> columnComments) {
         String createTableSql = createTableSql(table, schema);
         List<String> statements = new ArrayList<>();
         statements.add(createTableSql);
@@ -81,8 +78,8 @@ public interface JdbcDialect {
         for (YakColumn column : schema.columns()) {
             String comment = comments.get(column.name());
             if (!hasComment(comment)) continue;
-            statements.add("COMMENT ON COLUMN " + qualifiedTable(table) + "." + quoteIdentifier(column.name())
-                    + " IS " + stringLiteral(comment));
+            statements.add("COMMENT ON COLUMN " + qualifiedTable(table) + "." + quoteIdentifier(column.name()) + " IS "
+                    + stringLiteral(comment));
         }
         return new JdbcTargetTableDdlPlan(createTableSql, statements);
     }
