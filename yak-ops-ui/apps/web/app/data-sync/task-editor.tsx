@@ -94,7 +94,6 @@ interface ColumnOptions {
   loading: boolean;
 }
 
-
 const EMPTY_RUNTIME: DataSyncRuntimeConfig = {
   fetchSize: 500,
   readBatchSize: 500,
