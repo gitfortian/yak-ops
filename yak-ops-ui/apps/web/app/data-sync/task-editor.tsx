@@ -20,7 +20,7 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { SchemaMappingEditor } from "@/app/data-sync/schema-mapping-editor";
@@ -687,6 +687,13 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
 
   const warnings = preview.warnings || [];
   const unsupportedReasons = preview.unsupportedReasons || [];
+  const hasDiagnostics =
+    (!preview.targetTableExists && !preview.autoCreateTable) ||
+    warnings.length > 0 ||
+    unsupportedReasons.length > 0 ||
+    Boolean(preview.createTableSql);
+
+  if (!hasDiagnostics) return null;
 
   return (
     <div className="space-y-3">
@@ -780,6 +787,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [saving, setSaving] = useState(false);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mapping, setMapping] = useState<DataSyncMappingPreview>();
+  const mappingScopeRef = useRef("");
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
   const [scheduleExists, setScheduleExists] = useState(false);
 
@@ -925,6 +933,32 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     };
   }, [basePath, id, navigate, realtime, syncType]);
 
+  const mappingScopeKey = useMemo(
+    () =>
+      [
+        form.sourceDataSourceId,
+        form.sourceDatabase,
+        form.sourceSchema,
+        form.sourceTable,
+        form.targetDataSourceId,
+        form.targetDatabase,
+        form.targetSchema,
+        form.targetTable,
+        String(form.autoCreateTable),
+      ].join("::"),
+    [
+      form.sourceDataSourceId,
+      form.sourceDatabase,
+      form.sourceSchema,
+      form.sourceTable,
+      form.targetDataSourceId,
+      form.targetDatabase,
+      form.targetSchema,
+      form.targetTable,
+      form.autoCreateTable,
+    ],
+  );
+
   const mappingPayload = useMemo(
     () =>
       form.sourceDataSourceId &&
@@ -965,10 +999,18 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       setMappingLoading(false);
       return;
     }
+
+    const previousScope = mappingScopeRef.current;
+    const scopeChanged = Boolean(previousScope && previousScope !== mappingScopeKey);
+    mappingScopeRef.current = mappingScopeKey;
+
+    if (scopeChanged) {
+      setMapping(undefined);
+    }
+
     let active = true;
-    setMapping(undefined);
+    setMappingLoading(true);
     const timer = window.setTimeout(() => {
-      setMappingLoading(true);
       void previewDataSyncMapping(mappingPayload)
         .then((result) => {
           if (active) setMapping(result);
@@ -977,11 +1019,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           if (active) setMappingLoading(false);
         });
     }, 200);
+
     return () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [mappingPayload]);
+  }, [mappingPayload, mappingScopeKey]);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) =>
     setForm((current) => {
