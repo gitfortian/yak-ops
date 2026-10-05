@@ -1057,7 +1057,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
       { id: "target", label: "数据去向" },
-      { id: "mapping", label: "Schema 映射" },
+      { id: "mapping", label: "去向字段映射" },
       ...(realtime ? [] : [{ id: "schedule", label: "调度配置" }]),
       { id: "retry", label: "重试策略" },
       { id: "runtime", label: "运行参数" },
@@ -1462,7 +1462,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       : "新建离线同步任务";
   const pageDescription = realtime
     ? "MySQL CDC 单表实时同步 · 首次全量后持续消费 Binlog"
-    : "单表离线同步 · Schema 字段映射";
+    : "单表离线同步 · 去向字段映射";
 
   if (loading) {
     return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
