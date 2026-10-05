@@ -27,6 +27,7 @@ import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { EditorAnchorStepper, type EditorAnchorItem } from "@/app/data-sync/editor-anchor-stepper";
 import { SchemaMappingEditor } from "@/app/data-sync/schema-mapping-editor";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import {
@@ -1038,6 +1039,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mapping, setMapping] = useState<DataSyncMappingPreview>();
   const mappingScopeRef = useRef("");
+  const editorScrollRef = useRef<HTMLElement | null>(null);
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
   const [scheduleExists, setScheduleExists] = useState(false);
 
@@ -1047,6 +1049,20 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         ? { ...COMMON_TIME_ZONE_ITEMS, [scheduleForm.timeZone]: scheduleForm.timeZone }
         : COMMON_TIME_ZONE_ITEMS,
     [scheduleForm.timeZone],
+  );
+
+  const anchorItems = useMemo<EditorAnchorItem[]>(
+    () => [
+      { id: "basic", label: "基本信息" },
+      { id: "datasource", label: "数据源" },
+      { id: "source", label: "数据来源" },
+      { id: "target", label: "数据去向" },
+      { id: "mapping", label: "Schema 映射" },
+      ...(realtime ? [] : [{ id: "schedule", label: "调度配置" }]),
+      { id: "retry", label: "重试策略" },
+      { id: "runtime", label: "运行参数" },
+    ],
+    [realtime],
   );
 
   const sourceCatalog = useCatalogOptions(
@@ -1515,6 +1531,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         }
       >
         <main
+          ref={editorScrollRef}
           className={
             localScroll
               ? "min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
@@ -1858,29 +1875,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         <aside
           className={
             localScroll
-              ? "hidden h-fit w-40 shrink-0 space-y-1 self-start pt-5 lg:block"
-              : "sticky top-4 hidden h-fit w-40 shrink-0 space-y-1 self-start lg:block"
+              ? "hidden h-fit w-44 shrink-0 self-start pt-5 lg:block"
+              : "sticky top-4 hidden h-fit w-44 shrink-0 self-start lg:block"
           }
         >
-          {[
-            ["basic", "基本信息"],
-            ["datasource", "数据源"],
-            ["source", "数据来源"],
-            ["target", "数据去向"],
-            ["mapping", "Schema 映射"],
-            ...(realtime ? [] : [["schedule", "调度配置"]]),
-            ["retry", "重试策略"],
-            ["runtime", "运行参数"],
-          ].map(([anchor, label]) => (
-            <a
-              key={anchor}
-              href={`#${anchor}`}
-              className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-[#667085] hover:bg-[#f2f4f7] hover:text-[var(--yak-color-primary)]"
-            >
-              <span className="size-1.5 rounded-full bg-current" />
-              {label}
-            </a>
-          ))}
+          <EditorAnchorStepper
+            items={anchorItems}
+            scrollRootRef={localScroll ? editorScrollRef : undefined}
+          />
         </aside>
       </div>
     </div>

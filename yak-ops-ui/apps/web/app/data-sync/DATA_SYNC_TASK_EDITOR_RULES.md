@@ -39,7 +39,7 @@ OFFLINE Cron 使用 Yak UI `CronSchedulerPicker`，主表单不再要求用户�
 
 Schema Mapping Editor 保持历史字段映射的紧凑表格视觉：左右分别是“字段 / 类型”行，中间只承载映射连线。左右字段必须共享同一个纵向滚动坐标系，不允许各自独立滚动；连接点由 Mapping Overlay 按字段行位置绘制，不得通过负 offset 把节点塞进字段列表的 overflow 区域。所有映射固定使用 SVG 直线：同行为水平线，跨行为斜线，不使用 Bezier 曲线。Connector 的视觉节点与命中区域必须分离：默认使用约 8px 的紧凑菱形，实际可交互 Hit Area 约 20px；Hover Connector 时显示白底轻边框的“+”连接反馈并使用 pointer cursor，不能把静态状态点当成唯一可操作提示。字段不得改回逐项大圆角 Card。常规小表不常驻搜索框；字段较多时再显示左右搜索。连线 Hover 的删除 / 修改操作必须复用 Yak UI Button，并保持从连线移动到按钮时 Hover 不闪退；兼容性异常直接反映在线条与端点状态上。
 
-OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部滚动；右侧锚点导航在滚动区外，不能跟随内容滚走。REALTIME 当前保持原页面滚动方式，不把离线布局描述为两种模式都已采用。具体列宽与断点归 [task-editor.tsx](task-editor.tsx)，不照抄普通管理 Modal 的密度覆盖配置页。
+OFFLINE 可编辑页面使用父容器高度、固定 PageHeader 与左侧局部滚动；右侧章节导航在滚动区外，不能跟随内容滚走。章节导航使用 Data Sync 本地 EditorAnchorStepper：白色 Card、8px 节点、1px 纵向连接线，当前章节节点与文字使用 Yak 主色，其余使用中性灰；不使用整行 Hover 背景。滚动内容时 Stepper 必须自动跟随当前 CollapseSection，点击节点使用 smooth scroll 定位。OFFLINE 监听 main 局部滚动容器，REALTIME 监听 viewport，并继续按模式决定是否展示调度配置节点。窄屏沿用当前规则隐藏右侧导航。该 Stepper 先保持 Data Sync 本地组件，不提前提升到 Yak UI。具体列宽与断点归 [task-editor.tsx](task-editor.tsx)，不照抄普通管理 Modal 的密度覆盖配置页。
 
 ## Risk Presentation
 
