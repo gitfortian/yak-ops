@@ -16,10 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
-  Table,
   Textarea,
   toast,
-  type TableColumns,
 } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -45,7 +43,6 @@ import {
   publishDataSyncTask,
   saveDataSyncSchedule,
   updateDataSyncTask,
-  type DataSyncFieldMapping,
   type DataSyncMappingConfig,
   type DataSyncMappingPreview,
   type DataSyncRealtimeConfig,
@@ -690,23 +687,9 @@ function SchemaPreviewDiagnostics({ preview }: { preview?: DataSyncMappingPrevie
 
   const warnings = preview.warnings || [];
   const unsupportedReasons = preview.unsupportedReasons || [];
-  const targetBadge = preview.targetTableExists ? (
-    <Badge tone="success">目标表已存在</Badge>
-  ) : preview.autoCreateTable ? (
-    <Badge tone="warning">将自动建表</Badge>
-  ) : (
-    <Badge tone="danger">目标表不存在</Badge>
-  );
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {targetBadge}
-        <Badge tone={preview.compatible ? "success" : "danger"}>
-          {preview.compatible ? "Schema 可兼容" : "Schema 不兼容"}
-        </Badge>
-      </div>
-
       {!preview.targetTableExists && !preview.autoCreateTable ? (
         <div
           role="alert"
@@ -999,42 +982,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       window.clearTimeout(timer);
     };
   }, [mappingPayload]);
-
-  const mappingColumns: TableColumns<DataSyncFieldMapping> = [
-    { key: "sourceName", title: "来源字段", dataIndex: "sourceName", minWidth: 180 },
-    {
-      key: "sourceType",
-      title: "来源类型",
-      minWidth: 180,
-      render: (_value, record) => record.sourceType || "-",
-    },
-    {
-      key: "targetName",
-      title: "目标字段",
-      minWidth: 180,
-      render: (_value, record) => record.targetName || "-",
-    },
-    {
-      key: "targetType",
-      title: "目标类型",
-      minWidth: 180,
-      render: (_value, record) => record.targetType || "-",
-    },
-    {
-      key: "status",
-      title: "状态",
-      width: 160,
-      render: (_value, record) =>
-        record.compatible ? (
-          <Badge tone="success">兼容</Badge>
-        ) : (
-          <div className="space-y-1">
-            <Badge tone="danger">不兼容</Badge>
-            {record.message ? <div className="text-xs text-[#d92d20]">{record.message}</div> : null}
-          </div>
-        ),
-    },
-  ];
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) =>
     setForm((current) => {
@@ -1540,22 +1487,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               ) : null}
 
               <SchemaPreviewDiagnostics preview={mapping} />
-
-              {mappingPayload ? (
-                <div className="overflow-hidden rounded-lg bg-white">
-                  <Table<DataSyncFieldMapping>
-                    columns={mappingColumns}
-                    dataSource={mapping?.mappings || []}
-                    rowKey={(record) => `${record.sourceName}::${record.targetName || ""}`}
-                    loading={mappingLoading}
-                    bordered
-                    size="small"
-                    pagination={false}
-                    emptyText="暂无字段"
-                    scroll={{ x: 900 }}
-                  />
-                </div>
-              ) : null}
             </div>
           </CollapseSection>
 
