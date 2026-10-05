@@ -574,7 +574,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     public DataSyncScheduleVO querySchedule(String taskId) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         requireOfflineTask(requireTask(workspaceId, taskId));
-        return toScheduleVO(requireSchedule(workspaceId, taskId));
+        return scheduleRepository
+                .queryByTask(workspaceId, taskId)
+                .map(this::toScheduleVO)
+                .orElse(null);
     }
 
     @Override

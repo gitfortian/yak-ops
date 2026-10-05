@@ -87,6 +87,20 @@ class DataSyncScheduleContractTest {
     }
 
     @Test
+    void shouldReturnNullWhenOfflineTaskHasNoSchedule() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(
+                service,
+                "scheduleRepository",
+                scheduleRepository(null, new AtomicReference<>(), new AtomicReference<>()));
+
+        WorkspaceContext.bind("workspace-1");
+
+        assertNull(service.querySchedule("task-1"));
+    }
+
+    @Test
     void shouldEnablePublishedOfflineScheduleAndRegisterRuntime() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncScheduleEntity schedule = schedule(false);

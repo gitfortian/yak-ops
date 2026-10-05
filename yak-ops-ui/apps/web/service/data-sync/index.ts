@@ -141,10 +141,11 @@ export const getDataSyncSchedule = async (
   id: string,
 ): Promise<DataSyncScheduleRecord | undefined> => {
   try {
-    return await HttpUtils.getData<DataSyncScheduleRecord>(
+    const schedule = await HttpUtils.getData<DataSyncScheduleRecord | null>(
       `${DATA_SYNC_API_PREFIX}/tasks/${id}/schedule`,
       { skipErrorHandler: true },
     );
+    return schedule || undefined;
   } catch (error) {
     if (error instanceof BizError && error.code === DATA_SYNC_SCHEDULE_NOT_FOUND_CODE) {
       return undefined;
