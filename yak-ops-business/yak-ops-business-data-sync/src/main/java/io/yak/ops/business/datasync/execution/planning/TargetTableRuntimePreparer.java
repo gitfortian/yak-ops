@@ -182,10 +182,10 @@ public class TargetTableRuntimePreparer {
         Set<String> targetPrimaryKeys = normalizedKeys(targetWriteSchema.primaryKeys());
 
         if (DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
-            Set<String> mappedPrimaryKeys = normalizedKeys(resolvedMapping.targetTable().primaryKeys());
+            Set<String> mappedPrimaryKeys =
+                    normalizedKeys(resolvedMapping.targetTable().primaryKeys());
             if (!mappedPrimaryKeys.equals(targetPrimaryKeys)) {
-                throw new DataSyncException(
-                        DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步目标表主键必须与映射后的来源主键一致");
+                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步目标表主键必须与映射后的来源主键一致");
             }
             return;
         }
@@ -204,7 +204,8 @@ public class TargetTableRuntimePreparer {
         try {
             return schemaMappingResolver.resolve(sourceLogicalTable, schemaColumnMappings(mapping));
         } catch (IllegalArgumentException exception) {
-            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, exception.getMessage(), exception);
+            throw new DataSyncException(
+                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, exception.getMessage(), exception);
         }
     }
 
