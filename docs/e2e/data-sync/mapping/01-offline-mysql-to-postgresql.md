@@ -54,7 +54,7 @@ DROP TABLE IF EXISTS e2e_mapping_offline_target;
 2. 新建离线同步任务。
 3. 来源表选择 `e2e_mapping_offline_source`。
 4. 目标表名输入 `e2e_mapping_offline_target`，开启“自动建表”。
-5. 在“Schema 映射”中清空默认映射。
+5. 在“去向字段映射”中清空默认映射。
 6. 建立以下映射，并保持顺序：
    - `name → display_name`
    - `id → user_id`
