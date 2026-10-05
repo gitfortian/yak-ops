@@ -881,6 +881,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             targetSchema: form.targetSchema || undefined,
             targetTable: form.targetTable,
             autoCreateTable: form.autoCreateTable,
+            mapping: form.mapping,
           }
         : undefined,
     [
@@ -893,6 +894,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       form.targetSchema,
       form.targetTable,
       form.autoCreateTable,
+      form.mapping,
     ],
   );
 

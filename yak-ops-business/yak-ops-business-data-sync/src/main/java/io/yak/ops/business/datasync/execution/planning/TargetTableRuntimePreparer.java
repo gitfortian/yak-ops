@@ -5,6 +5,9 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
+import io.yak.ops.business.datasync.schema.ResolvedSchemaMapping;
+import io.yak.ops.business.datasync.schema.SchemaColumnMapping;
+import io.yak.ops.business.datasync.schema.SchemaMappingResolver;
 import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
 import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
 import io.yak.ops.business.datasync.schema.TargetTablePlan;
@@ -15,6 +18,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncMappingVO;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.util.ObjectUtils;
@@ -40,6 +44,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class TargetTableRuntimePreparer {
 
+    private final SchemaMappingResolver schemaMappingResolver = new SchemaMappingResolver();
+
     @Resource
     private DataSourceService dataSourceService;
 
@@ -57,6 +63,8 @@ public class TargetTableRuntimePreparer {
                 ObjectUtils.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
 
         LogicalTable sourceLogicalTable = sourceLogicalTable(sourceEndpoint);
+        ResolvedSchemaMapping resolvedMapping = resolveSchemaMapping(sourceLogicalTable, snapshot.getMapping());
+        validateRealtimeSourcePrimaryKeys(snapshot, sourceLogicalTable, resolvedMapping);
         DataSourceTablePathDTO targetPath = tablePath(targetEndpoint);
 
         Optional<DataSourceCatalogTableVO> targetTable =
@@ -67,7 +75,8 @@ public class TargetTableRuntimePreparer {
                 throw new DataSyncException(
                         DataSyncErrorCode.TARGET_TABLE_NOT_FOUND, targetEndpoint.getTable() + "；请先创建目标表或开启自动建表");
             }
-            created = createTargetTable(sourceLogicalTable, targetEndpoint, targetPath, timeoutSeconds);
+            validateAutoCreatePrimaryKeys(snapshot, sourceLogicalTable, resolvedMapping);
+            created = createTargetTable(resolvedMapping.targetTable(), targetEndpoint, targetPath, timeoutSeconds);
             targetTable = dataSourceService.findCatalogTable(targetEndpoint.getDataSourceId(), targetPath);
             if (targetTable.isEmpty()) {
                 throw new DataSyncException(
@@ -79,19 +88,19 @@ public class TargetTableRuntimePreparer {
         List<DataSourceCatalogColumnVO> targetColumns =
                 dataSourceService.queryCatalogColumns(targetEndpoint.getDataSourceId(), targetPath);
         TargetSchemaCompatibilityResult compatibility =
-                TargetSchemaCompatibility.check(sourceLogicalTable, targetColumns);
+                TargetSchemaCompatibility.check(resolvedMapping.targetTable(), targetColumns);
         if (!compatibility.compatible()) {
             throw new DataSyncException(
                     DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, String.join("；", compatibility.issues()));
         }
 
-        validatePrimaryKeyContract(snapshot, sourceLogicalTable, compatibility.targetWriteSchema());
+        validateTargetPrimaryKeyContract(snapshot, resolvedMapping, compatibility.targetWriteSchema());
         return new TargetTablePreparation(
-                sourceLogicalTable.toRuntimeSchema(), compatibility.targetWriteSchema(), created);
+                resolvedMapping.sourceTable().toRuntimeSchema(), compatibility.targetWriteSchema(), created);
     }
 
     private boolean createTargetTable(
-            LogicalTable sourceLogicalTable,
+            LogicalTable targetLogicalTable,
             DataSyncEndpointSnapshotVO targetEndpoint,
             DataSourceTablePathDTO targetPath,
             int timeoutSeconds) {
@@ -102,7 +111,7 @@ public class TargetTableRuntimePreparer {
         }
 
         TargetTablePlan plan = targetTablePlanner.plan(
-                sourceLogicalTable,
+                targetLogicalTable,
                 targetType,
                 targetPath.getDatabase(),
                 targetPath.getSchema(),
@@ -116,7 +125,7 @@ public class TargetTableRuntimePreparer {
             ddlExecutor.createTable(
                     dataSourceService.resolveRuntimeConnection(targetEndpoint.getDataSourceId()),
                     plan.targetPath(),
-                    sourceLogicalTable.toRuntimeSchema(),
+                    targetLogicalTable.toRuntimeSchema(),
                     timeoutSeconds);
             return true;
         } catch (Exception exception) {
@@ -138,35 +147,74 @@ public class TargetTableRuntimePreparer {
         return LogicalTableNormalizer.fromCatalog(table, columns);
     }
 
-    private void validatePrimaryKeyContract(
-            DataSyncDefinitionSnapshotVO snapshot, LogicalTable sourceLogicalTable, YakTableSchema targetWriteSchema) {
-        Set<String> sourcePrimaryKeys = normalizedKeys(sourceLogicalTable.primaryKeys());
+    private void validateRealtimeSourcePrimaryKeys(
+            DataSyncDefinitionSnapshotVO snapshot,
+            LogicalTable sourceLogicalTable,
+            ResolvedSchemaMapping resolvedMapping) {
+        if (!DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) return;
+
+        if (sourceLogicalTable.primaryKeys().isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步来源表必须包含主键");
+        }
+        if (!allPrimaryKeysMapped(sourceLogicalTable, resolvedMapping)) {
+            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步字段映射必须包含来源表全部主键");
+        }
+    }
+
+    private void validateAutoCreatePrimaryKeys(
+            DataSyncDefinitionSnapshotVO snapshot,
+            LogicalTable sourceLogicalTable,
+            ResolvedSchemaMapping resolvedMapping) {
+        if (!DataSyncWriteMode.UPSERT.name().equals(snapshot.getWriteMode())) return;
+
+        if (sourceLogicalTable.primaryKeys().isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 自动建表要求来源表包含主键");
+        }
+        if (!allPrimaryKeysMapped(sourceLogicalTable, resolvedMapping)) {
+            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 自动建表要求字段映射包含来源表全部主键");
+        }
+    }
+
+    private void validateTargetPrimaryKeyContract(
+            DataSyncDefinitionSnapshotVO snapshot,
+            ResolvedSchemaMapping resolvedMapping,
+            YakTableSchema targetWriteSchema) {
         Set<String> targetPrimaryKeys = normalizedKeys(targetWriteSchema.primaryKeys());
 
         if (DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
-            if (sourcePrimaryKeys.isEmpty()) {
-                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步来源表必须包含主键");
-            }
-            if (!sourcePrimaryKeys.equals(targetPrimaryKeys)) {
-                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "实时同步目标表主键必须与来源表主键一致");
+            Set<String> mappedPrimaryKeys =
+                    normalizedKeys(resolvedMapping.targetTable().primaryKeys());
+            if (!mappedPrimaryKeys.equals(targetPrimaryKeys)) {
+                String message = snapshot.getMapping() == null ? "实时同步目标表主键必须与来源表主键一致" : "实时同步目标表主键必须与映射后的来源主键一致";
+                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, message);
             }
             return;
         }
 
-        if (DataSyncWriteMode.UPSERT.name().equals(snapshot.getWriteMode())) {
-            if (targetPrimaryKeys.isEmpty()) {
-                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求目标表存在主键");
-            }
-            if (!sourceColumnNames(sourceLogicalTable).containsAll(targetPrimaryKeys)) {
-                throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求来源包含目标表全部主键字段");
-            }
+        if (DataSyncWriteMode.UPSERT.name().equals(snapshot.getWriteMode()) && targetPrimaryKeys.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, "UPSERT 写入要求目标表存在主键");
         }
     }
 
-    private Set<String> sourceColumnNames(LogicalTable logicalTable) {
-        Set<String> result = new HashSet<>();
-        logicalTable.columns().forEach(column -> result.add(column.name().toLowerCase(Locale.ROOT)));
-        return result;
+    private boolean allPrimaryKeysMapped(LogicalTable sourceLogicalTable, ResolvedSchemaMapping resolvedMapping) {
+        return normalizedKeys(sourceLogicalTable.primaryKeys())
+                .equals(normalizedKeys(resolvedMapping.sourceTable().primaryKeys()));
+    }
+
+    private ResolvedSchemaMapping resolveSchemaMapping(LogicalTable sourceLogicalTable, DataSyncMappingVO mapping) {
+        try {
+            return schemaMappingResolver.resolve(sourceLogicalTable, schemaColumnMappings(mapping));
+        } catch (IllegalArgumentException exception) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, exception.getMessage(), exception);
+        }
+    }
+
+    private List<SchemaColumnMapping> schemaColumnMappings(DataSyncMappingVO mapping) {
+        if (mapping == null) return null;
+        return mapping.getColumns().stream()
+                .map(column -> new SchemaColumnMapping(column.getSource(), column.getTarget()))
+                .toList();
     }
 
     private Set<String> normalizedKeys(List<String> keys) {

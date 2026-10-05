@@ -13,7 +13,9 @@ import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncColumnMappingVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncMappingVO;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.flow.api.row.YakTableSchema;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class TargetTableRuntimePreparerTest {
@@ -74,6 +77,89 @@ class TargetTableRuntimePreparerTest {
     }
 
     @Test
+    void shouldProjectRenameAndReorderIntoRuntimeSchemas() throws Exception {
+        TargetTableRuntimePreparer preparer =
+                preparer(mappedDataSourceService(), new AtomicInteger());
+
+        DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
+        snapshot.setMapping(mapping(
+                columnMapping("name", "display_name"),
+                columnMapping("id", "user_id")));
+
+        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+
+        assertEquals(
+                List.of("name", "id"),
+                result.sourceSchema().columns().stream().map(column -> column.name()).toList());
+        assertEquals(
+                List.of("display_name", "user_id"),
+                result.targetWriteSchema().columns().stream().map(column -> column.name()).toList());
+        assertEquals(List.of("id"), result.sourceSchema().primaryKeys());
+        assertEquals(List.of("user_id"), result.targetWriteSchema().primaryKeys());
+    }
+
+    @Test
+    void shouldAllowRealtimePrimaryKeyRename() throws Exception {
+        TargetTableRuntimePreparer preparer =
+                preparer(mappedDataSourceService(), new AtomicInteger());
+
+        DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
+        snapshot.setSyncType(DataSyncType.REALTIME.name());
+        snapshot.setMapping(mapping(
+                columnMapping("name", "display_name"),
+                columnMapping("id", "user_id")));
+
+        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+
+        assertEquals(List.of("id"), result.sourceSchema().primaryKeys());
+        assertEquals(List.of("user_id"), result.targetWriteSchema().primaryKeys());
+    }
+
+    @Test
+    void shouldRejectRealtimeMappingThatDropsSourcePrimaryKey() throws Exception {
+        TargetTableRuntimePreparer preparer =
+                preparer(mappedDataSourceService(), new AtomicInteger());
+
+        DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
+        snapshot.setSyncType(DataSyncType.REALTIME.name());
+        snapshot.setMapping(mapping(columnMapping("name", "display_name")));
+
+        DataSyncException exception =
+                assertThrows(DataSyncException.class, () -> preparer.prepare(snapshot, 30));
+
+        assertEquals(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, exception.getErrorCode());
+    }
+
+    @Test
+    void shouldAutoCreateMappedTargetSchema() throws Exception {
+        AtomicBoolean targetExists = new AtomicBoolean(false);
+        AtomicReference<YakTableSchema> createdSchema = new AtomicReference<>();
+        TargetTableRuntimePreparer preparer =
+                preparer(mappedAutoCreateDataSourceService(targetExists), new AtomicInteger());
+        inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
+            createdSchema.set(schema);
+            targetExists.set(true);
+            return "CREATE TABLE";
+        });
+
+        DataSyncDefinitionSnapshotVO snapshot = snapshot(true);
+        snapshot.setMapping(mapping(
+                columnMapping("name", "display_name"),
+                columnMapping("id", "user_id")));
+
+        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+
+        assertTrue(result.targetCreated());
+        assertEquals(
+                List.of("display_name", "user_id"),
+                createdSchema.get().columns().stream().map(column -> column.name()).toList());
+        assertEquals(List.of("user_id"), createdSchema.get().primaryKeys());
+        assertEquals(
+                List.of("name", "id"),
+                result.sourceSchema().columns().stream().map(column -> column.name()).toList());
+    }
+
+    @Test
     void shouldRejectExistingIncompatibleTargetSchema() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(true);
         TargetTableRuntimePreparer preparer =
@@ -94,6 +180,64 @@ class TargetTableRuntimePreparerTest {
             return "CREATE TABLE";
         });
         return preparer;
+    }
+
+    private DataSourceService mappedAutoCreateDataSourceService(AtomicBoolean targetExists) {
+        List<DataSourceCatalogColumnVO> sourceColumns = List.of(
+                column("id", Types.BIGINT, 19, false, 1, true, 1),
+                column("name", Types.VARCHAR, 100, true, 2, false, null));
+        List<DataSourceCatalogColumnVO> targetColumns = List.of(
+                column("user_id", Types.BIGINT, 19, false, 1, true, 1),
+                column("display_name", Types.VARCHAR, 100, true, 2, false, null));
+
+        return (DataSourceService) Proxy.newProxyInstance(
+                DataSourceService.class.getClassLoader(),
+                new Class<?>[] {DataSourceService.class},
+                (proxy, method, args) -> {
+                    String dataSourceId = args != null && args.length > 0 ? String.valueOf(args[0]) : null;
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? table("source_table") : table("target_table");
+                    }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return targetExists.get() ? Optional.of(table("target_table")) : Optional.empty();
+                    }
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? sourceColumns : targetColumns;
+                    }
+                    if ("resolveRuntimeConnection".equals(method.getName())) {
+                        return connection();
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private DataSourceService mappedDataSourceService() {
+        List<DataSourceCatalogColumnVO> sourceColumns = List.of(
+                column("id", Types.BIGINT, 19, false, 1, true, 1),
+                column("name", Types.VARCHAR, 100, true, 2, false, null));
+        List<DataSourceCatalogColumnVO> targetColumns = List.of(
+                column("user_id", Types.BIGINT, 19, false, 1, true, 1),
+                column("display_name", Types.VARCHAR, 100, true, 2, false, null));
+
+        return (DataSourceService) Proxy.newProxyInstance(
+                DataSourceService.class.getClassLoader(),
+                new Class<?>[] {DataSourceService.class},
+                (proxy, method, args) -> {
+                    String dataSourceId = args != null && args.length > 0 ? String.valueOf(args[0]) : null;
+                    if ("queryCatalogTable".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? table("source_table") : table("target_table");
+                    }
+                    if ("findCatalogTable".equals(method.getName())) {
+                        return Optional.of(table("target_table"));
+                    }
+                    if ("queryCatalogColumns".equals(method.getName())) {
+                        return "source".equals(dataSourceId) ? sourceColumns : targetColumns;
+                    }
+                    if ("resolveRuntimeConnection".equals(method.getName())) {
+                        return connection();
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     private DataSourceService dataSourceService(AtomicBoolean targetExists) {
@@ -144,6 +288,19 @@ class TargetTableRuntimePreparerTest {
         snapshot.setSource(endpoint("source", "MYSQL", "source_db", null, "source_table"));
         snapshot.setTarget(endpoint("target", "POSTGRE_SQL", "target_db", "public", "target_table"));
         return snapshot;
+    }
+
+    private DataSyncMappingVO mapping(DataSyncColumnMappingVO... columns) {
+        DataSyncMappingVO mapping = new DataSyncMappingVO();
+        mapping.setColumns(List.of(columns));
+        return mapping;
+    }
+
+    private DataSyncColumnMappingVO columnMapping(String source, String target) {
+        DataSyncColumnMappingVO mapping = new DataSyncColumnMappingVO();
+        mapping.setSource(source);
+        mapping.setTarget(target);
+        return mapping;
     }
 
     private DataSyncEndpointSnapshotVO endpoint(

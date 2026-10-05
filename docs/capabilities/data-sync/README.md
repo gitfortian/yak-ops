@@ -49,9 +49,25 @@ mapping.columns[]
 → 数组顺序属于 Task Definition
 ```
 
-显式 Mapping 不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
+显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
 
-当前 PR 只建立 Contract + Persistence，不改变既有 Mapping Resolver / Runtime。为保证该 PR 可独立合并且不会出现“保存了但执行忽略”的半成品，显式 Mapping 当前必须完整等价于后端解析出的同名映射。字段改名、字段子集和自定义目标顺序真正参与 Schema Preview / Runtime 由后续 Mapping-Aware Schema Resolution 实现。
+Mapping-Aware Schema Resolution 把同一份有序 Mapping 投影为两套位置对齐的运行 Schema：
+
+```text
+Source LogicalTable
+        +
+mapping.columns[]
+        ↓
+Source Read Schema
+保留来源字段名 / 按 mapping 顺序和子集
+        ↓ YakRow position
+Target Logical Schema
+同一位置改为目标字段名
+        ↓
+Target Compatibility / DDL Plan / Sink
+```
+
+因此字段改名与重排不需要引入 Transform；Source 只读取被映射字段，Sink 使用同位置的目标字段名写入。Schema Preview、保存 / 发布校验、Auto Create Table 与每个 Runtime Attempt 共用同一 Mapping 语义。
 
 Target 多余 nullable 字段允许存在；当前 Catalog 尚未稳定暴露 Column Default，因此多余 NOT NULL 字段保守判为不兼容，不能把数据库可能存在的默认值当成已验证事实。
 
@@ -85,7 +101,7 @@ v1.2 当前已经完成 Source Metadata Introspection、Logical Type Normalizati
 | --- | --- | --- |
 | APPEND | APPEND + INSERT | 保留原目标数据；重复运行可能重复写入 |
 | OVERWRITE | OVERWRITE + INSERT | 需要 TRUNCATE 权限；清空已提交后失败不能恢复旧数据 |
-| UPSERT | APPEND + UPSERT | Target 必须有主键，Source 映射包含全部目标主键字段；自动建表时复制 Source 主键 |
+| UPSERT | APPEND + UPSERT | Existing Target 必须有主键且 Mapping 覆盖全部目标主键；自动建表时 Mapping 必须包含全部 Source 主键并按目标字段名生成主键 |
 
 写入事务、split 与重放限制见 YakFlow；离线无跨进程断点续跑保证。Cron 和 Retry 不改变所选写入语义。
 
@@ -118,7 +134,7 @@ Trace 的 Source rows 是 Connector 在 Split 终态观察到的读取量，Sink
 
 ## Realtime Execution
 
-Source 仅支持 MySQL CDC，Target 支持 MySQL / PostgreSQL / Oracle。Source 必须有主键；Target 主键字段集合必须与 Source 在不区分大小写的同名映射下完全一致，顺序可不同，缺失、额外或不同主键均拒绝。自动建表开启时由 Source LogicalTable 主键生成目标主键，创建后仍重新 introspect 校验。
+Source 仅支持 MySQL CDC，Target 支持 MySQL / PostgreSQL / Oracle。Source 必须有主键，且 Mapping 必须包含全部 Source 主键字段；这些主键允许改名。Target 主键字段集合必须与“映射后的 Source 主键目标名”完全一致，顺序可不同，缺失、额外或错误映射均拒绝。自动建表开启时按主键 Mapping 生成目标主键，创建后仍重新 introspect 校验。
 
 Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普通追加 INSERT。读写指标表示变更事件，不等于业务表行数；一次 UPDATE 可以产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
 

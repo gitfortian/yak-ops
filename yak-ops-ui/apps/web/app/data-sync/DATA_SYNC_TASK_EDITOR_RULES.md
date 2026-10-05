@@ -18,7 +18,7 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
 - Retry Policy 使用共享“重试策略”折叠区配置：`maxAttempts` 范围 1～10，包含首次执行；1 表示关闭自动重试。启用重试时 `backoffSeconds` 范围 0～3600，表示固定等待秒数。前端只做同范围输入校验，最终仍由后端 DTO 校验。
 - Retry Policy 同时适用于 OFFLINE / REALTIME，并随 Task 定义保存及 Execution definitionSnapshot 冻结。页面不得增加第二个 enabled 字段，也不得把 Retry 做成 Quartz / Schedule 配置。
-- Column Mapping PR1 只建立持久化 Contract，编辑器暂不新增字段映射交互；编辑已有任务时必须 hydrate 并原样透传 task.mapping，普通保存不得静默清空。Source / Target 数据源或表范围变化时清空旧 Mapping，避免旧 Schema 身份被带到新范围。真正的 Mapping 编辑器由后续 Schema Mapping UI PR 承担。
+- Column Mapping 已进入 Mapping-Aware Schema Preview / Runtime，但当前编辑器仍不新增字段映射交互；编辑已有任务时必须 hydrate、透传并把 task.mapping 传给 Schema Preview，普通保存不得静默清空。Source / Target 数据源或表范围变化时清空旧 Mapping，避免旧 Schema 身份被带到新范围。真正的 Mapping 编辑器由后续 Schema Mapping UI PR 承担。
 - 不暴露 Debezium 状态目录、offset、schema history 或 serverId。
 
 ## Save / Publish

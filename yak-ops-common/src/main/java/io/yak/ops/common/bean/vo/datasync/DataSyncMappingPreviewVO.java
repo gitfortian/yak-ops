@@ -4,7 +4,7 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * 离线同步字段自动映射整体预览结果。
+ * 数据同步 Schema Mapping 与目标结构兼容性整体预览结果。
  *
  * @author weifuwan
  * @since 2026-09-27
@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class DataSyncMappingPreviewVO {
 
-    /** 当前来源表全部字段是否满足无 Transform 的直接同步条件。 */
+    /** 当前选定字段映射是否满足无 Transform 的直接同步条件。 */
     private boolean compatible;
 
     /** 目标物理表当前是否已经存在。 */
@@ -30,6 +30,6 @@ public class DataSyncMappingPreviewVO {
     /** 自动建表规划中的阻塞原因。 */
     private List<String> unsupportedReasons = List.of();
 
-    /** 按来源字段生成的同名字段映射明细。 */
+    /** 按任务 Mapping 顺序生成的字段映射明细。 */
     private List<DataSyncFieldMappingVO> mappings = List.of();
 }

@@ -168,6 +168,7 @@ export interface DataSyncMappingPreviewPayload {
   targetSchema?: string;
   targetTable: string;
   autoCreateTable?: boolean;
+  mapping?: DataSyncMappingConfig;
 }
 
 export interface DataSyncFieldMapping {
