@@ -375,10 +375,7 @@ export function SchemaMappingEditor({
     );
   };
 
-  const startNodeDrag = (
-    event: ReactPointerEvent<SVGCircleElement>,
-    node: FieldNodeGeometry,
-  ) => {
+  const startNodeDrag = (event: ReactPointerEvent<SVGCircleElement>, node: FieldNodeGeometry) => {
     const canvas = canvasRef.current;
     if (!canvas || node.role !== "source") return;
 
