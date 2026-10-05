@@ -55,9 +55,9 @@ splitSize 是目标行数，不保证均匀分布。每个 split 是独立读取
 
 标识符必须由方言引用，不接受任意用户 SQL。
 
-v1.2 PR3 起，JDBC Dialect 额外提供 Logical Type → Target Native Type 与 `CREATE TABLE` DDL **规划**，供 Data Sync TargetTablePlanner 消费。该能力只生成 SQL，不打开连接、不判断表存在性、不执行建表，因此当前 Runtime 仍不提供 Auto Create Table。
+v1.2 PR3 起，JDBC Dialect 额外提供 Logical Type → Target Native Type 与目标表 DDL **规划**，供 Data Sync TargetTablePlanner 消费；建表计划包含 CREATE TABLE，并可携带 Table / Column Comment。Dialect 只生成 SQL，不判断表存在性；受控执行入口由 JdbcTargetTableProvisioner 提供。
 
-真实 JDBC Acceptance 的目标表初始化直接执行 Dialect 生成的 CREATE TABLE SQL，验证 MySQL / PostgreSQL / Oracle DDL 可被对应数据库接受。DDL propagation 与 Schema Evolution 仍不提供。
+真实 JDBC Acceptance 验证 MySQL / PostgreSQL / Oracle 的 CREATE TABLE 与 Comment DDL 可被对应数据库接受并可从数据库元数据读回。对已存在表的 DDL propagation 与 Schema Evolution 仍不提供。
 
 ## Runtime Trace
 
