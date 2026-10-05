@@ -52,10 +52,7 @@ final class MySqlJdbcDialect implements JdbcDialect {
 
     @Override
     public JdbcTargetTableDdlPlan createTablePlan(
-            DataSourceTablePath table,
-            YakTableSchema schema,
-            String tableComment,
-            Map<String, String> columnComments) {
+            DataSourceTablePath table, YakTableSchema schema, String tableComment, Map<String, String> columnComments) {
         Map<String, String> comments = columnComments == null ? Map.of() : columnComments;
         String definitions = schema.columns().stream()
                 .map(column -> {
@@ -76,8 +73,7 @@ final class MySqlJdbcDialect implements JdbcDialect {
 
         String tableCommentClause =
                 tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
-        String createTableSql =
-                "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
+        String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
         return new JdbcTargetTableDdlPlan(createTableSql, List.of(createTableSql));
     }
 
