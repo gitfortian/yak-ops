@@ -4,14 +4,14 @@ import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.schema.LogicalTable;
-import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
-import io.yak.ops.business.datasync.schema.ResolvedSchemaMapping;
-import io.yak.ops.business.datasync.schema.SchemaColumnMapping;
-import io.yak.ops.business.datasync.schema.SchemaMappingResolver;
-import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
-import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
-import io.yak.ops.business.datasync.schema.TargetTablePlan;
-import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
+import io.yak.ops.business.datasync.schema.mapping.ResolvedSchemaMapping;
+import io.yak.ops.business.datasync.schema.mapping.SchemaColumnMapping;
+import io.yak.ops.business.datasync.schema.mapping.SchemaMappingResolver;
+import io.yak.ops.business.datasync.schema.target.TargetSchemaCompatibility;
+import io.yak.ops.business.datasync.schema.target.TargetSchemaCompatibilityResult;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlan;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -50,6 +50,9 @@ public class TargetTablePreflight {
     private DataSourceService dataSourceService;
 
     @Resource
+    private SourceTableIntrospector sourceTableIntrospector;
+
+    @Resource
     private TargetTablePlanner targetTablePlanner;
 
     @Resource
@@ -62,7 +65,11 @@ public class TargetTablePreflight {
         DataSyncEndpointSnapshotVO targetEndpoint =
                 ObjectUtils.requireNonNull(snapshot.getTarget(), "target endpoint must not be null");
 
-        LogicalTable sourceLogicalTable = sourceLogicalTable(sourceEndpoint);
+        LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                sourceEndpoint.getDataSourceId(),
+                sourceEndpoint.getDatabase(),
+                sourceEndpoint.getSchema(),
+                sourceEndpoint.getTable());
         ResolvedSchemaMapping resolvedMapping = resolveSchemaMapping(sourceLogicalTable, snapshot.getMapping());
         validateRealtimeSourcePrimaryKeys(snapshot, sourceLogicalTable, resolvedMapping);
         DataSourceTablePathDTO targetPath = tablePath(targetEndpoint);
@@ -137,14 +144,6 @@ public class TargetTablePreflight {
             throw new DataSyncException(
                     DataSyncErrorCode.TARGET_TABLE_CREATE_FAILED, exception.getMessage(), exception);
         }
-    }
-
-    private LogicalTable sourceLogicalTable(DataSyncEndpointSnapshotVO endpoint) {
-        DataSourceTablePathDTO path = tablePath(endpoint);
-        DataSourceCatalogTableVO table = dataSourceService.queryCatalogTable(endpoint.getDataSourceId(), path);
-        List<DataSourceCatalogColumnVO> columns =
-                dataSourceService.queryCatalogColumns(endpoint.getDataSourceId(), path);
-        return LogicalTableNormalizer.fromCatalog(table, columns);
     }
 
     private void validateRealtimeSourcePrimaryKeys(
