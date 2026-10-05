@@ -43,13 +43,18 @@ public final class SchemaMappingResolver {
             targetBySource.put(normalize(sourceColumn.name()), mapping.target());
         }
 
-        List<String> sourcePrimaryKeys = sourceTable.primaryKeys().stream()
-                .filter(primaryKey -> targetBySource.containsKey(normalize(primaryKey)))
-                .toList();
-        List<String> targetPrimaryKeys = sourceTable.primaryKeys().stream()
-                .map(primaryKey -> targetBySource.get(normalize(primaryKey)))
-                .filter(value -> value != null)
-                .toList();
+        boolean allPrimaryKeysMapped =
+                sourceTable.primaryKeys().stream().allMatch(primaryKey -> targetBySource.containsKey(normalize(primaryKey)));
+        List<String> sourcePrimaryKeys = allPrimaryKeysMapped
+                ? sourceTable.primaryKeys().stream()
+                        .map(primaryKey -> sourceByName.get(normalize(primaryKey)).name())
+                        .toList()
+                : List.of();
+        List<String> targetPrimaryKeys = allPrimaryKeysMapped
+                ? sourceTable.primaryKeys().stream()
+                        .map(primaryKey -> targetBySource.get(normalize(primaryKey)))
+                        .toList()
+                : List.of();
 
         LogicalTable projectedSource = new LogicalTable(
                 sourceTable.name(),
