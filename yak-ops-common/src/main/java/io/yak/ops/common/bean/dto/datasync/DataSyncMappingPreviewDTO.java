@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.dto.datasync;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -41,4 +42,8 @@ public class DataSyncMappingPreviewDTO {
 
     /** 目标表不存在时是否按当前 Logical Schema 预览自动建表。 */
     private Boolean autoCreateTable = Boolean.FALSE;
+
+    /** 本次预览使用的任务级字段映射；为空时按大小写不敏感同名映射解析。 */
+    @Valid
+    private DataSyncMappingDTO mapping;
 }
