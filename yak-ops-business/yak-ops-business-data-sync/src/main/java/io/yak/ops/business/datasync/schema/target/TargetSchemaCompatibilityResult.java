@@ -1,6 +1,5 @@
 package io.yak.ops.business.datasync.schema.target;
 
-import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.flow.api.row.YakTableSchema;
 import java.util.List;
 
