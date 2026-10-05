@@ -202,8 +202,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
-        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
-        validateExplicitMapping(dto.getMapping(), preview);
+        requireCompatibleMapping(resolvedScope);
 
         DataSyncTaskEntity entity = new DataSyncTaskEntity();
         entity.setWorkspaceId(workspaceId);
@@ -244,8 +243,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
-        DataSyncMappingPreviewVO preview = requireCompatibleMapping(resolvedScope);
-        validateExplicitMapping(dto.getMapping(), preview);
+        requireCompatibleMapping(resolvedScope);
 
         boolean executableDefinitionChanged = executableDefinitionChanged(entity, dto, resolvedScope);
         entity.setName(name);
