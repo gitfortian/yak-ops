@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -47,7 +48,7 @@ class DataSyncRealtimeDesiredStateContractTest {
 
         inject(service, "taskRepository", taskRepository(task, updatedTask, false));
         inject(service, "instanceRepository", instanceRepository(false, createdExecution));
-        inject(service, "dataSourceService", dataSourceService());
+        injectDataSourceService(service, dataSourceService());
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
 
         WorkspaceContext.bind("workspace-1");
@@ -68,7 +69,7 @@ class DataSyncRealtimeDesiredStateContractTest {
 
         inject(service, "taskRepository", taskRepository(task, new AtomicReference<>(), true));
         inject(service, "instanceRepository", instanceRepository(false, createdExecution));
-        inject(service, "dataSourceService", dataSourceService());
+        injectDataSourceService(service, dataSourceService());
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
 
         service.restoreRealtimeDesiredState();
@@ -279,6 +280,16 @@ class DataSyncRealtimeDesiredStateContractTest {
         column.setOrdinalPosition("id".equals(name) ? 1 : 2);
         column.setPrimaryKey(false);
         return column;
+    }
+
+    private void injectDataSourceService(DataSyncServiceImpl service, DataSourceService dataSourceService)
+            throws Exception {
+        inject(service, "dataSourceService", dataSourceService);
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        Field field = SourceTableIntrospector.class.getDeclaredField("dataSourceService");
+        field.setAccessible(true);
+        field.set(sourceTableIntrospector, dataSourceService);
+        inject(service, "sourceTableIntrospector", sourceTableIntrospector);
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {

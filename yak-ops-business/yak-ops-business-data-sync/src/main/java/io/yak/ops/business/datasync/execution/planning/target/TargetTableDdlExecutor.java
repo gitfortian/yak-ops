@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution.planning;
+package io.yak.ops.business.datasync.execution.planning.target;
 
 import io.yak.ops.flow.api.row.YakTableSchema;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;

@@ -31,7 +31,7 @@ Manual E2E
 | Retry Policy 按 `maxAttempts / backoffSeconds` 生效 | `DataSyncAutomationAcceptanceIT` | 以 CI 为发布硬证据 |
 | Stop / Cancel 不被自动 Retry | `DataSyncAutomationAcceptanceIT` | AUTOMATION-002 最后验证 Stop 后不 Auto Recovery |
 | Realtime `desiredState=RUNNING` 重启后创建新 Execution | `DataSyncAutomationAcceptanceIT` | [AUTOMATION-002](02-realtime-process-restart-auto-recovery.md) |
-| Auto Recovery 复用同 `definitionVersion` CDC state identity | `DataSyncAutomationAcceptanceIT` + `RealtimeSyncStateManagerTest` | [AUTOMATION-002](02-realtime-process-restart-auto-recovery.md) |
+| Auto Recovery 复用同 `definitionVersion` CDC state identity | `DataSyncAutomationAcceptanceIT` + `RealtimeSyncStateNamespaceTest` | [AUTOMATION-002](02-realtime-process-restart-auto-recovery.md) |
 | Auto Recovery 不退化为 fresh snapshot | `MySqlCdcIntegrationIT` 的 state reuse / offset continuation | [AUTOMATION-002](02-realtime-process-restart-auto-recovery.md) |
 
 ## 必选 Manual E2E

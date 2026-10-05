@@ -1,7 +1,9 @@
 package io.yak.ops.business.datasync.execution.planning;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
+import io.yak.ops.business.datasync.execution.planning.target.TargetTablePreflight;
+import io.yak.ops.business.datasync.execution.planning.target.TargetTablePreflightResult;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateNamespace;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncEndpointSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO;
@@ -23,7 +25,7 @@ import org.springframework.stereotype.Component;
 /**
  * 将 REALTIME 实例定义快照解析为 MySQL CDC Source + JDBC Changelog Sink 执行计划。
  *
- * <p>CDC state 目录与 Debezium engine identity 由 RealtimeSyncStateManager 按 Workspace / Task / definitionVersion
+ * <p>CDC state 目录与 Debezium engine identity 由 RealtimeSyncStateNamespace 按 Workspace / Task / definitionVersion
  * 稳定分配；MySQL replication serverId 由执行生命周期显式传入。</p>
  *
  * @author weifuwan
@@ -36,10 +38,10 @@ public class RealtimeSyncExecutionPlanner {
     private DataSourceService dataSourceService;
 
     @Resource
-    private TargetTableRuntimePreparer targetTableRuntimePreparer;
+    private TargetTablePreflight targetTablePreflight;
 
     @Resource
-    private RealtimeSyncStateManager stateManager;
+    private RealtimeSyncStateNamespace stateNamespace;
 
     public RealtimeSyncExecutionPlan plan(String workspaceId, DataSyncDefinitionSnapshotVO snapshot, long serverId) {
         ObjectUtils.requireNonNull(workspaceId, "workspace id must not be null");
@@ -55,10 +57,10 @@ public class RealtimeSyncExecutionPlanner {
         DataSyncRealtimeConfigVO realtimeConfig =
                 ObjectUtils.requireNonNull(snapshot.getRealtimeConfig(), "realtime config must not be null");
 
-        TargetTablePreparation targetPreparation =
-                targetTableRuntimePreparer.prepare(snapshot, realtimeConfig.getTimeoutSeconds());
-        YakTableSchema sourceSchema = targetPreparation.sourceSchema();
-        YakTableSchema targetWriteSchema = targetPreparation.targetWriteSchema();
+        TargetTablePreflightResult targetPreflight =
+                targetTablePreflight.prepare(snapshot, realtimeConfig.getTimeoutSeconds());
+        YakTableSchema sourceSchema = targetPreflight.sourceSchema();
+        YakTableSchema targetWriteSchema = targetPreflight.targetWriteSchema();
 
         JdbcConnectionProperties sourceConnection =
                 requireMySqlConnection(dataSourceService.resolveRuntimeConnection(sourceEndpoint.getDataSourceId()));
@@ -69,8 +71,8 @@ public class RealtimeSyncExecutionPlanner {
                 sourceConnection,
                 tablePathValue(sourceEndpoint),
                 sourceSchema,
-                stateManager.stateDirectory(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
-                stateManager.engineName(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
+                stateNamespace.stateDirectory(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
+                stateNamespace.engineName(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion()),
                 serverId,
                 realtimeConfig.getQueueCapacity(),
                 realtimeConfig.getPollBatchSize(),

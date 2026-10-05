@@ -1,5 +1,7 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.mapping;
 
+import io.yak.ops.business.datasync.schema.LogicalColumn;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

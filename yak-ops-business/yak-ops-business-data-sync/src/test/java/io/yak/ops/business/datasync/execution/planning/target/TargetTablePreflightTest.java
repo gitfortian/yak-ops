@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution.planning;
+package io.yak.ops.business.datasync.execution.planning.target;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
-import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -32,14 +33,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
-class TargetTableRuntimePreparerTest {
+class TargetTablePreflightTest {
 
     @Test
     void shouldUseExistingCompatibleTargetWithoutCreatingTable() throws Exception {
         AtomicInteger creates = new AtomicInteger();
-        TargetTableRuntimePreparer preparer = preparer(dataSourceService(new AtomicBoolean(true)), creates);
+        TargetTablePreflight preparer = preparer(dataSourceService(new AtomicBoolean(true)), creates);
 
-        TargetTablePreparation result = preparer.prepare(snapshot(false), 30);
+        TargetTablePreflightResult result = preparer.prepare(snapshot(false), 30);
 
         assertFalse(result.targetCreated());
         assertEquals(List.of("id"), result.targetWriteSchema().primaryKeys());
@@ -48,7 +49,7 @@ class TargetTableRuntimePreparerTest {
 
     @Test
     void shouldRejectMissingTargetWhenAutoCreateDisabled() throws Exception {
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(dataSourceService(new AtomicBoolean(false)), new AtomicInteger());
 
         DataSyncException exception =
@@ -61,14 +62,14 @@ class TargetTableRuntimePreparerTest {
     void shouldCreateMissingTargetAndReIntrospectBeforeUse() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(false);
         AtomicInteger creates = new AtomicInteger();
-        TargetTableRuntimePreparer preparer = preparer(dataSourceService(targetExists), creates);
+        TargetTablePreflight preparer = preparer(dataSourceService(targetExists), creates);
         inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
             creates.incrementAndGet();
             targetExists.set(true);
             return "CREATE TABLE";
         });
 
-        TargetTablePreparation result = preparer.prepare(snapshot(true), 30);
+        TargetTablePreflightResult result = preparer.prepare(snapshot(true), 30);
 
         assertTrue(result.targetCreated());
         assertEquals(1, creates.get());
@@ -78,7 +79,7 @@ class TargetTableRuntimePreparerTest {
 
     @Test
     void shouldProjectRenameAndReorderIntoRuntimeSchemas() throws Exception {
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(mappedDataSourceService(), new AtomicInteger());
 
         DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
@@ -86,7 +87,7 @@ class TargetTableRuntimePreparerTest {
                 columnMapping("name", "display_name"),
                 columnMapping("id", "user_id")));
 
-        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+        TargetTablePreflightResult result = preparer.prepare(snapshot, 30);
 
         assertEquals(
                 List.of("name", "id"),
@@ -100,7 +101,7 @@ class TargetTableRuntimePreparerTest {
 
     @Test
     void shouldAllowRealtimePrimaryKeyRename() throws Exception {
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(mappedDataSourceService(), new AtomicInteger());
 
         DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
@@ -109,7 +110,7 @@ class TargetTableRuntimePreparerTest {
                 columnMapping("name", "display_name"),
                 columnMapping("id", "user_id")));
 
-        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+        TargetTablePreflightResult result = preparer.prepare(snapshot, 30);
 
         assertEquals(List.of("id"), result.sourceSchema().primaryKeys());
         assertEquals(List.of("user_id"), result.targetWriteSchema().primaryKeys());
@@ -117,7 +118,7 @@ class TargetTableRuntimePreparerTest {
 
     @Test
     void shouldRejectRealtimeMappingThatDropsSourcePrimaryKey() throws Exception {
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(mappedDataSourceService(), new AtomicInteger());
 
         DataSyncDefinitionSnapshotVO snapshot = snapshot(false);
@@ -134,7 +135,7 @@ class TargetTableRuntimePreparerTest {
     void shouldAutoCreateMappedTargetSchema() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(false);
         AtomicReference<YakTableSchema> createdSchema = new AtomicReference<>();
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(mappedAutoCreateDataSourceService(targetExists), new AtomicInteger());
         inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
             createdSchema.set(schema);
@@ -147,7 +148,7 @@ class TargetTableRuntimePreparerTest {
                 columnMapping("name", "display_name"),
                 columnMapping("id", "user_id")));
 
-        TargetTablePreparation result = preparer.prepare(snapshot, 30);
+        TargetTablePreflightResult result = preparer.prepare(snapshot, 30);
 
         assertTrue(result.targetCreated());
         assertEquals(
@@ -162,7 +163,7 @@ class TargetTableRuntimePreparerTest {
     @Test
     void shouldRejectExistingIncompatibleTargetSchema() throws Exception {
         AtomicBoolean targetExists = new AtomicBoolean(true);
-        TargetTableRuntimePreparer preparer =
+        TargetTablePreflight preparer =
                 preparer(dataSourceService(targetExists, true), new AtomicInteger());
 
         DataSyncException exception =
@@ -171,9 +172,12 @@ class TargetTableRuntimePreparerTest {
         assertEquals(DataSyncErrorCode.TARGET_SCHEMA_INCOMPATIBLE, exception.getErrorCode());
     }
 
-    private TargetTableRuntimePreparer preparer(DataSourceService service, AtomicInteger creates) throws Exception {
-        TargetTableRuntimePreparer preparer = new TargetTableRuntimePreparer();
+    private TargetTablePreflight preparer(DataSourceService service, AtomicInteger creates) throws Exception {
+        TargetTablePreflight preparer = new TargetTablePreflight();
         inject(preparer, "dataSourceService", service);
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        inject(sourceTableIntrospector, "dataSourceService", service);
+        inject(preparer, "sourceTableIntrospector", sourceTableIntrospector);
         inject(preparer, "targetTablePlanner", new TargetTablePlanner());
         inject(preparer, "ddlExecutor", (TargetTableDdlExecutor) (connection, table, schema, timeoutSeconds) -> {
             creates.incrementAndGet();
@@ -393,7 +397,7 @@ class TargetTableRuntimePreparerTest {
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = TargetTableRuntimePreparer.class.getDeclaredField(fieldName);
+        Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }

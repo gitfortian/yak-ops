@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasync.DataSyncColumnMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncMappingPreviewDTO;

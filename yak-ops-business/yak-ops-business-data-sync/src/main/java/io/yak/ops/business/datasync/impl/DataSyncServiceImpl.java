@@ -20,15 +20,16 @@ import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFireListener;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngine;
 import io.yak.ops.business.datasync.scheduler.ScheduleEngineException;
 import io.yak.ops.business.datasync.schema.LogicalTable;
-import io.yak.ops.business.datasync.schema.LogicalTableNormalizer;
-import io.yak.ops.business.datasync.schema.ResolvedSchemaMapping;
-import io.yak.ops.business.datasync.schema.SchemaColumnMapping;
-import io.yak.ops.business.datasync.schema.SchemaMappingResolver;
-import io.yak.ops.business.datasync.schema.TargetColumnPlan;
-import io.yak.ops.business.datasync.schema.TargetSchemaCompatibility;
-import io.yak.ops.business.datasync.schema.TargetSchemaCompatibilityResult;
-import io.yak.ops.business.datasync.schema.TargetTablePlan;
-import io.yak.ops.business.datasync.schema.TargetTablePlanner;
+import io.yak.ops.business.datasync.schema.catalog.LogicalTableNormalizer;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
+import io.yak.ops.business.datasync.schema.mapping.ResolvedSchemaMapping;
+import io.yak.ops.business.datasync.schema.mapping.SchemaColumnMapping;
+import io.yak.ops.business.datasync.schema.mapping.SchemaMappingResolver;
+import io.yak.ops.business.datasync.schema.target.TargetColumnPlan;
+import io.yak.ops.business.datasync.schema.target.TargetSchemaCompatibility;
+import io.yak.ops.business.datasync.schema.target.TargetSchemaCompatibilityResult;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlan;
+import io.yak.ops.business.datasync.schema.target.TargetTablePlanner;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncColumnMappingDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncInstanceQueryDTO;
@@ -162,6 +163,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSourceService dataSourceService;
+
+    @Resource
+    private SourceTableIntrospector sourceTableIntrospector;
 
     @Resource
     private TargetTablePlanner targetTablePlanner;
@@ -1242,7 +1246,11 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             DataSyncWriteMode writeMode) {
         if (writeMode != DataSyncWriteMode.UPSERT) return;
 
-        LogicalTable sourceLogicalTable = sourceLogicalTable(sourceDataSourceId, resolvedScope);
+        LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                sourceDataSourceId,
+                resolvedScope.getSourceDatabase(),
+                resolvedScope.getSourceSchema(),
+                resolvedScope.getSourceTable());
         ResolvedSchemaMapping resolvedMapping = resolveSchemaMapping(sourceLogicalTable, resolvedScope.getMapping());
         DataSourceTablePathDTO targetPath = tablePath(
                 resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), resolvedScope.getTargetTable());
@@ -1288,7 +1296,11 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步目标数据源仅支持 MYSQL / POSTGRE_SQL / ORACLE");
         }
 
-        LogicalTable sourceLogicalTable = sourceLogicalTable(sourceDataSourceId, resolvedScope);
+        LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                sourceDataSourceId,
+                resolvedScope.getSourceDatabase(),
+                resolvedScope.getSourceSchema(),
+                resolvedScope.getSourceTable());
         if (sourceLogicalTable.primaryKeys().isEmpty()) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "实时同步来源表必须包含主键");
         }
@@ -1373,15 +1385,6 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncMappingDTO normalized = new DataSyncMappingDTO();
         normalized.setColumns(List.copyOf(columns));
         return normalized;
-    }
-
-    private LogicalTable sourceLogicalTable(String sourceDataSourceId, DataSyncMappingPreviewDTO resolvedScope) {
-        DataSourceTablePathDTO sourcePath = tablePath(
-                resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), resolvedScope.getSourceTable());
-        DataSourceCatalogTableVO sourceTable = dataSourceService.queryCatalogTable(sourceDataSourceId, sourcePath);
-        List<DataSourceCatalogColumnVO> sourceColumns =
-                dataSourceService.queryCatalogColumns(sourceDataSourceId, sourcePath);
-        return LogicalTableNormalizer.fromCatalog(sourceTable, sourceColumns);
     }
 
     private ResolvedSchemaMapping resolveSchemaMapping(LogicalTable sourceLogicalTable, DataSyncMappingDTO mapping) {

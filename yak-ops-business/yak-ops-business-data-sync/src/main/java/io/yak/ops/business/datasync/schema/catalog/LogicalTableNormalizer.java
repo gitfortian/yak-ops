@@ -1,6 +1,8 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.catalog;
 
 import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
+import io.yak.ops.business.datasync.schema.LogicalColumn;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.util.StringUtils;

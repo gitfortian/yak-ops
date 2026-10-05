@@ -1,6 +1,7 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.catalog;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;

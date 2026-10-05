@@ -1,5 +1,7 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.target;
 
+import io.yak.ops.business.datasync.schema.LogicalColumn;
+import io.yak.ops.business.datasync.schema.LogicalTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;

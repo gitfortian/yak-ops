@@ -7,7 +7,7 @@ import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
 import io.yak.ops.business.datasync.execution.planning.RealtimeSyncExecutionPlan;
 import io.yak.ops.business.datasync.execution.planning.RealtimeSyncExecutionPlanner;
 import io.yak.ops.business.datasync.execution.realtime.MySqlCdcServerIdAllocator;
-import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateNamespace;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -43,7 +43,7 @@ public class RealtimeSyncExecutor {
     private RealtimeSyncExecutionPlanner executionPlanner;
 
     @Resource
-    private RealtimeSyncStateManager stateManager;
+    private RealtimeSyncStateNamespace stateNamespace;
 
     @Resource
     private MySqlCdcServerIdAllocator serverIdAllocator;
@@ -156,7 +156,7 @@ public class RealtimeSyncExecutor {
         boolean started = false;
 
         try {
-            stateKey = stateManager.stateKey(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion());
+            stateKey = stateNamespace.stateKey(workspaceId, snapshot.getTaskId(), snapshot.getTaskVersion());
             serverId = serverIdAllocator.allocate(stateKey);
             RealtimeSyncExecutionPlan plan = executionPlanner.plan(workspaceId, snapshot, serverId);
             execution = new LocalExecutionEngine(plan.checkpointInterval())

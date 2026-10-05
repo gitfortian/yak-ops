@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.target;
 
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import java.util.List;

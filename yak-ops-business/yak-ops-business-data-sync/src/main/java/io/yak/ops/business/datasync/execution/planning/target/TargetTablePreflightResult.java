@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.execution.planning;
+package io.yak.ops.business.datasync.execution.planning.target;
 
 import io.yak.ops.flow.api.row.YakTableSchema;
 
@@ -9,4 +9,5 @@ import io.yak.ops.flow.api.row.YakTableSchema;
  * @param targetWriteSchema 按来源字段顺序排列的目标写入 Schema
  * @param targetCreated 本次 Preflight 是否创建了目标表
  */
-record TargetTablePreparation(YakTableSchema sourceSchema, YakTableSchema targetWriteSchema, boolean targetCreated) {}
+public record TargetTablePreflightResult(
+        YakTableSchema sourceSchema, YakTableSchema targetWriteSchema, boolean targetCreated) {}

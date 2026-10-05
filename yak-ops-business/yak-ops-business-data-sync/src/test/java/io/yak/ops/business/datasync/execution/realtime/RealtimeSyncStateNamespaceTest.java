@@ -9,14 +9,14 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class RealtimeSyncStateManagerTest {
+class RealtimeSyncStateNamespaceTest {
 
     @TempDir
     Path tempDirectory;
 
     @Test
     void shouldReuseStateDirectoryAndEngineNameForSameTaskVersion() {
-        RealtimeSyncStateManager manager = new RealtimeSyncStateManager(tempDirectory);
+        RealtimeSyncStateNamespace manager = new RealtimeSyncStateNamespace(tempDirectory);
 
         Path first = manager.stateDirectory("workspace-1", "task-1", 3);
         Path second = manager.stateDirectory("workspace-1", "task-1", 3);
@@ -31,7 +31,7 @@ class RealtimeSyncStateManagerTest {
 
     @Test
     void shouldIsolateDefinitionVersions() {
-        RealtimeSyncStateManager manager = new RealtimeSyncStateManager(tempDirectory);
+        RealtimeSyncStateNamespace manager = new RealtimeSyncStateNamespace(tempDirectory);
 
         assertNotEquals(
                 manager.stateDirectory("workspace-1", "task-1", 1),
@@ -43,7 +43,7 @@ class RealtimeSyncStateManagerTest {
 
     @Test
     void shouldRejectUnsafePathSegments() {
-        RealtimeSyncStateManager manager = new RealtimeSyncStateManager(tempDirectory);
+        RealtimeSyncStateNamespace manager = new RealtimeSyncStateNamespace(tempDirectory);
 
         assertThrows(IllegalArgumentException.class, () -> manager.stateDirectory("../workspace", "task-1", 1));
         assertThrows(IllegalArgumentException.class, () -> manager.stateDirectory("workspace-1", "../task", 1));

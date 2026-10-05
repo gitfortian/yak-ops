@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.mapping;
 
 import java.util.Objects;
 

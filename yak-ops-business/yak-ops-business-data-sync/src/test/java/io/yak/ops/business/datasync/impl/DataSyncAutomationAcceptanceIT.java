@@ -11,8 +11,9 @@ import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRecovery;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
-import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateManager;
+import io.yak.ops.business.datasync.execution.realtime.RealtimeSyncStateNamespace;
 import io.yak.ops.business.datasync.scheduler.DataSyncScheduleFire;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
@@ -67,7 +68,7 @@ class DataSyncAutomationAcceptanceIT {
         inject(service, "taskRepository", singleTaskRepository(offlineTask()));
         inject(service, "scheduleRepository", scheduleRepository(schedule(true)));
         inject(service, "instanceRepository", activeInstanceRepository(active, adds, created));
-        inject(service, "dataSourceService", dataSourceService());
+        injectDataSourceService(service, dataSourceService());
         inject(service, "offlineSyncExecutor", new NoopOfflineSyncExecutor());
 
         DataSyncScheduleFire fire = new DataSyncScheduleFire(
@@ -249,7 +250,7 @@ class DataSyncAutomationAcceptanceIT {
                 service,
                 "instanceRepository",
                 activeInstanceRepository(new AtomicBoolean(false), new AtomicInteger(), created));
-        inject(service, "dataSourceService", dataSourceService());
+        injectDataSourceService(service, dataSourceService());
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
 
         service.restoreRealtimeDesiredState();
@@ -258,10 +259,10 @@ class DataSyncAutomationAcceptanceIT {
         assertEquals(DataSyncTriggerType.AUTO_RECOVERY, created.get().getTriggerType());
         assertEquals(7, created.get().getTaskVersion());
 
-        RealtimeSyncStateManager stateManager = new RealtimeSyncStateManager();
+        RealtimeSyncStateNamespace stateNamespace = new RealtimeSyncStateNamespace();
         assertEquals(
                 "workspace-1/task-realtime/v7",
-                stateManager.stateKey(
+                stateNamespace.stateKey(
                         created.get().getWorkspaceId(), created.get().getTaskId(), created.get().getTaskVersion()));
     }
 
@@ -521,6 +522,16 @@ class DataSyncAutomationAcceptanceIT {
         column.setOrdinalPosition("id".equals(name) ? 1 : 2);
         column.setPrimaryKey(false);
         return column;
+    }
+
+    private void injectDataSourceService(DataSyncServiceImpl service, DataSourceService dataSourceService)
+            throws Exception {
+        inject(service, "dataSourceService", dataSourceService);
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        Field field = SourceTableIntrospector.class.getDeclaredField("dataSourceService");
+        field.setAccessible(true);
+        field.set(sourceTableIntrospector, dataSourceService);
+        inject(service, "sourceTableIntrospector", sourceTableIntrospector);
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {

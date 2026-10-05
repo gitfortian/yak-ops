@@ -229,7 +229,7 @@ Datasource Catalog exact table metadata
         +
 Datasource Catalog columns
         ↓
-SourceTableIntrospector
+schema.catalog.SourceTableIntrospector
         ↓
 LogicalTableNormalizer
         ↓
@@ -270,7 +270,7 @@ Target Datasource Type
       +
 Target Table Path
         ↓
-TargetTablePlanner
+schema.target.TargetTablePlanner
         ↓
 JdbcDialect
         ↓
@@ -328,12 +328,12 @@ PR4 在 PR3 的 TargetTablePlan 之上增加受控 Runtime Preflight：
 ~~~text
 Execution Attempt
       ↓
-TargetTableRuntimePreparer
+TargetTablePreflight
       ↓
 target exists?
   ├─ yes
   │   ↓
-  │ TargetSchemaCompatibility
+  │ schema.target.TargetSchemaCompatibility
   │   ↓
   │ compatible → continue
   │ incompatible → fail
@@ -392,7 +392,7 @@ Source LogicalTable
       +
 Task mapping.columns
         ↓
-SchemaMappingResolver
+schema.mapping.SchemaMappingResolver
 ├── Source Read LogicalTable
 │   └── 来源字段名，按 Mapping 顺序 / 子集
 └── Target LogicalTable
@@ -461,4 +461,4 @@ Contract test 至少验证：
 - Logical Column 名称不能重复。
 - capacity 只允许出现在 STRING / BINARY。
 
-PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTableRuntimePreparer Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。PR5 将后端 Preview Contract 暴露到 Task Editor：显式 Auto Create Switch、缺失目标表名输入、Target existence、field mapping、warning / unsupported 与只读 CREATE TABLE SQL；前端不复制 JDBC 类型或兼容算法。Logical Table persistence 仍属于后续能力。
+PR2 通过 LogicalTableNormalizer / SourceTableIntrospector Contract Test 验证 Catalog Import 的内存归一行为。PR3 通过 TargetTablePlanner / JdbcCreateTableDialectTest 验证跨库类型规划。PR4 通过 TargetSchemaCompatibility / TargetTablePreflight Contract Test 验证存在、缺失、自动创建与不兼容分支，并在 OfflineSyncJdbcAcceptanceIT 中通过 JdbcTargetTableProvisioner 对 MySQL / PostgreSQL / Oracle 实际创建目标表。PR5 将后端 Preview Contract 暴露到 Task Editor：显式 Auto Create Switch、缺失目标表名输入、Target existence、field mapping、warning / unsupported 与只读 CREATE TABLE SQL；前端不复制 JDBC 类型或兼容算法。Logical Table persistence 仍属于后续能力。

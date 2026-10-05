@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasync.schema;
+package io.yak.ops.business.datasync.schema.target;
 
 import io.yak.ops.flow.api.row.YakDataType;
 import java.util.Objects;

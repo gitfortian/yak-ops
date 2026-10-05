@@ -14,18 +14,18 @@ import org.springframework.stereotype.Component;
  * @since 2026-09-28
  */
 @Component
-public class RealtimeSyncStateManager {
+public class RealtimeSyncStateNamespace {
 
     private static final String HOME_PROPERTY = "yak.ops.home";
     private static final String STATE_ROOT_DIRECTORY = "data/data-sync/realtime";
 
     private final Path rootDirectory;
 
-    public RealtimeSyncStateManager() {
+    public RealtimeSyncStateNamespace() {
         this(resolveRootDirectory());
     }
 
-    RealtimeSyncStateManager(Path rootDirectory) {
+    RealtimeSyncStateNamespace(Path rootDirectory) {
         this.rootDirectory = Objects.requireNonNull(rootDirectory, "root directory must not be null")
                 .toAbsolutePath()
                 .normalize();
