@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRetryPolicyDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
@@ -54,6 +55,32 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(500, created.getRuntimeConfig().getWriteBatchSize());
         assertEquals(1, created.getRuntimeConfig().getSourceParallelism());
         assertEquals(30, created.getRuntimeConfig().getTimeoutSeconds());
+        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+    }
+
+    @Test
+    void shouldCreateRealtimeTaskWithSystemRuntimeAndRetryDefaultsWhenOmitted() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSourceService dataSourceService = dataSourceService();
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        inject(sourceTableIntrospector, "dataSourceService", dataSourceService);
+        inject(service, "taskRepository", taskRepository(null, captured));
+        inject(service, "dataSourceService", dataSourceService);
+        inject(service, "sourceTableIntrospector", sourceTableIntrospector);
+
+        DataSyncTaskDTO dto = taskDto();
+        dto.setSyncType(DataSyncType.REALTIME);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO created = service.createTask(dto);
+
+        assertEquals(10, created.getRealtimeConfig().getCheckpointIntervalSeconds());
+        assertEquals(64, created.getRealtimeConfig().getQueueCapacity());
+        assertEquals(500, created.getRealtimeConfig().getPollBatchSize());
+        assertEquals(500, created.getRealtimeConfig().getWriteBatchSize());
+        assertEquals(30, created.getRealtimeConfig().getTimeoutSeconds());
         assertEquals(1, created.getRetryPolicy().getMaxAttempts());
         assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
     }
@@ -351,7 +378,7 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = DataSyncServiceImpl.class.getDeclaredField(fieldName);
+        Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
