@@ -50,7 +50,7 @@ Execution 进入终态后不能自动追加 Attempt。连续 REALTIME Source 意
 
 ## Retry Policy
 
-`maxAttempts` 包含首次执行；默认 1 表示不自动重试，3 表示最多两次 Retry。`backoffSeconds` 是固定等待时间，默认 60 秒。请求范围与默认值由 DataSyncRetryPolicyDTO 维护。
+`maxAttempts` 包含首次执行；默认 1 表示不自动重试，3 表示最多两次 Retry。`backoffSeconds` 是固定等待时间，默认 60 秒。请求范围与默认值由 DataSyncRetryPolicyDTO 维护。Task Editor 默认不暴露该策略；创建请求省略时使用后端默认，编辑请求省略时保留原 Task 策略。
 
 只有 FAILED 尝试进入通用 Retry 决策，SUCCEEDED / CANCELED / LOST 不自动重试。OFFLINE 与 REALTIME 共用生命周期；REALTIME Retry 复用既有 task/version CDC state。
 
@@ -120,7 +120,7 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 ## Operations Contract
 
-列表一行对应一个 Execution，展示当前 / 最终 Attempt 信息；详情读取 `GET /api/v1/data-sync/instances/{id}/attempts` 获取尝试历史，并通过 `GET /api/v1/data-sync/instances/{id}/logs` 获取产品事件时间线。Retry Policy 的请求契约由后端 DTO 维护，页面如何配置由前端 owner 负责；Attempt 观察、事件观察与策略编辑是不同职责。
+列表一行对应一个 Execution，展示当前 / 最终 Attempt 信息；详情读取 `GET /api/v1/data-sync/instances/{id}/attempts` 获取尝试历史，并通过 `GET /api/v1/data-sync/instances/{id}/logs` 获取产品事件时间线。Retry Policy 的请求契约与默认 / 保留语义由后端维护；当前 Task Editor 不提供策略编辑。Attempt 观察、事件观察与系统策略是不同职责。
 
 ## Current Limits
 
