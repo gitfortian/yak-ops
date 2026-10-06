@@ -216,8 +216,12 @@ export function DataSyncExecutionConfigContent({
   }
 
   executionItems.push(
+    ["重试策略", retryPolicy?.mode === "SMART" ? "智能重试" : "固定重试"],
     ["最大尝试次数", (retryPolicy?.maxAttempts ?? record.maxAttempts ?? 1).toLocaleString()],
-    ["重试间隔", `${retryPolicy?.backoffSeconds ?? record.backoffSeconds ?? 0}s`],
+    [
+      retryPolicy?.mode === "SMART" ? "起始退避" : "重试间隔",
+      `${retryPolicy?.backoffSeconds ?? record.backoffSeconds ?? 0}s`,
+    ],
   );
 
   return (
