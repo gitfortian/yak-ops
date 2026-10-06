@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.business.datasync.schema.catalog.SourceTableIntrospector;
+import io.yak.ops.common.bean.dto.datasync.DataSyncRetryPolicyDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncRuntimeConfigDTO;
 import io.yak.ops.common.bean.dto.datasync.DataSyncTaskDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -48,6 +50,39 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(DataSyncTaskStatus.UNPUBLISHED.name(), created.getStatus());
         assertEquals(1, created.getDefinitionVersion());
         assertEquals(DataSyncTaskStatus.UNPUBLISHED, captured.get().getStatus());
+        assertEquals(500, created.getRuntimeConfig().getFetchSize());
+        assertEquals(500, created.getRuntimeConfig().getReadBatchSize());
+        assertEquals(500, created.getRuntimeConfig().getWriteBatchSize());
+        assertEquals(1, created.getRuntimeConfig().getSourceParallelism());
+        assertEquals(30, created.getRuntimeConfig().getTimeoutSeconds());
+        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+    }
+
+    @Test
+    void shouldCreateRealtimeTaskWithSystemRuntimeAndRetryDefaultsWhenOmitted() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSourceService dataSourceService = dataSourceService();
+        SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
+        inject(sourceTableIntrospector, "dataSourceService", dataSourceService);
+        inject(service, "taskRepository", taskRepository(null, captured));
+        inject(service, "dataSourceService", dataSourceService);
+        inject(service, "sourceTableIntrospector", sourceTableIntrospector);
+
+        DataSyncTaskDTO dto = taskDto();
+        dto.setSyncType(DataSyncType.REALTIME);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO created = service.createTask(dto);
+
+        assertEquals(10, created.getRealtimeConfig().getCheckpointIntervalSeconds());
+        assertEquals(64, created.getRealtimeConfig().getQueueCapacity());
+        assertEquals(500, created.getRealtimeConfig().getPollBatchSize());
+        assertEquals(500, created.getRealtimeConfig().getWriteBatchSize());
+        assertEquals(30, created.getRealtimeConfig().getTimeoutSeconds());
+        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
     }
 
     @Test
@@ -109,13 +144,38 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     @Test
+    void shouldPreserveExistingRuntimeAndRetryPolicyWhenUpdateOmitsThem() throws Exception {
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
+        task.setRuntimeConfig(
+                "{\"fetchSize\":1200,\"readBatchSize\":700,\"writeBatchSize\":300,\"splitSize\":250000,"
+                        + "\"sourceParallelism\":4,\"timeoutSeconds\":45}");
+        task.setRetryPolicy("{\"maxAttempts\":3,\"backoffSeconds\":90}");
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        DataSyncServiceImpl service = editableService(task, captured);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO updated = service.updateTask("task-1", taskDto());
+
+        assertEquals(3, updated.getDefinitionVersion());
+        assertEquals(1200, updated.getRuntimeConfig().getFetchSize());
+        assertEquals(700, updated.getRuntimeConfig().getReadBatchSize());
+        assertEquals(300, updated.getRuntimeConfig().getWriteBatchSize());
+        assertEquals(250000L, updated.getRuntimeConfig().getSplitSize());
+        assertEquals(4, updated.getRuntimeConfig().getSourceParallelism());
+        assertEquals(45, updated.getRuntimeConfig().getTimeoutSeconds());
+        assertEquals(3, updated.getRetryPolicy().getMaxAttempts());
+        assertEquals(90, updated.getRetryPolicy().getBackoffSeconds());
+    }
+
+    @Test
     void shouldIncrementVersionWhenExecutableDefinitionChanges() throws Exception {
         DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = editableService(task, captured);
         DataSyncTaskDTO dto = taskDto();
-        DataSyncRuntimeConfigDTO runtimeConfig = dto.getRuntimeConfig();
+        DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
         runtimeConfig.setFetchSize(1000);
+        dto.setRuntimeConfig(runtimeConfig);
 
         WorkspaceContext.bind("workspace-1");
         DataSyncTaskVO updated = service.updateTask("task-1", dto);
@@ -131,7 +191,9 @@ class DataSyncTaskLifecycleContractTest {
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = editableService(task, captured);
         DataSyncTaskDTO dto = taskDto();
-        dto.getRetryPolicy().setMaxAttempts(3);
+        DataSyncRetryPolicyDTO retryPolicy = new DataSyncRetryPolicyDTO();
+        retryPolicy.setMaxAttempts(3);
+        dto.setRetryPolicy(retryPolicy);
 
         WorkspaceContext.bind("workspace-1");
         DataSyncTaskVO updated = service.updateTask("task-1", dto);
@@ -316,7 +378,7 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = DataSyncServiceImpl.class.getDeclaredField(fieldName);
+        Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }

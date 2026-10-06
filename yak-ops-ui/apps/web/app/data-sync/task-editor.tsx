@@ -52,9 +52,6 @@ import {
   updateDataSyncTask,
   type DataSyncMappingConfig,
   type DataSyncMappingPreview,
-  type DataSyncRealtimeConfig,
-  type DataSyncRetryPolicy,
-  type DataSyncRuntimeConfig,
   type DataSyncScheduleSavePayload,
   type DataSyncTaskSavePayload,
   type DataSyncTaskStatus,
@@ -76,9 +73,6 @@ interface EditorForm {
   targetTable: string;
   autoCreateTable: boolean;
   mapping?: DataSyncMappingConfig;
-  runtimeConfig: DataSyncRuntimeConfig;
-  realtimeConfig: DataSyncRealtimeConfig;
-  retryPolicy: DataSyncRetryPolicy;
 }
 
 interface ScheduleForm {
@@ -97,27 +91,6 @@ interface ColumnOptions {
   columns: DataSourceCatalogColumn[];
   loading: boolean;
 }
-
-const EMPTY_RUNTIME: DataSyncRuntimeConfig = {
-  fetchSize: 500,
-  readBatchSize: 500,
-  writeBatchSize: 500,
-  sourceParallelism: 1,
-  timeoutSeconds: 30,
-};
-
-const EMPTY_REALTIME: DataSyncRealtimeConfig = {
-  checkpointIntervalSeconds: 10,
-  queueCapacity: 64,
-  pollBatchSize: 500,
-  writeBatchSize: 500,
-  timeoutSeconds: 30,
-};
-
-const EMPTY_RETRY_POLICY: DataSyncRetryPolicy = {
-  maxAttempts: 1,
-  backoffSeconds: 60,
-};
 
 const EMPTY_SCHEDULE: ScheduleForm = {
   cronExpression: "",
@@ -227,9 +200,6 @@ const EMPTY_FORM: EditorForm = {
   targetTable: "",
   autoCreateTable: false,
   mapping: undefined,
-  runtimeConfig: EMPTY_RUNTIME,
-  realtimeConfig: EMPTY_REALTIME,
-  retryPolicy: EMPTY_RETRY_POLICY,
 };
 
 const tableKey = (table: DataSourceCatalogTable) =>
@@ -542,155 +512,6 @@ const WRITE_MODE_ITEMS: Record<DataSyncWriteMode, string> = {
   OVERWRITE: "覆盖写入",
   UPSERT: "更新写入",
 };
-
-interface OfflineRuntimeFieldsProps {
-  config: DataSyncRuntimeConfig;
-  onChange: (key: keyof DataSyncRuntimeConfig, value: string) => void;
-  onSplitSizeChange: (value: string) => void;
-}
-
-function OfflineRuntimeFields({ config, onChange, onSplitSizeChange }: OfflineRuntimeFieldsProps) {
-  return (
-    <>
-      {(
-        [
-          ["fetchSize", "Fetch Size"],
-          ["readBatchSize", "读取 Batch Size"],
-          ["writeBatchSize", "写入 Batch Size"],
-          ["sourceParallelism", "Source 并行度"],
-          ["timeoutSeconds", "超时时间（秒）"],
-        ] as const
-      ).map(([key, label]) => (
-        <Field key={key} className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel>{label}</FieldLabel>
-          <Input
-            type="number"
-            min={1}
-            max={key === "sourceParallelism" ? 16 : undefined}
-            size="small"
-            variant="outlined"
-            value={String(config[key])}
-            onChange={(event) => onChange(key, event.target.value)}
-          />
-        </Field>
-      ))}
-      <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
-        <FieldLabel>Split Size</FieldLabel>
-        <Input
-          type="number"
-          min={1}
-          max={10000000}
-          size="small"
-          variant="outlined"
-          value={config.splitSize ? String(config.splitSize) : ""}
-          placeholder="留空则整表读取"
-          onChange={(event) => onSplitSizeChange(event.target.value)}
-        />
-      </Field>
-      {config.splitSize ? (
-        <Alert>启用 Split 后不保证整表同一时点快照，源表持续变更时可能存在数据差异。</Alert>
-      ) : null}
-    </>
-  );
-}
-
-interface RealtimeRuntimeFieldsProps {
-  config: DataSyncRealtimeConfig;
-  onChange: (key: keyof DataSyncRealtimeConfig, value: string) => void;
-}
-
-function RealtimeRuntimeFields({ config, onChange }: RealtimeRuntimeFieldsProps) {
-  return (
-    <>
-      {(
-        [
-          ["checkpointIntervalSeconds", "Checkpoint 周期（秒）"],
-          ["queueCapacity", "CDC 队列容量"],
-          ["pollBatchSize", "CDC 读取批次"],
-          ["writeBatchSize", "写入 Batch Size"],
-          ["timeoutSeconds", "超时时间（秒）"],
-        ] as const
-      ).map(([key, label]) => (
-        <Field key={key} className="grid grid-cols-[140px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel>{label}</FieldLabel>
-          <Input
-            type="number"
-            min={1}
-            size="small"
-            variant="outlined"
-            value={String(config[key])}
-            onChange={(event) => onChange(key, event.target.value)}
-          />
-        </Field>
-      ))}
-    </>
-  );
-}
-
-interface RetryPolicyFieldsProps {
-  config: DataSyncRetryPolicy;
-  onChange: (key: keyof DataSyncRetryPolicy, value: string) => void;
-}
-
-function RetryPolicyFields({ config, onChange }: RetryPolicyFieldsProps) {
-  const retryEnabled = config.maxAttempts > 1;
-
-  return (
-    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
-        <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
-          <FieldLabel className="pt-1.5">最大执行次数</FieldLabel>
-          <div className="space-y-1">
-            <Input
-              type="number"
-              min={1}
-              max={10}
-              step={1}
-              size="small"
-              variant="outlined"
-              value={String(config.maxAttempts)}
-              onChange={(event) => onChange("maxAttempts", event.target.value)}
-            />
-            <div className="px-1 text-xs text-[#98a2b3]">
-              包含首次执行，1 表示失败后不自动重试。
-            </div>
-          </div>
-        </Field>
-
-        <Field className="grid grid-cols-[140px_minmax(0,1fr)] items-start !gap-3">
-          <FieldLabel className="pt-1.5">重试间隔（秒）</FieldLabel>
-          <div className="space-y-1">
-            <Input
-              type="number"
-              min={0}
-              max={3600}
-              step={1}
-              size="small"
-              variant="outlined"
-              disabled={!retryEnabled}
-              value={String(config.backoffSeconds)}
-              onChange={(event) => onChange("backoffSeconds", event.target.value)}
-            />
-            <div className="px-1 text-xs text-[#98a2b3]">
-              {retryEnabled
-                ? `失败后最多自动重试 ${config.maxAttempts - 1} 次，每次固定等待 ${config.backoffSeconds} 秒。`
-                : "当前关闭自动重试。"}
-            </div>
-          </div>
-        </Field>
-      </div>
-
-      {retryEnabled ? (
-        <div className="mt-3">
-          <Alert>
-            自动重试会复用同一个 Execution 的冻结任务快照。APPEND 可能重复写入，OVERWRITE
-            会再次清空目标表； 当前语义仍不是 exactly-once。
-          </Alert>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 const SQL_KEYWORDS = new Set([
   "CREATE",
@@ -1025,9 +846,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     name: draft?.name || "",
     sourceDataSourceId: draft?.sourceDataSourceId || "",
     targetDataSourceId: draft?.targetDataSourceId || "",
-    runtimeConfig: { ...EMPTY_RUNTIME },
-    realtimeConfig: { ...EMPTY_REALTIME },
-    retryPolicy: { ...EMPTY_RETRY_POLICY },
   }));
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
@@ -1057,8 +875,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       { id: "target", label: "数据去向" },
       { id: "mapping", label: "去向字段映射" },
       ...(realtime ? [] : [{ id: "schedule", label: "调度配置" }]),
-      { id: "retry", label: "重试策略" },
-      { id: "runtime", label: "运行参数" },
     ],
     [realtime],
   );
@@ -1173,9 +989,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           targetTable: task.targetTable,
           autoCreateTable: Boolean(task.autoCreateTable),
           mapping: task.mapping,
-          runtimeConfig: task.runtimeConfig || { ...EMPTY_RUNTIME },
-          realtimeConfig: task.realtimeConfig || { ...EMPTY_REALTIME },
-          retryPolicy: task.retryPolicy || { ...EMPTY_RETRY_POLICY },
         });
         if (!realtime) {
           setScheduleExists(Boolean(schedule));
@@ -1308,52 +1121,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       return next;
     });
 
-  const patchRuntime = (key: keyof DataSyncRuntimeConfig, value: string) => {
-    const parsed = Number(value);
-    setForm((current) => ({
-      ...current,
-      runtimeConfig: {
-        ...current.runtimeConfig,
-        [key]: Number.isFinite(parsed) ? parsed : 0,
-      },
-    }));
-  };
-
   const patchSchedule = (key: keyof ScheduleForm, value: string) =>
     setScheduleForm((current) => ({ ...current, [key]: value }));
-
-  const patchRealtime = (key: keyof DataSyncRealtimeConfig, value: string) => {
-    const parsed = Number(value);
-    setForm((current) => ({
-      ...current,
-      realtimeConfig: {
-        ...current.realtimeConfig,
-        [key]: Number.isFinite(parsed) ? parsed : 0,
-      },
-    }));
-  };
-
-  const patchRetry = (key: keyof DataSyncRetryPolicy, value: string) => {
-    const parsed = Number(value);
-    setForm((current) => ({
-      ...current,
-      retryPolicy: {
-        ...current.retryPolicy,
-        [key]: Number.isFinite(parsed) ? parsed : 0,
-      },
-    }));
-  };
-
-  const patchOptionalSplitSize = (value: string) => {
-    const parsed = Number(value);
-    setForm((current) => ({
-      ...current,
-      runtimeConfig: {
-        ...current.runtimeConfig,
-        splitSize: value.trim() && Number.isFinite(parsed) ? parsed : undefined,
-      },
-    }));
-  };
 
   const payload = (): DataSyncTaskSavePayload => {
     const common = {
@@ -1368,7 +1137,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetTable: form.targetTable,
       autoCreateTable: form.autoCreateTable,
       mapping: form.mapping,
-      retryPolicy: form.retryPolicy,
       remark: form.remark.trim() || undefined,
     };
     if (realtime) {
@@ -1376,14 +1144,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         ...common,
         writeMode: "APPEND",
         syncType: "REALTIME",
-        realtimeConfig: form.realtimeConfig,
       };
     }
     return {
       ...common,
       writeMode: form.writeMode,
       syncType: "OFFLINE",
-      runtimeConfig: form.runtimeConfig,
     };
   };
 
@@ -1397,17 +1163,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const scheduleRequired = scheduleExists || scheduleConfigured;
   const scheduleValid =
     realtime || !scheduleRequired || (scheduleConfigured && Boolean(scheduleForm.timeZone.trim()));
-  const retryPolicyValid =
-    Number.isInteger(form.retryPolicy.maxAttempts) &&
-    form.retryPolicy.maxAttempts >= 1 &&
-    form.retryPolicy.maxAttempts <= 10 &&
-    Number.isInteger(form.retryPolicy.backoffSeconds) &&
-    form.retryPolicy.backoffSeconds >= 0 &&
-    form.retryPolicy.backoffSeconds <= 3600;
   const canSave =
     !published &&
     scheduleValid &&
-    retryPolicyValid &&
     form.name.trim() &&
     mapping?.compatible &&
     !mappingLoading &&
@@ -1848,26 +1606,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               </div>
             </CollapseSection>
           ) : null}
-
-          <CollapseSection id="retry" title="重试策略" defaultOpen={false}>
-            <RetryPolicyFields config={form.retryPolicy} onChange={patchRetry} />
-          </CollapseSection>
-
-          <CollapseSection id="runtime" title="运行参数" defaultOpen={false}>
-            <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 max-lg:grid-cols-1">
-                {realtime ? (
-                  <RealtimeRuntimeFields config={form.realtimeConfig} onChange={patchRealtime} />
-                ) : (
-                  <OfflineRuntimeFields
-                    config={form.runtimeConfig}
-                    onChange={patchRuntime}
-                    onSplitSizeChange={patchOptionalSplitSize}
-                  />
-                )}
-              </div>
-            </div>
-          </CollapseSection>
         </main>
 
         <aside

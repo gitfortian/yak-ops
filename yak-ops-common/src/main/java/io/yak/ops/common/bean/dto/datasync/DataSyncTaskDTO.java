@@ -71,17 +71,29 @@ public class DataSyncTaskDTO {
     @Valid
     private DataSyncMappingDTO mapping;
 
-    /** OFFLINE 任务使用的 YakFlow 运行参数；REALTIME 任务忽略该字段。 */
+    /**
+     * OFFLINE 任务使用的 YakFlow 运行参数。
+     *
+     * <p>请求可省略：创建时由服务端物化系统默认值，编辑时省略表示保留已有配置。</p>
+     */
     @Valid
-    private DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+    private DataSyncRuntimeConfigDTO runtimeConfig;
 
-    /** REALTIME 任务使用的 YakFlow CDC 运行参数；OFFLINE 任务忽略该字段。 */
+    /**
+     * REALTIME 任务使用的 YakFlow CDC 运行参数。
+     *
+     * <p>请求可省略：创建时由服务端物化系统默认值，编辑时省略表示保留已有配置。</p>
+     */
     @Valid
-    private DataSyncRealtimeConfigDTO realtimeConfig = new DataSyncRealtimeConfigDTO();
+    private DataSyncRealtimeConfigDTO realtimeConfig;
 
-    /** Execution 失败后的固定重试策略。 */
+    /**
+     * Execution 失败后的固定重试策略。
+     *
+     * <p>请求可省略：创建时由服务端物化系统默认值，编辑时省略表示保留已有配置。</p>
+     */
     @Valid
-    private DataSyncRetryPolicyDTO retryPolicy = new DataSyncRetryPolicyDTO();
+    private DataSyncRetryPolicyDTO retryPolicy;
 
     /** 用户维护的任务备注。 */
     @Size(max = 500, message = "任务备注不能超过 500 个字符")
