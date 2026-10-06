@@ -15,6 +15,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
@@ -53,10 +54,30 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(500, created.getRuntimeConfig().getFetchSize());
         assertEquals(500, created.getRuntimeConfig().getReadBatchSize());
         assertEquals(500, created.getRuntimeConfig().getWriteBatchSize());
+        assertEquals(DataSyncRuntimePolicy.AUTO, created.getRuntimeConfig().getPolicy());
         assertEquals(1, created.getRuntimeConfig().getSourceParallelism());
         assertEquals(30, created.getRuntimeConfig().getTimeoutSeconds());
         assertEquals(1, created.getRetryPolicy().getMaxAttempts());
         assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+    }
+
+    @Test
+    void shouldTreatExplicitOfflineRuntimeConfigWithoutPolicyAsFixed() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        inject(service, "taskRepository", taskRepository(null, captured));
+        inject(service, "dataSourceService", dataSourceService());
+
+        DataSyncTaskDTO dto = taskDto();
+        DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+        runtimeConfig.setSourceParallelism(4);
+        dto.setRuntimeConfig(runtimeConfig);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO created = service.createTask(dto);
+
+        assertEquals(DataSyncRuntimePolicy.FIXED, created.getRuntimeConfig().getPolicy());
+        assertEquals(4, created.getRuntimeConfig().getSourceParallelism());
     }
 
     @Test
@@ -157,6 +178,7 @@ class DataSyncTaskLifecycleContractTest {
         DataSyncTaskVO updated = service.updateTask("task-1", taskDto());
 
         assertEquals(3, updated.getDefinitionVersion());
+        assertEquals(DataSyncRuntimePolicy.FIXED, updated.getRuntimeConfig().getPolicy());
         assertEquals(1200, updated.getRuntimeConfig().getFetchSize());
         assertEquals(700, updated.getRuntimeConfig().getReadBatchSize());
         assertEquals(300, updated.getRuntimeConfig().getWriteBatchSize());

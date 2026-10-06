@@ -46,6 +46,9 @@ public class DataSyncDefinitionSnapshotVO {
     /** OFFLINE 实例启动时固化的 YakFlow 运行参数；REALTIME 实例为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;
 
+    /** OFFLINE 实例创建时固化的自动规划依据与分片摘要；REALTIME 实例为空。 */
+    private DataSyncOfflineRuntimePlanVO offlineRuntimePlan;
+
     /** REALTIME 实例启动时固化的 CDC / Checkpoint 参数；OFFLINE 实例为空。 */
     private DataSyncRealtimeConfigVO realtimeConfig;
 }

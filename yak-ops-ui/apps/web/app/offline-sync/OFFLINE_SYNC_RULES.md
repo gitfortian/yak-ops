@@ -30,8 +30,8 @@ Must:
 - Disable save while the current mapping / Schema Preview is incompatible.
 - Expose OFFLINE write mode under `数据去向`, never under runtime tuning. Options are APPEND / OVERWRITE / UPSERT with APPEND as the default.
 - Use Yak UI `Alert` when OFFLINE write mode is `OVERWRITE`: warn that the target table is cleared before loading and original data is not automatically restored after a later sync failure. APPEND / UPSERT do not render persistent helper text; backend Catalog validation remains the source of truth.
-- Keep OFFLINE runtime tuning limited to fetch size, read batch size, write batch size, source parallelism, optional split size and timeout.
-- Show the Split consistency Yak UI `Alert` only when `splitSize` is configured: explain that split reads do not guarantee one table-wide snapshot point and may observe different source states while the source table is changing.
+- Do not expose OFFLINE engine tuning in Task Editor. New ordinary tasks use backend-owned AUTO Runtime Policy; historical / explicit FIXED configs remain executable but are read-only product facts.
+- Execution `配置快照` shows the frozen Effective Runtime Config and planning summary (auto/fixed, planned row count when available, split count, read parallelism and batch sizes). Do not recompute these values in frontend or infer them from current Task state.
 - Use existing Yak UI primitives.
 - Keep the OFFLINE editor as a full-height local-scroll workspace: PageHeader and the desktop section navigator stay outside the scrolling region, while only the definition content column owns vertical scrolling. Do not rely on sticky positioning for these fixed editor controls and do not change the global AppLayout scroll contract for this page.
 - Keep the Offline Sync editor definition-focused; runtime history belongs to the separate Task Detail surface, not an editor Tab.

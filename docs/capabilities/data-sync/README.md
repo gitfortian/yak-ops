@@ -33,7 +33,9 @@ Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引�
 
 任务不是不完整草稿：保存必须通过后端 Datasource / Catalog / 映射校验；发布和运行还会重新校验外部资源。字段、默认值与请求校验从 DTO / VO 读取，不在这里复制全部参数。
 
-当前“参数内化”只改变配置 Ownership，不改变执行值：新建任务仍使用现有 OFFLINE / REALTIME / Retry 默认值，历史任务显式调优值继续保留。Task 与 Execution Snapshot 仍保存 concrete runtime config，详情与诊断可以读取实际值。动态 split / parallelism / batch 自动规划属于后续能力，不在本阶段实现。
+OFFLINE Runtime 从本版本开始支持 Task Policy 与 Execution Effective Config 分离。Task Editor 新建 OFFLINE 任务时由后端写入 `runtimeConfig.policy=AUTO`；历史未携带 policy 的 Runtime Config 按 `FIXED` 解释，显式 API Runtime Config 未声明 policy 时同样按 FIXED 处理，避免升级后改写历史调优值。
+
+AUTO 只在根 Execution 创建时规划一次：先使用 Mapping 后的 Source Logical Schema 估算行宽；MySQL / PostgreSQL 以约 1MiB、Oracle 以约 512KiB 的目标 Batch 预算计算 read/write batch，并限制在 100～1000 行。只有 Mapping 后仍保留单整数主键时才通过 YakFlow JDBC Statistics Reader 读取 MIN / MAX / COUNT：10 万行及以下整表读取，更大表按 25 万 / 50 万 / 100 万目标行数分片，并按计划分片数选择 2 / 4 / 8 的保守 Source 并行度。统计读取失败不阻断同步，回退到整表单并行。最终 Effective Runtime Config 与规划摘要写入 Execution definitionSnapshot；同一 Execution 的所有 Retry Attempt 复用该快照，不重新计算。
 
 ## Datasource Scope and Mapping
 

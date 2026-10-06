@@ -7,6 +7,8 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTracePage;
@@ -74,6 +76,7 @@ import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncOperationsRange;
+import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
@@ -107,6 +110,8 @@ import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
@@ -142,6 +147,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private static final int DEFAULT_TRACE_PAGE_SIZE = 50;
 
     private final SchemaMappingResolver schemaMappingResolver = new SchemaMappingResolver();
+    private final OfflineRuntimePlanner offlineRuntimePlanner = new OfflineRuntimePlanner();
 
     @Resource
     private DataSyncTaskRepository taskRepository;
@@ -1191,7 +1197,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || autoCreateTable(entity) != Boolean.TRUE.equals(dto.getAutoCreateTable())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
                 || !jsonEquals(normalizedMappingConfigJson(entity.getMappingConfig()), mappingConfigJson(dto))
-                || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
+                || !jsonEquals(
+                        normalizedRuntimeConfigJson(entity.getSyncType(), entity.getRuntimeConfig()),
+                        runtimeConfigJson(entity.getSyncType(), dto))
                 || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
     }
 
@@ -1421,9 +1429,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             }
             return;
         }
+
         if (dto.getRuntimeConfig() == null) {
-            dto.setRuntimeConfig(new DataSyncRuntimeConfigDTO());
+            DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+            runtimeConfig.setPolicy(DataSyncRuntimePolicy.AUTO);
+            dto.setRuntimeConfig(runtimeConfig);
+            return;
         }
+        normalizeRuntimePolicy(dto.getRuntimeConfig());
     }
 
     private void materializeUpdatePolicies(DataSyncTaskEntity entity, DataSyncTaskDTO dto) {
@@ -1438,13 +1451,23 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
         if (dto.getRuntimeConfig() == null) {
             dto.setRuntimeConfig(runtimeConfig(entity.getRuntimeConfig()));
+        } else {
+            normalizeRuntimePolicy(dto.getRuntimeConfig());
         }
     }
 
     private DataSyncRuntimeConfigDTO runtimeConfig(String json) {
-        return StringUtils.isBlank(json)
+        DataSyncRuntimeConfigDTO config = StringUtils.isBlank(json)
                 ? new DataSyncRuntimeConfigDTO()
                 : JSONUtils.parseObject(json, DataSyncRuntimeConfigDTO.class);
+        normalizeRuntimePolicy(config);
+        return config;
+    }
+
+    private void normalizeRuntimePolicy(DataSyncRuntimeConfigDTO config) {
+        if (config.getPolicy() == null) {
+            config.setPolicy(DataSyncRuntimePolicy.FIXED);
+        }
     }
 
     private DataSyncRealtimeConfigDTO realtimeConfig(String json) {
@@ -1463,6 +1486,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return syncType == DataSyncType.REALTIME
                 ? JSONUtils.toJson(dto.getRealtimeConfig())
                 : JSONUtils.toJson(dto.getRuntimeConfig());
+    }
+
+    private String normalizedRuntimeConfigJson(DataSyncType syncType, String json) {
+        if (syncType == DataSyncType.REALTIME) {
+            DataSyncRealtimeConfigDTO config = StringUtils.isBlank(json)
+                    ? new DataSyncRealtimeConfigDTO()
+                    : JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
+            return JSONUtils.toJson(config);
+        }
+        return JSONUtils.toJson(runtimeConfig(json));
     }
 
     private String retryPolicyJson(DataSyncTaskDTO dto) {
@@ -1495,6 +1528,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             DataSyncTaskEntity task, DataSyncMappingPreviewDTO resolvedScope) {
         DataSourceVO source = dataSourceService.queryDataSource(task.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(task.getTargetDataSourceId());
+        DataSyncEndpointSnapshotVO sourceEndpoint = endpointSnapshot(
+                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable());
+        DataSyncEndpointSnapshotVO targetEndpoint = endpointSnapshot(
+                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable());
 
         DataSyncDefinitionSnapshotVO snapshot = new DataSyncDefinitionSnapshotVO();
         snapshot.setTaskId(task.getId());
@@ -1505,14 +1542,34 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setAutoCreateTable(autoCreateTable(task));
         snapshot.setMapping(toMappingVO(task.getMappingConfig()));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
-        snapshot.setSource(endpointSnapshot(
-                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable()));
-        snapshot.setTarget(endpointSnapshot(
-                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable()));
+        snapshot.setSource(sourceEndpoint);
+        snapshot.setTarget(targetEndpoint);
         if (task.getSyncType() == DataSyncType.REALTIME) {
             snapshot.setRealtimeConfig(toRealtimeConfigVO(task.getRuntimeConfig()));
         } else {
-            snapshot.setRuntimeConfig(toRuntimeConfigVO(task.getRuntimeConfig()));
+            DataSyncRuntimeConfigVO taskRuntimeConfig = toRuntimeConfigVO(task.getRuntimeConfig());
+            if (taskRuntimeConfig.getPolicy() == DataSyncRuntimePolicy.AUTO) {
+                LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                        task.getSourceDataSourceId(),
+                        sourceEndpoint.getDatabase(),
+                        sourceEndpoint.getSchema(),
+                        sourceEndpoint.getTable());
+                ResolvedSchemaMapping resolvedMapping =
+                        resolveSchemaMapping(sourceLogicalTable, mappingConfig(task.getMappingConfig()));
+                DataSourceConnection sourceConnection =
+                        dataSourceService.resolveRuntimeConnection(task.getSourceDataSourceId());
+                OfflineRuntimePlan runtimePlan = offlineRuntimePlanner.plan(
+                        sourceConnection,
+                        new DataSourceTablePath(
+                                sourceEndpoint.getDatabase(), sourceEndpoint.getSchema(), sourceEndpoint.getTable()),
+                        resolvedMapping.sourceTable(),
+                        target.getDbType(),
+                        taskRuntimeConfig);
+                snapshot.setRuntimeConfig(runtimePlan.effectiveConfig());
+                snapshot.setOfflineRuntimePlan(runtimePlan.summary());
+            } else {
+                snapshot.setRuntimeConfig(taskRuntimeConfig);
+            }
         }
         return snapshot;
     }

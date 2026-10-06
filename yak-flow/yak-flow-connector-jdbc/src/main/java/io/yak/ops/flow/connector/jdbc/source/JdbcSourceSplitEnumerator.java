@@ -5,13 +5,13 @@ import io.yak.ops.flow.api.source.SourceSplitEnumerator;
 import io.yak.ops.flow.api.trace.RuntimeTraceListener;
 import io.yak.ops.flow.connector.jdbc.JdbcNumericSplitConfig;
 import io.yak.ops.flow.connector.jdbc.JdbcSourceConfig;
+import io.yak.ops.flow.connector.jdbc.JdbcSourceStatistics;
+import io.yak.ops.flow.connector.jdbc.JdbcSourceStatisticsReader;
 import io.yak.ops.flow.connector.jdbc.dialect.JdbcDialect;
 import io.yak.ops.flow.connector.jdbc.trace.JdbcSourceSplitTraceEvent;
 import io.yak.ops.flow.connector.jdbc.trace.JdbcTraceEventType;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import java.math.BigInteger;
-import java.sql.Connection;
-import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,37 +92,24 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
     }
 
     private List<JdbcSourceSplit> createDynamicSplits() throws Exception {
-        Optional<String> splitColumn = JdbcNumericSplitConfig.eligibleColumn(config.schema());
-        if (splitColumn.isEmpty()) return wholeTableSplit();
-
-        try (Connection connection = connectionProvider.open(config.connection(), config.timeoutSeconds())) {
-            connection.setReadOnly(true);
-            try (var statement =
-                    connection.prepareStatement(dialect.splitStatisticsSql(config.table(), splitColumn.get()))) {
-                statement.setQueryTimeout(config.timeoutSeconds());
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    if (!resultSet.next()) {
-                        throw new IllegalStateException("JDBC split statistics query returned no row");
-                    }
-                    long rowCount = resultSet.getLong(3);
-                    if (rowCount <= config.splitSize()) return wholeTableSplit();
-
-                    long lowerBound = resultSet.getLong(1);
-                    if (resultSet.wasNull()) return wholeTableSplit();
-                    long upperBound = resultSet.getLong(2);
-                    if (resultSet.wasNull()) return wholeTableSplit();
-
-                    long splitCount = rowCount / config.splitSize();
-                    if (rowCount % config.splitSize() != 0) splitCount++;
-                    if (splitCount > MAX_DYNAMIC_SPLIT_COUNT) {
-                        throw new IllegalArgumentException(
-                                "dynamic JDBC split count exceeds " + MAX_DYNAMIC_SPLIT_COUNT + "; increase splitSize");
-                    }
-                    return createSplits(
-                            new JdbcNumericSplitConfig(splitColumn.get(), lowerBound, upperBound, (int) splitCount));
-                }
-            }
+        Optional<JdbcSourceStatistics> statistics = new JdbcSourceStatisticsReader(connectionProvider)
+                .read(config.connection(), config.table(), config.schema(), config.timeoutSeconds());
+        if (statistics.isEmpty() || statistics.get().rowCount() <= config.splitSize()) {
+            return wholeTableSplit();
         }
+
+        JdbcSourceStatistics sourceStatistics = statistics.get();
+        long splitCount = sourceStatistics.rowCount() / config.splitSize();
+        if (sourceStatistics.rowCount() % config.splitSize() != 0) splitCount++;
+        if (splitCount > MAX_DYNAMIC_SPLIT_COUNT) {
+            throw new IllegalArgumentException(
+                    "dynamic JDBC split count exceeds " + MAX_DYNAMIC_SPLIT_COUNT + "; increase splitSize");
+        }
+        return createSplits(new JdbcNumericSplitConfig(
+                sourceStatistics.splitColumn(),
+                sourceStatistics.lowerBound(),
+                sourceStatistics.upperBound(),
+                (int) splitCount));
     }
 
     private List<JdbcSourceSplit> createSplits(JdbcNumericSplitConfig splitConfig) {

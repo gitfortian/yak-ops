@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.vo.datasync;
 
+import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import lombok.Data;
 
 /**
@@ -10,6 +11,10 @@ import lombok.Data;
  */
 @Data
 public class DataSyncRuntimeConfigVO {
+
+    /** 运行参数规划策略；历史配置缺失时由服务端按 FIXED 兼容。 */
+    private DataSyncRuntimePolicy policy;
+
 
     /** JDBC 游标 Fetch Size。 */
     private Integer fetchSize;

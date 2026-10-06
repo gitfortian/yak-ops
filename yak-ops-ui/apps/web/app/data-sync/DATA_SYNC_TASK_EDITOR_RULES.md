@@ -17,7 +17,7 @@ DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。O
 - Schema Mapping Editor 只负责字段选择、改名、重排和连线交互，不在前端重建 JDBC 类型兼容、主键契约或 Transform；每次 Mapping 变化都调用后端 Mapping Preview，兼容性、类型与 DDL 结果以后端为准。修改依赖字段后重新查询，过期结果不得覆盖当前选择。同一 Source / Target Scope 内仅 Mapping 变化时，Preview 刷新不得先清空上一份有效结果造成 Header / Diagnostics 反复挂载；使用独立 loading 状态阻断保存并保持布局稳定。Scope 身份变化时才清空旧 Preview，避免跨表展示陈旧状态。
 - 编辑器对用户展示的章节名称统一使用“去向字段映射”；内部 Contract / 类型 / 代码仍可使用 Schema Mapping，不为了文案重命名技术模型。
 - Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因与规划警告，不再铺开自动建表 DDL。自动建表 DDL 属于“数据去向 → 目标表”的辅助信息，只能通过目标表右侧的 Yak UI `DDL` Button 按需打开 Popover 查看。Popover 必须展示后端返回的完整 ddlStatements（CREATE TABLE + 可能的 Comment DDL），不能只展示第一条 CREATE TABLE；createTableSql 仅作为旧响应兼容回退。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。
-- OFFLINE 只发送 runtimeConfig；REALTIME 只发送 realtimeConfig，Task writeMode 保持 APPEND。
+- Task Editor 默认不发送 runtimeConfig / realtimeConfig / retryPolicy；运行策略由后端拥有。REALTIME Task writeMode 保持 APPEND。
 - Runtime tuning 与 Retry Policy 从 Task Editor 内化：普通用户不直接配置 fetch / batch / split / parallelism / checkpoint / queue / timeout / maxAttempts / backoffSeconds。前端 Save Request 默认省略 runtimeConfig / realtimeConfig / retryPolicy，由后端在创建时物化系统默认值、编辑时保留已有具体值。
 - Runtime Config / Retry Policy 仍是 Task / Execution 的执行事实，查询与详情可以展示；编辑器隐藏参数不等于删除 Contract，也不得在前端重新维护一套默认值。
 - Column Mapping Editor 支持同名映射、同行映射（按 Catalog 顺序）、单条添加 / 修改、删除、清空、字段搜索、点击连接和拖拽连接。已有目标表只能选择真实 Catalog 目标字段；自动建表且目标表不存在时允许输入自定义目标字段名。编辑已有任务时 hydrate 已持久化 mapping；新任务 mapping 为空时 UI 按后端隐式同名语义展示，但只有用户修改后才物化为显式 mapping。Source / Target 数据源、Schema、表或自动建表模式变化时清空旧 Mapping，避免旧 Schema 身份被带到新范围。
