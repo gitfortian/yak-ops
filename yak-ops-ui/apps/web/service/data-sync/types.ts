@@ -146,12 +146,12 @@ interface DataSyncTaskSaveBase {
 
 export interface OfflineDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "OFFLINE";
-  runtimeConfig: DataSyncRuntimeConfig;
+  runtimeConfig?: DataSyncRuntimeConfig;
 }
 
 export interface RealtimeDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "REALTIME";
-  realtimeConfig: DataSyncRealtimeConfig;
+  realtimeConfig?: DataSyncRealtimeConfig;
 }
 
 export type DataSyncTaskSavePayload =
