@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.dto.datasync;
 
+import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +14,10 @@ import lombok.Data;
  */
 @Data
 public class DataSyncRuntimeConfigDTO {
+
+    /** 运行参数规划策略；历史配置缺失时由服务端按 FIXED 兼容。 */
+    private DataSyncRuntimePolicy policy;
+
 
     /** JDBC 游标 Fetch Size。 */
     @NotNull(message = "Fetch Size 不能为空")
