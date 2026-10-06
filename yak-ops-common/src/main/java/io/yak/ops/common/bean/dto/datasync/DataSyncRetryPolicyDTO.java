@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 数据同步 Execution 的固定重试策略。
+ * 数据同步 Execution 的重试策略。
  *
  * @author weifuwan
  * @since 2026-09-29
