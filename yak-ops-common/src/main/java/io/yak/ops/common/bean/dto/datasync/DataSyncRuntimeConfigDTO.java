@@ -18,7 +18,6 @@ public class DataSyncRuntimeConfigDTO {
     /** 运行参数规划策略；历史配置缺失时由服务端按 FIXED 兼容。 */
     private DataSyncRuntimePolicy policy;
 
-
     /** JDBC 游标 Fetch Size。 */
     @NotNull(message = "Fetch Size 不能为空")
     @Min(value = 1, message = "Fetch Size 必须大于 0")
