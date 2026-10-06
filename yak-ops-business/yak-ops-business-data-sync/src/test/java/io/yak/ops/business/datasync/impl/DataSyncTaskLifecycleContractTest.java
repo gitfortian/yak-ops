@@ -62,6 +62,25 @@ class DataSyncTaskLifecycleContractTest {
     }
 
     @Test
+    void shouldTreatExplicitOfflineRuntimeConfigWithoutPolicyAsFixed() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        inject(service, "taskRepository", taskRepository(null, captured));
+        inject(service, "dataSourceService", dataSourceService());
+
+        DataSyncTaskDTO dto = taskDto();
+        DataSyncRuntimeConfigDTO runtimeConfig = new DataSyncRuntimeConfigDTO();
+        runtimeConfig.setSourceParallelism(4);
+        dto.setRuntimeConfig(runtimeConfig);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO created = service.createTask(dto);
+
+        assertEquals(DataSyncRuntimePolicy.FIXED, created.getRuntimeConfig().getPolicy());
+        assertEquals(4, created.getRuntimeConfig().getSourceParallelism());
+    }
+
+    @Test
     void shouldCreateRealtimeTaskWithSystemRuntimeAndRetryDefaultsWhenOmitted() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
