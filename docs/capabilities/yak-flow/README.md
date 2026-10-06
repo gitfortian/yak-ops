@@ -38,7 +38,7 @@ String / Binary 在双方长度已知时要求 Target 不小于 Source。DECIMAL
 
 复用 Datasource 的 DataSourceConnection / DataSourceTablePath、Driver 隔离和 JDBC endpoint runtime。读取使用 forward-only cursor 和有限批次，只读取声明列并保持顺序，不把整表放进内存。
 
-支持显式单整数主键范围 split，以及 splitSize 动态规划。动态规划读取 MIN / MAX / COUNT，以 ceil(rowCount / splitSize) 请求范围数量，再生成不重叠的闭区间。无合格单整数主键或记录数不超过 splitSize 时使用整表 split；超过 10,000 个动态 split 拒绝并要求增大 splitSize。
+支持显式单整数主键范围 split，以及 splitSize 动态规划。`JdbcSourceStatisticsReader` 是 MIN / MAX / COUNT 的共享受控入口，Runtime Split Enumerator 与上层 Data Sync Runtime Planner 复用同一统计语义；Connector 本身不决定产品级 batch / parallelism 策略。动态 Split 以 ceil(rowCount / splitSize) 请求范围数量，再生成不重叠的闭区间。无合格单整数主键或记录数不超过 splitSize 时使用整表 split；超过 10,000 个动态 split 拒绝并要求增大 splitSize。
 
 splitSize 是目标行数，不保证均匀分布。每个 split 是独立读取事务，不提供所有 split 共用的一致性快照；没有倾斜采样或分布分析。
 
