@@ -202,9 +202,9 @@ export function DataSyncExecutionConfigContent({
       [
         "运行策略",
         runtimeConfig?.policy === "AUTO"
-          ? offlineRuntimePlan?.statisticsAvailable
-            ? "自动规划"
-            : "自动规划（安全回退）"
+          ? offlineRuntimePlan?.splitColumn && offlineRuntimePlan.statisticsAvailable === false
+            ? "自动规划（安全回退）"
+            : "自动规划"
           : "固定配置",
       ],
       ["估算行宽", offlineRuntimePlan?.estimatedRowBytes ? `${offlineRuntimePlan.estimatedRowBytes} B` : "-"],
