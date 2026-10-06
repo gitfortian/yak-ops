@@ -18,7 +18,6 @@ public class DataSyncRetryPolicyDTO {
     /** Retry Policy 模式；历史配置缺失时按 FIXED 兼容。 */
     private DataSyncRetryPolicyMode mode;
 
-
     /** 最大 Attempt 总数，包含首次执行；1 表示关闭自动重试。 */
     @NotNull(message = "最大 Attempt 次数不能为空")
     @Min(value = 1, message = "最大 Attempt 次数不能小于 1")
