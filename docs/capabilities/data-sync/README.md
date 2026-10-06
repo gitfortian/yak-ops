@@ -29,7 +29,7 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 
 Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引用，不复制凭证。一个 Task 连接一张 Source 表与一张 Target 表；`syncType` 创建后不变。Target 默认必须已经存在，只有显式 `autoCreateTable=true` 时才允许在运行前创建缺失目标表。
 
-`runtime_config` 按类型解释：OFFLINE 使用 `DataSyncRuntimeConfig`，REALTIME 使用 `DataSyncRealtimeConfig`。Retry Policy 独立保存，创建 Execution 时冻结。Task Editor 不要求普通用户填写这些引擎参数：创建请求省略 runtime / retry 配置时由后端物化当前系统默认值；编辑请求省略时保留该 Task 已持久化的具体配置，不把“省略”解释成重置默认。`writeMode` 是任务语义，不放进 runtime tuning。
+`runtime_config` 按类型解释：OFFLINE 使用 `DataSyncRuntimeConfig`，REALTIME 使用 `DataSyncRealtimeConfig`。Retry Policy 独立保存并在创建 Execution 时冻结。Task Editor 不要求普通用户填写这些引擎参数：新建普通任务省略 Retry Policy 时由后端物化 SMART Retry（最多 3 次、15 秒起始退避），历史 / 显式无 mode Policy 按 FIXED 兼容；编辑请求省略时保留该 Task 已持久化的具体配置。`writeMode` 是任务语义，不放进 runtime tuning。
 
 任务不是不完整草稿：保存必须通过后端 Datasource / Catalog / 映射校验；发布和运行还会重新校验外部资源。字段、默认值与请求校验从 DTO / VO 读取，不在这里复制全部参数。
 

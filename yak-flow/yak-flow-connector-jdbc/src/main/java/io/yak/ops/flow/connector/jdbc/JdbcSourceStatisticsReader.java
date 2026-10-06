@@ -63,8 +63,7 @@ public final class JdbcSourceStatisticsReader {
                     long upperBound = resultSet.getLong(2);
                     if (resultSet.wasNull()) return Optional.empty();
 
-                    return Optional.of(
-                            new JdbcSourceStatistics(splitColumn.get(), lowerBound, upperBound, rowCount));
+                    return Optional.of(new JdbcSourceStatistics(splitColumn.get(), lowerBound, upperBound, rowCount));
                 }
             }
         }

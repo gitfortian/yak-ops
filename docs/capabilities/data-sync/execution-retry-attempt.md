@@ -50,7 +50,13 @@ Execution 进入终态后不能自动追加 Attempt。连续 REALTIME Source 意
 
 ## Retry Policy
 
-`maxAttempts` 包含首次执行；默认 1 表示不自动重试，3 表示最多两次 Retry。`backoffSeconds` 是固定等待时间，默认 60 秒。请求范围与默认值由 DataSyncRetryPolicyDTO 维护。Task Editor 默认不暴露该策略；创建请求省略时使用后端默认，编辑请求省略时保留原 Task 策略。
+Retry Policy 由 `mode + maxAttempts + backoffSeconds` 组成。新建任务省略 Retry Policy 时，后端物化 `SMART + maxAttempts=3 + backoffSeconds=15`；历史 JSON 没有 mode、以及显式 API Policy 没有 mode 时按 `FIXED` 兼容，不改变历史重试语义。Task Editor 不暴露这些引擎参数；编辑请求省略时保留原 Task 策略。
+
+`SMART` 不等于“所有异常都重试”。系统只对明确的瞬时失败进入 Retry：数据库连接 / recoverable / transient / timeout、SQLState 08（连接）与 40（事务回滚）、网络连接 / Socket timeout，以及 REALTIME 连续 Source 意外结束。SQL / Schema / 权限 / 完整性约束、产品校验、非法参数、能力不支持和未知异常直接失败。
+
+写入安全优先于瞬时错误分类：OFFLINE APPEND / OVERWRITE 一旦 YakFlow Runtime 已启动，就视为可能存在已提交批次或已执行 TRUNCATE，SMART 不自动重放；如果失败发生在 Runtime 启动前，明确的瞬时规划 / 连接异常仍可重试。OFFLINE UPSERT 与 REALTIME CHANGELOG 依赖主键语义，允许对明确瞬时失败继续 SMART Retry，但仍不承诺 exactly-once。
+
+SMART 退避以 `backoffSeconds` 为起点，按 Attempt 进行确定性倍增（15s → 30s → …），上限 300s；FIXED 保持原固定间隔。Durable Retry 继续持久化实际 `nextRetryTime`。
 
 只有 FAILED 尝试进入通用 Retry 决策，SUCCEEDED / CANCELED / LOST 不自动重试。OFFLINE 与 REALTIME 共用生命周期；REALTIME Retry 复用既有 task/version CDC state。
 
@@ -108,7 +114,7 @@ v1.1.0 Release Migration 只从迁移生效后开始记录新的 Execution 产�
 
 Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow 写入语义](../yak-flow/README.md#jdbc-batch-connector)。APPEND 重放可能重复写；OVERWRITE 再次尝试会重新执行破坏性清空；UPSERT / CHANGELOG 的主键应用不构成端到端 exactly-once。
 
-默认不开自动重试，是兼容性和风险边界，不得在整理文档时改成默认多次执行。
+历史 / 显式 FIXED Policy 继续保持原配置；新建普通任务使用 SMART Policy。SMART 的安全边界由失败分类和写入模式共同决定，不能仅因为 maxAttempts=3 就解释成无条件自动执行三次。
 
 ## Persistence and Compatibility
 
@@ -116,7 +122,7 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 `yak_ops_data_sync_instance` 和既有 Instance ID 保持不变。v1.1.0 以前的历史记录按单次执行解释；Migration 没有为历史 Instance 回填实体 Attempt 行，也不为历史 Execution 伪造产品事件，因此旧 attempts / logs 可以为空。
 
-旧 Task 默认回填 maxAttempts=1、backoffSeconds=60。Schema 由 DAO 维护，遵守 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不修改已冻结迁移或建立第二套 Task / Instance 模型。
+旧 Task 仍保留迁移期 maxAttempts=1、backoffSeconds=60；其 retryPolicy JSON 没有 mode 时读取为 FIXED。SMART mode 存在既有 JSON 字段中，不新增数据库列。Schema 由 DAO 维护，遵守 [Flyway Rules](../../../yak-ops-dao/FLYWAY_RULES.md)，不修改已冻结迁移或建立第二套 Task / Instance 模型。
 
 ## Operations Contract
 
@@ -124,7 +130,7 @@ Retry 不改变 [OFFLINE 写入方式](README.md#offline-execution) 或 [YakFlow
 
 ## Current Limits
 
-不提供指数退避、jitter、Quartz Retry、分布式 Attempt ownership、跨节点接管或 exactly-once。Durable Retry 只恢复明确持久化的 `RETRY_WAITING`；已经进入 LOST / FAILED / CANCELED 的 Execution 不会被通用 Retry 复活。
+SMART 提供有上限的确定性倍增退避，但仍不提供 jitter、Quartz Retry、分布式 Attempt ownership、跨节点接管或 exactly-once。Durable Retry 只恢复明确持久化的 `RETRY_WAITING`；已经进入 LOST / FAILED / CANCELED 的 Execution 不会被通用 Retry 复活。
 
 当前仍是 single-node 恢复模型：没有 leader election、fencing、分布式 lease 或多实例竞争协调。
 

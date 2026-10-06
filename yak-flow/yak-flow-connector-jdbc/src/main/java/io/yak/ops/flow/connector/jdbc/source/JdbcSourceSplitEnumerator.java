@@ -106,10 +106,8 @@ final class JdbcSourceSplitEnumerator implements SourceSplitEnumerator<JdbcSourc
                     "dynamic JDBC split count exceeds " + MAX_DYNAMIC_SPLIT_COUNT + "; increase splitSize");
         }
         return createSplits(new JdbcNumericSplitConfig(
-                sourceStatistics.splitColumn(),
-                sourceStatistics.lowerBound(),
-                sourceStatistics.upperBound(),
-                (int) splitCount));
+                sourceStatistics.splitColumn(), sourceStatistics.lowerBound(), sourceStatistics.upperBound(), (int)
+                        splitCount));
     }
 
     private List<JdbcSourceSplit> createSplits(JdbcNumericSplitConfig splitConfig) {

@@ -45,6 +45,8 @@ class DataSyncAttemptLifecycleTest {
                 1,
                 DataSyncAttemptStatus.RUNNING,
                 DataSyncInstanceStatus.RUNNING,
+                true,
+                "固定重试策略",
                 3,
                 0,
                 10,
@@ -58,6 +60,44 @@ class DataSyncAttemptLifecycleTest {
         assertEquals(0, completed.get());
         assertEquals(
                 List.of(DataSyncExecutionEventType.ATTEMPT_FAILED, DataSyncExecutionEventType.RETRY_WAITING), events);
+    }
+
+    @Test
+    void shouldFinishExecutionImmediatelyWhenRetryClassificationBlocksReplay() throws Exception {
+        DataSyncAttemptLifecycle lifecycle = new DataSyncAttemptLifecycle();
+        DataSyncInstanceEntity execution = execution(DataSyncInstanceStatus.RUNNING);
+        AtomicReference<DataSyncAttemptStatus> attemptTarget = new AtomicReference<>();
+        AtomicReference<DataSyncInstanceStatus> executionTarget = new AtomicReference<>();
+        AtomicInteger completed = new AtomicInteger();
+        List<DataSyncExecutionEventType> events = new ArrayList<>();
+
+        inject(lifecycle, "attemptRepository", attemptRepository(attemptTarget, new AtomicInteger()));
+        inject(lifecycle, "instanceRepository", instanceRepository(execution, executionTarget, completed));
+        inject(lifecycle, "eventRepository", eventRepository(events));
+
+        DataSyncRetryDecision decision = lifecycle.failAttempt(
+                "workspace-1",
+                "execution-1",
+                "attempt-1",
+                1,
+                DataSyncAttemptStatus.RUNNING,
+                DataSyncInstanceStatus.RUNNING,
+                false,
+                "追加写入已启动，不自动重放",
+                3,
+                15,
+                10,
+                8,
+                42012,
+                "connection reset");
+
+        assertFalse(decision.retry());
+        assertEquals(DataSyncAttemptStatus.FAILED, attemptTarget.get());
+        assertEquals(DataSyncInstanceStatus.FAILED, executionTarget.get());
+        assertEquals(1, completed.get());
+        assertEquals(
+                List.of(DataSyncExecutionEventType.ATTEMPT_FAILED, DataSyncExecutionEventType.EXECUTION_FAILED),
+                events);
     }
 
     @Test
@@ -80,6 +120,8 @@ class DataSyncAttemptLifecycleTest {
                 3,
                 DataSyncAttemptStatus.RUNNING,
                 DataSyncInstanceStatus.RUNNING,
+                true,
+                "固定重试策略",
                 3,
                 60,
                 20,
@@ -117,6 +159,8 @@ class DataSyncAttemptLifecycleTest {
                 1,
                 DataSyncAttemptStatus.RUNNING,
                 DataSyncInstanceStatus.RUNNING,
+                true,
+                "固定重试策略",
                 3,
                 60,
                 1,

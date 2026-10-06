@@ -216,8 +216,12 @@ export function DataSyncExecutionConfigContent({
   }
 
   executionItems.push(
+    ["重试策略", retryPolicy?.mode === "SMART" ? "智能重试" : "固定重试"],
     ["最大尝试次数", (retryPolicy?.maxAttempts ?? record.maxAttempts ?? 1).toLocaleString()],
-    ["重试间隔", `${retryPolicy?.backoffSeconds ?? record.backoffSeconds ?? 0}s`],
+    [
+      retryPolicy?.mode === "SMART" ? "起始退避" : "重试间隔",
+      `${retryPolicy?.backoffSeconds ?? record.backoffSeconds ?? 0}s`,
+    ],
   );
 
   return (
@@ -389,7 +393,10 @@ export function DataSyncExecutionDetailContent({
           />
           {record.status === "RETRY_WAITING" ? (
             <div className="border-t border-[#eef0f3] px-4 py-3 text-xs text-[#b54708]">
-              下一次重试：{record.nextRetryTime || "待执行"} · Backoff {record.backoffSeconds || 0}s
+              下一次重试：{record.nextRetryTime || "待执行"}
+              {record.definitionSnapshot?.retryPolicy?.mode === "SMART"
+                ? " · 智能退避"
+                : ` · Backoff ${record.backoffSeconds || 0}s`}
             </div>
           ) : null}
         </DetailSection>

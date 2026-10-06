@@ -15,6 +15,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
@@ -57,8 +58,9 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(DataSyncRuntimePolicy.AUTO, created.getRuntimeConfig().getPolicy());
         assertEquals(1, created.getRuntimeConfig().getSourceParallelism());
         assertEquals(30, created.getRuntimeConfig().getTimeoutSeconds());
-        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
-        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+        assertEquals(DataSyncRetryPolicyMode.SMART, created.getRetryPolicy().getMode());
+        assertEquals(3, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(15, created.getRetryPolicy().getBackoffSeconds());
     }
 
     @Test
@@ -102,8 +104,9 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(500, created.getRealtimeConfig().getPollBatchSize());
         assertEquals(500, created.getRealtimeConfig().getWriteBatchSize());
         assertEquals(30, created.getRealtimeConfig().getTimeoutSeconds());
-        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
-        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+        assertEquals(DataSyncRetryPolicyMode.SMART, created.getRetryPolicy().getMode());
+        assertEquals(3, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(15, created.getRetryPolicy().getBackoffSeconds());
     }
 
     @Test
@@ -185,6 +188,7 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(250000L, updated.getRuntimeConfig().getSplitSize());
         assertEquals(4, updated.getRuntimeConfig().getSourceParallelism());
         assertEquals(45, updated.getRuntimeConfig().getTimeoutSeconds());
+        assertEquals(DataSyncRetryPolicyMode.FIXED, updated.getRetryPolicy().getMode());
         assertEquals(3, updated.getRetryPolicy().getMaxAttempts());
         assertEquals(90, updated.getRetryPolicy().getBackoffSeconds());
     }
@@ -204,6 +208,27 @@ class DataSyncTaskLifecycleContractTest {
 
         assertEquals(4, updated.getDefinitionVersion());
         assertEquals(4, captured.get().getDefinitionVersion());
+    }
+
+    @Test
+    void shouldTreatExplicitRetryPolicyWithoutModeAsFixed() throws Exception {
+        DataSyncServiceImpl service = new DataSyncServiceImpl();
+        AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
+        inject(service, "taskRepository", taskRepository(null, captured));
+        inject(service, "dataSourceService", dataSourceService());
+
+        DataSyncTaskDTO dto = taskDto();
+        DataSyncRetryPolicyDTO retryPolicy = new DataSyncRetryPolicyDTO();
+        retryPolicy.setMaxAttempts(4);
+        retryPolicy.setBackoffSeconds(20);
+        dto.setRetryPolicy(retryPolicy);
+
+        WorkspaceContext.bind("workspace-1");
+        DataSyncTaskVO created = service.createTask(dto);
+
+        assertEquals(DataSyncRetryPolicyMode.FIXED, created.getRetryPolicy().getMode());
+        assertEquals(4, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(20, created.getRetryPolicy().getBackoffSeconds());
     }
 
     @Test

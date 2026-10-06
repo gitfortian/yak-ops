@@ -109,8 +109,8 @@ public final class OfflineRuntimePlanner {
         summary.setStatisticsAvailable(statistics != null);
         summary.setSplitCount(1);
 
-        String eligibleSplitColumn =
-                JdbcNumericSplitConfig.eligibleColumn(sourceReadTable.toRuntimeSchema()).orElse(null);
+        String eligibleSplitColumn = JdbcNumericSplitConfig.eligibleColumn(sourceReadTable.toRuntimeSchema())
+                .orElse(null);
         summary.setSplitColumn(eligibleSplitColumn);
 
         if (statistics == null) {
@@ -139,8 +139,8 @@ public final class OfflineRuntimePlanner {
         DataSyncOfflineRuntimePlanVO summary = new DataSyncOfflineRuntimePlanVO();
         summary.setPolicy(DataSyncRuntimePolicy.FIXED);
         summary.setEstimatedRowBytes(estimateRowBytes(sourceReadTable));
-        summary.setSplitColumn(
-                JdbcNumericSplitConfig.eligibleColumn(sourceReadTable.toRuntimeSchema()).orElse(null));
+        summary.setSplitColumn(JdbcNumericSplitConfig.eligibleColumn(sourceReadTable.toRuntimeSchema())
+                .orElse(null));
         summary.setStatisticsAvailable(false);
         return new OfflineRuntimePlan(effective, summary);
     }

@@ -3,6 +3,8 @@ package io.yak.ops.business.datasync.execution.executor;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryAssessment;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryClassifier;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncRetryDecision;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlan;
 import io.yak.ops.business.datasync.execution.planning.OfflineSyncExecutionPlanner;
@@ -13,6 +15,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncAttemptStatus;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
+import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.flow.runtime.ExecutionMetrics;
@@ -38,6 +41,9 @@ public class OfflineSyncExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(OfflineSyncExecutor.class);
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final long METRICS_FLUSH_INTERVAL_MILLIS = 500L;
+    private static final int MAX_SMART_BACKOFF_SECONDS = 300;
+
+    private final DataSyncRetryClassifier retryClassifier = new DataSyncRetryClassifier();
 
     @Resource
     private OfflineSyncExecutionPlanner executionPlanner;
@@ -208,10 +214,12 @@ public class OfflineSyncExecutor {
                 return DataSyncRetryDecision.stop();
             }
 
-            String message = safeMessage(execution.failure().orElse(null));
+            Throwable failure = execution.failure().orElse(null);
+            String message = safeMessage(failure);
             return failAttempt(
                     workspaceId,
                     instanceId,
+                    snapshot,
                     attempt,
                     attemptNo,
                     maxAttempts,
@@ -219,6 +227,8 @@ public class OfflineSyncExecutor {
                     DataSyncAttemptStatus.RUNNING,
                     DataSyncInstanceStatus.RUNNING,
                     metrics,
+                    failure,
+                    true,
                     message);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -226,6 +236,7 @@ public class OfflineSyncExecutor {
             return failAttempt(
                     workspaceId,
                     instanceId,
+                    snapshot,
                     attempt,
                     attemptNo,
                     maxAttempts,
@@ -233,12 +244,15 @@ public class OfflineSyncExecutor {
                     started ? DataSyncAttemptStatus.RUNNING : DataSyncAttemptStatus.PENDING,
                     started ? DataSyncInstanceStatus.RUNNING : expectedExecutionStatus,
                     execution == null ? null : execution.metrics(),
+                    exception,
+                    execution != null,
                     safeMessage(exception));
         } catch (Exception exception) {
             if (execution != null) execution.cancel();
             return failAttempt(
                     workspaceId,
                     instanceId,
+                    snapshot,
                     attempt,
                     attemptNo,
                     maxAttempts,
@@ -246,6 +260,8 @@ public class OfflineSyncExecutor {
                     started ? DataSyncAttemptStatus.RUNNING : DataSyncAttemptStatus.PENDING,
                     started ? DataSyncInstanceStatus.RUNNING : expectedExecutionStatus,
                     execution == null ? null : execution.metrics(),
+                    exception,
+                    execution != null,
                     safeMessage(exception));
         } finally {
             if (execution != null) executionRegistry.remove(instanceId, execution);
@@ -256,6 +272,7 @@ public class OfflineSyncExecutor {
     private DataSyncRetryDecision failAttempt(
             String workspaceId,
             String instanceId,
+            DataSyncDefinitionSnapshotVO snapshot,
             DataSyncAttemptEntity attempt,
             int attemptNo,
             int maxAttempts,
@@ -263,9 +280,13 @@ public class OfflineSyncExecutor {
             DataSyncAttemptStatus expectedAttemptStatus,
             DataSyncInstanceStatus expectedExecutionStatus,
             ExecutionMetrics metrics,
+            Throwable failure,
+            boolean runtimeStarted,
             String message) {
         long readRows = metrics == null ? 0L : metrics.readRows();
         long writeRows = metrics == null ? 0L : metrics.writeRows();
+        DataSyncRetryAssessment assessment = retryAssessment(snapshot, failure, runtimeStarted, writeRows);
+        int effectiveBackoffSeconds = retryBackoffSeconds(snapshot, attemptNo, backoffSeconds);
         DataSyncRetryDecision decision = attemptLifecycle.failAttempt(
                 workspaceId,
                 instanceId,
@@ -273,31 +294,54 @@ public class OfflineSyncExecutor {
                 attemptNo,
                 expectedAttemptStatus,
                 expectedExecutionStatus,
+                assessment.retryable(),
+                assessment.reason(),
                 maxAttempts,
-                backoffSeconds,
+                effectiveBackoffSeconds,
                 readRows,
                 writeRows,
                 DataSyncErrorCode.EXECUTION_FAILED.getCode(),
                 message);
         if (decision.retry()) {
             LOG.warn(
-                    "离线同步Attempt失败等待重试，workspaceId={}, instanceId={}, attempt={}/{}, nextRetryTime={}, error={}",
+                    "离线同步Attempt失败等待重试，workspaceId={}, instanceId={}, attempt={}/{}, nextRetryTime={}, retryReason={}, error={}",
                     workspaceId,
                     instanceId,
                     attemptNo,
                     maxAttempts,
                     decision.nextRetryTime(),
+                    assessment.reason(),
                     message);
         } else {
             LOG.error(
-                    "离线同步Execution执行失败，workspaceId={}, instanceId={}, attempt={}/{}, error={}",
+                    "离线同步Execution执行失败，workspaceId={}, instanceId={}, attempt={}/{}, retryReason={}, error={}",
                     workspaceId,
                     instanceId,
                     attemptNo,
                     maxAttempts,
+                    assessment.reason(),
                     message);
         }
         return decision;
+    }
+
+    private DataSyncRetryAssessment retryAssessment(
+            DataSyncDefinitionSnapshotVO snapshot, Throwable failure, boolean runtimeStarted, long writeRows) {
+        DataSyncRetryPolicyVO policy = snapshot.getRetryPolicy();
+        if (policy == null || policy.getMode() == null || policy.getMode() == DataSyncRetryPolicyMode.FIXED) {
+            return DataSyncRetryAssessment.retryable("固定重试策略");
+        }
+        return retryClassifier.classify(snapshot, failure, runtimeStarted, writeRows);
+    }
+
+    private int retryBackoffSeconds(
+            DataSyncDefinitionSnapshotVO snapshot, int attemptNo, int configuredBackoffSeconds) {
+        DataSyncRetryPolicyVO policy = snapshot.getRetryPolicy();
+        if (policy == null || policy.getMode() != DataSyncRetryPolicyMode.SMART) {
+            return Math.max(0, configuredBackoffSeconds);
+        }
+        long multiplier = 1L << Math.min(4, Math.max(0, attemptNo - 1));
+        return (int) Math.min(MAX_SMART_BACKOFF_SECONDS, Math.max(0L, configuredBackoffSeconds) * multiplier);
     }
 
     private void persistMetrics(String workspaceId, String instanceId, String attemptId, ExecutionMetrics metrics) {

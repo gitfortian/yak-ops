@@ -158,6 +158,8 @@ public class DataSyncAttemptLifecycle {
             int attemptNo,
             DataSyncAttemptStatus expectedAttemptStatus,
             DataSyncInstanceStatus expectedExecutionStatus,
+            boolean retryAllowed,
+            String retryReason,
             int maxAttempts,
             int backoffSeconds,
             long readRows,
@@ -192,7 +194,7 @@ public class DataSyncAttemptLifecycle {
                 DataSyncExecutionEventType.ATTEMPT_FAILED,
                 "Attempt #" + attemptNo + " 执行失败：" + safeEventMessage(errorMessage));
 
-        if (attemptNo < Math.max(1, maxAttempts)) {
+        if (retryAllowed && attemptNo < Math.max(1, maxAttempts)) {
             LocalDateTime nextRetryTime = finishTime.plusSeconds(Math.max(0, backoffSeconds));
             if (!instanceRepository.waitForRetry(
                     workspaceId,
@@ -212,7 +214,7 @@ public class DataSyncAttemptLifecycle {
                     attemptId,
                     DataSyncExecutionEventLevel.WARN,
                     DataSyncExecutionEventType.RETRY_WAITING,
-                    "Attempt #" + attemptNo + " 失败，等待重试");
+                    "Attempt #" + attemptNo + " 失败，等待重试：" + safeEventMessage(retryReason));
             return DataSyncRetryDecision.retryAt(nextRetryTime);
         }
 
@@ -229,13 +231,17 @@ public class DataSyncAttemptLifecycle {
                 errorMessage)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "记录 Execution 最终失败状态失败");
         }
+        String finalMessage = "Execution 执行失败：" + safeEventMessage(errorMessage);
+        if (!retryAllowed && attemptNo < Math.max(1, maxAttempts)) {
+            finalMessage += "；未自动重试：" + safeEventMessage(retryReason);
+        }
         appendEvent(
                 workspaceId,
                 executionId,
                 null,
                 DataSyncExecutionEventLevel.ERROR,
                 DataSyncExecutionEventType.EXECUTION_FAILED,
-                "Execution 执行失败：" + safeEventMessage(errorMessage));
+                finalMessage);
         return DataSyncRetryDecision.stop();
     }
 

@@ -33,7 +33,10 @@ export interface DataSyncRealtimeConfig {
   timeoutSeconds: number;
 }
 
+export type DataSyncRetryPolicyMode = "SMART" | "FIXED";
+
 export interface DataSyncRetryPolicy {
+  mode?: DataSyncRetryPolicyMode;
   maxAttempts: number;
   backoffSeconds: number;
 }
@@ -234,6 +237,7 @@ export interface DataSyncDefinitionSnapshot {
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;
+  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
   realtimeConfig?: DataSyncRealtimeConfig;
   retryPolicy?: DataSyncRetryPolicy;
 }
