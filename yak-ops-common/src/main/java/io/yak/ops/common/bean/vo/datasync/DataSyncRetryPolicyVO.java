@@ -15,7 +15,6 @@ public class DataSyncRetryPolicyVO {
     /** Retry Policy 模式；历史配置缺失时按 FIXED 兼容。 */
     private DataSyncRetryPolicyMode mode;
 
-
     /** 最大 Attempt 总数，包含首次执行。 */
     private Integer maxAttempts;
 
