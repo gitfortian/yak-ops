@@ -207,7 +207,10 @@ export function DataSyncExecutionConfigContent({
             : "自动规划"
           : "固定配置",
       ],
-      ["估算行宽", offlineRuntimePlan?.estimatedRowBytes ? `${offlineRuntimePlan.estimatedRowBytes} B` : "-"],
+      [
+        "估算行宽",
+        offlineRuntimePlan?.estimatedRowBytes ? `${offlineRuntimePlan.estimatedRowBytes} B` : "-",
+      ],
       ["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"],
     );
   }
