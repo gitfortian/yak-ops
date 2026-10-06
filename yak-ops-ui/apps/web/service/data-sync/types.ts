@@ -237,6 +237,7 @@ export interface DataSyncDefinitionSnapshot {
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
   runtimeConfig?: DataSyncRuntimeConfig;
+  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
   realtimeConfig?: DataSyncRealtimeConfig;
   retryPolicy?: DataSyncRetryPolicy;
 }
