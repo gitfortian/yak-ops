@@ -4,7 +4,7 @@ import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import lombok.Data;
 
 /**
- * 数据同步 Execution 对外展示的固定重试策略。
+ * 数据同步 Execution 对外展示的重试策略。
  *
  * @author weifuwan
  * @since 2026-09-29
