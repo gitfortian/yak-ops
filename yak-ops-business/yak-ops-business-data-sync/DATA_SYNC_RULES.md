@@ -71,6 +71,8 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 - TargetSchemaCompatibility 只消费已经投影成目标字段名的 LogicalTable；TargetTablePlanner / Auto Create DDL 同样消费映射后的 Target Logical Schema。继续复用 JdbcSchemaMapper / JdbcSchemaCompatibility，不在 Service 再写一套类型能力表。
 - REALTIME Mapping 必须覆盖全部 Source PK，Target PK 按 Mapping 后的目标字段名比较；UPSERT Existing Target 要求 Mapping 覆盖全部目标 PK，UPSERT Auto Create 要求 Mapping 覆盖全部 Source PK。
 - 版本比较集中在可执行定义的规范化比较，不每次 PUT 加一；包括 mapping 与 retryPolicy，具体语义见 [Version Contract](../../docs/capabilities/data-sync/task-lifecycle.md#definition-version-contract)。
+- Runtime Config / Retry Policy 的默认与保留语义由 Data Sync Service 拥有：创建请求省略时物化当前系统默认值；编辑请求省略时保留 Task 已持久化的具体配置。省略字段不得被解释为“重置默认”，也不得因为 UI 隐藏参数而修改历史调优值。
+- Task 持久化和 Execution definitionSnapshot 继续保存 concrete runtime / retry values；当前阶段不引入 RuntimePolicy.AUTO 等空壳策略枚举，也不在 Attempt 间重新计算参数。
 - CRUD / 查询、发布与运行的副作用必须分开；不能在保存或发布方法里偷偷启动 YakFlow。
 - `DataSyncServiceImpl` 是稳定产品编排入口，不因为文件长度机械拆 Manager / Coordinator；已有 Schema / Execution owner 能承担的逻辑不得再以重复 private helper 复制。
 
