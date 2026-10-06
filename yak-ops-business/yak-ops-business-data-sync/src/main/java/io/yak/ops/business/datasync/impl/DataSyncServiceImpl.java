@@ -7,10 +7,10 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
-import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
-import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTracePage;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceRecord;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTraceSide;
@@ -1520,8 +1520,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private String retryPolicyJson(DataSyncTaskDTO dto) {
-        DataSyncRetryPolicyDTO policy =
-                dto.getRetryPolicy() == null ? smartRetryPolicy() : dto.getRetryPolicy();
+        DataSyncRetryPolicyDTO policy = dto.getRetryPolicy() == null ? smartRetryPolicy() : dto.getRetryPolicy();
         normalizeRetryPolicy(policy);
         return JSONUtils.toJson(policy);
     }
