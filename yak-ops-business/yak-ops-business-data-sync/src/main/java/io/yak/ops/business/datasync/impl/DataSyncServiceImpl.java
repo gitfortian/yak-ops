@@ -1197,7 +1197,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 || autoCreateTable(entity) != Boolean.TRUE.equals(dto.getAutoCreateTable())
                 || taskWriteMode(entity) != requireWriteMode(dto.getWriteMode())
                 || !jsonEquals(normalizedMappingConfigJson(entity.getMappingConfig()), mappingConfigJson(dto))
-                || !jsonEquals(entity.getRuntimeConfig(), runtimeConfigJson(entity.getSyncType(), dto))
+                || !jsonEquals(
+                        normalizedRuntimeConfigJson(entity.getSyncType(), entity.getRuntimeConfig()),
+                        runtimeConfigJson(entity.getSyncType(), dto))
                 || !jsonEquals(normalizedRetryPolicyJson(entity.getRetryPolicy()), retryPolicyJson(dto));
     }
 
@@ -1484,6 +1486,16 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return syncType == DataSyncType.REALTIME
                 ? JSONUtils.toJson(dto.getRealtimeConfig())
                 : JSONUtils.toJson(dto.getRuntimeConfig());
+    }
+
+    private String normalizedRuntimeConfigJson(DataSyncType syncType, String json) {
+        if (syncType == DataSyncType.REALTIME) {
+            DataSyncRealtimeConfigDTO config = StringUtils.isBlank(json)
+                    ? new DataSyncRealtimeConfigDTO()
+                    : JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
+            return JSONUtils.toJson(config);
+        }
+        return JSONUtils.toJson(runtimeConfig(json));
     }
 
     private String retryPolicyJson(DataSyncTaskDTO dto) {
