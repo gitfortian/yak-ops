@@ -13,7 +13,10 @@ export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
 
 export type DataSyncDesiredState = "STOPPED" | "RUNNING";
 
+export type DataSyncRuntimePolicy = "AUTO" | "FIXED";
+
 export interface DataSyncRuntimeConfig {
+  policy?: DataSyncRuntimePolicy;
   fetchSize: number;
   readBatchSize: number;
   writeBatchSize: number;
@@ -62,6 +65,7 @@ export interface DataSyncTaskRecord {
   autoCreateTable?: boolean;
   mapping?: DataSyncMappingConfig;
   runtimeConfig?: DataSyncRuntimeConfig;
+  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
   realtimeConfig?: DataSyncRealtimeConfig;
   retryPolicy?: DataSyncRetryPolicy;
   definitionVersion: number;
@@ -208,6 +212,15 @@ export interface DataSyncEndpointSnapshot {
   database?: string;
   schema?: string;
   table: string;
+}
+
+export interface DataSyncOfflineRuntimePlan {
+  policy?: DataSyncRuntimePolicy;
+  sourceRowCount?: number;
+  estimatedRowBytes?: number;
+  splitColumn?: string;
+  splitCount?: number;
+  statisticsAvailable?: boolean;
 }
 
 export interface DataSyncDefinitionSnapshot {
