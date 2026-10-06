@@ -76,6 +76,7 @@ import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncOperationsRange;
+import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
@@ -1421,7 +1422,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private void materializeCreatePolicies(DataSyncType syncType, DataSyncTaskDTO dto) {
         if (dto.getRetryPolicy() == null) {
-            dto.setRetryPolicy(new DataSyncRetryPolicyDTO());
+            dto.setRetryPolicy(smartRetryPolicy());
+        } else {
+            normalizeRetryPolicy(dto.getRetryPolicy());
         }
         if (syncType == DataSyncType.REALTIME) {
             if (dto.getRealtimeConfig() == null) {
@@ -1442,6 +1445,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private void materializeUpdatePolicies(DataSyncTaskEntity entity, DataSyncTaskDTO dto) {
         if (dto.getRetryPolicy() == null) {
             dto.setRetryPolicy(retryPolicyConfig(entity.getRetryPolicy()));
+        } else {
+            normalizeRetryPolicy(dto.getRetryPolicy());
         }
         if (entity.getSyncType() == DataSyncType.REALTIME) {
             if (dto.getRealtimeConfig() == null) {
@@ -1477,9 +1482,25 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncRetryPolicyDTO retryPolicyConfig(String json) {
-        return StringUtils.isBlank(json)
+        DataSyncRetryPolicyDTO policy = StringUtils.isBlank(json)
                 ? new DataSyncRetryPolicyDTO()
                 : JSONUtils.parseObject(json, DataSyncRetryPolicyDTO.class);
+        normalizeRetryPolicy(policy);
+        return policy;
+    }
+
+    private DataSyncRetryPolicyDTO smartRetryPolicy() {
+        DataSyncRetryPolicyDTO policy = new DataSyncRetryPolicyDTO();
+        policy.setMode(DataSyncRetryPolicyMode.SMART);
+        policy.setMaxAttempts(3);
+        policy.setBackoffSeconds(15);
+        return policy;
+    }
+
+    private void normalizeRetryPolicy(DataSyncRetryPolicyDTO policy) {
+        if (policy.getMode() == null) {
+            policy.setMode(DataSyncRetryPolicyMode.FIXED);
+        }
     }
 
     private String runtimeConfigJson(DataSyncType syncType, DataSyncTaskDTO dto) {
@@ -1500,12 +1521,13 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     private String retryPolicyJson(DataSyncTaskDTO dto) {
         DataSyncRetryPolicyDTO policy =
-                dto.getRetryPolicy() == null ? new DataSyncRetryPolicyDTO() : dto.getRetryPolicy();
+                dto.getRetryPolicy() == null ? smartRetryPolicy() : dto.getRetryPolicy();
+        normalizeRetryPolicy(policy);
         return JSONUtils.toJson(policy);
     }
 
     private String normalizedRetryPolicyJson(String json) {
-        return StringUtils.isBlank(json) ? JSONUtils.toJson(new DataSyncRetryPolicyDTO()) : json;
+        return JSONUtils.toJson(retryPolicyConfig(json));
     }
 
     private DataSyncMappingPreviewVO requireCompatibleMapping(DataSyncMappingPreviewDTO dto) {
