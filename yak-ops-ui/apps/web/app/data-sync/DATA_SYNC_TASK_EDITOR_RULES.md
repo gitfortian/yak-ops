@@ -8,12 +8,12 @@ Scope: `app/data-sync/task-editor.tsx` 及其编辑器辅助组件。
 
 ## Ownership
 
-DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。OFFLINE / REALTIME 共用数据源选择、绑定范围展示、Catalog 查询、字段映射和保存实现；差异留在模式参数、运行配置、文案及返回路径，不复制完整编辑器。
+DataSyncTaskEditorPage 显式接收 syncType，不按 URL pathname 猜模式。OFFLINE / REALTIME 共用数据源选择、Catalog 查询、字段映射和保存实现；差异留在模式参数、运行配置、文案及返回路径，不复制完整编辑器。
 
 ## Data / Validation
 
 - REALTIME Source 只展示 MySQL，Target 只展示 MySQL / PostgreSQL / Oracle；最终拓扑、主键和兼容性由后端校验。
-- Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。
+- Datasource 保存 ID、显示名称；表选择保留稳定身份与异步回显，遵循 [Select](../../../../packages/yak-ui/docs/select-motion.md)。数据源已绑定的数据库/Schema 不提供重复覆盖输入。数据源卡片的“类型”复用 datasource 模块已有 DatabaseIcons 与产品化类型名称（MySQL / PostgreSQL / Oracle），不直接展示后端枚举，也不重复显示“连接范围”等说明性副文本。
 - Schema Mapping Editor 只负责字段选择、改名、重排和连线交互，不在前端重建 JDBC 类型兼容、主键契约或 Transform；每次 Mapping 变化都调用后端 Mapping Preview，兼容性、类型与 DDL 结果以后端为准。修改依赖字段后重新查询，过期结果不得覆盖当前选择。同一 Source / Target Scope 内仅 Mapping 变化时，Preview 刷新不得先清空上一份有效结果造成 Header / Diagnostics 反复挂载；使用独立 loading 状态阻断保存并保持布局稳定。Scope 身份变化时才清空旧 Preview，避免跨表展示陈旧状态。
 - 编辑器对用户展示的章节名称统一使用“去向字段映射”；内部 Contract / 类型 / 代码仍可使用 Schema Mapping，不为了文案重命名技术模型。
 - Mapping Preview 的字段名、字段类型与映射关系直接回收到 Schema Mapping Editor：不再在编辑器下方重复渲染第二张字段映射明细表。CollapseSection Header 只保留目标表 / 兼容性摘要；正文只保留阻断原因与规划警告，不再铺开自动建表 DDL。自动建表 DDL 属于“数据去向 → 目标表”的辅助信息，只能通过目标表右侧的 Yak UI `DDL` Button 按需打开 Popover 查看。Popover 必须展示后端返回的完整 ddlStatements（CREATE TABLE + 可能的 Comment DDL），不能只展示第一条 CREATE TABLE；createTableSql 仅作为旧响应兼容回退。无实际诊断内容时 SchemaPreviewDiagnostics 必须直接返回 null，不得渲染零高度空容器参与父级 gap / space 布局。

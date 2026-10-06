@@ -30,6 +30,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { EditorAnchorStepper, type EditorAnchorItem } from "@/app/data-sync/editor-anchor-stepper";
 import { SchemaMappingEditor } from "@/app/data-sync/schema-mapping-editor";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
+import { getDataSourceTypeLabel } from "@/app/datasource/constants";
+import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
 import {
   listDataSourceColumns,
   listDataSources,
@@ -368,49 +370,45 @@ function DataSourceEndpointCard({
       ),
     [dataSources],
   );
-  const scopeText = [selectedDataSource?.database, selectedDataSource?.schema]
-    .filter(Boolean)
-    .join(" · ");
-
   return (
     <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
       <div className="text-sm font-semibold text-[#344054]">{title}</div>
       <div className="mt-4 space-y-3">
         <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel>类型</FieldLabel>
-          <div className="text-[13px] text-[#344054]">{selectedDataSource?.dbType || "-"}</div>
+          {selectedDataSource ? (
+            <div className="flex items-center gap-2 text-[13px] text-[#344054]">
+              <DatabaseIcons dbType={selectedDataSource.dbType} width="16px" height="16px" />
+              <span>{getDataSourceTypeLabel(selectedDataSource.dbType)}</span>
+            </div>
+          ) : (
+            <div className="text-[13px] text-[#98a2b3]">-</div>
+          )}
         </Field>
 
-        <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-start !gap-3">
-          <FieldLabel required className="pt-1.5">
-            数据源
-          </FieldLabel>
-          <div className="space-y-1">
-            <DataSyncSearchableSelect
-              value={dataSourceId || null}
-              options={dataSourceOptions}
-              placeholder="请选择数据源"
-              searchPlaceholder="搜索数据源"
-              emptyText="暂无数据源"
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              footer={
-                <Button
-                  size="small"
-                  variant="ghost"
-                  className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
-                  onClick={onCreateDataSource}
-                >
-                  <Plus size={14} />
-                  新增数据源
-                </Button>
-              }
-              onValueChange={onDataSourceChange}
-            />
-            {scopeText ? (
-              <div className="px-1 text-xs text-[#98a2b3]">连接范围：{scopeText}</div>
-            ) : null}
-          </div>
+        <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
+          <FieldLabel required>数据源</FieldLabel>
+          <DataSyncSearchableSelect
+            value={dataSourceId || null}
+            options={dataSourceOptions}
+            placeholder="请选择数据源"
+            searchPlaceholder="搜索数据源"
+            emptyText="暂无数据源"
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            footer={
+              <Button
+                size="small"
+                variant="ghost"
+                className="px-1 text-xs font-normal text-[var(--yak-color-primary)]"
+                onClick={onCreateDataSource}
+              >
+                <Plus size={14} />
+                新增数据源
+              </Button>
+            }
+            onValueChange={onDataSourceChange}
+          />
         </Field>
       </div>
     </div>
