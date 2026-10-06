@@ -297,8 +297,7 @@ public class RealtimeSyncExecutor {
             String message) {
         long readRows = metrics == null ? 0L : metrics.readRows();
         long writeRows = metrics == null ? 0L : metrics.writeRows();
-        DataSyncRetryAssessment assessment =
-                retryAssessment(snapshot, failure, writeRows, unexpectedContinuousEnd);
+        DataSyncRetryAssessment assessment = retryAssessment(snapshot, failure, writeRows, unexpectedContinuousEnd);
         int effectiveBackoffSeconds = retryBackoffSeconds(snapshot, attemptNo, backoffSeconds);
         DataSyncRetryDecision decision = attemptLifecycle.failAttempt(
                 workspaceId,
@@ -339,10 +338,7 @@ public class RealtimeSyncExecutor {
     }
 
     private DataSyncRetryAssessment retryAssessment(
-            DataSyncDefinitionSnapshotVO snapshot,
-            Throwable failure,
-            long writeRows,
-            boolean unexpectedContinuousEnd) {
+            DataSyncDefinitionSnapshotVO snapshot, Throwable failure, long writeRows, boolean unexpectedContinuousEnd) {
         DataSyncRetryPolicyVO policy = snapshot.getRetryPolicy();
         if (policy == null || policy.getMode() == null || policy.getMode() == DataSyncRetryPolicyMode.FIXED) {
             return DataSyncRetryAssessment.retryable("固定重试策略");
