@@ -7,6 +7,8 @@ import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
+import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTracePage;
@@ -74,6 +76,7 @@ import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasync.DataSyncDesiredState;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncOperationsRange;
+import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
@@ -107,6 +110,7 @@ import io.yak.ops.flow.api.row.YakColumn;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaCompatibility;
 import io.yak.ops.flow.connector.jdbc.JdbcSchemaMapper;
 import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
 import jakarta.annotation.Resource;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
@@ -142,6 +146,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private static final int DEFAULT_TRACE_PAGE_SIZE = 50;
 
     private final SchemaMappingResolver schemaMappingResolver = new SchemaMappingResolver();
+    private final OfflineRuntimePlanner offlineRuntimePlanner = new OfflineRuntimePlanner();
 
     @Resource
     private DataSyncTaskRepository taskRepository;
