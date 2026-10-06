@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.dto.datasync;
 
+import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +14,10 @@ import lombok.Data;
  */
 @Data
 public class DataSyncRetryPolicyDTO {
+
+    /** Retry Policy 模式；历史配置缺失时按 FIXED 兼容。 */
+    private DataSyncRetryPolicyMode mode;
+
 
     /** 最大 Attempt 总数，包含首次执行；1 表示关闭自动重试。 */
     @NotNull(message = "最大 Attempt 次数不能为空")
