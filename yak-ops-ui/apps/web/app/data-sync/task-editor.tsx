@@ -1606,7 +1606,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               </div>
             </CollapseSection>
           ) : null}
-
         </main>
 
         <aside
