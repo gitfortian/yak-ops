@@ -203,6 +203,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (name == null) throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "任务名称不能为空");
         ensureTaskNameAvailable(workspaceId, name, null);
         DataSyncType syncType = requireSyncType(dto.getSyncType());
+        materializeCreatePolicies(syncType, dto);
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
@@ -244,6 +245,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (entity.getSyncType() != syncType) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步类型创建后不允许修改");
         }
+        materializeUpdatePolicies(entity, dto);
         DataSyncMappingPreviewDTO resolvedScope =
                 resolveMappingScope(BeanCopyUtils.copy(dto, DataSyncMappingPreviewDTO.class));
         validateTaskDefinition(syncType, dto, resolvedScope);
@@ -1222,19 +1224,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         validateWriteMode(syncType, dto.getWriteMode());
         DataSyncMappingDTO mapping = normalizeMapping(dto.getMapping());
         resolvedScope.setMapping(mapping);
-        if (dto.getRetryPolicy() == null) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Retry Policy 不能为空");
-        }
         if (syncType == DataSyncType.OFFLINE) {
-            if (dto.getRuntimeConfig() == null) {
-                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "OFFLINE 运行参数不能为空");
-            }
             validateOfflineUpsertTarget(
                     dto.getSourceDataSourceId(), dto.getTargetDataSourceId(), resolvedScope, dto.getWriteMode());
             return;
-        }
-        if (dto.getRealtimeConfig() == null) {
-            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 运行参数不能为空");
         }
 
         validateRealtimeTopology(dto.getSourceDataSourceId(), dto.getTargetDataSourceId(), resolvedScope);
@@ -1416,6 +1409,54 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             }
         }
         return result;
+    }
+
+    private void materializeCreatePolicies(DataSyncType syncType, DataSyncTaskDTO dto) {
+        if (dto.getRetryPolicy() == null) {
+            dto.setRetryPolicy(new DataSyncRetryPolicyDTO());
+        }
+        if (syncType == DataSyncType.REALTIME) {
+            if (dto.getRealtimeConfig() == null) {
+                dto.setRealtimeConfig(new DataSyncRealtimeConfigDTO());
+            }
+            return;
+        }
+        if (dto.getRuntimeConfig() == null) {
+            dto.setRuntimeConfig(new DataSyncRuntimeConfigDTO());
+        }
+    }
+
+    private void materializeUpdatePolicies(DataSyncTaskEntity entity, DataSyncTaskDTO dto) {
+        if (dto.getRetryPolicy() == null) {
+            dto.setRetryPolicy(retryPolicyConfig(entity.getRetryPolicy()));
+        }
+        if (entity.getSyncType() == DataSyncType.REALTIME) {
+            if (dto.getRealtimeConfig() == null) {
+                dto.setRealtimeConfig(realtimeConfig(entity.getRuntimeConfig()));
+            }
+            return;
+        }
+        if (dto.getRuntimeConfig() == null) {
+            dto.setRuntimeConfig(runtimeConfig(entity.getRuntimeConfig()));
+        }
+    }
+
+    private DataSyncRuntimeConfigDTO runtimeConfig(String json) {
+        return StringUtils.isBlank(json)
+                ? new DataSyncRuntimeConfigDTO()
+                : JSONUtils.parseObject(json, DataSyncRuntimeConfigDTO.class);
+    }
+
+    private DataSyncRealtimeConfigDTO realtimeConfig(String json) {
+        return StringUtils.isBlank(json)
+                ? new DataSyncRealtimeConfigDTO()
+                : JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
+    }
+
+    private DataSyncRetryPolicyDTO retryPolicyConfig(String json) {
+        return StringUtils.isBlank(json)
+                ? new DataSyncRetryPolicyDTO()
+                : JSONUtils.parseObject(json, DataSyncRetryPolicyDTO.class);
     }
 
     private String runtimeConfigJson(DataSyncType syncType, DataSyncTaskDTO dto) {
@@ -1790,13 +1831,11 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncRuntimeConfigVO toRuntimeConfigVO(String json) {
-        DataSyncRuntimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRuntimeConfigDTO.class);
-        return BeanCopyUtils.copy(source, DataSyncRuntimeConfigVO.class);
+        return BeanCopyUtils.copy(runtimeConfig(json), DataSyncRuntimeConfigVO.class);
     }
 
     private DataSyncRealtimeConfigVO toRealtimeConfigVO(String json) {
-        DataSyncRealtimeConfigDTO source = JSONUtils.parseObject(json, DataSyncRealtimeConfigDTO.class);
-        return BeanCopyUtils.copy(source, DataSyncRealtimeConfigVO.class);
+        return BeanCopyUtils.copy(realtimeConfig(json), DataSyncRealtimeConfigVO.class);
     }
 
     private DataSyncMappingVO toMappingVO(String json) {
@@ -1811,10 +1850,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncRetryPolicyVO toRetryPolicyVO(String json) {
-        DataSyncRetryPolicyDTO source = StringUtils.isBlank(json)
-                ? new DataSyncRetryPolicyDTO()
-                : JSONUtils.parseObject(json, DataSyncRetryPolicyDTO.class);
-        return BeanCopyUtils.copy(source, DataSyncRetryPolicyVO.class);
+        return BeanCopyUtils.copy(retryPolicyConfig(json), DataSyncRetryPolicyVO.class);
     }
 
     private DataSyncAttemptVO toAttemptVO(DataSyncAttemptEntity source) {
