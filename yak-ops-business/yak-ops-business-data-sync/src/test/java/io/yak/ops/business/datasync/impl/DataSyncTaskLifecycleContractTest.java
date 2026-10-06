@@ -104,8 +104,9 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(500, created.getRealtimeConfig().getPollBatchSize());
         assertEquals(500, created.getRealtimeConfig().getWriteBatchSize());
         assertEquals(30, created.getRealtimeConfig().getTimeoutSeconds());
-        assertEquals(1, created.getRetryPolicy().getMaxAttempts());
-        assertEquals(60, created.getRetryPolicy().getBackoffSeconds());
+        assertEquals(DataSyncRetryPolicyMode.SMART, created.getRetryPolicy().getMode());
+        assertEquals(3, created.getRetryPolicy().getMaxAttempts());
+        assertEquals(15, created.getRetryPolicy().getBackoffSeconds());
     }
 
     @Test
