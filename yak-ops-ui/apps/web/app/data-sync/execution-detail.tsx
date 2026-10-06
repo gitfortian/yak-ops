@@ -143,6 +143,7 @@ export function DataSyncExecutionConfigContent({
   }
 
   const runtimeConfig = snapshot.runtimeConfig;
+  const offlineRuntimePlan = snapshot.offlineRuntimePlan;
   const realtimeConfig = snapshot.realtimeConfig;
   const retryPolicy = snapshot.retryPolicy;
   const sourceItems: ConfigurationItem[] = [
@@ -181,17 +182,34 @@ export function DataSyncExecutionConfigContent({
     sourceItems.push(
       ["Fetch Size", runtimeConfig?.fetchSize?.toLocaleString() || "-"],
       ["读取批次", runtimeConfig?.readBatchSize?.toLocaleString() || "-"],
-      ["Source 并行度", runtimeConfig?.sourceParallelism?.toLocaleString() || "-"],
+      ["读取并行度", runtimeConfig?.sourceParallelism?.toLocaleString() || "-"],
       [
-        "Split Size",
-        runtimeConfig?.splitSize == null ? "-" : runtimeConfig.splitSize.toLocaleString(),
+        "分片目标行数",
+        runtimeConfig?.splitSize == null ? "整表读取" : runtimeConfig.splitSize.toLocaleString(),
       ],
     );
+    if (offlineRuntimePlan?.sourceRowCount != null) {
+      sourceItems.push(["规划行数", offlineRuntimePlan.sourceRowCount.toLocaleString()]);
+    }
+    if (offlineRuntimePlan?.splitCount != null) {
+      sourceItems.push(["规划分片数", offlineRuntimePlan.splitCount.toLocaleString()]);
+    }
     targetItems.push(
       ["写入方式", writeModeText(snapshot.writeMode)],
       ["写入批次", runtimeConfig?.writeBatchSize?.toLocaleString() || "-"],
     );
-    executionItems.push(["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"]);
+    executionItems.push(
+      [
+        "运行策略",
+        runtimeConfig?.policy === "AUTO"
+          ? offlineRuntimePlan?.statisticsAvailable
+            ? "自动规划"
+            : "自动规划（安全回退）"
+          : "固定配置",
+      ],
+      ["估算行宽", offlineRuntimePlan?.estimatedRowBytes ? `${offlineRuntimePlan.estimatedRowBytes} B` : "-"],
+      ["超时", runtimeConfig ? `${runtimeConfig.timeoutSeconds}s` : "-"],
+    );
   }
 
   executionItems.push(
