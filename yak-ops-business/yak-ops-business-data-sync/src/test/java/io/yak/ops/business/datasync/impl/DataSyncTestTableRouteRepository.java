@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasync.impl;
 
 import io.yak.ops.dao.entity.datasync.DataSyncTableRouteEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncTableRouteRepository;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -21,8 +22,7 @@ final class DataSyncTestTableRouteRepository {
         return inject(service, null);
     }
 
-    static DataSyncTableRouteRepository inject(DataSyncServiceImpl service, io.yak.ops.dao.entity.datasync.DataSyncTaskEntity task)
-            throws Exception {
+    static DataSyncTableRouteRepository inject(DataSyncServiceImpl service, DataSyncTaskEntity task) throws Exception {
         DataSyncTableRouteRepository repository = create();
         if (task != null) {
             DataSyncTableRouteEntity route = new DataSyncTableRouteEntity();
