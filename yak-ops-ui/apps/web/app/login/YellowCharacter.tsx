@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { LoginSceneState } from "./login-interaction";
+import LoginSuccessPose from "./LoginSuccessPose";
 
 import { LOGIN_ENTRANCE_START, YELLOW_BODY_PATH, type YellowEntrancePose } from "./login-entrance";
 const FACE_CENTER = { x: 520, y: 388 };
@@ -112,7 +113,6 @@ function faceGeometry(pose: YellowFacePose, inputMix = 0) {
     transform: `translate(${offsetX.toFixed(3)} ${offsetY.toFixed(3)})`,
     eyeX: eyeX.toFixed(3),
     mouth: `M${mouthX - halfWidth} ${mouthY}H${mouthX + halfWidth}`,
-    success: `M${mouthX - 40} 407Q${mouthX} 425 ${mouthX + 40} 407`,
   };
 }
 
@@ -137,7 +137,6 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
     const faceRef = useRef<SVGGElement | null>(null);
     const eyeRef = useRef<SVGCircleElement | null>(null);
     const mouthRef = useRef<SVGPathElement | null>(null);
-    const successRef = useRef<SVGPathElement | null>(null);
     const failureMouthRef = useRef<SVGPathElement | null>(null);
     const poseRef = useRef<YellowFacePose>(REST_POSE);
     const reducedMotionRef = useRef<MediaQueryList | null>(null);
@@ -148,7 +147,6 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
       faceRef.current?.setAttribute("transform", geometry.transform);
       eyeRef.current?.setAttribute("cx", geometry.eyeX);
       mouthRef.current?.setAttribute("d", geometry.mouth);
-      successRef.current?.setAttribute("d", geometry.success);
     }, []);
 
     useImperativeHandle(
@@ -260,15 +258,6 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
                     strokeWidth="4"
                     strokeLinecap="round"
                   />
-                  <path
-                    ref={successRef}
-                    className="yak-login-character__mouth yak-login-character__mouth--success"
-                    d={REST_FACE.success}
-                    fill="none"
-                    stroke="#171717"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
                 </g>
               </g>
             </g>
@@ -288,6 +277,7 @@ export default forwardRef<YellowCharacterHandle, { sceneState: LoginSceneState }
           />
         </g>
         <g data-failure-bridge />
+        <LoginSuccessPose character="yellow" />
       </g>
     );
   },

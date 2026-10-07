@@ -2,6 +2,9 @@ import { useId, useLayoutEffect, useRef } from "react";
 
 import YellowCharacter, { type YellowCharacterHandle, type YellowPointer } from "./YellowCharacter";
 import "./login-characters.css";
+import LoginSuccessPose from "./LoginSuccessPose";
+import { ORANGE_HAPPY_MOUTH_PATH } from "./login-success-pose";
+import { createLoginSuccessTransition } from "./login-success-transition";
 import {
   resolveLoginSceneState,
   type LoginFocusState,
@@ -287,14 +290,6 @@ function PurpleCharacter() {
                           strokeWidth="5"
                           strokeLinecap="round"
                         />
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--success"
-                          d="M292 169Q304.5 187 317 169"
-                          fill="none"
-                          stroke="#171717"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
                       </g>
                     </g>
                   </g>
@@ -325,6 +320,7 @@ function PurpleCharacter() {
         </g>
       </g>
       <g data-failure-bridge />
+      <LoginSuccessPose character="purple" />
     </g>
   );
 }
@@ -357,14 +353,6 @@ function BlackCharacter() {
                             <CharacterPoseEyes character="black" pose="reveal" />
                           </g>
                         </g>
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--success"
-                          d="M391 309Q403.5 324 416 309"
-                          fill="none"
-                          stroke="#FFFFFF"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
                       </g>
                     </g>
                   </g>
@@ -379,6 +367,7 @@ function BlackCharacter() {
         <CharacterPoseEyes character="black" pose="failure" />
       </g>
       <g data-failure-bridge />
+      <LoginSuccessPose character="black" />
     </g>
   );
 }
@@ -432,7 +421,7 @@ function OrangeCharacter() {
                       <g className="yak-login-character--orange__mouth-pose">
                         <path
                           className="yak-login-character__mouth yak-login-character__mouth--default yak-login-character--orange__mouth yak-login-character--orange__mouth--happy"
-                          d="M213 475Q213 473 215 473H246Q248 473 248 475C246.8 483.5 240 488 230.5 488C221 488 214.2 483.5 213 475Z"
+                          d={ORANGE_HAPPY_MOUTH_PATH}
                           fill="#171717"
                         />
                         <circle
@@ -449,11 +438,6 @@ function OrangeCharacter() {
                           stroke="#171717"
                           strokeWidth="4"
                           strokeLinecap="round"
-                        />
-                        <path
-                          className="yak-login-character__mouth yak-login-character__mouth--success"
-                          d="M208 481Q208 479 210.5 479H250.5Q253 479 253 481C251 495 242.5 504 230.5 504C218.5 504 210 495 208 481Z"
-                          fill="#171717"
                         />
                       </g>
                     </g>
@@ -480,6 +464,7 @@ function OrangeCharacter() {
         </g>
       </g>
       <g data-failure-bridge />
+      <LoginSuccessPose character="orange" />
     </g>
   );
 }
@@ -503,6 +488,8 @@ export default function LoginCharacters({
   const recoveryStateRef = useRef(recoveryState);
   const transitionId = useId();
   const transitionRef = useRef<ReturnType<typeof createLoginFailureTransition> | null>(null);
+  const successTransitionRef = useRef<ReturnType<typeof createLoginSuccessTransition> | null>(null);
+  const successStartedAtRef = useRef<number | null>(null);
   const beforeStateRef = useRef<FailureSnapshot | null>(null);
   const syncSceneRef = useRef<(() => void) | null>(null);
   const entranceRef = useRef<{ startedAt: number | null; complete: boolean }>({
@@ -519,7 +506,10 @@ export default function LoginCharacters({
   // so this is the actual outgoing geometry (including a half blink), not the next state's rig.
   useLayoutEffect(
     () => () => {
-      beforeStateRef.current = transitionRef.current?.captureVisible() ?? null;
+      beforeStateRef.current =
+        successTransitionRef.current?.captureVisible() ??
+        transitionRef.current?.captureVisible() ??
+        null;
     },
     [sceneState],
   );
@@ -528,6 +518,8 @@ export default function LoginCharacters({
   useLayoutEffect(() => {
     sceneStateRef.current = sceneState;
     recoveryStateRef.current = recoveryState;
+    if (sceneState === "success") successStartedAtRef.current ??= performance.now();
+    else successStartedAtRef.current = null;
     // Field/visibility changes within failure must not restart this one-shot reaction.
     if (sceneState === "failure") {
       if (failureMotionRef.current.startedAt === null) {
@@ -681,6 +673,8 @@ export default function LoginCharacters({
 
     const transition = createLoginFailureTransition(scene, transitionId);
     transitionRef.current = transition;
+    const successTransition = createLoginSuccessTransition(scene, transitionId);
+    successTransitionRef.current = successTransition;
     let previousSceneState: LoginSceneState | undefined;
     let normalSceneState: LoginSceneState = "idle";
     const applySceneClass = (state: LoginSceneState, result: LoginSceneState) => {
@@ -706,10 +700,13 @@ export default function LoginCharacters({
       const canAnimate =
         !motionPreference.matches && !document.hidden && scene.getClientRects().length > 0;
       if (changed) {
-        const before = beforeStateRef.current ?? transition.captureVisible();
+        const before =
+          beforeStateRef.current ??
+          successTransition.captureVisible() ??
+          transition.captureVisible();
         beforeStateRef.current = null;
         if (next === "failure") {
-          // Entry shares the existing failure clock; it does not extend the form's feedback lock.
+          successTransition.settle(false);
           if (canAnimate)
             transition.begin(
               "enter",
@@ -719,19 +716,36 @@ export default function LoginCharacters({
           else transition.settle(true);
         } else if (next === "success") {
           transition.settle(false);
+          if (canAnimate)
+            successTransition.begin(
+              "enter",
+              before,
+              successStartedAtRef.current ?? performance.now(),
+            );
+          else successTransition.settle(true);
         } else if (next === "submitting") {
-          // A retry can interrupt recovery. Freeze that exact drawing, not a neutral rig.
-          if (transition.active() && canAnimate)
-            transition.begin("frozen", before, performance.now());
-          else transition.settle(false);
+          // A retry freezes whichever bridge is actually visible, not the hidden ordinary rig.
+          if (successTransition.visible() && canAnimate) {
+            successTransition.begin("frozen", before, performance.now());
+            transition.settle(false);
+          } else {
+            successTransition.settle(false);
+            if (transition.active() && canAnimate)
+              transition.begin("frozen", before, performance.now());
+            else transition.settle(false);
+          }
+        } else if (successTransition.visible()) {
+          // Authentication handoff can fail after success: recover visually without a new lock.
+          if (canAnimate) successTransition.begin("recover", before, performance.now());
+          else successTransition.settle(false);
         } else if (previousSceneState === "failure" || transition.active()) {
-          // Rebase only on a semantic target change, not on pointer events or field identity.
           if (canAnimate) transition.begin("recover", before, performance.now());
           else transition.settle(false);
         }
       }
       if (next !== "submitting")
-        normalSceneState = next === "failure" ? recoveryStateRef.current : next;
+        normalSceneState =
+          next === "failure" || next === "success" ? recoveryStateRef.current : next;
       applySceneClass(normalSceneState, next);
       previousSceneState = next;
     };
@@ -749,6 +763,7 @@ export default function LoginCharacters({
         clearPointerPosition();
         finishFailureMotion();
         transition.settle(sceneStateRef.current === "failure");
+        successTransition.settle(sceneStateRef.current === "success");
         if (!entranceRef.current.complete) finishEntrance();
       }
     };
@@ -775,12 +790,14 @@ export default function LoginCharacters({
       }
       const activeSceneState = sceneStateRef.current;
       if (!failureMotionRef.current.complete) refreshFailureMotion(now);
-      // Submitting holds the last visible pose. Failure prepares the *live* recovery rig
+      // Submitting holds the last visible pose. Results prepare the *live* recovery rig
       // behind the bridge, including the original springs/velocities; it never targets null
       // merely because an authentication result is covering the ordinary renderer.
       if (activeSceneState !== "submitting") {
         const motionSceneState =
-          activeSceneState === "failure" ? recoveryStateRef.current : activeSceneState;
+          activeSceneState === "failure" || activeSceneState === "success"
+            ? recoveryStateRef.current
+            : activeSceneState;
         // One clock blends mutually exclusive authored poses. Field-to-field focus is unchanged.
         const inputTarget = motionSceneState === "inputFocus" ? 1 : 0;
         const revealTarget = motionSceneState === "passwordVisible" ? 1 : 0;
@@ -868,6 +885,7 @@ export default function LoginCharacters({
         }
       }
       transition.paint(now);
+      successTransition.paint(now);
 
       frame = window.requestAnimationFrame(animate);
     };
@@ -875,6 +893,7 @@ export default function LoginCharacters({
     const handleMotionPreference = () => {
       if (motionPreference.matches) finishFailureMotion();
       transition.settle(sceneStateRef.current === "failure");
+      successTransition.settle(sceneStateRef.current === "success");
       window.cancelAnimationFrame(frame);
       frame = 0;
       previousFrameAt = performance.now();
@@ -919,6 +938,7 @@ export default function LoginCharacters({
       if (!scene.getClientRects().length) {
         finishFailureMotion();
         transition.settle(sceneStateRef.current === "failure");
+        successTransition.settle(sceneStateRef.current === "success");
       }
       if (!scene.getClientRects().length && !entranceRef.current.complete) {
         pointerPosition = null;
@@ -948,6 +968,8 @@ export default function LoginCharacters({
     return () => {
       disposed = true;
       transition.dispose();
+      successTransition.dispose();
+      successTransitionRef.current = null;
       transitionRef.current = null;
       syncSceneRef.current = null;
       // Clean the drawing without resetting the attempt during StrictMode effect replay.

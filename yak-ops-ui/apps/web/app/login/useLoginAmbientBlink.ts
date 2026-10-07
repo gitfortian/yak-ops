@@ -1,6 +1,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 import { LOGIN_FAILURE_TRANSITION_END } from "./login-failure-transition";
+import { LOGIN_SUCCESS_TRANSITION_END } from "./login-success-transition";
 import { LOGIN_ENTRANCE_COMPLETE_EVENT } from "./login-entrance";
 import type { LoginSceneState } from "./login-interaction";
 
@@ -71,6 +72,7 @@ export function useLoginAmbientBlink(
       scene.isConnected &&
       scene.dataset.entranceState !== "playing" &&
       (!scene.dataset.failurePhase || scene.dataset.failurePhase === "none") &&
+      (!scene.dataset.successPhase || scene.dataset.successPhase === "none") &&
       scene.dataset.sceneState === sceneState &&
       scene.getClientRects().length > 0;
 
@@ -167,6 +169,7 @@ export function useLoginAmbientBlink(
     });
     scene.addEventListener(LOGIN_ENTRANCE_COMPLETE_EVENT, reset);
     scene.addEventListener(LOGIN_FAILURE_TRANSITION_END, reset);
+    scene.addEventListener(LOGIN_SUCCESS_TRANSITION_END, reset);
     reset();
     observer.observe(scene);
     media.addEventListener("change", reset);
@@ -177,6 +180,7 @@ export function useLoginAmbientBlink(
       observer.disconnect();
       scene.removeEventListener(LOGIN_ENTRANCE_COMPLETE_EVENT, reset);
       scene.removeEventListener(LOGIN_FAILURE_TRANSITION_END, reset);
+      scene.removeEventListener(LOGIN_SUCCESS_TRANSITION_END, reset);
       media.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", reset);
     };
