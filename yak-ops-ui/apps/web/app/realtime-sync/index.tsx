@@ -356,9 +356,7 @@ export function RealtimeSyncPage() {
           runtimeClassName = "text-[#d92d20]";
         } else if (record.desiredState === "RUNNING") {
           runtimeLabel = "重新启动";
-          runtimeClassName = published
-            ? "text-[var(--yak-color-primary)]"
-            : "text-[#667085]";
+          runtimeClassName = published ? "text-[var(--yak-color-primary)]" : "text-[#667085]";
         } else if (published) {
           runtimeClassName = "text-[var(--yak-color-primary)]";
         }
