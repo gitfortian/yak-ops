@@ -172,9 +172,9 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime 与 Schema Preview UI；尚未提供 Logical Table persistence、Catalog refresh / diff、DDL Sync / Automatic Schema Evolution、Transform、多表任务、分布式 Worker / HA / fencing 或 exactly-once。
+当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime、Schema Preview UI、任务级 Column Mapping、OFFLINE AUTO Runtime Planning、SMART Retry 与 Durable RETRY_WAITING Recovery。普通 Task Editor 不暴露底层 Runtime / Retry tuning；系统负责物化默认 Policy，Execution Detail 展示冻结后的 Effective Config / Retry Policy 事实。
 
-发布、Retry、Schedule 和启动自动恢复是已有能力，不再列为“后续阶段”。通用 YakFlow checkpoint 跨进程恢复和常驻恢复 watchdog 仍不具备。
+发布、Schedule、启动自动恢复以及列表级 OFFLINE 运行、REALTIME 启动 / 停止 / 重新启动都是已有能力，不再列为“后续阶段”。v1.2 明确不提供 Logical Table persistence、Catalog refresh / diff、DDL Sync / Automatic Schema Evolution、Transform、多表任务、用户可配置 Runtime / Retry tuning、Continuous Realtime Reconciliation、通用 YakFlow checkpoint 跨进程恢复、分布式 Worker / HA / fencing 或 exactly-once。
 
 ## Code and Verification
 

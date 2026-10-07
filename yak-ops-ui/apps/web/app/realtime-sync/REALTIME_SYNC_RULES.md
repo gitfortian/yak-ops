@@ -16,12 +16,8 @@ Must:
 - Target Datasource may be MySQL / PostgreSQL / Oracle.
 - Reuse the shared Data Sync Task Editor for Catalog and field mapping.
 - Treat backend validation as the source of truth for exact Source/Target primary-key correspondence; do not reimplement the PK contract in frontend state.
-- Configure only:
-  - `checkpointIntervalSeconds`
-  - `queueCapacity`
-  - `pollBatchSize`
-  - `writeBatchSize`
-  - `timeoutSeconds`
+- Do not expose REALTIME engine tuning or Retry Policy in Task Editor. Ordinary save requests omit `realtimeConfig` / `retryPolicy`; backend-owned defaults and SMART Retry are product policy, while persisted Task / Execution snapshots remain observable facts.
+- Historical or explicit REALTIME configs remain executable and may be displayed read-only in detail surfaces; hiding tuning from the editor must not overwrite existing values with current defaults.
 - Explain that first start performs the initial snapshot and then continuously consumes MySQL Binlog.
 - When editing an existing UNPUBLISHED REALTIME Task, show a Yak UI `Alert` that executable-definition changes create a new Task version and that version's first start performs a fresh initial snapshot; metadata-only name/remark changes do not increment the version.
 - In the REALTIME source section, show a Yak UI `Alert` that ROW Binlog and CDC account permissions are required; ordinary Datasource connection-test success does not prove CDC readiness.
@@ -56,5 +52,5 @@ Must Not:
 
 - Show or edit state directories, Debezium offsets, schema history or serverId.
 - Invent or estimate checkpoint time when the backend does not persist it.
-- Add scheduler, retry policy, Transform, DDL sync or multi-table configuration.
+- Add scheduler controls, user-configurable runtime / retry tuning, Transform, DDL sync or multi-table configuration.
 - Copy the Offline Instance implementation; OFFLINE and REALTIME wrappers must reuse the shared Data Sync runtime component.

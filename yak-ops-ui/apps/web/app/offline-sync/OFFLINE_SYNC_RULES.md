@@ -5,7 +5,7 @@ Scope:
 - `yak-ops-ui/apps/web/app/offline-sync/**`
 - OFFLINE mode of `yak-ops-ui/apps/web/app/data-sync/task-editor.tsx`
 
-## Phase 4 Boundary
+## Current Boundary
 
 The offline product owns Task definition, publication configuration, Schedule definition, Schedule enable / disable on the Task list, a manual Run shortcut, and Task-scoped read-only runtime detail. Operations Center remains the cross-Task observability surface; Execution Stop is not moved into Offline Sync definition pages.
 
@@ -20,11 +20,11 @@ Must:
 - Show the bound database / schema as read-only scope context under the Datasource Select.
 - Show a Schema Select only when the Datasource itself does not bind a default Schema and Catalog exposes Schemas.
 - Display backend mapping / Schema Preview as the source of truth.
-- Keep mapping read-only and same-name in this phase; frontend must not reimplement JDBC type mapping or compatibility.
+- Column Mapping Editor is the editable mapping surface: it supports implicit same-name mapping, same-order mapping, explicit field subset / reorder / rename, single-link editing, clear-as-intermediate-state and field search. Existing targets select real Catalog fields; Auto Create with a missing target may define target field names. Frontend must not reimplement JDBC type compatibility or primary-key validation.
 - Expose `autoCreateTable` as an explicit Task-definition Switch under `数据去向`; default false and preserve the persisted value when editing.
 - The target table stays one field labeled `目标表`: Auto Create disabled renders the Catalog Select only; Auto Create enabled replaces that Select with a controlled Input for the target table name. Never render Select and Input at the same time.
 - Switching Auto Create from disabled to enabled preserves the currently selected target table name in the Input. Switching back keeps the name only when that exact table exists in the current Catalog scope; otherwise clear it so the user must choose an existing table.
-- Schema Preview must distinguish target exists / missing + disabled / missing + auto-create, and render backend `warnings`, `unsupportedReasons` and read-only `createTableSql` when provided.
+- Schema Preview must distinguish target exists / missing + disabled / missing + auto-create and consume backend `warnings` / `unsupportedReasons`. Auto Create DDL is auxiliary target-table information: expose the backend `ddlStatements` through the target-table DDL action / Popover, with `createTableSql` only as legacy-response fallback; do not keep a duplicate inline DDL surface in the normal form.
 - Warnings are non-blocking; backend `compatible=false` or any blocking unsupported result disables Save / Save & Publish through the same preview compatibility boundary.
 - Save does not execute DDL and Runtime re-checks the target before CREATE; existing targets are never ALTERed / DROPed by this feature. This is implementation behavior and must not be rendered as persistent helper copy in the normal form.
 - Disable save while the current mapping / Schema Preview is incompatible.
