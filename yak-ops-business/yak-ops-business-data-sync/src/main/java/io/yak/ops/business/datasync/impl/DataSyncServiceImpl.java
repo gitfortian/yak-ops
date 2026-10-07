@@ -1986,8 +1986,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (tableRouteRepository == null) {
             return List.of(toCompatibilityTableRouteVO(task));
         }
-        List<DataSyncTableRouteEntity> routes =
-                tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
+        List<DataSyncTableRouteEntity> routes = tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
         return routes.stream().map(this::toTableRouteVO).toList();
     }
 
