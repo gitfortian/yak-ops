@@ -375,14 +375,15 @@ target exists?
 - 自动创建新表时保留 LogicalTable / LogicalColumn comment；只对本次新建表执行受控 Comment DDL，不对已存在目标表做 COMMENT / ALTER 同步。
 - 仍不提供 INDEX、FOREIGN KEY、ALTER、DROP、DDL Sync 或 Automatic Schema Evolution。
 
-Task persistence 使用 v1.2 Draft Migration：
+Task persistence 已在 v1.2 Release Freeze 收口到唯一 Release Migration：
 
 ~~~text
-V3__data_sync_auto_create_table.sql
-V4__data_sync_column_mapping.sql
+V3__v1_2_0.sql
 ~~~
 
-V3 增加 `yak_ops_data_sync_task.auto_create_table`，默认 0；V4 增加可空 `mapping_config`，NULL 保持旧任务的隐式同名映射语义。两者都属于未发布 v1.2 开发历史，Release Freeze 时按 Flyway Rules 与同版本其它 Draft 一起收口，不得修改已经发布的 V1 / V2。
+该 Migration 按原 Draft 顺序依次增加 `yak_ops_data_sync_task.auto_create_table` 与可空 `mapping_config`。前者默认 0；后者 NULL 保持旧任务的隐式同名映射语义。原 `V3__data_sync_auto_create_table.sql` / `V4__data_sync_column_mapping.sql` 仅属于未发布、可重建的开发历史，已从 Release 候选链删除。
+
+`V3__v1_2_0.sql` 当前已进入 v1.2 Migration Freeze，但尚未正式发布；发现 Release Blocker 需要修改时必须重新打开 Migration Freeze 并重新 Review。V1 / V2 继续保持永久冻结。
 
 ## 10.1 Mapping-Aware Schema Projection
 
