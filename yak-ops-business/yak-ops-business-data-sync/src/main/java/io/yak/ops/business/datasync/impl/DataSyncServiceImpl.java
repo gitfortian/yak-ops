@@ -1214,10 +1214,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (routes.isEmpty()) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步任务缺少 Table Route");
         }
-        routes.sort(Comparator.comparing(
-                        DataSyncTableRouteEntity::getSortOrder,
-                        Comparator.nullsLast(Integer::compareTo))
-                .thenComparing(DataSyncTableRouteEntity::getId, Comparator.nullsLast(String::compareTo)));
+        routes.sort(
+                Comparator.comparing(DataSyncTableRouteEntity::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(DataSyncTableRouteEntity::getId, Comparator.nullsLast(String::compareTo)));
         for (int index = 0; index < routes.size(); index++) {
             DataSyncTableRouteEntity route = routes.get(index);
             if (!Objects.equals(route.getWorkspaceId(), task.getWorkspaceId())
@@ -1626,8 +1625,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 : null;
 
         List<DataSyncTableRouteSnapshotVO> routeSnapshots = routes.stream()
-                .map(route -> tableRouteSnapshot(
-                        task, route, source, target, taskRuntimeConfig, sourceConnection))
+                .map(route -> tableRouteSnapshot(task, route, source, target, taskRuntimeConfig, sourceConnection))
                 .toList();
         DataSyncTableRouteSnapshotVO compatibilityRoute = routeSnapshots.get(0);
 
@@ -1662,10 +1660,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             DataSourceVO target,
             DataSyncRuntimeConfigVO taskRuntimeConfig,
             DataSourceConnection sourceConnection) {
-        DataSyncEndpointSnapshotVO sourceEndpoint = endpointSnapshot(
-                source, route.getSourceDatabase(), route.getSourceSchema(), route.getSourceTable());
-        DataSyncEndpointSnapshotVO targetEndpoint = endpointSnapshot(
-                target, route.getTargetDatabase(), route.getTargetSchema(), route.getTargetTable());
+        DataSyncEndpointSnapshotVO sourceEndpoint =
+                endpointSnapshot(source, route.getSourceDatabase(), route.getSourceSchema(), route.getSourceTable());
+        DataSyncEndpointSnapshotVO targetEndpoint =
+                endpointSnapshot(target, route.getTargetDatabase(), route.getTargetSchema(), route.getTargetTable());
 
         DataSyncTableRouteSnapshotVO snapshot = new DataSyncTableRouteSnapshotVO();
         snapshot.setRouteId(route.getId());
