@@ -30,7 +30,7 @@ Scope:
 当前候选版本：
 
 ```text
-1.2.0 — Development / Scope Frozen / Migration Frozen / Awaiting Manual E2E
+1.2.0 — Ready / Awaiting Version Finalization
 ```
 
 v1.2.0 候选材料：
