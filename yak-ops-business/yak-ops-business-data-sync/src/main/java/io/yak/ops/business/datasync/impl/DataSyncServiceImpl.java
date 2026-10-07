@@ -1803,8 +1803,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private void synchronizeCompatibilityTableRoute(DataSyncTaskEntity task, String operatorUserId) {
-        List<DataSyncTableRouteEntity> routes =
-                tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
+        List<DataSyncTableRouteEntity> routes = tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
         if (routes.size() > 1) {
             throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "多表任务暂不支持通过单表兼容接口编辑");
         }
@@ -1993,8 +1992,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncTableRouteVO toTableRouteVO(DataSyncTableRouteEntity source) {
-        DataSyncTableRouteVO target =
-                BeanCopyUtils.copy(source, DataSyncTableRouteVO.class, "mappingConfig");
+        DataSyncTableRouteVO target = BeanCopyUtils.copy(source, DataSyncTableRouteVO.class, "mappingConfig");
         target.setAutoCreateTable(Boolean.TRUE.equals(source.getAutoCreateTable()));
         target.setMapping(toMappingVO(source.getMappingConfig()));
         return target;
