@@ -114,6 +114,8 @@ Target：PostgreSQL / e2e_durable_retry_target
 ```js
 const taskId = "替换为当前 Task ID";
 const workspaceId = localStorage.getItem("yak-ops.current-workspace-id");
+if (!workspaceId) throw new Error("当前 Workspace 未加载，请先在 Yak Ops 中选择 Workspace");
+
 const headers = {
   "Content-Type": "application/json",
   "X-Workspace-Id": workspaceId,
