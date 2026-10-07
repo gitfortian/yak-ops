@@ -1,0 +1,83 @@
+name: Login Success Workbench
+on:
+  push:
+    branches: [codex/login-success-authored-pose-historical-alignment]
+    paths:
+      - .github/workflows/login-success-workbench.yml
+      - .github/login-success.patch
+permissions:
+  contents: read
+concurrency:
+  group: login-success-workbench
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'weifuwan/yak-ops' && github.ref == 'refs/heads/codex/login-success-authored-pose-historical-alignment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/login-success-authored-pose-historical-alignment
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: yak-ops-ui/package-lock.json
+      - run: npm ci
+        working-directory: yak-ops-ui
+      - name: Apply reviewed implementation patch
+        if: hashFiles('.github/login-success.patch') != ''
+        run: git apply --check .github/login-success.patch && git apply .github/login-success.patch
+      - name: Format touched source
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: |
+          git diff --name-only -- '*.ts' '*.tsx' '*.css' '*.mjs' '*.md' | sed 's|^yak-ops-ui/||' | while IFS= read -r path; do
+            test ! -f "$path" || npx --no-install oxfmt "$path"
+          done
+      - name: Format check
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: npm run format:check
+      - name: Lint
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: npm run lint
+      - name: Types
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: npm run typecheck
+      - name: Architecture
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: npm run architecture:check
+      - name: Geometry regression
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: node scripts/verify-login-failure-transition.mjs && node scripts/verify-login-success-transition.mjs
+      - name: Production build
+        if: hashFiles('.github/login-success.patch') != ''
+        working-directory: yak-ops-ui
+        run: npm run build
+      - name: Package verification workspace
+        if: always()
+        run: tar -czf /tmp/yak-login-workspace.tgz yak-ops-ui docs/engineering-context-model.md .github/workflows/quality-check.yml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: yak-login-workspace
+          path: /tmp/yak-login-workspace.tgz
+          retention-days: 3
+      - name: Publish verified implementation on the isolated branch
+        if: success() && hashFiles('.github/login-success.patch') != ''
+        run: |
+          test "$(git branch --show-current)" = codex/login-success-authored-pose-historical-alignment
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/login-success.patch .github/workflows/login-success-workbench.yml
+          git add yak-ops-ui
+          git commit -m 'feat(ui): align authored login success poses with historical expressions'
+          git push origin HEAD:codex/login-success-authored-pose-historical-alignment
