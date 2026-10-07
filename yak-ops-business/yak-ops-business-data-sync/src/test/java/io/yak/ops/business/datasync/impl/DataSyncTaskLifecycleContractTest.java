@@ -140,7 +140,7 @@ class DataSyncTaskLifecycleContractTest {
         DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableRouteRepository.inject(service, task);
         DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
