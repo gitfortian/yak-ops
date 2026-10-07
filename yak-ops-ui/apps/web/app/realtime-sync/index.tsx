@@ -23,10 +23,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import { getUsersByIds, type UserRecord } from "@/service/user";
 import {
+  cancelDataSyncInstance,
   deleteDataSyncTask,
   listDataSyncTasks,
   publishDataSyncTask,
+  runDataSyncTask,
   unpublishDataSyncTask,
+  type DataSyncInstanceRecord,
   type DataSyncTaskRecord,
   type DataSyncTaskStatus,
 } from "@/service/data-sync";
@@ -36,6 +39,7 @@ import {
   DATA_SYNC_TASK_STATUS_ITEMS,
   DataSyncTaskLifecycleActions,
   DataSyncTaskStatusBadge,
+  isPublishedTask,
   useActiveTaskInstances,
 } from "@/app/data-sync/task-lifecycle";
 
@@ -209,6 +213,34 @@ export function RealtimeSyncPage() {
     return user?.realName || user?.userName || "未知用户";
   };
 
+  const startTask = async (record: DataSyncTaskRecord) => {
+    if (actionKey) return;
+    const restarting = record.desiredState === "RUNNING";
+    setActionKey(`${record.id}:start`);
+    try {
+      await runDataSyncTask(record.id);
+      toast.success(restarting ? "实时同步任务已重新启动" : "实时同步任务已启动");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
+    }
+  };
+
+  const stopTask = async (
+    record: DataSyncTaskRecord,
+    activeInstance: DataSyncInstanceRecord,
+  ) => {
+    if (actionKey) return;
+    setActionKey(`${record.id}:stop`);
+    try {
+      await cancelDataSyncInstance(activeInstance.id);
+      toast.success("实时同步任务已停止");
+      await Promise.all([loadTasks(), refreshActiveInstances()]);
+    } finally {
+      setActionKey(undefined);
+    }
+  };
+
   const publishTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
     setActionKey(`${record.id}:publish`);
@@ -311,21 +343,47 @@ export function RealtimeSyncPage() {
     {
       key: "actions",
       title: "操作",
-      width: 260,
+      width: 320,
       fixed: "right",
       align: "center",
-      render: (_value, record) => (
-        <DataSyncTaskLifecycleActions
-          record={record}
-          activeInstance={activeByTask.get(record.id)}
-          actionKey={actionKey}
-          onPublish={(value) => void publishTask(value)}
-          onUnpublish={(value) => void unpublishTask(value)}
-          onEdit={(value) => navigate(`/realtime-sync/${value.id}`)}
-          onDetail={(value) => navigate(`/realtime-sync/${value.id}/detail`)}
-          onDelete={setPendingDelete}
-        />
-      ),
+      render: (_value, record) => {
+        const activeInstance = activeByTask.get(record.id);
+        const published = isPublishedTask(record);
+        const stopping = Boolean(activeInstance);
+        const runtimeLoading = actionKey === `${record.id}:${stopping ? "stop" : "start"}`;
+        const runtimeLabel = stopping
+          ? "停止"
+          : record.desiredState === "RUNNING"
+            ? "重新启动"
+            : "启动";
+
+        return (
+          <DataSyncTaskLifecycleActions
+            record={record}
+            activeInstance={activeInstance}
+            actionKey={actionKey}
+            runtimeAction={{
+              label: runtimeLabel,
+              loading: runtimeLoading,
+              disabled: stopping ? false : !published,
+              className: stopping
+                ? "text-[#d92d20]"
+                : published
+                  ? "text-[var(--yak-color-primary)]"
+                  : "text-[#667085]",
+              onClick: () => {
+                if (activeInstance) void stopTask(record, activeInstance);
+                else void startTask(record);
+              },
+            }}
+            onPublish={(value) => void publishTask(value)}
+            onUnpublish={(value) => void unpublishTask(value)}
+            onEdit={(value) => navigate(`/realtime-sync/${value.id}`)}
+            onDetail={(value) => navigate(`/realtime-sync/${value.id}/detail`)}
+            onDelete={setPendingDelete}
+          />
+        );
+      },
     },
   ];
 
