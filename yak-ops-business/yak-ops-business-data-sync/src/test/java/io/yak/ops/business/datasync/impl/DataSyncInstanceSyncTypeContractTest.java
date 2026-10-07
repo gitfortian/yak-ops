@@ -40,6 +40,7 @@ class DataSyncInstanceSyncTypeContractTest {
     void shouldPersistRealtimeSyncTypeWhenCreatingInstance() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(task()));
         inject(service, "instanceRepository", instanceRepository(captured));
@@ -61,6 +62,7 @@ class DataSyncInstanceSyncTypeContractTest {
     void shouldRejectRealtimeRunWhenTargetPrimaryKeyDoesNotMatchSource() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(task()));
         inject(service, "instanceRepository", instanceRepository(captured));
