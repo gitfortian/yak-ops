@@ -56,7 +56,7 @@ bash scripts/release/check-release-metadata.sh v1.1.0
 检查 Release Migration：
 
 ```bash
-bash scripts/release/check-release-migration.sh 1.1.0
+bash scripts/release/check-release-migration.sh 1.2.0
 ```
 
 脚本会机械验证：
