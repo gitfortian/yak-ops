@@ -177,6 +177,8 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(3, updated.getDefinitionVersion());
         assertEquals("renamed-task", captured.get().getName());
         assertEquals("metadata-only", captured.get().getRemark());
+        assertEquals(1, updated.getTableRoutes().size());
+        assertEquals("task-1", updated.getTableRoutes().get(0).getId());
     }
 
     @Test
@@ -323,7 +325,7 @@ class DataSyncTaskLifecycleContractTest {
     private DataSyncServiceImpl editableService(
             DataSyncTaskEntity task, AtomicReference<DataSyncTaskEntity> captured) throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableRouteRepository.inject(service, task);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
         return service;
