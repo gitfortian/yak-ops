@@ -42,6 +42,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldCreateTaskAsUnpublishedVersionOne() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -52,6 +53,11 @@ class DataSyncTaskLifecycleContractTest {
         assertEquals(DataSyncTaskStatus.UNPUBLISHED.name(), created.getStatus());
         assertEquals(1, created.getDefinitionVersion());
         assertEquals(DataSyncTaskStatus.UNPUBLISHED, captured.get().getStatus());
+        assertNotNull(created.getTableRoutes());
+        assertEquals(1, created.getTableRoutes().size());
+        assertNotNull(created.getTableRoutes().get(0).getId());
+        assertEquals("source_table", created.getTableRoutes().get(0).getSourceTable());
+        assertEquals("target_table", created.getTableRoutes().get(0).getTargetTable());
         assertEquals(500, created.getRuntimeConfig().getFetchSize());
         assertEquals(500, created.getRuntimeConfig().getReadBatchSize());
         assertEquals(500, created.getRuntimeConfig().getWriteBatchSize());
@@ -66,6 +72,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldTreatExplicitOfflineRuntimeConfigWithoutPolicyAsFixed() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -85,6 +92,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldCreateRealtimeTaskWithSystemRuntimeAndRetryDefaultsWhenOmitted() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSourceService dataSourceService = dataSourceService();
         SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
@@ -112,6 +120,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldRejectRunForUnpublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.UNPUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -126,6 +135,7 @@ class DataSyncTaskLifecycleContractTest {
         DataSyncTaskEntity task = task(DataSyncTaskStatus.UNPUBLISHED, 3);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
 
@@ -140,6 +150,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldRejectUnpublishWhileInstanceIsActive() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 2), new AtomicReference<>()));
         inject(service, "instanceRepository", instanceRepository(true));
 
@@ -213,6 +224,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldTreatExplicitRetryPolicyWithoutModeAsFixed() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -269,6 +281,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldRejectUpdateForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -281,6 +294,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldRejectSyncTypeMutation() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.UNPUBLISHED, 1), new AtomicReference<>()));
         DataSyncTaskDTO dto = taskDto();
         dto.setSyncType(DataSyncType.REALTIME);
@@ -295,6 +309,7 @@ class DataSyncTaskLifecycleContractTest {
     @Test
     void shouldRejectDeleteForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -307,6 +322,7 @@ class DataSyncTaskLifecycleContractTest {
     private DataSyncServiceImpl editableService(
             DataSyncTaskEntity task, AtomicReference<DataSyncTaskEntity> captured) throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
         return service;
