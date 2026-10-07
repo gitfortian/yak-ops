@@ -147,13 +147,14 @@ class DataSyncScheduleContractTest {
     @Test
     void shouldCreateScheduleTriggeredInstanceAndSubmitOfflineExecution() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.PUBLISHED);
+        DataSyncTestTableRouteRepository.inject(service, task);
         DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger instanceAdds = new AtomicInteger();
         AtomicReference<DataSyncInstanceEntity> capturedInstance = new AtomicReference<>();
         AtomicReference<String> submittedInstanceId = new AtomicReference<>();
 
-        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(service, "taskRepository", taskRepository(task));
         inject(service, "scheduleRepository", scheduleRepository(schedule(true), new AtomicReference<>(), new AtomicReference<>()));
         inject(service, "instanceRepository", instanceRepository(false, instanceAdds, capturedInstance));
         inject(service, "dataSourceService", dataSourceService());
@@ -177,11 +178,12 @@ class DataSyncScheduleContractTest {
     @Test
     void shouldClearWorkspaceContextWhenScheduledFireFails() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.PUBLISHED);
+        DataSyncTestTableRouteRepository.inject(service, task);
         DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger instanceAdds = new AtomicInteger();
 
-        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(service, "taskRepository", taskRepository(task));
         inject(
                 service,
                 "scheduleRepository",
