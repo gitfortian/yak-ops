@@ -25,6 +25,7 @@ MySqlCdcIntegrationIT
 
 说明：
 
-- 本 PR 只定义步骤，不记录 PASS。
-- 是否纳入 v1.2 Required Manual E2E，由 Release Readiness 建立时正式决定。
+- 本目录只定义可重复步骤，不记录 PASS。
+- v1.2 Scope Freeze 已将 MAPPING-001 / MAPPING-002 纳入 Required Manual E2E；正式执行结果由后续 v1.2 Release Readiness / Evidence 记录。
+- Release Readiness 执行时，MAPPING-001 额外确认 DDL / Comment 与 AUTO Runtime 的用户可见结果；MAPPING-002 额外确认列表启动 / 停止 / 重新启动路径。
 - 不声明 exactly-once。
