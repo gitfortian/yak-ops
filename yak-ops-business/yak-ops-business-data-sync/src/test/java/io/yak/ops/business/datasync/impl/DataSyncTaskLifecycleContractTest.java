@@ -44,6 +44,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldCreateTaskAsUnpublishedVersionOne() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -74,6 +75,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldTreatExplicitOfflineRuntimeConfigWithoutPolicyAsFixed() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -94,6 +96,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldCreateRealtimeTaskWithSystemRuntimeAndRetryDefaultsWhenOmitted() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSourceService dataSourceService = dataSourceService();
         SourceTableIntrospector sourceTableIntrospector = new SourceTableIntrospector();
@@ -122,6 +125,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldRejectRunForUnpublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.UNPUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -137,6 +141,7 @@ class DataSyncTaskLifecycleContractTest {
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
 
@@ -152,6 +157,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldRejectUnpublishWhileInstanceIsActive() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 2), new AtomicReference<>()));
         inject(service, "instanceRepository", instanceRepository(true));
 
@@ -228,6 +234,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldTreatExplicitRetryPolicyWithoutModeAsFixed() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncTaskEntity> captured = new AtomicReference<>();
         inject(service, "taskRepository", taskRepository(null, captured));
         inject(service, "dataSourceService", dataSourceService());
@@ -285,6 +292,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldRejectUpdateForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -298,6 +306,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldRejectSyncTypeMutation() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.UNPUBLISHED, 1), new AtomicReference<>()));
         DataSyncTaskDTO dto = taskDto();
         dto.setSyncType(DataSyncType.REALTIME);
@@ -313,6 +322,7 @@ class DataSyncTaskLifecycleContractTest {
     void shouldRejectDeleteForPublishedTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED, 1), new AtomicReference<>()));
 
         WorkspaceContext.bind("workspace-1");
@@ -326,6 +336,7 @@ class DataSyncTaskLifecycleContractTest {
             DataSyncTaskEntity task, AtomicReference<DataSyncTaskEntity> captured) throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service, task);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task, captured));
         inject(service, "dataSourceService", dataSourceService());
         return service;
