@@ -24,8 +24,7 @@ CREATE TABLE yak_ops_data_sync_table_route (
     create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
     update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_ops_data_sync_table_route_task_order (workspace_id, task_id, sort_order),
-    KEY idx_ops_data_sync_table_route_workspace_task (workspace_id, task_id)
+    UNIQUE KEY uk_ops_data_sync_table_route_task_order (workspace_id, task_id, sort_order)
 ) ENGINE=InnoDB
   DEFAULT CHARACTER SET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
