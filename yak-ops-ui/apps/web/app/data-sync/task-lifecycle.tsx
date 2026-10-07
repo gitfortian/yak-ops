@@ -130,28 +130,6 @@ export function DataSyncTaskLifecycleActions({
   const published = isPublishedTask(record);
   const lifecycleAction = published ? "unpublish" : "publish";
   const actions: LifecycleAction[] = [
-    ...(runtimeAction
-      ? [
-          {
-            key: "runtime",
-            ...runtimeAction,
-          },
-        ]
-      : onRun
-        ? [
-            {
-              key: "run",
-              label: "运行",
-              className:
-                published && !activeInstance
-                  ? "text-[var(--yak-color-primary)]"
-                  : "text-[#667085]",
-              disabled: !published || Boolean(activeInstance),
-              loading: actionKey === `${record.id}:run`,
-              onClick: () => onRun(record),
-            },
-          ]
-        : []),
     {
       key: "lifecycle",
       label: published ? "下线" : "上线",
@@ -183,6 +161,23 @@ export function DataSyncTaskLifecycleActions({
       onClick: () => onDelete(record),
     },
   ];
+
+  if (runtimeAction) {
+    actions.unshift({
+      key: "runtime",
+      ...runtimeAction,
+    });
+  } else if (onRun) {
+    actions.unshift({
+      key: "run",
+      label: "运行",
+      className:
+        published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[#667085]",
+      disabled: !published || Boolean(activeInstance),
+      loading: actionKey === `${record.id}:run`,
+      onClick: () => onRun(record),
+    });
+  }
 
   return (
     <div className="flex items-center justify-center gap-0">
