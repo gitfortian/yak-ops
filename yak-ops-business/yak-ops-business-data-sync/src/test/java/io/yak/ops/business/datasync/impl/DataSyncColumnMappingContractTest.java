@@ -137,6 +137,7 @@ class DataSyncColumnMappingContractTest {
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(existing, captured));
         inject(service, "dataSourceService", dataSourceService);
         return service;
