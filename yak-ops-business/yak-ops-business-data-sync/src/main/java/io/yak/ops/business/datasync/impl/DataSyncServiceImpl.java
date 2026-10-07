@@ -519,14 +519,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务尚未上线");
-        DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+        List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
         if (task.getSyncType() == DataSyncType.REALTIME) {
             updateDesiredState(workspaceId, task, DataSyncDesiredState.RUNNING);
         }
-        return createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.MANUAL);
+        return createInstance(workspaceId, task, routes, DataSyncTriggerType.MANUAL);
     }
 
     @Override
@@ -678,9 +678,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                     continue;
                 }
 
-                DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+                List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
                 DataSyncInstanceVO recovered =
-                        createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.AUTO_RECOVERY);
+                        createInstance(workspaceId, task, routes, DataSyncTriggerType.AUTO_RECOVERY);
                 LOG.info(
                         "实时同步自动恢复已创建新Execution，workspaceId={}, taskId={}, taskVersion={}, instanceId={}",
                         workspaceId,
@@ -742,9 +742,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 return;
             }
 
-            DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+            List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
             DataSyncInstanceVO instance =
-                    createInstance(fire.workspaceId(), task, resolvedScope, DataSyncTriggerType.SCHEDULE);
+                    createInstance(fire.workspaceId(), task, routes, DataSyncTriggerType.SCHEDULE);
             LOG.info(
                     "离线调度已创建同步实例，workspaceId={}, taskId={}, scheduleId={}, instanceId={}",
                     fire.workspaceId(),
@@ -1025,9 +1025,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncInstanceVO createInstance(
             String workspaceId,
             DataSyncTaskEntity task,
-            DataSyncMappingPreviewDTO resolvedScope,
+            List<DataSyncTableRouteEntity> routes,
             DataSyncTriggerType triggerType) {
-        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, resolvedScope);
+        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, routes);
         DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
         instance.setWorkspaceId(workspaceId);
         instance.setTaskId(task.getId());
@@ -1047,6 +1047,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (instanceRepository.add(instance) == null) {
             throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
         }
+        createTableExecutions(workspaceId, instance.getId(), snapshot.getTableRoutes());
         if (triggerType == DataSyncTriggerType.AUTO_RECOVERY) {
             attemptLifecycle.recordAutoRecoveryStarted(workspaceId, instance.getId());
         }
