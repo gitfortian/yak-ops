@@ -136,16 +136,17 @@ v1.1 Release 前新增两条必选场景：
 
 Retry / Backoff、`SKIP_IF_RUNNING` 等难以通过稳定人工故障注入复现的状态机规则，以 `DataSyncAutomationAcceptanceIT` 作为 Release 硬证据；手工 E2E 不为覆盖状态矩阵而人为制造不稳定环境。
 
-## v1.2 Column Mapping 手工 E2E
+## v1.2 Required Manual E2E
 
-PR4 已定义两条可重复执行的 Mapping 产品验收步骤，但当前只表示“已定义”，不表示已人工执行，也不自动成为 v1.2 Required Manual E2E。
+v1.2 Scope Freeze 已冻结最小新增人工验收集合。当前只表示“Required Set 已定义”，不表示已经执行或 PASS；正式结果进入后续 v1.2 Release Readiness / Evidence。
 
 | ID | 场景 | 目的 |
 | --- | --- | --- |
-| MAPPING-001 | [离线 MySQL → PostgreSQL 字段映射](mapping/01-offline-mysql-to-postgresql.md) | 验证字段子集、重排、改名、自动建表与最终数据。 |
-| MAPPING-002 | [实时 MySQL CDC → PostgreSQL 主键改名](mapping/02-realtime-mysql-cdc-to-postgresql.md) | 验证 PK 改名后 Snapshot、INSERT、UPDATE、DELETE。 |
+| MAPPING-001 | [离线 MySQL → PostgreSQL 字段映射](mapping/01-offline-mysql-to-postgresql.md) | 验证字段子集、重排、改名、自动建表与最终数据；Release Readiness 执行时同时确认 DDL / Comment 与 AUTO Runtime 的用户可见结果。 |
+| MAPPING-002 | [实时 MySQL CDC → PostgreSQL 主键改名](mapping/02-realtime-mysql-cdc-to-postgresql.md) | 验证 PK 改名后 Snapshot、INSERT、UPDATE、DELETE；Release Readiness 执行时同时确认列表启动 / 停止 / 重新启动路径。 |
+| RECOVERY-001 | Durable Retry Recovery | 验证 Execution 处于 `RETRY_WAITING` 时重启 Yak Ops，保留同一 Execution Root，并按持久化 `nextRetryTime` 继续下一 Attempt。具体可重复步骤由 v1.2 Release Readiness PR 补齐。 |
 
-自动化三库矩阵与手工产品场景的职责边界见 [Column Mapping 验收索引](mapping/README.md)。
+自动化三库矩阵与手工产品场景的职责边界见 [Column Mapping 验收索引](mapping/README.md)。SMART Retry 的异常分类矩阵继续由自动测试负责，不扩成人工故障注入矩阵。
 
 ## 扩展规则
 
