@@ -226,10 +226,7 @@ export function RealtimeSyncPage() {
     }
   };
 
-  const stopTask = async (
-    record: DataSyncTaskRecord,
-    activeInstance: DataSyncInstanceRecord,
-  ) => {
+  const stopTask = async (record: DataSyncTaskRecord, activeInstance: DataSyncInstanceRecord) => {
     if (actionKey) return;
     setActionKey(`${record.id}:stop`);
     try {
@@ -350,12 +347,21 @@ export function RealtimeSyncPage() {
         const activeInstance = activeByTask.get(record.id);
         const published = isPublishedTask(record);
         const stopping = Boolean(activeInstance);
-        const runtimeLoading = actionKey === `${record.id}:${stopping ? "stop" : "start"}`;
-        const runtimeLabel = stopping
-          ? "停止"
-          : record.desiredState === "RUNNING"
-            ? "重新启动"
-            : "启动";
+        const runtimeActionKey = `${record.id}:${stopping ? "stop" : "start"}`;
+        const runtimeLoading = actionKey === runtimeActionKey;
+        let runtimeLabel = "启动";
+        let runtimeClassName = "text-[#667085]";
+        if (stopping) {
+          runtimeLabel = "停止";
+          runtimeClassName = "text-[#d92d20]";
+        } else if (record.desiredState === "RUNNING") {
+          runtimeLabel = "重新启动";
+          runtimeClassName = published
+            ? "text-[var(--yak-color-primary)]"
+            : "text-[#667085]";
+        } else if (published) {
+          runtimeClassName = "text-[var(--yak-color-primary)]";
+        }
 
         return (
           <DataSyncTaskLifecycleActions
@@ -365,12 +371,8 @@ export function RealtimeSyncPage() {
             runtimeAction={{
               label: runtimeLabel,
               loading: runtimeLoading,
-              disabled: stopping ? false : !published,
-              className: stopping
-                ? "text-[#d92d20]"
-                : published
-                  ? "text-[var(--yak-color-primary)]"
-                  : "text-[#667085]",
+              disabled: !stopping && !published,
+              className: runtimeClassName,
               onClick: () => {
                 if (activeInstance) void stopTask(record, activeInstance);
                 else void startTask(record);
