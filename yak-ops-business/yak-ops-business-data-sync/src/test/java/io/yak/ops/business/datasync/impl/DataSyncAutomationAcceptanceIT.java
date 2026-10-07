@@ -61,6 +61,7 @@ class DataSyncAutomationAcceptanceIT {
     @Test
     void shouldCreateOneScheduledExecutionAndSkipSecondFireWhileActive() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicBoolean active = new AtomicBoolean(false);
         AtomicInteger adds = new AtomicInteger();
         AtomicReference<DataSyncInstanceEntity> created = new AtomicReference<>();
@@ -86,6 +87,7 @@ class DataSyncAutomationAcceptanceIT {
     @Test
     void shouldIgnoreScheduleFireAfterScheduleIsDisabled() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         AtomicInteger adds = new AtomicInteger();
 
         inject(service, "scheduleRepository", scheduleRepository(schedule(false)));
@@ -248,6 +250,7 @@ class DataSyncAutomationAcceptanceIT {
     @Test
     void shouldAutoRecoverRealtimeWithSameTaskVersionAndCdcStateIdentity() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask();
         AtomicReference<DataSyncInstanceEntity> created = new AtomicReference<>();
 
