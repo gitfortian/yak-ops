@@ -18,7 +18,28 @@ final class DataSyncTestTableRouteRepository {
     private DataSyncTestTableRouteRepository() {}
 
     static DataSyncTableRouteRepository inject(DataSyncServiceImpl service) throws Exception {
+        return inject(service, null);
+    }
+
+    static DataSyncTableRouteRepository inject(DataSyncServiceImpl service, io.yak.ops.dao.entity.datasync.DataSyncTaskEntity task)
+            throws Exception {
         DataSyncTableRouteRepository repository = create();
+        if (task != null) {
+            DataSyncTableRouteEntity route = new DataSyncTableRouteEntity();
+            route.setId(task.getId());
+            route.setWorkspaceId(task.getWorkspaceId());
+            route.setTaskId(task.getId());
+            route.setSourceDatabase(task.getSourceDatabase());
+            route.setSourceSchema(task.getSourceSchema());
+            route.setSourceTable(task.getSourceTable());
+            route.setTargetDatabase(task.getTargetDatabase());
+            route.setTargetSchema(task.getTargetSchema());
+            route.setTargetTable(task.getTargetTable());
+            route.setAutoCreateTable(Boolean.TRUE.equals(task.getAutoCreateTable()));
+            route.setMappingConfig(task.getMappingConfig());
+            route.setSortOrder(0);
+            repository.add(route);
+        }
         Field field = DataSyncServiceImpl.class.getDeclaredField("tableRouteRepository");
         field.setAccessible(true);
         field.set(service, repository);
