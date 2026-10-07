@@ -23,11 +23,12 @@ Task Definition → Published Task → Execution（DataSyncInstance）
 | 离线 Cron、启停、触发校验与恢复 | [Scheduler](scheduler.md) |
 | 实时期望状态、进程重启与 CDC state | [Realtime Desired State](realtime-desired-state.md) |
 | Schema / Logical Table 产品模型与版本边界 | [Schema / Logical Table](schema-logical-table.md) |
+| Multi-Table Task / Table Route 持久化与兼容边界 | [Multi-Table Route](multi-table.md) |
 | 类型、split、写入与 checkpoint 机制 | [YakFlow](../yak-flow/README.md) |
 
 ## Task Definition
 
-Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引用，不复制凭证。一个 Task 连接一张 Source 表与一张 Target 表；`syncType` 创建后不变。Target 默认必须已经存在，只有显式 `autoCreateTable=true` 时才允许在运行前创建缺失目标表。
+Task 由 Workspace 拥有，名称在 Workspace 内唯一。数据源按 ID 引用，不复制凭证。v1.3 PR1 已建立稳定 Table Route 子资源：Task 拥有一个 Source Datasource 与一个 Target Datasource，Route 拥有 Source / Target Table path、Mapping、Auto Create 与顺序。当前写 API、Execution Snapshot 与 Runtime 仍保持单 Route 兼容语义，真正的 OFFLINE Multi-Table Runtime 尚未开放；`syncType` 创建后不变。当前兼容 Route 的 Target 默认必须已经存在，只有显式 `autoCreateTable=true` 时才允许在运行前创建缺失目标表。
 
 `runtime_config` 按类型解释：OFFLINE 使用 `DataSyncRuntimeConfig`，REALTIME 使用 `DataSyncRealtimeConfig`。Retry Policy 独立保存并在创建 Execution 时冻结。Task Editor 不要求普通用户填写这些引擎参数：新建普通任务省略 Retry Policy 时由后端物化 SMART Retry（最多 3 次、15 秒起始退避），历史 / 显式无 mode Policy 按 FIXED 兼容；编辑请求省略时保留该 Task 已持久化的具体配置。`writeMode` 是任务语义，不放进 runtime tuning。
 
@@ -41,19 +42,21 @@ AUTO 只在根 Execution 创建时规划一次：先使用 Mapping 后的 Source
 
 Datasource 已绑定的 database / schema 是权威范围；Task 不能覆盖已绑定层级，只有未绑定 schema 可由任务选择。映射预览、保存、发布和执行不得依赖前端校验结果。
 
-Task 现在拥有可冻结的任务级 Column Mapping Contract：
+v1.3 PR1 起 Column Mapping 的稳定产品 owner 是 Table Route；Task 根记录上的 `mapping_config` 仅作为当前单 Route Runtime 的兼容投影：
 
 ```text
-mapping = null
-→ 沿用系统默认的大小写不敏感同名映射
+Table Route
+└── mapping = null
+    → 沿用系统默认的大小写不敏感同名映射
 
-mapping.columns[]
-→ source + target 的显式一对一映射
-→ 来源字段与目标字段分别大小写不敏感唯一
-→ 数组顺序属于 Task Definition
+Table Route
+└── mapping.columns[]
+    → source + target 的显式一对一映射
+    → 来源字段与目标字段分别大小写不敏感唯一
+    → 数组顺序属于 Route Definition
 ```
 
-显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
+PR1 仍通过旧单表 DTO 创建 / 编辑任务，并在同一事务中双写唯一 Route 与 Task 兼容投影；Execution definitionSnapshot / Runtime 暂时继续读取 Task 投影，PR2 再切换为冻结 Route 集合。显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 仍属于可执行定义，真实变化继续推进 definitionVersion；Retry / Auto Recovery 继续复用原 Execution 已冻结 Mapping。
 
 Schema Mapping Editor 已直接消费该任务级 Mapping Contract：已有目标表支持同名 / 同序 / 手动连线、删除与字段搜索；自动建表目标不存在时允许重命名目标字段。前端只维护字段身份与顺序，不判断 JDBC 类型兼容或主键合法性，所有编辑结果继续通过后端 Mapping Preview 验证。
 
@@ -172,9 +175,9 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前为单节点、单表同步。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime、Schema Preview UI、任务级 Column Mapping、OFFLINE AUTO Runtime Planning、SMART Retry 与 Durable RETRY_WAITING Recovery。普通 Task Editor 不暴露底层 Runtime / Retry tuning；系统负责物化默认 Policy，Execution Detail 展示冻结后的 Effective Config / Retry Policy 事实。
+当前 Runtime 仍为单节点、单表执行。v1.3 PR1 已增加稳定 Table Route persistence，并把 v1.2 单表 Task 兼容为 one Route；Task 详情可读取 Route，但当前写 API、definitionSnapshot、Schema Preview 与 Executor 仍消费单 Route 兼容投影，不声明 Multi-Table Runtime 已实现。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime、Schema Preview UI、任务级 Column Mapping、OFFLINE AUTO Runtime Planning、SMART Retry 与 Durable RETRY_WAITING Recovery。普通 Task Editor 不暴露底层 Runtime / Retry tuning；系统负责物化默认 Policy，Execution Detail 展示冻结后的 Effective Config / Retry Policy 事实。
 
-发布、Schedule、启动自动恢复以及列表级 OFFLINE 运行、REALTIME 启动 / 停止 / 重新启动都是已有能力，不再列为“后续阶段”。v1.2 明确不提供 Logical Table persistence、Catalog refresh / diff、DDL Sync / Automatic Schema Evolution、Transform、多表任务、用户可配置 Runtime / Retry tuning、Continuous Realtime Reconciliation、通用 YakFlow checkpoint 跨进程恢复、分布式 Worker / HA / fencing 或 exactly-once。
+发布、Schedule、启动自动恢复以及列表级 OFFLINE 运行、REALTIME 启动 / 停止 / 重新启动都是已有能力，不再列为“后续阶段”。Multi-Table Route 的当前边界见 [Multi-Table Route Contract](multi-table.md)：PR1 只完成持久化地基，不包含 Table Execution / Multi-Table Runtime / Editor。Catalog refresh / diff、Automatic Schema Evolution、Incremental、Continuous Realtime Reconciliation 等能力继续按 v1.3 Release Contract 后续 PR 推进；Transform、分布式 Worker / HA / fencing 与 exactly-once 仍不在当前能力范围。
 
 ## Code and Verification
 

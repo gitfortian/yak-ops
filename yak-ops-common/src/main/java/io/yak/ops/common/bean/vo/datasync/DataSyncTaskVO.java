@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.vo.datasync;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -59,6 +60,11 @@ public class DataSyncTaskVO {
 
     /** 任务详情 / 写入响应返回的显式字段映射；分页列表为空，配置为空时表示继续使用系统默认同名映射。 */
     private DataSyncMappingVO mapping;
+
+    /**
+     * 任务详情 / 写入响应返回的稳定表级 Route；v1.3 PR1 仍只有一个兼容 Route，分页列表不返回。
+     */
+    private List<DataSyncTableRouteVO> tableRoutes;
 
     /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;

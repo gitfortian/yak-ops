@@ -32,7 +32,7 @@ Security、Datasource、Boot、Business、Core、SPI 和 Plugin 模块不得创�
 
 ## Baseline Mode
 
-已发布的 `v1.0.0` 使用 `V1__baseline.sql` 作为永久冻结基线。v1.1.0 在正式发布前把未发布、只用于可重建开发 / E2E 环境的 V2 ~ V5 Draft Migration 收口为唯一的 `V2__v1_1_0.sql` Release Migration。v1.2.0 Release Freeze 同样把未发布 V3 / V4 Draft 按原顺序收口为唯一的 `V3__v1_2_0.sql`；在 v1.2.0 正式发布前它属于冻结的 Release 候选 Migration，若因 Release Blocker 修改必须显式重新打开 Migration Freeze 并重新 Review。
+已发布的 `v1.0.0` 使用 `V1__baseline.sql` 作为永久冻结基线。v1.1.0 在正式发布前把未发布、只用于可重建开发 / E2E 环境的 V2 ~ V5 Draft Migration 收口为唯一的 `V2__v1_1_0.sql` Release Migration。v1.2.0 Release Freeze 同样把未发布 V3 / V4 Draft 按原顺序收口为唯一的 `V3__v1_2_0.sql`，该 Migration 已随 v1.2.0 正式发布并永久冻结。v1.3 开发从 V4 开始使用 Draft Migration，Release Freeze 前再按本规则收口。
 
 Migration 是否允许修改取决于它是否已经成为共享历史，而不是取决于文件编号：
 

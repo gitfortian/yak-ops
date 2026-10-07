@@ -41,6 +41,7 @@ class DataSyncOperationReadModelTest {
     @Test
     void shouldAggregatePublishedTaskLatestExecutionAndSchedulerNextFireTime() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         DataSyncTaskEntity task = task();
         DataSyncInstanceEntity latest = latestExecution();
         DataSyncScheduleEntity schedule = schedule();

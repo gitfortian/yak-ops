@@ -32,6 +32,7 @@ class DataSyncTaskListSummaryContractTest {
     @Test
     void shouldReturnUpdaterAndScheduleDefinitionWithOneBatchScheduleQuery() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         DataSyncTaskEntity task = task();
         DataSyncScheduleEntity schedule = schedule();
         AtomicReference<List<String>> queriedTaskIds = new AtomicReference<>();

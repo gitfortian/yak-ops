@@ -86,6 +86,7 @@ class DataSyncAutoCreatePreviewContractTest {
 
     private DataSyncServiceImpl service() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "dataSourceService", dataSourceService());
         inject(service, "targetTablePlanner", new TargetTablePlanner());
         return service;
