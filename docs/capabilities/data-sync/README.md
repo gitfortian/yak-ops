@@ -42,19 +42,21 @@ AUTO 只在根 Execution 创建时规划一次：先使用 Mapping 后的 Source
 
 Datasource 已绑定的 database / schema 是权威范围；Task 不能覆盖已绑定层级，只有未绑定 schema 可由任务选择。映射预览、保存、发布和执行不得依赖前端校验结果。
 
-Task 现在拥有可冻结的任务级 Column Mapping Contract：
+v1.3 PR1 起 Column Mapping 的稳定产品 owner 是 Table Route；Task 根记录上的 `mapping_config` 仅作为当前单 Route Runtime 的兼容投影：
 
 ```text
-mapping = null
-→ 沿用系统默认的大小写不敏感同名映射
+Table Route
+└── mapping = null
+    → 沿用系统默认的大小写不敏感同名映射
 
-mapping.columns[]
-→ source + target 的显式一对一映射
-→ 来源字段与目标字段分别大小写不敏感唯一
-→ 数组顺序属于 Task Definition
+Table Route
+└── mapping.columns[]
+    → source + target 的显式一对一映射
+    → 来源字段与目标字段分别大小写不敏感唯一
+    → 数组顺序属于 Route Definition
 ```
 
-显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 属于可执行定义，持久化到 Task 并冻结进 Execution definitionSnapshot；修改 Mapping 推进 definitionVersion，Retry / Auto Recovery 继续复用原 Execution 的冻结 Mapping。
+PR1 仍通过旧单表 DTO 创建 / 编辑任务，并在同一事务中双写唯一 Route 与 Task 兼容投影；Execution definitionSnapshot / Runtime 暂时继续读取 Task 投影，PR2 再切换为冻结 Route 集合。显式 Mapping 支持字段改名、字段子集和字段重排，但不允许表达式、自定义 SQL、CAST 或 Transform，也不保存字段值。Mapping 仍属于可执行定义，真实变化继续推进 definitionVersion；Retry / Auto Recovery 继续复用原 Execution 已冻结 Mapping。
 
 Schema Mapping Editor 已直接消费该任务级 Mapping Contract：已有目标表支持同名 / 同序 / 手动连线、删除与字段搜索；自动建表目标不存在时允许重命名目标字段。前端只维护字段身份与顺序，不判断 JDBC 类型兼容或主键合法性，所有编辑结果继续通过后端 Mapping Preview 验证。
 
