@@ -84,12 +84,13 @@ ORDER BY ordinal_position;
 ```sql
 SELECT a.attname
 FROM pg_index i
+CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
 JOIN pg_attribute a
   ON a.attrelid = i.indrelid
- AND a.attnum = ANY(i.indkey)
+ AND a.attnum = k.attnum
 WHERE i.indrelid = 'e2e_mapping_realtime_target'::regclass
   AND i.indisprimary
-ORDER BY array_position(i.indkey, a.attnum);
+ORDER BY k.ord;
 ```
 
 预期主键为：
