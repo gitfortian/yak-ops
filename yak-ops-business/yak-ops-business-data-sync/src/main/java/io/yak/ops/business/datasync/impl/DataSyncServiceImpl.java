@@ -1611,13 +1611,25 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
-            DataSyncTaskEntity task, DataSyncMappingPreviewDTO resolvedScope) {
+            DataSyncTaskEntity task, List<DataSyncTableRouteEntity> routes) {
+        if (routes == null || routes.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步任务缺少可冻结的 Table Route");
+        }
+
         DataSourceVO source = dataSourceService.queryDataSource(task.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(task.getTargetDataSourceId());
-        DataSyncEndpointSnapshotVO sourceEndpoint = endpointSnapshot(
-                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable());
-        DataSyncEndpointSnapshotVO targetEndpoint = endpointSnapshot(
-                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable());
+        DataSyncRuntimeConfigVO taskRuntimeConfig =
+                task.getSyncType() == DataSyncType.OFFLINE ? toRuntimeConfigVO(task.getRuntimeConfig()) : null;
+        DataSourceConnection sourceConnection = task.getSyncType() == DataSyncType.OFFLINE
+                        && taskRuntimeConfig.getPolicy() == DataSyncRuntimePolicy.AUTO
+                ? dataSourceService.resolveRuntimeConnection(task.getSourceDataSourceId())
+                : null;
+
+        List<DataSyncTableRouteSnapshotVO> routeSnapshots = routes.stream()
+                .map(route -> tableRouteSnapshot(
+                        task, route, source, target, taskRuntimeConfig, sourceConnection))
+                .toList();
+        DataSyncTableRouteSnapshotVO compatibilityRoute = routeSnapshots.get(0);
 
         DataSyncDefinitionSnapshotVO snapshot = new DataSyncDefinitionSnapshotVO();
         snapshot.setTaskId(task.getId());
@@ -1625,39 +1637,91 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
-        snapshot.setAutoCreateTable(autoCreateTable(task));
-        snapshot.setMapping(toMappingVO(task.getMappingConfig()));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
-        snapshot.setSource(sourceEndpoint);
-        snapshot.setTarget(targetEndpoint);
+        snapshot.setTableRoutes(routeSnapshots);
+
+        // PR2 keeps the existing single-route Runtime contract alive by projecting the first
+        // frozen Route onto the historical root fields. PR3 will execute tableRoutes directly.
+        snapshot.setSource(compatibilityRoute.getSource());
+        snapshot.setTarget(compatibilityRoute.getTarget());
+        snapshot.setAutoCreateTable(compatibilityRoute.getAutoCreateTable());
+        snapshot.setMapping(compatibilityRoute.getMapping());
         if (task.getSyncType() == DataSyncType.REALTIME) {
             snapshot.setRealtimeConfig(toRealtimeConfigVO(task.getRuntimeConfig()));
         } else {
-            DataSyncRuntimeConfigVO taskRuntimeConfig = toRuntimeConfigVO(task.getRuntimeConfig());
-            if (taskRuntimeConfig.getPolicy() == DataSyncRuntimePolicy.AUTO) {
-                LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
-                        task.getSourceDataSourceId(),
-                        sourceEndpoint.getDatabase(),
-                        sourceEndpoint.getSchema(),
-                        sourceEndpoint.getTable());
-                ResolvedSchemaMapping resolvedMapping =
-                        resolveSchemaMapping(sourceLogicalTable, mappingConfig(task.getMappingConfig()));
-                DataSourceConnection sourceConnection =
-                        dataSourceService.resolveRuntimeConnection(task.getSourceDataSourceId());
-                OfflineRuntimePlan runtimePlan = offlineRuntimePlanner.plan(
-                        sourceConnection,
-                        new DataSourceTablePath(
-                                sourceEndpoint.getDatabase(), sourceEndpoint.getSchema(), sourceEndpoint.getTable()),
-                        resolvedMapping.sourceTable(),
-                        target.getDbType(),
-                        taskRuntimeConfig);
-                snapshot.setRuntimeConfig(runtimePlan.effectiveConfig());
-                snapshot.setOfflineRuntimePlan(runtimePlan.summary());
-            } else {
-                snapshot.setRuntimeConfig(taskRuntimeConfig);
-            }
+            snapshot.setRuntimeConfig(compatibilityRoute.getRuntimeConfig());
+            snapshot.setOfflineRuntimePlan(compatibilityRoute.getOfflineRuntimePlan());
         }
         return snapshot;
+    }
+
+    private DataSyncTableRouteSnapshotVO tableRouteSnapshot(
+            DataSyncTaskEntity task,
+            DataSyncTableRouteEntity route,
+            DataSourceVO source,
+            DataSourceVO target,
+            DataSyncRuntimeConfigVO taskRuntimeConfig,
+            DataSourceConnection sourceConnection) {
+        DataSyncEndpointSnapshotVO sourceEndpoint = endpointSnapshot(
+                source, route.getSourceDatabase(), route.getSourceSchema(), route.getSourceTable());
+        DataSyncEndpointSnapshotVO targetEndpoint = endpointSnapshot(
+                target, route.getTargetDatabase(), route.getTargetSchema(), route.getTargetTable());
+
+        DataSyncTableRouteSnapshotVO snapshot = new DataSyncTableRouteSnapshotVO();
+        snapshot.setRouteId(route.getId());
+        snapshot.setSortOrder(route.getSortOrder());
+        snapshot.setSource(sourceEndpoint);
+        snapshot.setTarget(targetEndpoint);
+        snapshot.setAutoCreateTable(Boolean.TRUE.equals(route.getAutoCreateTable()));
+        snapshot.setMapping(toMappingVO(route.getMappingConfig()));
+
+        if (task.getSyncType() != DataSyncType.OFFLINE) {
+            return snapshot;
+        }
+        if (taskRuntimeConfig.getPolicy() != DataSyncRuntimePolicy.AUTO) {
+            snapshot.setRuntimeConfig(taskRuntimeConfig);
+            return snapshot;
+        }
+
+        LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                task.getSourceDataSourceId(),
+                sourceEndpoint.getDatabase(),
+                sourceEndpoint.getSchema(),
+                sourceEndpoint.getTable());
+        ResolvedSchemaMapping resolvedMapping =
+                resolveSchemaMapping(sourceLogicalTable, mappingConfig(route.getMappingConfig()));
+        OfflineRuntimePlan runtimePlan = offlineRuntimePlanner.plan(
+                sourceConnection,
+                new DataSourceTablePath(
+                        sourceEndpoint.getDatabase(), sourceEndpoint.getSchema(), sourceEndpoint.getTable()),
+                resolvedMapping.sourceTable(),
+                target.getDbType(),
+                taskRuntimeConfig);
+        snapshot.setRuntimeConfig(runtimePlan.effectiveConfig());
+        snapshot.setOfflineRuntimePlan(runtimePlan.summary());
+        return snapshot;
+    }
+
+    private void createTableExecutions(
+            String workspaceId, String executionId, List<DataSyncTableRouteSnapshotVO> routeSnapshots) {
+        if (routeSnapshots == null || routeSnapshots.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "Execution 缺少冻结 Table Route");
+        }
+        for (DataSyncTableRouteSnapshotVO route : routeSnapshots) {
+            DataSyncTableExecutionEntity tableExecution = new DataSyncTableExecutionEntity();
+            tableExecution.setWorkspaceId(workspaceId);
+            tableExecution.setExecutionId(executionId);
+            tableExecution.setRouteId(route.getRouteId());
+            tableExecution.setRouteOrder(route.getSortOrder());
+            tableExecution.setStatus(DataSyncTableExecutionStatus.PLANNED);
+            tableExecution.setCurrentAttempt(0);
+            tableExecution.setReadRows(0L);
+            tableExecution.setWriteRows(0L);
+            tableExecution.initCreate();
+            if (tableExecutionRepository.add(tableExecution) == null) {
+                throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建 Table Execution 失败");
+            }
+        }
     }
 
     private DataSyncEndpointSnapshotVO endpointSnapshot(
