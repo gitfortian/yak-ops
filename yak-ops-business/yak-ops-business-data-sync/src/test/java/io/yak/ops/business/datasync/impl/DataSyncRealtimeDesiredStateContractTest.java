@@ -43,6 +43,7 @@ class DataSyncRealtimeDesiredStateContractTest {
     void shouldSetDesiredRunningWhenRealtimeTaskStarts() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask(DataSyncDesiredState.STOPPED);
         AtomicReference<DataSyncTaskEntity> updatedTask = new AtomicReference<>();
         AtomicReference<DataSyncInstanceEntity> createdExecution = new AtomicReference<>();
@@ -65,6 +66,7 @@ class DataSyncRealtimeDesiredStateContractTest {
     void shouldCreateAutoRecoveryExecutionForDesiredRunningRealtimeTask() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask(DataSyncDesiredState.RUNNING);
         task.setDefinitionVersion(3);
         AtomicReference<DataSyncInstanceEntity> createdExecution = new AtomicReference<>();
@@ -86,6 +88,7 @@ class DataSyncRealtimeDesiredStateContractTest {
     void shouldSkipAutoRecoveryWhenActiveExecutionAlreadyExists() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask(DataSyncDesiredState.RUNNING);
         AtomicReference<DataSyncInstanceEntity> createdExecution = new AtomicReference<>();
 
@@ -101,6 +104,7 @@ class DataSyncRealtimeDesiredStateContractTest {
     void shouldStopDesiredStateWhenRetryWaitingExecutionIsCanceled() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask(DataSyncDesiredState.RUNNING);
         AtomicReference<DataSyncTaskEntity> updatedTask = new AtomicReference<>();
         DataSyncInstanceEntity execution = new DataSyncInstanceEntity();
@@ -128,6 +132,7 @@ class DataSyncRealtimeDesiredStateContractTest {
     void shouldStopDesiredStateWhenRealtimeTaskIsUnpublished() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask(DataSyncDesiredState.RUNNING);
         AtomicReference<DataSyncTaskEntity> updatedTask = new AtomicReference<>();
 
