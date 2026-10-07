@@ -1183,20 +1183,67 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return target;
     }
 
-    private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {
-        DataSyncMappingPreviewDTO resolvedScope =
-                resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
-        resolvedScope.setMapping(mappingConfig(task.getMappingConfig()));
+    private List<DataSyncTableRouteEntity> validatePersistedTaskDefinition(DataSyncTaskEntity task) {
+        List<DataSyncTableRouteEntity> routes = requirePersistedTableRoutes(task);
         DataSyncWriteMode writeMode = taskWriteMode(task);
         validateWriteMode(task.getSyncType(), writeMode);
-        if (task.getSyncType() == DataSyncType.REALTIME) {
-            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
-        } else {
-            validateOfflineUpsertTarget(
-                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
+        if (routes.size() > 1) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.INVALID_TASK,
+                    task.getSyncType() == DataSyncType.REALTIME
+                            ? "REALTIME 当前只支持单 Route"
+                            : "OFFLINE Multi-Table Runtime 将由后续 PR 开启");
         }
-        requireCompatibleMapping(resolvedScope);
-        return resolvedScope;
+
+        for (DataSyncTableRouteEntity route : routes) {
+            DataSyncMappingPreviewDTO resolvedScope = resolveRouteScope(task, route);
+            if (task.getSyncType() == DataSyncType.REALTIME) {
+                validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+            } else {
+                validateOfflineUpsertTarget(
+                        task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
+            }
+            requireCompatibleMapping(resolvedScope);
+        }
+        return routes;
+    }
+
+    private List<DataSyncTableRouteEntity> requirePersistedTableRoutes(DataSyncTaskEntity task) {
+        List<DataSyncTableRouteEntity> routes =
+                new ArrayList<>(tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId()));
+        if (routes.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步任务缺少 Table Route");
+        }
+        routes.sort(Comparator.comparing(
+                        DataSyncTableRouteEntity::getSortOrder,
+                        Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(DataSyncTableRouteEntity::getId, Comparator.nullsLast(String::compareTo)));
+        for (int index = 0; index < routes.size(); index++) {
+            DataSyncTableRouteEntity route = routes.get(index);
+            if (!Objects.equals(route.getWorkspaceId(), task.getWorkspaceId())
+                    || !Objects.equals(route.getTaskId(), task.getId())
+                    || StringUtils.isBlank(route.getId())
+                    || route.getSortOrder() == null
+                    || route.getSortOrder() != index) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Table Route 身份或顺序不合法");
+            }
+        }
+        return List.copyOf(routes);
+    }
+
+    private DataSyncMappingPreviewDTO resolveRouteScope(DataSyncTaskEntity task, DataSyncTableRouteEntity route) {
+        DataSyncMappingPreviewDTO scope = new DataSyncMappingPreviewDTO();
+        scope.setSourceDataSourceId(task.getSourceDataSourceId());
+        scope.setSourceDatabase(route.getSourceDatabase());
+        scope.setSourceSchema(route.getSourceSchema());
+        scope.setSourceTable(route.getSourceTable());
+        scope.setTargetDataSourceId(task.getTargetDataSourceId());
+        scope.setTargetDatabase(route.getTargetDatabase());
+        scope.setTargetSchema(route.getTargetSchema());
+        scope.setTargetTable(route.getTargetTable());
+        scope.setAutoCreateTable(Boolean.TRUE.equals(route.getAutoCreateTable()));
+        scope.setMapping(mappingConfig(route.getMappingConfig()));
+        return resolveMappingScope(scope);
     }
 
     private boolean executableDefinitionChanged(
