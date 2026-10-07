@@ -30,7 +30,7 @@ Scope:
 当前候选版本：
 
 ```text
-1.2.0 — Development / Scope Frozen
+1.2.0 — Development / Scope Frozen / Migration Frozen
 ```
 
 v1.2.0 开发入口：
