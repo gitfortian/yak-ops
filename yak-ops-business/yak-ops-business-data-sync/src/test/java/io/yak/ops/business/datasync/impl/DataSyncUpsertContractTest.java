@@ -53,6 +53,7 @@ class DataSyncUpsertContractTest {
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository());
         injectDataSourceService(service, dataSourceService(sourceColumns, targetColumns));
         return service;
