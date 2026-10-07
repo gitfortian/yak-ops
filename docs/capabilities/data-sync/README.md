@@ -152,9 +152,9 @@ Task 层 `writeMode` 固定 APPEND，运行时使用 JDBC CHANGELOG，并非普�
 
 ## Product Responsibilities
 
-数据集成负责 Task 定义、发布，以及围绕当前 Task 的只读运行详情：任务详情可以查看该 Task 的 Execution 历史、选中的 Execution 状态、指标、Attempt 历史和冻结快照。OFFLINE Execution 额外提供 Runtime Trace 驱动的执行诊断（Summary、Source Split、Sink Batch、错误上下文），既有产品生命周期事件保留为辅助审计；REALTIME 仍展示产品事件日志。Task Editor 仍只负责定义，不承载运行态；数据集成详情不提供 Run / Start / Stop。OFFLINE Task 列表额外提供一次手工 `运行` 快捷入口，仅允许已上线且当前没有 PENDING / RUNNING / RETRY_WAITING Execution 的任务调用既有 Run API，创建根触发类型为 MANUAL 的 Execution。
+数据集成负责 Task 定义、发布，以及围绕当前 Task 的只读运行详情：任务详情可以查看该 Task 的 Execution 历史、选中的 Execution 状态、指标、Attempt 历史和冻结快照。OFFLINE Execution 额外提供 Runtime Trace 驱动的执行诊断（Summary、Source Split、Sink Batch、错误上下文），既有产品生命周期事件保留为辅助审计；REALTIME 仍展示产品事件日志。Task Editor 仍只负责定义，不承载运行态；数据集成详情不提供 Run / Start / Stop。OFFLINE Task 列表提供一次手工 `运行` 快捷入口，仅允许已上线且当前没有 PENDING / RUNNING / RETRY_WAITING Execution 的任务调用既有 Run API，创建根触发类型为 MANUAL 的 Execution。REALTIME Task 列表提供 `启动 / 停止 / 重新启动` 生命周期快捷入口：启动与重新启动复用同一 Run API；停止取消当前活动 Execution，并由既有 Realtime Desired State 契约把用户运行意图置为 STOPPED。
 
-运维中心当前前端负责跨 Task 聚合运行观察：OFFLINE / REALTIME 根页面都直接消费 Operations Metrics Read Model，不再以 Task / Instance 表格作为主视图。Task 详情和运维中心复用同一 Execution / Attempt 后端事实，不建立第二套运行模型。既有 Run / Start / Stop、Schedule Runtime 与 REALTIME Desired State 后端能力仍保留；当前 Dashboard 根页面不承载这些命令，OFFLINE 列表的手工运行只是定义列表上的快捷触发，不改变 Task Detail 的只读边界。
+运维中心当前前端负责跨 Task 聚合运行观察：OFFLINE / REALTIME 根页面都直接消费 Operations Metrics Read Model，不再以 Task / Instance 表格作为主视图。Task 详情和运维中心复用同一 Execution / Attempt 后端事实，不建立第二套运行模型。既有 Run / Start / Stop、Schedule Runtime 与 REALTIME Desired State 后端能力仍保留；当前 Dashboard 根页面不承载这些命令，Task 列表的运行快捷操作不改变 Task Detail 的只读边界。
 
 历史 Execution 持有自身 syncType、任务版本与脱敏快照。查询历史不依赖当前 Task 发布状态；删除 Task 不删除已有运行历史，但当前 Task 详情需要 Task 本身仍存在。运维可执行任务查询限定已发布任务。
 
