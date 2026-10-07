@@ -14,10 +14,10 @@ Scope:
 
 本规则管理的是 Yak Ops **产品发布版本**，不管理 Data Sync Task 的 `definitionVersion`。
 
-当前主干开发版本：
+当前 Release Candidate 版本：
 
 ```text
-1.2.0-SNAPSHOT
+1.2.0
 ```
 
 已发布稳定版本：
@@ -30,7 +30,7 @@ Scope:
 当前候选版本：
 
 ```text
-1.2.0 — Ready / Awaiting Version Finalization
+1.2.0 — Scope Frozen / Ready for Formal Release Gate
 ```
 
 v1.2.0 候选材料：
@@ -38,6 +38,7 @@ v1.2.0 候选材料：
 - [v1.2.0 Release Contract](./v1.2.0.md)
 - [v1.2.0 Release Notes](./v1.2.0-release-notes.md)
 - [v1.2.0 Release Readiness](./v1.2.0-readiness.md)
+- [v1.2.0 Release Evidence](./v1.2.0-release-evidence.md)
 
 v1.1.0 发布材料：
 
