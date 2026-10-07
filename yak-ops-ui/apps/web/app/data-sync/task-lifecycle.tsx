@@ -94,10 +94,19 @@ interface LifecycleAction {
   onClick: () => void;
 }
 
+export interface DataSyncTaskRuntimeAction {
+  label: string;
+  className: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onClick: () => void;
+}
+
 interface DataSyncTaskLifecycleActionsProps {
   record: DataSyncTaskRecord;
   activeInstance?: DataSyncInstanceRecord;
   actionKey?: string;
+  runtimeAction?: DataSyncTaskRuntimeAction;
   onRun?: (record: DataSyncTaskRecord) => void;
   onPublish: (record: DataSyncTaskRecord) => void;
   onUnpublish: (record: DataSyncTaskRecord) => void;
@@ -110,6 +119,7 @@ export function DataSyncTaskLifecycleActions({
   record,
   activeInstance,
   actionKey,
+  runtimeAction,
   onRun,
   onPublish,
   onUnpublish,
@@ -120,19 +130,28 @@ export function DataSyncTaskLifecycleActions({
   const published = isPublishedTask(record);
   const lifecycleAction = published ? "unpublish" : "publish";
   const actions: LifecycleAction[] = [
-    ...(onRun
+    ...(runtimeAction
       ? [
           {
-            key: "run",
-            label: "运行",
-            className:
-              published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[#667085]",
-            disabled: !published || Boolean(activeInstance),
-            loading: actionKey === `${record.id}:run`,
-            onClick: () => onRun(record),
+            key: "runtime",
+            ...runtimeAction,
           },
         ]
-      : []),
+      : onRun
+        ? [
+            {
+              key: "run",
+              label: "运行",
+              className:
+                published && !activeInstance
+                  ? "text-[var(--yak-color-primary)]"
+                  : "text-[#667085]",
+              disabled: !published || Boolean(activeInstance),
+              loading: actionKey === `${record.id}:run`,
+              onClick: () => onRun(record),
+            },
+          ]
+        : []),
     {
       key: "lifecycle",
       label: published ? "下线" : "上线",
