@@ -1983,9 +1983,6 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private List<DataSyncTableRouteVO> toTableRouteVOs(DataSyncTaskEntity task) {
-        if (tableRouteRepository == null) {
-            return List.of(toCompatibilityTableRouteVO(task));
-        }
         List<DataSyncTableRouteEntity> routes = tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
         return routes.stream().map(this::toTableRouteVO).toList();
     }
@@ -1994,21 +1991,6 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         DataSyncTableRouteVO target = BeanCopyUtils.copy(source, DataSyncTableRouteVO.class, "mappingConfig");
         target.setAutoCreateTable(Boolean.TRUE.equals(source.getAutoCreateTable()));
         target.setMapping(toMappingVO(source.getMappingConfig()));
-        return target;
-    }
-
-    private DataSyncTableRouteVO toCompatibilityTableRouteVO(DataSyncTaskEntity source) {
-        DataSyncTableRouteVO target = new DataSyncTableRouteVO();
-        target.setId(source.getId());
-        target.setSourceDatabase(source.getSourceDatabase());
-        target.setSourceSchema(source.getSourceSchema());
-        target.setSourceTable(source.getSourceTable());
-        target.setTargetDatabase(source.getTargetDatabase());
-        target.setTargetSchema(source.getTargetSchema());
-        target.setTargetTable(source.getTargetTable());
-        target.setAutoCreateTable(autoCreateTable(source));
-        target.setMapping(toMappingVO(source.getMappingConfig()));
-        target.setSortOrder(0);
         return target;
     }
 
