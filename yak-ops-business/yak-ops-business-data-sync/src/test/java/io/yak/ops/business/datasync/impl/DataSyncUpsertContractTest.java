@@ -52,6 +52,7 @@ class DataSyncUpsertContractTest {
             List<DataSourceCatalogColumnVO> sourceColumns, List<DataSourceCatalogColumnVO> targetColumns)
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
+        DataSyncTestTableRouteRepository.inject(service);
         inject(service, "taskRepository", taskRepository());
         injectDataSourceService(service, dataSourceService(sourceColumns, targetColumns));
         return service;
