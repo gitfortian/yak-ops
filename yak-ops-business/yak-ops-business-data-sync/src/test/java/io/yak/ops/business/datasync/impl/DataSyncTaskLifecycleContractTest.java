@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasync.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.DataSourceService;
