@@ -27,10 +27,11 @@ MySQL：
 DROP TABLE IF EXISTS e2e_mapping_offline_source;
 
 CREATE TABLE e2e_mapping_offline_source (
-    id BIGINT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    amount DECIMAL(10,2)
-);
+    id BIGINT NOT NULL COMMENT '用户ID',
+    name VARCHAR(100) NOT NULL COMMENT '显示名称',
+    amount DECIMAL(10,2) COMMENT '交易金额',
+    PRIMARY KEY (id)
+) COMMENT='离线字段映射源表';
 
 INSERT INTO e2e_mapping_offline_source VALUES
 (1, 'yak', 10.25),
@@ -59,10 +60,14 @@ DROP TABLE IF EXISTS e2e_mapping_offline_target;
    - `name → display_name`
    - `id → user_id`
 7. 不映射 `amount`。
-8. 确认 CREATE TABLE 预览只包含目标字段 `display_name`、`user_id`，且 `user_id` 为主键。
+8. 点击目标表右侧 DDL 入口，确认完整 DDL：
+   - 只包含目标字段 `display_name`、`user_id`。
+   - `user_id` 为主键。
+   - PostgreSQL Comment DDL 保留来源表 / 字段 Comment。
 9. 保存并上线任务。
 10. 运行任务。
 11. 等待本次实例进入 `SUCCEEDED`。
+12. 打开本次 Execution 的“配置快照”，确认运行策略为 `AUTO`，并能看到冻结后的 Effective Runtime Config / Planning Summary；不要在前端重新计算这些参数。
 
 ## 结果验证
 
@@ -84,15 +89,53 @@ mapping  | 3
 
 再确认目标表不存在 `amount` 字段。
 
+验证 PostgreSQL Comment：
+
+```sql
+SELECT obj_description('e2e_mapping_offline_target'::regclass) AS table_comment;
+
+SELECT
+    a.attname,
+    col_description(a.attrelid, a.attnum) AS column_comment
+FROM pg_attribute a
+WHERE a.attrelid = 'e2e_mapping_offline_target'::regclass
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY a.attnum;
+```
+
+预期至少确认：
+
+```text
+table_comment = 离线字段映射源表
+
+display_name → 显示名称
+user_id      → 用户ID
+```
+
+Execution “配置快照”中还应确认：
+
+```text
+Runtime Policy = AUTO
+Effective Runtime Config = 已冻结
+Planning Summary = 已记录
+```
+
+不要求人工用固定数字断言 batch size / parallelism；它们由 Planner 根据 Schema / Statistics / Target 类型推导。
+
 ## 验收清单
 
 - [ ] Schema Mapping Editor 可以改名。
 - [ ] Mapping 顺序可以调整为 `name, id`。
 - [ ] `amount` 未进入 Mapping。
 - [ ] Preview 显示 Schema 兼容。
-- [ ] CREATE TABLE 预览使用目标字段名。
+- [ ] DDL 预览使用目标字段名并展示完整 CREATE / COMMENT 计划。
 - [ ] 自动建表后 `user_id` 为主键。
+- [ ] Target Table Comment 已保留。
+- [ ] `display_name` / `user_id` Column Comment 已按 Mapping 后字段名保留。
 - [ ] 实例最终为 `SUCCEEDED`。
+- [ ] Execution 配置快照显示 `AUTO` Runtime Policy。
+- [ ] Effective Runtime Config / Planning Summary 已冻结并可观察。
 - [ ] 目标数据与预期一致。
 
 ## 清理

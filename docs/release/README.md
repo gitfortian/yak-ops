@@ -30,12 +30,14 @@ Scope:
 当前候选版本：
 
 ```text
-1.2.0 — Development / Scope Frozen / Migration Frozen
+1.2.0 — Development / Scope Frozen / Migration Frozen / Awaiting Manual E2E
 ```
 
-v1.2.0 开发入口：
+v1.2.0 候选材料：
 
 - [v1.2.0 Release Contract](./v1.2.0.md)
+- [v1.2.0 Release Notes](./v1.2.0-release-notes.md)
+- [v1.2.0 Release Readiness](./v1.2.0-readiness.md)
 
 v1.1.0 发布材料：
 

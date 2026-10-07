@@ -27,5 +27,5 @@ MySqlCdcIntegrationIT
 
 - 本目录只定义可重复步骤，不记录 PASS。
 - v1.2 Scope Freeze 已将 MAPPING-001 / MAPPING-002 纳入 Required Manual E2E；正式执行结果由后续 v1.2 Release Readiness / Evidence 记录。
-- Release Readiness 执行时，MAPPING-001 额外确认 DDL / Comment 与 AUTO Runtime 的用户可见结果；MAPPING-002 额外确认列表启动 / 停止 / 重新启动路径。
+- MAPPING-001 已补齐 DDL / Comment 与 AUTO Runtime 配置快照检查；MAPPING-002 已补齐 Auto Create、任务列表停止 / 再次启动与 CDC state 续传检查。用户主动 Stop 后按钮应回到“启动”；`desiredState=RUNNING` 但无 Active Execution 时的“重新启动”差异状态由自动 Contract / Acceptance 覆盖。
 - 不声明 exactly-once。

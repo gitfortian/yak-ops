@@ -39,6 +39,8 @@ Management Center
 - [v1.1.0 Release Readiness](docs/release/v1.1.0-readiness.md)
 - [v1.1.0 Release Notes](docs/release/v1.1.0-release-notes.md)
 - [v1.2.0 Release Contract](docs/release/v1.2.0.md)（Development / Scope Frozen / Migration Frozen）
+- [v1.2.0 Release Readiness](docs/release/v1.2.0-readiness.md)（Awaiting Manual E2E）
+- [v1.2.0 Release Notes](docs/release/v1.2.0-release-notes.md)
 - [Data Sync 手工 E2E](docs/e2e/data-sync/README.md)
 
 ## Distribution
