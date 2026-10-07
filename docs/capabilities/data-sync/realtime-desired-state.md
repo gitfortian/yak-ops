@@ -20,7 +20,7 @@ Scope: REALTIME 运行意图、启动协调、CDC 状态 identity 与恢复边�
 | Execution 后续 FAILED / LOST | 不自动改成 STOPPED，运行失败不代表用户改变意图 |
 | 对已终态 Execution 重复 Cancel | 只返回历史结果，不改变 Task desiredState |
 
-当前没有独立的“只修改 desiredState”命令。无活动实例但意图仍为 RUNNING 时，不可借取消历史 FAILED / LOST 记录声称已停止意图；成功下线可清除意图。接口限制不能被文档中的泛化 Stop 描述掩盖。
+当前没有独立的“只修改 desiredState”命令。无活动实例但意图仍为 RUNNING 时，不可借取消历史 FAILED / LOST 记录声称已停止意图；成功下线可清除意图。Realtime Task 列表因此把这种差异显示为“重新启动”，而不是“启动”或“已停止”；存在 PENDING / RUNNING / RETRY_WAITING 活动 Execution 时显示“停止”。接口限制不能被文档中的泛化 Stop 描述掩盖。
 
 ## Application Restart
 
