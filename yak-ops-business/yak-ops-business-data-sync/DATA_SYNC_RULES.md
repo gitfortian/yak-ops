@@ -86,6 +86,10 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 
 ## Execution and Metrics Implementation
 
+- v1.3 PR2 起 Root definitionSnapshot 必须冻结有序 `tableRoutes[]`；每条 Route 保存稳定 routeId、Source / Target endpoint、Mapping、Auto Create，以及 OFFLINE Route 自己的 Effective Runtime Config / planning summary。Root 上旧单表字段只允许作为首 Route 兼容投影。
+- Root Execution 创建后、Runtime 提交前必须为每条冻结 Route 创建一条 Table Execution；PR2 状态固定为 PLANNED，禁止在没有 PR3 表级 Runtime 的情况下假写 RUNNING / SUCCEEDED。
+- Table Execution identity 使用持久化 ID + routeId，禁止用 table name 拼接；同一 Root 内 routeId 与 routeOrder 都必须唯一。
+- PR2 仍禁止 N>1 Route 进入当前单表 Executor；这个阻断只能由 PR3 在真正逐表执行闭环后移除。
 新 Execution 先保存脱敏快照，再提交 Runtime；有事务时在提交后派发，不让执行依赖尚未提交的产品记录。
 
 OFFLINE / REALTIME 共用 DataSyncAttemptLifecycle。状态变更使用 Repository 的预期状态条件更新，竞争失败不能当作已成功转移；取消和重试不得复活终态根记录。
