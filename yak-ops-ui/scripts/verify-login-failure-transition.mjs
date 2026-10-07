@@ -4,13 +4,13 @@ import ts from "typescript";
 
 // No browser shim or new test dependency. This checks geometry, not DOM/animation acceptance.
 const source = readFileSync(
-  new URL("../apps/web/app/login/login-failure-transition.ts", import.meta.url),
+  new URL("../apps/web/app/login/login-pose-snapshot.ts", import.meta.url),
   "utf8",
 );
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
-const { normalizeAuthoredLoginPath: normalize, mixFailureSnapshot: mix } = await import(
+const { normalizeAuthoredLoginPath: normalize, mixLoginPoseSnapshot: mix } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
 );
 

@@ -48,6 +48,8 @@ npm run build
 
 针对登录失败衔接的纯几何回归可在 `yak-ops-ui/` 执行 `node scripts/verify-login-failure-transition.mjs`。它使用已有 TypeScript 与 Node assert，检查路径拓扑、地面、端点、动态目标与中断重接；不是新增测试框架或默认 CI gate，也不能证明 DOM 采样、浏览器动画、焦点或真实认证。
 
+针对登录成功定格与切入的纯几何回归可执行 `node scripts/verify-login-success-transition.mjs`。它使用同一 TypeScript / Node assert 工具，检查四个目标表情、身体共用、成功反馈时长、直接切入、中断重接与页面进入失败后的恢复；不安装新测试框架，不替代浏览器、真实接口或页面跳转验收。静态对照位于 `scripts/fixtures/login-success/`，不作为产品资产导入。
+
 ## Verification Record
 
 组件文档中的验收步骤描述可重复执行的方法，不表示已经通过。一次结果放在 PR / CI；发布结果放对应版本证据，并按 [Engineering Context Model](../../docs/engineering-context-model.md#evidence-chain) 记录提交、环境、执行范围和证据。局部样式夹具、真实 React 运行时、产品 E2E 分开报告；未执行、失败和 skipped 不写成完整验收通过。
