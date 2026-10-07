@@ -39,10 +39,11 @@ class DataSyncInstanceSyncTypeContractTest {
     @Test
     void shouldPersistRealtimeSyncTypeWhenCreatingInstance() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task();
+        DataSyncTestTableRouteRepository.inject(service, task);
         DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
-        inject(service, "taskRepository", taskRepository(task()));
+        inject(service, "taskRepository", taskRepository(task));
         inject(service, "instanceRepository", instanceRepository(captured));
         injectDataSourceService(service, dataSourceService(List.of(primaryKeyColumn("id")), List.of(primaryKeyColumn("ID"))));
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
@@ -61,10 +62,11 @@ class DataSyncInstanceSyncTypeContractTest {
     @Test
     void shouldRejectRealtimeRunWhenTargetPrimaryKeyDoesNotMatchSource() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task();
+        DataSyncTestTableRouteRepository.inject(service, task);
         DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
-        inject(service, "taskRepository", taskRepository(task()));
+        inject(service, "taskRepository", taskRepository(task));
         inject(service, "instanceRepository", instanceRepository(captured));
         injectDataSourceService(service, dataSourceService(List.of(primaryKeyColumn("id")), List.of(primaryKeyColumn("name"))));
         inject(service, "realtimeSyncExecutor", new NoopRealtimeSyncExecutor());
