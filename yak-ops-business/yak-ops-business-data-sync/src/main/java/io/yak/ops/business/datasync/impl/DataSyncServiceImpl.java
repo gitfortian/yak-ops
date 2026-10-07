@@ -68,6 +68,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTableRouteVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTracePageVO;
@@ -94,6 +95,7 @@ import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncTableRouteEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncExecutionEventRepository;
@@ -105,6 +107,7 @@ import io.yak.ops.dao.repository.datasync.DataSyncOperationsStatusStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsSummaryStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsTrendStats;
 import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncTableRouteRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import io.yak.ops.flow.api.row.YakColumn;
@@ -152,6 +155,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncTaskRepository taskRepository;
+
+    @Resource
+    private DataSyncTableRouteRepository tableRouteRepository;
 
     @Resource
     private DataSyncInstanceRepository instanceRepository;
@@ -229,6 +235,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (taskRepository.add(entity) == null) {
             throw new DataSyncException(DataSyncErrorCode.CREATE_TASK_FAILED);
         }
+        createCompatibilityTableRoute(entity, operatorUserId);
         return toTaskVO(entity);
     }
 
@@ -269,6 +276,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (taskRepository.update(workspaceId, entity) == null) {
             throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED);
         }
+        synchronizeCompatibilityTableRoute(entity, operatorUserId);
         return toTaskVO(entity);
     }
 
@@ -753,6 +761,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (taskRepository.deleteById(workspaceId, entity.getId()) <= 0) {
             throw new DataSyncException(DataSyncErrorCode.DELETE_TASK_FAILED);
         }
+        tableRouteRepository.deleteByTask(workspaceId, entity.getId());
         return true;
     }
 
@@ -1784,8 +1793,67 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
     }
 
+    private void createCompatibilityTableRoute(DataSyncTaskEntity task, String operatorUserId) {
+        DataSyncTableRouteEntity route = new DataSyncTableRouteEntity();
+        applyCompatibilityTableRoute(route, task);
+        route.initCreate(operatorUserId);
+        if (tableRouteRepository.add(route) == null) {
+            throw new DataSyncException(DataSyncErrorCode.CREATE_TASK_FAILED, "表级 Route 创建失败");
+        }
+    }
+
+    private void synchronizeCompatibilityTableRoute(DataSyncTaskEntity task, String operatorUserId) {
+        List<DataSyncTableRouteEntity> routes =
+                tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
+        if (routes.size() > 1) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "多表任务暂不支持通过单表兼容接口编辑");
+        }
+        if (routes.isEmpty()) {
+            createCompatibilityTableRoute(task, operatorUserId);
+            return;
+        }
+
+        DataSyncTableRouteEntity route = routes.get(0);
+        if (compatibilityTableRouteMatches(route, task)) return;
+        applyCompatibilityTableRoute(route, task);
+        route.initUpdate(operatorUserId);
+        if (tableRouteRepository.update(task.getWorkspaceId(), route) == null) {
+            throw new DataSyncException(DataSyncErrorCode.UPDATE_TASK_FAILED, "表级 Route 更新失败");
+        }
+    }
+
+    private void applyCompatibilityTableRoute(DataSyncTableRouteEntity route, DataSyncTaskEntity task) {
+        route.setWorkspaceId(task.getWorkspaceId());
+        route.setTaskId(task.getId());
+        route.setSourceDatabase(task.getSourceDatabase());
+        route.setSourceSchema(task.getSourceSchema());
+        route.setSourceTable(task.getSourceTable());
+        route.setTargetDatabase(task.getTargetDatabase());
+        route.setTargetSchema(task.getTargetSchema());
+        route.setTargetTable(task.getTargetTable());
+        route.setAutoCreateTable(autoCreateTable(task));
+        route.setMappingConfig(task.getMappingConfig());
+        route.setSortOrder(0);
+    }
+
+    private boolean compatibilityTableRouteMatches(DataSyncTableRouteEntity route, DataSyncTaskEntity task) {
+        return Objects.equals(route.getWorkspaceId(), task.getWorkspaceId())
+                && Objects.equals(route.getTaskId(), task.getId())
+                && Objects.equals(route.getSourceDatabase(), task.getSourceDatabase())
+                && Objects.equals(route.getSourceSchema(), task.getSourceSchema())
+                && Objects.equals(route.getSourceTable(), task.getSourceTable())
+                && Objects.equals(route.getTargetDatabase(), task.getTargetDatabase())
+                && Objects.equals(route.getTargetSchema(), task.getTargetSchema())
+                && Objects.equals(route.getTargetTable(), task.getTargetTable())
+                && Boolean.TRUE.equals(route.getAutoCreateTable()) == autoCreateTable(task)
+                && jsonEquals(
+                        normalizedMappingConfigJson(route.getMappingConfig()),
+                        normalizedMappingConfigJson(task.getMappingConfig()))
+                && Objects.equals(route.getSortOrder(), 0);
+    }
+
     private DataSyncTaskVO toTaskListVO(DataSyncTaskEntity source, DataSyncScheduleEntity schedule) {
-        DataSyncTaskVO target = toTaskVO(source);
+        DataSyncTaskVO target = toTaskVO(source, false);
         target.setMapping(null);
         if (schedule != null) {
             target.setScheduleCronExpression(schedule.getCronExpression());
@@ -1882,6 +1950,10 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source) {
+        return toTaskVO(source, true);
+    }
+
+    private DataSyncTaskVO toTaskVO(DataSyncTaskEntity source, boolean includeTableRoutes) {
         DataSyncTaskVO target = BeanCopyUtils.copy(
                 source,
                 DataSyncTaskVO.class,
@@ -1899,12 +1971,47 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         target.setWriteMode(taskWriteMode(source).name());
         target.setAutoCreateTable(autoCreateTable(source));
         target.setMapping(toMappingVO(source.getMappingConfig()));
+        if (includeTableRoutes) {
+            target.setTableRoutes(toTableRouteVOs(source));
+        }
         target.setRetryPolicy(toRetryPolicyVO(source.getRetryPolicy()));
         if (source.getSyncType() == DataSyncType.REALTIME) {
             target.setRealtimeConfig(toRealtimeConfigVO(source.getRuntimeConfig()));
         } else {
             target.setRuntimeConfig(toRuntimeConfigVO(source.getRuntimeConfig()));
         }
+        return target;
+    }
+
+    private List<DataSyncTableRouteVO> toTableRouteVOs(DataSyncTaskEntity task) {
+        if (tableRouteRepository == null) {
+            return List.of(toCompatibilityTableRouteVO(task));
+        }
+        List<DataSyncTableRouteEntity> routes =
+                tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId());
+        return routes.stream().map(this::toTableRouteVO).toList();
+    }
+
+    private DataSyncTableRouteVO toTableRouteVO(DataSyncTableRouteEntity source) {
+        DataSyncTableRouteVO target =
+                BeanCopyUtils.copy(source, DataSyncTableRouteVO.class, "mappingConfig");
+        target.setAutoCreateTable(Boolean.TRUE.equals(source.getAutoCreateTable()));
+        target.setMapping(toMappingVO(source.getMappingConfig()));
+        return target;
+    }
+
+    private DataSyncTableRouteVO toCompatibilityTableRouteVO(DataSyncTaskEntity source) {
+        DataSyncTableRouteVO target = new DataSyncTableRouteVO();
+        target.setId(source.getId());
+        target.setSourceDatabase(source.getSourceDatabase());
+        target.setSourceSchema(source.getSourceSchema());
+        target.setSourceTable(source.getSourceTable());
+        target.setTargetDatabase(source.getTargetDatabase());
+        target.setTargetSchema(source.getTargetSchema());
+        target.setTargetTable(source.getTargetTable());
+        target.setAutoCreateTable(autoCreateTable(source));
+        target.setMapping(toMappingVO(source.getMappingConfig()));
+        target.setSortOrder(0);
         return target;
     }
 
