@@ -6,6 +6,17 @@ Scope: Execution / Attempt 身份、状态聚合、Retry、取消、指标、产
 
 ## Identity
 
+v1.3 PR2 在 Root Execution 与 Attempt 之间建立稳定 Table Execution identity：
+
+```text
+Task
+└─ Root Execution
+   ├─ Table Execution A (PLANNED)
+   └─ Table Execution B (PLANNED)
+```
+
+PR2 只负责冻结 Route 与创建 Table Execution；既有 Attempt 仍是单表 Runtime 的 Root-level 兼容实现。PR3 才把 Attempt / Retry / Metrics 真正下沉为每个 Table Execution 的运行事实。不能把 PR2 的 PLANNED Table Execution 当成已执行状态。
+
 ```text
 Task
  ├─ Execution E1（现有 DataSyncInstance）
