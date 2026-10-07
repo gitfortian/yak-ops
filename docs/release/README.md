@@ -33,6 +33,18 @@ Scope:
 1.2.0 — Scope Frozen / Ready for Formal Release Gate
 ```
 
+下一开发版本 Contract：
+
+```text
+1.3.0 — Multi-Table + Incremental + Long-Running
+```
+
+v1.3.0 规划材料：
+
+- [v1.3.0 Release Contract](./v1.3.0.md)
+
+PR0 只冻结 v1.3 架构与范围边界；在 v1.2.0 正式发布前不切换仓库 Product Version，也不修改 v1.2 Release Candidate / Migration / Evidence。
+
 v1.2.0 候选材料：
 
 - [v1.2.0 Release Contract](./v1.2.0.md)
@@ -459,6 +471,8 @@ Update latest
 ```text
 docs/release/v1.0.0.md
 docs/release/v1.1.0.md
+docs/release/v1.2.0.md
+docs/release/v1.3.0.md
 ```
 
 具体版本 Contract 负责定义：

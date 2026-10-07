@@ -92,6 +92,16 @@ Schema 位于 `yak-ops-dao/src/main/resources/db/migration/yak-ops`。迁移冻�
 
 通过 `DataSourceService` 读取 Catalog / 解析运行连接，不绕过该接口访问 Datasource DAO 或 Plugin Registry。运行计划可以间接持有凭证，但只能存在于内存，不能进入快照、响应或日志。
 
+数据同步扩展到多表、增量和长期运行时，产品级 ownership 仍留在 Data Sync：
+
+- Task 级共享策略与每张表的稳定 Route identity 由 Data Sync 拥有。
+- 一次 Task 运行的 Root Execution、单表 Table Execution 与 Attempt 由 Data Sync 负责持久化和聚合；YakFlow 不成为产品级多任务调度器。
+- OFFLINE Incremental 的 confirmed cursor / watermark、Schema baseline / diff、Recovery budget 与 Task Health 都是产品事实，不下沉到 YakFlow。
+- YakFlow 继续接收单条已解析的 Source → Sink 执行计划并负责数据平面；连接器私有 checkpoint 不能替代产品级 Route 状态。
+- REALTIME periodic reconciliation 属于 Data Sync lifecycle；Boot 可以负责调度 / 装配入口，但不能直接查询 DAO 后自行创建 Execution。
+
+v1.3 的具体范围、兼容要求与 Non-Goals 由 [v1.3.0 Release Contract](docs/release/v1.3.0.md) 冻结；在对应实现 PR 合并前，这些规划能力不计入当前已实现 Capability。
+
 详细行为由 [Data Sync Capability](docs/capabilities/data-sync/README.md) 及其专题定义，实现约束见 [Data Sync Rules](yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md)。
 
 ### `yak-ops-plugins/yak-ops-plugin-datasource`
