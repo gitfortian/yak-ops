@@ -46,27 +46,59 @@ PostgreSQL：
 
 ```sql
 DROP TABLE IF EXISTS e2e_mapping_realtime_target;
-
-CREATE TABLE e2e_mapping_realtime_target (
-    user_id BIGINT PRIMARY KEY,
-    display_name VARCHAR(100)
-);
 ```
+
+目标表必须保持不存在，用于同时验证 Auto Create + 映射后主键建表。
 
 ## Yak Ops 操作
 
 1. 新建实时同步任务。
 2. Source 选择 `e2e_mapping_realtime_source`。
-3. Target 选择 `e2e_mapping_realtime_target`。
+3. Target 开启“自动建表”，目标表名输入 `e2e_mapping_realtime_target`。
 4. 在“去向字段映射”中配置：
    - `name → display_name`
    - `id → user_id`
 5. 不映射 `note`。
-6. 确认 Preview 显示兼容。
+6. 确认 Preview 显示兼容，并通过目标表 DDL 入口确认计划只包含 `display_name / user_id`，且 `user_id` 为主键。
 7. 保存并上线。
-8. 启动任务。
+8. 从实时任务列表点击“启动”。
 
-## Snapshot 验证
+## Auto Create + Snapshot 验证
+
+先确认目标表已经由 Runtime 创建：
+
+```sql
+SELECT
+    column_name,
+    is_nullable,
+    data_type
+FROM information_schema.columns
+WHERE table_name = 'e2e_mapping_realtime_target'
+ORDER BY ordinal_position;
+```
+
+确认只有 `display_name / user_id` 两个业务字段。
+
+再确认主键：
+
+```sql
+SELECT a.attname
+FROM pg_index i
+JOIN pg_attribute a
+  ON a.attrelid = i.indrelid
+ AND a.attnum = ANY(i.indkey)
+WHERE i.indrelid = 'e2e_mapping_realtime_target'::regclass
+  AND i.indisprimary
+ORDER BY array_position(i.indkey, a.attnum);
+```
+
+预期主键为：
+
+```text
+user_id
+```
+
+然后验证 Snapshot。
 
 PostgreSQL：
 
@@ -142,14 +174,81 @@ ORDER BY user_id;
 3 | gamma
 ```
 
+## 实时任务列表启停与续传验证
+
+保持当前 Task / definitionVersion 不变。
+
+从实时任务列表点击：
+
+```text
+停止
+```
+
+预期当前活动 Execution 进入：
+
+```text
+CANCELED / 已停止
+```
+
+用户主动 Stop 会把 `desiredState` 置为 `STOPPED`，因此按钮回到“启动”；这里不把它误写成“重新启动”。
+
+停止期间在 MySQL 新增：
+
+```sql
+INSERT INTO e2e_mapping_realtime_source(id, name, note)
+VALUES (4, 'delta', 'ignored-4');
+```
+
+确认目标端暂时没有 `user_id = 4`。
+
+随后仍从实时任务列表点击：
+
+```text
+启动
+```
+
+等待目标端出现：
+
+```text
+4 | delta
+```
+
+再次查询：
+
+```sql
+SELECT user_id, display_name
+FROM e2e_mapping_realtime_target
+ORDER BY user_id;
+```
+
+预期：
+
+```text
+1 | alpha-v2
+3 | gamma
+4 | delta
+```
+
+不得重新出现已经 DELETE 的 `user_id = 2`。这一步验证同一个 Task / definitionVersion 停止后再次启动继续复用持久化 CDC state，而不是重新做 fresh snapshot。
+
+说明：UI 文案“重新启动”专门用于 `desiredState=RUNNING` 但没有 Active Execution 的差异状态；该状态机由自动 Contract / Acceptance 覆盖，本手工场景验证用户主动 Stop 后的“停止 → 再次启动”产品路径。
+
 ## 验收清单
 
+- [ ] 目标表在运行时自动创建。
+- [ ] 自动建表后只有 `display_name / user_id` 业务字段。
+- [ ] 自动建表后 `user_id` 为主键。
 - [ ] Snapshot 使用目标字段名写入。
 - [ ] `note` 未进入目标表。
 - [ ] `id → user_id` 主键映射通过后端校验。
 - [ ] INSERT 正确。
 - [ ] UPDATE 能通过映射后的主键定位目标记录。
 - [ ] DELETE 能通过映射后的主键删除目标记录。
+- [ ] 实时任务列表可以停止当前活动 Execution。
+- [ ] Stop 后按钮回到“启动”，没有错误显示为“重新启动”。
+- [ ] 停止期间 Source 新增事件不会提前写入 Target。
+- [ ] 再次启动后继续消费停止期间的 `id = 4`。
+- [ ] 再次启动没有退化为 fresh snapshot，也没有恢复已删除的 `user_id = 2`。
 - [ ] 没有把运行结果描述为 exactly-once。
 
 ## 清理
