@@ -62,6 +62,10 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 
 ## Task and Mapping Implementation
 
+- v1.3 起 Table Route 是 Source / Target table path、Mapping、Auto Create 与 route order 的稳定产品 owner；Task 根记录上的单表字段在过渡期只是 Runtime / API 兼容投影，禁止新增能力继续把表级状态绑定回 Task。
+- Route 必须使用稳定 ID 持久化为独立子资源，不能存成 Task 内 opaque JSON；所有 Route Repository 查询都必须带 workspaceId。
+- PR1 的旧单表写接口只允许维护唯一兼容 Route：创建 Task 后同事务创建 Route，编辑保持原 Route ID，删除 Task 同事务删除当前 Route。检测到多 Route 时旧单表编辑入口必须拒绝覆盖。
+- v1.2 → v1.3 Migration 只把现有单表定义投影为 one Route，不推进 Task definitionVersion、不修改历史 definitionSnapshot、不触发 Runtime，也不重置 REALTIME CDC state。
 - 通过 WorkspaceContext.requireWorkspaceId 获取产品请求范围；所有 Task / Schedule / Execution / Attempt 访问必须带 workspaceId，不能仅凭资源 ID 查询。
 - Task 保存、发布、运行均按 [Task / Mapping Contract](../../docs/capabilities/data-sync/README.md#datasource-scope-and-mapping) 做服务端校验；前端值只在未绑定范围内参与选择。
 - Task `mapping_config` 为可空 JSON：NULL 表示旧行为的隐式同名映射；显式 Mapping 必须 trim 字段名，并保证 source / target 分别大小写不敏感唯一。Mapping 只保存字段身份，不保存表达式、SQL、类型转换或业务字段值。
