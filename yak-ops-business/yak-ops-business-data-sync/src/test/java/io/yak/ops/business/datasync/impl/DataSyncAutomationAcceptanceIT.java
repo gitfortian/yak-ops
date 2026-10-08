@@ -61,12 +61,14 @@ class DataSyncAutomationAcceptanceIT {
     @Test
     void shouldCreateOneScheduledExecutionAndSkipSecondFireWhileActive() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = offlineTask();
+        DataSyncTestTableRouteRepository.inject(service, task);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicBoolean active = new AtomicBoolean(false);
         AtomicInteger adds = new AtomicInteger();
         AtomicReference<DataSyncInstanceEntity> created = new AtomicReference<>();
 
-        inject(service, "taskRepository", singleTaskRepository(offlineTask()));
+        inject(service, "taskRepository", singleTaskRepository(task));
         inject(service, "scheduleRepository", scheduleRepository(schedule(true)));
         inject(service, "instanceRepository", activeInstanceRepository(active, adds, created));
         injectDataSourceService(service, dataSourceService());
@@ -88,6 +90,7 @@ class DataSyncAutomationAcceptanceIT {
     void shouldIgnoreScheduleFireAfterScheduleIsDisabled() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger adds = new AtomicInteger();
 
         inject(service, "scheduleRepository", scheduleRepository(schedule(false)));
@@ -250,8 +253,9 @@ class DataSyncAutomationAcceptanceIT {
     @Test
     void shouldAutoRecoverRealtimeWithSameTaskVersionAndCdcStateIdentity() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
         DataSyncTaskEntity task = realtimeTask();
+        DataSyncTestTableRouteRepository.inject(service, task);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncInstanceEntity> created = new AtomicReference<>();
 
         inject(service, "taskRepository", desiredRunningRepository(task));

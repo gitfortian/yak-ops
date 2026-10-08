@@ -175,9 +175,9 @@ readRows / writeRows 继续遵循 [Execution Metrics Semantics](execution-retry-
 
 ## Current Capability Boundary
 
-当前 Runtime 仍为单节点、单表执行。v1.3 PR1 已增加稳定 Table Route persistence，并把 v1.2 单表 Task 兼容为 one Route；Task 详情可读取 Route，但当前写 API、definitionSnapshot、Schema Preview 与 Executor 仍消费单 Route 兼容投影，不声明 Multi-Table Runtime 已实现。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime、Schema Preview UI、任务级 Column Mapping、OFFLINE AUTO Runtime Planning、SMART Retry 与 Durable RETRY_WAITING Recovery。普通 Task Editor 不暴露底层 Runtime / Retry tuning；系统负责物化默认 Policy，Execution Detail 展示冻结后的 Effective Config / Retry Policy 事实。
+当前 Runtime 仍为单节点、单表执行。v1.3 PR1 已增加稳定 Table Route persistence，并把 v1.2 单表 Task 兼容为 one Route；PR2 进一步让 Root definitionSnapshot 冻结有序 `tableRoutes[]`，并为每条 Route 创建 PLANNED Table Execution。当前 Executor 仍只消费首 Route 兼容投影，因此运行入口继续阻断 N>1 Route，不声明 Multi-Table Runtime 已实现。v1.2 已具备 Schema / Logical Table Contract、Source Metadata Introspection、Logical Type Normalization、跨 MySQL / PostgreSQL / Oracle 的 Target Table Planning、Schema Compatibility、显式 Auto Create Table Runtime、Schema Preview UI、任务级 Column Mapping、OFFLINE AUTO Runtime Planning、SMART Retry 与 Durable RETRY_WAITING Recovery。普通 Task Editor 不暴露底层 Runtime / Retry tuning；系统负责物化默认 Policy，Execution Detail 展示冻结后的 Effective Config / Retry Policy 事实。
 
-发布、Schedule、启动自动恢复以及列表级 OFFLINE 运行、REALTIME 启动 / 停止 / 重新启动都是已有能力，不再列为“后续阶段”。Multi-Table Route 的当前边界见 [Multi-Table Route Contract](multi-table.md)：PR1 只完成持久化地基，不包含 Table Execution / Multi-Table Runtime / Editor。Catalog refresh / diff、Automatic Schema Evolution、Incremental、Continuous Realtime Reconciliation 等能力继续按 v1.3 Release Contract 后续 PR 推进；Transform、分布式 Worker / HA / fencing 与 exactly-once 仍不在当前能力范围。
+发布、Schedule、启动自动恢复以及列表级 OFFLINE 运行、REALTIME 启动 / 停止 / 重新启动都是已有能力，不再列为“后续阶段”。Multi-Table Route 的当前边界见 [Multi-Table Route Contract](multi-table.md)：PR1 完成 Route 持久化，PR2 完成 Definition Snapshot + PLANNED Table Execution；逐表 Runtime / Retry / Metrics / Editor 仍未开放。Catalog refresh / diff、Automatic Schema Evolution、Incremental、Continuous Realtime Reconciliation 等能力继续按 v1.3 Release Contract 后续 PR 推进；Transform、分布式 Worker / HA / fencing 与 exactly-once 仍不在当前能力范围。
 
 ## Code and Verification
 

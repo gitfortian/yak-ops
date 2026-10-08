@@ -19,26 +19,32 @@ final class DataSyncTestTableRouteRepository {
     private DataSyncTestTableRouteRepository() {}
 
     static DataSyncTableRouteRepository inject(DataSyncServiceImpl service) throws Exception {
-        return inject(service, null);
+        return inject(service, List.of());
     }
 
     static DataSyncTableRouteRepository inject(DataSyncServiceImpl service, DataSyncTaskEntity task) throws Exception {
+        if (task == null) return inject(service);
+        DataSyncTableRouteEntity route = new DataSyncTableRouteEntity();
+        route.setId(task.getId());
+        route.setWorkspaceId(task.getWorkspaceId());
+        route.setTaskId(task.getId());
+        route.setSourceDatabase(task.getSourceDatabase());
+        route.setSourceSchema(task.getSourceSchema());
+        route.setSourceTable(task.getSourceTable());
+        route.setTargetDatabase(task.getTargetDatabase());
+        route.setTargetSchema(task.getTargetSchema());
+        route.setTargetTable(task.getTargetTable());
+        route.setAutoCreateTable(Boolean.TRUE.equals(task.getAutoCreateTable()));
+        route.setMappingConfig(task.getMappingConfig());
+        route.setSortOrder(0);
+        return inject(service, List.of(route));
+    }
+
+    static DataSyncTableRouteRepository inject(DataSyncServiceImpl service, List<DataSyncTableRouteEntity> routes)
+            throws Exception {
         DataSyncTableRouteRepository repository = create();
-        if (task != null) {
-            DataSyncTableRouteEntity route = new DataSyncTableRouteEntity();
-            route.setId(task.getId());
-            route.setWorkspaceId(task.getWorkspaceId());
-            route.setTaskId(task.getId());
-            route.setSourceDatabase(task.getSourceDatabase());
-            route.setSourceSchema(task.getSourceSchema());
-            route.setSourceTable(task.getSourceTable());
-            route.setTargetDatabase(task.getTargetDatabase());
-            route.setTargetSchema(task.getTargetSchema());
-            route.setTargetTable(task.getTargetTable());
-            route.setAutoCreateTable(Boolean.TRUE.equals(task.getAutoCreateTable()));
-            route.setMappingConfig(task.getMappingConfig());
-            route.setSortOrder(0);
-            repository.add(route);
+        if (routes != null) {
+            routes.forEach(repository::add);
         }
         Field field = DataSyncServiceImpl.class.getDeclaredField("tableRouteRepository");
         field.setAccessible(true);

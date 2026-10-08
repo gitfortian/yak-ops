@@ -1,6 +1,6 @@
 # Data Sync Multi-Table Route Contract
 
-Status: Active — v1.3 PR1 Persistence Foundation
+Status: Active — v1.3 PR2 Definition Snapshot + Table Execution
 
 Scope:
 
@@ -43,7 +43,7 @@ Target Table
 
 后续 Incremental Cursor、Schema Baseline、Table Execution、Route Metrics 与 Health 都以 Route ID 作为产品身份，不通过表名字符串拼接身份。
 
-PR1 只建立 Contract + Persistence Foundation；真正的多表 Definition Snapshot、Table Execution、Runtime 和 Editor 属于后续 PR。
+PR1 已建立 Route Contract + Persistence；PR2 进一步让 Root Execution 冻结全部 Route，并为每条 Route 创建稳定 Table Execution。真正的逐表 Runtime / Retry / Metrics 与 Editor 仍属于后续 PR。
 
 ## 2. Ownership
 
@@ -200,27 +200,71 @@ PR1 正常情况下只有一条 Route。
 
 Task 分页列表暂不展开 Route 明细，避免为每行 Task 产生额外 Route 查询和大 payload；列表仍沿用当前摘要字段，PR4 再设计多表摘要 UI。
 
-## 7. Runtime Boundary
+## 7. Definition Snapshot
 
-PR1 **不改变 Runtime Source of Truth**。
-
-当前 Execution 创建、definitionSnapshot、Schema Preview、OFFLINE / REALTIME Executor 仍继续读取 Task 根记录上的单表兼容字段。
-
-这是有意的过渡边界：
+PR2 起，新的 Root Execution snapshot 以 `tableRoutes[]` 冻结完整表级定义：
 
 ```text
-PR1
-Route persistence exists
-Runtime = legacy single-table projection
-
-PR2
-Definition Snapshot + Table Execution
-Runtime starts consuming frozen Routes
+definitionSnapshot
+├── task shared policy
+└── tableRoutes[]
+    ├── routeId / sortOrder
+    ├── source endpoint
+    ├── target endpoint
+    ├── mapping
+    ├── autoCreateTable
+    ├── effective runtime config
+    └── offline runtime plan
 ```
 
-因此 PR1 合并不代表“多表任务已经可以运行”。
+OFFLINE AUTO Runtime Planning 按 Route 独立计算并冻结，因此不同表可以拥有不同 Effective Config。Retry / Recovery 必须复用 Root Execution 已冻结的 Route Snapshot，不能重新读取 Task 当前 Route 覆盖历史执行。
 
-## 8. definitionVersion
+为了保持 v1.2 单表 Executor 兼容，Root Snapshot 暂时继续保存首 Route 的 `source / target / mapping / autoCreateTable / runtimeConfig / offlineRuntimePlan` 投影。该投影只用于过渡兼容，新的 canonical 表级定义是 `tableRoutes[]`。
+
+历史 v1.2 Snapshot 没有 `tableRoutes[]` 时继续按旧字段读取，不回填或改写历史 JSON。
+
+## 8. Table Execution
+
+PR2 新增：
+
+```text
+Root Execution
+├── Table Execution A
+├── Table Execution B
+└── Table Execution C
+```
+
+每个 Table Execution 固定：
+
+- Root executionId。
+- frozen routeId。
+- routeOrder。
+- 独立表级状态 / Attempt 序号 / 指标 / 时间 /错误字段的持久化位置。
+
+PR2 创建 Table Execution 时状态固定为：
+
+```text
+PLANNED
+```
+
+它只表示“该 Route 已被冻结并拥有稳定表级执行身份”，**不表示表级 Runtime 已经启动**。PR3 才允许 Table Execution 进入 PENDING / RUNNING / RETRY_WAITING / terminal 状态，并把 Attempt / Metrics 真正归到表级执行。
+
+Root Execution 与全部 Table Execution 在 Runtime 提交前创建；任何 Route identity 都不能通过 Source / Target table name 临时拼接。
+
+## 9. Current Runtime Boundary
+
+PR2 已把定义 Source of Truth 切到 persisted Route + frozen `tableRoutes[]`，但现有 OFFLINE / REALTIME Executor 仍只消费首 Route 的兼容投影。
+
+为了避免 PR3 前发生“多 Route 任务只执行第一张表”的数据错误，当前发布 / 运行校验明确拒绝 Route 数量大于 1：
+
+```text
+N Route Snapshot = contract ready
+N Route Runtime = blocked until PR3
+```
+
+因此 PR2 合并仍不代表产品已经开放 Multi-Table Runtime。
+
+## 10. definitionVersion
 
 Migration 只把现有定义投影为 Route，不能推进 `definitionVersion`。
 
@@ -232,7 +276,7 @@ PR1 期间通过旧单表 API 修改 Source / Target / Mapping / Auto Create 时
 
 后续多 Route 编辑时，任何会改变冻结可执行 Route 集合或 Route 内容的变化都必须进入统一 definitionVersion 比较；该部分由后续 Contract 冻结。
 
-## 9. Migration Status
+## 11. Migration Status
 
 v1.2 已发布历史：
 
@@ -244,31 +288,32 @@ V3__v1_2_0.sql
 
 永久冻结。
 
-PR1 新增开发期 Draft：
+v1.3 当前开发期 Draft：
 
 ```text
 V4__data_sync_multi_table_route.sql
+V5__data_sync_table_execution.sql
 ```
 
-该文件只属于 v1.3 可重建开发 / E2E 历史；Release Freeze 前必须按照 Flyway Rules 与其它 v1.3 Draft 一起审查并收口为最多一个正式 `V4__v1_3_0.sql`。
+这些文件只属于 v1.3 可重建开发 / E2E 历史；Release Freeze 前必须按照 Flyway Rules 一起审查并收口为最多一个正式 `V4__v1_3_0.sql`。
 
-## 10. PR1 Non-Goals
+## 12. PR2 Non-Goals
 
-PR1 不做：
+PR2 不做：
 
 - 多 Route 创建 / 编辑 HTTP DTO。
 - OFFLINE Multi-Table Runtime。
-- Table Execution / per-table Attempt。
-- Per-table Retry / Metrics。
+- Table Execution Runtime 状态迁移。
+- per-table Attempt / Retry / Metrics。
 - Multi-Table Editor。
 - REALTIME Multi-Table CDC。
 - Incremental Cursor。
 - Catalog Refresh / Schema Diff。
 - Schema Evolution。
-- 删除 Task 根记录上的历史单表字段。
+- 删除 Snapshot 首 Route 兼容投影。
 
 下一步：
 
 ```text
-PR2 — Multi-Table Definition Snapshot + Table Execution
+PR3 — Multi-Table Runtime + Per-Table Retry / Metrics
 ```

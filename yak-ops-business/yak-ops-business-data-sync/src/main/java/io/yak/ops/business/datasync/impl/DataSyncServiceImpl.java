@@ -68,6 +68,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTableRouteSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTableRouteVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
@@ -79,6 +80,7 @@ import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
 import io.yak.ops.common.enums.datasync.DataSyncOperationsRange;
 import io.yak.ops.common.enums.datasync.DataSyncRetryPolicyMode;
 import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
+import io.yak.ops.common.enums.datasync.DataSyncTableExecutionStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTriggerType;
 import io.yak.ops.common.enums.datasync.DataSyncType;
@@ -95,6 +97,7 @@ import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncTableExecutionEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTableRouteEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncAttemptRepository;
@@ -107,6 +110,7 @@ import io.yak.ops.dao.repository.datasync.DataSyncOperationsStatusStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsSummaryStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsTrendStats;
 import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncTableExecutionRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTableRouteRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
@@ -122,6 +126,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -158,6 +163,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncTableRouteRepository tableRouteRepository;
+
+    @Resource
+    private DataSyncTableExecutionRepository tableExecutionRepository;
 
     @Resource
     private DataSyncInstanceRepository instanceRepository;
@@ -511,14 +519,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSyncTaskEntity task = requireTask(workspaceId, id);
         requireTaskStatus(task, DataSyncTaskStatus.PUBLISHED, "任务尚未上线");
-        DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+        List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
         if (instanceRepository.existsActiveByTask(workspaceId, task.getId())) {
             throw new DataSyncException(DataSyncErrorCode.ACTIVE_INSTANCE_EXISTS);
         }
         if (task.getSyncType() == DataSyncType.REALTIME) {
             updateDesiredState(workspaceId, task, DataSyncDesiredState.RUNNING);
         }
-        return createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.MANUAL);
+        return createInstance(workspaceId, task, routes, DataSyncTriggerType.MANUAL);
     }
 
     @Override
@@ -670,9 +678,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                     continue;
                 }
 
-                DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+                List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
                 DataSyncInstanceVO recovered =
-                        createInstance(workspaceId, task, resolvedScope, DataSyncTriggerType.AUTO_RECOVERY);
+                        createInstance(workspaceId, task, routes, DataSyncTriggerType.AUTO_RECOVERY);
                 LOG.info(
                         "实时同步自动恢复已创建新Execution，workspaceId={}, taskId={}, taskVersion={}, instanceId={}",
                         workspaceId,
@@ -734,9 +742,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 return;
             }
 
-            DataSyncMappingPreviewDTO resolvedScope = validatePersistedTaskDefinition(task);
+            List<DataSyncTableRouteEntity> routes = validatePersistedTaskDefinition(task);
             DataSyncInstanceVO instance =
-                    createInstance(fire.workspaceId(), task, resolvedScope, DataSyncTriggerType.SCHEDULE);
+                    createInstance(fire.workspaceId(), task, routes, DataSyncTriggerType.SCHEDULE);
             LOG.info(
                     "离线调度已创建同步实例，workspaceId={}, taskId={}, scheduleId={}, instanceId={}",
                     fire.workspaceId(),
@@ -1017,9 +1025,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncInstanceVO createInstance(
             String workspaceId,
             DataSyncTaskEntity task,
-            DataSyncMappingPreviewDTO resolvedScope,
+            List<DataSyncTableRouteEntity> routes,
             DataSyncTriggerType triggerType) {
-        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, resolvedScope);
+        DataSyncDefinitionSnapshotVO snapshot = definitionSnapshot(task, routes);
         DataSyncInstanceEntity instance = new DataSyncInstanceEntity();
         instance.setWorkspaceId(workspaceId);
         instance.setTaskId(task.getId());
@@ -1039,6 +1047,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (instanceRepository.add(instance) == null) {
             throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建同步实例失败");
         }
+        createTableExecutions(workspaceId, instance.getId(), snapshot.getTableRoutes());
         if (triggerType == DataSyncTriggerType.AUTO_RECOVERY) {
             attemptLifecycle.recordAutoRecoveryStarted(workspaceId, instance.getId());
         }
@@ -1174,20 +1183,66 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return target;
     }
 
-    private DataSyncMappingPreviewDTO validatePersistedTaskDefinition(DataSyncTaskEntity task) {
-        DataSyncMappingPreviewDTO resolvedScope =
-                resolveMappingScope(BeanCopyUtils.copy(task, DataSyncMappingPreviewDTO.class));
-        resolvedScope.setMapping(mappingConfig(task.getMappingConfig()));
+    private List<DataSyncTableRouteEntity> validatePersistedTaskDefinition(DataSyncTaskEntity task) {
+        List<DataSyncTableRouteEntity> routes = requirePersistedTableRoutes(task);
         DataSyncWriteMode writeMode = taskWriteMode(task);
         validateWriteMode(task.getSyncType(), writeMode);
-        if (task.getSyncType() == DataSyncType.REALTIME) {
-            validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
-        } else {
-            validateOfflineUpsertTarget(
-                    task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
+        if (routes.size() > 1) {
+            throw new DataSyncException(
+                    DataSyncErrorCode.INVALID_TASK,
+                    task.getSyncType() == DataSyncType.REALTIME
+                            ? "REALTIME 当前只支持单 Route"
+                            : "OFFLINE Multi-Table Runtime 将由后续 PR 开启");
         }
-        requireCompatibleMapping(resolvedScope);
-        return resolvedScope;
+
+        for (DataSyncTableRouteEntity route : routes) {
+            DataSyncMappingPreviewDTO resolvedScope = resolveRouteScope(task, route);
+            if (task.getSyncType() == DataSyncType.REALTIME) {
+                validateRealtimeTopology(task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope);
+            } else {
+                validateOfflineUpsertTarget(
+                        task.getSourceDataSourceId(), task.getTargetDataSourceId(), resolvedScope, writeMode);
+            }
+            requireCompatibleMapping(resolvedScope);
+        }
+        return routes;
+    }
+
+    private List<DataSyncTableRouteEntity> requirePersistedTableRoutes(DataSyncTaskEntity task) {
+        List<DataSyncTableRouteEntity> routes =
+                new ArrayList<>(tableRouteRepository.queryByTask(task.getWorkspaceId(), task.getId()));
+        if (routes.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步任务缺少 Table Route");
+        }
+        routes.sort(
+                Comparator.comparing(DataSyncTableRouteEntity::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(DataSyncTableRouteEntity::getId, Comparator.nullsLast(String::compareTo)));
+        for (int index = 0; index < routes.size(); index++) {
+            DataSyncTableRouteEntity route = routes.get(index);
+            if (!Objects.equals(route.getWorkspaceId(), task.getWorkspaceId())
+                    || !Objects.equals(route.getTaskId(), task.getId())
+                    || StringUtils.isBlank(route.getId())
+                    || route.getSortOrder() == null
+                    || route.getSortOrder() != index) {
+                throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "Table Route 身份或顺序不合法");
+            }
+        }
+        return List.copyOf(routes);
+    }
+
+    private DataSyncMappingPreviewDTO resolveRouteScope(DataSyncTaskEntity task, DataSyncTableRouteEntity route) {
+        DataSyncMappingPreviewDTO scope = new DataSyncMappingPreviewDTO();
+        scope.setSourceDataSourceId(task.getSourceDataSourceId());
+        scope.setSourceDatabase(route.getSourceDatabase());
+        scope.setSourceSchema(route.getSourceSchema());
+        scope.setSourceTable(route.getSourceTable());
+        scope.setTargetDataSourceId(task.getTargetDataSourceId());
+        scope.setTargetDatabase(route.getTargetDatabase());
+        scope.setTargetSchema(route.getTargetSchema());
+        scope.setTargetTable(route.getTargetTable());
+        scope.setAutoCreateTable(Boolean.TRUE.equals(route.getAutoCreateTable()));
+        scope.setMapping(mappingConfig(route.getMappingConfig()));
+        return resolveMappingScope(scope);
     }
 
     private boolean executableDefinitionChanged(
@@ -1555,13 +1610,24 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncDefinitionSnapshotVO definitionSnapshot(
-            DataSyncTaskEntity task, DataSyncMappingPreviewDTO resolvedScope) {
+            DataSyncTaskEntity task, List<DataSyncTableRouteEntity> routes) {
+        if (routes == null || routes.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "同步任务缺少可冻结的 Table Route");
+        }
+
         DataSourceVO source = dataSourceService.queryDataSource(task.getSourceDataSourceId());
         DataSourceVO target = dataSourceService.queryDataSource(task.getTargetDataSourceId());
-        DataSyncEndpointSnapshotVO sourceEndpoint = endpointSnapshot(
-                source, resolvedScope.getSourceDatabase(), resolvedScope.getSourceSchema(), task.getSourceTable());
-        DataSyncEndpointSnapshotVO targetEndpoint = endpointSnapshot(
-                target, resolvedScope.getTargetDatabase(), resolvedScope.getTargetSchema(), task.getTargetTable());
+        DataSyncRuntimeConfigVO taskRuntimeConfig =
+                task.getSyncType() == DataSyncType.OFFLINE ? toRuntimeConfigVO(task.getRuntimeConfig()) : null;
+        DataSourceConnection sourceConnection = task.getSyncType() == DataSyncType.OFFLINE
+                        && taskRuntimeConfig.getPolicy() == DataSyncRuntimePolicy.AUTO
+                ? dataSourceService.resolveRuntimeConnection(task.getSourceDataSourceId())
+                : null;
+
+        List<DataSyncTableRouteSnapshotVO> routeSnapshots = routes.stream()
+                .map(route -> tableRouteSnapshot(task, route, source, target, taskRuntimeConfig, sourceConnection))
+                .toList();
+        DataSyncTableRouteSnapshotVO compatibilityRoute = routeSnapshots.get(0);
 
         DataSyncDefinitionSnapshotVO snapshot = new DataSyncDefinitionSnapshotVO();
         snapshot.setTaskId(task.getId());
@@ -1569,39 +1635,91 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         snapshot.setTaskVersion(task.getDefinitionVersion());
         snapshot.setSyncType(task.getSyncType().name());
         snapshot.setWriteMode(taskWriteMode(task).name());
-        snapshot.setAutoCreateTable(autoCreateTable(task));
-        snapshot.setMapping(toMappingVO(task.getMappingConfig()));
         snapshot.setRetryPolicy(toRetryPolicyVO(task.getRetryPolicy()));
-        snapshot.setSource(sourceEndpoint);
-        snapshot.setTarget(targetEndpoint);
+        snapshot.setTableRoutes(routeSnapshots);
+
+        // PR2 keeps the existing single-route Runtime contract alive by projecting the first
+        // frozen Route onto the historical root fields. PR3 will execute tableRoutes directly.
+        snapshot.setSource(compatibilityRoute.getSource());
+        snapshot.setTarget(compatibilityRoute.getTarget());
+        snapshot.setAutoCreateTable(compatibilityRoute.getAutoCreateTable());
+        snapshot.setMapping(compatibilityRoute.getMapping());
         if (task.getSyncType() == DataSyncType.REALTIME) {
             snapshot.setRealtimeConfig(toRealtimeConfigVO(task.getRuntimeConfig()));
         } else {
-            DataSyncRuntimeConfigVO taskRuntimeConfig = toRuntimeConfigVO(task.getRuntimeConfig());
-            if (taskRuntimeConfig.getPolicy() == DataSyncRuntimePolicy.AUTO) {
-                LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
-                        task.getSourceDataSourceId(),
-                        sourceEndpoint.getDatabase(),
-                        sourceEndpoint.getSchema(),
-                        sourceEndpoint.getTable());
-                ResolvedSchemaMapping resolvedMapping =
-                        resolveSchemaMapping(sourceLogicalTable, mappingConfig(task.getMappingConfig()));
-                DataSourceConnection sourceConnection =
-                        dataSourceService.resolveRuntimeConnection(task.getSourceDataSourceId());
-                OfflineRuntimePlan runtimePlan = offlineRuntimePlanner.plan(
-                        sourceConnection,
-                        new DataSourceTablePath(
-                                sourceEndpoint.getDatabase(), sourceEndpoint.getSchema(), sourceEndpoint.getTable()),
-                        resolvedMapping.sourceTable(),
-                        target.getDbType(),
-                        taskRuntimeConfig);
-                snapshot.setRuntimeConfig(runtimePlan.effectiveConfig());
-                snapshot.setOfflineRuntimePlan(runtimePlan.summary());
-            } else {
-                snapshot.setRuntimeConfig(taskRuntimeConfig);
-            }
+            snapshot.setRuntimeConfig(compatibilityRoute.getRuntimeConfig());
+            snapshot.setOfflineRuntimePlan(compatibilityRoute.getOfflineRuntimePlan());
         }
         return snapshot;
+    }
+
+    private DataSyncTableRouteSnapshotVO tableRouteSnapshot(
+            DataSyncTaskEntity task,
+            DataSyncTableRouteEntity route,
+            DataSourceVO source,
+            DataSourceVO target,
+            DataSyncRuntimeConfigVO taskRuntimeConfig,
+            DataSourceConnection sourceConnection) {
+        DataSyncEndpointSnapshotVO sourceEndpoint =
+                endpointSnapshot(source, route.getSourceDatabase(), route.getSourceSchema(), route.getSourceTable());
+        DataSyncEndpointSnapshotVO targetEndpoint =
+                endpointSnapshot(target, route.getTargetDatabase(), route.getTargetSchema(), route.getTargetTable());
+
+        DataSyncTableRouteSnapshotVO snapshot = new DataSyncTableRouteSnapshotVO();
+        snapshot.setRouteId(route.getId());
+        snapshot.setSortOrder(route.getSortOrder());
+        snapshot.setSource(sourceEndpoint);
+        snapshot.setTarget(targetEndpoint);
+        snapshot.setAutoCreateTable(Boolean.TRUE.equals(route.getAutoCreateTable()));
+        snapshot.setMapping(toMappingVO(route.getMappingConfig()));
+
+        if (task.getSyncType() != DataSyncType.OFFLINE) {
+            return snapshot;
+        }
+        if (taskRuntimeConfig.getPolicy() != DataSyncRuntimePolicy.AUTO) {
+            snapshot.setRuntimeConfig(taskRuntimeConfig);
+            return snapshot;
+        }
+
+        LogicalTable sourceLogicalTable = sourceTableIntrospector.introspect(
+                task.getSourceDataSourceId(),
+                sourceEndpoint.getDatabase(),
+                sourceEndpoint.getSchema(),
+                sourceEndpoint.getTable());
+        ResolvedSchemaMapping resolvedMapping =
+                resolveSchemaMapping(sourceLogicalTable, mappingConfig(route.getMappingConfig()));
+        OfflineRuntimePlan runtimePlan = offlineRuntimePlanner.plan(
+                sourceConnection,
+                new DataSourceTablePath(
+                        sourceEndpoint.getDatabase(), sourceEndpoint.getSchema(), sourceEndpoint.getTable()),
+                resolvedMapping.sourceTable(),
+                target.getDbType(),
+                taskRuntimeConfig);
+        snapshot.setRuntimeConfig(runtimePlan.effectiveConfig());
+        snapshot.setOfflineRuntimePlan(runtimePlan.summary());
+        return snapshot;
+    }
+
+    private void createTableExecutions(
+            String workspaceId, String executionId, List<DataSyncTableRouteSnapshotVO> routeSnapshots) {
+        if (routeSnapshots == null || routeSnapshots.isEmpty()) {
+            throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "Execution 缺少冻结 Table Route");
+        }
+        for (DataSyncTableRouteSnapshotVO route : routeSnapshots) {
+            DataSyncTableExecutionEntity tableExecution = new DataSyncTableExecutionEntity();
+            tableExecution.setWorkspaceId(workspaceId);
+            tableExecution.setExecutionId(executionId);
+            tableExecution.setRouteId(route.getRouteId());
+            tableExecution.setRouteOrder(route.getSortOrder());
+            tableExecution.setStatus(DataSyncTableExecutionStatus.PLANNED);
+            tableExecution.setCurrentAttempt(0);
+            tableExecution.setReadRows(0L);
+            tableExecution.setWriteRows(0L);
+            tableExecution.initCreate();
+            if (tableExecutionRepository.add(tableExecution) == null) {
+                throw new DataSyncException(DataSyncErrorCode.EXECUTION_FAILED, "创建 Table Execution 失败");
+            }
+        }
     }
 
     private DataSyncEndpointSnapshotVO endpointSnapshot(

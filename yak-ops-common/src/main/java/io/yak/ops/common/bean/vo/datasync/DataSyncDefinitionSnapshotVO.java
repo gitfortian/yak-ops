@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.vo.datasync;
 
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -34,19 +35,30 @@ public class DataSyncDefinitionSnapshotVO {
     /** 实例启动时固化的目标数据源与表路径，不包含连接凭证。 */
     private DataSyncEndpointSnapshotVO target;
 
-    /** Execution 创建时固化的目标表自动创建策略。 */
+    /**
+     * 兼容旧 Runtime 的首 Route 自动建表投影；新的表级定义以 tableRoutes 为准。
+     */
     private Boolean autoCreateTable;
 
-    /** Execution 创建时固化的任务级字段映射；为空表示沿用系统默认同名映射。 */
+    /**
+     * 兼容旧 Runtime 的首 Route Mapping 投影；新的表级定义以 tableRoutes 为准。
+     */
     private DataSyncMappingVO mapping;
+
+    /** Root Execution 创建时按 Route 顺序冻结的全部表级定义。 */
+    private List<DataSyncTableRouteSnapshotVO> tableRoutes;
 
     /** Execution 创建时固化的 Retry Policy；所有 Attempt 共用。 */
     private DataSyncRetryPolicyVO retryPolicy;
 
-    /** OFFLINE 实例启动时固化的 YakFlow 运行参数；REALTIME 实例为空。 */
+    /**
+     * 兼容旧 Runtime 的首 Route Effective Runtime Config；新的 OFFLINE 表级配置以 tableRoutes 为准。
+     */
     private DataSyncRuntimeConfigVO runtimeConfig;
 
-    /** OFFLINE 实例创建时固化的自动规划依据与分片摘要；REALTIME 实例为空。 */
+    /**
+     * 兼容旧 Runtime 的首 Route AUTO 规划摘要；新的 OFFLINE 表级规划以 tableRoutes 为准。
+     */
     private DataSyncOfflineRuntimePlanVO offlineRuntimePlan;
 
     /** REALTIME 实例启动时固化的 CDC / Checkpoint 参数；OFFLINE 实例为空。 */

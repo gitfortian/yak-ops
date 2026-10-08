@@ -54,6 +54,7 @@ class DataSyncScheduleContractTest {
     void shouldSaveNewOfflineScheduleDisabledAndValidateDefinition() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicReference<DataSyncScheduleEntity> added = new AtomicReference<>();
         TestScheduleEngine engine = new TestScheduleEngine();
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.UNPUBLISHED)));
@@ -76,6 +77,7 @@ class DataSyncScheduleContractTest {
     void shouldPreviewScheduleUsingRequestedTimezone() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         TestScheduleEngine engine = new TestScheduleEngine();
         inject(service, "scheduleEngine", engine);
 
@@ -92,6 +94,7 @@ class DataSyncScheduleContractTest {
     void shouldReturnNullWhenOfflineTaskHasNoSchedule() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
         inject(
                 service,
@@ -107,6 +110,7 @@ class DataSyncScheduleContractTest {
     void shouldEnablePublishedOfflineScheduleAndRegisterRuntime() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncScheduleEntity schedule = schedule(false);
         AtomicReference<DataSyncScheduleEntity> updated = new AtomicReference<>();
         TestScheduleEngine engine = new TestScheduleEngine();
@@ -129,6 +133,7 @@ class DataSyncScheduleContractTest {
     void shouldSkipScheduledFireWhenTaskAlreadyHasActiveInstance() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger instanceAdds = new AtomicInteger();
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
         inject(service, "scheduleRepository", scheduleRepository(schedule(true), new AtomicReference<>(), new AtomicReference<>()));
@@ -142,12 +147,14 @@ class DataSyncScheduleContractTest {
     @Test
     void shouldCreateScheduleTriggeredInstanceAndSubmitOfflineExecution() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.PUBLISHED);
+        DataSyncTestTableRouteRepository.inject(service, task);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger instanceAdds = new AtomicInteger();
         AtomicReference<DataSyncInstanceEntity> capturedInstance = new AtomicReference<>();
         AtomicReference<String> submittedInstanceId = new AtomicReference<>();
 
-        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(service, "taskRepository", taskRepository(task));
         inject(service, "scheduleRepository", scheduleRepository(schedule(true), new AtomicReference<>(), new AtomicReference<>()));
         inject(service, "instanceRepository", instanceRepository(false, instanceAdds, capturedInstance));
         inject(service, "dataSourceService", dataSourceService());
@@ -171,10 +178,12 @@ class DataSyncScheduleContractTest {
     @Test
     void shouldClearWorkspaceContextWhenScheduledFireFails() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTaskEntity task = task(DataSyncTaskStatus.PUBLISHED);
+        DataSyncTestTableRouteRepository.inject(service, task);
+        DataSyncTestTableExecutionRepository.inject(service);
         AtomicInteger instanceAdds = new AtomicInteger();
 
-        inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));
+        inject(service, "taskRepository", taskRepository(task));
         inject(
                 service,
                 "scheduleRepository",
@@ -196,6 +205,7 @@ class DataSyncScheduleContractTest {
     void shouldRestoreEnabledScheduleFromDatabaseSourceOfTruth() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         DataSyncScheduleEntity schedule = schedule(true);
         TestScheduleEngine engine = new TestScheduleEngine();
         inject(service, "taskRepository", taskRepository(task(DataSyncTaskStatus.PUBLISHED)));

@@ -18,6 +18,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncInstanceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datasync.DataSyncTableExecutionStatus;
 import io.yak.ops.common.enums.datasync.DataSyncTaskStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
@@ -25,6 +26,7 @@ import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
 import io.yak.ops.dao.repository.datasync.DataSyncInstanceRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncTableExecutionRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskRepository;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -106,6 +108,7 @@ class DataSyncColumnMappingContractTest {
         DataSyncTaskEntity task = task(DataSyncTaskStatus.PUBLISHED, 5, JSONUtils.toJson(mapping));
         AtomicReference<DataSyncInstanceEntity> captured = new AtomicReference<>();
         DataSyncServiceImpl service = service(task, new AtomicReference<>());
+        DataSyncTableExecutionRepository tableExecutions = DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "instanceRepository", instanceRepository(captured));
         inject(service, "offlineSyncExecutor", new OfflineSyncExecutor() {
             @Override
@@ -119,6 +122,25 @@ class DataSyncColumnMappingContractTest {
         assertNotNull(execution.getDefinitionSnapshot().getMapping());
         assertEquals(2, execution.getDefinitionSnapshot().getMapping().getColumns().size());
         assertEquals("ID", execution.getDefinitionSnapshot().getMapping().getColumns().get(0).getTarget());
+        assertEquals(1, execution.getDefinitionSnapshot().getTableRoutes().size());
+        assertEquals("task-1", execution.getDefinitionSnapshot().getTableRoutes().get(0).getRouteId());
+        assertEquals(
+                "ID",
+                execution.getDefinitionSnapshot()
+                        .getTableRoutes()
+                        .get(0)
+                        .getMapping()
+                        .getColumns()
+                        .get(0)
+                        .getTarget());
+
+        assertEquals(1, tableExecutions.queryByExecution("workspace-1", execution.getId()).size());
+        assertEquals(
+                DataSyncTableExecutionStatus.PLANNED,
+                tableExecutions.queryByExecution("workspace-1", execution.getId()).get(0).getStatus());
+        assertEquals(
+                "task-1",
+                tableExecutions.queryByExecution("workspace-1", execution.getId()).get(0).getRouteId());
 
         DataSyncDefinitionSnapshotVO persisted =
                 JSONUtils.parseObject(captured.get().getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
@@ -136,7 +158,8 @@ class DataSyncColumnMappingContractTest {
             DataSourceService dataSourceService)
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
-        DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableRouteRepository.inject(service, existing);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(existing, captured));
         inject(service, "dataSourceService", dataSourceService);
         return service;

@@ -100,6 +100,7 @@ class DataSyncMappingPrimaryKeyContractTest {
             throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTestTableRouteRepository.inject(service);
+        DataSyncTestTableExecutionRepository.inject(service);
         inject(service, "taskRepository", taskRepository(captured));
         injectDataSourceService(service, dataSourceService(targetExists));
         return service;
