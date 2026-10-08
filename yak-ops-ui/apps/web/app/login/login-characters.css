@@ -1,0 +1,501 @@
+.yak-login-characters {
+  --yak-input-mix: 0;
+  --yak-reveal-mix: 0;
+  --yak-input-lean: calc(-10deg * var(--yak-input-mix));
+  --yak-purple-gaze-rotate: 0deg;
+  --yak-purple-face-x: 0px;
+  --yak-purple-face-y: 0px;
+  --yak-purple-pupil-x: 0px;
+  --yak-purple-pupil-y: 0px;
+  --yak-black-gaze-rotate: 0deg;
+  --yak-black-face-x: 0px;
+  --yak-black-face-y: 0px;
+  --yak-black-face-rotate: 0deg;
+  --yak-black-pupil-x: 0px;
+  --yak-black-pupil-y: 0px;
+  --yak-orange-face-x: 0px;
+  --yak-orange-face-y: 0px;
+  --yak-orange-face-rotate: 0deg;
+  --yak-orange-entry-face-opacity: 1;
+}
+
+.yak-login-characters__svg {
+  overflow: visible;
+}
+
+/*
+ * Ground Anchor Contract:
+ * once a character has landed, grounded motion keeps the bottom edge fixed.
+ * Steady-state grounded motion keeps the bottom edge fixed through anchored
+ * skew/scale or direct SVG path deformation. Translation is reserved for
+ * entrance choreography and authored reference-pose offsets only.
+ * Reference offsets keep the same y=550 ground line; pointer tracking cannot translate it.
+ */
+
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes,
+.yak-login-character--purple__eyes,
+.yak-login-character--black__eyes,
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body,
+.yak-login-character--purple__face,
+.yak-login-character--purple__pupil,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body,
+.yak-login-character--black__face,
+.yak-login-character--black__pupil,
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body,
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes,
+.yak-login-character--orange__mouth-pose,
+.yak-login-character--yellow__face {
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+.yak-login-character--purple__focus,
+.yak-login-character--black__focus,
+.yak-login-character--orange__focus,
+.yak-login-character--purple__breathe,
+.yak-login-character--purple__body,
+.yak-login-character--black__breathe,
+.yak-login-character--black__body,
+.yak-login-character--orange__breathe,
+.yak-login-character--orange__body {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--purple__face,
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--purple__eyes,
+.yak-login-character--purple__pupil,
+.yak-login-character--black__face,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--black__eyes,
+.yak-login-character--black__pupil,
+.yak-login-character--orange__face,
+.yak-login-character--orange__eyes,
+.yak-login-character--orange__mouth-pose,
+.yak-login-character--yellow__face {
+  transform-origin: center;
+}
+
+.yak-login-character--purple__body {
+  transform: skewX(0deg) scaleY(1);
+}
+
+.yak-login-character--purple__face {
+  transform: translate(var(--yak-purple-face-x), var(--yak-purple-face-y));
+}
+
+.yak-login-character--purple__pupil {
+  transform: translate(var(--yak-purple-pupil-x), var(--yak-purple-pupil-y));
+}
+
+.yak-login-character--black__body {
+  transform: skewX(0deg) scaleY(1);
+}
+
+.yak-login-character--black__face {
+  transform: translate(var(--yak-black-face-x), var(--yak-black-face-y))
+    rotate(var(--yak-black-face-rotate));
+}
+
+.yak-login-character--black__pupil {
+  transform: translate(var(--yak-black-pupil-x), var(--yak-black-pupil-y));
+}
+
+/* Eye-group rotation is independent of entrance, authored poses and local blink transforms. */
+.yak-login-character--purple__pointer-face {
+  transform-box: view-box;
+  transform-origin: 304.5px 145px;
+  transform: rotate(var(--yak-purple-gaze-rotate));
+}
+
+.yak-login-character--black__pointer-face {
+  transform-box: view-box;
+  transform-origin: 403.5px 278px;
+  transform: rotate(var(--yak-black-gaze-rotate));
+}
+
+.yak-login-character--orange__body {
+  transform: none;
+}
+
+.yak-login-character--orange__face {
+  opacity: var(--yak-orange-entry-face-opacity);
+  transform-box: view-box;
+  transform-origin: 230px 460px;
+  transform: translate(var(--yak-orange-face-x), var(--yak-orange-face-y))
+    rotate(var(--yak-orange-face-rotate));
+}
+
+.yak-login-character--orange__eyes-open,
+.yak-login-character--orange__eyes-blink,
+.yak-login-character--orange__mouth {
+  transition: opacity 140ms ease;
+}
+
+.yak-login-character--orange__eyes-blink,
+.yak-login-character--orange__mouth--input,
+.yak-login-character--orange__mouth--password {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--orange__eyes-open {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--orange__eyes-blink {
+  opacity: 1;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--orange__mouth--happy {
+  opacity: 0;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--orange__mouth--input {
+  opacity: 1;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--orange__mouth--happy,
+.yak-login-characters.is-password-visible .yak-login-character--orange__mouth--input {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--orange__mouth--password {
+  opacity: 1;
+}
+
+.yak-login-character--purple__focus-eyes,
+.yak-login-character--black__focus-eyes,
+.yak-login-character--orange__focus-eyes,
+.yak-login-character--yellow__focus-eyes {
+  transform-origin: center;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character--purple__pupil,
+.yak-login-character--black__pupil {
+  transition: opacity 160ms ease;
+}
+
+.yak-login-character--purple__result,
+.yak-login-character--black__result,
+.yak-login-character--orange__result,
+.yak-login-character--yellow__result,
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes,
+.yak-login-character__mouth {
+  transform-box: fill-box;
+  will-change: transform, opacity;
+}
+
+.yak-login-character--purple__result,
+.yak-login-character--black__result,
+.yak-login-character--orange__result,
+.yak-login-character--yellow__result {
+  transform-origin: center bottom;
+}
+
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes,
+.yak-login-character__mouth {
+  transform-origin: center;
+}
+
+.yak-login-character--purple__result-eyes,
+.yak-login-character--black__result-eyes,
+.yak-login-character--orange__result-eyes,
+.yak-login-character--yellow__result-eyes {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yak-login-character__mouth {
+  transition: opacity 160ms ease;
+}
+
+.yak-login-character--purple__mouth--input {
+  opacity: 0;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--purple__mouth--idle {
+  opacity: 0;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--purple__mouth--input {
+  opacity: 1;
+}
+
+.yak-login-characters.is-login-submitting .yak-login-character--purple__breathe,
+.yak-login-characters.is-login-submitting .yak-login-character--black__breathe,
+.yak-login-characters.is-login-submitting .yak-login-character--orange__breathe {
+  animation-play-state: paused;
+}
+
+/* Keep the rig anchored while entrance paths change their bounding boxes. */
+.yak-login-character--purple__entry {
+  transform-box: view-box;
+  transform-origin: 308px 550px;
+}
+
+.yak-login-character--black__entry,
+.yak-login-character--black__breathe,
+.yak-login-character--black__result,
+.yak-login-character--black__focus,
+.yak-login-character--black__body {
+  transform-box: view-box;
+  transform-origin: 403px 550px;
+}
+
+/* Face bounds must not move the entry/result ground anchor. */
+.yak-login-character--yellow__entry,
+.yak-login-character--yellow__result {
+  transform-box: view-box;
+  transform-origin: 520px 550px;
+}
+
+/* One root-SVG sampler owns entry transforms; do not rebase them to animated bounds. */
+.yak-login-character--purple__entry,
+.yak-login-character--black__entry,
+.yak-login-character--orange__entry,
+.yak-login-character--yellow__entry,
+[data-entrance-face] {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+.yak-login-character__input-eyes,
+.yak-login-character__reveal-eyes {
+  display: none;
+}
+
+.yak-login-character__mouth--reveal {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yak-login-characters[data-scene-state] .yak-login-character [class] {
+    animation: none;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* These are final poses, not motion: reduced motion keeps the same landmarks. */
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--purple__breathe,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--black__breathe,
+.yak-login-characters.is-password-visible[data-scene-state] .yak-login-character--orange__breathe {
+  animation: none;
+  transform: none;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--purple__eyes,
+.yak-login-characters.is-password-visible .yak-login-character--black__eyes {
+  visibility: hidden;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character__reveal-eyes {
+  display: inline;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character--purple__mouth--idle {
+  opacity: 0;
+}
+
+.yak-login-characters.is-password-visible .yak-login-character__mouth--reveal {
+  opacity: 1;
+}
+
+/* One scene-owned progress drives the three grounded skews and face counter-skews.
+ * These rules follow reduced-motion: geometry is retained, only interpolation is skipped.
+ */
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--purple__focus {
+  transform-box: view-box;
+  transform-origin: 212px 550px;
+  transform: translateX(calc(-2px * var(--yak-reveal-mix))) skewX(var(--yak-input-lean))
+    scale(calc(1 + 0.055 * var(--yak-reveal-mix)), calc(1 - 0.0223 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--black__focus {
+  transform-box: view-box;
+  transform-origin: 403px 550px;
+  transform: translateX(calc(12px * var(--yak-reveal-mix))) skewX(var(--yak-input-lean))
+    scaleY(calc(1 + 0.0065 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--orange__focus {
+  transform-box: view-box;
+  transform-origin: 240px 550px;
+  transform: scaleY(calc(1 + 0.0431 * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state] [data-character] .yak-login-character--yellow__focus {
+  transform-box: view-box;
+  transform-origin: 520px 550px;
+  transform: skewX(var(--yak-input-lean));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--purple__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 304.5px 145px;
+  transform: translate(
+      calc(42px * var(--yak-input-mix) - 44px * var(--yak-reveal-mix)),
+      calc(-15px * var(--yak-input-mix) + 8.5px * var(--yak-reveal-mix))
+    )
+    skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--black__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 403.5px 278px;
+  transform: translate(
+      calc(45px * var(--yak-input-mix) - 18.5px * var(--yak-reveal-mix)),
+      calc(-16px * var(--yak-input-mix) + 79px * var(--yak-reveal-mix))
+    )
+    skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--orange__state-face-pose {
+  transform-box: view-box;
+  transform-origin: 230px calc(460px + 13px * var(--yak-reveal-mix));
+  transform: translate(
+      calc(104px * var(--yak-input-mix) - 75px * var(--yak-reveal-mix)),
+      calc(-5px * var(--yak-input-mix) - 4px * var(--yak-reveal-mix))
+    )
+    rotate(calc(-11deg * var(--yak-input-mix) + 4deg * var(--yak-reveal-mix)));
+}
+
+.yak-login-characters[data-scene-state]
+  [data-character]
+  .yak-login-character--yellow__input-face-pose {
+  transform-box: view-box;
+  transform-origin: 520px 376px;
+  transform: translateY(calc(-16px * var(--yak-input-mix))) skewX(calc(-1 * var(--yak-input-lean)));
+}
+
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--purple__breathe,
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--black__breathe,
+.yak-login-characters.is-input-focus[data-scene-state] .yak-login-character--orange__breathe {
+  animation: none;
+  transform: none;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character--purple__eyes,
+.yak-login-characters.is-input-focus .yak-login-character--black__eyes {
+  visibility: hidden;
+}
+
+.yak-login-characters.is-input-focus .yak-login-character__input-eyes {
+  display: inline;
+}
+
+/* Both endpoint rigs stay measurable, but only one renderer is painted. Sibling branches
+ * never affect the normal rig's own transform-box. Bridge coordinates are in the root viewBox.
+ * Do not use display:none here: recovery samples the live hidden rig, not its neutral fallback.
+ */
+.yak-login-character__failure-pose {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-failure-bridge] {
+  display: none;
+  pointer-events: none;
+}
+
+.yak-login-characters[data-failure-phase]:not([data-failure-phase="none"]) [data-character-motion] {
+  opacity: 0;
+}
+
+.yak-login-characters[data-failure-phase="hold"] .yak-login-character__failure-pose {
+  opacity: 1;
+}
+
+.yak-login-characters:is(
+    [data-failure-phase="enter"],
+    [data-failure-phase="recover"],
+    [data-failure-phase="frozen"]
+  )
+  [data-failure-bridge] {
+  display: inline;
+}
+
+/* Hidden mouth transitions must not introduce a second clock at the handoff endpoint. */
+.yak-login-characters[data-failure-phase]:not([data-failure-phase="none"])
+  [data-character-motion]
+  * {
+  animation: none;
+  transition: none;
+}
+
+/* Explicit SVG coordinates own the extra face transform; never use changing face bounds. */
+.yak-login-characters [data-failure-motion] {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+/* Endpoints stay measurable. Only the selected branch is painted; success never squashes eyes. */
+.yak-login-character__success-pose {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-success-bridge] {
+  display: none;
+  pointer-events: none;
+}
+
+.yak-login-characters[data-success-phase]:not([data-success-phase="none"]) [data-character-motion],
+.yak-login-characters[data-success-phase]:not([data-success-phase="none"])
+  .yak-login-character__failure-pose {
+  opacity: 0;
+}
+
+.yak-login-characters[data-success-phase]:not([data-success-phase="none"]) [data-failure-bridge] {
+  display: none;
+}
+
+.yak-login-characters[data-success-phase="hold"] .yak-login-character__success-pose {
+  opacity: 1;
+}
+
+.yak-login-characters:is(
+    [data-success-phase="enter"],
+    [data-success-phase="recover"],
+    [data-success-phase="frozen"]
+  )
+  [data-success-bridge] {
+  display: inline;
+}
+
+.yak-login-characters[data-success-phase]:not([data-success-phase="none"])
+  [data-character-motion]
+  * {
+  animation: none;
+  transition: none;
+}

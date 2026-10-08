@@ -1,0 +1,366 @@
+.yak-login-welcome-scene {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  /* Keep the former copy slot as quiet headroom so removing copy does not resize the characters. */
+  grid-template-rows: clamp(4.875rem, calc(8svh + 1.875rem), 7.375rem) minmax(16rem, 1fr);
+  gap: clamp(1rem, 3svh, 2rem);
+  height: 100%;
+  min-height: 100svh;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 18% 16%,
+      rgb(90 151 200 / 10%) 0%,
+      rgb(90 151 200 / 5%) 20%,
+      rgb(90 151 200 / 0%) 42%
+    ),
+    radial-gradient(
+      circle at 78% 12%,
+      rgb(87 169 200 / 8%) 0%,
+      rgb(87 169 200 / 3%) 18%,
+      rgb(87 169 200 / 0%) 36%
+    ),
+    linear-gradient(180deg, #f8fafc 0%, #f2f6fa 100%);
+}
+
+.yak-login-welcome-scene__ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.yak-login-welcome-scene__top-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 34%) 0%,
+    rgb(255 255 255 / 14%) 18%,
+    rgb(255 255 255 / 0%) 38%
+  );
+}
+
+.yak-login-welcome-scene__glow {
+  position: absolute;
+  z-index: 1;
+  border-radius: 999px;
+  filter: blur(32px);
+  opacity: 0.82;
+  will-change: transform;
+}
+
+.yak-login-welcome-scene__glow--left {
+  top: -4rem;
+  left: -4rem;
+  width: clamp(14rem, 27vw, 19rem);
+  height: clamp(14rem, 27vw, 19rem);
+  background: radial-gradient(
+    circle,
+    rgb(0 210 255 / 14%) 0%,
+    rgb(0 210 255 / 6%) 40%,
+    rgb(0 210 255 / 0%) 72%
+  );
+  animation: yak-login-ambient-glow-left 12s ease-in-out infinite;
+}
+
+.yak-login-welcome-scene__glow--right {
+  top: 1rem;
+  right: 2.5rem;
+  width: clamp(12rem, 23vw, 16rem);
+  height: clamp(12rem, 23vw, 16rem);
+  background: radial-gradient(
+    circle,
+    rgb(3 160 255 / 11%) 0%,
+    rgb(3 160 255 / 4%) 38%,
+    rgb(3 160 255 / 0%) 72%
+  );
+  animation: yak-login-ambient-glow-right 14s ease-in-out infinite;
+}
+
+.yak-login-welcome-scene__bubbles,
+.yak-login-welcome-scene__sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.yak-login-welcome-scene__bubble {
+  position: absolute;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    0 8px 20px rgb(1 106 251 / 5%);
+  opacity: 0.58;
+  animation: yak-login-ambient-bubble-float 16s ease-in-out infinite;
+  will-change: transform;
+}
+
+.yak-login-welcome-scene__bubble--1 {
+  top: 20%;
+  left: 9%;
+  width: 0.875rem;
+  height: 0.875rem;
+  background: rgb(255 255 255 / 28%);
+  animation-duration: 13s;
+}
+
+.yak-login-welcome-scene__bubble--2 {
+  top: 61%;
+  left: 21%;
+  width: 0.625rem;
+  height: 0.625rem;
+  background: rgb(3 160 255 / 11%);
+  animation-duration: 16s;
+  animation-delay: -4s;
+}
+
+.yak-login-welcome-scene__bubble--3 {
+  top: 17%;
+  left: 74%;
+  width: 1.125rem;
+  height: 1.125rem;
+  background: rgb(255 255 255 / 24%);
+  animation-duration: 18s;
+  animation-delay: -7s;
+}
+
+.yak-login-welcome-scene__bubble--4 {
+  top: 39%;
+  right: 11%;
+  width: 0.75rem;
+  height: 0.75rem;
+  background: rgb(0 210 255 / 10%);
+  animation-duration: 15s;
+  animation-delay: -2s;
+}
+
+.yak-login-welcome-scene__bubble--5 {
+  right: 30%;
+  bottom: 16%;
+  width: 1.375rem;
+  height: 1.375rem;
+  background: rgb(255 255 255 / 20%);
+  animation-duration: 20s;
+  animation-delay: -9s;
+}
+
+.yak-login-welcome-scene__bubble--6 {
+  top: 27%;
+  left: 48%;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: rgb(3 160 255 / 12%);
+  animation-duration: 14s;
+  animation-delay: -5s;
+}
+
+.yak-login-welcome-scene__bubble--7 {
+  right: 15%;
+  bottom: 27%;
+  width: 1rem;
+  height: 1rem;
+  background: rgb(255 255 255 / 23%);
+  animation-duration: 19s;
+  animation-delay: -6s;
+}
+
+.yak-login-welcome-scene__spark {
+  position: absolute;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 84%);
+  box-shadow: 0 0 10px rgb(3 160 255 / 24%);
+  opacity: 0.28;
+  animation: yak-login-ambient-spark 4.6s ease-in-out infinite;
+}
+
+.yak-login-welcome-scene__spark--1 {
+  top: 14%;
+  left: 58%;
+  animation-delay: -0.4s;
+}
+
+.yak-login-welcome-scene__spark--2 {
+  top: 29%;
+  right: 18%;
+  animation-delay: -1.8s;
+}
+
+.yak-login-welcome-scene__spark--3 {
+  bottom: 31%;
+  left: 17%;
+  animation-delay: -3.1s;
+}
+
+.yak-login-welcome-scene__spark--4 {
+  right: 29%;
+  bottom: 19%;
+  animation-delay: -2.5s;
+}
+
+.yak-login-welcome-scene__stage {
+  --yak-login-scene-ground-gap: clamp(4rem, 22svh, 16rem);
+  --yak-login-scene-headroom: clamp(1.25rem, 3svh, 2rem);
+  /* Both artwork and shadow resolve these units against this allocated grid row. */
+  --yak-login-scene-art-height: max(
+    0px,
+    calc(100cqh - var(--yak-login-scene-ground-gap) - var(--yak-login-scene-headroom))
+  );
+  --yak-login-scene-art-width: min(88%, 820px, calc(var(--yak-login-scene-art-height) * 720 / 550));
+  position: relative;
+  z-index: 1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+}
+
+.yak-login-welcome-scene__floor-aura {
+  position: absolute;
+  z-index: 0;
+  bottom: calc(var(--yak-login-scene-ground-gap) - 6.5rem);
+  left: 50%;
+  width: min(84%, 48rem);
+  height: clamp(10rem, 30cqh, 16rem);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(1 106 251 / 8%) 0%,
+    rgb(3 160 255 / 5%) 30%,
+    rgb(0 210 255 / 2.5%) 50%,
+    rgb(0 210 255 / 0%) 72%
+  );
+  filter: blur(24px);
+  transform: translate(-50%, 50%);
+  animation: yak-login-ambient-floor 8s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Compose the existing private illustration without changing its animation/state owner. */
+.yak-login-welcome-scene__stage > .yak-login-characters {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+}
+
+.yak-login-welcome-scene__stage .yak-login-characters__svg {
+  bottom: var(--yak-login-scene-ground-gap);
+  width: var(--yak-login-scene-art-width);
+}
+
+.yak-login-welcome-scene__ground {
+  position: absolute;
+  z-index: 1;
+  bottom: var(--yak-login-scene-ground-gap);
+  left: 50%;
+  width: calc(var(--yak-login-scene-art-width) * 0.78);
+  height: clamp(0.625rem, 2cqh, 1.25rem);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(62 85 110 / 12%) 0%,
+    rgb(62 85 110 / 5%) 42%,
+    rgb(62 85 110 / 0%) 72%
+  );
+  transform: translate(-50%, 50%);
+  pointer-events: none;
+}
+
+@keyframes yak-login-ambient-glow-left {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0.75rem, 0.5rem, 0);
+  }
+}
+
+@keyframes yak-login-ambient-glow-right {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(-0.625rem, 0.625rem, 0);
+  }
+}
+
+@keyframes yak-login-ambient-bubble-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate3d(0.25rem, -0.5rem, 0) scale(1.04);
+  }
+
+  50% {
+    transform: translate3d(-0.1875rem, -1.125rem, 0) scale(0.98);
+  }
+
+  75% {
+    transform: translate3d(0.3125rem, -0.625rem, 0) scale(1.02);
+  }
+}
+
+@keyframes yak-login-ambient-spark {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.82;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes yak-login-ambient-floor {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translate(-50%, 50%) scale(1);
+  }
+
+  50% {
+    opacity: 0.92;
+    transform: translate(-50%, 50%) scale(1.045);
+  }
+}
+
+@media (max-height: 700px) {
+  .yak-login-welcome-scene {
+    grid-template-rows: 3.5rem minmax(16rem, 1fr);
+  }
+
+  .yak-login-welcome-scene__floor-aura {
+    bottom: calc(var(--yak-login-scene-ground-gap) - 5rem);
+    height: clamp(8rem, 26cqh, 12rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yak-login-welcome-scene__glow,
+  .yak-login-welcome-scene__bubble,
+  .yak-login-welcome-scene__spark,
+  .yak-login-welcome-scene__floor-aura {
+    animation: none;
+  }
+}

@@ -3,19 +3,54 @@ package io.yak.ops.common.bean.vo.datasource;
 import java.time.LocalDateTime;
 import lombok.Data;
 
-/** 数据源展示对象。 */
+/**
+ * 数据源管理列表和详情的展示对象。
+ *
+ * @author weifuwan
+ * @since 2026-09-24
+ */
 @Data
 public class DataSourceVO {
 
-  private Long id;
-  private String name;
-  private String dbType;
-  private String jdbcUrl;
-  private String environment;
-  private String environmentName;
-  private String connStatus;
-  private String remark;
-  private String originalJson;
-  private LocalDateTime createTime;
-  private LocalDateTime updateTime;
+    /** 数据源主键 ID。 */
+    private String id;
+
+    /** 数据源名称。 */
+    private String name;
+
+    /** 数据库类型。 */
+    private String dbType;
+
+    /** 数据源连接已绑定的默认数据库名称；未绑定时为空。 */
+    private String database;
+
+    /** 数据源连接已绑定的默认 Schema；未绑定时为空。 */
+    private String schema;
+
+    /** 已遮罩敏感信息的基础连接地址。 */
+    private String jdbcUrl;
+
+    /** 已遮罩敏感信息并包含可展示高级参数的连接地址，仅用于产品 UI。 */
+    private String displayJdbcUrl;
+
+    /** 运行环境编码。 */
+    private String environment;
+
+    /** 运行环境展示名称。 */
+    private String environmentName;
+
+    /** 最近一次连接状态。 */
+    private String connStatus;
+
+    /** 数据源备注。 */
+    private String remark;
+
+    /** 详情编辑回显使用的已遮罩连接参数 JSON。 */
+    private String originalJson;
+
+    /** 创建时间。 */
+    private LocalDateTime createTime;
+
+    /** 最后更新时间。 */
+    private LocalDateTime updateTime;
 }

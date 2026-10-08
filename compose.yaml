@@ -29,7 +29,7 @@ services:
       - yak-ops-network
 
   yak-ops-backend:
-    image: ${YAK_OPS_API_IMAGE:-weifuwan/yak-ops-api:0.1.0}
+    image: ${YAK_OPS_API_IMAGE:-weifuwan/yak-ops-api:1.2.0}
     container_name: yak-ops-backend
     restart: unless-stopped
     build:
@@ -48,9 +48,9 @@ services:
 
       # Yak Security and Yak Ops business modules share this datasource by
       # default. The MySQL application user owns MYSQL_DATABASE.
-      YAK_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai"
-      YAK_DATASOURCE_USERNAME: ${MYSQL_USER:-yak_ops}
-      YAK_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-yak_ops_password}
+      YAK_DATABASE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai"
+      YAK_DATABASE_USERNAME: ${MYSQL_USER:-yak_ops}
+      YAK_DATABASE_PASSWORD: ${MYSQL_PASSWORD:-yak_ops_password}
 
       YAK_SECURITY_BOOTSTRAP_USERNAME: ${YAK_SECURITY_BOOTSTRAP_USERNAME:-root}
       YAK_SECURITY_BOOTSTRAP_PASSWORD: ${YAK_SECURITY_BOOTSTRAP_PASSWORD:-Root@123456}
@@ -67,7 +67,7 @@ services:
       - yak-ops-network
 
   yak-ops-frontend:
-    image: ${YAK_OPS_IMAGE:-weifuwan/yak-ops:0.1.0}
+    image: ${YAK_OPS_IMAGE:-weifuwan/yak-ops:1.2.0}
     container_name: yak-ops-frontend
     restart: unless-stopped
     build:

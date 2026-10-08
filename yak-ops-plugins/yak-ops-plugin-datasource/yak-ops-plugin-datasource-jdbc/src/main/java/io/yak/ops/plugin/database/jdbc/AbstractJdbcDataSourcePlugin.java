@@ -1,27 +1,24 @@
 package io.yak.ops.plugin.database.jdbc;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.common.enums.datasource.DataSourceDbType;
-import io.yak.ops.spi.datasource.DataSourceCapability;
-import io.yak.ops.spi.datasource.DataSourceCatalog;
-import io.yak.ops.spi.datasource.DataSourceConnection;
-import io.yak.ops.spi.datasource.DataSourcePlugin;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.ConnectionForm;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FieldType;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormRule;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormSection;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityCondition;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityOperator;
-import io.yak.ops.spi.datasource.DataSourcePluginException;
-import io.yak.ops.spi.datasource.DataSourcePluginException.Operation;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
+import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.common.util.SensitiveUtils;
+import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.plugin.database.jdbc.enums.SshAuthType;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalog;
+import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
+import io.yak.ops.plugin.datasource.api.enums.DataSourcePluginOperation;
+import io.yak.ops.plugin.datasource.api.exception.DataSourcePluginException;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.Driver;
 import java.sql.DriverManager;
-import java.util.ArrayList;
+import java.sql.DriverPropertyInfo;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -31,615 +28,615 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 
-/** JDBC datasource plugin base: descriptor, connection parsing, connectivity, SSH and SQL. */
+/**
+ * JDBC 数据源插件基础实现，负责运行时插件元数据、连接参数、连通性、SSH 和 Catalog 元数据。
+ *
+ * @author weifuwan
+ * @since 2026-09-24
+ */
 public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-  @Override
-  public DataSourcePluginDescriptor descriptor() {
-    List<FormField> connectionFields = new ArrayList<>();
-    connectionFields.add(
-        field(
+    private static final Set<String> RESERVED_CONNECTION_PROPERTY_KEYS = Set.of(
             "host",
-            "主机地址",
-            "INPUT",
-            "请输入数据库主机地址",
-            "127.0.0.1",
-            required("请输入主机地址")));
-    connectionFields.add(
-        field(
+            "hostname",
+            "pghost",
             "port",
-            "端口",
-            "NUMBER",
-            "请输入数据库端口",
-            defaultPort(),
-            rangeRule(1, 65535, "端口必须在 1 到 65535 之间")));
-    connectionFields.add(
-        field(
+            "pgport",
             "database",
-            databaseLabel(),
-            "INPUT",
-            "请输入数据库名称",
-            null,
-            required("请输入数据库名称")));
-    connectionFields.add(
-        field(
-            "schema",
-            "Schema",
-            "INPUT",
-            "可选；不填写时使用数据库默认 Schema",
-            null,
-            Collections.emptyList()));
-    connectionFields.add(
-        field(
+            "databasename",
+            "dbname",
+            "pgdbname",
+            "servicename",
             "username",
-            "用户名",
-            "INPUT",
-            "请输入数据库用户名",
-            null,
-            required("请输入数据库用户名")));
-    connectionFields.add(
-        field(
+            "user",
             "password",
-            "密码",
-            "PASSWORD",
-            "请输入数据库密码",
-            null,
-            Collections.emptyList()));
-    connectionFields.add(
-        field(
-            "jdbcUrl",
-            "JDBC 地址",
-            "INPUT",
-            "可选；留空时由插件根据主机、端口和数据库生成",
-            null,
-            Collections.emptyList()));
+            "jdbcurl",
+            "url",
+            "driver",
+            "driverclassname",
+            "driverid");
 
-    List<FormField> sshFields = new ArrayList<>();
-    sshFields.add(
-        field(
-            "sshTunnel",
-            "SSH 隧道",
-            "SSH",
-            null,
-            sshDefaultValue(),
-            Collections.emptyList()));
-
-    List<FormField> driverFields = new ArrayList<>();
-    driverFields.add(
-        field(
-            "driverClassName",
-            "驱动类",
-            "INPUT",
-            "请输入 JDBC Driver Class",
-            defaultDriverClassName(),
-            required("请输入 JDBC 驱动类")));
-
-    List<FormField> advancedFields = new ArrayList<>();
-    FormField propertiesField =
-        field(
-            "properties",
-            "扩展属性",
-            "TEXTAREA",
-            "可选；请输入 JSON 对象，例如 {\"useSSL\":\"false\"}",
-            null,
-            Collections.emptyList());
-    propertiesField =
-        propertiesField
-            .withDependsOn(Collections.singletonList("driverClassName"))
-            .withVisibleWhen(
-                Collections.singletonList(
-                    new VisibilityCondition(null, VisibilityOperator.TRUTHY, null, List.of())));
-    advancedFields.add(propertiesField);
-    appendFormFields(advancedFields);
-
-    List<FormSection> sections = new ArrayList<>();
-    sections.add(section("connection", "连接参数", "", false, true, connectionFields));
-    sections.add(section("ssh", "SSH 隧道", "", true, false, sshFields));
-    sections.add(section("driver", "驱动配置", "", true, true, driverFields));
-    if (!advancedFields.isEmpty()) {
-      sections.add(section("advanced", "高级配置", "", true, false, advancedFields));
+    @Override
+    public DataSourcePluginDescriptor descriptor() {
+        return new DataSourcePluginDescriptor(
+                type(), aliases(), DataSourcePluginDescriptor.CURRENT_API_VERSION, capabilities(), secretFieldKeys());
     }
 
-    // Legacy flat fields intentionally omit the composite SSH field.
-    List<FormField> fields = new ArrayList<>();
-    fields.addAll(connectionFields);
-    fields.addAll(driverFields);
-    fields.addAll(advancedFields);
+    protected Set<String> aliases() {
+        return Set.of();
+    }
 
-    DataSourcePluginDescriptor descriptor =
-        new DataSourcePluginDescriptor(
-            dbType(),
-            dbType().getDisplayName(),
-            DataSourcePluginDescriptor.CURRENT_API_VERSION,
-            capabilities(),
-            new ConnectionForm(sections, fields),
-            false,
-            null);
-    return JdbcUrlSchemaSupport.apply(descriptor, jdbcUrlTemplate());
-  }
+    protected Set<DataSourceCapability> capabilities() {
+        return EnumSet.of(
+                DataSourceCapability.CONNECTION_TEST,
+                DataSourceCapability.CATALOG_METADATA,
+                DataSourceCapability.SSH_TUNNEL);
+    }
 
-  protected Set<DataSourceCapability> capabilities() {
-    return EnumSet.of(
-        DataSourceCapability.CONNECTION_TEST,
-        DataSourceCapability.CATALOG_METADATA,
-        DataSourceCapability.CATALOG_READ,
-        DataSourceCapability.SQL_EXECUTION,
-        DataSourceCapability.TRANSACTIONS,
-        DataSourceCapability.SSH_TUNNEL);
-  }
+    protected Set<String> secretFieldKeys() {
+        return Set.of("password", "privateKey", "privateKeyContent", "passphrase", "privateKeyPassphrase");
+    }
 
-  /** JDBC URL linkage template used by the standard form component. */
-  protected String jdbcUrlTemplate() {
-    return null;
-  }
+    @Override
+    public List<String> connectionPropertyKeys() {
+        TreeSet<String> keys = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        keys.addAll(knownConnectionPropertyKeys());
 
-  @Override
-  public DataSourceConnection parseConnection(String connectionJson) {
-    try {
-      JsonNode root = OBJECT_MAPPER.readTree(connectionJson);
-      if (root == null || !root.isObject()) {
-        throw parameterError("连接参数必须是 JSON 对象", null);
-      }
-
-      validateDeclaredType(root);
-      String explicitUrl = firstText(root, "jdbcUrl", "url");
-      String host = firstText(root, "host", "hostname");
-      int port = intValue(root, defaultPort(), "port");
-      String database = firstText(root, "database", "databaseName", "serviceName");
-      String schema = firstText(root, "schema", "schemaName");
-      String username = firstText(root, "username", "user");
-      String password = firstText(root, "password");
-      String driver =
-          defaultIfBlank(firstText(root, "driverClassName", "driver"), defaultDriverClassName());
-      SshTunnelConfig sshTunnel = parseSshTunnel(root);
-
-      if (isBlank(username)) {
-        throw parameterError("username 不能为空", null);
-      }
-      if (sshTunnel.enabled() && !isBlank(explicitUrl)) {
-        throw parameterError(
-            "启用 SSH 隧道时请使用 host、port、database 参数，不支持自定义 JDBC 地址", null);
-      }
-
-      String jdbcUrl = explicitUrl;
-      if (isBlank(jdbcUrl)) {
-        if (isBlank(host)) {
-          throw parameterError("host 不能为空", null);
+        try {
+            String jdbcUrl =
+                    buildJdbcUrl("127.0.0.1", defaultPort(), propertyInfoDatabase(), JSONUtils.createObjectNode());
+            DriverPropertyInfo[] propertyInfo = connectionPropertyInfo(jdbcUrl, new Properties());
+            if (propertyInfo != null) {
+                for (DriverPropertyInfo item : propertyInfo) {
+                    if (item != null && includeConnectionPropertyKey(item.name)) {
+                        keys.add(item.name.trim());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Driver 元数据不可用时仍返回 Provider 已知属性，不能把高级参数下拉框变成运行时连接前置条件。
         }
-        if (isBlank(database)) {
-          throw parameterError("database 不能为空", null);
+
+        keys.removeIf(key -> !includeConnectionPropertyKey(key));
+        return List.copyOf(keys);
+    }
+
+    @Override
+    public DataSourceConnection parseConnection(String connectionJson) {
+        try {
+            JsonNode root = JSONUtils.readTree(connectionJson);
+            if (root == null || !root.isObject()) {
+                throw parameterError("连接参数必须是 JSON 对象", null);
+            }
+
+            validateDeclaredType(root);
+            String explicitUrl = JSONUtils.firstText(root, "jdbcUrl", "url");
+            String host = JSONUtils.firstText(root, "host", "hostname");
+            int port = intValue(root, defaultPort(), "port");
+            String database = JSONUtils.firstText(root, "database", "databaseName", "serviceName");
+            String schema = JSONUtils.firstText(root, "schema", "schemaName");
+            String username = JSONUtils.firstText(root, "username", "user");
+            String password = JSONUtils.firstText(root, "password");
+            String driverId = normalizeDriverId(root);
+            String driver = normalizeDriverClassName(root, driverId);
+            SshTunnelConfig sshTunnel = parseSshTunnel(root);
+
+            if (StringUtils.isBlank(username)) {
+                throw parameterError("username 不能为空", null);
+            }
+            if (sshTunnel.enabled() && !StringUtils.isBlank(explicitUrl)) {
+                throw parameterError("启用 SSH 隧道时请使用 host、port、database 参数，不支持自定义 JDBC 地址", null);
+            }
+
+            String jdbcUrl = explicitUrl;
+            if (StringUtils.isBlank(jdbcUrl)) {
+                if (StringUtils.isBlank(host)) {
+                    throw parameterError("host 不能为空", null);
+                }
+                if (StringUtils.isBlank(database)) {
+                    throw parameterError("database 不能为空", null);
+                }
+                jdbcUrl = buildJdbcUrl(host.trim(), port, database.trim(), root);
+            } else {
+                jdbcUrl = jdbcUrl.trim();
+                if (!acceptsUrl(jdbcUrl)) {
+                    throw parameterError("JDBC 地址与插件类型不匹配：" + jdbcUrl, null);
+                }
+            }
+
+            if (StringUtils.isBlank(database)) {
+                database = inferDatabase(jdbcUrl);
+            }
+
+            Map<String, String> properties = normalizeProperties(parseProperties(root.get("properties")));
+            validateProperties(properties);
+            schema = normalizeSchema(schema);
+            ObjectNode normalized = JSONUtils.createObjectNode();
+            normalized.put("dbType", type());
+            putIfText(normalized, "host", host);
+            normalized.put("port", port);
+            putIfText(normalized, "database", database);
+            putIfText(normalized, "schema", schema);
+            putIfText(normalized, "username", username);
+            if (password != null) {
+                normalized.put("password", password);
+            }
+            normalized.put("jdbcUrl", jdbcUrl);
+            putIfText(normalized, "driverId", driverId);
+            normalized.put("driverClassName", driver);
+            ObjectNode propertiesNode = normalized.putObject("properties");
+            properties.forEach(propertiesNode::put);
+            writeSshTunnel(normalized, sshTunnel);
+            appendNormalizedFields(root, normalized);
+
+            return new JdbcConnectionProperties(
+                    type(),
+                    StringUtils.trimToNull(host),
+                    port,
+                    jdbcUrl,
+                    driver,
+                    driverId,
+                    username.trim(),
+                    password,
+                    StringUtils.trimToNull(database),
+                    StringUtils.trimToNull(schema),
+                    properties,
+                    sshTunnel,
+                    JSONUtils.toJson(normalized));
+        } catch (DataSourcePluginException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw parameterError("连接参数解析失败：" + safeMessage(exception), exception);
         }
-        jdbcUrl = buildJdbcUrl(host.trim(), port, database.trim(), root);
-      } else {
-        jdbcUrl = jdbcUrl.trim();
-        if (!acceptsUrl(jdbcUrl)) {
-          throw parameterError("JDBC 地址与插件类型不匹配：" + jdbcUrl, null);
+    }
+
+    @Override
+    public void testConnection(DataSourceConnection connection, int timeoutSeconds) {
+        JdbcConnectionProperties jdbcConnection = requireJdbcConnection(connection);
+        int safeTimeout = Math.max(1, timeoutSeconds);
+        try (Connection opened = openJdbcConnection(jdbcConnection, safeTimeout)) {
+            if (opened == null || opened.isClosed() || !opened.isValid(safeTimeout)) {
+                throw new DataSourcePluginException(DataSourcePluginOperation.CONNECTIVITY, "数据库连接不可用");
+            }
+        } catch (DataSourcePluginException exception) {
+            throw exception;
+        } catch (ClassNotFoundException exception) {
+            throw new DataSourcePluginException(
+                    DataSourcePluginOperation.CONNECTIVITY, "数据库驱动未安装：" + jdbcConnection.driverClassName(), exception);
+        } catch (Exception exception) {
+            throw new DataSourcePluginException(
+                    DataSourcePluginOperation.CONNECTIVITY, safeMessage(exception), exception);
         }
-      }
-
-      if (isBlank(database)) {
-        database = inferDatabase(jdbcUrl);
-      }
-
-      Map<String, String> properties = parseProperties(root.get("properties"));
-      ObjectNode normalized = OBJECT_MAPPER.createObjectNode();
-      normalized.put("dbType", dbType().name());
-      putIfText(normalized, "host", host);
-      normalized.put("port", port);
-      putIfText(normalized, "database", database);
-      putIfText(normalized, "schema", schema);
-      putIfText(normalized, "username", username);
-      if (password != null) {
-        normalized.put("password", password);
-      }
-      normalized.put("jdbcUrl", jdbcUrl);
-      normalized.put("driverClassName", driver);
-      ObjectNode propertiesNode = normalized.putObject("properties");
-      properties.forEach(propertiesNode::put);
-      writeSshTunnel(normalized, sshTunnel);
-      appendNormalizedFields(root, normalized);
-
-      return new JdbcConnectionProperties(
-          dbType(),
-          trimToNull(host),
-          port,
-          jdbcUrl,
-          driver,
-          username.trim(),
-          password,
-          trimToNull(database),
-          trimToNull(schema),
-          properties,
-          sshTunnel,
-          OBJECT_MAPPER.writeValueAsString(normalized));
-    } catch (DataSourcePluginException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw parameterError("连接参数解析失败：" + safeMessage(exception), exception);
-    }
-  }
-
-  @Override
-  public void testConnection(DataSourceConnection connection, int timeoutSeconds) {
-    JdbcConnectionProperties jdbcConnection = requireJdbcConnection(connection);
-    try (Connection opened = openJdbcConnection(jdbcConnection, timeoutSeconds)) {
-      if (opened == null || opened.isClosed()) {
-        throw new DataSourcePluginException(Operation.CONNECTIVITY, "数据库连接不可用");
-      }
-    } catch (DataSourcePluginException exception) {
-      throw exception;
-    } catch (ClassNotFoundException exception) {
-      throw new DataSourcePluginException(
-          Operation.CONNECTIVITY,
-          "数据库驱动未安装：" + jdbcConnection.driverClassName(),
-          exception);
-    } catch (Exception exception) {
-      throw new DataSourcePluginException(Operation.CONNECTIVITY, safeMessage(exception), exception);
-    }
-  }
-
-  @Override
-  public DataSourceCatalog createCatalog(DataSourceConnection connection, int timeoutSeconds) {
-    return createCatalog(connection, timeoutSeconds, timeoutSeconds);
-  }
-
-  @Override
-  public DataSourceCatalog createCatalog(
-      DataSourceConnection connection,
-      int connectionTimeoutSeconds,
-      int queryTimeoutSeconds) {
-    return createJdbcCatalog(
-        requireJdbcConnection(connection),
-        Math.max(1, connectionTimeoutSeconds),
-        Math.max(1, queryTimeoutSeconds));
-  }
-
-  @Override
-  public DataSourceSqlExecutor createSqlExecutor(
-      DataSourceConnection connection, int connectionTimeoutSeconds) {
-    return new JdbcDataSourceSqlExecutor(
-        requireJdbcConnection(connection),
-        Math.max(1, connectionTimeoutSeconds),
-        this::openJdbcConnection);
-  }
-
-  protected DataSourceCatalog createJdbcCatalog(
-      JdbcConnectionProperties connection, int timeoutSeconds) {
-    return createJdbcCatalog(connection, timeoutSeconds, timeoutSeconds);
-  }
-
-  protected DataSourceCatalog createJdbcCatalog(
-      JdbcConnectionProperties connection,
-      int connectionTimeoutSeconds,
-      int queryTimeoutSeconds) {
-    return new GenericJdbcCatalog(connection, connectionTimeoutSeconds, queryTimeoutSeconds) {
-      @Override
-      protected Connection openConnection() throws Exception {
-        return openJdbcConnection(connection, connectionTimeoutSeconds);
-      }
-    };
-  }
-
-  protected Connection openJdbcConnection(
-      JdbcConnectionProperties connection, int timeoutSeconds) throws Exception {
-    Class.forName(connection.driverClassName());
-    int safeTimeout = Math.max(1, timeoutSeconds);
-    DriverManager.setLoginTimeout(safeTimeout);
-
-    SshTunnelConfig sshTunnel = connection.sshTunnel();
-    if (!sshTunnel.enabled()) {
-      return DriverManager.getConnection(connection.jdbcUrl(), connectionProperties(connection));
     }
 
-    SshTunnel tunnel =
-        SshTunnel.open(sshTunnel, connection.host(), connection.port(), safeTimeout);
-    try {
-      JsonNode normalized = OBJECT_MAPPER.readTree(connection.normalizedJson());
-      String tunneledJdbcUrl =
-          buildJdbcUrl("127.0.0.1", tunnel.localPort(), connection.database(), normalized);
-      Connection opened =
-          DriverManager.getConnection(tunneledJdbcUrl, connectionProperties(connection));
-      return SshTunneledConnection.wrap(opened, tunnel);
-    } catch (Exception exception) {
-      tunnel.close();
-      throw exception;
-    }
-  }
-
-  protected abstract int defaultPort();
-
-  protected abstract String defaultDriverClassName();
-
-  protected abstract String buildJdbcUrl(
-      String host, int port, String database, JsonNode connectionJson);
-
-  protected String databaseLabel() {
-    return "数据库";
-  }
-
-  protected void appendFormFields(List<FormField> fields) {}
-
-  protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {}
-
-  protected String inferDatabase(String jdbcUrl) {
-    if (isBlank(jdbcUrl)) {
-      return null;
-    }
-    String value = jdbcUrl;
-    int queryIndex = value.indexOf('?');
-    if (queryIndex >= 0) {
-      value = value.substring(0, queryIndex);
-    }
-    int slashIndex = value.lastIndexOf('/');
-    return slashIndex >= 0 && slashIndex < value.length() - 1
-        ? value.substring(slashIndex + 1)
-        : null;
-  }
-
-  protected JdbcConnectionProperties requireJdbcConnection(DataSourceConnection connection) {
-    if (!(connection instanceof JdbcConnectionProperties jdbcConnection)) {
-      throw parameterError("连接参数与插件类型不匹配", null);
-    }
-    if (connection.dbType() != dbType()) {
-      throw parameterError("连接参数与插件类型不匹配", null);
-    }
-    return jdbcConnection;
-  }
-
-  protected Properties connectionProperties(JdbcConnectionProperties connection) {
-    Properties properties = new Properties();
-    properties.putAll(connection.properties());
-    if (!isBlank(connection.username())) {
-      properties.setProperty("user", connection.username());
-    }
-    if (connection.password() != null) {
-      properties.setProperty("password", connection.password());
-    }
-    return properties;
-  }
-
-  protected String safeMessage(Throwable throwable) {
-    String message = throwable == null ? null : throwable.getMessage();
-    if (isBlank(message)) {
-      return throwable == null ? "未知错误" : throwable.getClass().getSimpleName();
-    }
-    String sanitized = message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
-    return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
-  }
-
-  protected FormField field(
-      String key,
-      String label,
-      String type,
-      String placeholder,
-      Object defaultValue,
-      List<FormRule> rules) {
-    return new FormField(
-        key,
-        label,
-        FieldType.valueOf(type),
-        placeholder,
-        defaultValue,
-        List.of(),
-        rules,
-        List.of(),
-        List.of(),
-        null);
-  }
-
-  protected FormSection section(
-      String key,
-      String title,
-      String description,
-      boolean collapsible,
-      boolean defaultExpanded,
-      List<FormField> fields) {
-    return new FormSection(key, title, description, collapsible, defaultExpanded, fields);
-  }
-
-  protected List<FormRule> required(String message) {
-    return Collections.singletonList(new FormRule(true, null, null, null, message));
-  }
-
-  protected List<FormRule> rangeRule(int min, int max, String message) {
-    return Collections.singletonList(new FormRule(true, null, min, max, message));
-  }
-
-  private Map<String, Object> sshDefaultValue() {
-    Map<String, Object> defaults = new LinkedHashMap<>();
-    defaults.put("enabled", false);
-    defaults.put("port", 22);
-    defaults.put("authType", SshTunnelConfig.AuthType.PASSWORD.name());
-    defaults.put("strictHostKeyChecking", false);
-    return defaults;
-  }
-
-  private SshTunnelConfig parseSshTunnel(JsonNode root) {
-    JsonNode node = root.get("sshTunnel");
-    if (node == null || node.isNull()) {
-      node = root.get("ssh");
-    }
-    if (node == null || node.isNull()) {
-      return SshTunnelConfig.disabled();
-    }
-    if (!node.isObject()) {
-      throw parameterError("sshTunnel 必须是 JSON 对象", null);
+    @Override
+    public DataSourceCatalog createCatalog(DataSourceConnection connection, int timeoutSeconds) {
+        int safeTimeout = Math.max(1, timeoutSeconds);
+        return createJdbcCatalog(requireJdbcConnection(connection), safeTimeout, safeTimeout);
     }
 
-    boolean enabled = booleanValue(node, false, "enabled");
-    if (!enabled) {
-      return SshTunnelConfig.disabled();
+    protected DataSourceCatalog createJdbcCatalog(JdbcConnectionProperties connection, int timeoutSeconds) {
+        return createJdbcCatalog(connection, timeoutSeconds, timeoutSeconds);
     }
 
-    String host = trimToNull(firstText(node, "host", "sshHost"));
-    int port = intValue(node, 22, "port");
-    String username = trimToNull(firstText(node, "username", "user"));
-    String authValue =
-        defaultIfBlank(firstText(node, "authType", "authenticationType"), "PASSWORD")
-            .toUpperCase(Locale.ROOT);
-    SshTunnelConfig.AuthType authType;
-    try {
-      authType = SshTunnelConfig.AuthType.valueOf(authValue);
-    } catch (IllegalArgumentException exception) {
-      throw parameterError("SSH 认证方式仅支持 PASSWORD 或 PRIVATE_KEY", exception);
+    protected DataSourceCatalog createJdbcCatalog(
+            JdbcConnectionProperties connection, int connectionTimeoutSeconds, int queryTimeoutSeconds) {
+        return new GenericJdbcCatalog(connection, connectionTimeoutSeconds, queryTimeoutSeconds) {
+            @Override
+            protected Connection openConnection() throws Exception {
+                return openJdbcConnection(connection, connectionTimeoutSeconds);
+            }
+        };
     }
 
-    String sshPassword = firstText(node, "password");
-    String privateKey = firstText(node, "privateKey", "privateKeyContent");
-    String passphrase = firstText(node, "passphrase", "privateKeyPassphrase");
-    boolean strictHostKeyChecking = booleanValue(node, false, "strictHostKeyChecking");
-    String knownHosts = firstText(node, "knownHosts", "knownHostsContent");
-
-    if (isBlank(host)) {
-      throw parameterError("SSH host 不能为空", null);
-    }
-    if (isBlank(username)) {
-      throw parameterError("SSH username 不能为空", null);
-    }
-    if (authType == SshTunnelConfig.AuthType.PASSWORD && isBlank(sshPassword)) {
-      throw parameterError("SSH password 不能为空", null);
-    }
-    if (authType == SshTunnelConfig.AuthType.PRIVATE_KEY && isBlank(privateKey)) {
-      throw parameterError("SSH privateKey 不能为空", null);
-    }
-    if (strictHostKeyChecking && isBlank(knownHosts)) {
-      throw parameterError("开启 SSH 严格主机校验后 knownHosts 不能为空", null);
-    }
-
-    return new SshTunnelConfig(
-        true,
-        host,
-        port,
-        username,
-        authType,
-        sshPassword,
-        privateKey,
-        passphrase,
-        strictHostKeyChecking,
-        knownHosts);
-  }
-
-  private void writeSshTunnel(ObjectNode normalized, SshTunnelConfig config) {
-    ObjectNode node = normalized.putObject("sshTunnel");
-    node.put("enabled", config.enabled());
-    node.put("port", config.port());
-    node.put("authType", config.authType().name());
-    node.put("strictHostKeyChecking", config.strictHostKeyChecking());
-    if (!config.enabled()) return;
-
-    putIfText(node, "host", config.host());
-    putIfText(node, "username", config.username());
-    if (config.password() != null) {
-      node.put("password", config.password());
-    }
-    if (config.privateKey() != null) {
-      node.put("privateKey", config.privateKey());
-    }
-    if (config.passphrase() != null) {
-      node.put("passphrase", config.passphrase());
-    }
-    putIfText(node, "knownHosts", config.knownHosts());
-  }
-
-  private void validateDeclaredType(JsonNode root) {
-    String declaredType = firstText(root, "dbType", "type", "pluginType");
-    if (isBlank(declaredType)) {
-      return;
-    }
-    try {
-      if (DataSourceDbType.parse(declaredType) != dbType()) {
-        throw parameterError("连接参数中的数据源类型与插件不匹配", null);
-      }
-    } catch (IllegalArgumentException exception) {
-      throw parameterError(exception.getMessage(), exception);
-    }
-  }
-
-  private Map<String, String> parseProperties(JsonNode node) {
-    if (node == null || node.isNull() || (node.isTextual() && isBlank(node.asText()))) {
-      return Collections.emptyMap();
-    }
-    JsonNode objectNode = node;
-    try {
-      if (node.isTextual()) {
-        objectNode = OBJECT_MAPPER.readTree(node.asText());
-      }
-      if (objectNode == null || !objectNode.isObject()) {
-        throw parameterError("properties 必须是 JSON 对象", null);
-      }
-      Map<String, String> values = new LinkedHashMap<>();
-      Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
-      while (fields.hasNext()) {
-        Map.Entry<String, JsonNode> field = fields.next();
-        if (field.getValue() != null && !field.getValue().isNull()) {
-          values.put(field.getKey(), field.getValue().asText());
+    protected Connection openJdbcConnection(JdbcConnectionProperties connection, int timeoutSeconds) throws Exception {
+        int safeTimeout = Math.max(1, timeoutSeconds);
+        SshTunnelConfig sshTunnel = connection.sshTunnel();
+        if (!sshTunnel.enabled()) {
+            return connectJdbc(connection, connection.jdbcUrl(), safeTimeout);
         }
-      }
-      return values;
-    } catch (DataSourcePluginException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw parameterError("properties 不是合法 JSON", exception);
+
+        SshTunnel tunnel = SshTunnel.open(sshTunnel, connection.host(), connection.port(), safeTimeout);
+        try {
+            JsonNode normalized = JSONUtils.readTree(connection.normalizedJson());
+            String tunneledJdbcUrl = buildJdbcUrl("127.0.0.1", tunnel.localPort(), connection.database(), normalized);
+            Connection opened = connectJdbc(connection, tunneledJdbcUrl, safeTimeout);
+            return SshTunneledConnection.wrap(opened, tunnel);
+        } catch (Exception exception) {
+            tunnel.close();
+            throw exception;
+        }
     }
-  }
 
-  private int intValue(JsonNode root, int defaultValue, String key) {
-    JsonNode value = root.get(key);
-    if (value == null || value.isNull() || isBlank(value.asText())) {
-      return defaultValue;
+    protected Connection connectJdbc(JdbcConnectionProperties connection, String jdbcUrl, int timeoutSeconds)
+            throws Exception {
+        Class.forName(connection.driverClassName());
+        DriverManager.setLoginTimeout(Math.max(1, timeoutSeconds));
+        return DriverManager.getConnection(jdbcUrl, connectionProperties(connection));
     }
-    int port = value.asInt(-1);
-    if (port < 1 || port > 65535) {
-      throw parameterError(key + " 必须在 1 到 65535 之间", null);
+
+    protected abstract int defaultPort();
+
+    protected abstract String defaultDriverClassName();
+
+    protected abstract String buildJdbcUrl(String host, int port, String database, JsonNode connectionJson);
+
+    protected Set<String> knownConnectionPropertyKeys() {
+        return Set.of();
     }
-    return port;
-  }
 
-  private boolean booleanValue(JsonNode root, boolean defaultValue, String key) {
-    JsonNode value = root.get(key);
-    if (value == null || value.isNull() || isBlank(value.asText())) {
-      return defaultValue;
+    protected String propertyInfoDatabase() {
+        return "database";
     }
-    if (value.isBoolean()) {
-      return value.asBoolean();
+
+    protected Driver connectionPropertyDriver(String jdbcUrl) throws Exception {
+        Class.forName(defaultDriverClassName());
+        return DriverManager.getDriver(jdbcUrl);
     }
-    return Boolean.parseBoolean(value.asText());
-  }
 
-  private String firstText(JsonNode node, String... keys) {
-    for (String key : keys) {
-      JsonNode value = node.get(key);
-      if (value != null && !value.isNull()) {
-        return value.asText();
-      }
+    protected DriverPropertyInfo[] connectionPropertyInfo(String jdbcUrl, Properties properties) throws Exception {
+        return connectionPropertyDriver(jdbcUrl).getPropertyInfo(jdbcUrl, properties);
     }
-    return null;
-  }
 
-  private void putIfText(ObjectNode target, String key, String value) {
-    if (!isBlank(value)) {
-      target.put(key, value.trim());
+    protected final String displayJdbcUrlWithQueryProperties(DataSourceConnection connection) {
+        JdbcConnectionProperties jdbcConnection = requireJdbcConnection(connection);
+        String jdbcUrl = jdbcConnection.jdbcUrl();
+        if (StringUtils.isBlank(jdbcUrl) || jdbcConnection.properties().isEmpty()) return jdbcUrl;
+
+        StringBuilder displayUrl = new StringBuilder(jdbcUrl);
+        String separator = jdbcUrl.contains("?") ? (jdbcUrl.endsWith("?") || jdbcUrl.endsWith("&") ? "" : "&") : "?";
+        for (Map.Entry<String, String> entry : jdbcConnection.properties().entrySet()) {
+            if (StringUtils.isBlank(entry.getKey())) continue;
+            displayUrl
+                    .append(separator)
+                    .append(encodeQueryComponent(entry.getKey()))
+                    .append("=")
+                    .append(encodeQueryComponent(entry.getValue()));
+            separator = "&";
+        }
+        return displayUrl.toString();
     }
-  }
 
-  private String defaultIfBlank(String value, String defaultValue) {
-    return isBlank(value) ? defaultValue : value.trim();
-  }
+    protected boolean includeConnectionPropertyKey(String key) {
+        String value = StringUtils.trimToNull(key);
+        if (value == null) return false;
+        String normalized = value.toLowerCase(Locale.ROOT);
+        return !RESERVED_CONNECTION_PROPERTY_KEYS.contains(normalized)
+                && !normalized.contains(".testsuite.faultinjection.")
+                && !normalized.contains(".faultinjection.");
+    }
 
-  private String trimToNull(String value) {
-    return isBlank(value) ? null : value.trim();
-  }
+    protected Map<String, String> normalizeProperties(Map<String, String> properties) {
+        return properties;
+    }
 
-  private boolean isBlank(String value) {
-    return value == null || value.trim().isEmpty();
-  }
+    protected void validateProperties(Map<String, String> properties) {}
 
-  private DataSourcePluginException parameterError(String message, Throwable cause) {
-    return cause == null
-        ? new DataSourcePluginException(Operation.PARAMETER, message)
-        : new DataSourcePluginException(Operation.PARAMETER, message, cause);
-  }
+    protected String normalizeSchema(String schema) {
+        return StringUtils.trimToNull(schema);
+    }
+
+    protected String normalizeDriverId(JsonNode connectionJson) {
+        String driverId = StringUtils.trimToNull(JSONUtils.firstText(connectionJson, "driverId"));
+        if (driverId != null) {
+            throw parameterError("当前数据源不支持 JDBC Driver 选择：" + driverId, null);
+        }
+        return null;
+    }
+
+    protected String normalizeDriverClassName(JsonNode connectionJson, String driverId) {
+        String driver = StringUtils.trimToNull(JSONUtils.firstText(connectionJson, "driverClassName", "driver"));
+        return driver == null ? defaultDriverClassName() : driver;
+    }
+
+    protected final Map<String, String> canonicalizeProperties(
+            Map<String, String> properties, Map<String, String> canonicalKeys) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            String key = StringUtils.trimToNull(entry.getKey());
+            if (key == null) {
+                throw parameterError("JDBC 属性名不能为空", null);
+            }
+            String canonicalKey = canonicalKeys.getOrDefault(key.toLowerCase(Locale.ROOT), key);
+            if (normalized.containsKey(canonicalKey)) {
+                throw parameterError("JDBC 属性重复：" + canonicalKey, null);
+            }
+            normalized.put(canonicalKey, entry.getValue());
+        }
+        return normalized;
+    }
+
+    protected final void normalizeBooleanProperty(Map<String, String> properties, String key) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+            throw parameterError("JDBC 属性 " + key + " 仅支持 true 或 false", null);
+        }
+        properties.put(key, value.toLowerCase(Locale.ROOT));
+    }
+
+    protected final void normalizeUpperCaseEnumProperty(
+            Map<String, String> properties, String key, Set<String> allowedValues) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        String normalized = value.toUpperCase(Locale.ROOT);
+        if (!allowedValues.contains(normalized)) {
+            throw parameterError("JDBC 属性 " + key + " 不支持值：" + value, null);
+        }
+        properties.put(key, normalized);
+    }
+
+    protected final void normalizeLowerCaseEnumProperty(
+            Map<String, String> properties, String key, Set<String> allowedValues) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        if (!allowedValues.contains(normalized)) {
+            throw parameterError("JDBC 属性 " + key + " 不支持值：" + value, null);
+        }
+        properties.put(key, normalized);
+    }
+
+    protected final void validateNonNegativeIntegerProperty(Map<String, String> properties, String key) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        try {
+            if (Integer.parseInt(value) < 0) {
+                throw parameterError("JDBC 属性 " + key + " 不能小于 0", null);
+            }
+        } catch (NumberFormatException exception) {
+            throw parameterError("JDBC 属性 " + key + " 必须是整数", exception);
+        }
+        properties.put(key, value);
+    }
+
+    protected final void validatePositiveIntegerProperty(Map<String, String> properties, String key) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        try {
+            if (Integer.parseInt(value) <= 0) {
+                throw parameterError("JDBC 属性 " + key + " 必须大于 0", null);
+            }
+        } catch (NumberFormatException exception) {
+            throw parameterError("JDBC 属性 " + key + " 必须是整数", exception);
+        }
+        properties.put(key, value);
+    }
+
+    protected final void validateNonBlankProperty(Map<String, String> properties, String key) {
+        if (!properties.containsKey(key)) return;
+        String value = StringUtils.trimToNull(properties.get(key));
+        if (value == null) {
+            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
+        }
+        properties.put(key, value);
+    }
+
+    protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {}
+
+    protected String inferDatabase(String jdbcUrl) {
+        if (StringUtils.isBlank(jdbcUrl)) {
+            return null;
+        }
+        String value = jdbcUrl;
+        int queryIndex = value.indexOf('?');
+        if (queryIndex >= 0) {
+            value = value.substring(0, queryIndex);
+        }
+        int slashIndex = value.lastIndexOf('/');
+        return slashIndex >= 0 && slashIndex < value.length() - 1 ? value.substring(slashIndex + 1) : null;
+    }
+
+    protected JdbcConnectionProperties requireJdbcConnection(DataSourceConnection connection) {
+        if (!(connection instanceof JdbcConnectionProperties jdbcConnection)) {
+            throw parameterError("连接参数与插件类型不匹配", null);
+        }
+        if (!type().equals(connection.type())) {
+            throw parameterError("连接参数与插件类型不匹配", null);
+        }
+        return jdbcConnection;
+    }
+
+    protected Properties connectionProperties(JdbcConnectionProperties connection) {
+        Properties properties = new Properties();
+        properties.putAll(connection.properties());
+        if (!StringUtils.isBlank(connection.username())) {
+            properties.setProperty("user", connection.username());
+        }
+        if (connection.password() != null) {
+            properties.setProperty("password", connection.password());
+        }
+        return properties;
+    }
+
+    protected String safeMessage(Throwable throwable) {
+        String message = throwable == null ? null : throwable.getMessage();
+        if (StringUtils.isBlank(message)) {
+            return throwable == null ? "未知错误" : throwable.getClass().getSimpleName();
+        }
+        String sanitized = SensitiveUtils.mask(message);
+        return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
+    }
+
+    private static String encodeQueryComponent(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8)
+                .replace("+", "%20");
+    }
+
+    private SshTunnelConfig parseSshTunnel(JsonNode root) {
+        JsonNode node = root.get("sshTunnel");
+        if (node == null || node.isNull()) {
+            node = root.get("ssh");
+        }
+        if (node == null || node.isNull()) {
+            return SshTunnelConfig.disabled();
+        }
+        if (!node.isObject()) {
+            throw parameterError("sshTunnel 必须是 JSON 对象", null);
+        }
+
+        boolean enabled = booleanValue(node, false, "enabled");
+        if (!enabled) {
+            return SshTunnelConfig.disabled();
+        }
+
+        String host = StringUtils.trimToNull(JSONUtils.firstText(node, "host", "sshHost"));
+        int port = intValue(node, 22, "port");
+        String username = StringUtils.trimToNull(JSONUtils.firstText(node, "username", "user"));
+        String authValue = StringUtils.trimToNull(JSONUtils.firstText(node, "authType", "authenticationType"));
+        if (authValue == null) authValue = SshAuthType.PASSWORD.name();
+        authValue = authValue.toUpperCase(Locale.ROOT);
+        SshAuthType authType;
+        try {
+            authType = SshAuthType.valueOf(authValue);
+        } catch (IllegalArgumentException exception) {
+            throw parameterError("SSH 认证方式仅支持 PASSWORD 或 PRIVATE_KEY", exception);
+        }
+
+        String sshPassword = JSONUtils.firstText(node, "password");
+        String privateKey = JSONUtils.firstText(node, "privateKey", "privateKeyContent");
+        String passphrase = JSONUtils.firstText(node, "passphrase", "privateKeyPassphrase");
+        boolean strictHostKeyChecking = booleanValue(node, false, "strictHostKeyChecking");
+        String knownHosts = JSONUtils.firstText(node, "knownHosts", "knownHostsContent");
+
+        if (StringUtils.isBlank(host)) {
+            throw parameterError("SSH host 不能为空", null);
+        }
+        if (StringUtils.isBlank(username)) {
+            throw parameterError("SSH username 不能为空", null);
+        }
+        if (authType == SshAuthType.PASSWORD && StringUtils.isBlank(sshPassword)) {
+            throw parameterError("SSH password 不能为空", null);
+        }
+        if (authType == SshAuthType.PRIVATE_KEY && StringUtils.isBlank(privateKey)) {
+            throw parameterError("SSH privateKey 不能为空", null);
+        }
+        if (strictHostKeyChecking && StringUtils.isBlank(knownHosts)) {
+            throw parameterError("开启 SSH 严格主机校验后 knownHosts 不能为空", null);
+        }
+
+        return new SshTunnelConfig(
+                true,
+                host,
+                port,
+                username,
+                authType,
+                sshPassword,
+                privateKey,
+                passphrase,
+                strictHostKeyChecking,
+                knownHosts);
+    }
+
+    private void writeSshTunnel(ObjectNode normalized, SshTunnelConfig config) {
+        ObjectNode node = normalized.putObject("sshTunnel");
+        node.put("enabled", config.enabled());
+        node.put("port", config.port());
+        node.put("authType", config.authType().name());
+        node.put("strictHostKeyChecking", config.strictHostKeyChecking());
+        if (!config.enabled()) return;
+
+        putIfText(node, "host", config.host());
+        putIfText(node, "username", config.username());
+        if (config.password() != null) {
+            node.put("password", config.password());
+        }
+        if (config.privateKey() != null) {
+            node.put("privateKey", config.privateKey());
+        }
+        if (config.passphrase() != null) {
+            node.put("passphrase", config.passphrase());
+        }
+        putIfText(node, "knownHosts", config.knownHosts());
+    }
+
+    private void validateDeclaredType(JsonNode root) {
+        String declaredType = JSONUtils.firstText(root, "dbType", "type", "pluginType");
+        if (StringUtils.isBlank(declaredType)) {
+            return;
+        }
+        if (!descriptor().matchesType(declaredType)) {
+            throw parameterError("连接参数中的数据源类型与插件不匹配", null);
+        }
+    }
+
+    private Map<String, String> parseProperties(JsonNode node) {
+        if (node == null || node.isNull() || (node.isTextual() && StringUtils.isBlank(node.asText()))) {
+            return Collections.emptyMap();
+        }
+        JsonNode objectNode = node;
+        try {
+            if (node.isTextual()) {
+                objectNode = JSONUtils.readTree(node.asText());
+            }
+            if (objectNode == null || !objectNode.isObject()) {
+                throw parameterError("properties 必须是 JSON 对象", null);
+            }
+            Map<String, String> values = new LinkedHashMap<>();
+            Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                if (field.getValue() != null && !field.getValue().isNull()) {
+                    values.put(field.getKey(), field.getValue().asText());
+                }
+            }
+            return values;
+        } catch (DataSourcePluginException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw parameterError("properties 不是合法 JSON", exception);
+        }
+    }
+
+    private int intValue(JsonNode root, int defaultValue, String key) {
+        JsonNode value = root.get(key);
+        if (value == null || value.isNull() || StringUtils.isBlank(value.asText())) {
+            return defaultValue;
+        }
+        int port = value.asInt(-1);
+        if (port < 1 || port > 65535) {
+            throw parameterError(key + " 必须在 1 到 65535 之间", null);
+        }
+        return port;
+    }
+
+    private boolean booleanValue(JsonNode root, boolean defaultValue, String key) {
+        JsonNode value = root.get(key);
+        if (value == null || value.isNull() || StringUtils.isBlank(value.asText())) {
+            return defaultValue;
+        }
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        }
+        return Boolean.parseBoolean(value.asText());
+    }
+
+    private void putIfText(ObjectNode target, String key, String value) {
+        if (!StringUtils.isBlank(value)) {
+            target.put(key, value.trim());
+        }
+    }
+
+    protected final DataSourcePluginException parameterError(String message, Throwable cause) {
+        return cause == null
+                ? new DataSourcePluginException(DataSourcePluginOperation.PARAMETER, message)
+                : new DataSourcePluginException(DataSourcePluginOperation.PARAMETER, message, cause);
+    }
 }

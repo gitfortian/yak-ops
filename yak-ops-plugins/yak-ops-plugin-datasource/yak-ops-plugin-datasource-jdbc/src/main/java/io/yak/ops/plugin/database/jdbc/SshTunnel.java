@@ -3,82 +3,76 @@ package io.yak.ops.plugin.database.jdbc;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
+import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.plugin.database.jdbc.enums.SshAuthType;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
-/** 单次 JDBC 连接使用的 SSH 本地端口转发，会随 JDBC Connection 一起释放。 */
+/**
+ * 为单次 JDBC 连接建立 SSH 本地端口转发。
+ *
+ * <p>隧道生命周期必须与 JDBC Connection 绑定释放；密码、私钥和 passphrase 只用于建立 SSH Session，不得写入日志。</p>
+ *
+ * @author weifuwan
+ * @since 2026-09-24
+ */
 final class SshTunnel implements AutoCloseable {
 
-  private final Session session;
-  private final int localPort;
+    private final Session session;
+    private final int localPort;
 
-  private SshTunnel(Session session, int localPort) {
-    this.session = session;
-    this.localPort = localPort;
-  }
-
-  static SshTunnel open(
-      SshTunnelConfig config,
-      String targetHost,
-      int targetPort,
-      int timeoutSeconds)
-      throws JSchException {
-    JSch jsch = new JSch();
-    configureHostKeys(jsch, config);
-    configureIdentity(jsch, config);
-
-    Session session = jsch.getSession(config.username(), config.host(), config.port());
-    if (config.authType() == SshTunnelConfig.AuthType.PASSWORD) {
-      session.setPassword(config.password().getBytes(StandardCharsets.UTF_8));
-      session.setConfig("PreferredAuthentications", "password,keyboard-interactive");
-    } else {
-      session.setConfig("PreferredAuthentications", "publickey");
+    private SshTunnel(Session session, int localPort) {
+        this.session = session;
+        this.localPort = localPort;
     }
-    session.setConfig(
-        "StrictHostKeyChecking",
-        config.strictHostKeyChecking() ? "yes" : "no");
 
-    int timeoutMillis = Math.max(1, timeoutSeconds) * 1000;
-    try {
-      session.connect(timeoutMillis);
-      int localPort =
-          session.setPortForwardingL("127.0.0.1", 0, targetHost, targetPort);
-      return new SshTunnel(session, localPort);
-    } catch (JSchException exception) {
-      session.disconnect();
-      throw exception;
+    static SshTunnel open(SshTunnelConfig config, String targetHost, int targetPort, int timeoutSeconds)
+            throws JSchException {
+        JSch jsch = new JSch();
+        configureHostKeys(jsch, config);
+        configureIdentity(jsch, config);
+
+        Session session = jsch.getSession(config.username(), config.host(), config.port());
+        if (config.authType() == SshAuthType.PASSWORD) {
+            session.setPassword(config.password().getBytes(StandardCharsets.UTF_8));
+            session.setConfig("PreferredAuthentications", "password,keyboard-interactive");
+        } else {
+            session.setConfig("PreferredAuthentications", "publickey");
+        }
+        session.setConfig("StrictHostKeyChecking", config.strictHostKeyChecking() ? "yes" : "no");
+
+        int timeoutMillis = Math.max(1, timeoutSeconds) * 1000;
+        try {
+            session.connect(timeoutMillis);
+            int localPort = session.setPortForwardingL("127.0.0.1", 0, targetHost, targetPort);
+            return new SshTunnel(session, localPort);
+        } catch (JSchException exception) {
+            session.disconnect();
+            throw exception;
+        }
     }
-  }
 
-  int localPort() {
-    return localPort;
-  }
-
-  @Override
-  public void close() {
-    if (session.isConnected()) {
-      session.disconnect();
+    int localPort() {
+        return localPort;
     }
-  }
 
-  private static void configureHostKeys(JSch jsch, SshTunnelConfig config)
-      throws JSchException {
-    if (!config.strictHostKeyChecking()) return;
-    jsch.setKnownHosts(
-        new ByteArrayInputStream(config.knownHosts().getBytes(StandardCharsets.UTF_8)));
-  }
+    @Override
+    public void close() {
+        if (session.isConnected()) {
+            session.disconnect();
+        }
+    }
 
-  private static void configureIdentity(JSch jsch, SshTunnelConfig config)
-      throws JSchException {
-    if (config.authType() != SshTunnelConfig.AuthType.PRIVATE_KEY) return;
-    byte[] passphrase =
-        config.passphrase() == null || config.passphrase().isEmpty()
-            ? null
-            : config.passphrase().getBytes(StandardCharsets.UTF_8);
-    jsch.addIdentity(
-        "yak-ops-datasource",
-        config.privateKey().getBytes(StandardCharsets.UTF_8),
-        null,
-        passphrase);
-  }
+    private static void configureHostKeys(JSch jsch, SshTunnelConfig config) throws JSchException {
+        if (!config.strictHostKeyChecking()) return;
+        jsch.setKnownHosts(new ByteArrayInputStream(config.knownHosts().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static void configureIdentity(JSch jsch, SshTunnelConfig config) throws JSchException {
+        if (config.authType() != SshAuthType.PRIVATE_KEY) return;
+        byte[] passphrase = StringUtils.isBlank(config.passphrase())
+                ? null
+                : config.passphrase().getBytes(StandardCharsets.UTF_8);
+        jsch.addIdentity("yak-ops-datasource", config.privateKey().getBytes(StandardCharsets.UTF_8), null, passphrase);
+    }
 }

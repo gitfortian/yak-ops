@@ -1,0 +1,180 @@
+name: Quality Check
+
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-quality:
+    name: Backend Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Release tooling syntax
+        run: bash -n scripts/release/*.sh
+
+      - name: Release metadata consistency
+        run: bash scripts/release/check-release-metadata.sh
+
+      - name: Backend logging rules
+        run: python3 scripts/verify_logging_rules.py
+
+      - name: Backend format
+        run: >-
+          bash mvnw -q -DskipTests
+          -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist'
+          com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
+
+      - name: Backend compile
+        run: >-
+          bash mvnw -q -DskipTests
+          -pl '!yak-ops-ui,!yak-ops-dist'
+          compile
+
+      - name: Backend verify
+        run: >-
+          bash mvnw -q
+          -pl '!yak-ops-ui,!yak-ops-dist'
+          verify
+
+  frontend-quality:
+    name: Frontend Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: yak-ops-ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.13"
+          cache: npm
+          cache-dependency-path: yak-ops-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Frontend format
+        run: npm run format:check
+
+      - name: Frontend lint
+        run: npm run lint
+
+      - name: Frontend type check
+        run: npm run typecheck
+
+      - name: Frontend architecture
+        run: npm run architecture:check
+
+      - name: Frontend build
+        run: npm run build
+
+
+  distribution-quality:
+    name: Distribution Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect distribution changes
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_sha="${PR_BASE_SHA}"
+            head_sha="${PR_HEAD_SHA}"
+          else
+            base_sha="${PUSH_BEFORE_SHA}"
+            head_sha="${CURRENT_SHA}"
+          fi
+
+          if [[ -z "${base_sha}" || "${base_sha}" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse "${head_sha}^")"
+          fi
+
+          git diff --name-only "${base_sha}" "${head_sha}" > /tmp/distribution-changes.txt
+          required=false
+
+          while IFS= read -r file; do
+            case "${file}" in
+              release.env|.env.example|compose.yaml|compose.without-mysql.yaml|Dockerfile|docker/*|README.md|NOTICE|pom.xml|yak-ops-dist/*|scripts/release/*|yak-ops-ui/package.json|yak-ops-ui/package-lock.json)
+                required=true
+                break
+                ;;
+            esac
+          done < /tmp/distribution-changes.txt
+
+          echo "required=${required}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Java
+        if: steps.changes.outputs.required == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Setup Node
+        if: steps.changes.outputs.required == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.13"
+          cache: npm
+          cache-dependency-path: yak-ops-ui/package-lock.json
+
+      - name: Install frontend dependencies
+        if: steps.changes.outputs.required == 'true'
+        working-directory: yak-ops-ui
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Build frontend distribution
+        if: steps.changes.outputs.required == 'true'
+        working-directory: yak-ops-ui
+        run: npm run build
+
+      - name: Build Yak Ops distribution
+        if: steps.changes.outputs.required == 'true'
+        run: bash mvnw -B -ntp -DskipTests package
+
+      - name: Verify Yak Ops distribution
+        if: steps.changes.outputs.required == 'true'
+        run: bash scripts/release/verify-distribution.sh

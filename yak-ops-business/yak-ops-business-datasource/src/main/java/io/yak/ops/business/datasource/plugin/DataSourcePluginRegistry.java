@@ -1,148 +1,228 @@
 package io.yak.ops.business.datasource.plugin;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
-import io.yak.ops.spi.datasource.DataSourceCapability;
-import io.yak.ops.spi.datasource.DataSourcePlugin;
-import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
+import io.yak.ops.common.util.ObjectUtils;
+import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalog;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalogQuery;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTable;
+import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
+import io.yak.ops.plugin.datasource.api.exception.DataSourcePluginException;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.ServiceLoader;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/** Discovers datasource plugins with ServiceLoader and validates their stable descriptor contract. */
-@Slf4j
+/**
+ * Datasource Service 内部的 Plugin 发现、类型解析和能力路由机制。
+ *
+ * <p>通过 ServiceLoader 注册当前运行时可用 Provider，并统一把 Plugin 异常映射为 DatasourceException；该组件不是 Boot 或 HTTP 的业务入口。</p>
+ *
+ * @author weifuwan
+ * @since 2026-09-25
+ */
 @Component
-@ConditionalOnDataSourceEnabled
-@RequiredArgsConstructor
 public class DataSourcePluginRegistry {
 
-  private final ObjectMapper objectMapper;
-  private Map<DataSourceDbType, DataSourcePlugin> plugins = Collections.emptyMap();
+    private static final Logger LOG = LoggerFactory.getLogger(DataSourcePluginRegistry.class);
 
-  @PostConstruct
-  public void initialize() {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    if (classLoader == null) classLoader = DataSourcePluginRegistry.class.getClassLoader();
+    @Resource
+    private DataSourceSecretCodec secretCodec;
 
-    Map<DataSourceDbType, DataSourcePlugin> discovered = new EnumMap<>(DataSourceDbType.class);
-    for (DataSourcePlugin plugin : ServiceLoader.load(DataSourcePlugin.class, classLoader)) {
-      validateDescriptor(plugin);
-      DataSourcePlugin existing = discovered.putIfAbsent(plugin.dbType(), plugin);
-      if (existing != null) {
-        throw new IllegalStateException(
-            "Duplicate datasource plugin for "
-                + plugin.dbType().name()
-                + ": "
-                + existing.getClass().getName()
-                + " and "
-                + plugin.getClass().getName());
-      }
-      log.info(
-          "Registered datasource plugin: type={}, apiVersion={}, capabilities={}, implementation={}",
-          plugin.dbType(),
-          plugin.descriptor().apiVersion(),
-          plugin.descriptor().capabilities(),
-          plugin.getClass().getName());
-    }
-    plugins = Collections.unmodifiableMap(discovered);
-  }
+    /** 按 canonical type 和兼容 alias 建立的只读 Plugin 路由表。 */
+    private Map<String, DataSourcePlugin> plugins = Collections.emptyMap();
 
-  public DataSourcePlugin get(String dbType) {
-    try {
-      return get(DataSourceDbType.parse(dbType));
-    } catch (IllegalArgumentException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_DB_TYPE, exception.getMessage(), exception);
-    }
-  }
+    /** 启动时发现并校验当前 classpath 中可用的 Datasource Provider。 */
+    @PostConstruct
+    public void initialize() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = DataSourcePluginRegistry.class.getClassLoader();
+        }
 
-  public DataSourcePlugin get(DataSourceDbType dbType) {
-    DataSourcePlugin plugin = dbType == null ? null : plugins.get(dbType);
-    if (plugin == null) {
-      throw new DataSourceException(
-          DataSourceErrorCode.PLUGIN_NOT_FOUND,
-          dbType == null ? "未指定数据源类型" : "未找到插件：" + dbType.name());
+        Map<String, DataSourcePlugin> discovered = new LinkedHashMap<>();
+        for (DataSourcePlugin plugin : ServiceLoader.load(DataSourcePlugin.class, classLoader)) {
+            validateDescriptor(plugin);
+            register(discovered, plugin.descriptor().type(), plugin);
+            for (String alias : plugin.descriptor().aliases()) {
+                register(discovered, alias, plugin);
+            }
+            LOG.info(
+                    "数据源插件注册完成，type={}, aliases={}, apiVersion={}, capabilities={}, implementation={}",
+                    plugin.descriptor().type(),
+                    plugin.descriptor().aliases(),
+                    plugin.descriptor().apiVersion(),
+                    plugin.descriptor().capabilities(),
+                    plugin.getClass().getName());
+        }
+        if (discovered.isEmpty()) {
+            LOG.warn("未发现可用数据源插件，数据源连接能力不可用");
+        }
+        plugins = Collections.unmodifiableMap(discovered);
     }
-    return plugin;
-  }
 
-  /** Parse only the routing field; the target plugin still owns connection parsing. */
-  public DataSourceDbType resolveConnectionType(String connectionJson) {
-    try {
-      JsonNode root = objectMapper.readTree(connectionJson);
-      if (root == null || !root.isObject()) {
-        throw new DataSourceException(
-            DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接参数必须是 JSON 对象");
-      }
-      String value = firstText(root, "dbType", "type", "pluginType");
-      if (value == null || value.trim().isEmpty()) {
-        throw new DataSourceException(
-            DataSourceErrorCode.INVALID_DB_TYPE, "连接参数中缺少 dbType 或 pluginType");
-      }
-      return DataSourceDbType.parse(value);
-    } catch (DataSourceException exception) {
-      throw exception;
-    } catch (IllegalArgumentException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_DB_TYPE, exception.getMessage(), exception);
-    } catch (Exception exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "无法识别连接参数中的插件类型", exception);
+    public String resolvePluginType(String pluginType) {
+        return get(pluginType).descriptor().type();
     }
-  }
 
-  public Map<DataSourceDbType, DataSourcePlugin> registeredPlugins() {
-    return plugins;
-  }
+    public List<String> connectionPropertyKeys(String pluginType) {
+        return get(pluginType).connectionPropertyKeys();
+    }
 
-  private void validateDescriptor(DataSourcePlugin plugin) {
-    if (plugin == null || plugin.dbType() == null) {
-      throw new IllegalStateException("Datasource plugin and dbType must not be null");
+    public DataSourceConnection parseConnection(String pluginType, String connectionJson) {
+        try {
+            return get(pluginType).parseConnection(connectionJson);
+        } catch (DataSourcePluginException exception) {
+            throw new DataSourceException(
+                    DataSourceErrorCode.INVALID_CONNECTION_PARAMS, exception.getMessage(), exception);
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(
+                    DataSourceErrorCode.INVALID_CONNECTION_PARAMS, exception.getMessage(), exception);
+        }
     }
-    DataSourcePluginDescriptor descriptor = plugin.descriptor();
-    if (descriptor == null) {
-      throw new IllegalStateException("Datasource plugin descriptor must not be null: " + plugin.getClass().getName());
-    }
-    if (descriptor.dbType() != plugin.dbType()) {
-      throw new IllegalStateException(
-          "Datasource plugin descriptor type mismatch: plugin="
-              + plugin.dbType()
-              + ", descriptor="
-              + descriptor.dbType());
-    }
-    if (!DataSourcePluginDescriptor.CURRENT_API_VERSION.equals(descriptor.apiVersion())) {
-      throw new IllegalStateException(
-          "Unsupported datasource plugin API version "
-              + descriptor.apiVersion()
-              + " for "
-              + plugin.dbType());
-    }
-    if (descriptor.supports(DataSourceCapability.TRANSACTIONS)
-        && !descriptor.supports(DataSourceCapability.SQL_EXECUTION)) {
-      throw new IllegalStateException(
-          "Datasource plugin TRANSACTIONS requires SQL_EXECUTION: " + plugin.dbType());
-    }
-    if (descriptor.supports(DataSourceCapability.CATALOG_READ)
-        && !descriptor.supports(DataSourceCapability.CATALOG_METADATA)) {
-      throw new IllegalStateException(
-          "Datasource plugin CATALOG_READ requires CATALOG_METADATA: " + plugin.dbType());
-    }
-  }
 
-  private String firstText(JsonNode root, String... keys) {
-    for (String key : keys) {
-      JsonNode value = root.get(key);
-      if (value != null && !value.isNull()) return value.asText();
+    public String displayJdbcUrl(String pluginType, String connectionJson) {
+        DataSourcePlugin plugin = get(pluginType);
+        String maskedConnectionJson = secretCodec.maskConnectionJson(plugin.descriptor(), connectionJson);
+        DataSourceConnection connection = parseConnection(plugin.descriptor().type(), maskedConnectionJson);
+        return secretCodec.maskSensitiveText(plugin.displayJdbcUrl(connection));
     }
-    return null;
-  }
+
+    public DataSourceConnection mergeStoredSecrets(String pluginType, String submittedJson, String storedJson) {
+        DataSourcePlugin plugin = get(pluginType);
+        String merged = secretCodec.mergeStoredSecrets(plugin.descriptor(), submittedJson, storedJson);
+        return parseConnection(plugin.descriptor().type(), merged);
+    }
+
+    public void testConnection(String pluginType, String connectionJson, int timeoutSeconds) {
+        DataSourcePlugin plugin = get(pluginType);
+        requireCapability(plugin, DataSourceCapability.CONNECTION_TEST, DataSourceErrorCode.CONNECT_FAILED);
+        DataSourceConnection connection = parseConnection(plugin.descriptor().type(), connectionJson);
+        try {
+            plugin.testConnection(connection, Math.max(1, timeoutSeconds));
+        } catch (DataSourcePluginException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, exception.getMessage(), exception);
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, exception.getMessage(), exception);
+        }
+    }
+
+    public List<String> catalogDatabases(String pluginType, String connectionJson, int timeoutSeconds) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, DataSourceCatalog::listDatabases);
+    }
+
+    public List<String> catalogSchemas(String pluginType, String connectionJson, int timeoutSeconds, String database) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listSchemas(database));
+    }
+
+    public List<DataSourceTable> catalogTables(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceCatalogQuery query) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listTables(query));
+    }
+
+    public Optional<DataSourceTable> catalogTable(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceTablePath tablePath) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.findTable(tablePath));
+    }
+
+    public List<DataSourceColumn> catalogColumns(
+            String pluginType, String connectionJson, int timeoutSeconds, DataSourceTablePath tablePath) {
+        return catalogOperation(pluginType, connectionJson, timeoutSeconds, catalog -> catalog.listColumns(tablePath));
+    }
+
+    public String maskConnectionJson(String pluginType, String connectionJson) {
+        return secretCodec.maskConnectionJson(get(pluginType).descriptor(), connectionJson);
+    }
+
+    public String maskSensitiveText(String value) {
+        return secretCodec.maskSensitiveText(value);
+    }
+
+    private <T> T catalogOperation(
+            String pluginType, String connectionJson, int timeoutSeconds, Function<DataSourceCatalog, T> action) {
+        DataSourcePlugin plugin = get(pluginType);
+        requireCapability(plugin, DataSourceCapability.CATALOG_METADATA, DataSourceErrorCode.CATALOG_QUERY_FAILED);
+        DataSourceConnection connection = parseConnection(plugin.descriptor().type(), connectionJson);
+        try {
+            DataSourceCatalog catalog = plugin.createCatalog(connection, Math.max(1, timeoutSeconds));
+            return action.apply(catalog);
+        } catch (DataSourcePluginException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, exception.getMessage(), exception);
+        }
+    }
+
+    private DataSourcePlugin get(String pluginType) {
+        final String normalized;
+        try {
+            normalized = DataSourcePluginDescriptor.normalizeType(pluginType);
+        } catch (IllegalArgumentException exception) {
+            throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, exception.getMessage(), exception);
+        }
+        DataSourcePlugin plugin = plugins.get(normalized);
+        if (plugin == null) {
+            throw new DataSourceException(DataSourceErrorCode.PLUGIN_NOT_FOUND, "未找到插件：" + normalized);
+        }
+        return plugin;
+    }
+
+    private void register(Map<String, DataSourcePlugin> discovered, String pluginType, DataSourcePlugin plugin) {
+        String normalized = DataSourcePluginDescriptor.normalizeType(pluginType);
+        DataSourcePlugin existing = discovered.putIfAbsent(normalized, plugin);
+        if (existing != null && existing != plugin) {
+            throw new IllegalStateException("Duplicate datasource plugin type or alias "
+                    + normalized
+                    + ": "
+                    + existing.getClass().getName()
+                    + " and "
+                    + plugin.getClass().getName());
+        }
+    }
+
+    private void validateDescriptor(DataSourcePlugin plugin) {
+        if (ObjectUtils.isNull(plugin) || StringUtils.isBlank(plugin.type())) {
+            throw new IllegalStateException("Datasource plugin and type must not be null or blank");
+        }
+        DataSourcePluginDescriptor descriptor = plugin.descriptor();
+        if (ObjectUtils.isNull(descriptor)) {
+            throw new IllegalStateException("Datasource plugin descriptor must not be null: "
+                    + plugin.getClass().getName());
+        }
+        String normalizedType = DataSourcePluginDescriptor.normalizeType(plugin.type());
+        if (!descriptor.type().equals(normalizedType)) {
+            throw new IllegalStateException("Datasource plugin descriptor type mismatch: plugin="
+                    + normalizedType
+                    + ", descriptor="
+                    + descriptor.type());
+        }
+        if (!DataSourcePluginDescriptor.CURRENT_API_VERSION.equals(descriptor.apiVersion())) {
+            throw new IllegalStateException(
+                    "Unsupported datasource plugin API version " + descriptor.apiVersion() + " for " + normalizedType);
+        }
+    }
+
+    private void requireCapability(
+            DataSourcePlugin plugin, DataSourceCapability capability, DataSourceErrorCode errorCode) {
+        if (!plugin.supports(capability)) {
+            throw new DataSourceException(
+                    errorCode,
+                    "数据源插件未声明能力 " + capability.name() + "："
+                            + plugin.descriptor().type());
+        }
+    }
 }

@@ -1,134 +1,201 @@
 package io.yak.ops.plugin.database.jdbc;
 
-import io.yak.ops.common.enums.datasource.DataSourceDbType;
-import io.yak.ops.spi.datasource.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** JDBC 插件解析后的不可变连接参数。 */
+/**
+ * JDBC Provider 解析并规范化后的不可变连接参数。
+ *
+ * <p>该对象会在连接测试、Catalog 和 SSH 隧道建立过程中复用；密码和规范化 JSON 可能包含敏感信息，不得直接写入日志。</p>
+ *
+ * @author weifuwan
+ * @since 2026-09-24
+ */
 public final class JdbcConnectionProperties implements DataSourceConnection {
 
-  private final DataSourceDbType dbType;
-  private final String host;
-  private final int port;
-  private final String jdbcUrl;
-  private final String driverClassName;
-  private final String username;
-  private final String password;
-  private final String database;
-  private final String schema;
-  private final Map<String, String> properties;
-  private final SshTunnelConfig sshTunnel;
-  private final String normalizedJson;
+    /** Provider canonical type。 */
+    private final String type;
 
-  /** 保留原构造器，兼容现有插件或测试代码的直接构造。 */
-  public JdbcConnectionProperties(
-      DataSourceDbType dbType,
-      String jdbcUrl,
-      String driverClassName,
-      String username,
-      String password,
-      String database,
-      String schema,
-      Map<String, String> properties,
-      String normalizedJson) {
-    this(
-        dbType,
-        null,
-        0,
-        jdbcUrl,
-        driverClassName,
-        username,
-        password,
-        database,
-        schema,
-        properties,
-        SshTunnelConfig.disabled(),
-        normalizedJson);
-  }
+    /** 数据库主机；使用自定义 JDBC URL 时可以为空。 */
+    private final String host;
 
-  public JdbcConnectionProperties(
-      DataSourceDbType dbType,
-      String host,
-      int port,
-      String jdbcUrl,
-      String driverClassName,
-      String username,
-      String password,
-      String database,
-      String schema,
-      Map<String, String> properties,
-      SshTunnelConfig sshTunnel,
-      String normalizedJson) {
-    this.dbType = dbType;
-    this.host = host;
-    this.port = port;
-    this.jdbcUrl = jdbcUrl;
-    this.driverClassName = driverClassName;
-    this.username = username;
-    this.password = password;
-    this.database = database;
-    this.schema = schema;
-    this.properties = Collections.unmodifiableMap(new LinkedHashMap<>(properties));
-    this.sshTunnel = sshTunnel == null ? SshTunnelConfig.disabled() : sshTunnel;
-    this.normalizedJson = normalizedJson;
-  }
+    /** 数据库端口。 */
+    private final int port;
 
-  @Override
-  public DataSourceDbType dbType() {
-    return dbType;
-  }
+    /** 规范化后的 JDBC URL。 */
+    private final String jdbcUrl;
 
-  public String host() {
-    return host;
-  }
+    /** JDBC Driver 类名。 */
+    private final String driverClassName;
 
-  public int port() {
-    return port;
-  }
+    /** Provider 规范化后的 JDBC Driver 选择标识。 */
+    private final String driverId;
 
-  @Override
-  public String jdbcUrl() {
-    return jdbcUrl;
-  }
+    /** 数据库登录用户名。 */
+    private final String username;
 
-  @Override
-  public String driverClassName() {
-    return driverClassName;
-  }
+    /** 数据库登录密码，不得写入日志或异常文本。 */
+    private final String password;
 
-  @Override
-  public String username() {
-    return username;
-  }
+    /** 默认数据库或服务名。 */
+    private final String database;
 
-  @Override
-  public String password() {
-    return password;
-  }
+    /** 默认 Schema。 */
+    private final String schema;
 
-  @Override
-  public String database() {
-    return database;
-  }
+    /** 传递给 JDBC Driver 的附加连接属性。 */
+    private final Map<String, String> properties;
 
-  @Override
-  public String schema() {
-    return schema;
-  }
+    /** 可选 SSH 隧道配置。 */
+    private final SshTunnelConfig sshTunnel;
 
-  @Override
-  public Map<String, String> properties() {
-    return properties;
-  }
+    /** 可持久化的规范化连接 JSON，可能包含敏感字段。 */
+    private final String normalizedJson;
 
-  public SshTunnelConfig sshTunnel() {
-    return sshTunnel;
-  }
+    /** 保留原构造器，兼容现有插件或测试代码的直接构造。 */
+    public JdbcConnectionProperties(
+            String type,
+            String jdbcUrl,
+            String driverClassName,
+            String username,
+            String password,
+            String database,
+            String schema,
+            Map<String, String> properties,
+            String normalizedJson) {
+        this(
+                type,
+                null,
+                0,
+                jdbcUrl,
+                driverClassName,
+                username,
+                password,
+                database,
+                schema,
+                properties,
+                SshTunnelConfig.disabled(),
+                normalizedJson);
+    }
 
-  @Override
-  public String normalizedJson() {
-    return normalizedJson;
-  }
+    public JdbcConnectionProperties(
+            String type,
+            String host,
+            int port,
+            String jdbcUrl,
+            String driverClassName,
+            String username,
+            String password,
+            String database,
+            String schema,
+            Map<String, String> properties,
+            SshTunnelConfig sshTunnel,
+            String normalizedJson) {
+        this(
+                type,
+                host,
+                port,
+                jdbcUrl,
+                driverClassName,
+                null,
+                username,
+                password,
+                database,
+                schema,
+                properties,
+                sshTunnel,
+                normalizedJson);
+    }
+
+    public JdbcConnectionProperties(
+            String type,
+            String host,
+            int port,
+            String jdbcUrl,
+            String driverClassName,
+            String driverId,
+            String username,
+            String password,
+            String database,
+            String schema,
+            Map<String, String> properties,
+            SshTunnelConfig sshTunnel,
+            String normalizedJson) {
+        this.type = type;
+        this.host = host;
+        this.port = port;
+        this.jdbcUrl = jdbcUrl;
+        this.driverClassName = driverClassName;
+        this.driverId = driverId;
+        this.username = username;
+        this.password = password;
+        this.database = database;
+        this.schema = schema;
+        this.properties = Collections.unmodifiableMap(new LinkedHashMap<>(properties));
+        this.sshTunnel = sshTunnel == null ? SshTunnelConfig.disabled() : sshTunnel;
+        this.normalizedJson = normalizedJson;
+    }
+
+    @Override
+    public String type() {
+        return type;
+    }
+
+    public String host() {
+        return host;
+    }
+
+    public int port() {
+        return port;
+    }
+
+    @Override
+    public String jdbcUrl() {
+        return jdbcUrl;
+    }
+
+    @Override
+    public String driverClassName() {
+        return driverClassName;
+    }
+
+    public String driverId() {
+        return driverId;
+    }
+
+    @Override
+    public String username() {
+        return username;
+    }
+
+    @Override
+    public String password() {
+        return password;
+    }
+
+    @Override
+    public String database() {
+        return database;
+    }
+
+    @Override
+    public String schema() {
+        return schema;
+    }
+
+    @Override
+    public Map<String, String> properties() {
+        return properties;
+    }
+
+    public SshTunnelConfig sshTunnel() {
+        return sshTunnel;
+    }
+
+    @Override
+    public String normalizedJson() {
+        return normalizedJson;
+    }
 }

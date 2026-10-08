@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.yak.ops</groupId>
         <artifactId>yak-ops</artifactId>
-        <version>1.0.0</version>
+        <version>1.2.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -18,22 +18,7 @@
     <description>Yak Ops business-domain module aggregation</description>
 
     <modules>
-        <module>yak-ops-business-audit</module>
         <module>yak-ops-business-datasource</module>
-        <module>yak-ops-business-data-service</module>
-        <module>yak-ops-business-job</module>
-        <module>yak-ops-business-task-catalog</module>
-        <module>yak-ops-business-data-development</module>
-        <module>yak-ops-business-lineage</module>
-        <module>yak-ops-business-dataset</module>
-        <module>yak-ops-business-analysis</module>
-        <module>yak-ops-business-dashboard</module>
-        <module>yak-ops-business-digital-screen</module>
-        <module>yak-ops-business-resource</module>
-        <module>yak-ops-business-sync</module>
-        <module>yak-ops-business-quality</module>
-        <module>yak-ops-business-workflow</module>
-        <module>yak-ops-business-alert</module>
-        <module>yak-ops-business-home</module>
+        <module>yak-ops-business-data-sync</module>
     </modules>
 </project>

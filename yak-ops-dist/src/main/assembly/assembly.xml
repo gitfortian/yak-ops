@@ -35,7 +35,6 @@
             <outputDirectory>conf</outputDirectory>
             <includes>
                 <include>application.yml</include>
-                <include>logback-spring.xml</include>
             </includes>
         </fileSet>
         <fileSet>
@@ -54,8 +53,8 @@
             </includes>
         </fileSet>
         <fileSet>
-            <directory>src/main/jdbc-drivers</directory>
-            <outputDirectory>jdbc-drivers</outputDirectory>
+            <directory>src/main/jdbc-drivers-builtin</directory>
+            <outputDirectory>jdbc-drivers-builtin</outputDirectory>
             <includes>
                 <include>**/*</include>
             </includes>
