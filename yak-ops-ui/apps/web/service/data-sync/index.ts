@@ -97,11 +97,19 @@ export const deleteDataSyncTask = async (id: string): Promise<void> => {
   await HttpUtils.deleteData<boolean>(`${TASK_DEFINITION_API_PREFIX}/${id}`);
 };
 
-export const publishDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
-  HttpUtils.postData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/publish`);
+export const publishDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+  const definition = await HttpUtils.postData<TaskDefinitionRecord>(
+    `${TASK_DEFINITION_API_PREFIX}/${id}/publish`,
+  );
+  return toSyncTaskRecord(definition);
+};
 
-export const unpublishDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
-  HttpUtils.postData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/unpublish`);
+export const unpublishDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+  const definition = await HttpUtils.postData<TaskDefinitionRecord>(
+    `${TASK_DEFINITION_API_PREFIX}/${id}/unpublish`,
+  );
+  return toSyncTaskRecord(definition);
+};
 
 export const runDataSyncTask = (id: string): Promise<DataSyncInstanceRecord> =>
   HttpUtils.postData<DataSyncInstanceRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}/run`);

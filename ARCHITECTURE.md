@@ -103,7 +103,7 @@ Descriptor 是运行时元信息，不是前端动态表单协议。内置 Provi
 
 ### `yak-ops-boot`
 
-拥有所有 HTTP Controller / ControllerAdvice、健康入口、全局运行配置与最终应用装配。Controller 位于 `io.yak.ops.boot.controller`，只依赖稳定 Service 和共享 DTO / VO。
+拥有所有 HTTP Controller / ControllerAdvice、健康入口、全局运行配置与最终应用装配。Controller 统一位于 `io.yak.ops.boot.controller`，全局异常处理位于 `io.yak.ops.boot.exception`；Controller 只依赖稳定 Service 和共享 DTO / VO。
 
 GlobalExceptionHandler 统一映射 BusinessException 与 ErrorCode；领域模块不创建第二套 HTTP 异常出口。运行时保持单一应用 DataSource、默认事务管理器、MyBatis-Plus 会话工厂与拦截器链、OpenAPI 文档。优先使用 Spring Boot / Starter 自动配置，不手工重建已提供的基础设施 Bean。
 

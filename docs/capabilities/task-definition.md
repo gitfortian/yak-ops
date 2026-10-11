@@ -26,8 +26,9 @@ A future Workflow node references a stable `definition_id + version`, not anothe
 Canonical endpoints: `/api/v1/task-definitions` (create, edit, query, page, publish, unpublish, delete)
 and `/api/v1/task-definitions/{id}/versions`.
 
-The existing `/api/v1/data-sync/tasks` Definition endpoints remain as HTTP-only DTO projections
-onto the one `DefinitionService`. They do not preserve Data Sync Instance, Schedule or Execution.
+The former `/api/v1/data-sync/tasks` Definition facade and its flat DTO mapper are removed.
+`TaskDefinitionController` is the single HTTP entry for Task Definition CRUD and publish/unpublish.
+Data Sync Instance, Schedule and Execution are not part of this controller.
 
 ## Migration boundary
 

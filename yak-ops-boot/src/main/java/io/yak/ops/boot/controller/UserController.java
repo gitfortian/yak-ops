@@ -1,4 +1,4 @@
-package io.yak.ops.boot.controller.security.v1;
+package io.yak.ops.boot.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

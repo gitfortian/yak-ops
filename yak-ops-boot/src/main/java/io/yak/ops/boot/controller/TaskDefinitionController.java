@@ -1,4 +1,4 @@
-package io.yak.ops.boot.controller.task.v1;
+package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.task.definition.DefinitionService;
 import io.yak.ops.common.bean.dto.task.CreateDefinitionDTO;
