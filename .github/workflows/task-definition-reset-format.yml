@@ -1,0 +1,35 @@
+name: Task Definition Reset Formatting
+
+on:
+  push:
+    branches:
+      - refactor/task-definition-foundation-reset-20261011
+
+permissions:
+  contents: write
+
+jobs:
+  autoformat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/task-definition-foundation-reset-20261011
+          persist-credentials: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Apply repository Palantir Java format
+        run: bash mvnw -q -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+      - name: Commit formatting to this PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          if ! git diff --cached --quiet; then
+            git commit -m "style(task): apply repository Palantir Java formatting"
+            git push origin HEAD:refs/heads/refactor/task-definition-foundation-reset-20261011
+          fi
