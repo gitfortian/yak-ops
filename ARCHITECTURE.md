@@ -6,9 +6,9 @@ Scope: 当前模块职责、代码归属与依赖方向。文档归属遵循 [En
 
 ## Principle
 
-**当前分支状态**：旧 Business execution 已移除，Data Sync 的前端、Controller、Service、DAO、Flyway 保留。YakFlow 已具备 Core/Runtime 和独立 JDBC Source Connector；产品层尚未把离线/CDC 任务接入新 Connector。JDBC Sink 已提供多表批量写入、字段映射、按主键 Changelog 和独立跨数据库验收，但产品运行入口尚未接入新引擎，不能宣称数据同步产品功能已恢复。
+**当前分支状态**：产品后端仅保留通用 Task Definition CRUD、不可变版本及 DATA_SYNC 插件校验。原数据同步运行、实例、调度、指标和日志后端已删除，前端未修改。YakFlow Core/Runtime/Connector 独立保留，尚未连接产品任务。
 
-Datasource 管资源与连接，Data Sync 管同步任务和运行语义，YakFlow 管执行机制。Platform 提供身份、工作空间和用户偏好。能力边界不等同于页面菜单或 Maven 模块数量。
+Datasource 管资源与连接，Task Business 管任务定义和版本，Task Plugin 管类型专属参数及校验，YakFlow 管未来的数据执行机制。Platform 提供身份、工作空间和用户偏好。能力边界不等同于页面菜单或 Maven 模块数量。
 
 HTTP 入口与最终应用装配归 Boot。能力模块不依赖 Boot，不复制 HTTP、持久化或连接模型。行为细节由各能力 Contract 定义，本文件不维护第二套状态机或开发进度。
 
@@ -89,11 +89,7 @@ The JDBC Connector owns SQL dialects, native type mappings, generated target DDL
 
 ### `yak-ops-business/yak-ops-business-task`
 
-通用任务 Definition / Version、Instance / Attempt / Event、Schedule 和根实例 Metrics 由 Task DAO 提供唯一共享表及只读映射，Task Business 提供 Workspace-scoped 定义、执行历史、调度、指标与结构化事件读服务。当前实例创建、调度启停与执行控制仍由 DATA_SYNC Business 承担；通用 Task 不创建第二份 Instance 或独立调度器。参见 [Task Definition](docs/capabilities/task-definition.md) 与 [Task Instance Contract](docs/capabilities/task-instance.md)。
-
-### `yak-ops-business/yak-ops-business-data-sync`
-
-Data Sync Business 按 SyncDefinition、Instance、Schedule、Operations、Metrics、Log 六个 Service 划分；SyncDefinition 只拥有插件专属的单表配置和物理 Schema 校验，通用身份/发布状态/版本在 Task Definition 表中，历史 Route 与 Execution 数据保留。旧 business.datasync.execution 包已删除；历史运行态由 history.DataSyncHistoryRecovery 收口，新 Connector 未接入前手动运行和有效 Cron 触发均拒绝新建执行实例。产品持久化与运行时 ExecutionGraph 内存尝试互不混淆。详细见 [Data Sync Capability](docs/capabilities/data-sync/README.md)。
+Task Definition 是唯一产品业务入口，`DefinitionService` 负责创建、编辑、发布、下线、Workspace 隔离、不可变版本与逻辑删除。不存在数据同步专有业务 Module、通用 Instance/Schedule/Log Service 或执行任务的业务入口。详见 [Task Definition](docs/capabilities/task-definition.md)。
 
 ### `yak-ops-plugins/yak-ops-plugin-datasource`
 
@@ -103,7 +99,7 @@ Descriptor 是运行时元信息，不是前端动态表单协议。内置 Provi
 
 ### `yak-ops-plugins/yak-ops-plugin-task`
 
-Task 插件模块由 API、内置 DATA_SYNC 插件和 all 聚合模块组成。API 使用 ServiceLoader + Registry 按字符串类型发现插件并执行参数解析/校验。当前仅注册 DATA_SYNC 的单表配置，不依赖 Business、DAO、Boot 或 YakFlow Runtime；通用 Task Definition 身份及版本由 Task DAO 和 Business 持有，插件专属编辑、执行历史写入和调度启停仍由 Data Sync Business 持有，数据同步尚未对接新 YakFlow 执行引擎。Boot 在启动时构建插件 Registry，但当前的 Data Sync API 尚不消费该 Registry。边界及现状见 [Task Plugin Contract](docs/capabilities/task-plugin.md)。
+插件仅负责参数解析、规范化和验证。`TaskPluginRegistry` 根据任务类型调用插件，`SyncPlugin` 通过可信只读 `TaskValidationContext` 获取 Datasource 元信息与表结构，不持有凭证、DAO 或执行状态。未来 WorkflowNode 只引用 TaskDefinition ID 和固定版本；本轮没有 Workflow 表与运行时 SPI。
 
 ### `yak-ops-boot`
 
@@ -111,7 +107,7 @@ Task 插件模块由 API、内置 DATA_SYNC 插件和 all 聚合模块组成。A
 
 GlobalExceptionHandler 统一映射 BusinessException 与 ErrorCode；领域模块不创建第二套 HTTP 异常出口。运行时保持单一应用 DataSource、默认事务管理器、MyBatis-Plus 会话工厂与拦截器链、OpenAPI 文档。优先使用 Spring Boot / Starter 自动配置，不手工重建已提供的基础设施 Bean。
 
-QuartzScheduleEngine、Quartz JobFactory、Job 以及启动恢复装配在 Boot。Job 只把稳定 ID 和触发时间交回业务；不直接查询 Repository 或提交 YakFlow。DAO 继续拥有 Schema，Quartz 不拥有业务状态。
+Boot 仅装配 Task Plugin Registry、可信 Datasource 元信息验证接口和 HTTP Controller；不装配 Quartz 或数据同步运行恢复。
 
 ### `yak-ops-ui`
 
@@ -134,19 +130,18 @@ Yak Ops 不依赖外部 `yak-framework`。现有 Common 与 Platform 能力由�
 ```text
 UI → HTTP → Boot
              ├─ Platform → DAO / Common
-             ├─ DataSourceService → DAO / Datasource Plugin API
-             ├─ Task DefinitionService → DAO
-             └─ Data Sync SyncDefinition/Instance/Schedule/OperationsService → DAO / DataSourceService
-
-YakFlow Runtime（Graph / Operator / Execution / Checkpoint）→ Yak Ops Core（API / Configuration / Transformation）
-JDBC Connector → Connector Base + Core（Source / TableRecord / Configuration）
-Connector Base → Core（SourceReader / SourceSplit）
-YakFlow StreamGraph → JobGraph → ExecutionGraph → StreamTask
-Datasource JDBC Schema → YakFlow Row / Type API
-Boot Quartz → Data Sync Scheduler Contract
+             ├─ DataSourceService → Datasource DAO / Plugin API
+             └─ Task DefinitionService → Definition DAO + Task Plugin API
+                                                  ↓
+                                      DATA_SYNC Plugin
+                                                  ↓
+                                      read-only validation context
+YakFlow Runtime → Core
+JDBC / CDC Connectors → Core / Connector Base
+Future WorkflowNode → immutable (Task Definition ID, version)
 ```
 
-产品业务与执行机制分离：Quartz 不决定产品 Retry；YakFlow 不持久化产品 Execution；连接器私有状态不冒充通用 Runtime 恢复。当前运行范围为单节点，不声明分布式 ownership 或 exactly-once。
+没有产品执行、Quartz、Master/Worker 或 Workflow 持久化。
 
 ## Refactor Rule
 

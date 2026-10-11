@@ -14,9 +14,8 @@
 | --- | --- |
 | 数据源资源与连接能力 | [Datasource](capabilities/datasource/README.md) |
 | Task 插件类型注册与配置校验 | [Task Plugin Contract](capabilities/task-plugin.md) |
-| 通用任务定义、版本与数据同步迁移 | [Task Definition Contract](capabilities/task-definition.md) |
-| Task Instance / Attempt / Schedule / Metrics / Log | [Task Instance Contract](capabilities/task-instance.md) |
-| 离线 / 实时同步 | [Data Sync 总览](capabilities/data-sync/README.md)；按任务选读 [发布生命周期](capabilities/data-sync/task-lifecycle.md)、[调度](capabilities/data-sync/scheduler.md)、[执行与重试](capabilities/data-sync/execution-retry-attempt.md)、[实时期望状态与恢复](capabilities/data-sync/realtime-desired-state.md) |
+| 通用任务定义、不可变版本及重置 | [Task Definition Contract](capabilities/task-definition.md) |
+| 数据同步 Task Definition | [Task Plugin Contract](capabilities/task-plugin.md)；其执行、调度和运维功能已从当前后端移除 |
 | 执行引擎与连接器 | [YakFlow](capabilities/yak-flow/README.md)；[Core / Runtime 执行契约（提案）](capabilities/yak-flow/core-runtime-contract.md) |
 | 工作空间与成员 | [Workspace](capabilities/workspace/README.md) |
 | 用户收藏与使用偏好 | [User Preference](capabilities/user-preference/README.md) |
@@ -30,7 +29,7 @@
 
 ### 验收与发布
 
-[Data Sync Manual E2E](e2e/data-sync/README.md) 提供可重复执行的产品验收步骤；[Version Management](release/README.md) 定位对应版本的范围、Readiness、Notes 和 Evidence。
+[Version Management](release/README.md) 定位对应版本的范围、Readiness、Notes 和 Evidence。
 
 发布状态只在版本材料中维护，本索引不复制版本号、冻结状态或 PASS 结果。普通开发不默认读取这些材料。
 

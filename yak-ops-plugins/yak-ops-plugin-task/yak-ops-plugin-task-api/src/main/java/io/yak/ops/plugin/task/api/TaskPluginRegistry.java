@@ -79,6 +79,25 @@ public final class TaskPluginRegistry {
         return parameters;
     }
 
+    /**
+     * Parse, normalize and validate a real Definition against Workspace-scoped read-only resources.
+     * Only the host persists the result; a plugin never writes Definition tables.
+     */
+    public TaskParameters validateDefinition(String type, String parametersJson, TaskValidationContext context) {
+        if (context == null) {
+            throw new TaskPluginException("Task validation context is required");
+        }
+        TaskPlugin plugin = get(type);
+        TaskParameters parameters = parseParameters(type, parametersJson);
+        TaskParameters normalized = plugin.normalize(parameters, context);
+        if (normalized == null) {
+            throw new TaskPluginException("Task plugin returned null normalized parameters");
+        }
+        normalized.validate();
+        plugin.validateDefinition(normalized, context);
+        return normalized;
+    }
+
     /** 将类型标准化为大写下划线标识，保持插件类型集合可扩展。 */
     public static String normalizeType(String type) {
         String normalized = StringUtils.trimToNull(type);

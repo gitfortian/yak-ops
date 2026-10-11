@@ -1,23 +1,28 @@
 package io.yak.ops.business.task.definition;
 
+import io.yak.ops.common.bean.dto.task.CreateDefinitionDTO;
+import io.yak.ops.common.bean.dto.task.DefinitionQueryDTO;
+import io.yak.ops.common.bean.dto.task.UpdateDefinitionDTO;
 import io.yak.ops.common.bean.vo.task.DefinitionVO;
 import io.yak.ops.common.bean.vo.task.DefinitionVersionVO;
+import io.yak.ops.common.page.PagingData;
 import java.util.List;
 
-/**
- * 通用 Task Definition 查询与可执行版本历史的稳定业务接口。
- *
- * <p>DATA_SYNC 的当前单表创建/修改仍由其业务 Service 进行物理 Schema 校验，
- * 当前实例与调度的迁移不属于此接口。
- *
- * @author weifuwan
- * @since 2026-10-10
- */
+/** One generic Task Definition business entrypoint, independent of plugin type. */
 public interface DefinitionService {
+    DefinitionVO create(CreateDefinitionDTO dto, String operatorId);
 
-    /** 查询当前 Workspace 中一个插件无关的任务定义。 */
+    DefinitionVO update(String id, UpdateDefinitionDTO dto, String operatorId);
+
     DefinitionVO query(String id);
 
-    /** 列出当前 Workspace 中真实留存的定义版本，不虚构丢失的历史。 */
+    PagingData<DefinitionVO> queryPage(DefinitionQueryDTO dto);
+
     List<DefinitionVersionVO> queryVersions(String id);
+
+    DefinitionVO publish(String id, String operatorId);
+
+    DefinitionVO unpublish(String id, String operatorId);
+
+    void delete(String id, String operatorId);
 }

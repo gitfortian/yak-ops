@@ -1,28 +1,22 @@
 package io.yak.ops.dao.repository.task;
 
+import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.repository.BaseRepository;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
-/**
- * Workspace-scoped 通用任务定义持久化接口。
- *
- * @author weifuwan
- * @since 2026-10-10
- */
+/** Single writer of generic Task Definition identity and publication state. */
 public interface DefinitionRepository extends BaseRepository<DefinitionEntity> {
-
     Optional<DefinitionEntity> queryById(String workspaceId, String id);
 
-    List<DefinitionEntity> queryByIds(String workspaceId, List<String> ids);
+    Optional<DefinitionEntity> queryByIdForUpdate(String workspaceId, String id);
 
-    /** 仅供系统启动恢复使用，不能用作 HTTP 跨 Workspace 查询。 */
-    List<DefinitionEntity> queryByIdsForRecovery(List<String> ids);
+    PageData<DefinitionEntity> queryPage(DefinitionPageQuery query);
 
     DefinitionEntity update(String workspaceId, DefinitionEntity entity);
 
-    int deleteById(String workspaceId, String id);
+    boolean softDelete(String workspaceId, String id, LocalDateTime at, String operator);
 
     boolean existsByName(String workspaceId, String name, String excludeId);
 }

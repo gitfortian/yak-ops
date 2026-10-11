@@ -27,7 +27,7 @@ Java 变更先读 `ARCHITECTURE.md` 和 `JAVA_RULES.md`，再按目标读取下�
 | 日志 | `LOGGING_RULES.md` |
 | HTTP Controller | `CONTROLLER_RULES.md` |
 | Platform | `yak-ops-platform/PLATFORM_RULES.md`；按 Security / Workspace / Preference 读取同目录的 `SECURITY_RULES.md` / `WORKSPACE_RULES.md` / `USER_PREFERENCE_RULES.md` |
-| Business | `yak-ops-business/BUSINESS_RULES.md`；Task 定义读 `yak-ops-business/yak-ops-business-task/TASK_RULES.md`，数据源读 `yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md`，数据同步读 `yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md` |
+| Business | `yak-ops-business/BUSINESS_RULES.md`；Task Definition CRUD 读 `yak-ops-business/yak-ops-business-task/TASK_RULES.md`，数据源读 `yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md` |
 | Common / DTO / VO | `yak-ops-common/COMMON_RULES.md`；共享 DTO / VO 另读同目录 `DTO_VO_RULES.md` |
 | DAO / Entity / Migration | `yak-ops-dao/DAO_RULES.md`；按修改内容读取同目录 `ENTITY_RULES.md` / `FLYWAY_RULES.md` |
 | Core / SPI | `yak-ops-core/CORE_RULES.md` / `yak-ops-spi/SPI_RULES.md` |
@@ -52,7 +52,7 @@ Java 变更先读 `ARCHITECTURE.md` 和 `JAVA_RULES.md`，再按目标读取下�
 
 ## Documentation Context
 
-文档变更先读 Engineering Context Model，再读目标权威正文及直接引用。发布任务从 `docs/release/README.md` 进入对应版本材料；手工数据同步验收从 `docs/e2e/data-sync/README.md` 进入对应场景。
+文档变更先读 Engineering Context Model，再读目标权威正文及直接引用。发布任务从 `docs/release/README.md` 进入对应版本材料。
 
 遇到旧 Phase / PR 叙述或文档与实现冲突，按 Engineering Context Model 核对，不把历史阶段当成当前约束，也不擅自改代码迁就旧文档。
 
