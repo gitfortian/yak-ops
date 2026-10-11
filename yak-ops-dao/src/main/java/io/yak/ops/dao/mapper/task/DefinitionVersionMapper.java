@@ -5,10 +5,7 @@ import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 通用 Task Definition 历史版本快照的 MyBatis 映射。
- *
- * @author weifuwan
- * @since 2026-10-10
+ * Maps immutable Task Definition version snapshots through MyBatis.
  */
 @Mapper
 public interface DefinitionVersionMapper extends BaseMapper<DefinitionVersionEntity> {}
