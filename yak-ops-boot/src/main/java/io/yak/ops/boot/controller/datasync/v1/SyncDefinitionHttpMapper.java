@@ -69,5 +69,40 @@ final class SyncDefinitionHttpMapper {
         return JSONUtils.toJson(target);
     }
 
-    // VIEW_AND_PARAMETERS
+
+    static DataSyncTaskVO toSync(DefinitionVO source) {
+        JsonNode p = JSONUtils.readTree(source.getParameters());
+        DataSyncTaskVO vo = new DataSyncTaskVO();
+        vo.setId(source.getId());
+        vo.setName(source.getName());
+        vo.setStatus(source.getStatus());
+        vo.setDesiredState("STOPPED");
+        vo.setDefinitionVersion(source.getDefinitionVersion());
+        vo.setRemark(source.getRemark());
+        vo.setCreateTime(source.getCreateTime());
+        vo.setUpdateTime(source.getUpdateTime());
+        vo.setUpdateBy(source.getUpdateBy());
+        vo.setSyncType(value(p, "syncType"));
+        vo.setWriteMode(value(p, "writeMode"));
+        vo.setSourceDataSourceId(value(p, "sourceDataSourceId"));
+        vo.setSourceDatabase(value(p, "sourceDatabase"));
+        vo.setSourceSchema(value(p, "sourceSchema"));
+        vo.setSourceTable(value(p, "sourceTable"));
+        vo.setTargetDataSourceId(value(p, "targetDataSourceId"));
+        vo.setTargetDatabase(value(p, "targetDatabase"));
+        vo.setTargetSchema(value(p, "targetSchema"));
+        vo.setTargetTable(value(p, "targetTable"));
+        return vo;
+    }
+
+    static PagingData<DataSyncTaskVO> toPage(PagingData<DefinitionVO> source) {
+        return new PagingData<>(source.getBizData().stream().map(SyncDefinitionHttpMapper::toSync).toList(),
+                source.getPagination());
+    }
+
+    private static String value(JsonNode node, String key) {
+        JsonNode field = node.get(key);
+        return field == null || field.isNull() ? null : field.asText();
+    }
+
 }
