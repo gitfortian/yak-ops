@@ -7,6 +7,8 @@ import java.util.Optional;
 /** Append-only immutable definition version persistence. */
 public interface DefinitionVersionRepository {
     DefinitionVersionEntity append(DefinitionVersionEntity version);
+
     Optional<DefinitionVersionEntity> queryCurrent(String workspaceId, String definitionId, int version);
+
     List<DefinitionVersionEntity> queryByDefinition(String workspaceId, String definitionId);
 }

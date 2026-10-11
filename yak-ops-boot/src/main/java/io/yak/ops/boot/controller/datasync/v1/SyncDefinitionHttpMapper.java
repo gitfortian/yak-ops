@@ -44,23 +44,33 @@ final class SyncDefinitionHttpMapper {
         dto.setSorts(source.getSorts());
         dto.setKeyword(source.getKeyword());
         dto.setTaskType("DATA_SYNC");
-        dto.setStatus(source.getStatus() == null ? null : DefinitionStatus.valueOf(source.getStatus().name()));
+        dto.setStatus(
+                source.getStatus() == null
+                        ? null
+                        : DefinitionStatus.valueOf(source.getStatus().name()));
         Map<String, String> filters = new HashMap<>();
-        if (source.getSyncType() != null) filters.put("syncType", source.getSyncType().name());
+        if (source.getSyncType() != null)
+            filters.put("syncType", source.getSyncType().name());
         if (source.getSourceDataSourceId() != null) filters.put("sourceDataSourceId", source.getSourceDataSourceId());
         if (source.getTargetDataSourceId() != null) filters.put("targetDataSourceId", source.getTargetDataSourceId());
         dto.setParameterFilters(filters);
         return dto;
     }
 
-
     private static String parameters(DataSyncTaskDTO dto, String existing) {
-        ObjectNode target = existing == null ? JSONUtils.createObjectNode()
-                : (ObjectNode) JSONUtils.readTree(existing);
+        ObjectNode target = existing == null ? JSONUtils.createObjectNode() : (ObjectNode) JSONUtils.readTree(existing);
         JsonNode input = JSONUtils.readTree(JSONUtils.toJson(dto));
-        for (String key : List.of("syncType", "writeMode", "sourceDataSourceId", "sourceDatabase",
-                "sourceSchema", "sourceTable", "targetDataSourceId", "targetDatabase",
-                "targetSchema", "targetTable")) {
+        for (String key : List.of(
+                "syncType",
+                "writeMode",
+                "sourceDataSourceId",
+                "sourceDatabase",
+                "sourceSchema",
+                "sourceTable",
+                "targetDataSourceId",
+                "targetDatabase",
+                "targetSchema",
+                "targetTable")) {
             if (input.has(key)) target.set(key, input.get(key));
         }
         for (String key : List.of("runtimeConfig", "realtimeConfig", "retryPolicy")) {
@@ -68,7 +78,6 @@ final class SyncDefinitionHttpMapper {
         }
         return JSONUtils.toJson(target);
     }
-
 
     static DataSyncTaskVO toSync(DefinitionVO source) {
         JsonNode p = JSONUtils.readTree(source.getParameters());
@@ -93,22 +102,27 @@ final class SyncDefinitionHttpMapper {
         vo.setTargetSchema(value(p, "targetSchema"));
         vo.setTargetTable(value(p, "targetTable"));
         if (p.hasNonNull("runtimeConfig")) {
-            vo.setRuntimeConfig(JSONUtils.parseObject(p.get("runtimeConfig").toString(),
+            vo.setRuntimeConfig(JSONUtils.parseObject(
+                    p.get("runtimeConfig").toString(),
                     io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO.class));
         }
         if (p.hasNonNull("realtimeConfig")) {
-            vo.setRealtimeConfig(JSONUtils.parseObject(p.get("realtimeConfig").toString(),
+            vo.setRealtimeConfig(JSONUtils.parseObject(
+                    p.get("realtimeConfig").toString(),
                     io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO.class));
         }
         if (p.hasNonNull("retryPolicy")) {
-            vo.setRetryPolicy(JSONUtils.parseObject(p.get("retryPolicy").toString(),
-                    io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO.class));
+            vo.setRetryPolicy(JSONUtils.parseObject(
+                    p.get("retryPolicy").toString(), io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO.class));
         }
         return vo;
     }
 
     static PagingData<DataSyncTaskVO> toPage(PagingData<DefinitionVO> source) {
-        return new PagingData<>(source.getBizData().stream().map(SyncDefinitionHttpMapper::toSync).toList(),
+        return new PagingData<>(
+                source.getBizData().stream()
+                        .map(SyncDefinitionHttpMapper::toSync)
+                        .toList(),
                 source.getPagination());
     }
 
@@ -116,5 +130,4 @@ final class SyncDefinitionHttpMapper {
         JsonNode field = node.get(key);
         return field == null || field.isNull() ? null : field.asText();
     }
-
 }

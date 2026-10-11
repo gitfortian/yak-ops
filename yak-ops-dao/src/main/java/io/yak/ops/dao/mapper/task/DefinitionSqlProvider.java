@@ -26,7 +26,10 @@ public final class DefinitionSqlProvider {
             // Business validates identifiers; quoted parameter paths cannot inject SQL.
             if (!key.matches("[A-Za-z][A-Za-z0-9_]*")) throw new IllegalArgumentException("Invalid filter key");
             sql.append(" AND JSON_UNQUOTE(JSON_EXTRACT(v.parameters, '$.");
-            sql.append(key).append("')) = #{filter.parameterFilters.").append(key).append("}");
+            sql.append(key)
+                    .append("')) = #{filter.parameterFilters.")
+                    .append(key)
+                    .append("}");
         }
         return sql.append(" ORDER BY d.update_time DESC, d.id DESC").toString();
     }

@@ -7,12 +7,17 @@ import lombok.Data;
 /** Generic Task Definition creation request. */
 @Data
 public class CreateDefinitionDTO {
-    @NotBlank @Size(max = 128)
+    @NotBlank
+    @Size(max = 128)
     private String name;
-    @NotBlank @Size(max = 64)
+
+    @NotBlank
+    @Size(max = 64)
     private String taskType;
+
     @NotBlank
     private String parameters;
+
     @Size(max = 500)
     private String remark;
 }

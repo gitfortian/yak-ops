@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TaskDefinitionController {
     @Resource
     private DefinitionService service;
+
     @Resource
     private AuthenticationManager authenticationManager;
 

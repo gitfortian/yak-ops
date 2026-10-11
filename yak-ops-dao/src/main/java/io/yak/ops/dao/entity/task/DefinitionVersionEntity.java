@@ -15,7 +15,9 @@ public class DefinitionVersionEntity extends BaseEntity {
     private String workspaceId;
     private String definitionId;
     private Integer version;
+
     @ToString.Exclude
     private String parameters;
+
     private Integer parameterSchemaVersion;
 }

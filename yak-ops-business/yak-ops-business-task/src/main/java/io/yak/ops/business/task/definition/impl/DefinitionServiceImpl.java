@@ -33,13 +33,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefinitionServiceImpl implements DefinitionService {
     @Resource
     private DefinitionRepository definitionRepository;
+
     @Resource
     private DefinitionVersionRepository versionRepository;
+
     @Resource
     private TaskPluginRegistry pluginRegistry;
+
     @Resource
     private TaskValidationContext validationContext;
-
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -88,7 +90,6 @@ public class DefinitionServiceImpl implements DefinitionService {
         return toVO(definition);
     }
 
-
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
@@ -116,12 +117,13 @@ public class DefinitionServiceImpl implements DefinitionService {
         DefinitionEntity definition = requireDefinition(id, true);
         requireUnpublished(definition);
         if (!definitionRepository.softDelete(
-                definition.getWorkspaceId(), id, DateUtils.now(),
+                definition.getWorkspaceId(),
+                id,
+                DateUtils.now(),
                 StringUtils.trimToNull(operatorId) == null ? "system" : operatorId)) {
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         }
     }
-
 
     @Override
     public DefinitionVO query(String id) {
@@ -130,19 +132,28 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     @Override
     public PagingData<DefinitionVO> queryPage(DefinitionQueryDTO dto) {
-        if (dto == null || dto.getPageNo() == null || dto.getPageSize() == null
-                || dto.getPageNo() < 1 || dto.getPageSize() < 1 || dto.getPageSize() > 200
+        if (dto == null
+                || dto.getPageNo() == null
+                || dto.getPageSize() == null
+                || dto.getPageNo() < 1
+                || dto.getPageSize() < 1
+                || dto.getPageSize() > 200
                 || !dto.getSorts().isEmpty()) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
         Map<String, String> filters = dto.getParameterFilters() == null ? Map.of() : dto.getParameterFilters();
-        if (filters.size() > 16 || filters.keySet().stream().anyMatch(k -> k == null || !k.matches("[A-Za-z][A-Za-z0-9_]*"))) {
+        if (filters.size() > 16
+                || filters.keySet().stream().anyMatch(k -> k == null || !k.matches("[A-Za-z][A-Za-z0-9_]*"))) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
         DefinitionPageQuery filter = new DefinitionPageQuery(
-                WorkspaceContext.requireWorkspaceId(), dto.getPageNo(), dto.getPageSize(),
-                StringUtils.trimToNull(dto.getKeyword()), StringUtils.trimToNull(dto.getTaskType()),
-                dto.getStatus() == null ? null : dto.getStatus().getValue(), filters);
+                WorkspaceContext.requireWorkspaceId(),
+                dto.getPageNo(),
+                dto.getPageSize(),
+                StringUtils.trimToNull(dto.getKeyword()),
+                StringUtils.trimToNull(dto.getTaskType()),
+                dto.getStatus() == null ? null : dto.getStatus().getValue(),
+                filters);
         return PagingData.from(definitionRepository.queryPage(filter).map(this::toVO));
     }
 
@@ -157,10 +168,9 @@ public class DefinitionServiceImpl implements DefinitionService {
                 .toList();
     }
 
-
-
     private DefinitionVersionEntity currentVersion(DefinitionEntity entity) {
-        return versionRepository.queryCurrent(entity.getWorkspaceId(), entity.getId(), entity.getCurrentVersion())
+        return versionRepository
+                .queryCurrent(entity.getWorkspaceId(), entity.getId(), entity.getCurrentVersion())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
 
@@ -172,7 +182,8 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     private DefinitionEntity requireDefinition(String id, boolean forUpdate) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        return (forUpdate ? definitionRepository.queryByIdForUpdate(workspaceId, id)
+        return (forUpdate
+                        ? definitionRepository.queryByIdForUpdate(workspaceId, id)
                         : definitionRepository.queryById(workspaceId, id))
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
@@ -198,7 +209,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         version.setWorkspaceId(entity.getWorkspaceId());
         version.setDefinitionId(entity.getId());
         version.setVersion(entity.getCurrentVersion());
-        version.setParameterSchemaVersion(pluginRegistry.get(entity.getTaskType()).parameterSchemaVersion());
+        version.setParameterSchemaVersion(
+                pluginRegistry.get(entity.getTaskType()).parameterSchemaVersion());
         version.setParameters(json);
         version.initCreate(operator);
         versionRepository.append(version);
@@ -217,5 +229,4 @@ public class DefinitionServiceImpl implements DefinitionService {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
         }
     }
-
 }

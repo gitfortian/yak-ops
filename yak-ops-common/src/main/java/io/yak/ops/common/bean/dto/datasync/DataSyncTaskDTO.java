@@ -64,7 +64,6 @@ public class DataSyncTaskDTO {
     @Size(max = 128, message = "目标表名称不能超过 128 个字符")
     private String targetTable;
 
-
     /**
      * OFFLINE 任务使用的 YakFlow 运行参数。
      *

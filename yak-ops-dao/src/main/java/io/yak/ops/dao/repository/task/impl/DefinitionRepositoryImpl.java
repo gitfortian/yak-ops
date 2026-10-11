@@ -50,30 +50,36 @@ public class DefinitionRepositoryImpl extends BaseRepositoryImpl<DefinitionMappe
 
     @Override
     public DefinitionEntity update(String workspaceId, DefinitionEntity entity) {
-        int count = definitionMapper.update(entity, Wrappers.<DefinitionEntity>lambdaUpdate()
-                .eq(DefinitionEntity::getWorkspaceId, workspaceId)
-                .eq(DefinitionEntity::getId, entity.getId())
-                .isNull(DefinitionEntity::getDeletedAt));
+        int count = definitionMapper.update(
+                entity,
+                Wrappers.<DefinitionEntity>lambdaUpdate()
+                        .eq(DefinitionEntity::getWorkspaceId, workspaceId)
+                        .eq(DefinitionEntity::getId, entity.getId())
+                        .isNull(DefinitionEntity::getDeletedAt));
         return count == 1 ? entity : null;
     }
 
     @Override
     public boolean softDelete(String workspaceId, String id, LocalDateTime at, String operator) {
-        return definitionMapper.update(null, Wrappers.<DefinitionEntity>lambdaUpdate()
-                .eq(DefinitionEntity::getWorkspaceId, workspaceId)
-                .eq(DefinitionEntity::getId, id)
-                .isNull(DefinitionEntity::getDeletedAt)
-                .set(DefinitionEntity::getDeletedAt, at)
-                .set(DefinitionEntity::getUpdateTime, at)
-                .set(DefinitionEntity::getUpdateBy, operator)) == 1;
+        return definitionMapper.update(
+                        null,
+                        Wrappers.<DefinitionEntity>lambdaUpdate()
+                                .eq(DefinitionEntity::getWorkspaceId, workspaceId)
+                                .eq(DefinitionEntity::getId, id)
+                                .isNull(DefinitionEntity::getDeletedAt)
+                                .set(DefinitionEntity::getDeletedAt, at)
+                                .set(DefinitionEntity::getUpdateTime, at)
+                                .set(DefinitionEntity::getUpdateBy, operator))
+                == 1;
     }
 
     @Override
     public boolean existsByName(String workspaceId, String name, String excludeId) {
         return definitionMapper.selectCount(Wrappers.<DefinitionEntity>lambdaQuery()
-                .eq(DefinitionEntity::getWorkspaceId, workspaceId)
-                .eq(DefinitionEntity::getName, name)
-                .isNull(DefinitionEntity::getDeletedAt)
-                .ne(excludeId != null, DefinitionEntity::getId, excludeId)) > 0;
+                        .eq(DefinitionEntity::getWorkspaceId, workspaceId)
+                        .eq(DefinitionEntity::getName, name)
+                        .isNull(DefinitionEntity::getDeletedAt)
+                        .ne(excludeId != null, DefinitionEntity::getId, excludeId))
+                > 0;
     }
 }

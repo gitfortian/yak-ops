@@ -68,7 +68,6 @@ public record SyncParameters(
         rejectSecrets(retryPolicy);
     }
 
-
     private static void rejectSecrets(JsonNode node) {
         if (node == null || node.isNull()) return;
         if (node.isObject()) {
@@ -76,9 +75,13 @@ public record SyncParameters(
             while (fields.hasNext()) {
                 var entry = fields.next();
                 String key = entry.getKey().toLowerCase(java.util.Locale.ROOT).replace("_", "");
-                if (key.contains("password") || key.contains("secret") || key.contains("token")
-                        || key.contains("credential") || key.contains("privatekey")
-                        || key.contains("connectionjson") || key.contains("jdbcurl")) {
+                if (key.contains("password")
+                        || key.contains("secret")
+                        || key.contains("token")
+                        || key.contains("credential")
+                        || key.contains("privatekey")
+                        || key.contains("connectionjson")
+                        || key.contains("jdbcurl")) {
                     throw new TaskPluginException("Credentials must not be stored in task parameters");
                 }
                 rejectSecrets(entry.getValue());

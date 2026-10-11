@@ -13,6 +13,7 @@ import lombok.EqualsAndHashCode;
 public class DefinitionQueryDTO extends PageQueryDTO {
     @Size(max = 256)
     private String keyword;
+
     private String taskType;
     private DefinitionStatus status;
     private Map<String, String> parameterFilters;

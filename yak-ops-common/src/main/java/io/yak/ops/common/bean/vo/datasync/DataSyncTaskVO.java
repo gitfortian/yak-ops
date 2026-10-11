@@ -54,7 +54,6 @@ public class DataSyncTaskVO {
     /** 目标物理表名称。 */
     private String targetTable;
 
-
     /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
     private DataSyncRuntimeConfigVO runtimeConfig;
 

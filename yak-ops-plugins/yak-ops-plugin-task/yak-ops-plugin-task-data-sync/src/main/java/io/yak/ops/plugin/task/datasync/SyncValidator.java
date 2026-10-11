@@ -27,23 +27,34 @@ final class SyncValidator {
         TableSchema from = context.tableSchema(p.sourceDataSourceId(), sourceDb, sourceSchema, p.sourceTable());
         TableSchema to = context.tableSchema(p.targetDataSourceId(), targetDb, targetSchema, p.targetTable());
         requireCompatible(from, to, p.syncType() == DataSyncType.REALTIME || p.writeMode() == DataSyncWriteMode.UPSERT);
-        return new SyncParameters(p.syncType(), p.writeMode(), p.sourceDataSourceId(), sourceDb, sourceSchema,
-                p.sourceTable(), p.targetDataSourceId(), targetDb, targetSchema, p.targetTable(),
-                p.runtimeConfig(), p.realtimeConfig(), p.retryPolicy());
+        return new SyncParameters(
+                p.syncType(),
+                p.writeMode(),
+                p.sourceDataSourceId(),
+                sourceDb,
+                sourceSchema,
+                p.sourceTable(),
+                p.targetDataSourceId(),
+                targetDb,
+                targetSchema,
+                p.targetTable(),
+                p.runtimeConfig(),
+                p.realtimeConfig(),
+                p.retryPolicy());
     }
 
     private static String bound(String configured, String requested) {
         return configured != null && !configured.isBlank() ? configured : requested;
     }
 
-
     private static void requireCompatible(TableSchema source, TableSchema target, boolean requireKeys) {
         java.util.Map<String, io.yak.ops.core.types.Column> sourceColumns = columns(source);
         java.util.Map<String, io.yak.ops.core.types.Column> targetColumns = columns(target);
         for (var entry : sourceColumns.entrySet()) {
             var other = targetColumns.get(entry.getKey());
-            if (other == null || !io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility
-                    .isCompatible(entry.getValue(), other)) {
+            if (other == null
+                    || !io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility.isCompatible(
+                            entry.getValue(), other)) {
                 throw new TaskPluginException("Source and target table schemas are incompatible");
             }
         }
@@ -76,5 +87,4 @@ final class SyncValidator {
         for (String key : keys) normalized.add(key.toLowerCase(java.util.Locale.ROOT));
         return normalized;
     }
-
 }

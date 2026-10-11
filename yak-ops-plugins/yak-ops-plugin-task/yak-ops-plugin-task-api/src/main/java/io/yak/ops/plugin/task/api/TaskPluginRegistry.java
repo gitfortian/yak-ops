@@ -79,7 +79,6 @@ public final class TaskPluginRegistry {
         return parameters;
     }
 
-
     /**
      * Parse, normalize and validate a real Definition against Workspace-scoped read-only resources.
      * Only the host persists the result; a plugin never writes Definition tables.

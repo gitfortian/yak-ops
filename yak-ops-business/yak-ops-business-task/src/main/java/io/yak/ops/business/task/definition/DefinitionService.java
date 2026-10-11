@@ -11,11 +11,18 @@ import java.util.List;
 /** One generic Task Definition business entrypoint, independent of plugin type. */
 public interface DefinitionService {
     DefinitionVO create(CreateDefinitionDTO dto, String operatorId);
+
     DefinitionVO update(String id, UpdateDefinitionDTO dto, String operatorId);
+
     DefinitionVO query(String id);
+
     PagingData<DefinitionVO> queryPage(DefinitionQueryDTO dto);
+
     List<DefinitionVersionVO> queryVersions(String id);
+
     DefinitionVO publish(String id, String operatorId);
+
     DefinitionVO unpublish(String id, String operatorId);
+
     void delete(String id, String operatorId);
 }
