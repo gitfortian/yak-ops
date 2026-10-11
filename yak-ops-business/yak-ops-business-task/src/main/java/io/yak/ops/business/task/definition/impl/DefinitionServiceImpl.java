@@ -158,6 +158,18 @@ public class DefinitionServiceImpl implements DefinitionService {
     }
 
 
+
+    private DefinitionVersionEntity currentVersion(DefinitionEntity entity) {
+        return versionRepository.queryCurrent(entity.getWorkspaceId(), entity.getId(), entity.getCurrentVersion())
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+    }
+
+    private void requireUnpublished(DefinitionEntity entity) {
+        if (entity.getStatus() != DefinitionStatus.UNPUBLISHED) {
+            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        }
+    }
+
     private DefinitionEntity requireDefinition(String id, boolean forUpdate) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         return (forUpdate ? definitionRepository.queryByIdForUpdate(workspaceId, id)
