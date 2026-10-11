@@ -1,10 +1,8 @@
 package io.yak.ops.plugin.task.api;
 
 /**
- * Defines plugin-specific Task parameters validated without Workspace or Datasource access.
+ * Immutable, plugin-owned configuration value included in a Task Definition version.
+ *
+ * <p>Physical runtime settings and connection credentials are not part of this contract.
  */
-public interface TaskParameters {
-
-    /** Validates local parameter structure and semantics without resolving credentials or querying a database. */
-    void validate();
-}
+public interface TaskParameters {}
