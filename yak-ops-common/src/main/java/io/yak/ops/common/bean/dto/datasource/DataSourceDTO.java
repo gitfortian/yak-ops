@@ -7,31 +7,28 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 数据源新增和编辑请求的数据传输对象。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Carries the input for creating or editing a datasource.
  */
 @Data
 public class DataSourceDTO {
 
-    /** 数据源名称。 */
+    /** Datasource name visible within the Workspace. */
     @NotBlank(message = "数据源名称不能为空")
     @Size(max = 128, message = "数据源名称不能超过 128 个字符")
     private String name;
 
-    /** 数据库类型，对应已注册的数据源插件类型。 */
+    /** Registered datasource provider type. */
     @NotBlank(message = "数据源类型不能为空")
     private String dbType;
 
-    /** 运行环境，例如 DEVELOP、TEST、PRODUCTION。 */
+    /** Environment code such as DEVELOP, TEST or PRODUCTION. */
     private String environment;
 
-    /** 数据源备注。 */
+    /** Optional user-maintained datasource description. */
     @Size(max = 500, message = "数据源备注不能超过 500 个字符")
     private String remark;
 
-    /** 前端提交的结构化连接参数。 */
+    /** Structured connection parameters submitted by the client. */
     @Valid
     @NotNull(message = "数据源连接参数不能为空")
     private DataSourceConnectionDTO connectionParams;
