@@ -1,65 +1,117 @@
 package io.yak.ops.plugin.task.datasync;
 
-import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
+import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.sink.jdbc.JdbcSinkParameters;
-import io.yak.ops.plugin.task.datasync.source.SourceParameters;
-import io.yak.ops.plugin.task.datasync.source.jdbc.JdbcSourceParameters;
-import io.yak.ops.plugin.task.datasync.source.mysqlcdc.MySqlCdcSourceParameters;
+import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
+import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Validates product-level pipeline semantics against authorized physical table metadata. */
+/**
+ * DATA_SYNC definition checks, independent of execution and checkpoint state.
+ *
+ * <p>Structure is checked once during parsing. Physical checks use Workspace-authorized
+ * Datasource metadata and do not silently replace an explicit database or schema.
+ */
 final class SyncValidator {
-    private static final Set<String> JDBC_TYPES = Set.of("MYSQL", "POSTGRESQL", "POSTGRE_SQL", "PGSQL", "ORACLE");
 
     private SyncValidator() {}
 
-    static SyncParameters validate(SyncParameters parameters, TaskValidationContext context) {
-        parameters.validate();
-        SourceParameters source = parameters.source();
-        JdbcSinkParameters sink = (JdbcSinkParameters) parameters.sink();
-        var fromDatasource = context.dataSource(source.datasourceId());
-        var toDatasource = context.dataSource(sink.datasourceId());
-        String fromType = fromDatasource.type().toUpperCase(Locale.ROOT);
-        String toType = toDatasource.type().toUpperCase(Locale.ROOT);
-        if (!JDBC_TYPES.contains(fromType) || !JDBC_TYPES.contains(toType)) {
-            throw new TaskPluginException("Unsupported DATA_SYNC datasource type");
+    static void checkParameters(SyncParameters parameters) {
+        if (parameters == null || parameters.source() == null || parameters.sink() == null) {
+            throw new TaskPluginException("DATA_SYNC requires one source and one sink");
         }
-        if (parameters.syncType() == DataSyncType.REALTIME && !"MYSQL".equals(fromType)) {
+        if (!(parameters.source() instanceof JdbcSourceParameters)
+                && !(parameters.source() instanceof MySqlCdcSourceParameters)) {
+            throw new TaskPluginException("Unsupported DATA_SYNC source");
+        }
+        if (!(parameters.sink() instanceof JdbcSinkParameters sink)) {
+            throw new TaskPluginException("Unsupported DATA_SYNC sink");
+        }
+        if (!parameters.transform().isEmpty()) {
+            throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
+        }
+        checkTableFields(
+                parameters.source().datasourceId(),
+                parameters.source().database(),
+                parameters.source().schema(),
+                parameters.source().table());
+        checkTableFields(sink.datasourceId(), sink.database(), sink.schema(), sink.table());
+        if (sink.writeMode() == null || sink.writeMode() == DataSyncWriteMode.OVERWRITE) {
+            throw new TaskPluginException("DATA_SYNC supports APPEND or UPSERT only");
+        }
+        if (parameters.source() instanceof MySqlCdcSourceParameters && sink.writeMode() != DataSyncWriteMode.UPSERT) {
+            throw new TaskPluginException("MySQL CDC requires UPSERT to preserve change events");
+        }
+    }
+
+    static void checkResources(SyncParameters parameters, TaskValidationContext context) {
+        var source = parameters.source();
+        var sink = (JdbcSinkParameters) parameters.sink();
+        DataSourceInfo sourceInfo = context.dataSource(source.datasourceId());
+        DataSourceInfo sinkInfo = context.dataSource(sink.datasourceId());
+
+        if (source instanceof MySqlCdcSourceParameters && !"MYSQL".equals(sourceInfo.type())) {
             throw new TaskPluginException("MySQL CDC requires a MySQL datasource");
         }
-        String sourceDatabase = bound(fromDatasource.database(), source.database());
-        String sourceSchema = bound(fromDatasource.schema(), source.schema());
-        String sinkDatabase = bound(toDatasource.database(), sink.database());
-        String sinkSchema = bound(toDatasource.schema(), sink.schema());
-        TableSchema from = context.tableSchema(source.datasourceId(), sourceDatabase, sourceSchema, source.table());
-        TableSchema to = context.tableSchema(sink.datasourceId(), sinkDatabase, sinkSchema, sink.table());
-        requireCompatible(
-                from,
-                to,
-                parameters.syncType() == DataSyncType.REALTIME || sink.writeMode() == DataSyncWriteMode.UPSERT);
-        SourceParameters normalizedSource = source instanceof JdbcSourceParameters
-                ? new JdbcSourceParameters(source.datasourceId(), sourceDatabase, sourceSchema, source.table())
-                : new MySqlCdcSourceParameters(source.datasourceId(), sourceDatabase, sourceSchema, source.table());
-        JdbcSinkParameters normalizedSink =
-                new JdbcSinkParameters(sink.datasourceId(), sinkDatabase, sinkSchema, sink.table(), sink.writeMode());
-        return new SyncParameters(normalizedSource, parameters.transform(), normalizedSink);
+
+        TableId sourceTable = tablePath(sourceInfo, source.database(), source.schema(), source.table());
+        TableId sinkTable = tablePath(sinkInfo, sink.database(), sink.schema(), sink.table());
+        TableSchema from = context.tableSchema(source.datasourceId(), sourceTable);
+        TableSchema to = context.tableSchema(sink.datasourceId(), sinkTable);
+        boolean requireKeys = source instanceof MySqlCdcSourceParameters
+                || sink.writeMode() == DataSyncWriteMode.UPSERT;
+        checkSchemaCompatibility(from, to, requireKeys);
     }
 
-    private static String bound(String configured, String requested) {
-        return configured != null && !configured.isBlank() ? configured : requested;
+    private static void checkTableFields(String datasourceId, String database, String schema, String table) {
+        requireText(datasourceId, 64, "datasourceId");
+        requireText(table, 128, "table");
+        optionalText(database, 128, "database");
+        optionalText(schema, 128, "schema");
     }
 
-    private static void requireCompatible(TableSchema source, TableSchema target, boolean requireKeys) {
+    private static void requireText(String value, int maxLength, String field) {
+        if (StringUtils.isBlank(value)) {
+            throw new TaskPluginException("DATA_SYNC requires " + field);
+        }
+        optionalText(value, maxLength, field);
+    }
+
+    private static void optionalText(String value, int maxLength, String field) {
+        if (value != null && value.length() > maxLength) {
+            throw new TaskPluginException("DATA_SYNC " + field + " exceeds " + maxLength + " characters");
+        }
+    }
+
+    private static TableId tablePath(DataSourceInfo info, String database, String schema, String table) {
+        String selectedDatabase = chooseNamespace(info.database(), database, "database");
+        String selectedSchema = chooseNamespace(info.schema(), schema, "schema");
+        return new TableId(selectedDatabase, selectedSchema, table);
+    }
+
+    private static String chooseNamespace(String bound, String selected, String field) {
+        if (StringUtils.isNotBlank(bound) && StringUtils.isNotBlank(selected) && !bound.equals(selected)) {
+            throw new TaskPluginException("DATA_SYNC " + field + " differs from the bound Datasource");
+        }
+        if (StringUtils.isNotBlank(selected)) {
+            return selected;
+        }
+        return bound;
+    }
+
+    private static void checkSchemaCompatibility(TableSchema source, TableSchema target, boolean requireKeys) {
         Map<String, Column> sourceColumns = columns(source);
         Map<String, Column> targetColumns = columns(target);
         for (var entry : sourceColumns.entrySet()) {
@@ -93,7 +145,9 @@ final class SyncValidator {
 
     private static Set<String> keys(java.util.List<String> values) {
         Set<String> result = new HashSet<>();
-        for (String key : values) result.add(key.toLowerCase(Locale.ROOT));
+        for (String key : values) {
+            result.add(key.toLowerCase(Locale.ROOT));
+        }
         return result;
     }
 }

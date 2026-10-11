@@ -1,15 +1,22 @@
 package io.yak.ops.plugin.task.datasync;
 
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import io.yak.ops.plugin.task.datasync.hocon.SyncHoconFormatter;
 import io.yak.ops.plugin.task.datasync.hocon.SyncHoconParser;
 
-/** DATA_SYNC Task plugin: pipeline parameters, parsing and physical metadata checks only. */
+/**
+ * DATA_SYNC definition plugin for bounded JDBC and continuous MySQL CDC pipelines.
+ *
+ * <p>Parsing rejects malformed local definitions. Resource checks use the caller's Workspace
+ * metadata but never rewrite submitted parameters or create YakFlow execution objects.
+ */
 public final class SyncPlugin implements TaskPlugin {
+
     public static final String TYPE = "DATA_SYNC";
 
     @Override
@@ -23,37 +30,42 @@ public final class SyncPlugin implements TaskPlugin {
     }
 
     @Override
-    public TaskParameters parseParameters(String json) {
-        try {
-            SyncParameters parsed = JSONUtils.parseObject(json, SyncParameters.class);
-            if (parsed == null) throw new TaskPluginException("DATA_SYNC requires a pipeline JSON object");
-            return parsed;
-        } catch (IllegalArgumentException exception) {
-            throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON");
-        }
-    }
-
-    @Override
-    public TaskParameters parseParameters(String parameters, String format) {
-        if ("HOCON".equalsIgnoreCase(format)) {
-            return parseParameters(SyncHoconParser.parse(parameters));
-        }
-        return TaskPlugin.super.parseParameters(parameters, format);
-    }
-
-    @Override
-    public String formatParameters(TaskParameters parameters, String format) {
-        if ("HOCON".equalsIgnoreCase(format)) {
-            if (!(parameters instanceof SyncParameters sync)) {
-                throw new TaskPluginException("Invalid DATA_SYNC pipeline parameters");
+    public TaskParameters parse(String content, ParameterFormat format) {
+        SyncParameters parameters;
+        if (format == ParameterFormat.HOCON) {
+            parameters = SyncHoconParser.parse(content);
+        } else if (format == ParameterFormat.JSON) {
+            try {
+                parameters = JSONUtils.parseObject(content, SyncParameters.class);
+            } catch (IllegalArgumentException exception) {
+                throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON");
             }
-            return SyncHoconFormatter.format(sync);
+        } else {
+            throw new TaskPluginException("Unsupported DATA_SYNC parameter format");
         }
-        return TaskPlugin.super.formatParameters(parameters, format);
+        SyncValidator.checkParameters(parameters);
+        return parameters;
     }
 
     @Override
-    public TaskParameters normalize(TaskParameters parameters, TaskValidationContext context) {
-        return SyncValidator.validate((SyncParameters) parameters, context);
+    public void validate(TaskParameters parameters, TaskValidationContext context) {
+        if (!(parameters instanceof SyncParameters pipeline)) {
+            throw new TaskPluginException("Invalid DATA_SYNC parameter type");
+        }
+        SyncValidator.checkResources(pipeline, context);
+    }
+
+    @Override
+    public String format(TaskParameters parameters, ParameterFormat format) {
+        if (!(parameters instanceof SyncParameters pipeline)) {
+            throw new TaskPluginException("Invalid DATA_SYNC parameter type");
+        }
+        if (format == ParameterFormat.HOCON) {
+            return SyncHoconFormatter.format(pipeline);
+        }
+        if (format == ParameterFormat.JSON) {
+            return JSONUtils.toJson(pipeline);
+        }
+        throw new TaskPluginException("Unsupported DATA_SYNC parameter format");
     }
 }
