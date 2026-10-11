@@ -1,35 +1,44 @@
-# Task Definition Contract
+# Task Definition Foundation
 
-Status: Active — generic Definition identity, Workspace-scoped reads and immutable version snapshots; DATA_SYNC is the first migrated task type.
+Status: Active — definition-only backend reset (v1.3 draft).
 
-## Ownership
+## Single ownership
 
-`yak_ops_task_definition` holds the sole writable source for Task ID, Workspace ID, name, plugin `task_type`, publication status, current `definition_version`, remark and audit fields. Types are stable open strings (`DATA_SYNC` today), not an enum of all possible plugins.
+- `yak-ops-business-task` owns all Task Definition CRUD, publication, logical deletion and version transactions.
+- `yak_ops_task_definition` owns stable task ID, Workspace, name, plugin type, current version, status and audit fields.
+- `yak_ops_task_definition_version` owns immutable executable parameters, their plugin schema version, and audit fields.
+- The unique active name is per Workspace. Deleted definitions retain versions; the same name may be reused.
+- Changes to executable parameters append a version. Rename, remark and status changes do not.
+- Task types are open canonical strings, such as `DATA_SYNC`, not a hardcoded enum.
 
-`yak_ops_data_sync_task` remains the indexed DATA_SYNC-only configuration table, keyed by the same stable Task ID and Workspace ID. It owns OFFLINE/REALTIME mode, source and target database/table, write and retry policy, and realtime `desired_state`. Shared name/status/version/remark columns were migrated out; new tasks **do not** dual-write these fields. This avoids hiding indexed Datasource filters inside an unqueryable generic JSON blob.
+## Plugin validation
 
-New definitions are added inside the existing Data Sync Business transaction. Plugin-specific physical Schema and target compatibility validation remains in `SyncDefinitionServiceImpl / SyncDefinitionValidator`. The generic `DefinitionService` currently provides read-only current-definition and version queries; general cross-plugin creation and execution dispatch are not available.
+`DefinitionService` calls `TaskPluginRegistry.validateDefinition` with trusted read-only `TaskValidationContext`.
+The DATA_SYNC plugin owns its parameter schema, datasource type rules, bound schema path and
+source/target table compatibility validation. The host supplies Workspace-checked datasource metadata,
+never database credentials. Unknown parameters and credential-bearing configuration are rejected.
 
-## Version Identity
+Each version is immutable and is uniquely identified by `(workspace_id, definition_id, version)`.
+A future Workflow node references a stable `definition_id + version`, not another copy of its parameters.
 
-A Data Sync task retains its original Task ID. An executable parameter change increments `definitionVersion` and transactionally appends an immutable row in `yak_ops_task_definition_version`. Rename, remark and publication status do not advance its executable version.
+## HTTP
 
-Versions use `(workspace_id, definition_id, version)` uniqueness. Current DATA_SYNC parameters are snapshotted with source/target resource IDs and table names, write mode, and runtime/retry policy JSON; datasource passwords and SSH secrets are never serialized.
+Canonical endpoints: `/api/v1/task-definitions` (create, edit, query, page, publish, unpublish, delete)
+and `/api/v1/task-definitions/{id}/versions`.
 
-Migration [V7](../../yak-ops-dao/src/main/resources/db/migration/yak-ops/V7__task_definition.sql) backfills one record for the **currently stored version** of each existing DATA_SYNC definition and preserves existing Task IDs, Schedule task references and historical Instance/Attempt IDs. Older configuration revisions not stored in legacy tables cannot be reconstructed and must not be invented. All published V1–V3 migrations remain unchanged.
+The existing `/api/v1/data-sync/tasks` Definition endpoints remain as HTTP-only DTO projections
+onto the one `DefinitionService`. They do not preserve Data Sync Instance, Schedule or Execution.
 
-Deleting an unpublished Definition retains its historical version rows and existing execution records. V8 extends this foundation with one shared Task Instance/Attempt/Event/Schedule model, documented in [Task Instance Contract](task-instance.md). It does not add an executable WorkflowInstance.
+## Migration boundary
 
-## HTTP Surface
+Published V1–V3 remain frozen. Draft V4–V8 were withdrawn and replaced with
+`V4__task_definition_foundation.sql`. It explicitly retires V1–V3's old data-sync tables
+and creates only the two Task Definition tables. This is a destructive product reset:
+existing V4–V8 development databases must be backed up and rebuilt from V1–V3,
+not silently repaired or migrated. Published v1.2 execution history is not carried forward.
 
-- `GET /api/v1/task-definitions/{id}`: current generic identity/status/version
-- `GET /api/v1/task-definitions/{id}/versions`: actually persisted historical versions
-- Existing `/api/v1/data-sync/tasks/**` CRUD and publish/unpublish routes remain supported by the new Data Sync `DefinitionController`. There is no second writable Task Definition HTTP API.
+## Deliberate non-goals
 
-Workspace authorization is established by Boot, and the Service/DAO apply Workspace scoping on every definition/version read. Existing Data Sync DTO / VO JSON and frontend screens remain unchanged.
-
-## Execution Boundary
-
-The canonical Definition model continues to own identity and versioning. [Shared Task Instance storage](task-instance.md) is now present, with read-only generic APIs; existing DATA_SYNC lifecycle, Quartz and Dashboard semantics are preserved. Manual Run and effective Cron fire still fail explicitly until the Data Sync → YakFlow Runtime bridge is implemented; having a Definition row or a discovered plugin is not executable proof.
-
-Later Workflow nodes must reference stable Definition ID plus version. They must not recreate DATA_SYNC-specific definitions or Product TaskInstances.
+No TaskInstance, Attempt, Scheduler, Quartz, Metrics, Log, Workflow entities, runtime submission or
+Master/Worker abstractions are introduced. YakFlow Core/Runtime/Connectors and the frontend are unchanged.
+The legacy frontend's Instance and Schedule pages are intentionally nonfunctional until rebuilt.
