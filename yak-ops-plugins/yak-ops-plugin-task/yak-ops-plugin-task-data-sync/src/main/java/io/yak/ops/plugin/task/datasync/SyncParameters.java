@@ -3,108 +3,64 @@ package io.yak.ops.plugin.task.datasync;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
-import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPluginException;
+import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
+import io.yak.ops.plugin.task.datasync.sink.jdbc.JdbcSinkParameters;
+import io.yak.ops.plugin.task.datasync.source.SourceParameters;
+import io.yak.ops.plugin.task.datasync.source.jdbc.JdbcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.mysqlcdc.MySqlCdcSourceParameters;
+import java.util.List;
 
 /**
- * Defines single-table parameters for the DATA_SYNC plugin; generic Task Definitions own name, versions and publication.
+ * Immutable product-level data sync pipeline. Source type determines boundedness.
  *
- * <p>Runtime and retry payloads must be JSON objects without credentials. Workspace authorization and physical schema access are delegated to the trusted host.
- *
- * @param syncType OFFLINE bounded sync or REALTIME continuous sync
- * @param writeMode target mode; REALTIME currently allows APPEND only
- * @param sourceDataSourceId stable source identifier without credentials
- * @param sourceDatabase source database, absent when unsupported
- * @param sourceSchema source schema, absent when unsupported
- * @param sourceTable physical source table name
- * @param targetDataSourceId stable target identifier without credentials
- * @param targetDatabase target database, absent when unsupported
- * @param targetSchema target schema, absent when unsupported
- * @param targetTable physical target table name
- * @param runtimeConfig optional offline execution settings JSON object
- * @param realtimeConfig optional realtime CDC settings JSON object
- * @param retryPolicy optional business retry settings JSON object
+ * <p>All performance, checkpoint, retry and credential options belong to the future Task
+ * execution planner, YakFlow Runtime, or the physical Connector, never to this definition.
  */
-public record SyncParameters(
-        DataSyncType syncType,
-        DataSyncWriteMode writeMode,
-        String sourceDataSourceId,
-        String sourceDatabase,
-        String sourceSchema,
-        String sourceTable,
-        String targetDataSourceId,
-        String targetDatabase,
-        String targetSchema,
-        String targetTable,
-        JsonNode runtimeConfig,
-        JsonNode realtimeConfig,
-        JsonNode retryPolicy)
+public record SyncParameters(SourceParameters source, List<JsonNode> transform, SinkParameters sink)
         implements TaskParameters {
+
+    public SyncParameters {
+        transform = transform == null ? List.of() : List.copyOf(transform);
+    }
+
+    public DataSyncType syncType() {
+        return source instanceof MySqlCdcSourceParameters ? DataSyncType.REALTIME : DataSyncType.OFFLINE;
+    }
 
     @Override
     public void validate() {
-        if (syncType == null || writeMode == null) {
-            throw new TaskPluginException("DATA_SYNC requires syncType and writeMode");
+        if (source == null || sink == null) {
+            throw new TaskPluginException("DATA_SYNC requires exactly one source and one sink");
         }
-        if (syncType == DataSyncType.REALTIME && writeMode != DataSyncWriteMode.APPEND) {
-            throw new TaskPluginException("REALTIME DATA_SYNC requires APPEND write mode");
+        if (!(source instanceof JdbcSourceParameters || source instanceof MySqlCdcSourceParameters)) {
+            throw new TaskPluginException("Unsupported DATA_SYNC source");
         }
-        requireText(sourceDataSourceId, "sourceDataSourceId", 64);
-        requireText(sourceTable, "sourceTable", 128);
-        requireText(targetDataSourceId, "targetDataSourceId", 64);
-        requireText(targetTable, "targetTable", 128);
-        checkOptionalText(sourceDatabase, "sourceDatabase", 128);
-        checkOptionalText(sourceSchema, "sourceSchema", 128);
-        checkOptionalText(targetDatabase, "targetDatabase", 128);
-        checkOptionalText(targetSchema, "targetSchema", 128);
-        checkObject(runtimeConfig, "runtimeConfig");
-        checkObject(realtimeConfig, "realtimeConfig");
-        checkObject(retryPolicy, "retryPolicy");
-        rejectSecrets(runtimeConfig);
-        rejectSecrets(realtimeConfig);
-        rejectSecrets(retryPolicy);
-    }
-
-    private static void rejectSecrets(JsonNode node) {
-        if (node == null || node.isNull()) return;
-        if (node.isObject()) {
-            var fields = node.fields();
-            while (fields.hasNext()) {
-                var entry = fields.next();
-                String key = entry.getKey().toLowerCase(java.util.Locale.ROOT).replace("_", "");
-                if (key.contains("password")
-                        || key.contains("secret")
-                        || key.contains("token")
-                        || key.contains("credential")
-                        || key.contains("privatekey")
-                        || key.contains("connectionjson")
-                        || key.contains("jdbcurl")) {
-                    throw new TaskPluginException("Credentials must not be stored in task parameters");
-                }
-                rejectSecrets(entry.getValue());
-            }
-        } else if (node.isArray()) {
-            for (JsonNode child : node) rejectSecrets(child);
+        if (!(sink instanceof JdbcSinkParameters jdbcSink)) {
+            throw new TaskPluginException("Unsupported DATA_SYNC sink");
+        }
+        if (!transform.isEmpty()) {
+            throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
+        }
+        source.validate();
+        sink.validate();
+        if (jdbcSink.writeMode() == null || jdbcSink.writeMode() == DataSyncWriteMode.OVERWRITE) {
+            throw new TaskPluginException("DATA_SYNC supports APPEND or UPSERT only");
+        }
+        if (syncType() == DataSyncType.REALTIME && jdbcSink.writeMode() != DataSyncWriteMode.UPSERT) {
+            throw new TaskPluginException("MySQL CDC requires an UPSERT sink to preserve changes");
         }
     }
 
-    private static void requireText(String value, String field, int maxLength) {
-        if (StringUtils.isBlank(value)) {
-            throw new TaskPluginException("DATA_SYNC requires " + field);
-        }
-        checkOptionalText(value, field, maxLength);
+    public static void requireText(String value, String field, int maxLength) {
+        if (value == null || value.isBlank()) throw new TaskPluginException(field + " is required");
+        optionalText(value, field, maxLength);
     }
 
-    private static void checkOptionalText(String value, String field, int maxLength) {
+    public static void optionalText(String value, String field, int maxLength) {
         if (value != null && value.length() > maxLength) {
-            throw new TaskPluginException("DATA_SYNC " + field + " exceeds maximum length " + maxLength);
-        }
-    }
-
-    private static void checkObject(JsonNode value, String field) {
-        if (value != null && !value.isNull() && !value.isObject()) {
-            throw new TaskPluginException("DATA_SYNC " + field + " must be a JSON object");
+            throw new TaskPluginException(field + " exceeds " + maxLength + " characters");
         }
     }
 }
