@@ -50,23 +50,16 @@ public final class TaskPluginRegistry {
     }
 
     /** Parses and locally checks a definition without querying physical resources. */
-    public TaskParameters parse(String type, String content, ParameterFormat format) {
-        return get(type).parse(content, format);
+    public TaskParameters parse(String type, String content) {
+        return get(type).parse(content);
     }
 
     /** Parses once, then checks Workspace resources once, without rewriting user parameters. */
-    public TaskParameters validate(String type, String content, ParameterFormat format, TaskValidationContext context) {
+    public TaskParameters validate(String type, String content, TaskValidationContext context) {
         TaskPlugin plugin = get(type);
-        TaskParameters parameters = plugin.parse(content, format);
+        TaskParameters parameters = plugin.parse(content);
         plugin.validate(parameters, context);
         return parameters;
-    }
-
-    /** Exports a stored JSON snapshot in the requested representation. */
-    public String format(String type, String parametersJson, ParameterFormat outputFormat) {
-        TaskPlugin plugin = get(type);
-        TaskParameters parameters = plugin.parse(parametersJson, ParameterFormat.JSON);
-        return plugin.format(parameters, outputFormat);
     }
 
     private static ClassLoader contextClassLoader() {

@@ -34,7 +34,6 @@ export function createDefinitionRequest(task: DataSyncTaskSavePayload) {
     name: task.name,
     taskType: "DATA_SYNC",
     remark: task.remark,
-    parametersFormat: "JSON",
     parameters: JSON.stringify(buildSyncParameters(task)),
   };
 }

@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TaskPluginException.class)
     public ResponseEntity<Result<Void>> handleTaskParameters(TaskPluginException exception) {
-        // User-supplied HOCON and JSON errors must never log or return raw configuration values.
+        // User-supplied JSON errors must never log or return raw configuration values.
         return ResponseEntity.badRequest().body(Result.fail(CommonErrorCode.PARAM_NOT_VALID));
     }
 

@@ -35,6 +35,7 @@ assert.equal(buildSyncParameters(realtime).sink.writeMode, "UPSERT");
 
 const created = createDefinitionRequest(realtime);
 assert.equal(created.taskType, "DATA_SYNC");
+assert.equal("parametersFormat" in created, false);
 assert.equal(typeof created.parameters, "string");
 assert.equal(JSON.parse(created.parameters).sink.writeMode, "UPSERT");
 

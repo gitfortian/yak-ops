@@ -10,7 +10,6 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginException;
@@ -41,13 +40,14 @@ class SyncPluginContractTest {
 
     @Test
     void parsesJDBCAndMySqlCdcWithoutAddingExecutionState() {
-        SyncParameters jdbc = (SyncParameters) registry.parse("DATA_SYNC", offlineJson(), ParameterFormat.JSON);
-        SyncParameters cdc = (SyncParameters) registry.parse("DATA_SYNC", realtimeJson(), ParameterFormat.JSON);
+        SyncParameters jdbc = (SyncParameters) registry.parse("DATA_SYNC", offlineJson());
+        SyncParameters cdc = (SyncParameters) registry.parse("DATA_SYNC", realtimeJson());
         assertInstanceOf(JdbcSourceParameters.class, jdbc.source());
         assertInstanceOf(MySqlCdcSourceParameters.class, cdc.source());
         assertEquals("JDBC", JSONUtils.readTree(JSONUtils.toJson(jdbc)).path("source").path("type").asText());
         assertEquals("MYSQL_CDC", JSONUtils.readTree(JSONUtils.toJson(cdc)).path("source").path("type").asText());
         assertEquals(3, JSONUtils.readTree(JSONUtils.toJson(jdbc)).size());
+        assertEquals(jdbc, registry.parse("DATA_SYNC", JSONUtils.toJson(jdbc)));
     }
 
     @Test
@@ -61,7 +61,7 @@ class SyncPluginContractTest {
                 offlineJson().replace("\"transform\": []", "\"runtimeConfig\": {}"),
                 offlineJson().replace("APPEND", "OVERWRITE"),
                 realtimeJson().replace("UPSERT", "APPEND"))) {
-            assertThrows(TaskPluginException.class, () -> registry.parse("DATA_SYNC", json, ParameterFormat.JSON));
+            assertThrows(TaskPluginException.class, () -> registry.parse("DATA_SYNC", json));
         }
     }
 
@@ -70,7 +70,7 @@ class SyncPluginContractTest {
         String json = offlineJson().replace(
                 "\"table\":\"orders\"", "\"table\":\"orders\",\"password\":\"private-value\"");
         TaskPluginException exception = assertThrows(
-                TaskPluginException.class, () -> registry.parse("DATA_SYNC", json, ParameterFormat.JSON));
+                TaskPluginException.class, () -> registry.parse("DATA_SYNC", json));
         assertEquals("Invalid DATA_SYNC pipeline JSON", exception.getMessage());
     }
 
@@ -78,7 +78,7 @@ class SyncPluginContractTest {
     void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
         Metadata context = new Metadata();
         SyncParameters parameters =
-                (SyncParameters) registry.validate("DATA_SYNC", realtimeJson(), ParameterFormat.JSON, context);
+                (SyncParameters) registry.validate("DATA_SYNC", realtimeJson(), context);
         assertInstanceOf(MySqlCdcSourceParameters.class, parameters.source());
         assertEquals(null, parameters.source().database());
         assertEquals(null, parameters.sink().schema());
@@ -86,7 +86,7 @@ class SyncPluginContractTest {
         assertEquals("ods", context.lastTargetTable.schema());
 
         SyncParameters bounded =
-                (SyncParameters) registry.validate("DATA_SYNC", offlineJson(), ParameterFormat.JSON, context);
+                (SyncParameters) registry.validate("DATA_SYNC", offlineJson(), context);
         assertInstanceOf(JdbcSourceParameters.class, bounded.source());
     }
 
@@ -96,12 +96,12 @@ class SyncPluginContractTest {
         String otherDatabase = offlineJson().replace(
                 "\"datasourceId\":\"source\",\"table\"", "\"datasourceId\":\"source\",\"database\":\"wrong_db\",\"table\"");
         assertThrows(TaskPluginException.class,
-                () -> registry.validate("DATA_SYNC", otherDatabase, ParameterFormat.JSON, context));
+                () -> registry.validate("DATA_SYNC", otherDatabase, context));
 
         String otherSchema = offlineJson().replace(
                 "\"datasourceId\":\"target\",\"table\"", "\"datasourceId\":\"target\",\"schema\":\"wrong_schema\",\"table\"");
         assertThrows(TaskPluginException.class,
-                () -> registry.validate("DATA_SYNC", otherSchema, ParameterFormat.JSON, context));
+                () -> registry.validate("DATA_SYNC", otherSchema, context));
     }
 
     @Test
@@ -116,7 +116,7 @@ class SyncPluginContractTest {
             }
         };
         assertThrows(TaskPluginException.class,
-                () -> registry.validate("DATA_SYNC", realtimeJson(), ParameterFormat.JSON, wrong));
+                () -> registry.validate("DATA_SYNC", realtimeJson(), wrong));
     }
 
     @Test
@@ -135,7 +135,7 @@ class SyncPluginContractTest {
             }
 
             @Override
-            public TaskParameters parse(String content, ParameterFormat format) {
+            public TaskParameters parse(String content) {
                 parses.incrementAndGet();
                 return new TaskParameters() {};
             }
@@ -144,13 +144,8 @@ class SyncPluginContractTest {
             public void validate(TaskParameters parameters, TaskValidationContext context) {
                 validations.incrementAndGet();
             }
-
-            @Override
-            public String format(TaskParameters parameters, ParameterFormat format) {
-                return "{}";
-            }
         };
-        new TaskPluginRegistry(List.of(plugin)).validate("TEST", "{}", ParameterFormat.JSON, new Metadata());
+        new TaskPluginRegistry(List.of(plugin)).validate("TEST", "{}", new Metadata());
         assertEquals(1, parses.get());
         assertEquals(1, validations.get());
     }

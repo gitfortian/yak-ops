@@ -18,14 +18,14 @@ public interface TaskPlugin {
     int parameterSchemaVersion();
 
     /**
-     * Parses a user-supplied representation into a typed definition.
+     * Parses JSON parameters into a typed definition.
      *
      * <p>The result must have passed plugin-owned local structural validation. This method
      * must not access Workspace resources or evaluate system properties.
      *
-     * @throws TaskPluginException for invalid content or unsupported formats
+     * @throws TaskPluginException for invalid JSON or plugin parameters
      */
-    TaskParameters parse(String content, ParameterFormat format);
+    TaskParameters parse(String content);
 
     /**
      * Checks external resource constraints once for a locally valid definition.
@@ -34,11 +34,4 @@ public interface TaskPlugin {
      * Implementations must not silently replace an explicitly selected database or schema.
      */
     void validate(TaskParameters parameters, TaskValidationContext context);
-
-    /**
-     * Formats a typed definition for display or export, without access to external resources.
-     *
-     * @throws TaskPluginException for unsupported formats or parameter types
-     */
-    String format(TaskParameters parameters, ParameterFormat format);
 }
