@@ -6,25 +6,22 @@ import io.yak.ops.dao.repository.BaseRepository;
 import java.util.Optional;
 
 /**
- * 定义 Workspace-scoped 数据源持久化能力，隔离 Service Layer 与 MyBatis 细节。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Defines Workspace-scoped datasource persistence operations without exposing MyBatis details.
  */
 public interface DataSourceEntityRepository extends BaseRepository<DataSourceEntity> {
 
-    /** 在指定 Workspace 内按数据源筛选条件查询分页数据。 */
+    /** Queries datasource pages using filters scoped to the requested Workspace. */
     PageData<DataSourceEntity> queryPage(String workspaceId, DataSourcePageQuery query);
 
-    /** 在指定 Workspace 内根据数据源 ID 查询。 */
+    /** Loads one datasource by identifier within the requested Workspace. */
     Optional<DataSourceEntity> queryById(String workspaceId, String id);
 
-    /** 在指定 Workspace 内更新数据源。 */
+    /** Updates a datasource only within its owning Workspace. */
     DataSourceEntity update(String workspaceId, DataSourceEntity entity);
 
-    /** 在指定 Workspace 内删除数据源。 */
+    /** Deletes a datasource only within its owning Workspace. */
     int deleteById(String workspaceId, String id);
 
-    /** 判断指定 Workspace 内的数据源名称是否已被占用，可排除当前数据源 ID。 */
+    /** Checks name uniqueness within a Workspace, optionally excluding the current datasource. */
     boolean existsByName(String workspaceId, String name, String excludeId);
 }

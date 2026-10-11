@@ -1,16 +1,13 @@
 package io.yak.ops.plugin.datasource.api.enums;
 
 /**
- * 数据源插件可显式声明的稳定能力。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Declares stable capabilities supported by a datasource provider.
  */
 public enum DataSourceCapability {
 
-    /** Provider 支持执行连接可用性测试。 */
+    /** Provider can perform connection availability tests. */
     CONNECTION_TEST,
 
-    /** Provider 支持通过 SSH 本地端口转发建立数据库连接。 */
+    /** Provider can create database connections through SSH local port forwarding. */
     SSH_TUNNEL
 }

@@ -16,10 +16,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
 /**
- * 使用 MyBatis-Plus 实现 Workspace-scoped 数据源查询、更新、删除和名称校验。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Implements Workspace-scoped datasource queries, updates, deletes and name checks using MyBatis-Plus.
  */
 @Repository
 public class DataSourceEntityRepositoryImpl extends BaseRepositoryImpl<DataSourceMapper, DataSourceEntity>
