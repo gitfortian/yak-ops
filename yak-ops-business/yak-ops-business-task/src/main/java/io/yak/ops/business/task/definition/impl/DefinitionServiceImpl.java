@@ -40,6 +40,54 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Resource
     private TaskValidationContext validationContext;
 
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DefinitionVO create(CreateDefinitionDTO dto, String operatorId) {
+        if (dto == null) throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        String name = requiredName(dto.getName());
+        checkNameAvailable(workspaceId, name, null);
+        String type = TaskPluginRegistry.normalizeType(dto.getTaskType());
+        String parameters = validatedParameters(type, dto.getParameters());
+        DefinitionEntity definition = new DefinitionEntity();
+        definition.setWorkspaceId(workspaceId);
+        definition.setName(name);
+        definition.setTaskType(type);
+        definition.setStatus(DefinitionStatus.UNPUBLISHED);
+        definition.setCurrentVersion(1);
+        definition.setRemark(dto.getRemark());
+        definition.initCreate(operatorId);
+        definitionRepository.add(definition);
+        appendVersion(definition, parameters, operatorId);
+        return toVO(definition);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DefinitionVO update(String id, UpdateDefinitionDTO dto, String operatorId) {
+        if (dto == null) throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        DefinitionEntity definition = requireDefinition(id, true);
+        requireUnpublished(definition);
+        String name = requiredName(dto.getName());
+        checkNameAvailable(definition.getWorkspaceId(), name, id);
+        if (StringUtils.isNotBlank(dto.getParameters())) {
+            String updated = validatedParameters(definition.getTaskType(), dto.getParameters());
+            String existing = currentVersion(definition).getParameters();
+            if (!updated.equals(existing)) {
+                definition.setCurrentVersion(definition.getCurrentVersion() + 1);
+                appendVersion(definition, updated, operatorId);
+            }
+        }
+        definition.setName(name);
+        definition.setRemark(dto.getRemark());
+        definition.initUpdate(operatorId);
+        if (definitionRepository.update(definition.getWorkspaceId(), definition) == null) {
+            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        }
+        return toVO(definition);
+    }
+
     // COMMAND_METHODS
 
     @Override
