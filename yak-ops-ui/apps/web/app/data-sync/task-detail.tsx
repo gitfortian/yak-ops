@@ -138,7 +138,9 @@ export function DataSyncTaskDetailPage({
       const [sourceValue, targetValue, scheduleValue] = await Promise.all([
         getDataSource(value.sourceDataSourceId).catch(() => undefined),
         getDataSource(value.targetDataSourceId).catch(() => undefined),
-        realtime ? Promise.resolve(undefined) : getDataSyncSchedule(value.id),
+        realtime
+          ? Promise.resolve(undefined)
+          : getDataSyncSchedule(value.id).catch(() => undefined),
       ]);
 
       setTask(value);

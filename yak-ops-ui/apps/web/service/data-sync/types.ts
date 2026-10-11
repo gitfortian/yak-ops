@@ -94,6 +94,25 @@ export interface DataSyncTaskPageResult {
   pagination: PaginationInfo;
 }
 
+export interface TaskDefinitionRecord {
+  id: string;
+  name: string;
+  taskType: string;
+  status: DataSyncTaskStatus | string;
+  definitionVersion: number;
+  parameterSchemaVersion: number;
+  parameters: string;
+  remark?: string;
+  createTime?: string;
+  updateTime?: string;
+  updateBy?: string;
+}
+
+export interface TaskDefinitionPageResult {
+  bizData: TaskDefinitionRecord[];
+  pagination: PaginationInfo;
+}
+
 export interface DataSyncScheduleRecord {
   id: string;
   taskId: string;
@@ -134,7 +153,6 @@ export interface DataSyncTaskOperationPageResult {
 
 interface DataSyncTaskSaveBase {
   name: string;
-  writeMode?: DataSyncWriteMode;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -143,23 +161,44 @@ interface DataSyncTaskSaveBase {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  retryPolicy?: DataSyncRetryPolicy;
   remark?: string;
 }
 
 export interface OfflineDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "OFFLINE";
-  runtimeConfig?: DataSyncRuntimeConfig;
+  writeMode?: DataSyncWriteMode;
 }
 
 export interface RealtimeDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "REALTIME";
-  realtimeConfig?: DataSyncRealtimeConfig;
 }
 
 export type DataSyncTaskSavePayload =
   | OfflineDataSyncTaskSavePayload
   | RealtimeDataSyncTaskSavePayload;
+
+export type DataSyncTaskUpdatePayload =
+  | DataSyncTaskSavePayload
+  | Pick<DataSyncTaskSaveBase, "name" | "remark">;
+
+export interface SyncPipelineParameters {
+  source: {
+    type: "JDBC" | "MYSQL_CDC";
+    datasourceId: string;
+    database?: string;
+    schema?: string;
+    table: string;
+  };
+  transform: [];
+  sink: {
+    type: "JDBC";
+    datasourceId: string;
+    database?: string;
+    schema?: string;
+    table: string;
+    writeMode: DataSyncWriteMode;
+  };
+}
 
 export type DataSyncInstanceStatus =
   | "PENDING"
