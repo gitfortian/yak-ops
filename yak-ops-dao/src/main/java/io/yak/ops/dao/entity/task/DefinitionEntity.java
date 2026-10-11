@@ -14,11 +14,18 @@ import lombok.ToString;
 @ToString
 @TableName("yak_ops_task_definition")
 public class DefinitionEntity extends BaseEntity {
+    /** Workspace identifier enforcing definition ownership and isolation. */
     private String workspaceId;
+    /** Definition name within its Workspace. */
     private String name;
+    /** Registered plugin type; executable payload lives in version records. */
     private String taskType;
+    /** Publication status independent of execution state. */
     private DefinitionStatus status;
+    /** Latest immutable version number of this definition. */
     private Integer currentVersion;
+    /** Optional user-maintained description. */
     private String remark;
+    /** Logical deletion timestamp; null while the definition remains active. */
     private LocalDateTime deletedAt;
 }

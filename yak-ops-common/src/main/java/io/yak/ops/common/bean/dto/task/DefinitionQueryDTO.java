@@ -11,10 +11,14 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class DefinitionQueryDTO extends PageQueryDTO {
+    /** Optional search term for the definition name. */
     @Size(max = 256)
     private String keyword;
 
+    /** Optional registered plugin type filter. */
     private String taskType;
+    /** Optional publication status filter, independent of runtime state. */
     private DefinitionStatus status;
+    /** Safe exact-match filters on top-level plugin parameter keys. */
     private Map<String, String> parameterFilters;
 }
