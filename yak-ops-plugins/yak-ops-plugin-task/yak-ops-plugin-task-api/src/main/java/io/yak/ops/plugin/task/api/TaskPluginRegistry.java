@@ -55,8 +55,7 @@ public final class TaskPluginRegistry {
     }
 
     /** Parses once, then checks Workspace resources once, without rewriting user parameters. */
-    public TaskParameters validate(
-            String type, String content, ParameterFormat format, TaskValidationContext context) {
+    public TaskParameters validate(String type, String content, ParameterFormat format, TaskValidationContext context) {
         TaskPlugin plugin = get(type);
         TaskParameters parameters = plugin.parse(content, format);
         plugin.validate(parameters, context);
