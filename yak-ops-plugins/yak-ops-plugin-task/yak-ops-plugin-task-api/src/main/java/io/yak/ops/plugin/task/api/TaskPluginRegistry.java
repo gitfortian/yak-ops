@@ -1,92 +1,79 @@
 package io.yak.ops.plugin.task.api;
 
-import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/** Discovers Task plugins and delegates configuration interpretation to their owning plugin. */
+/**
+ * Discovers stateless Task plugins through Java ServiceLoader and dispatches by exact type.
+ *
+ * <p>Each plugin owns parsing, local validation and resource validation. The registry does not
+ * implement a second validation flow or infer compatibility aliases.
+ */
 public final class TaskPluginRegistry {
+
     private final Map<String, TaskPlugin> plugins;
 
     public TaskPluginRegistry() {
-        this(loadFactories());
+        this(ServiceLoader.load(TaskPlugin.class, contextClassLoader()));
     }
 
-    public TaskPluginRegistry(Iterable<? extends TaskPluginFactory> factories) {
-        if (factories == null) throw new TaskPluginException("Task plugin factories must not be null");
+    /** Uses an explicit provider collection for deterministic registry tests. */
+    public TaskPluginRegistry(Iterable<? extends TaskPlugin> providers) {
         Map<String, TaskPlugin> discovered = new LinkedHashMap<>();
-        for (TaskPluginFactory factory : factories) {
-            if (factory == null) throw new TaskPluginException("Task plugin factory must not be null");
-            String type = normalizeType(factory.type());
-            TaskPlugin plugin = factory.create();
-            if (plugin == null || !type.equals(normalizeType(plugin.type()))) {
-                throw new TaskPluginException("Task plugin type does not match its factory: " + type);
+        for (TaskPlugin plugin : providers) {
+            if (plugin == null || plugin.type() == null || plugin.type().isBlank()) {
+                throw new TaskPluginException("Task plugin type is required");
             }
-            if (discovered.putIfAbsent(type, plugin) != null) {
-                throw new TaskPluginException("Duplicate task plugin type: " + type);
+            if (discovered.putIfAbsent(plugin.type(), plugin) != null) {
+                throw new TaskPluginException("Duplicate task plugin type: " + plugin.type());
             }
         }
         plugins = Collections.unmodifiableMap(discovered);
     }
 
+    /** Lists the exact canonical Task types available in this application. */
     public List<String> types() {
         return List.copyOf(plugins.keySet());
     }
 
+    /** Requires the exact registered Task type; unknown aliases are rejected. */
     public TaskPlugin get(String type) {
-        String normalized = normalizeType(type);
-        TaskPlugin plugin = plugins.get(normalized);
-        if (plugin == null) throw new TaskPluginException("Unknown task plugin type: " + normalized);
+        TaskPlugin plugin = plugins.get(type);
+        if (plugin == null) {
+            throw new TaskPluginException("Unknown task plugin type");
+        }
         return plugin;
     }
 
-    public TaskParameters parseParameters(String type, String parametersJson) {
-        return parseParameters(type, parametersJson, "JSON");
+    /** Parses and locally checks a definition without querying physical resources. */
+    public TaskParameters parse(String type, String content, ParameterFormat format) {
+        return get(type).parse(content, format);
     }
 
-    public TaskParameters parseParameters(String type, String parameters, String format) {
-        TaskParameters result;
-        try {
-            result = get(type).parseParameters(parameters, format);
-        } catch (TaskPluginException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
-            throw new TaskPluginException("Invalid task plugin parameters for type: " + normalizeType(type), exception);
-        }
-        if (result == null) throw new TaskPluginException("Task plugin returned null parameters");
-        result.validate();
-        return result;
-    }
-
-    public TaskParameters validateDefinition(String type, String parametersJson, TaskValidationContext context) {
-        return validateDefinition(type, parametersJson, context, "JSON");
-    }
-
-    public TaskParameters validateDefinition(
-            String type, String parameters, TaskValidationContext context, String format) {
-        if (context == null) throw new TaskPluginException("Task validation context is required");
+    /** Parses once, then checks Workspace resources once, without rewriting user parameters. */
+    public TaskParameters validate(String type, String content, ParameterFormat format, TaskValidationContext context) {
         TaskPlugin plugin = get(type);
-        TaskParameters parsed = parseParameters(type, parameters, format);
-        TaskParameters normalized = plugin.normalize(parsed, context);
-        if (normalized == null) throw new TaskPluginException("Task plugin returned null normalized parameters");
-        normalized.validate();
-        plugin.validateDefinition(normalized, context);
-        return normalized;
+        TaskParameters parameters = plugin.parse(content, format);
+        plugin.validate(parameters, context);
+        return parameters;
     }
 
-    public static String normalizeType(String type) {
-        String text = StringUtils.trimToNull(type);
-        if (text == null) throw new TaskPluginException("Task plugin type must not be blank");
-        return text.toUpperCase(Locale.ROOT).replace('-', '_');
+    /** Exports a stored JSON snapshot in the requested representation. */
+    public String format(String type, String parametersJson, ParameterFormat outputFormat) {
+        TaskPlugin plugin = get(type);
+        TaskParameters parameters = plugin.parse(parametersJson, ParameterFormat.JSON);
+        return plugin.format(parameters, outputFormat);
     }
 
-    private static ServiceLoader<TaskPluginFactory> loadFactories() {
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        if (classLoader == null) classLoader = TaskPluginRegistry.class.getClassLoader();
-        return ServiceLoader.load(TaskPluginFactory.class, classLoader);
+    private static ClassLoader contextClassLoader() {
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        if (loader == null) {
+            return TaskPluginRegistry.class.getClassLoader();
+        }
+        return loader;
     }
 }

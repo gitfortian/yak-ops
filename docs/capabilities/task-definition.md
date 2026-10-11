@@ -13,7 +13,7 @@ Status: Active — definition-only backend reset (v1.3 draft).
 
 ## Plugin validation
 
-`DefinitionService` calls `TaskPluginRegistry.validateDefinition` with trusted read-only `TaskValidationContext`.
+`DefinitionService` calls `TaskPluginRegistry.validate` with a typed `ParameterFormat` and a read-only `TaskValidationContext`.
 The DATA_SYNC plugin uses the Source / Transform / Sink pipeline parameter schema v2, with HOCON input and
 JDBC / MySQL CDC source/target table compatibility checks. The host supplies Workspace-checked datasource metadata,
 never database credentials. Unknown parameters and credential-bearing configuration are rejected.
@@ -47,7 +47,7 @@ The legacy frontend's Instance and Schedule pages are intentionally nonfunctiona
 
 Canonical Task Definition payloads default to JSON. A create or update request may supply
 `parametersFormat: "HOCON"` for a DATA_SYNC pipeline; parsing happens inside SyncPlugin and the
-result is always normalized JSON before version comparison and persistence. A separate
+result is stored as canonical JSON before version comparison and persistence. A separate
 `GET /api/v1/task-definitions/{id}/parameters/hocon` returns human-readable HOCON without
 storing duplicate source text. DATA_SYNC parameter schema version 2 is frozen per Definition
 Version; old schema 1 snapshots are not silently rewritten or reinterpreted.

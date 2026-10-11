@@ -20,8 +20,9 @@ import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
+import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         String name = requiredName(dto.getName());
         checkNameAvailable(workspaceId, name, null);
-        String type = TaskPluginRegistry.normalizeType(dto.getTaskType());
+        String type = dto.getTaskType();
         String parameters = validatedParameters(type, dto.getParameters(), dto.getParametersFormat());
         DefinitionEntity definition = new DefinitionEntity();
         definition.setWorkspaceId(workspaceId);
@@ -95,7 +96,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
-        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters());
+        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters(), "JSON");
         definition.setStatus(DefinitionStatus.PUBLISHED);
         definition.initUpdate(operatorId);
         definitionRepository.update(definition.getWorkspaceId(), definition);
@@ -117,11 +118,11 @@ public class DefinitionServiceImpl implements DefinitionService {
     public void delete(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
         requireUnpublished(definition);
-        if (!definitionRepository.softDelete(
-                definition.getWorkspaceId(),
-                id,
-                DateUtils.now(),
-                StringUtils.trimToNull(operatorId) == null ? "system" : operatorId)) {
+        String operator = operatorId;
+        if (StringUtils.isBlank(operator)) {
+            operator = "system";
+        }
+        if (!definitionRepository.softDelete(definition.getWorkspaceId(), id, DateUtils.now(), operator)) {
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         }
     }
@@ -142,7 +143,10 @@ public class DefinitionServiceImpl implements DefinitionService {
                 || !dto.getSorts().isEmpty()) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
-        Map<String, String> filters = dto.getParameterFilters() == null ? Map.of() : dto.getParameterFilters();
+        Map<String, String> filters = dto.getParameterFilters();
+        if (filters == null) {
+            filters = Map.of();
+        }
         if (filters.size() > 16
                 || filters.keySet().stream()
                         .anyMatch(k -> k == null
@@ -150,13 +154,17 @@ public class DefinitionServiceImpl implements DefinitionService {
                                         .contains(k))) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
+        Integer status = null;
+        if (dto.getStatus() != null) {
+            status = dto.getStatus().getValue();
+        }
         DefinitionPageQuery filter = new DefinitionPageQuery(
                 WorkspaceContext.requireWorkspaceId(),
                 dto.getPageNo(),
                 dto.getPageSize(),
                 StringUtils.trimToNull(dto.getKeyword()),
                 StringUtils.trimToNull(dto.getTaskType()),
-                dto.getStatus() == null ? null : dto.getStatus().getValue(),
+                status,
                 filters);
         return PagingData.from(definitionRepository.queryPage(filter).map(this::toVO));
     }
@@ -186,10 +194,13 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     private DefinitionEntity requireDefinition(String id, boolean forUpdate) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        return (forUpdate
-                        ? definitionRepository.queryByIdForUpdate(workspaceId, id)
-                        : definitionRepository.queryById(workspaceId, id))
-                .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+        java.util.Optional<DefinitionEntity> definition;
+        if (forUpdate) {
+            definition = definitionRepository.queryByIdForUpdate(workspaceId, id);
+        } else {
+            definition = definitionRepository.queryById(workspaceId, id);
+        }
+        return definition.orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
 
     private DefinitionVO toVO(DefinitionEntity entity) {
@@ -204,15 +215,16 @@ public class DefinitionServiceImpl implements DefinitionService {
         return vo;
     }
 
-    private String validatedParameters(String type, String parameters) {
-        return validatedParameters(type, parameters, "JSON");
-    }
-
-    private String validatedParameters(String type, String parameters, String format) {
-        if (format == null || "JSON".equalsIgnoreCase(format)) {
-            return JSONUtils.toJson(pluginRegistry.validateDefinition(type, parameters, validationContext));
+    private String validatedParameters(String type, String parameters, String formatName) {
+        ParameterFormat format;
+        if (StringUtils.isBlank(formatName) || "JSON".equalsIgnoreCase(formatName)) {
+            format = ParameterFormat.JSON;
+        } else if ("HOCON".equalsIgnoreCase(formatName)) {
+            format = ParameterFormat.HOCON;
+        } else {
+            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
-        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, parameters, validationContext, format));
+        return JSONUtils.toJson(pluginRegistry.validate(type, parameters, format, validationContext));
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {
@@ -228,11 +240,11 @@ public class DefinitionServiceImpl implements DefinitionService {
     }
 
     private String requiredName(String name) {
-        String normalized = StringUtils.trimToNull(name);
-        if (normalized == null || normalized.length() > 128) {
+        String trimmedName = StringUtils.trimToNull(name);
+        if (trimmedName == null || trimmedName.length() > 128) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
-        return normalized;
+        return trimmedName;
     }
 
     private void checkNameAvailable(String workspaceId, String name, String excludeId) {

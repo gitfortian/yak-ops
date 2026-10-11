@@ -9,6 +9,7 @@ import io.yak.ops.common.bean.vo.task.DefinitionVersionVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
+import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.security.authentication.AuthenticationManager;
 import jakarta.annotation.Resource;
@@ -59,8 +60,8 @@ public class TaskDefinitionController {
     @GetMapping("/{id}/parameters/hocon")
     public Result<String> exportHocon(@PathVariable String id) {
         DefinitionVO definition = service.query(id);
-        var plugin = taskPluginRegistry.get(definition.getTaskType());
-        return Result.success(plugin.formatParameters(plugin.parseParameters(definition.getParameters()), "HOCON"));
+        return Result.success(
+                taskPluginRegistry.format(definition.getTaskType(), definition.getParameters(), ParameterFormat.HOCON));
     }
 
     @GetMapping("/{id}/versions")

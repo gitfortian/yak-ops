@@ -1,37 +1,44 @@
 package io.yak.ops.plugin.task.api;
 
-import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 
-/** Type-specific parameter interpretation; Task Business owns identity and versions. */
+/**
+ * Defines the parameter contract for one registered Task type.
+ *
+ * <p>Parsing checks the local parameter structure without accessing Datasource. Validation
+ * checks authorized resources without mutating the submitted parameters. Plugins do not
+ * persist definitions, construct YakFlow jobs, or own execution state.
+ */
 public interface TaskPlugin {
+
+    /** Stable plugin identifier; aliases are not inferred from case or punctuation. */
     String type();
 
-    /** Reads the canonical versioned JSON representation. */
-    TaskParameters parseParameters(String parametersJson);
+    /** Schema version used for newly persisted immutable definition parameters. */
+    int parameterSchemaVersion();
 
-    /** Optional user-facing format; non-sync plugins remain JSON-only by default. */
-    default TaskParameters parseParameters(String parameters, String format) {
-        if (!"JSON".equalsIgnoreCase(format)) {
-            throw new TaskPluginException("Unsupported task parameters format");
-        }
-        return parseParameters(parameters);
-    }
+    /**
+     * Parses a user-supplied representation into a typed definition.
+     *
+     * <p>The result must have passed plugin-owned local structural validation. This method
+     * must not access Workspace resources or evaluate system properties.
+     *
+     * @throws TaskPluginException for invalid content or unsupported formats
+     */
+    TaskParameters parse(String content, ParameterFormat format);
 
-    /** Formats a canonical parameter snapshot for user-facing export. */
-    default String formatParameters(TaskParameters parameters, String format) {
-        if (!"JSON".equalsIgnoreCase(format)) {
-            throw new TaskPluginException("Unsupported task parameters format");
-        }
-        return JSONUtils.toJson(parameters);
-    }
+    /**
+     * Checks external resource constraints once for a locally valid definition.
+     *
+     * <p>The trusted context resolves Datasource metadata within the current Workspace.
+     * Implementations must not silently replace an explicitly selected database or schema.
+     */
+    void validate(TaskParameters parameters, TaskValidationContext context);
 
-    default int parameterSchemaVersion() {
-        return 1;
-    }
-
-    default TaskParameters normalize(TaskParameters parameters, TaskValidationContext context) {
-        return parameters;
-    }
-
-    default void validateDefinition(TaskParameters parameters, TaskValidationContext context) {}
+    /**
+     * Formats a typed definition for display or export, without access to external resources.
+     *
+     * @throws TaskPluginException for unsupported formats or parameter types
+     */
+    String format(TaskParameters parameters, ParameterFormat format);
 }
