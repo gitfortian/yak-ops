@@ -2,16 +2,19 @@ package io.yak.ops.plugin.task.datasync.sink;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import io.yak.ops.plugin.task.datasync.sink.jdbc.JdbcSinkParameters;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
+import io.yak.ops.plugin.task.datasync.sink.jdbc.JdbcSinkParameters;
 
 /** Product-level Sink selection; physical writer options remain in YakFlow connectors. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes(@JsonSubTypes.Type(value = JdbcSinkParameters.class, name = "JDBC"))
 public interface SinkParameters {
     String datasourceId();
+
     String database();
+
     String schema();
+
     String table();
 
     default void validate() {

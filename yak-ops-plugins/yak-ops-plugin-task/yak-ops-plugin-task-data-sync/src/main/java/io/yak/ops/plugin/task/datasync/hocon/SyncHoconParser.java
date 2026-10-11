@@ -27,9 +27,8 @@ public final class SyncHoconParser {
     private static final int MAX_LENGTH = 32_768;
     private static final int MAX_DEPTH = 16;
     private static final Set<String> ROOT_KEYS = Set.of("source", "transform", "sink");
-    private static final ConfigParseOptions OPTIONS = ConfigParseOptions.defaults()
-            .setSyntax(ConfigSyntax.CONF)
-            .setIncluder(new NoIncludes());
+    private static final ConfigParseOptions OPTIONS =
+            ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF).setIncluder(new NoIncludes());
 
     private SyncHoconParser() {}
 
@@ -49,8 +48,9 @@ public final class SyncHoconParser {
                 throw new TaskPluginException("DATA_SYNC requires only source, transform and sink");
             }
             ConfigValue transform = root.get("transform");
-            if (transform != null && !((transform instanceof ConfigObject object && object.isEmpty())
-                    || (transform instanceof ConfigList list && list.isEmpty()))) {
+            if (transform != null
+                    && !((transform instanceof ConfigObject object && object.isEmpty())
+                            || (transform instanceof ConfigList list && list.isEmpty()))) {
                 throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
             }
             ObjectNode canonical = JSONUtils.createObjectNode();
@@ -80,12 +80,13 @@ public final class SyncHoconParser {
         ObjectNode json = JSONUtils.createObjectNode();
         json.put("type", type);
         for (var option : options.entrySet()) {
-            String key = switch (option.getKey()) {
-                case "datasource_id" -> "datasourceId";
-                case "database", "schema", "table" -> option.getKey();
-                case "write_mode" -> "writeMode";
-                default -> throw new TaskPluginException("Unsupported DATA_SYNC connector option");
-            };
+            String key =
+                    switch (option.getKey()) {
+                        case "datasource_id" -> "datasourceId";
+                        case "database", "schema", "table" -> option.getKey();
+                        case "write_mode" -> "writeMode";
+                        default -> throw new TaskPluginException("Unsupported DATA_SYNC connector option");
+                    };
             if (source && key.equals("writeMode")) {
                 throw new TaskPluginException("Write mode belongs to the sink");
             }

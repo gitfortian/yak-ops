@@ -2,9 +2,9 @@ package io.yak.ops.plugin.task.datasync.source;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import io.yak.ops.plugin.task.datasync.SyncParameters;
 import io.yak.ops.plugin.task.datasync.source.jdbc.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.mysqlcdc.MySqlCdcSourceParameters;
-import io.yak.ops.plugin.task.datasync.SyncParameters;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
@@ -14,8 +14,11 @@ import io.yak.ops.plugin.task.datasync.SyncParameters;
 /** Product-level Source selection, not a YakFlow Source configuration or connector factory. */
 public interface SourceParameters {
     String datasourceId();
+
     String database();
+
     String schema();
+
     String table();
 
     default void validate() {

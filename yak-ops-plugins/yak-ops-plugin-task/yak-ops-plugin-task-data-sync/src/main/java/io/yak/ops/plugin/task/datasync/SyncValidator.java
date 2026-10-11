@@ -41,17 +41,17 @@ final class SyncValidator {
         String sourceSchema = bound(fromDatasource.schema(), source.schema());
         String sinkDatabase = bound(toDatasource.database(), sink.database());
         String sinkSchema = bound(toDatasource.schema(), sink.schema());
-        TableSchema from = context.tableSchema(
-                source.datasourceId(), sourceDatabase, sourceSchema, source.table());
-        TableSchema to = context.tableSchema(
-                sink.datasourceId(), sinkDatabase, sinkSchema, sink.table());
-        requireCompatible(from, to,
+        TableSchema from = context.tableSchema(source.datasourceId(), sourceDatabase, sourceSchema, source.table());
+        TableSchema to = context.tableSchema(sink.datasourceId(), sinkDatabase, sinkSchema, sink.table());
+        requireCompatible(
+                from,
+                to,
                 parameters.syncType() == DataSyncType.REALTIME || sink.writeMode() == DataSyncWriteMode.UPSERT);
         SourceParameters normalizedSource = source instanceof JdbcSourceParameters
                 ? new JdbcSourceParameters(source.datasourceId(), sourceDatabase, sourceSchema, source.table())
                 : new MySqlCdcSourceParameters(source.datasourceId(), sourceDatabase, sourceSchema, source.table());
-        JdbcSinkParameters normalizedSink = new JdbcSinkParameters(
-                sink.datasourceId(), sinkDatabase, sinkSchema, sink.table(), sink.writeMode());
+        JdbcSinkParameters normalizedSink =
+                new JdbcSinkParameters(sink.datasourceId(), sinkDatabase, sinkSchema, sink.table(), sink.writeMode());
         return new SyncParameters(normalizedSource, parameters.transform(), normalizedSink);
     }
 

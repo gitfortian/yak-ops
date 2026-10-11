@@ -49,8 +49,10 @@ final class SyncDefinitionHttpMapper {
         result.setSorts(request.getSorts());
         result.setKeyword(request.getKeyword());
         result.setTaskType("DATA_SYNC");
-        result.setStatus(request.getStatus() == null
-                ? null : DefinitionStatus.valueOf(request.getStatus().name()));
+        result.setStatus(
+                request.getStatus() == null
+                        ? null
+                        : DefinitionStatus.valueOf(request.getStatus().name()));
         Map<String, String> filters = new HashMap<>();
         if (request.getSyncType() != null) {
             filters.put("sourceType", request.getSyncType() == DataSyncType.REALTIME ? "MYSQL_CDC" : "JDBC");
@@ -66,8 +68,7 @@ final class SyncDefinitionHttpMapper {
     }
 
     private static String parameters(DataSyncTaskDTO request) {
-        if (request.getSyncType() == DataSyncType.REALTIME
-                && request.getWriteMode() != DataSyncWriteMode.UPSERT) {
+        if (request.getSyncType() == DataSyncType.REALTIME && request.getWriteMode() != DataSyncWriteMode.UPSERT) {
             throw new BusinessException("实时 CDC 任务必须使用 UPSERT；旧表单 APPEND 不会自动转换");
         }
         ObjectNode source = JSONUtils.createObjectNode();
@@ -83,7 +84,8 @@ final class SyncDefinitionHttpMapper {
         put(sink, "database", request.getTargetDatabase());
         put(sink, "schema", request.getTargetSchema());
         sink.put("table", request.getTargetTable());
-        if (request.getWriteMode() != null) sink.put("writeMode", request.getWriteMode().name());
+        if (request.getWriteMode() != null)
+            sink.put("writeMode", request.getWriteMode().name());
 
         ObjectNode pipeline = JSONUtils.createObjectNode();
         pipeline.set("source", source);
@@ -123,8 +125,8 @@ final class SyncDefinitionHttpMapper {
     }
 
     static PagingData<DataSyncTaskVO> toPage(PagingData<DefinitionVO> page) {
-        return new PagingData<>(page.getBizData().stream().map(SyncDefinitionHttpMapper::toSync).toList(),
-                page.getPagination());
+        return new PagingData<>(
+                page.getBizData().stream().map(SyncDefinitionHttpMapper::toSync).toList(), page.getPagination());
     }
 
     private static String text(JsonNode object, String field) {

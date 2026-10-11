@@ -143,8 +143,10 @@ public class DefinitionServiceImpl implements DefinitionService {
         }
         Map<String, String> filters = dto.getParameterFilters() == null ? Map.of() : dto.getParameterFilters();
         if (filters.size() > 16
-                || filters.keySet().stream().anyMatch(k -> k == null || !java.util.Set.of(
-                                "sourceType", "sourceDataSourceId", "targetDataSourceId").contains(k))) {
+                || filters.keySet().stream()
+                        .anyMatch(k -> k == null
+                                || !java.util.Set.of("sourceType", "sourceDataSourceId", "targetDataSourceId")
+                                        .contains(k))) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
         DefinitionPageQuery filter = new DefinitionPageQuery(
