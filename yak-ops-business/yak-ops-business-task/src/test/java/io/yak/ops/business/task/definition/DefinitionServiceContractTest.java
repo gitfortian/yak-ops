@@ -50,14 +50,14 @@ class DefinitionServiceContractTest {
         definition.setName("同步订单");
         definition.setTaskType("DATA_SYNC");
         definition.setStatus(DefinitionStatus.PUBLISHED);
-        definition.setDefinitionVersion(5);
+        definition.setCurrentVersion(5);
         when(definitions.queryById("ws", "task-1")).thenReturn(Optional.of(definition));
 
         DefinitionVersionEntity version = new DefinitionVersionEntity();
         version.setDefinitionId("task-1");
-        version.setTaskType("DATA_SYNC");
-        version.setVersion(5);
-        version.setParametersSnapshot("{\"sourceTable\":\"orders\"}");
+                version.setVersion(5);
+        version.setParameters("{\"sourceTable\":\"orders\"}");
+        when(versions.queryCurrent("ws", "task-1", 5)).thenReturn(Optional.of(version));
         when(versions.queryByDefinition("ws", "task-1")).thenReturn(List.of(version));
 
         assertEquals("PUBLISHED", service.query("task-1").getStatus());
