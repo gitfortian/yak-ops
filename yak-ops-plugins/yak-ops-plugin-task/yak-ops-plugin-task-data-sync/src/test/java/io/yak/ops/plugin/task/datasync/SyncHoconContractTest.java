@@ -1,42 +1,55 @@
 package io.yak.ops.plugin.task.datasync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
+import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import org.junit.jupiter.api.Test;
 
-/** Contract tests for restricted in-memory HOCON input and canonical JSON output. */
+/** Ensures user HOCON parses directly into typed parameters, with no external configuration access. */
 class SyncHoconContractTest {
+
     private final TaskPluginRegistry registry = new TaskPluginRegistry();
 
     @Test
-    void hoconJsonAndReformattedHoconHaveTheSamePipelineMeaning() {
+    void exportsAndReadsBothSourceTypesWithoutIntermediateJsonConversions() {
         for (boolean cdc : new boolean[] {false, true}) {
-            SyncParameters first = (SyncParameters) registry.parseParameters("DATA_SYNC", hocon(cdc), "HOCON");
-            String exported = registry.get("DATA_SYNC").formatParameters(first, "HOCON");
-            SyncParameters second = (SyncParameters) registry.parseParameters("DATA_SYNC", exported, "HOCON");
-            assertEquals(JSONUtils.readTree(JSONUtils.toJson(first)), JSONUtils.readTree(JSONUtils.toJson(second)));
-            assertEquals(cdc ? DataSyncType.REALTIME : DataSyncType.OFFLINE, second.syncType());
+            SyncParameters original =
+                    (SyncParameters) registry.parse("DATA_SYNC", hocon(cdc), ParameterFormat.HOCON);
+            String json = JSONUtils.toJson(original);
+            String exported = registry.format("DATA_SYNC", json, ParameterFormat.HOCON);
+            SyncParameters reloaded =
+                    (SyncParameters) registry.parse("DATA_SYNC", exported, ParameterFormat.HOCON);
+            assertEquals(JSONUtils.readTree(json), JSONUtils.readTree(JSONUtils.toJson(reloaded)));
             assertTrue(exported.contains("datasource_id"));
+            if (cdc) {
+                assertTrue(reloaded.source() instanceof MySqlCdcSourceParameters);
+            } else {
+                assertTrue(reloaded.source() instanceof JdbcSourceParameters);
+            }
         }
     }
 
     @Test
-    void ignoresFormattingAndCommentsButNotExecutableValues() {
-        var initial = registry.parseParameters("DATA_SYNC", hocon(false), "HOCON");
-        var comments = registry.parseParameters("DATA_SYNC", "# only an explanation\n" + hocon(false) + "\n", "HOCON");
-        assertEquals(JSONUtils.toJson(initial), JSONUtils.toJson(comments));
-        var changed = registry.parseParameters("DATA_SYNC", hocon(false).replace("orders_copy", "sales"), "HOCON");
-        org.junit.jupiter.api.Assertions.assertNotEquals(JSONUtils.toJson(initial), JSONUtils.toJson(changed));
+    void ignoresCommentsAndFormattingButNotExecutionSemantics() {
+        SyncParameters original = (SyncParameters) registry.parse("DATA_SYNC", hocon(false), ParameterFormat.HOCON);
+        SyncParameters comments = (SyncParameters) registry.parse(
+                "DATA_SYNC", "# comment\n" + hocon(false) + "\n", ParameterFormat.HOCON);
+        assertEquals(JSONUtils.toJson(original), JSONUtils.toJson(comments));
+        SyncParameters changed = (SyncParameters) registry.parse(
+                "DATA_SYNC", hocon(false).replace("orders_copy", "sales"), ParameterFormat.HOCON);
+        assertNotEquals(JSONUtils.toJson(original), JSONUtils.toJson(changed));
     }
 
     @Test
-    void forbidsExternalIncludesAndEnvironmentSubstitutions() {
+    void forbidsIncludesAndEnvironmentSubstitutions() {
         for (String input : new String[] {
             "include \"local.conf\"\n" + hocon(false),
             "include file(\"/etc/passwd\")\n" + hocon(false),
@@ -45,12 +58,12 @@ class SyncHoconContractTest {
             hocon(false).replace("orders_copy", "${HOME}")
         }) {
             assertThrows(TaskPluginException.class,
-                    () -> registry.parseParameters("DATA_SYNC", input, "HOCON"));
+                    () -> registry.parse("DATA_SYNC", input, ParameterFormat.HOCON));
         }
     }
 
     @Test
-    void rejectsExtraStagesUnsupportedOptionsAndNonemptyTransforms() {
+    void forbidsUnimplementedStagesAndInlineSecrets() {
         for (String input : new String[] {
             hocon(false).replace("transform {}", "transform { Sql { query = \"select 1\" } }"),
             hocon(false).replace("source {", "source { Kafka { topic = \"x\" }"),
@@ -59,21 +72,27 @@ class SyncHoconContractTest {
             hocon(false).replace("source {", "source { MySQL-CDC { datasource_id = \"other\" }")
         }) {
             assertThrows(TaskPluginException.class,
-                    () -> registry.parseParameters("DATA_SYNC", input, "HOCON"));
+                    () -> registry.parse("DATA_SYNC", input, ParameterFormat.HOCON));
         }
     }
 
     @Test
-    void rejectsLargeAndUnreasonablyNestedConfiguration() {
+    void rejectsExcessiveInputSizeAndNesting() {
         assertThrows(TaskPluginException.class,
-                () -> registry.parseParameters("DATA_SYNC", " ".repeat(33_000) + hocon(false), "HOCON"));
+                () -> registry.parse("DATA_SYNC", " ".repeat(33_000) + hocon(false), ParameterFormat.HOCON));
         String deep = "source { Jdbc { " + "outer { ".repeat(24)
                 + "table = orders " + "}".repeat(24) + " } }" + hocon(false);
         assertThrows(TaskPluginException.class,
-                () -> registry.parseParameters("DATA_SYNC", deep, "HOCON"));
+                () -> registry.parse("DATA_SYNC", deep, ParameterFormat.HOCON));
     }
 
     private static String hocon(boolean cdc) {
+        String kind = "Jdbc";
+        String writeMode = "APPEND";
+        if (cdc) {
+            kind = "MySQL-CDC";
+            writeMode = "UPSERT";
+        }
         return """
                 source {
                   %s {
@@ -89,6 +108,6 @@ class SyncHoconContractTest {
                     write_mode = "%s"
                   }
                 }
-                """.formatted(cdc ? "MySQL-CDC" : "Jdbc", cdc ? "UPSERT" : "APPEND");
+                """.formatted(kind, writeMode);
     }
 }
