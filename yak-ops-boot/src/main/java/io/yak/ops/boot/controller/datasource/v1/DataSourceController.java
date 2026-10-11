@@ -32,10 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 对外提供数据源配置管理、列表查询和连接测试 HTTP 接口。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Exposes Workspace-scoped datasource configuration, catalog browsing, and connection testing over HTTP.
  */
 @Tag(name = "数据源管理接口")
 @RestController

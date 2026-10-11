@@ -28,10 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * DATA_SYNC 插件当前单表定义的创建、查询和发布入口，URL 行为保持兼容。
- *
- * @author weifuwan
- * @since 2026-10-10
+ * Preserves the legacy DATA_SYNC single-table definition HTTP contract while delegating to generic Task Definitions.
  */
 @Tag(name = "数据同步任务定义")
 @RestController
