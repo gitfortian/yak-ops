@@ -4,14 +4,11 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * 数据源高级连接参数候选项。
- *
- * @author weifuwan
- * @since 2026-09-26
+ * Exposes advanced connection-property suggestions for a datasource provider.
  */
 @Data
 public class DataSourceConnectionPropertyKeysVO {
 
-    /** 当前 Provider 可推荐给高级参数编辑器的属性名。 */
+    /** Property names recommended by the provider for the advanced connection editor. */
     private List<String> acceptedPropertyKeys;
 }

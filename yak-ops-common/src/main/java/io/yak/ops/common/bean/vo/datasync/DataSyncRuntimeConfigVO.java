@@ -4,32 +4,29 @@ import io.yak.ops.common.enums.datasync.DataSyncRuntimePolicy;
 import lombok.Data;
 
 /**
- * 数据同步任务对外展示的 YakFlow 运行参数。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Exposes YakFlow runtime settings for synchronization tasks.
  */
 @Data
 public class DataSyncRuntimeConfigVO {
 
-    /** 运行参数规划策略；历史配置缺失时由服务端按 FIXED 兼容。 */
+    /** Runtime planning policy; older configurations without a policy use FIXED. */
     private DataSyncRuntimePolicy policy;
 
-    /** JDBC 游标 Fetch Size。 */
+    /** JDBC cursor fetch size. */
     private Integer fetchSize;
 
-    /** Source 读取批次大小。 */
+    /** Source read batch size. */
     private Integer readBatchSize;
 
-    /** Sink 写入批次大小。 */
+    /** Sink write batch size. */
     private Integer writeBatchSize;
 
-    /** 动态分片目标行数；为空时不启用自动范围分片。 */
+    /** Target row count for dynamic splitting; null disables automatic range splitting. */
     private Long splitSize;
 
-    /** bounded Source Reader 并行度。 */
+    /** Parallelism of the bounded Source Reader. */
     private Integer sourceParallelism;
 
-    /** 连接与语句超时秒数。 */
+    /** Connection and statement timeout, in seconds. */
     private Integer timeoutSeconds;
 }
