@@ -88,7 +88,40 @@ public class DefinitionServiceImpl implements DefinitionService {
         return toVO(definition);
     }
 
-    // COMMAND_METHODS
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DefinitionVO publish(String id, String operatorId) {
+        DefinitionEntity definition = requireDefinition(id, true);
+        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters());
+        definition.setStatus(DefinitionStatus.PUBLISHED);
+        definition.initUpdate(operatorId);
+        definitionRepository.update(definition.getWorkspaceId(), definition);
+        return toVO(definition);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DefinitionVO unpublish(String id, String operatorId) {
+        DefinitionEntity definition = requireDefinition(id, true);
+        definition.setStatus(DefinitionStatus.UNPUBLISHED);
+        definition.initUpdate(operatorId);
+        definitionRepository.update(definition.getWorkspaceId(), definition);
+        return toVO(definition);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(String id, String operatorId) {
+        DefinitionEntity definition = requireDefinition(id, true);
+        requireUnpublished(definition);
+        if (!definitionRepository.softDelete(
+                definition.getWorkspaceId(), id, DateUtils.now(),
+                StringUtils.trimToNull(operatorId) == null ? "system" : operatorId)) {
+            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        }
+    }
+
 
     @Override
     public DefinitionVO query(String id) {
