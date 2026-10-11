@@ -106,6 +106,31 @@ class DefinitionCrudContractTest {
         assertEquals(2, service.unpublish(stored.getId(), "user-1").getDefinitionVersion());
     }
 
+
+    @Test
+    void hoconAndJsonWithTheSameNormalizedPipelineDoNotCreateAnotherVersion() {
+        WorkspaceContext.bind("ws");
+        CreateDefinitionDTO create = new CreateDefinitionDTO();
+        create.setName("orders");
+        create.setTaskType("DATA_SYNC");
+        create.setParameters("{\\"sourceTable\\":\\"orders\\"}");
+        assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
+
+        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+                .thenReturn(new Parameters("orders"));
+        UpdateDefinitionDTO formatted = new UpdateDefinitionDTO();
+        formatted.setName("orders");
+        formatted.setParametersFormat("HOCON");
+        formatted.setParameters("source { Jdbc { table = orders } }");
+        assertEquals(1, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
+        assertEquals(1, snapshots.size());
+
+        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+                .thenReturn(new Parameters("orders_new"));
+        assertEquals(2, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
+        assertEquals(2, snapshots.size());
+    }
+
     private void inject(String name, Object dependency) {
         try {
             Field field = DefinitionServiceImpl.class.getDeclaredField(name);
