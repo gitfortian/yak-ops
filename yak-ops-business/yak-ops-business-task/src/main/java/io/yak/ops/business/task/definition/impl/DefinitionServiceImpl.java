@@ -51,7 +51,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(workspaceId, name, null);
         String type = TaskPluginRegistry.normalizeType(dto.getTaskType());
-        String parameters = validatedParameters(type, dto.getParameters());
+        String parameters = validatedParameters(type, dto.getParameters(), dto.getParametersFormat());
         DefinitionEntity definition = new DefinitionEntity();
         definition.setWorkspaceId(workspaceId);
         definition.setName(name);
@@ -74,7 +74,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
-            String updated = validatedParameters(definition.getTaskType(), dto.getParameters());
+            String updated = validatedParameters(definition.getTaskType(), dto.getParameters(), dto.getParametersFormat());
             String existing = currentVersion(definition).getParameters();
             if (!updated.equals(existing)) {
                 definition.setCurrentVersion(definition.getCurrentVersion() + 1);
@@ -203,8 +203,15 @@ public class DefinitionServiceImpl implements DefinitionService {
         return vo;
     }
 
-    private String validatedParameters(String type, String json) {
-        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, json, validationContext));
+    private String validatedParameters(String type, String parameters) {
+        return validatedParameters(type, parameters, "JSON");
+    }
+
+    private String validatedParameters(String type, String parameters, String format) {
+        if (format == null || "JSON".equalsIgnoreCase(format)) {
+            return JSONUtils.toJson(pluginRegistry.validateDefinition(type, parameters, validationContext));
+        }
+        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, parameters, validationContext, format));
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {
