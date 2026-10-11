@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.hocon;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
@@ -15,30 +14,43 @@ import com.typesafe.config.ConfigParseOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValue;
 import com.typesafe.config.ConfigValueType;
-import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.task.api.TaskPluginException;
+import io.yak.ops.plugin.task.datasync.SyncParameters;
+import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
+import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.io.File;
 import java.net.URL;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Parses the restricted user-facing Source / Transform / Sink HOCON format in memory only. */
+/**
+ * Reads the restricted user-facing HOCON directly into typed DATA_SYNC parameters.
+ *
+ * <p>Includes, substitutions, arbitrary option keys and nonempty transforms are rejected.
+ * Parsing only reads the supplied text and never resolves host files or environment variables.
+ */
 public final class SyncHoconParser {
+
     private static final int MAX_LENGTH = 32_768;
     private static final int MAX_DEPTH = 16;
     private static final Set<String> ROOT_KEYS = Set.of("source", "transform", "sink");
+    private static final Set<String> SOURCE_KEYS = Set.of("datasource_id", "database", "schema", "table");
+    private static final Set<String> SINK_KEYS = Set.of("datasource_id", "database", "schema", "table", "write_mode");
     private static final ConfigParseOptions OPTIONS =
             ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF).setIncluder(new NoIncludes());
 
     private SyncHoconParser() {}
 
-    /** Returns the canonical pipeline JSON shape; does not load files or resolve variables. */
-    public static String parse(String hocon) {
+    /** Reads a single Source and Sink without a temporary JSON representation. */
+    public static SyncParameters parse(String hocon) {
         if (hocon == null || hocon.isBlank() || hocon.length() > MAX_LENGTH) {
             throw new TaskPluginException("Invalid DATA_SYNC HOCON size");
         }
         try {
-            // Substitutions are forbidden even inside quoted strings; no host environment is exposed.
+            // No substitution syntax is accepted, even when written as a quoted literal.
             if (hocon.contains("${")) {
                 throw new TaskPluginException("DATA_SYNC HOCON substitutions are not supported");
             }
@@ -47,71 +59,104 @@ public final class SyncHoconParser {
                 throw new TaskPluginException("DATA_SYNC HOCON substitutions are not supported");
             }
             ConfigObject root = config.root();
-            limitDepth(root, 0);
+            checkDepth(root, 0);
             if (!ROOT_KEYS.containsAll(root.keySet()) || !root.containsKey("source") || !root.containsKey("sink")) {
                 throw new TaskPluginException("DATA_SYNC requires only source, transform and sink");
             }
             ConfigValue transform = root.get("transform");
-            if (transform != null
-                    && !((transform instanceof ConfigObject object && object.isEmpty())
-                            || (transform instanceof ConfigList list && list.isEmpty()))) {
-                throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
+            if (transform != null) {
+                if (transform instanceof ConfigObject object && object.isEmpty()) {
+                    // An empty object is a valid placeholder for a future transformation stage.
+                } else if (transform instanceof ConfigList list && list.isEmpty()) {
+                    // An empty list is also accepted for compatibility with canonical JSON.
+                } else {
+                    throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
+                }
             }
-            ObjectNode canonical = JSONUtils.createObjectNode();
-            canonical.set("source", stage(root.get("source"), true));
-            canonical.set("transform", JSONUtils.readTree("[]"));
-            canonical.set("sink", stage(root.get("sink"), false));
-            return JSONUtils.toJson(canonical);
-        } catch (TaskPluginException error) {
-            throw error;
-        } catch (ConfigException | IllegalArgumentException error) {
+            return new SyncParameters(readSource(root.get("source")), List.of(), readSink(root.get("sink")));
+        } catch (TaskPluginException exception) {
+            throw exception;
+        } catch (ConfigException | IllegalArgumentException exception) {
             throw new TaskPluginException("Invalid DATA_SYNC HOCON");
         }
     }
 
-    private static ObjectNode stage(ConfigValue value, boolean source) {
+    private static SourceParameters readSource(ConfigValue value) {
+        Map.Entry<String, ConfigValue> stage = singleStage(value);
+        ConfigObject options = readOptions(stage.getValue(), SOURCE_KEYS);
+        String datasourceId = text(options, "datasource_id");
+        String database = text(options, "database");
+        String schema = text(options, "schema");
+        String table = text(options, "table");
+        return switch (stage.getKey()) {
+            case "Jdbc" -> new JdbcSourceParameters(datasourceId, database, schema, table);
+            case "MySQL-CDC" -> new MySqlCdcSourceParameters(datasourceId, database, schema, table);
+            default -> throw new TaskPluginException("Unsupported DATA_SYNC Source connector");
+        };
+    }
+
+    private static JdbcSinkParameters readSink(ConfigValue value) {
+        Map.Entry<String, ConfigValue> stage = singleStage(value);
+        if (!"Jdbc".equals(stage.getKey())) {
+            throw new TaskPluginException("Unsupported DATA_SYNC Sink connector");
+        }
+        ConfigObject options = readOptions(stage.getValue(), SINK_KEYS);
+        String mode = text(options, "write_mode");
+        io.yak.ops.common.enums.datasync.DataSyncWriteMode writeMode;
+        try {
+            writeMode = mode == null ? null : io.yak.ops.common.enums.datasync.DataSyncWriteMode.valueOf(mode);
+        } catch (IllegalArgumentException exception) {
+            throw new TaskPluginException("Unsupported DATA_SYNC write mode");
+        }
+        return new JdbcSinkParameters(
+                text(options, "datasource_id"),
+                text(options, "database"),
+                text(options, "schema"),
+                text(options, "table"),
+                writeMode);
+    }
+
+    private static Map.Entry<String, ConfigValue> singleStage(ConfigValue value) {
         if (!(value instanceof ConfigObject section) || section.size() != 1) {
-            throw new TaskPluginException("DATA_SYNC requires exactly one source and sink connector");
+            throw new TaskPluginException("DATA_SYNC requires exactly one Source or Sink connector");
         }
-        Map.Entry<String, ConfigValue> entry = section.entrySet().iterator().next();
-        String type = entry.getKey().trim().toUpperCase(java.util.Locale.ROOT).replace('-', '_');
-        if (!(source ? Set.of("JDBC", "MYSQL_CDC") : Set.of("JDBC")).contains(type)) {
-            throw new TaskPluginException("Unsupported DATA_SYNC connector type");
-        }
-        if (!(entry.getValue() instanceof ConfigObject options)) {
-            throw new TaskPluginException("DATA_SYNC connector options must be an object");
-        }
-        ObjectNode json = JSONUtils.createObjectNode();
-        json.put("type", type);
-        for (var option : options.entrySet()) {
-            String key =
-                    switch (option.getKey()) {
-                        case "datasource_id" -> "datasourceId";
-                        case "database", "schema", "table" -> option.getKey();
-                        case "write_mode" -> "writeMode";
-                        default -> throw new TaskPluginException("Unsupported DATA_SYNC connector option");
-                    };
-            if (source && key.equals("writeMode")) {
-                throw new TaskPluginException("Write mode belongs to the sink");
-            }
-            if (option.getValue().valueType() != ConfigValueType.STRING) {
-                throw new TaskPluginException("DATA_SYNC connector option must be a string");
-            }
-            json.put(key, (String) option.getValue().unwrapped());
-        }
-        return json;
+        return section.entrySet().iterator().next();
     }
 
-    private static void limitDepth(ConfigValue value, int depth) {
-        if (depth > MAX_DEPTH) throw new TaskPluginException("DATA_SYNC HOCON is too deeply nested");
+    private static ConfigObject readOptions(ConfigValue value, Set<String> allowed) {
+        if (!(value instanceof ConfigObject options) || !allowed.containsAll(options.keySet())) {
+            throw new TaskPluginException("Unsupported DATA_SYNC connector options");
+        }
+        return options;
+    }
+
+    private static String text(ConfigObject object, String key) {
+        ConfigValue value = object.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value.valueType() != ConfigValueType.STRING) {
+            throw new TaskPluginException("DATA_SYNC connector option must be a string");
+        }
+        return (String) value.unwrapped();
+    }
+
+    private static void checkDepth(ConfigValue value, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw new TaskPluginException("DATA_SYNC HOCON is too deeply nested");
+        }
         if (value instanceof ConfigObject object) {
-            for (ConfigValue child : object.values()) limitDepth(child, depth + 1);
+            for (ConfigValue child : object.values()) {
+                checkDepth(child, depth + 1);
+            }
         } else if (value instanceof ConfigList list) {
-            for (ConfigValue child : list) limitDepth(child, depth + 1);
+            for (ConfigValue child : list) {
+                checkDepth(child, depth + 1);
+            }
         }
     }
 
-    /** Explicitly blocks heuristic, file, URL and classpath includes, including required(...). */
+    /** Forbids HOCON includes regardless of their resolution protocol. */
     private static final class NoIncludes
             implements ConfigIncluder, ConfigIncluderFile, ConfigIncluderURL, ConfigIncluderClasspath {
         @Override
