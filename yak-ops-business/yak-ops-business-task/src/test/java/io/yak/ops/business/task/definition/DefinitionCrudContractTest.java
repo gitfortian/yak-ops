@@ -18,10 +18,11 @@ import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
+import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,10 +40,7 @@ class DefinitionCrudContractTest {
     private final Map<Integer, DefinitionVersionEntity> snapshots = new HashMap<>();
     private DefinitionEntity stored;
 
-    private record Parameters(String sourceTable) implements TaskParameters {
-        @Override
-        public void validate() {}
-    }
+    private record Parameters(String sourceTable) implements TaskParameters {}
 
     DefinitionCrudContractTest() {
         inject("definitionRepository", definitions);
@@ -52,7 +50,7 @@ class DefinitionCrudContractTest {
         TaskPlugin plugin = mock(TaskPlugin.class);
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
-        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context)))
+        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.JSON), eq(context)))
                 .thenAnswer(args -> new Parameters(io.yak.ops.common.util.JSONUtils
                         .readTree(args.getArgument(1)).path("sourceTable").asText()));
         when(definitions.add(any())).thenAnswer(args -> {
@@ -108,7 +106,7 @@ class DefinitionCrudContractTest {
 
 
     @Test
-    void hoconAndJsonWithTheSameNormalizedPipelineDoNotCreateAnotherVersion() {
+    void hoconAndJsonWithTheSameParametersDoNotCreateAnotherVersion() {
         WorkspaceContext.bind("ws");
         CreateDefinitionDTO create = new CreateDefinitionDTO();
         create.setName("orders");
@@ -116,7 +114,7 @@ class DefinitionCrudContractTest {
         create.setParameters(io.yak.ops.common.util.JSONUtils.toJson(java.util.Map.of("sourceTable", "orders")));
         assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
 
-        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.HOCON), eq(context)))
                 .thenReturn(new Parameters("orders"));
         UpdateDefinitionDTO formatted = new UpdateDefinitionDTO();
         formatted.setName("orders");
@@ -125,7 +123,7 @@ class DefinitionCrudContractTest {
         assertEquals(1, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
         assertEquals(1, snapshots.size());
 
-        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.HOCON), eq(context)))
                 .thenReturn(new Parameters("orders_new"));
         assertEquals(2, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
         assertEquals(2, snapshots.size());
