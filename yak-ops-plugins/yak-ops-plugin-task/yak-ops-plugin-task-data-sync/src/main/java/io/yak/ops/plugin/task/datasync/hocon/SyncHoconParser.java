@@ -14,6 +14,7 @@ import com.typesafe.config.ConfigParseOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValue;
 import com.typesafe.config.ConfigValueType;
+import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
 import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
@@ -65,11 +66,9 @@ public final class SyncHoconParser {
             }
             ConfigValue transform = root.get("transform");
             if (transform != null) {
-                if (transform instanceof ConfigObject object && object.isEmpty()) {
-                    // An empty object is a valid placeholder for a future transformation stage.
-                } else if (transform instanceof ConfigList list && list.isEmpty()) {
-                    // An empty list is also accepted for compatibility with canonical JSON.
-                } else {
+                boolean emptyObject = transform instanceof ConfigObject object && object.isEmpty();
+                boolean emptyList = transform instanceof ConfigList list && list.isEmpty();
+                if (!emptyObject && !emptyList) {
                     throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
                 }
             }
@@ -102,11 +101,13 @@ public final class SyncHoconParser {
         }
         ConfigObject options = readOptions(stage.getValue(), SINK_KEYS);
         String mode = text(options, "write_mode");
-        io.yak.ops.common.enums.datasync.DataSyncWriteMode writeMode;
-        try {
-            writeMode = mode == null ? null : io.yak.ops.common.enums.datasync.DataSyncWriteMode.valueOf(mode);
-        } catch (IllegalArgumentException exception) {
-            throw new TaskPluginException("Unsupported DATA_SYNC write mode");
+        DataSyncWriteMode writeMode = null;
+        if (mode != null) {
+            try {
+                writeMode = DataSyncWriteMode.valueOf(mode);
+            } catch (IllegalArgumentException exception) {
+                throw new TaskPluginException("Unsupported DATA_SYNC write mode");
+            }
         }
         return new JdbcSinkParameters(
                 text(options, "datasource_id"),
