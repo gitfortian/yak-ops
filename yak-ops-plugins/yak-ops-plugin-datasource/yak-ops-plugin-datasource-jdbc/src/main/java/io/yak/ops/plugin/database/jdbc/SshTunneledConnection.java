@@ -7,12 +7,9 @@ import java.sql.Connection;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 将 SSH Tunnel 生命周期绑定到 JDBC Connection.close()。
+ * Releases an SSH tunnel when its associated JDBC Connection closes.
  *
- * <p>通过代理保证 JDBC Connection 首次关闭时同时释放隧道，避免 SSH Session 泄漏。</p>
- *
- * @author weifuwan
- * @since 2026-09-24
+ * <p>Uses a proxy so that the first Connection.close() releases the tunnel exactly once and avoids leaking the SSH session.
  */
 final class SshTunneledConnection {
 

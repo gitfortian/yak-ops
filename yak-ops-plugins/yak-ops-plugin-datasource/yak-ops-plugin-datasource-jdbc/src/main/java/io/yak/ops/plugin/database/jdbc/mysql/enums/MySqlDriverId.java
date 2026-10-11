@@ -3,20 +3,17 @@ package io.yak.ops.plugin.database.jdbc.mysql.enums;
 import java.util.Locale;
 
 /**
- * MySQL JDBC Driver 选择标识，同时拥有对应隔离 Driver Runtime 的目录和 Driver 类名。
- *
- * @author weifuwan
- * @since 2026-09-26
+ * Selects an isolated MySQL JDBC driver runtime and its driver class.
  */
 public enum MySqlDriverId {
 
-    /** 自动选择当前默认 Driver；当前等价于 MYSQL_8。 */
+    /** Selects the current default driver, equivalent to MYSQL_8. */
     AUTO("mysql/8", "com.mysql.cj.jdbc.NonRegisteringDriver"),
 
-    /** MySQL 8.x / 5.7.x 使用的 Connector/J 8.x Driver。 */
+    /** Selects Connector/J 8.x for MySQL 8.x and 5.7.x. */
     MYSQL_8("mysql/8", "com.mysql.cj.jdbc.NonRegisteringDriver"),
 
-    /** MySQL 5.5.x / 5.6.x 使用的 Connector/J 5.1.x Driver。 */
+    /** Selects Connector/J 5.1.x for MySQL 5.5.x and 5.6.x. */
     MYSQL_5("mysql/5", "com.mysql.jdbc.NonRegisteringDriver");
 
     private final String driverDirectory;

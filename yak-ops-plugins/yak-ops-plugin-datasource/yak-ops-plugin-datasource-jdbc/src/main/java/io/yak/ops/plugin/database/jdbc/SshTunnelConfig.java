@@ -3,20 +3,18 @@ package io.yak.ops.plugin.database.jdbc;
 import io.yak.ops.plugin.database.jdbc.enums.SshAuthType;
 
 /**
- * JDBC Provider 可选的 SSH 隧道连接配置。
+ * Carries optional SSH tunnel settings for a JDBC datasource provider.
  *
- * @param enabled 是否启用 SSH 隧道
- * @param host SSH Server 地址
- * @param port SSH Server 端口
- * @param username SSH 登录用户名
- * @param authType SSH 认证方式
- * @param password PASSWORD 模式使用的密码
- * @param privateKey PRIVATE_KEY 模式使用的私钥内容
- * @param passphrase 私钥 passphrase
- * @param strictHostKeyChecking 是否启用严格主机校验
- * @param knownHosts 严格主机校验使用的 known_hosts 内容
- * @author weifuwan
- * @since 2026-09-24
+ * @param enabled whether SSH tunneling is enabled
+ * @param host SSH server host
+ * @param port SSH server port
+ * @param username SSH login username
+ * @param authType authentication method
+ * @param password credential for PASSWORD authentication
+ * @param privateKey private-key contents for PRIVATE_KEY authentication
+ * @param passphrase private-key passphrase
+ * @param strictHostKeyChecking whether server host keys are strictly verified
+ * @param knownHosts known_hosts contents used for strict verification
  */
 public record SshTunnelConfig(
         boolean enabled,
@@ -30,7 +28,7 @@ public record SshTunnelConfig(
         boolean strictHostKeyChecking,
         String knownHosts) {
 
-    /** @return 关闭 SSH 隧道的默认配置 */
+    /** @return the default configuration with SSH tunneling disabled */
     public static SshTunnelConfig disabled() {
         return new SshTunnelConfig(false, null, 22, null, SshAuthType.PASSWORD, null, null, null, false, null);
     }

@@ -14,10 +14,7 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * MySQL JDBC Provider，拥有 MySQL 默认端口、Driver、JDBC URL 和连接属性规则。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Defines MySQL provider defaults for ports, driver selection, JDBC URLs and connection properties.
  */
 public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 

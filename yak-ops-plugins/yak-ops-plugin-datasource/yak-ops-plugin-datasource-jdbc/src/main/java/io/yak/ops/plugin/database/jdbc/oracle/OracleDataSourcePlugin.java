@@ -7,10 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Oracle JDBC Provider，直接消费原生 JDBC URL，并保留结构化历史连接的 Service Name URL 回退能力。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Consumes native Oracle JDBC URLs and retains a service-name URL fallback for legacy structured connection settings.
  */
 public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 

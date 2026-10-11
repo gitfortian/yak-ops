@@ -1,16 +1,13 @@
 package io.yak.ops.plugin.database.jdbc.enums;
 
 /**
- * SSH 登录认证方式。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Identifies the authentication mechanism for an SSH tunnel.
  */
 public enum SshAuthType {
 
-    /** 用户名 + 密码认证。 */
+    /** Authenticates using a username and password. */
     PASSWORD,
 
-    /** 用户名 + 私钥认证。 */
+    /** Authenticates using a username and private key. */
     PRIVATE_KEY
 }
