@@ -89,7 +89,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 }
             }
         } catch (Exception ignored) {
-            // If driver metadata is unavailable, keep the provider's known properties as editor suggestions without making discovery a connection prerequisite.
+            // If driver metadata is unavailable, keep the provider's known properties as editor suggestions without
+            // making discovery a connection prerequisite.
         }
 
         keys.removeIf(key -> !includeConnectionPropertyKey(key));
