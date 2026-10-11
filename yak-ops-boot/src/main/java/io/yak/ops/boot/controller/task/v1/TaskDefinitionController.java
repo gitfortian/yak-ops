@@ -60,8 +60,8 @@ public class TaskDefinitionController {
     @GetMapping("/{id}/parameters/hocon")
     public Result<String> exportHocon(@PathVariable String id) {
         DefinitionVO definition = service.query(id);
-        return Result.success(taskPluginRegistry.format(
-                definition.getTaskType(), definition.getParameters(), ParameterFormat.HOCON));
+        return Result.success(
+                taskPluginRegistry.format(definition.getTaskType(), definition.getParameters(), ParameterFormat.HOCON));
     }
 
     @GetMapping("/{id}/versions")
