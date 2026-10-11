@@ -1,28 +1,86 @@
-# Task Plugin Contract
+# Task Plugin and DATA_SYNC Pipeline Configuration
 
-Status: Active — Task Definition parameter registration, parsing and validation.
+Status: Active — Task Definition parameter schema v2.
 
-## Boundary
+## Stable ownership
 
-`TaskPluginFactory` and `TaskPluginRegistry` discover canonical plugin types via ServiceLoader.
-`TaskPlugin` owns local parameter parsing, normalization and type-specific definition validation.
-`TaskValidationContext` is a narrow, Workspace-scoped, read-only metadata capability supplied
-by Boot and backed by Datasource Business. Plugins receive no DAO, HTTP objects or secrets.
+- Task Business owns Task Definition identity, publication and immutable version transactions.
+- Task plugins interpret their own parameters, normalize using read-only Workspace-scoped metadata, and reject unsupported definitions.
+- `DATA_SYNC` is a Task plugin, not a YakFlow Connector. Its product parameters refer to **Datasource IDs and table names only**.
+- Connector-specific split sizes, fetch settings, CDC credentials and checkpoint tuning remain in YakFlow Core/Runtime/Connector internals.
+- `PipelineExecutor` / `JobClient` already exist in YakFlow Core; this scope introduces no new Client module, job submission or runtime integration.
 
-DefinitionService -> TaskPluginRegistry -> TaskPlugin -> read-only validation context.
+## Definition schema v2
 
-The only built-in task type today is `DATA_SYNC`. `SyncParameters` describes OFFLINE or REALTIME
-source and target tables, write mode and optional policy JSON. `SyncValidator` checks supported
-datasource types, source/target column compatibility and required primary keys.
+The canonical `TaskDefinitionVersion.parameters` is immutable JSON:
 
-The Task Business layer owns definition identity, version persistence, publication state and
-all transactions. Plugins never create Definition records or manage Task Instances.
+```json
+{
+  "source": {"type":"JDBC","datasourceId":"mysql-source","table":"orders"},
+  "transform": [],
+  "sink": {"type":"JDBC","datasourceId":"pg-target","table":"ods_orders","writeMode":"APPEND"}
+}
+```
 
-## Future Workflow boundary
+Source types: `JDBC` (bounded) and `MYSQL_CDC` (continuous). Sink type: `JDBC`.
+A single source and sink are required. No nonempty Transform or multiple stages are supported yet.
+CDC uses `UPSERT` and matching source/target primary keys; it is **not** equivalent to APPEND.
+OVERWRITE is excluded pending explicit execution/recovery semantics.
 
-A future WorkflowNode points to `(taskDefinitionId, taskDefinitionVersion)`.
-One Task Definition may be referenced multiple times. Workflow nodes have independent node IDs;
-editing a Task Definition does not silently advance versions inside published workflows.
+The source and sink Parameters classes live in `datasync/source/{jdbc,mysqlcdc}` and `datasync/sink/jdbc`.
+They must not duplicate `JdbcSourceOptions`, `MySqlCdcSourceConfig`, or other physical Connector config classes.
+New Connector product types add their own parameter type under the relevant stage package.
+Do not introduce speculative SourceFactory/SinkFactory interfaces or an execution Planner in the Task Plugin.
 
-No Workflow definition, instance, Task execution, Quartz scheduler, Worker or YakFlow
-execution adapter is implemented in this reset. Do not add placeholder SPIs.
+## User-facing HOCON
+
+```hocon
+source {
+  Jdbc {
+    datasource_id = "mysql-source"
+    table = "orders"
+  }
+}
+transform {}
+sink {
+  Jdbc {
+    datasource_id = "pg-target"
+    table = "ods_orders"
+    write_mode = "APPEND"
+  }
+}
+```
+
+`SyncHoconParser` and `SyncHoconFormatter` are input/output utilities only.
+HOCON and JSON both normalize to the same typed product parameters and canonical JSON snapshot.
+Only explicitly supplied `parametersFormat: "HOCON"` selects HOCON; default is JSON.
+`GET /api/v1/task-definitions/{id}/parameters/hocon` exports the current canonical snapshot.
+HOCON comments, whitespace, and key order do not change the executable Definition Version.
+
+HOCON is parsed **in memory only**. Includes from local files, classpath or URLs, substitutions,
+unsupported top-level keys (including `env`), unknown connector parameters, nonempty Transform,
+excessive input length/depth and inline credentials are rejected. Never call `ConfigFactory.load()`
+or resolve host environment variables for user-supplied configurations.
+
+The older flat DATA_SYNC parameter JSON is not a second canonical schema. Draft development
+definitions using parameter schema v1 must be recreated or explicitly migrated; they are not
+silently rewritten in place. There are no Flyway changes because `parameters` is already JSON
+and each new DATA_SYNC snapshot records `parameter_schema_version=2`.
+
+## HTTP and former editor
+
+The old `/api/v1/data-sync/tasks` Definition-only endpoints remain as an HTTP adapter to the
+same generic DefinitionService, without a second Business Service or persistence model.
+Runtime/Realtime/Retry tuning from the old editor is **not stored** in schema v2.
+Legacy realtime APPEND requests return an explicit HTTP 400 instead of silently switching
+to UPSERT; the frontend will need its own follow-up work to submit valid CDC definitions.
+Definition filtering reads `source.type`, `source.datasourceId` and `sink.datasourceId`
+through explicit safe JSON paths.
+
+## Future execution boundary
+
+A future, separately scoped product execution adapter resolves authorized Datasource resources
+into runtime-only Connector configurations and assembles a YakFlow Pipeline. YakFlow Runtime
+owns JobGraph, ExecutionGraph, readers, writers and checkpoint execution.
+Neither HOCON parsing nor Task Definition persistence constructs jobs or submits them.
+Workflow nodes reference stable `TaskDefinitionId + Version`, not an embedded Pipeline.

@@ -14,8 +14,8 @@ Status: Active — definition-only backend reset (v1.3 draft).
 ## Plugin validation
 
 `DefinitionService` calls `TaskPluginRegistry.validateDefinition` with trusted read-only `TaskValidationContext`.
-The DATA_SYNC plugin owns its parameter schema, datasource type rules, bound schema path and
-source/target table compatibility validation. The host supplies Workspace-checked datasource metadata,
+The DATA_SYNC plugin uses the Source / Transform / Sink pipeline parameter schema v2, with HOCON input and
+JDBC / MySQL CDC source/target table compatibility checks. The host supplies Workspace-checked datasource metadata,
 never database credentials. Unknown parameters and credential-bearing configuration are rejected.
 
 Each version is immutable and is uniquely identified by `(workspace_id, definition_id, version)`.
@@ -42,3 +42,12 @@ not silently repaired or migrated. Published v1.2 execution history is not carri
 No TaskInstance, Attempt, Scheduler, Quartz, Metrics, Log, Workflow entities, runtime submission or
 Master/Worker abstractions are introduced. YakFlow Core/Runtime/Connectors and the frontend are unchanged.
 The legacy frontend's Instance and Schedule pages are intentionally nonfunctional until rebuilt.
+
+## Configuration formats
+
+Canonical Task Definition payloads default to JSON. A create or update request may supply
+`parametersFormat: "HOCON"` for a DATA_SYNC pipeline; parsing happens inside SyncPlugin and the
+result is always normalized JSON before version comparison and persistence. A separate
+`GET /api/v1/task-definitions/{id}/parameters/hocon` returns human-readable HOCON without
+storing duplicate source text. DATA_SYNC parameter schema version 2 is frozen per Definition
+Version; old schema 1 snapshots are not silently rewritten or reinterpreted.
