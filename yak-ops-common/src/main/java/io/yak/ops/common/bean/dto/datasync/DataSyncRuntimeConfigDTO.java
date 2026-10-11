@@ -7,47 +7,44 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 离线同步任务的 YakFlow 运行参数。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Carries YakFlow runtime settings for an offline synchronization definition.
  */
 @Data
 public class DataSyncRuntimeConfigDTO {
 
-    /** 运行参数规划策略；历史配置缺失时由服务端按 FIXED 兼容。 */
+    /** Runtime planning policy; historical configurations without one fall back to FIXED. */
     private DataSyncRuntimePolicy policy;
 
-    /** JDBC 游标 Fetch Size。 */
+    /** JDBC cursor fetch size. */
     @NotNull(message = "Fetch Size 不能为空")
     @Min(value = 1, message = "Fetch Size 必须大于 0")
     @Max(value = 100000, message = "Fetch Size 不能超过 100000")
     private Integer fetchSize = 500;
 
-    /** Source 每次向 Runtime 输出的最大行数。 */
+    /** Maximum rows emitted by the Source in one runtime batch. */
     @NotNull(message = "读取批次大小不能为空")
     @Min(value = 1, message = "读取批次大小必须大于 0")
     @Max(value = 100000, message = "读取批次大小不能超过 100000")
     private Integer readBatchSize = 500;
 
-    /** Sink 每次提交的最大行数。 */
+    /** Maximum rows written by a Sink commit batch. */
     @NotNull(message = "写入批次大小不能为空")
     @Min(value = 1, message = "写入批次大小必须大于 0")
     @Max(value = 100000, message = "写入批次大小不能超过 100000")
     private Integer writeBatchSize = 500;
 
-    /** 动态分片目标行数；为空时不启用自动范围分片。 */
+    /** Target row count for dynamic range splitting; null disables automatic splitting. */
     @Min(value = 1, message = "Split Size 必须大于 0")
     @Max(value = 10000000, message = "Split Size 不能超过 10000000")
     private Long splitSize;
 
-    /** bounded Source Reader 并行度。 */
+    /** Parallelism of the bounded Source Reader. */
     @NotNull(message = "Source 并行度不能为空")
     @Min(value = 1, message = "Source 并行度必须大于 0")
     @Max(value = 16, message = "Source 并行度不能超过 16")
     private Integer sourceParallelism = 1;
 
-    /** JDBC 连接与语句超时秒数。 */
+    /** JDBC connection and statement timeout, in seconds. */
     @NotNull(message = "超时时间不能为空")
     @Min(value = 1, message = "超时时间必须大于 0")
     @Max(value = 600, message = "超时时间不能超过 600 秒")
