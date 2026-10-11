@@ -92,6 +92,18 @@ final class SyncDefinitionHttpMapper {
         vo.setTargetDatabase(value(p, "targetDatabase"));
         vo.setTargetSchema(value(p, "targetSchema"));
         vo.setTargetTable(value(p, "targetTable"));
+        if (p.hasNonNull("runtimeConfig")) {
+            vo.setRuntimeConfig(JSONUtils.parseObject(p.get("runtimeConfig").toString(),
+                    io.yak.ops.common.bean.vo.datasync.DataSyncRuntimeConfigVO.class));
+        }
+        if (p.hasNonNull("realtimeConfig")) {
+            vo.setRealtimeConfig(JSONUtils.parseObject(p.get("realtimeConfig").toString(),
+                    io.yak.ops.common.bean.vo.datasync.DataSyncRealtimeConfigVO.class));
+        }
+        if (p.hasNonNull("retryPolicy")) {
+            vo.setRetryPolicy(JSONUtils.parseObject(p.get("retryPolicy").toString(),
+                    io.yak.ops.common.bean.vo.datasync.DataSyncRetryPolicyVO.class));
+        }
         return vo;
     }
 
