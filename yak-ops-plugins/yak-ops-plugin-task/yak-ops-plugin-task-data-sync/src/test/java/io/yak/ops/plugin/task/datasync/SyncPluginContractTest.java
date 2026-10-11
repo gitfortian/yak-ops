@@ -5,127 +5,197 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.plugin.task.api.ParameterFormat;
+import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.api.TaskPluginFactory;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
+import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
+import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
-/** Tests plugin registration, canonical JSON, source boundedness and metadata-only validation. */
+/** Verifies stateless plugin discovery and independent local and physical validation boundaries. */
 class SyncPluginContractTest {
+
     private final TaskPluginRegistry registry = new TaskPluginRegistry();
 
     @Test
-    void discoversOnlyTheDeclaredTaskType() {
+    void discoversRegisteredPluginWithoutAnIntermediateFactory() {
         assertTrue(registry.types().contains("DATA_SYNC"));
-        assertEquals("DATA_SYNC", registry.get("data-sync").type());
+        assertInstanceOf(SyncPlugin.class, registry.get("DATA_SYNC"));
         assertEquals(2, registry.get("DATA_SYNC").parameterSchemaVersion());
+        assertThrows(TaskPluginException.class, () -> registry.get("data-sync"));
+        assertThrows(TaskPluginException.class, () -> registry.get("data_sync"));
+        assertThrows(TaskPluginException.class, () -> registry.get("SQL"));
+        assertThrows(TaskPluginException.class, () -> new TaskPluginRegistry(List.of(new SyncPlugin(), new SyncPlugin())));
     }
 
     @Test
-    void readsBoundedAndContinuousPipelineDefinitions() {
-        SyncParameters jdbc = assertInstanceOf(
-                SyncParameters.class, registry.parseParameters("DATA_SYNC", validJson(false)));
-        SyncParameters cdc = assertInstanceOf(
-                SyncParameters.class, registry.parseParameters("DATA_SYNC", validJson(true)));
-        assertEquals(DataSyncType.OFFLINE, jdbc.syncType());
-        assertEquals(DataSyncType.REALTIME, cdc.syncType());
+    void parsesJDBCAndMySqlCdcWithoutAddingExecutionState() {
+        SyncParameters jdbc = (SyncParameters) registry.parse("DATA_SYNC", offlineJson(), ParameterFormat.JSON);
+        SyncParameters cdc = (SyncParameters) registry.parse("DATA_SYNC", realtimeJson(), ParameterFormat.JSON);
+        assertInstanceOf(JdbcSourceParameters.class, jdbc.source());
+        assertInstanceOf(MySqlCdcSourceParameters.class, cdc.source());
         assertEquals("JDBC", JSONUtils.readTree(JSONUtils.toJson(jdbc)).path("source").path("type").asText());
         assertEquals("MYSQL_CDC", JSONUtils.readTree(JSONUtils.toJson(cdc)).path("source").path("type").asText());
+        assertEquals(3, JSONUtils.readTree(JSONUtils.toJson(jdbc)).size());
     }
 
     @Test
-    void rejectsUnsupportedAndObsoleteConfiguration() {
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters("DATA_SYNC", "{}"));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters("DATA_SYNC", "[ ]"));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters("DATA_SYNC", "{"));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("JDBC", "KAFKA")));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("\"transform\": []", "\"transform\":[{}]")));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("\"transform\": []", "\"runtimeConfig\":{}")));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(true).replace("UPSERT", "APPEND")));
-        assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("APPEND", "OVERWRITE")));
+    void rejectsUnsupportedModesAndUndeclaredParametersOnParse() {
+        for (String json : List.of(
+                "{}",
+                "[]",
+                "{",
+                offlineJson().replace("JDBC", "KAFKA"),
+                offlineJson().replace("\"transform\": []", "\"transform\": [{}]"),
+                offlineJson().replace("\"transform\": []", "\"runtimeConfig\": {}"),
+                offlineJson().replace("APPEND", "OVERWRITE"),
+                realtimeJson().replace("UPSERT", "APPEND"))) {
+            assertThrows(TaskPluginException.class, () -> registry.parse("DATA_SYNC", json, ParameterFormat.JSON));
+        }
     }
 
     @Test
-    void rejectsUnknownSecretsRatherThanEchoingInput() {
-        String json = validJson(false).replace("\"table\":\"orders\"",
-                "\"table\":\"orders\",\"password\":\"sensitive-value\"");
-        TaskPluginException error = assertThrows(
-                TaskPluginException.class, () -> registry.parseParameters("DATA_SYNC", json));
-        assertEquals("Invalid DATA_SYNC pipeline JSON", error.getMessage());
+    void rejectsSecretFieldsWithoutEchoingTheirValues() {
+        String json = offlineJson().replace(
+                "\"table\":\"orders\"", "\"table\":\"orders\",\"password\":\"private-value\"");
+        TaskPluginException exception = assertThrows(
+                TaskPluginException.class, () -> registry.parse("DATA_SYNC", json, ParameterFormat.JSON));
+        assertEquals("Invalid DATA_SYNC pipeline JSON", exception.getMessage());
     }
 
     @Test
-    void validatesSchemasAndNormalizesAuthorizedDatasourceDefaults() {
-        var p = assertInstanceOf(SyncParameters.class, registry.validateDefinition(
-                "DATA_SYNC", validJson(true), new Metadata(), "JSON"));
-        assertEquals(DataSyncType.REALTIME, p.syncType());
-        assertEquals("app", p.source().database());
-        assertEquals("ods", p.sink().schema());
-        TaskPluginException failure = assertThrows(TaskPluginException.class, () ->
-                registry.validateDefinition("DATA_SYNC", validJson(true), new Metadata() {
-                    @Override
-                    public TableSchema tableSchema(String id, String db, String schema, String table) {
-                        return id.equals("source") ? super.tableSchema(id, db, schema, table)
-                                : new TableSchema(List.of(new Column("other", LogicalTypes.INTEGER)), List.of("other"));
-                    }
-                }, "JSON"));
-        assertEquals("Source and target table schemas are incompatible", failure.getMessage());
+    void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
+        Metadata context = new Metadata();
+        SyncParameters parameters =
+                (SyncParameters) registry.validate("DATA_SYNC", realtimeJson(), ParameterFormat.JSON, context);
+        assertInstanceOf(MySqlCdcSourceParameters.class, parameters.source());
+        assertEquals(null, parameters.source().database());
+        assertEquals(null, parameters.sink().schema());
+        assertEquals("app", context.lastSourceTable.catalog());
+        assertEquals("ods", context.lastTargetTable.schema());
+
+        SyncParameters bounded =
+                (SyncParameters) registry.validate("DATA_SYNC", offlineJson(), ParameterFormat.JSON, context);
+        assertInstanceOf(JdbcSourceParameters.class, bounded.source());
     }
 
     @Test
-    void rejectsUnknownAndDuplicateFactories() {
-        assertThrows(TaskPluginException.class, () -> registry.get("SQL"));
-        assertThrows(TaskPluginException.class, () -> new TaskPluginRegistry(
-                List.of(new SyncPluginFactory(), new SyncPluginFactory())));
-        assertThrows(TaskPluginException.class, () -> new TaskPluginRegistry(List.of(new TaskPluginFactory() {
+    void rejectsConflictsWithDatasourceBoundDatabaseAndSchema() {
+        Metadata context = new Metadata();
+        String otherDatabase = offlineJson().replace(
+                "\"datasourceId\":\"source\",\"table\"", "\"datasourceId\":\"source\",\"database\":\"wrong_db\",\"table\"");
+        assertThrows(TaskPluginException.class,
+                () -> registry.validate("DATA_SYNC", otherDatabase, ParameterFormat.JSON, context));
+
+        String otherSchema = offlineJson().replace(
+                "\"datasourceId\":\"target\",\"table\"", "\"datasourceId\":\"target\",\"schema\":\"wrong_schema\",\"table\"");
+        assertThrows(TaskPluginException.class,
+                () -> registry.validate("DATA_SYNC", otherSchema, ParameterFormat.JSON, context));
+    }
+
+    @Test
+    void checksCrossDatabaseColumnAndPrimaryKeyCompatibility() {
+        Metadata wrong = new Metadata() {
+            @Override
+            public TableSchema tableSchema(String id, TableId tableId) {
+                if ("target".equals(id)) {
+                    return new TableSchema(List.of(new Column("other", LogicalTypes.INTEGER)), List.of("other"));
+                }
+                return super.tableSchema(id, tableId);
+            }
+        };
+        assertThrows(TaskPluginException.class,
+                () -> registry.validate("DATA_SYNC", realtimeJson(), ParameterFormat.JSON, wrong));
+    }
+
+    @Test
+    void registryParsesAndValidatesEachDefinitionExactlyOnce() {
+        AtomicInteger parses = new AtomicInteger();
+        AtomicInteger validations = new AtomicInteger();
+        TaskPlugin plugin = new TaskPlugin() {
             @Override
             public String type() {
-                return "SQL";
+                return "TEST";
             }
 
             @Override
-            public TaskPlugin create() {
-                return new SyncPlugin();
+            public int parameterSchemaVersion() {
+                return 1;
             }
-        })));
+
+            @Override
+            public TaskParameters parse(String content, ParameterFormat format) {
+                parses.incrementAndGet();
+                return new TaskParameters() {};
+            }
+
+            @Override
+            public void validate(TaskParameters parameters, TaskValidationContext context) {
+                validations.incrementAndGet();
+            }
+
+            @Override
+            public String format(TaskParameters parameters, ParameterFormat format) {
+                return "{}";
+            }
+        };
+        new TaskPluginRegistry(List.of(plugin)).validate("TEST", "{}", ParameterFormat.JSON, new Metadata());
+        assertEquals(1, parses.get());
+        assertEquals(1, validations.get());
     }
 
-    static String validJson(boolean cdc) {
+    static String offlineJson() {
         return """
                 {
-                  "source": {"type":"%s","datasourceId":"source","table":"orders"},
+                  "source": {"type":"JDBC","datasourceId":"source","table":"orders"},
                   "transform": [],
-                  "sink": {"type":"JDBC","datasourceId":"target","table":"orders_copy","writeMode":"%s"}
+                  "sink": {"type":"JDBC","datasourceId":"target","table":"orders_copy","writeMode":"APPEND"}
                 }
-                """.formatted(cdc ? "MYSQL_CDC" : "JDBC", cdc ? "UPSERT" : "APPEND");
+                """;
+    }
+
+    static String realtimeJson() {
+        return """
+                {
+                  "source": {"type":"MYSQL_CDC","datasourceId":"source","table":"orders"},
+                  "transform": [],
+                  "sink": {"type":"JDBC","datasourceId":"target","table":"orders_copy","writeMode":"UPSERT"}
+                }
+                """;
     }
 
     static class Metadata implements TaskValidationContext {
+        TableId lastSourceTable;
+        TableId lastTargetTable;
+
         @Override
         public DataSourceInfo dataSource(String id) {
-            return id.equals("source")
-                    ? new DataSourceInfo("MYSQL", "app", null)
-                    : new DataSourceInfo("POSTGRESQL", null, "ods");
+            if ("source".equals(id)) {
+                return new DataSourceInfo("MYSQL", "app", null);
+            }
+            return new DataSourceInfo("POSTGRE_SQL", null, "ods");
         }
 
         @Override
-        public TableSchema tableSchema(String id, String database, String schema, String table) {
+        public TableSchema tableSchema(String id, TableId tableId) {
+            if ("source".equals(id)) {
+                lastSourceTable = tableId;
+            } else {
+                lastTargetTable = tableId;
+            }
             return new TableSchema(
-                    List.of(new Column("id", LogicalTypes.BIGINT),
-                            new Column("name", LogicalTypes.STRING)),
+                    List.of(new Column("id", LogicalTypes.BIGINT), new Column("name", LogicalTypes.STRING)),
                     List.of("id"));
         }
     }
