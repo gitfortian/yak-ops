@@ -440,6 +440,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [taskStatus, setTaskStatus] = useState<DataSyncTaskStatus>("UNPUBLISHED");
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
+  const [parametersDirty, setParametersDirty] = useState(false);
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({ ...EMPTY_SCHEDULE });
   const [scheduleExists, setScheduleExists] = useState(false);
@@ -521,7 +522,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     setLoading(true);
     void Promise.all([
       getDataSyncTask(id),
-      realtime ? Promise.resolve(undefined) : getDataSyncSchedule(id),
+      realtime ? Promise.resolve(undefined) : getDataSyncSchedule(id).catch(() => undefined),
     ])
       .then(([task, schedule]) => {
         if (!active) return;
@@ -531,6 +532,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           return;
         }
         setTaskStatus(task.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED");
+        setParametersDirty(false);
         setForm({
           name: task.name,
           remark: task.remark || "",
@@ -567,8 +569,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     };
   }, [basePath, id, navigate, realtime, syncType]);
 
-  const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) =>
+  const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
+    if (key !== "name" && key !== "remark") setParametersDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
+  };
 
   const patchSchedule = (key: keyof ScheduleForm, value: string) =>
     setScheduleForm((current) => ({ ...current, [key]: value }));
@@ -589,7 +593,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     if (realtime) {
       return {
         ...common,
-        writeMode: "APPEND",
         syncType: "REALTIME",
       };
     }
@@ -632,10 +635,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     if (!canSave || saving) return;
     setSaving(true);
     try {
+      const request = payload();
       const saved =
         editing && id
-          ? await updateDataSyncTask(id, payload())
-          : await createDataSyncTask(payload());
+          ? await updateDataSyncTask(
+              id,
+              parametersDirty ? request : { name: request.name, remark: request.remark },
+            )
+          : await createDataSyncTask(request);
 
       if (!realtime && scheduleRequired) {
         try {
@@ -806,6 +813,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
+                  setParametersDirty(true);
                   setForm((current) => ({
                     ...current,
                     sourceDataSourceId: value,
@@ -824,6 +832,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
+                  setParametersDirty(true);
                   setForm((current) => ({
                     ...current,
                     targetDataSourceId: value,
@@ -844,21 +853,23 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               schema={form.sourceSchema}
               table={form.sourceTable}
               catalog={sourceCatalog}
-              onSchemaChange={(value) =>
+              onSchemaChange={(value) => {
+                setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
                   sourceSchema: value,
                   sourceTable: "",
-                }))
-              }
-              onTableChange={(table) =>
+                }));
+              }}
+              onTableChange={(table) => {
+                setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
                   sourceDatabase: current.sourceDatabase || table.database || "",
                   sourceSchema: current.sourceSchema || table.schema || "",
                   sourceTable: table.name,
-                }))
-              }
+                }));
+              }}
             >
               {realtime ? (
                 <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
@@ -874,17 +885,19 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               schema={form.targetSchema}
               table={form.targetTable}
               catalog={targetCatalog}
-              onSchemaChange={(value) =>
-                setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }))
-              }
-              onTableChange={(table) =>
+              onSchemaChange={(value) => {
+                setParametersDirty(true);
+                setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }));
+              }}
+              onTableChange={(table) => {
+                setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
                   targetDatabase: current.targetDatabase || table.database || "",
                   targetSchema: current.targetSchema || table.schema || "",
                   targetTable: table.name,
-                }))
-              }
+                }));
+              }}
             />
           </CollapseSection>
 

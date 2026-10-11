@@ -1,6 +1,13 @@
 import HttpUtils from "@/service/http/HttpUtils";
 import { BizError } from "@/service/http/request";
 
+import {
+  createDefinitionRequest,
+  definitionPageRequest,
+  toSyncTaskRecord,
+  updateDefinitionRequest,
+} from "./definition";
+
 import type {
   DataSyncAttemptRecord,
   DataSyncExecutionEventRecord,
@@ -19,19 +26,28 @@ import type {
   DataSyncTaskPageResult,
   DataSyncTaskRecord,
   DataSyncTaskSavePayload,
+  DataSyncTaskUpdatePayload,
   DataSyncTracePage,
   DataSyncTraceQuery,
   DataSyncTraceSummary,
+  TaskDefinitionPageResult,
+  TaskDefinitionRecord,
 } from "./types";
 
 export type * from "./types";
 
 const DATA_SYNC_API_PREFIX = "/api/v1/data-sync";
+const TASK_DEFINITION_API_PREFIX = "/api/v1/task-definitions";
 
-export const listDataSyncTasks = (
+export const listDataSyncTasks = async (
   params: DataSyncTaskPageParams,
-): Promise<DataSyncTaskPageResult> =>
-  HttpUtils.postData<DataSyncTaskPageResult>(`${DATA_SYNC_API_PREFIX}/tasks/page`, params);
+): Promise<DataSyncTaskPageResult> => {
+  const page = await HttpUtils.postData<TaskDefinitionPageResult>(
+    `${TASK_DEFINITION_API_PREFIX}/page`,
+    definitionPageRequest(params),
+  );
+  return { ...page, bizData: page.bizData.map(toSyncTaskRecord) };
+};
 
 export const listDataSyncOperationTasks = (
   params: DataSyncTaskPageParams,
@@ -49,20 +65,36 @@ export const getDataSyncOperationsDashboard = (
     payload,
   );
 
-export const getDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>
-  HttpUtils.getData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}`);
+export const getDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+  const definition = await HttpUtils.getData<TaskDefinitionRecord>(
+    `${TASK_DEFINITION_API_PREFIX}/${id}`,
+  );
+  return toSyncTaskRecord(definition);
+};
 
-export const createDataSyncTask = (payload: DataSyncTaskSavePayload): Promise<DataSyncTaskRecord> =>
-  HttpUtils.postData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks`, payload);
-
-export const updateDataSyncTask = (
-  id: string,
+export const createDataSyncTask = async (
   payload: DataSyncTaskSavePayload,
-): Promise<DataSyncTaskRecord> =>
-  HttpUtils.putData<DataSyncTaskRecord>(`${DATA_SYNC_API_PREFIX}/tasks/${id}`, payload);
+): Promise<DataSyncTaskRecord> => {
+  const definition = await HttpUtils.postData<TaskDefinitionRecord>(
+    TASK_DEFINITION_API_PREFIX,
+    createDefinitionRequest(payload),
+  );
+  return toSyncTaskRecord(definition);
+};
+
+export const updateDataSyncTask = async (
+  id: string,
+  payload: DataSyncTaskUpdatePayload,
+): Promise<DataSyncTaskRecord> => {
+  const definition = await HttpUtils.putData<TaskDefinitionRecord>(
+    `${TASK_DEFINITION_API_PREFIX}/${id}`,
+    updateDefinitionRequest(payload),
+  );
+  return toSyncTaskRecord(definition);
+};
 
 export const deleteDataSyncTask = async (id: string): Promise<void> => {
-  await HttpUtils.deleteData<boolean>(`${DATA_SYNC_API_PREFIX}/tasks/${id}`);
+  await HttpUtils.deleteData<boolean>(`${TASK_DEFINITION_API_PREFIX}/${id}`);
 };
 
 export const publishDataSyncTask = (id: string): Promise<DataSyncTaskRecord> =>

@@ -40,8 +40,9 @@ not silently repaired or migrated. Published v1.2 execution history is not carri
 ## Deliberate non-goals
 
 No TaskInstance, Attempt, Scheduler, Quartz, Metrics, Log, Workflow entities, runtime submission or
-Master/Worker abstractions are introduced. YakFlow Core/Runtime/Connectors and the frontend are unchanged.
-The legacy frontend's Instance and Schedule pages are intentionally nonfunctional until rebuilt.
+Master/Worker abstractions are introduced. YakFlow Core/Runtime/Connectors are unchanged.
+The DATA_SYNC frontend uses canonical Task Definition CRUD and projects pipeline JSON onto
+its existing single-table editor. Instance, Schedule, and execution pages remain out of scope.
 
 ## Configuration formats
 

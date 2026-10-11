@@ -73,7 +73,7 @@ The old `/api/v1/data-sync/tasks` Definition-only endpoints remain as an HTTP ad
 same generic DefinitionService, without a second Business Service or persistence model.
 Runtime/Realtime/Retry tuning from the old editor is **not stored** in schema v2.
 Legacy realtime APPEND requests return an explicit HTTP 400 instead of silently switching
-to UPSERT; the frontend will need its own follow-up work to submit valid CDC definitions.
+to UPSERT; the frontend now uses canonical Task Definition CRUD and sends UPSERT for CDC.
 Definition filtering reads `source.type`, `source.datasourceId` and `sink.datasourceId`
 through explicit safe JSON paths.
 
