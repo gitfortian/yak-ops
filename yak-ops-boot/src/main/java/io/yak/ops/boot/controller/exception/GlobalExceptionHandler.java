@@ -6,6 +6,7 @@ import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.common.result.Result;
+import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.security.enums.SecurityErrorCode;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import jakarta.validation.ConstraintViolationException;
@@ -30,6 +31,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class GlobalExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(TaskPluginException.class)
+    public ResponseEntity<Result<Void>> handleTaskParameters(TaskPluginException exception) {
+        // User-supplied HOCON and JSON errors must never log or return raw configuration values.
+        return ResponseEntity.badRequest().body(Result.fail(CommonErrorCode.PARAM_NOT_VALID));
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Result<Void>> handleBusinessException(BusinessException exception) {

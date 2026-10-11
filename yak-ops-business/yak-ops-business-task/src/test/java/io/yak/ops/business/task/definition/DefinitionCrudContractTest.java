@@ -86,7 +86,7 @@ class DefinitionCrudContractTest {
         CreateDefinitionDTO create = new CreateDefinitionDTO();
         create.setName("orders");
         create.setTaskType("DATA_SYNC");
-        create.setParameters("{\"sourceTable\":\"orders\"}");
+        create.setParameters(io.yak.ops.common.util.JSONUtils.toJson(java.util.Map.of("sourceTable", "orders")));
         assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
 
         UpdateDefinitionDTO rename = new UpdateDefinitionDTO();
@@ -104,6 +104,31 @@ class DefinitionCrudContractTest {
         assertEquals(2, service.publish(stored.getId(), "user-1").getDefinitionVersion());
         assertThrows(BusinessException.class, () -> service.update(stored.getId(), change, "user-1"));
         assertEquals(2, service.unpublish(stored.getId(), "user-1").getDefinitionVersion());
+    }
+
+
+    @Test
+    void hoconAndJsonWithTheSameNormalizedPipelineDoNotCreateAnotherVersion() {
+        WorkspaceContext.bind("ws");
+        CreateDefinitionDTO create = new CreateDefinitionDTO();
+        create.setName("orders");
+        create.setTaskType("DATA_SYNC");
+        create.setParameters(io.yak.ops.common.util.JSONUtils.toJson(java.util.Map.of("sourceTable", "orders")));
+        assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
+
+        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+                .thenReturn(new Parameters("orders"));
+        UpdateDefinitionDTO formatted = new UpdateDefinitionDTO();
+        formatted.setName("orders");
+        formatted.setParametersFormat("HOCON");
+        formatted.setParameters("source { Jdbc { table = orders } }");
+        assertEquals(1, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
+        assertEquals(1, snapshots.size());
+
+        when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
+                .thenReturn(new Parameters("orders_new"));
+        assertEquals(2, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
+        assertEquals(2, snapshots.size());
     }
 
     private void inject(String name, Object dependency) {

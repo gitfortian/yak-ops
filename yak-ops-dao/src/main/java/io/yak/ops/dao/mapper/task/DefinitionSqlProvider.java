@@ -3,8 +3,13 @@ package io.yak.ops.dao.mapper.task;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import java.util.Map;
 
-/** Prepared-parameter SQL for plugin-neutral indexed Task Definition list queries. */
+/** Typed product filters target nested canonical JSON paths; bound filter values remain parameters. */
 public final class DefinitionSqlProvider {
+    private static final Map<String, String> JSON_FILTER_PATHS = Map.of(
+            "sourceType", "$.source.type",
+            "sourceDataSourceId", "$.source.datasourceId",
+            "targetDataSourceId", "$.sink.datasourceId");
+
     private DefinitionSqlProvider() {}
 
     public static String selectDefinitionPage(Map<String, Object> args) {
@@ -23,10 +28,10 @@ public final class DefinitionSqlProvider {
             sql.append(" OR v.parameters LIKE CONCAT('%', #{filter.keyword}, '%'))");
         }
         for (String key : filter.parameterFilters().keySet()) {
-            // Business validates identifiers; quoted parameter paths cannot inject SQL.
-            if (!key.matches("[A-Za-z][A-Za-z0-9_]*")) throw new IllegalArgumentException("Invalid filter key");
-            sql.append(" AND JSON_UNQUOTE(JSON_EXTRACT(v.parameters, '$.");
-            sql.append(key)
+            String path = JSON_FILTER_PATHS.get(key);
+            if (path == null) throw new IllegalArgumentException("Unsupported definition parameter filter");
+            sql.append(" AND JSON_UNQUOTE(JSON_EXTRACT(v.parameters, '")
+                    .append(path)
                     .append("')) = #{filter.parameterFilters.")
                     .append(key)
                     .append("}");
