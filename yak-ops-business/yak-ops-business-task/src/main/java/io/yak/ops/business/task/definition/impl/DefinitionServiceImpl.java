@@ -51,7 +51,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(workspaceId, name, null);
         String type = TaskPluginRegistry.normalizeType(dto.getTaskType());
-        String parameters = validatedParameters(type, dto.getParameters(), dto.getParametersFormat());
+        String parameters = validatedParameters(type, dto.getParameters());
         DefinitionEntity definition = new DefinitionEntity();
         definition.setWorkspaceId(workspaceId);
         definition.setName(name);
@@ -74,7 +74,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
-            String updated = validatedParameters(definition.getTaskType(), dto.getParameters(), dto.getParametersFormat());
+            String updated = validatedParameters(definition.getTaskType(), dto.getParameters());
             String existing = currentVersion(definition).getParameters();
             if (!updated.equals(existing)) {
                 definition.setCurrentVersion(definition.getCurrentVersion() + 1);
@@ -143,7 +143,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         }
         Map<String, String> filters = dto.getParameterFilters() == null ? Map.of() : dto.getParameterFilters();
         if (filters.size() > 16
-                || filters.keySet().stream().anyMatch(k -> k == null || !k.matches("[A-Za-z][A-Za-z0-9_]*"))) {
+                || filters.keySet().stream().anyMatch(k -> k == null || !java.util.Set.of(
+                                "sourceType", "sourceDataSourceId", "targetDataSourceId").contains(k))) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
         DefinitionPageQuery filter = new DefinitionPageQuery(
@@ -200,15 +201,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         return vo;
     }
 
-    private String validatedParameters(String type, String text) {
-        return validatedParameters(type, text, "JSON");
-    }
-
-    private String validatedParameters(String type, String text, String format) {
-        if (format == null || "JSON".equalsIgnoreCase(format)) {
-            return JSONUtils.toJson(pluginRegistry.validateDefinition(type, text, validationContext));
-        }
-        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, text, validationContext, format));
+    private String validatedParameters(String type, String json) {
+        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, json, validationContext));
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {
