@@ -42,9 +42,12 @@ const metadataOnly = updateDefinitionRequest({ name: "renamed", remark: "new rem
 assert.equal(metadataOnly.parameters, undefined);
 assert.equal(JSON.parse(updateDefinitionRequest(offline).parameters).source.table, "orders");
 
-assert.deepEqual(definitionPageRequest({ pageNo: 1, pageSize: 20, syncType: "REALTIME" }).parameterFilters, {
-  sourceType: "MYSQL_CDC",
-});
+const realtimeFilters = definitionPageRequest({
+  pageNo: 1,
+  pageSize: 20,
+  syncType: "REALTIME",
+}).parameterFilters;
+assert.deepEqual(realtimeFilters, { sourceType: "MYSQL_CDC" });
 assert.deepEqual(
   definitionPageRequest({
     pageNo: 1,
@@ -73,15 +76,14 @@ assert.equal(result.syncType, "REALTIME");
 assert.equal(result.targetSchema, "public");
 assert.equal(result.definitionVersion, 2);
 
-assert.throws(() =>
-  toSyncTaskRecord({
-    id: "old",
-    name: "old",
-    taskType: "DATA_SYNC",
-    status: "UNPUBLISHED",
-    definitionVersion: 1,
-    parameterSchemaVersion: 1,
-    parameters: "{}",
-  }),
-);
+const oldDefinition = {
+  id: "old",
+  name: "old",
+  taskType: "DATA_SYNC",
+  status: "UNPUBLISHED",
+  definitionVersion: 1,
+  parameterSchemaVersion: 1,
+  parameters: "{}",
+};
+assert.throws(() => toSyncTaskRecord(oldDefinition));
 console.log("Data Sync Definition contract checks passed");
