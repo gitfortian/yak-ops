@@ -76,5 +76,53 @@ public class DefinitionServiceImpl implements DefinitionService {
                 .toList();
     }
 
-    // INTERNAL_HELPERS
+
+    private DefinitionEntity requireDefinition(String id, boolean forUpdate) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        return (forUpdate ? definitionRepository.queryByIdForUpdate(workspaceId, id)
+                        : definitionRepository.queryById(workspaceId, id))
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+    }
+
+    private DefinitionVO toVO(DefinitionEntity entity) {
+        DefinitionVersionEntity version = versionRepository
+                .queryCurrent(entity.getWorkspaceId(), entity.getId(), entity.getCurrentVersion())
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+        DefinitionVO vo = BeanCopyUtils.copy(entity, DefinitionVO.class);
+        vo.setStatus(entity.getStatus().name());
+        vo.setDefinitionVersion(entity.getCurrentVersion());
+        vo.setParameters(version.getParameters());
+        vo.setParameterSchemaVersion(version.getParameterSchemaVersion());
+        return vo;
+    }
+
+    private String validatedParameters(String type, String json) {
+        return JSONUtils.toJson(pluginRegistry.validateDefinition(type, json, validationContext));
+    }
+
+    private void appendVersion(DefinitionEntity entity, String json, String operator) {
+        DefinitionVersionEntity version = new DefinitionVersionEntity();
+        version.setWorkspaceId(entity.getWorkspaceId());
+        version.setDefinitionId(entity.getId());
+        version.setVersion(entity.getCurrentVersion());
+        version.setParameterSchemaVersion(pluginRegistry.get(entity.getTaskType()).parameterSchemaVersion());
+        version.setParameters(json);
+        version.initCreate(operator);
+        versionRepository.append(version);
+    }
+
+    private String requiredName(String name) {
+        String normalized = StringUtils.trimToNull(name);
+        if (normalized == null || normalized.length() > 128) {
+            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        }
+        return normalized;
+    }
+
+    private void checkNameAvailable(String workspaceId, String name, String excludeId) {
+        if (definitionRepository.existsByName(workspaceId, name, excludeId)) {
+            throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
+        }
+    }
+
 }
