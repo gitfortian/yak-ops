@@ -1,15 +1,32 @@
 # Task Plugin Rules
 
-Status: Active — Definition parameters and validation only.
+Status: Active — Task Definition parameter parsing and validation only.
 
-- Use ServiceLoader to register stable Task plugin types. Registry rejects unknown, duplicate and mismatched types.
-- JSON is the default parameter input format. Explicit HOCON input may be handled by plugins such as DATA_SYNC; canonical storage remains JSON.
-- Task Business owns Workspace, identity, versions and publication. The plugin provides typed parameters and metadata-only validation, not persistence or execution.
-- DATA_SYNC parameters are organized under `source/`, `sink/`, with one type-specific Parameters class per supported stage. Do not flatten JDBC, MySQL CDC or future Kafka/Doris options into a shared config package.
-- HOCON parsing and formatting belong exclusively to `datasync/hocon`; avoid generic Codec, Processor and Manager aliases. Do not parse user input through local files, remote URLs, includes or environment substitutions.
-- Only use Workspace-checked, read-only `TaskValidationContext`. Do not expose passwords, tokens, JDBC URLs, source connection objects or raw credentials in Definition parameters or log messages.
-- Source JDBC is bounded; Source MYSQL_CDC is continuous and requires UPSERT sink semantics with matching primary keys.
-- DATA_SYNC canonical v2 has one Source, empty Transform and one Sink; runtime tuning and retries are not part of the product parameters.
-- YakFlow Core/Runtime/Connectors exclusively own physical execution options; do not replicate their Configuration or source/sink writer classes in the Task Plugin.
-- Do not add a new Client module or an execution/Workflow SPI solely to parse HOCON. Existing PipelineExecutor and JobClient are the future submission boundary.
-- Each new task type or stage must have tests for unknown options, secrets and parameter-schema compatibility.
+## Ownership
+
+- `yak-ops-plugin-task-api` exposes the provider-neutral `TaskPlugin`, `TaskParameters`, `ParameterFormat`, `TaskPluginRegistry`, and resource validation contract.
+- Direct `ServiceLoader<TaskPlugin>` discovery registers one stateless plugin for one exact canonical type; no redundant Factory or inferred type aliases. Reject duplicates on startup.
+- The Registry only discovers providers and delegates parsing, validation and formatting. It never implements an extra parameter-validation flow.
+- The selected plugin checks local parameter structure once in `parse`, and authorized Workspace resource constraints once in `validate`. `validate` does not mutate or replace the submitted configuration.
+- Task Business alone owns Workspace, Definition identity, immutable versions and publishing. JSON remains the versioned storage format; HOCON is an explicit external format.
+- Keep cross-layer `DataSourceInfo` as a top-level record in the API validation package.
+
+## DATA_SYNC
+
+- Product parameter definitions live under `source/`, `sink/` and one `SyncParameters` pipeline. Current implementations are JDBC Source, MySQL CDC Source and JDBC Sink.
+- No one-class `source/jdbc`, `source/mysqlcdc` or `sink/jdbc` packages until the type owns enough implementation detail to warrant them.
+- HOCON input/output belong to `SyncHoconParser` and `SyncHoconFormatter`. Parsing constructs typed parameters directly; no ObjectNode → JSON String → second parse bridge.
+- Source JDBC is bounded; MySQL CDC is continuous and requires UPSERT with matching primary keys. Transform is empty and runtime/retry policy is not part of Definition parameters.
+- Resolve Datasource metadata only through trusted read-only `TaskValidationContext`; use Core `TableId` and `TableSchema` without JDBC URLs, passwords, access tokens or connections.
+- Reject user-provided Database/Schema conflicts with Datasource scope. Use the Datasource default solely to locate metadata when the user did not specify a value.
+- Query each physical table's Schema once for validation. Unknown database dialects should fail through actual Connector/Datasource capability rather than a duplicate type allowlist.
+- HOCON `include`, substitutions, unsupported stages/fields and credential-bearing options stay forbidden.
+
+## Code style
+
+- No generic `normalize/normalized` rewrite hooks; name each operation according to what it actually does.
+- No `?:` for Task Plugin business, parameter or resource selection; prefer direct `if` and `switch`.
+- No empty default methods, forwarding-only layers, redundant factories, speculative abstract base classes or duplicated validation calls.
+- Follow repository `JAVA_RULES.md` and `JAVA_COMMENT_RULES.md`: describe API contracts, not obvious getters or method names.
+- YakFlow Core/Runtime/Connectors own execution-time Options, Readers, Writers, JobGraph and Checkpoint. The Task Plugin does not build or execute jobs.
+- Do not introduce Client/Planner/Execution/Workflow modules in this refactor. Existing `PipelineExecutor` and `JobClient` remain the future submission boundary.
