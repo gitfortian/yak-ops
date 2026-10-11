@@ -30,10 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * JDBC 数据源插件基础实现，负责运行时插件元数据、连接参数、连通性及 SSH 驱动连接。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Provides JDBC datasource plugin metadata, parameter normalization, connectivity testing and SSH-aware connections.
  */
 public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
@@ -92,7 +89,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 }
             }
         } catch (Exception ignored) {
-            // Driver 元数据不可用时仍返回 Provider 已知属性，不能把高级参数下拉框变成运行时连接前置条件。
+            // If driver metadata is unavailable, keep the provider's known properties as editor suggestions without making discovery a connection prerequisite.
         }
 
         keys.removeIf(key -> !includeConnectionPropertyKey(key));

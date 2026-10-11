@@ -3,37 +3,34 @@ package io.yak.ops.plugin.datasource.api.plugin;
 import java.util.Map;
 
 /**
- * 插件解析并规范化后的数据源连接参数。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Stores normalized datasource connection parameters produced by a plugin.
  */
 public interface DataSourceConnection {
 
-    /** 插件稳定类型标识。 */
+    /** Stable identifier of the producing plugin. */
     String type();
 
-    /** 插件规范化后的连接地址。 */
+    /** Connection URL normalized by the plugin. */
     String jdbcUrl();
 
-    /** JDBC 驱动类；非 JDBC 插件可以为空。 */
+    /** JDBC driver class, or null for non-JDBC providers. */
     String driverClassName();
 
-    /** 连接用户名。 */
+    /** Connection authentication username. */
     String username();
 
-    /** 连接密码等敏感凭证。 */
+    /** Password or other sensitive connection credential. */
     String password();
 
-    /** 默认数据库名称。 */
+    /** Default database name. */
     String database();
 
-    /** Provider 可选的默认 Schema 上下文；并非所有数据源都把 Schema 作为连接字段。 */
+    /** Optional provider schema context; not all providers expose schema as a connection property. */
     String schema();
 
-    /** 插件附加连接属性。 */
+    /** Additional provider-specific connection properties. */
     Map<String, String> properties();
 
-    /** 可持久化并用于编辑回显的规范化 JSON。 */
+    /** Normalized JSON that may be stored and projected back into the edit form. */
     String normalizedJson();
 }

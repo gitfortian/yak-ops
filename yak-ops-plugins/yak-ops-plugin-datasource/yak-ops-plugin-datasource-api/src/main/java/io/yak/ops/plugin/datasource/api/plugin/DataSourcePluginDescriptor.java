@@ -10,17 +10,15 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * 数据源 Provider 的稳定运行时元数据。
+ * Describes stable runtime capabilities of a datasource provider.
  *
- * <p>Provider 自己声明 canonical type、aliases、capabilities 与敏感字段；核心模块不维护数据库类型枚举或 UI schema。</p>
+ * <p>The provider owns its canonical type, aliases, capabilities and secret fields; the platform does not duplicate database type enums or UI form schemas.
  *
- * @param type Provider canonical type
- * @param aliases 与 canonical type 等价的兼容类型名
- * @param apiVersion Datasource Plugin API 版本
- * @param capabilities Provider 当前实际支持的能力集合
- * @param secretFieldKeys Provider 特有的敏感连接字段名
- * @author weifuwan
- * @since 2026-09-25
+ * @param type canonical provider type
+ * @param aliases supported aliases of the canonical type
+ * @param apiVersion supported Datasource Plugin API version
+ * @param capabilities capabilities currently implemented by the provider
+ * @param secretFieldKeys provider-specific sensitive connection property names
  */
 public record DataSourcePluginDescriptor(
         String type,
@@ -29,7 +27,7 @@ public record DataSourcePluginDescriptor(
         Set<DataSourceCapability> capabilities,
         Set<String> secretFieldKeys) {
 
-    /** 当前运行时接受的 Datasource Plugin API 版本。 */
+    /** Datasource Plugin API version accepted by this runtime. */
     public static final String CURRENT_API_VERSION = "4";
 
     public DataSourcePluginDescriptor {
