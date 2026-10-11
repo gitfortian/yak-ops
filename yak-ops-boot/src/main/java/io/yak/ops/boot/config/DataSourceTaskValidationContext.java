@@ -3,14 +3,18 @@ package io.yak.ops.boot.config;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.TaskValidationContext;
+import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
 /**
- * Supplies Workspace-checked, read-only Datasource metadata to Task plugins.
- * Real credentials remain inside Datasource and are never passed to a Task plugin.
+ * Binds plugin validation to the caller's authorized Datasource and physical metadata.
+ *
+ * <p>Catalog access uses one lookup for each table. Credentials and connections are never
+ * passed to Task Plugins, and metadata failures are not swallowed as missing tables.
  */
 @Component
 public class DataSourceTaskValidationContext implements TaskValidationContext {
@@ -24,12 +28,11 @@ public class DataSourceTaskValidationContext implements TaskValidationContext {
     }
 
     @Override
-    public TableSchema tableSchema(String id, String database, String schema, String table) {
+    public TableSchema tableSchema(String datasourceId, TableId tableId) {
         DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(database);
-        path.setSchema(schema);
-        path.setTable(table);
-        dataSourceService.queryCatalogTable(id, path);
-        return dataSourceService.queryTableSchema(id, path);
+        path.setDatabase(tableId.catalog());
+        path.setSchema(tableId.schema());
+        path.setTable(tableId.table());
+        return dataSourceService.queryTableSchema(datasourceId, path);
     }
 }
