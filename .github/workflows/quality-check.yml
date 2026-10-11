@@ -63,11 +63,11 @@ jobs:
         if: steps.scope.outputs.backend == 'true'
         run: python3 scripts/verify_logging_rules.py
 
-      - name: YakFlow comment conventions
+      - name: Java comment conventions
         if: steps.scope.outputs.backend == 'true'
         run: |
-          python3 scripts/ci/test_verify_yakflow_comments.py
-          python3 scripts/ci/verify_yakflow_comments.py
+          python3 scripts/ci/test_verify_java_comments.py
+          python3 scripts/ci/verify_java_comments.py
 
       - name: Backend format
         if: steps.scope.outputs.backend == 'true'

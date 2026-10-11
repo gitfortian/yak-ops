@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate objective comment rules across all active YakFlow Core and Connector modules."""
+"""Validate objective Java comment conventions across migrated repository scopes."""
 
 from __future__ import annotations
 
@@ -15,7 +15,30 @@ MODULES = (
     ROOT / "yak-flow" / "yak-flow-connector-base",
     ROOT / "yak-flow" / "yak-flow-connector-jdbc",
     ROOT / "yak-flow" / "yak-flow-connector-cdc-mysql",
+    ROOT / "yak-ops-business" / "yak-ops-business-datasource",
+    ROOT / "yak-ops-business" / "yak-ops-business-task",
+    ROOT / "yak-ops-plugins" / "yak-ops-plugin-datasource" / "yak-ops-plugin-datasource-api",
+    ROOT / "yak-ops-plugins" / "yak-ops-plugin-datasource" / "yak-ops-plugin-datasource-jdbc",
+    ROOT / "yak-ops-plugins" / "yak-ops-plugin-task" / "yak-ops-plugin-task-api",
+    ROOT / "yak-ops-plugins" / "yak-ops-plugin-task" / "yak-ops-plugin-task-data-sync",
 )
+
+# Shared modules have multiple owners. Scan only the Datasource/Task API and persistence
+# packages; expanding to unrelated, not-yet-migrated Java packages is a separate change.
+EXTRA_SOURCE_ROOTS = tuple(
+    ROOT / module / "src" / "main" / "java" / "io" / "yak" / "ops" / owner / kind
+    for module, owner, kinds in (
+        ("yak-ops-common", "common/bean/dto", ("datasource", "datasync", "task")),
+        ("yak-ops-common", "common/bean/vo", ("datasource", "datasync", "task")),
+        ("yak-ops-common", "common/enums", ("datasource", "datasync", "task")),
+        ("yak-ops-dao", "dao/entity", ("datasource", "task")),
+        ("yak-ops-dao", "dao/mapper", ("datasource", "task")),
+        ("yak-ops-dao", "dao/repository", ("datasource", "task")),
+        ("yak-ops-boot", "boot/controller", ("datasource", "datasync", "task")),
+    )
+    for kind in kinds
+)
+
 CJK = re.compile(r"[\u3400-\u9fff]")
 JAVA_TYPE = r"(?:class|interface|enum|record)"
 
@@ -124,25 +147,29 @@ def check_source(source: str, filename: str, production: bool) -> list[tuple[int
 def main() -> int:
     failures = 0
     checked = 0
-    for module in MODULES:
-        for category in ("main", "test"):
-            base = module / "src" / category / "java"
-            if not base.is_dir():
-                continue
-            for path in sorted(base.rglob("*.java")):
-                checked += 1
-                relative = path.relative_to(ROOT)
-                try:
-                    issues = check_source(path.read_text(encoding="utf-8"), path.name, category == "main")
-                except (UnicodeError, ValueError) as error:
-                    issues = [(1, f"Unable to parse Java comments: {error}")]
-                for line, reason in issues:
-                    print(f"{relative}:{line}: {reason}", file=sys.stderr)
-                    failures += 1
+    source_roots = [
+        (module / "src" / category / "java", category == "main")
+        for module in MODULES
+        for category in ("main", "test")
+    ]
+    source_roots.extend((root, True) for root in EXTRA_SOURCE_ROOTS)
+    for base, production in source_roots:
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.java")):
+            checked += 1
+            relative = path.relative_to(ROOT)
+            try:
+                issues = check_source(path.read_text(encoding="utf-8"), path.name, production)
+            except (UnicodeError, ValueError) as error:
+                issues = [(1, f"Unable to parse Java comments: {error}")]
+            for line, reason in issues:
+                print(f"{relative}:{line}: {reason}", file=sys.stderr)
+                failures += 1
     if failures:
-        print(f"YakFlow comment check failed: {failures} issue(s) in {checked} Java files.", file=sys.stderr)
+        print(f"Java comment check failed: {failures} issue(s) in {checked} Java files.", file=sys.stderr)
         return 1
-    print(f"YakFlow comment conventions passed: checked {checked} Core/Runtime/Connector Java files.")
+    print(f"Java comment conventions passed: checked {checked} selected Java files.")
     return 0
 
 
