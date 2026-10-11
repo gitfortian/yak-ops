@@ -86,15 +86,13 @@ public final class SyncHoconParser {
                 case "write_mode" -> "writeMode";
                 default -> throw new TaskPluginException("Unsupported DATA_SYNC connector option");
             };
-            if (!source && key.equals("datasourceId") || key.equals("database") || key.equals("schema")
-                    || key.equals("table") || (!source && key.equals("writeMode"))) {
-                if (option.getValue().valueType() != ConfigValueType.STRING) {
-                    throw new TaskPluginException("DATA_SYNC connector option must be a string");
-                }
-                json.put(key, (String) option.getValue().unwrapped());
-            } else {
-                throw new TaskPluginException("Unsupported DATA_SYNC connector option");
+            if (source && key.equals("writeMode")) {
+                throw new TaskPluginException("Write mode belongs to the sink");
             }
+            if (option.getValue().valueType() != ConfigValueType.STRING) {
+                throw new TaskPluginException("DATA_SYNC connector option must be a string");
+            }
+            json.put(key, (String) option.getValue().unwrapped());
         }
         return json;
     }
