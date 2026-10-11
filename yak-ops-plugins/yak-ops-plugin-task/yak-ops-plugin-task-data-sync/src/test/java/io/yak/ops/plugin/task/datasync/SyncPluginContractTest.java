@@ -49,9 +49,9 @@ class SyncPluginContractTest {
         assertThrows(TaskPluginException.class, () -> registry.parseParameters(
                 "DATA_SYNC", validJson(false).replace("JDBC", "KAFKA")));
         assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("\"transform\":[]", "\"transform\":[{}]")));
+                "DATA_SYNC", validJson(false).replace("\"transform\": []", "\"transform\":[{}]")));
         assertThrows(TaskPluginException.class, () -> registry.parseParameters(
-                "DATA_SYNC", validJson(false).replace("\"transform\":[]", "\"runtimeConfig\":{}")));
+                "DATA_SYNC", validJson(false).replace("\"transform\": []", "\"runtimeConfig\":{}")));
         assertThrows(TaskPluginException.class, () -> registry.parseParameters(
                 "DATA_SYNC", validJson(true).replace("UPSERT", "APPEND")));
         assertThrows(TaskPluginException.class, () -> registry.parseParameters(

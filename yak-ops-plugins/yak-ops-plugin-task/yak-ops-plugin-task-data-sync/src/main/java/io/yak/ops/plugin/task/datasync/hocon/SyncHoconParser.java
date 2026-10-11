@@ -38,6 +38,10 @@ public final class SyncHoconParser {
             throw new TaskPluginException("Invalid DATA_SYNC HOCON size");
         }
         try {
+            // Substitutions are forbidden even inside quoted strings; no host environment is exposed.
+            if (hocon.contains("${")) {
+                throw new TaskPluginException("DATA_SYNC HOCON substitutions are not supported");
+            }
             Config config = ConfigFactory.parseString(hocon, OPTIONS);
             if (!config.isResolved()) {
                 throw new TaskPluginException("DATA_SYNC HOCON substitutions are not supported");
