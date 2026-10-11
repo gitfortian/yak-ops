@@ -5,10 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 数据源管理业务错误码。
- *
- * @author weifuwan
- * @since 2026-09-25
+ * Defines structured business error codes for datasource management.
  */
 @Getter
 @RequiredArgsConstructor

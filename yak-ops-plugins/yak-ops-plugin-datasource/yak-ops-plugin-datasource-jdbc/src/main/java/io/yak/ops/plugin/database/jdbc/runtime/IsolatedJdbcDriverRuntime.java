@@ -14,13 +14,9 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 通过独立 ClassLoader 加载版本化 JDBC Driver，避免同一 Vendor 的多个 Driver Jar 污染应用 ClassLoader。
+ * Loads versioned JDBC drivers with separate class loaders to isolate vendor driver JARs.
  *
- * <p>每个 runtimeId 在应用生命周期内只加载一次；Driver ClassLoader 只继承 JDK Platform ClassLoader，不继承 Yak Ops
- * 应用 ClassLoader。</p>
- *
- * @author weifuwan
- * @since 2026-09-26
+ * <p>Each runtimeId loads once per application lifetime; driver class loaders inherit only the JDK platform loader, not the Yak Ops application loader.
  */
 public final class IsolatedJdbcDriverRuntime {
 

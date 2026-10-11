@@ -8,10 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * PostgreSQL JDBC Provider，拥有默认端口、Driver、URL、属性规则和兼容类型别名；Schema 仅作为 Catalog 命名空间或 currentSchema 高级参数。
+ * Defines PostgreSQL provider defaults, driver, URL, properties and compatibility aliases.
  *
- * @author weifuwan
- * @since 2026-09-24
+ * <p>Schema belongs to Catalog namespaces or the optional currentSchema connection property.
  */
 public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 

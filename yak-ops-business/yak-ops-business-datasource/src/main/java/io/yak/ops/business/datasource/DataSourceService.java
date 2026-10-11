@@ -18,59 +18,56 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Datasource 管理对 Boot 暴露的唯一稳定 Service Contract。
+ * Defines the Datasource business boundary exposed to Boot.
  *
- * <p>负责数据源增删改查、分页查询和连接测试；数据库差异和连接参数解析通过内部 Plugin 能力完成。</p>
- *
- * @author weifuwan
- * @since 2026-09-25
+ * <p>Owns configuration CRUD, paged search and connectivity tests; delegates database-specific parameter handling to plugins.
  */
 public interface DataSourceService {
 
     /**
-     * 创建数据源并持久化规范化后的连接参数。
+     * Creates a datasource with normalized connection parameters.
      *
-     * @param dto 数据源配置
-     * @return 创建成功返回 true
+     * @param dto datasource configuration
+     * @return {@code true} after successful persistence
      */
     boolean addDataSource(DataSourceDTO dto);
 
     /**
-     * 更新已有数据源；当前不允许通过编辑操作修改数据源类型。
+     * Updates a datasource without changing its registered database type.
      *
-     * @param id 数据源 ID
-     * @param dto 更新后的数据源配置
-     * @return 更新成功返回 true
+     * @param id datasource identifier
+     * @param dto updated configuration
+     * @return {@code true} after a successful update
      */
     boolean updateDataSource(String id, DataSourceDTO dto);
 
-    /** 查询数据源详情，返回的敏感连接信息必须经过遮罩。 */
+    /** Returns datasource details with sensitive connection values masked. */
     DataSourceVO queryDataSource(String id);
 
     /**
-     * 查询指定 Provider 可推荐的高级连接参数名。
+     * Lists advanced connection-property names recommended by a provider.
      *
-     * @param dbType 数据源类型或兼容别名
-     * @return Provider 属性名候选项
+     * @param dbType provider type or supported alias
+     * @return candidate property names
      */
     DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType);
 
-    /** 查询已保存数据源可见的数据库列表。 */
+    /** Lists databases visible through the saved datasource connection. */
     List<String> queryCatalogDatabases(String id);
 
-    /** 查询已保存数据源指定数据库下可见的 Schema 列表。 */
+    /** Lists schemas visible under the selected database. */
     List<String> queryCatalogSchemas(String id, String database);
 
-    /** 查询已保存数据源的表 / 视图元数据。 */
+    /** Lists physical tables and views visible through the saved datasource. */
     List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
 
-    /** 精确查询已保存数据源指定表 / 视图的元数据；不存在时返回空。 */
+    /** Looks up table or view metadata; returns empty when the object does not exist. */
     Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto);
 
-    /** 精确查询已保存数据源指定表 / 视图的元数据；不存在时抛出业务异常。 */
+    /** Requires table or view metadata; throws a business exception if absent. */
     DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto);
 
-    /** 查询已保存数据源指定表的字段元数据。 */
+    /** Lists column metadata for the selected physical table. */
     List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
 
     /**
@@ -86,47 +83,47 @@ public interface DataSourceService {
     TableSchema queryTableSchema(String id, DataSourceTablePathDTO path);
 
     /**
-     * 为可信内部执行能力解析已保存数据源的真实运行时连接。
+     * Resolves the saved datasource into a trusted runtime connection.
      *
-     * <p>返回值包含敏感凭证，禁止发布为 HTTP API、序列化或记录。</p>
+     * <p>The result contains credentials and must never be exposed over HTTP, serialized or logged.
      */
     DataSourceConnection resolveRuntimeConnection(String id);
 
-    /** 删除指定数据源。 */
+    /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);
 
     /**
-     * 在同一事务中批量删除数据源；任意数据源不存在或删除失败时整体回滚。
+     * Deletes multiple datasources in one transaction; any missing ID or failure rolls back the operation.
      *
-     * @param dto 待删除的数据源 ID
-     * @return 全部删除成功返回 true
+     * @param dto identifiers to delete
+     * @return {@code true} only when all deletions succeed
      */
     boolean batchDeleteDataSources(DataSourceBatchIdsDTO dto);
 
-    /** 按当前分页 Contract 查询数据源列表。 */
+    /** Returns datasource records using the established paging contract. */
     PagingData<DataSourceVO> queryDataSourcePage(DataSourceQueryDTO dto);
 
     /**
-     * 测试已保存数据源连接，并同步更新其连接状态。
+     * Tests a saved datasource connection and persists the resulting connection status.
      *
-     * @param id 数据源 ID
-     * @return 连接成功返回 true
+     * @param id datasource identifier
+     * @return {@code true} on successful connectivity
      */
     boolean testConnection(String id);
 
     /**
-     * 批量测试已保存数据源连接；单个连接失败不会中断其他数据源测试。
+     * Tests saved datasource connections independently, without aborting the remaining items after one failure.
      *
-     * @param dto 待测试的数据源 ID
-     * @return 按请求顺序返回每个数据源的连接结果
+     * @param dto requested datasource identifiers
+     * @return connection results in request order
      */
     List<DataSourceBatchConnectTestResultVO> batchTestConnections(DataSourceBatchIdsDTO dto);
 
     /**
-     * 使用请求参数执行一次连接测试，不持久化新的数据源配置。
+     * Tests request-supplied connection parameters without persisting a datasource.
      *
-     * @param dto 连接测试参数
-     * @return 连接成功返回 true
+     * @param dto connection test input
+     * @return {@code true} on successful connectivity
      */
     boolean testConnection(DataSourceConnectTestDTO dto);
 }

@@ -5,32 +5,29 @@ import java.sql.Connection;
 import java.util.List;
 
 /**
- * 数据源插件稳定扩展契约，负责连接配置、连通性和 JDBC 连接创建。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Defines the datasource plugin SPI for connection settings, connectivity and JDBC connection creation.
  */
 public interface DataSourcePlugin {
 
-    /** 插件稳定类型标识，例如 MYSQL、POSTGRE_SQL。 */
+    /** Returns the stable provider type, such as MYSQL or POSTGRE_SQL. */
     String type();
 
-    /** @return Provider 的稳定运行时元数据 */
+    /** @return stable runtime metadata declared by this provider */
     DataSourcePluginDescriptor descriptor();
 
     /**
-     * 解析并规范化连接参数。
+     * Parses and normalizes provider connection parameters.
      *
-     * @param connectionJson 原始连接 JSON
-     * @return Provider 可直接使用的规范化连接对象
+     * @param connectionJson raw connection JSON
+     * @return connection parameters ready for use by the provider
      */
     DataSourceConnection parseConnection(String connectionJson);
 
     /**
-     * 执行一次连接可用性测试。
+     * Performs one connection availability test.
      *
-     * @param connection 已解析的连接参数
-     * @param timeoutSeconds 连接超时时间，单位秒
+     * @param connection normalized connection parameters
+     * @param timeoutSeconds connection timeout, in seconds
      */
     void testConnection(DataSourceConnection connection, int timeoutSeconds);
 
@@ -48,35 +45,35 @@ public interface DataSourcePlugin {
     Connection openConnection(DataSourceConnection connection, int timeoutSeconds) throws Exception;
 
     /**
-     * 返回当前 Provider 可推荐给高级参数编辑器的连接属性名。
+     * Lists provider-recommended connection properties for the advanced editor.
      *
-     * <p>这是轻量属性名发现能力，不是前端表单 Schema 或严格白名单；未知属性是否允许仍由 Provider 的连接参数规则决定。</p>
+     * <p>The list is discovery guidance, not a form schema or strict allowlist; the provider still validates unknown properties.
      *
-     * @return 稳定、去重后的连接属性名列表
+     * @return stable, distinct property names
      */
     default List<String> connectionPropertyKeys() {
         return List.of();
     }
 
     /**
-     * 返回产品界面展示使用的 JDBC 地址。
+     * Returns a JDBC URL suitable for product display.
      *
-     * <p>默认保持规范化 JDBC URL 不变；Provider 可以把独立连接属性投影到展示地址，但不得因此改变运行时连接对象。
+     * <p>The default is the normalized URL; a provider may include displayable advanced settings without modifying the runtime connection.
      *
-     * @param connection 已解析的连接参数
-     * @return 产品界面展示使用的 JDBC 地址
+     * @param connection normalized connection parameters
+     * @return display-only JDBC URL
      */
     default String displayJdbcUrl(DataSourceConnection connection) {
         return connection.jdbcUrl();
     }
 
-    /** 判断 Provider 是否显式声明指定能力。 */
+    /** Checks whether this provider explicitly advertises a capability. */
     default boolean supports(DataSourceCapability capability) {
         DataSourcePluginDescriptor value = descriptor();
         return value != null && value.supports(capability);
     }
 
-    /** 判断 JDBC URL 是否属于当前 Provider；非 JDBC Provider 可保持默认 false。 */
+    /** Checks whether a JDBC URL belongs to this provider; non-JDBC plugins may return false. */
     default boolean acceptsUrl(String jdbcUrl) {
         return false;
     }

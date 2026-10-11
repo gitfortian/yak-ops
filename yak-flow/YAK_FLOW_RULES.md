@@ -4,15 +4,6 @@ Status: Active
 
 Scope: `yak-ops-core`、`yak-flow/yak-flow-runtime`、`yak-flow/yak-flow-connector-base`、`yak-flow/yak-flow-connector-jdbc` 与 `yak-flow/yak-flow-connector-cdc-mysql`。先遵循 [Architecture](../ARCHITECTURE.md)、[Core Rules](../yak-ops-core/CORE_RULES.md) 和 [Core / Runtime Contract](../docs/capabilities/yak-flow/core-runtime-contract.md)。
 
-## JavaDoc and Comments
-
-Core, Runtime, Connector Base, and JDBC Connector all follow the same
-[YakFlow Javadoc and Comment Convention](../docs/capabilities/yak-flow/core-runtime-comment-rules.md).
-Use English comments, document public SPI method behavior and meaningful database, mailbox,
-checkpoint and resource-lifecycle guarantees, and avoid restating method names. The existing
-Backend Quality step checks all four modules for the objective rules; method semantics stay
-subject to code review.
-
 ## Module Boundary
 
 - Core 拥有 Source / Sink / Split / Transformation / Configuration / PipelineExecutor / JobClient 共享 API，不得依赖 Runtime。

@@ -3,17 +3,14 @@ package io.yak.ops.common.bean.vo.datasource;
 import lombok.Data;
 
 /**
- * 单个数据源的批量连接测试结果。
- *
- * @author weifuwan
- * @since 2026-09-26
+ * Represents the connectivity-test result of one datasource in a batch.
  */
 @Data
 public class DataSourceBatchConnectTestResultVO {
 
-    /** 数据源 ID。 */
+    /** Identifier of the tested datasource. */
     private String dataSourceId;
 
-    /** 是否连接成功。 */
+    /** Whether the connection test succeeded. */
     private boolean connected;
 }

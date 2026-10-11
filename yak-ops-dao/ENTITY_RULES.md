@@ -27,9 +27,6 @@ Owns:
 - 只有特殊映射、自动填充或逻辑删除等真实语义才使用 `@TableField / @TableLogic`。
 - 固定状态 / 类型优先使用枚举；枚举 Java 类型与 Flyway 中的真实存储格式必须一致。
 - 数值持久化枚举使用 Common 中声明 `@EnumValue` 的 `value` 字段自动读写，Entity 不保存裸 `Integer` 状态码，Repository / Business 不手动做枚举与数字转换。
-- Entity 类必须有中文 JavaDoc，并包含 `@author` 与 `@since`。
-- Entity 的持久化业务字段必须有中文 JavaDoc。
-- Entity 字段注释与 Flyway 对应字段 COMMENT 的业务语义保持一致。
 - 敏感字段必须使用 `@ToString.Exclude` 或等价机制，禁止凭证进入日志。
 - 表存在逻辑删除字段时使用 `@TableLogic`，删除语义必须与 Flyway 默认值一致。
 - Schema 变化时必须同步修改 Entity；Entity 变化涉及持久化结构时必须同步检查 Flyway。

@@ -18,17 +18,14 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * 处理 Datasource 连接参数中的敏感字段遮罩和编辑态密钥保留。
+ * Masks sensitive Datasource connection parameters and preserves unchanged credentials during editing.
  *
- * <p>Plugin descriptor 提供领域敏感字段，本类再叠加 password / token / private key 等通用规则；任何对外连接 JSON 都必须经过遮罩后返回。</p>
- *
- * @author weifuwan
- * @since 2026-09-24
+ * <p>Combines provider-declared secret fields with common password, token and private-key rules; external JSON must be masked.
  */
 @Component
 public class DataSourceSecretCodec {
 
-    /** Datasource 连接参数中跨 Provider 通用的敏感字段名。 */
+    /** Credential-related field names shared across datasource providers. */
     private static final Set<String> COMMON_SECRET_KEYS = Set.of(
             "password",
             "pwd",
@@ -42,11 +39,11 @@ public class DataSourceSecretCodec {
             "privatekeypassphrase");
 
     /**
-     * 递归遮罩连接 JSON 中的敏感字段，保持原 JSON 结构不变。
+     * Recursively masks credential fields without changing the JSON structure.
      *
-     * @param descriptor Plugin 元数据
-     * @param connectionJson 原始连接参数
-     * @return 可安全返回给前端的连接 JSON
+     * @param descriptor provider metadata
+     * @param connectionJson original connection parameters
+     * @return connection JSON safe to expose in the UI
      */
     public String maskConnectionJson(DataSourcePluginDescriptor descriptor, String connectionJson) {
         if (StringUtils.isBlank(connectionJson)) return null;
@@ -56,14 +53,14 @@ public class DataSourceSecretCodec {
     }
 
     /**
-     * 编辑数据源时，将空值或遮罩占位符恢复为已保存的密钥值。
+     * Restores stored secrets only for blank or masked credential fields submitted during editing.
      *
-     * <p>只有识别为敏感字段的值会被保留，普通字段始终以本次提交内容为准。</p>
+     * <p>All other fields take their values from the current submission.
      *
-     * @param descriptor Plugin 元数据
-     * @param submittedJson 本次提交的连接参数
-     * @param storedJson 已保存的连接参数
-     * @return 合并后的完整连接 JSON
+     * @param descriptor provider metadata
+     * @param submittedJson current connection payload
+     * @param storedJson previously saved connection payload
+     * @return merged connection JSON, including retained credentials
      */
     public String mergeStoredSecrets(DataSourcePluginDescriptor descriptor, String submittedJson, String storedJson) {
         ObjectNode submitted = readObject(submittedJson);
@@ -72,7 +69,7 @@ public class DataSourceSecretCodec {
         return write(submitted);
     }
 
-    /** 对 JDBC URL、异常消息等普通文本执行凭证遮罩。 */
+    /** Masks embedded credentials in JDBC URLs, exceptions and other text. */
     public String maskSensitiveText(String value) {
         return SensitiveUtils.mask(value);
     }

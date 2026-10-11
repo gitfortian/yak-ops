@@ -8,25 +8,23 @@ import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 
 /**
- * DATA_SYNC 任务专属的单表配置。名称、版本与发布状态归通用 TaskDefinition。
+ * Defines single-table parameters for the DATA_SYNC plugin; generic Task Definitions own name, versions and publication.
  *
- * <p>Runtime 与 Retry 只做 JSON 对象形状校验；Datasource 授权、物理 Schema 和执行策略仍由业务层负责。
+ * <p>Runtime and retry payloads must be JSON objects without credentials. Workspace authorization and physical schema access are delegated to the trusted host.
  *
- * @param syncType OFFLINE 有界同步或 REALTIME 持续同步
- * @param writeMode 目标写入模式；REALTIME 当前仅支持 APPEND
- * @param sourceDataSourceId 来源数据源稳定资源 ID，不包含连接凭证
- * @param sourceDatabase 来源数据库名称，缺少该层级时为空
- * @param sourceSchema 来源 Schema 名称，缺少该层级时为空
- * @param sourceTable 来源物理表名称
- * @param targetDataSourceId 目标数据源稳定资源 ID，不包含连接凭证
- * @param targetDatabase 目标数据库名称，缺少该层级时为空
- * @param targetSchema 目标 Schema 名称，缺少该层级时为空
- * @param targetTable 目标物理表名称
- * @param runtimeConfig 离线执行配置 JSON 对象
- * @param realtimeConfig 实时 CDC 配置 JSON 对象
- * @param retryPolicy 业务任务重试策略 JSON 对象
- * @author weifuwan
- * @since 2026-10-10
+ * @param syncType OFFLINE bounded sync or REALTIME continuous sync
+ * @param writeMode target mode; REALTIME currently allows APPEND only
+ * @param sourceDataSourceId stable source identifier without credentials
+ * @param sourceDatabase source database, absent when unsupported
+ * @param sourceSchema source schema, absent when unsupported
+ * @param sourceTable physical source table name
+ * @param targetDataSourceId stable target identifier without credentials
+ * @param targetDatabase target database, absent when unsupported
+ * @param targetSchema target schema, absent when unsupported
+ * @param targetTable physical target table name
+ * @param runtimeConfig optional offline execution settings JSON object
+ * @param realtimeConfig optional realtime CDC settings JSON object
+ * @param retryPolicy optional business retry settings JSON object
  */
 public record SyncParameters(
         DataSyncType syncType,

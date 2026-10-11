@@ -6,9 +6,14 @@ import lombok.Data;
 /** Immutable executable version for a future Workflow node reference. */
 @Data
 public class DefinitionVersionVO {
+    /** Stable identifier of the owning definition. */
     private String definitionId;
+    /** Immutable version number usable by future Workflow nodes. */
     private Integer version;
+    /** Plugin parameter schema version frozen with this definition version. */
     private Integer parameterSchemaVersion;
+    /** Persisted plugin-specific JSON snapshot for this version. */
     private String parameters;
+    /** Timestamp when the immutable version was created. */
     private LocalDateTime createTime;
 }

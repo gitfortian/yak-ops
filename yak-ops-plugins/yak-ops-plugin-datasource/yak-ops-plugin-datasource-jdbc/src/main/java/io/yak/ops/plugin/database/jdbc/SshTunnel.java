@@ -9,12 +9,9 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 为单次 JDBC 连接建立 SSH 本地端口转发。
+ * Establishes SSH local port forwarding for one JDBC connection.
  *
- * <p>隧道生命周期必须与 JDBC Connection 绑定释放；密码、私钥和 passphrase 只用于建立 SSH Session，不得写入日志。</p>
- *
- * @author weifuwan
- * @since 2026-09-24
+ * <p>The SSH tunnel must be released with its JDBC Connection; credentials, private keys and passphrases must never be logged.
  */
 final class SshTunnel implements AutoCloseable {
 

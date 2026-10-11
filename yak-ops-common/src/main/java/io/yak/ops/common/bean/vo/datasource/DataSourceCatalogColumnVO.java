@@ -3,41 +3,38 @@ package io.yak.ops.common.bean.vo.datasource;
 import lombok.Data;
 
 /**
- * 数据源 Catalog 字段元数据响应。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Exposes physical column metadata from a datasource Catalog.
  */
 @Data
 public class DataSourceCatalogColumnVO {
 
-    /** 数据库返回的物理字段名称，字段映射时保留原始大小写。 */
+    /** Database-native column name; preserve its original case for mappings. */
     private String name;
 
-    /** 数据库原生字段类型名称，例如 VARCHAR、NUMBER。 */
+    /** Native SQL type name returned by the database, such as VARCHAR or NUMBER. */
     private String typeName;
 
-    /** JDBC 标准类型编码，对应 java.sql.Types，用于跨数据库类型兼容判断。 */
+    /** Standard JDBC type code from {@link java.sql.Types} for cross-database compatibility checks. */
     private Integer jdbcType;
 
-    /** JDBC 元数据返回的字段长度或数值精度；驱动未提供时可能为空。 */
+    /** Column length or numeric precision supplied by the JDBC driver; may be null. */
     private Integer size;
 
-    /** 数值字段的小数位数；非数值字段或驱动未提供时可能为空。 */
+    /** Fractional precision of numeric columns; null for non-numeric or unspecified values. */
     private Integer scale;
 
-    /** 字段是否允许 NULL。 */
+    /** Whether the database column accepts NULL. */
     private Boolean nullable;
 
-    /** JDBC Catalog 中的字段物理顺序，用于稳定恢复表字段顺序。 */
+    /** Physical column ordinal reported by JDBC Catalog metadata. */
     private Integer ordinalPosition;
 
-    /** 字段是否属于主键。 */
+    /** Whether the column belongs to the table's primary key. */
     private Boolean primaryKey;
 
-    /** 复合主键顺序，对应 JDBC KEY_SEQ；非主键或驱动未提供时为空。 */
+    /** Composite primary-key position from JDBC KEY_SEQ; null for non-key or unspecified columns. */
     private Integer primaryKeyPosition;
 
-    /** 数据库字段备注或 Comment；数据库未配置时可能为空。 */
+    /** Optional database column description or comment. */
     private String remarks;
 }

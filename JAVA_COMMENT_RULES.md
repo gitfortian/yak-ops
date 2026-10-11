@@ -1,39 +1,50 @@
-# YakFlow Javadoc and Comment Convention
+# JavaDoc and Comment Convention
 
-Scope: `yak-ops-core/src/main/java/**`, `yak-flow/yak-flow-runtime/src/main/java/**`, `yak-flow/yak-flow-connector-base/src/main/java/**`, `yak-flow/yak-flow-connector-jdbc/src/main/java/**`, `yak-flow/yak-flow-connector-cdc-mysql/src/main/java/**`, and their Java tests.
+Scope: All repository-owned Java production and test sources.
 
-This file is the **YakFlow-wide override** to the `Comments and JavaDoc` section of `JAVA_RULES.md`. It applies uniformly to Core and **all modules under `yak-flow/`**, including Connector Base, JDBC Source/Sink, and MySQL CDC. All other Java rules, including Spotless, remain in effect. It follows Flink's `JavadocType`, `JavadocMethod`, `JavadocParagraph` and `JavadocStyle` practices without requiring filler documentation.
+This is the **single repository-wide JavaDoc and implementation comment convention**. It adopts the existing YakFlow/Flink-inspired standard for every Java module: comments explain contracts, invariants, ownership, and non-obvious behavior rather than restating names. `JAVA_RULES.md` and module rules own code design and formatting; they do not define alternative comment policies. Spotless + Palantir Java Format remains the sole mechanical Java formatter.
 
-The file path remains unchanged for existing references; `core-runtime` in the filename does **not** narrow its scope.
+Existing Java modules may be migrated incrementally. **New and modified comments must follow this standard**; migrating comments does not authorize changing executable behavior or source string literals.
 
-| Module | API documentation emphasis |
+| Boundary | Documentation emphasis |
 | --- | --- |
-| `yak-ops-core` | Source/Sink SPI, RowData/Schema contracts, configuration and lifecycle capabilities |
-| `yak-flow-runtime` | Task mailbox, graph construction, events, checkpoint, cancellation and ownership |
-| `yak-flow-connector-base` | Source fetch/emit handover, split progress and batch buffer/flush guarantees |
-| `yak-flow-connector-jdbc` | Factory/Catalog/Dialect/Converter SPI, JDBC Source enumeration/reading, Sink transaction and statement lifecycle |
-| `yak-flow-connector-cdc-mysql` | Debezium Binlog Reader, bounded handover, offset/checkpoint and schema-history recovery contracts |
+| Core, Runtime and Connectors | Public SPI, mailbox/thread ownership, source and sink lifecycle, checkpoint and recovery contracts |
+| Business services and Task plugins | Business invariants, workspace isolation, definition versions, plugin validation boundaries |
+| Datasource plugins | Connection ownership, credential handling, catalog metadata, JDBC/SSH lifecycles |
+| DAO and Entity | Persistence mapping, unique constraints, sensitive columns, transaction/query boundaries |
+| DTO, VO, request/response and model | Field semantics, enum codes, nullability, units, defaults, confidentiality and API compatibility |
+| HTTP controllers | Observable API constraints and non-obvious compatibility behavior, not endpoint annotations restated |
 
 ## Language
 
-- New and modified **Javadoc** and implementation comments use **English only**.
+- New and modified **JavaDoc** and implementation comments use **English only**, including DTO/VO/Entity field descriptions.
 - Preserve original Java identifiers, protocol names, API references, and formal names such as `Checkpoint`, `SourceReader`, `SinkWriter`, `Mailbox`, `KeyGroup`.
 - Do not translate log messages, exception text, data records, SQL, configuration keys or product-facing copy merely to satisfy comment conventions.
 - Correct outdated descriptions as part of changing the related API; **do not** claim unsupported Flink features, distributed execution, exactly-once, committer, or rescaling.
-- Existing, verifiable `@author` and `@since` provenance may remain. Do **not** invent a creator or creation date, or require these tags for any YakFlow module. Here, `@since` denotes an actual API version where known, not the edit date.
+- Existing, verifiable `@author` and `@since` provenance may remain. Do **not** invent a creator or creation date, or require these tags in any module. Here, `@since` denotes an actual API version where known, not the edit date.
 
 ## Type Javadoc
 
-Every repository-owned production **top-level class, interface, record, enum or annotation** has a Javadoc description. Meaningful nested public/protected types should also have it.
+Every repository-owned production **top-level class, interface, record, enum or annotation** has a Javadoc description. Test types may rely on descriptive test names; add a type comment only when it explains otherwise hidden intent. Meaningful nested public/protected types should also have it.
 
 A useful type comment identifies:
-- The owned responsibility and boundary (Core contract, Runtime mechanism, Connector Base primitive, or JDBC-specific implementation).
+- The owned responsibility and boundary (contract, application service, persistence, runtime or plugin implementation).
 - The important thread/lifecycle or mutable-state model when applicable.
 - Important supported/unsupported behavior that a caller could otherwise misunderstand.
+
+## Data model fields
+
+- Add concise field JavaDoc to repository-owned DTO, VO, Entity, persistent model and cross-layer request/response contracts when fields carry business meaning.
+- Document non-obvious nullability, units, enum/status codes, defaults, ordering, sensitive-data masking, and compatibility semantics; do not merely expand the field identifier into words.
+- Do not comment loggers, injected dependencies, ordinary implementation state or every accessor for completeness.
+- Persisted field descriptions must agree with the Flyway column meaning and the actual API representation.
 
 A one-sentence type comment is fine for a simple value type. Do not restate the Java type name or invent a paragraph merely to make the file look documented.
 
 ## Method Javadoc
+
+- **Application services and repositories**: describe important workspace scoping, transaction rollback, authentication/authorization, paging, updates, and failure guarantees. Do not restate obvious CRUD methods.
+- **Task and datasource plugin SPI**: document accepted inputs, normalization, validation, connection ownership, and exception semantics where behavior is not clear from the signature.
 
 - **Core public connector and execution APIs**: describe behavioral contracts, not just method names. Document non-obvious `@param`, `@return`, `@throws` and type parameters when they affect callers.
 - **Runtime public/protected entrypoints**: document significant lifecycle transitions, mailbox/thread confinement, `CompletableFuture` completion/failure, Checkpoint ACK/durability, and ownership of resources.
@@ -118,12 +129,13 @@ JobStatus getStatus();
 finished = true;
 ```
 
-## Guardrails and CI
+## Guardrails and verification
 
-- `scripts/ci/verify_yakflow_comments.py` already covers **all four modules**, including both JDBC and Connector Base, for the **objective subset**: no Chinese text in Java comment tokens and required production top-level type Javadoc. It deliberately ignores Chinese string literals and Java text blocks.
-- `Backend Quality` runs that checker as an **existing job step**, together with its regression self-tests. Do not create a second workflow/job or weaken Spotless.
-- Human review covers quality, accuracy, method contracts, stale details, misleading `@see` references and meaningless filler. Do not enforce subjective comment quality or demand tags on every getter with regex. A PR touching public SPI behavior must review the adjacent method JavaDoc.
-- Comment-only migrations must leave executable Java tokens and runtime behavior unchanged. Keep the original supported Checkpoint v1/v2 data formats intact.
+- `scripts/ci/verify_java_comments.py` checks objective rules: English-only Java comment tokens (not log strings, SQL, text blocks, or user-facing messages) and production top-level JavaDoc.
+- During staged adoption the existing Backend Quality step scans YakFlow/Core plus the migrated Datasource and Task modules and the related DTO/VO/DAO/Controller packages. Other Java modules follow the same **normative standard** immediately, but legacy comments outside this initial scan are migration debt rather than new exceptions.
+- `scripts/ci/test_verify_java_comments.py` guards scanner behavior. Keep a single comment checker; do not create a parallel workflow or change Spotless checks.
+- Human review covers correctness, method-level contracts, stale notes, misleading links and filler comments. Do not enforce subjective comment quality via regex.
+- Comment-only migrations must leave executable Java tokens, exception messages, logging text and runtime behavior unchanged.
 
 ## Source references
 

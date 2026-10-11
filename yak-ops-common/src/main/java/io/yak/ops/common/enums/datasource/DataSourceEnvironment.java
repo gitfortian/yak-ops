@@ -6,10 +6,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 数据源所属运行环境。
- *
- * @author weifuwan
- * @since 2026-09-25
+ * Classifies the operating environment assigned to a datasource.
  */
 @Getter
 @RequiredArgsConstructor

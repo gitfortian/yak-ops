@@ -7,24 +7,21 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 数据同步 Execution 的重试策略。
- *
- * @author weifuwan
- * @since 2026-09-29
+ * Defines retry settings for a data synchronization execution.
  */
 @Data
 public class DataSyncRetryPolicyDTO {
 
-    /** Retry Policy 模式；历史配置缺失时按 FIXED 兼容。 */
+    /** Retry policy mode; a missing value in historical configurations is treated as FIXED. */
     private DataSyncRetryPolicyMode mode;
 
-    /** 最大 Attempt 总数，包含首次执行；1 表示关闭自动重试。 */
+    /** Maximum attempt count including the first execution; 1 disables automatic retries. */
     @NotNull(message = "最大 Attempt 次数不能为空")
     @Min(value = 1, message = "最大 Attempt 次数不能小于 1")
     @Max(value = 10, message = "最大 Attempt 次数不能超过 10")
     private Integer maxAttempts = 1;
 
-    /** Attempt 失败后的固定等待秒数。 */
+    /** Fixed delay after a failed attempt, in seconds. */
     @NotNull(message = "Retry Backoff 不能为空")
     @Min(value = 0, message = "Retry Backoff 不能小于 0")
     @Max(value = 3600, message = "Retry Backoff 不能超过 3600 秒")

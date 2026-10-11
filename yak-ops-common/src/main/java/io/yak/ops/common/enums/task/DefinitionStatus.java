@@ -5,19 +5,16 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 通用任务定义的发布状态，与任务执行状态和同步类型相互独立。
- *
- * @author weifuwan
- * @since 2026-10-10
+ * Represents Task Definition publication independently of execution state and sync type.
  */
 @Getter
 @RequiredArgsConstructor
 public enum DefinitionStatus {
 
-    /** 定义已下线，不允许创建新的执行实例。 */
+    /** An unpublished definition cannot create new execution instances. */
     UNPUBLISHED(0),
 
-    /** 定义已上线，可按任务类型规则执行。 */
+    /** A published definition can execute according to its plugin rules. */
     PUBLISHED(1);
 
     @EnumValue

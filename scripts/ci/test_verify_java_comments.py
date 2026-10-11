@@ -3,15 +3,24 @@
 
 import unittest
 
-from verify_yakflow_comments import MODULES, check_source, scan_comments
+from verify_java_comments import EXTRA_SOURCE_ROOTS, MODULES, check_source, scan_comments
 
 
 class YakFlowCommentChecksTest(unittest.TestCase):
-    def test_all_yakflow_modules_are_scanned(self):
+    def test_all_migrated_modules_are_scanned(self):
         self.assertEqual(
-            ("yak-ops-core", "yak-flow-runtime", "yak-flow-connector-base", "yak-flow-connector-jdbc", "yak-flow-connector-cdc-mysql"),
+            ("yak-ops-core", "yak-flow-runtime", "yak-flow-connector-base", "yak-flow-connector-jdbc",
+             "yak-flow-connector-cdc-mysql", "yak-ops-business-datasource", "yak-ops-business-task",
+             "yak-ops-plugin-datasource-api", "yak-ops-plugin-datasource-jdbc",
+             "yak-ops-plugin-task-api", "yak-ops-plugin-task-data-sync"),
             tuple(path.name for path in MODULES),
         )
+
+    def test_shared_package_scopes_include_datasource_and_task(self):
+        paths = tuple(str(root) for root in EXTRA_SOURCE_ROOTS)
+        self.assertTrue(any(path.endswith("common/bean/dto/datasource") for path in paths))
+        self.assertTrue(any(path.endswith("dao/entity/task") for path in paths))
+        self.assertTrue(any(path.endswith("boot/controller/task") for path in paths))
 
     def test_ignores_chinese_literals_and_inline_urls(self):
         text = '''/** A documented type. */

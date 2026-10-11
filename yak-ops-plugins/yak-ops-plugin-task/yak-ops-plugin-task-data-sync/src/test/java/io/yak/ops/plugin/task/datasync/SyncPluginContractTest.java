@@ -14,10 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * DATA_SYNC Task Plugin 的类型注册、参数解析和基础校验测试。
- *
- * @author weifuwan
- * @since 2026-10-10
+ * Verifies DATA_SYNC plugin discovery, parameter parsing and local validation behavior.
  */
 class SyncPluginContractTest {
 
