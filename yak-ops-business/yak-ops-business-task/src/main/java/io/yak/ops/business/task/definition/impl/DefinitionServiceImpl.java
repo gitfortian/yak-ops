@@ -74,8 +74,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
-            String updated = validatedParameters(
-                    definition.getTaskType(), dto.getParameters(), dto.getParametersFormat());
+            String updated =
+                    validatedParameters(definition.getTaskType(), dto.getParameters(), dto.getParametersFormat());
             String existing = currentVersion(definition).getParameters();
             if (!updated.equals(existing)) {
                 definition.setCurrentVersion(definition.getCurrentVersion() + 1);
