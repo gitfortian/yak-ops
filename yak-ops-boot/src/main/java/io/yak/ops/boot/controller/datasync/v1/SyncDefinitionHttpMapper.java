@@ -53,5 +53,21 @@ final class SyncDefinitionHttpMapper {
         return dto;
     }
 
+
+    private static String parameters(DataSyncTaskDTO dto, String existing) {
+        ObjectNode target = existing == null ? JSONUtils.createObjectNode()
+                : (ObjectNode) JSONUtils.readTree(existing);
+        JsonNode input = JSONUtils.readTree(JSONUtils.toJson(dto));
+        for (String key : List.of("syncType", "writeMode", "sourceDataSourceId", "sourceDatabase",
+                "sourceSchema", "sourceTable", "targetDataSourceId", "targetDatabase",
+                "targetSchema", "targetTable")) {
+            if (input.has(key)) target.set(key, input.get(key));
+        }
+        for (String key : List.of("runtimeConfig", "realtimeConfig", "retryPolicy")) {
+            if (input.hasNonNull(key)) target.set(key, input.get(key));
+        }
+        return JSONUtils.toJson(target);
+    }
+
     // VIEW_AND_PARAMETERS
 }
