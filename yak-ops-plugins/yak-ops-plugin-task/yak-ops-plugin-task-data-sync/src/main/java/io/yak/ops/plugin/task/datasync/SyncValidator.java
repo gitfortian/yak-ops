@@ -70,8 +70,8 @@ final class SyncValidator {
         TableId sinkTable = tablePath(sinkInfo, sink.database(), sink.schema(), sink.table());
         TableSchema from = context.tableSchema(source.datasourceId(), sourceTable);
         TableSchema to = context.tableSchema(sink.datasourceId(), sinkTable);
-        boolean requireKeys = source instanceof MySqlCdcSourceParameters
-                || sink.writeMode() == DataSyncWriteMode.UPSERT;
+        boolean requireKeys =
+                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT;
         checkSchemaCompatibility(from, to, requireKeys);
     }
 

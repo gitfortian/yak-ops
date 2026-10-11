@@ -55,8 +55,7 @@ public final class SyncHoconFormatter {
         return ConfigFactory.parseMap(root).root().render(OUTPUT);
     }
 
-    private static Map<String, Object> tableOptions(
-            String datasourceId, String database, String schema, String table) {
+    private static Map<String, Object> tableOptions(String datasourceId, String database, String schema, String table) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("datasource_id", datasourceId);
         if (database != null) {
