@@ -113,7 +113,7 @@ class DefinitionCrudContractTest {
         CreateDefinitionDTO create = new CreateDefinitionDTO();
         create.setName("orders");
         create.setTaskType("DATA_SYNC");
-        create.setParameters("{\\"sourceTable\\":\\"orders\\"}");
+        create.setParameters(io.yak.ops.common.util.JSONUtils.toJson(java.util.Map.of("sourceTable", "orders")));
         assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
 
         when(registry.validateDefinition(eq("DATA_SYNC"), anyString(), eq(context), eq("HOCON")))
