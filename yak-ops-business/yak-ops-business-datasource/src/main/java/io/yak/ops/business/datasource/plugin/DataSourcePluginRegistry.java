@@ -30,12 +30,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Datasource Service 内部的 Plugin 发现、类型解析和能力路由机制。
+ * Discovers Datasource plugins, resolves provider types and routes their capabilities.
  *
- * <p>通过 ServiceLoader 注册当前运行时可用 Provider，并统一把 Plugin 异常映射为 DatasourceException；该组件不是 Boot 或 HTTP 的业务入口。</p>
- *
- * @author weifuwan
- * @since 2026-09-25
+ * <p>Loads providers from the runtime classpath and maps plugin failures to Datasource business errors; this is not an HTTP entrypoint.
  */
 @Component
 public class DataSourcePluginRegistry {
@@ -45,10 +42,10 @@ public class DataSourcePluginRegistry {
     @Resource
     private DataSourceSecretCodec secretCodec;
 
-    /** 按 canonical type 和兼容 alias 建立的只读 Plugin 路由表。 */
+    /** Immutable plugin lookup indexed by canonical type and supported aliases. */
     private Map<String, DataSourcePlugin> plugins = Collections.emptyMap();
 
-    /** 启动时发现并校验当前 classpath 中可用的 Datasource Provider。 */
+    /** Discovers and validates Datasource providers available on the application classpath at startup. */
     @PostConstruct
     public void initialize() {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();

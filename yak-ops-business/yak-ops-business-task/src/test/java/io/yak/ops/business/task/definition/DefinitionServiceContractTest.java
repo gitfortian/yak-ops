@@ -20,10 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * 通用 Task Definition 的 Workspace 隔离与真实历史版本查询合同。
- *
- * @author weifuwan
- * @since 2026-10-10
+ * Verifies Task Definition Workspace isolation and retrieval of immutable version history.
  */
 class DefinitionServiceContractTest {
 
