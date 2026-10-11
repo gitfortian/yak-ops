@@ -67,13 +67,13 @@ definitions using parameter schema v1 must be recreated or explicitly migrated; 
 silently rewritten in place. There are no Flyway changes because `parameters` is already JSON
 and each new DATA_SYNC snapshot records `parameter_schema_version=2`.
 
-## HTTP and former editor
+## HTTP
 
-The old `/api/v1/data-sync/tasks` Definition-only endpoints remain as an HTTP adapter to the
-same generic DefinitionService, without a second Business Service or persistence model.
-Runtime/Realtime/Retry tuning from the old editor is **not stored** in schema v2.
-Legacy realtime APPEND requests return an explicit HTTP 400 instead of silently switching
-to UPSERT; the frontend now uses canonical Task Definition CRUD and sends UPSERT for CDC.
+`TaskDefinitionController` exposes the single Definition HTTP contract under
+`/api/v1/task-definitions`. The former `/api/v1/data-sync/tasks` adapter has been removed.
+The frontend submits schema v2 pipeline JSON as a `parameters` string, with
+`MYSQL_CDC` and `UPSERT` for realtime definitions; publish/unpublish use the same API.
+Runtime/Realtime/Retry tuning from the former editor is **not stored** in schema v2.
 Definition filtering reads `source.type`, `source.datasourceId` and `sink.datasourceId`
 through explicit safe JSON paths.
 

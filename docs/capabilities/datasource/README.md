@@ -91,7 +91,7 @@ Datasource publishes read-only Catalog database / Schema / table / column APIs f
 
 For exact table discovery, DataSourceService exposes `queryCatalogTable(...)` on the existing HTTP product contract and the internal `queryTableSchema(...)` for Data Sync planning. Both delegate to `yak-flow-connector-jdbc` Catalog. Connector returns native table/column descriptions for UI display and canonical `TableSchema` for engine/validation; Datasource never converts JDBC type codes into a second LogicalType.
 
-Column metadata now preserves JDBC composite-primary-key order through `primaryKeyPosition` / `KEY_SEQ` in addition to the existing `primaryKey` membership flag. See [DataSourceController](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/controller/datasource/v1/DataSourceController.java) and [Datasource Rules](../../../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md) for the backend boundary. Summary and arbitrary SQL execution APIs remain outside this capability.
+Column metadata now preserves JDBC composite-primary-key order through `primaryKeyPosition` / `KEY_SEQ` in addition to the existing `primaryKey` membership flag. See [DataSourceController](../../../yak-ops-boot/src/main/java/io/yak/ops/boot/controller/DataSourceController.java) and [Datasource Rules](../../../yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md) for the backend boundary. Summary and arbitrary SQL execution APIs remain outside this capability.
 
 ## Frontend Structure
 

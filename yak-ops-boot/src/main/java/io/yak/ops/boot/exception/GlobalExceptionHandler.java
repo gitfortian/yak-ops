@@ -1,4 +1,4 @@
-package io.yak.ops.boot.controller.exception;
+package io.yak.ops.boot.exception;
 
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.common.CommonErrorCode;
