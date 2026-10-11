@@ -39,12 +39,12 @@ public class DataSourceSecretCodec {
             "privatekeypassphrase");
 
     /**
- * Recursively masks credential fields without changing the JSON structure.
- *
- * @param descriptor provider metadata
- * @param connectionJson original connection parameters
- * @return connection JSON safe to expose in the UI
- */
+     * Recursively masks credential fields without changing the JSON structure.
+     *
+     * @param descriptor provider metadata
+     * @param connectionJson original connection parameters
+     * @return connection JSON safe to expose in the UI
+     */
     public String maskConnectionJson(DataSourcePluginDescriptor descriptor, String connectionJson) {
         if (StringUtils.isBlank(connectionJson)) return null;
         ObjectNode root = readObject(connectionJson);
@@ -53,15 +53,15 @@ public class DataSourceSecretCodec {
     }
 
     /**
- * Restores stored secrets only for blank or masked credential fields submitted during editing.
- *
- * <p>All other fields take their values from the current submission.
- *
- * @param descriptor provider metadata
- * @param submittedJson current connection payload
- * @param storedJson previously saved connection payload
- * @return merged connection JSON, including retained credentials
- */
+     * Restores stored secrets only for blank or masked credential fields submitted during editing.
+     *
+     * <p>All other fields take their values from the current submission.
+     *
+     * @param descriptor provider metadata
+     * @param submittedJson current connection payload
+     * @param storedJson previously saved connection payload
+     * @return merged connection JSON, including retained credentials
+     */
     public String mergeStoredSecrets(DataSourcePluginDescriptor descriptor, String submittedJson, String storedJson) {
         ObjectNode submitted = readObject(submittedJson);
         ObjectNode stored = readObject(storedJson);

@@ -62,26 +62,26 @@ public class DataSyncTaskDTO {
     private String targetTable;
 
     /**
- * YakFlow runtime settings for OFFLINE tasks.
- *
- * <p>Optional on create (server defaults are materialized); omission on update retains the saved settings.
- */
+     * YakFlow runtime settings for OFFLINE tasks.
+     *
+     * <p>Optional on create (server defaults are materialized); omission on update retains the saved settings.
+     */
     @Valid
     private DataSyncRuntimeConfigDTO runtimeConfig;
 
     /**
- * YakFlow CDC settings for REALTIME tasks.
- *
- * <p>Optional on create (server defaults are materialized); omission on update retains the saved settings.
- */
+     * YakFlow CDC settings for REALTIME tasks.
+     *
+     * <p>Optional on create (server defaults are materialized); omission on update retains the saved settings.
+     */
     @Valid
     private DataSyncRealtimeConfigDTO realtimeConfig;
 
     /**
- * Fixed retry policy after execution failure.
- *
- * <p>Optional on create (server defaults are materialized); omission on update retains the saved policy.
- */
+     * Fixed retry policy after execution failure.
+     *
+     * <p>Optional on create (server defaults are materialized); omission on update retains the saved policy.
+     */
     @Valid
     private DataSyncRetryPolicyDTO retryPolicy;
 

@@ -25,31 +25,31 @@ import java.util.Optional;
 public interface DataSourceService {
 
     /**
- * Creates a datasource with normalized connection parameters.
- *
- * @param dto datasource configuration
- * @return {@code true} after successful persistence
- */
+     * Creates a datasource with normalized connection parameters.
+     *
+     * @param dto datasource configuration
+     * @return {@code true} after successful persistence
+     */
     boolean addDataSource(DataSourceDTO dto);
 
     /**
- * Updates a datasource without changing its registered database type.
- *
- * @param id datasource identifier
- * @param dto updated configuration
- * @return {@code true} after a successful update
- */
+     * Updates a datasource without changing its registered database type.
+     *
+     * @param id datasource identifier
+     * @param dto updated configuration
+     * @return {@code true} after a successful update
+     */
     boolean updateDataSource(String id, DataSourceDTO dto);
 
     /** Returns datasource details with sensitive connection values masked. */
     DataSourceVO queryDataSource(String id);
 
     /**
- * Lists advanced connection-property names recommended by a provider.
- *
- * @param dbType provider type or supported alias
- * @return candidate property names
- */
+     * Lists advanced connection-property names recommended by a provider.
+     *
+     * @param dbType provider type or supported alias
+     * @return candidate property names
+     */
     DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType);
 
     /** Lists databases visible through the saved datasource connection. */
@@ -83,47 +83,47 @@ public interface DataSourceService {
     TableSchema queryTableSchema(String id, DataSourceTablePathDTO path);
 
     /**
- * Resolves the saved datasource into a trusted runtime connection.
- *
- * <p>The result contains credentials and must never be exposed over HTTP, serialized or logged.
- */
+     * Resolves the saved datasource into a trusted runtime connection.
+     *
+     * <p>The result contains credentials and must never be exposed over HTTP, serialized or logged.
+     */
     DataSourceConnection resolveRuntimeConnection(String id);
 
     /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);
 
     /**
- * Deletes multiple datasources in one transaction; any missing ID or failure rolls back the operation.
- *
- * @param dto identifiers to delete
- * @return {@code true} only when all deletions succeed
- */
+     * Deletes multiple datasources in one transaction; any missing ID or failure rolls back the operation.
+     *
+     * @param dto identifiers to delete
+     * @return {@code true} only when all deletions succeed
+     */
     boolean batchDeleteDataSources(DataSourceBatchIdsDTO dto);
 
     /** Returns datasource records using the established paging contract. */
     PagingData<DataSourceVO> queryDataSourcePage(DataSourceQueryDTO dto);
 
     /**
- * Tests a saved datasource connection and persists the resulting connection status.
- *
- * @param id datasource identifier
- * @return {@code true} on successful connectivity
- */
+     * Tests a saved datasource connection and persists the resulting connection status.
+     *
+     * @param id datasource identifier
+     * @return {@code true} on successful connectivity
+     */
     boolean testConnection(String id);
 
     /**
- * Tests saved datasource connections independently, without aborting the remaining items after one failure.
- *
- * @param dto requested datasource identifiers
- * @return connection results in request order
- */
+     * Tests saved datasource connections independently, without aborting the remaining items after one failure.
+     *
+     * @param dto requested datasource identifiers
+     * @return connection results in request order
+     */
     List<DataSourceBatchConnectTestResultVO> batchTestConnections(DataSourceBatchIdsDTO dto);
 
     /**
- * Tests request-supplied connection parameters without persisting a datasource.
- *
- * @param dto connection test input
- * @return {@code true} on successful connectivity
- */
+     * Tests request-supplied connection parameters without persisting a datasource.
+     *
+     * @param dto connection test input
+     * @return {@code true} on successful connectivity
+     */
     boolean testConnection(DataSourceConnectTestDTO dto);
 }

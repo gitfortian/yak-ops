@@ -16,19 +16,19 @@ public interface DataSourcePlugin {
     DataSourcePluginDescriptor descriptor();
 
     /**
- * Parses and normalizes provider connection parameters.
- *
- * @param connectionJson raw connection JSON
- * @return connection parameters ready for use by the provider
- */
+     * Parses and normalizes provider connection parameters.
+     *
+     * @param connectionJson raw connection JSON
+     * @return connection parameters ready for use by the provider
+     */
     DataSourceConnection parseConnection(String connectionJson);
 
     /**
- * Performs one connection availability test.
- *
- * @param connection normalized connection parameters
- * @param timeoutSeconds connection timeout, in seconds
- */
+     * Performs one connection availability test.
+     *
+     * @param connection normalized connection parameters
+     * @param timeoutSeconds connection timeout, in seconds
+     */
     void testConnection(DataSourceConnection connection, int timeoutSeconds);
 
     /**
@@ -45,24 +45,24 @@ public interface DataSourcePlugin {
     Connection openConnection(DataSourceConnection connection, int timeoutSeconds) throws Exception;
 
     /**
- * Lists provider-recommended connection properties for the advanced editor.
- *
- * <p>The list is discovery guidance, not a form schema or strict allowlist; the provider still validates unknown properties.
- *
- * @return stable, distinct property names
- */
+     * Lists provider-recommended connection properties for the advanced editor.
+     *
+     * <p>The list is discovery guidance, not a form schema or strict allowlist; the provider still validates unknown properties.
+     *
+     * @return stable, distinct property names
+     */
     default List<String> connectionPropertyKeys() {
         return List.of();
     }
 
     /**
- * Returns a JDBC URL suitable for product display.
- *
- * <p>The default is the normalized URL; a provider may include displayable advanced settings without modifying the runtime connection.
- *
- * @param connection normalized connection parameters
- * @return display-only JDBC URL
- */
+     * Returns a JDBC URL suitable for product display.
+     *
+     * <p>The default is the normalized URL; a provider may include displayable advanced settings without modifying the runtime connection.
+     *
+     * @param connection normalized connection parameters
+     * @return display-only JDBC URL
+     */
     default String displayJdbcUrl(DataSourceConnection connection) {
         return connection.jdbcUrl();
     }
