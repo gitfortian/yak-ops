@@ -10,6 +10,7 @@ import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
+import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -32,6 +33,9 @@ public class TaskDefinitionController {
     @Resource
     private AuthenticationManager authenticationManager;
 
+    @Resource
+    private TaskPluginRegistry taskPluginRegistry;
+
     @PostMapping
     public Result<DefinitionVO> create(@Valid @RequestBody CreateDefinitionDTO dto) {
         return Result.success(service.create(dto, authenticationManager.getLoginUserId()));
@@ -50,6 +54,13 @@ public class TaskDefinitionController {
     @PostMapping("/page")
     public Result<PagingData<DefinitionVO>> page(@Valid @RequestBody DefinitionQueryDTO dto) {
         return Result.success(service.queryPage(dto));
+    }
+
+    @GetMapping("/{id}/parameters/hocon")
+    public Result<String> exportHocon(@PathVariable String id) {
+        DefinitionVO definition = service.query(id);
+        var plugin = taskPluginRegistry.get(definition.getTaskType());
+        return Result.success(plugin.formatParameters(plugin.parseParameters(definition.getParameters()), "HOCON"));
     }
 
     @GetMapping("/{id}/versions")
