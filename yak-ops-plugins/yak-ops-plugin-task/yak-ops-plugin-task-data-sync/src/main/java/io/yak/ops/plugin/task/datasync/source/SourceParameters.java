@@ -6,12 +6,12 @@ import io.yak.ops.plugin.task.datasync.source.jdbc.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.mysqlcdc.MySqlCdcSourceParameters;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
 
-/** Product-level Source selection, not a YakFlow Source configuration or connector factory. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
     @JsonSubTypes.Type(value = JdbcSourceParameters.class, name = "JDBC"),
     @JsonSubTypes.Type(value = MySqlCdcSourceParameters.class, name = "MYSQL_CDC")
 })
+/** Product-level Source selection, not a YakFlow Source configuration or connector factory. */
 public interface SourceParameters {
     String datasourceId();
     String database();
