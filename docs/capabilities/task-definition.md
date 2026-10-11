@@ -13,8 +13,8 @@ Status: Active — definition-only backend reset (v1.3 draft).
 
 ## Plugin validation
 
-`DefinitionService` calls `TaskPluginRegistry.validate` with a typed `ParameterFormat` and a read-only `TaskValidationContext`.
-The DATA_SYNC plugin uses the Source / Transform / Sink pipeline parameter schema v2, with HOCON input and
+`DefinitionService` calls `TaskPluginRegistry.validate` with JSON parameters and a read-only `TaskValidationContext`.
+The DATA_SYNC plugin uses the Source / Transform / Sink pipeline parameter schema v2, with
 JDBC / MySQL CDC source/target table compatibility checks. The host supplies Workspace-checked datasource metadata,
 never database credentials. Unknown parameters and credential-bearing configuration are rejected.
 
@@ -45,11 +45,11 @@ Master/Worker abstractions are introduced. YakFlow Core/Runtime/Connectors are u
 The DATA_SYNC frontend uses canonical Task Definition CRUD and projects pipeline JSON onto
 its existing single-table editor. Instance, Schedule, and execution pages remain out of scope.
 
-## Configuration formats
+## Configuration
 
-Canonical Task Definition payloads default to JSON. A create or update request may supply
-`parametersFormat: "HOCON"` for a DATA_SYNC pipeline; parsing happens inside SyncPlugin and the
-result is stored as canonical JSON before version comparison and persistence. A separate
-`GET /api/v1/task-definitions/{id}/parameters/hocon` returns human-readable HOCON without
-storing duplicate source text. DATA_SYNC parameter schema version 2 is frozen per Definition
-Version; old schema 1 snapshots are not silently rewritten or reinterpreted.
+Task Definition requests accept JSON only. The HTTP `parameters` field is a JSON string containing
+the plugin-specific configuration; the frontend serializes the pipeline object before sending.
+The Task Plugin parses and validates it once, and the Business layer stores the canonical JSON
+snapshot for immutable version comparison. Omitting `parameters` when editing name/remark keeps the
+current version. DATA_SYNC parameter schema version 2 is frozen per Definition Version; old
+schema 1 snapshots are not silently rewritten or reinterpreted.

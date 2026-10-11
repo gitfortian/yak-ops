@@ -18,7 +18,6 @@ import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
-import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
@@ -50,7 +49,7 @@ class DefinitionCrudContractTest {
         TaskPlugin plugin = mock(TaskPlugin.class);
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
-        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.JSON), eq(context)))
+        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(context)))
                 .thenAnswer(args -> new Parameters(io.yak.ops.common.util.JSONUtils
                         .readTree(args.getArgument(1)).path("sourceTable").asText()));
         when(definitions.add(any())).thenAnswer(args -> {
@@ -104,27 +103,22 @@ class DefinitionCrudContractTest {
         assertEquals(2, service.unpublish(stored.getId(), "user-1").getDefinitionVersion());
     }
 
-
     @Test
-    void hoconAndJsonWithTheSameParametersDoNotCreateAnotherVersion() {
+    void equivalentJsonDoesNotCreateAnotherVersion() {
         WorkspaceContext.bind("ws");
         CreateDefinitionDTO create = new CreateDefinitionDTO();
         create.setName("orders");
         create.setTaskType("DATA_SYNC");
-        create.setParameters(io.yak.ops.common.util.JSONUtils.toJson(java.util.Map.of("sourceTable", "orders")));
+        create.setParameters("{\"sourceTable\":\"orders\"}");
         assertEquals(1, service.create(create, "user-1").getDefinitionVersion());
 
-        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.HOCON), eq(context)))
-                .thenReturn(new Parameters("orders"));
         UpdateDefinitionDTO formatted = new UpdateDefinitionDTO();
         formatted.setName("orders");
-        formatted.setParametersFormat("HOCON");
-        formatted.setParameters("source { Jdbc { table = orders } }");
+        formatted.setParameters("{ \"sourceTable\" : \"orders\" }");
         assertEquals(1, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
         assertEquals(1, snapshots.size());
 
-        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(ParameterFormat.HOCON), eq(context)))
-                .thenReturn(new Parameters("orders_new"));
+        formatted.setParameters("{\"sourceTable\":\"orders_new\"}");
         assertEquals(2, service.update(stored.getId(), formatted, "user-1").getDefinitionVersion());
         assertEquals(2, snapshots.size());
     }

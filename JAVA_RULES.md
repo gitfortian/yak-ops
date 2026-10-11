@@ -250,13 +250,13 @@ Existing names such as `AuthenticationManager`, capability-specific exception ha
 
 These rules apply to new and modified Task Plugin API, DATA_SYNC configuration, and directly related Task Business wiring.
 
-- Prefer descriptive operations such as `parse`, `validate`, `format`, `checkResources` and `chooseNamespace`. Do not add catch-all `normalize()` / `normalized()` methods that silently rewrite user configurations.
+- Prefer descriptive operations such as `parse`, `validate`, `checkResources` and `chooseNamespace`. Do not add catch-all `normalize()` / `normalized()` methods that silently rewrite user configurations.
 - Do not use the conditional operator (`?:`) to select Source/Sink types, datasource namespaces, write modes or other Task Plugin business branches. Use explicit `if` / `else` or `switch` so unsupported cases remain visible.
 - Validate local syntax and fields once when the plugin parses; validate Workspace-owned physical resources once at the business boundary. Do not insert repeated validation loops or empty default hooks.
 - Do not override an explicitly selected Database / Schema with the Datasource bound values. Report conflicts, and use a bound value only for metadata lookup when the user omitted a value. Persist the user's original parameter meaning.
 - Do not create `interface + impl`, abstract classes or factories for a single trivial stateless implementation. A new abstraction must have real callers, shared behavior, independent state or a stable protocol.
 - Package by current responsibility; do not create a connector-specific one-class directory merely for possible future implementations.
-- Keep HOCON parsing within Task Plugin and physical Connector options inside YakFlow. Reuse Common string/JSON utilities and Core logical table identifiers rather than copying them.
+- Parse JSON parameters directly within Task Plugin, and keep physical Connector options inside YakFlow. Reuse Common string/JSON utilities and Core logical table identifiers rather than copying them.
 
 These conventions guide code review; do not add a blanket text-scanning CI rule that treats every occurrence of a word or operator as a correctness issue. Safety and API boundary validations remain mandatory.
 

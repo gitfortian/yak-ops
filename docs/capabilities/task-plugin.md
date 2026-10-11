@@ -32,35 +32,14 @@ They must not duplicate `JdbcSourceOptions`, `MySqlCdcSourceConfig`, or other ph
 New Connector product types add their own parameter type under the relevant stage package.
 Do not introduce speculative SourceFactory/SinkFactory interfaces or an execution Planner in the Task Plugin.
 
-## User-facing HOCON
+## JSON configuration
 
-```hocon
-source {
-  Jdbc {
-    datasource_id = "mysql-source"
-    table = "orders"
-  }
-}
-transform {}
-sink {
-  Jdbc {
-    datasource_id = "pg-target"
-    table = "ods_orders"
-    write_mode = "APPEND"
-  }
-}
-```
-
-`SyncHoconParser` reads HOCON directly into `SyncParameters`; `SyncHoconFormatter` exports it. No intermediate JSON conversion is needed.
-HOCON and JSON both normalize to the same typed product parameters and canonical JSON snapshot.
-Only explicitly supplied `parametersFormat: "HOCON"` selects HOCON; default is JSON.
-`GET /api/v1/task-definitions/{id}/parameters/hocon` exports the current canonical snapshot.
-HOCON comments, whitespace, and key order do not change the executable Definition Version.
-
-HOCON is parsed **in memory only**. Includes from local files, classpath or URLs, substitutions,
-unsupported top-level keys (including `env`), unknown connector parameters, nonempty Transform,
-excessive input length/depth and inline credentials are rejected. Never call `ConfigFactory.load()`
-or resolve host environment variables for user-supplied configurations.
+Task Definition accepts JSON only. The HTTP `parameters` field contains a serialized JSON
+string of the schema v2 pipeline above. The frontend uses `JSON.stringify` and the
+`SyncPlugin` parses it directly into `SyncParameters` through `JSONUtils`.
+Unknown connector fields (including embedded credentials), invalid JSON, nonempty Transform
+and unsupported Source/Sink types are rejected. The trusted Workspace validation
+context checks datasource ownership, table compatibility and required primary keys.
 
 The older flat DATA_SYNC parameter JSON is not a second canonical schema. Draft development
 definitions using parameter schema v1 must be recreated or explicitly migrated; they are not
@@ -82,12 +61,12 @@ through explicit safe JSON paths.
 A future, separately scoped product execution adapter resolves authorized Datasource resources
 into runtime-only Connector configurations and assembles a YakFlow Pipeline. YakFlow Runtime
 owns JobGraph, ExecutionGraph, readers, writers and checkpoint execution.
-Neither HOCON parsing nor Task Definition persistence constructs jobs or submits them.
+Neither Task Definition parsing nor persistence constructs jobs or submits them.
 Workflow nodes reference stable `TaskDefinitionId + Version`, not an embedded Pipeline.
 
 ## API and validation simplification
 
-`TaskPlugin` exposes `type`, `parameterSchemaVersion`, `parse`, `validate`, and `format`.
+`TaskPlugin` exposes `type`, `parameterSchemaVersion`, `parse`, and `validate`.
 `TaskPluginRegistry` discovers `ServiceLoader<TaskPlugin>` entries directly; it does not create
 plugins through `TaskPluginFactory` or silently accept aliases such as `data-sync`.
 

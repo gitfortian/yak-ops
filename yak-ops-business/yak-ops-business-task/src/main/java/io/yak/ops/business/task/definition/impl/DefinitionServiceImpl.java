@@ -20,7 +20,6 @@ import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
-import io.yak.ops.plugin.task.api.ParameterFormat;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import jakarta.annotation.Resource;
@@ -52,7 +51,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(workspaceId, name, null);
         String type = dto.getTaskType();
-        String parameters = validatedParameters(type, dto.getParameters(), dto.getParametersFormat());
+        String parameters = validatedParameters(type, dto.getParameters());
         DefinitionEntity definition = new DefinitionEntity();
         definition.setWorkspaceId(workspaceId);
         definition.setName(name);
@@ -75,8 +74,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         String name = requiredName(dto.getName());
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
-            String updated =
-                    validatedParameters(definition.getTaskType(), dto.getParameters(), dto.getParametersFormat());
+            String updated = validatedParameters(definition.getTaskType(), dto.getParameters());
             String existing = currentVersion(definition).getParameters();
             if (!updated.equals(existing)) {
                 definition.setCurrentVersion(definition.getCurrentVersion() + 1);
@@ -96,7 +94,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
-        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters(), "JSON");
+        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters());
         definition.setStatus(DefinitionStatus.PUBLISHED);
         definition.initUpdate(operatorId);
         definitionRepository.update(definition.getWorkspaceId(), definition);
@@ -215,16 +213,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         return vo;
     }
 
-    private String validatedParameters(String type, String parameters, String formatName) {
-        ParameterFormat format;
-        if (StringUtils.isBlank(formatName) || "JSON".equalsIgnoreCase(formatName)) {
-            format = ParameterFormat.JSON;
-        } else if ("HOCON".equalsIgnoreCase(formatName)) {
-            format = ParameterFormat.HOCON;
-        } else {
-            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
-        }
-        return JSONUtils.toJson(pluginRegistry.validate(type, parameters, format, validationContext));
+    private String validatedParameters(String type, String parameters) {
+        return JSONUtils.toJson(pluginRegistry.validate(type, parameters, validationContext));
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {
