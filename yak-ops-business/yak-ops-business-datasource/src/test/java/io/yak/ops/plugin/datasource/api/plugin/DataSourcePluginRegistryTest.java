@@ -1,12 +1,13 @@
 package io.yak.ops.plugin.datasource.api.plugin;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.impl.H2TestDataSourcePlugin;
+import io.yak.ops.spi.SpiRegistry;
 import java.sql.Connection;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -23,12 +24,13 @@ class DataSourcePluginRegistryTest {
     @Test
     void resolvesAliasesWithoutChangingGlobalRegistration() {
         DataSourcePlugin provider = provider("POSTGRE_SQL", Set.of("POSTGRES", "POSTGRESQL"));
-        Map<String, DataSourcePlugin> registered = DataSourcePluginRegistry.registerProviders(List.of(provider));
+        SpiRegistry<DataSourcePlugin> registered = DataSourcePluginRegistry.registerProviders(List.of(provider));
 
         assertSame(provider, registered.get("POSTGRE_SQL"));
         assertSame(provider, registered.get("POSTGRES"));
         assertSame(provider, registered.get("POSTGRESQL"));
-        assertThrows(UnsupportedOperationException.class, () -> registered.put("MYSQL", provider));
+        assertEquals(3, registered.types().size());
+        assertThrows(UnsupportedOperationException.class, () -> registered.types().add("MYSQL"));
         assertThrows(NoSuchElementException.class, () -> DataSourcePluginRegistry.get("UNREGISTERED_TYPE"));
     }
 

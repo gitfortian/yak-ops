@@ -49,9 +49,9 @@ class DefinitionCrudContractTest {
         TaskPlugin plugin = mock(TaskPlugin.class);
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
-        when(registry.validate(eq("DATA_SYNC"), anyString(), eq(context)))
+        when(plugin.parse(anyString()))
                 .thenAnswer(args -> new Parameters(io.yak.ops.common.util.JSONUtils
-                        .readTree(args.getArgument(1)).path("sourceTable").asText()));
+                        .readTree(args.getArgument(0)).path("sourceTable").asText()));
         when(definitions.add(any())).thenAnswer(args -> {
             stored = args.getArgument(0);
             return stored;

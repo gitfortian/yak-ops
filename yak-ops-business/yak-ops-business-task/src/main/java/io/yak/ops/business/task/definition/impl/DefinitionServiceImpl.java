@@ -20,6 +20,8 @@ import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
+import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import jakarta.annotation.Resource;
@@ -214,7 +216,10 @@ public class DefinitionServiceImpl implements DefinitionService {
     }
 
     private String validatedParameters(String type, String parameters) {
-        return JSONUtils.toJson(pluginRegistry.validate(type, parameters, validationContext));
+        TaskPlugin plugin = pluginRegistry.get(type);
+        TaskParameters parsed = plugin.parse(parameters);
+        plugin.validate(parsed, validationContext);
+        return JSONUtils.toJson(parsed);
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {

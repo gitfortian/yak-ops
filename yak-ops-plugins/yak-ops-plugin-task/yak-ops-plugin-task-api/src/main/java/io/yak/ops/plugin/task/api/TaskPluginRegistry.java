@@ -1,72 +1,70 @@
 package io.yak.ops.plugin.task.api;
 
-import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import io.yak.ops.spi.SpiRegistry;
 import java.util.List;
-import java.util.Map;
-import java.util.ServiceLoader;
+import java.util.NoSuchElementException;
 
 /**
- * Discovers stateless Task plugins through Java ServiceLoader and dispatches by exact type.
+ * Resolves exact Task plugin types through the shared SPI registration mechanism.
  *
- * <p>Each plugin owns parsing, local validation and resource validation. The registry
- * resolves only exact registered Task types and delegates validation to that plugin.
+ * <p>Plugins may be discovered from the classpath or supplied as constructed instances.
+ * Parameter parsing and resource validation remain the responsibility of each plugin.
  */
 public final class TaskPluginRegistry {
 
-    private final Map<String, TaskPlugin> plugins;
+    private final SpiRegistry<TaskPlugin> plugins;
 
+    /** Discovers Task plugins using their Java SPI registrations. */
     public TaskPluginRegistry() {
-        this(ServiceLoader.load(TaskPlugin.class, contextClassLoader()));
+        try {
+            plugins = SpiRegistry.load(TaskPlugin.class, TaskPluginRegistry::identifiers);
+        } catch (IllegalStateException exception) {
+            throw new TaskPluginException(exception.getMessage(), exception);
+        }
     }
 
-    /** Uses an explicit provider collection for deterministic registry tests. */
+    /**
+     * Registers explicitly constructed Task plugins.
+     *
+     * @param providers plugin instances, including plugins constructed with runtime dependencies
+     */
     public TaskPluginRegistry(Iterable<? extends TaskPlugin> providers) {
-        Map<String, TaskPlugin> discovered = new LinkedHashMap<>();
-        for (TaskPlugin plugin : providers) {
-            if (plugin == null || plugin.type() == null || plugin.type().isBlank()) {
-                throw new TaskPluginException("Task plugin type is required");
-            }
-            if (discovered.putIfAbsent(plugin.type(), plugin) != null) {
-                throw new TaskPluginException("Duplicate task plugin type: " + plugin.type());
-            }
+        try {
+            plugins = SpiRegistry.of(providers, TaskPluginRegistry::identifiers);
+        } catch (IllegalStateException exception) {
+            throw new TaskPluginException(exception.getMessage(), exception);
         }
-        plugins = Collections.unmodifiableMap(discovered);
     }
 
-    /** Lists the exact canonical Task types available in this application. */
+    /**
+     * Lists the exact registered Task types.
+     *
+     * @return registered Task type identifiers
+     */
     public List<String> types() {
-        return List.copyOf(plugins.keySet());
+        return List.copyOf(plugins.types());
     }
 
-    /** Requires the exact registered Task type; unknown aliases are rejected. */
+    /**
+     * Returns the plugin registered for the exact Task type.
+     *
+     * @param type registered Task type
+     * @return matching Task plugin
+     * @throws TaskPluginException if the type is not registered
+     */
     public TaskPlugin get(String type) {
-        TaskPlugin plugin = plugins.get(type);
-        if (plugin == null) {
-            throw new TaskPluginException("Unknown task plugin type");
+        try {
+            return plugins.get(type);
+        } catch (NoSuchElementException exception) {
+            throw new TaskPluginException("Unknown task plugin type", exception);
         }
-        return plugin;
     }
 
-    /** Parses and locally checks a definition without querying physical resources. */
-    public TaskParameters parse(String type, String content) {
-        return get(type).parse(content);
-    }
-
-    /** Parses once, then checks Workspace resources once, without rewriting user parameters. */
-    public TaskParameters validate(String type, String content, TaskValidationContext context) {
-        TaskPlugin plugin = get(type);
-        TaskParameters parameters = plugin.parse(content);
-        plugin.validate(parameters, context);
-        return parameters;
-    }
-
-    private static ClassLoader contextClassLoader() {
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        if (loader == null) {
-            return TaskPluginRegistry.class.getClassLoader();
+    private static List<String> identifiers(TaskPlugin plugin) {
+        String type = plugin.type();
+        if (type == null || type.isBlank()) {
+            throw new TaskPluginException("Task plugin type is required");
         }
-        return loader;
+        return List.of(type);
     }
 }

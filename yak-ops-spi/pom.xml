@@ -10,5 +10,12 @@
     </parent>
     <artifactId>yak-ops-spi</artifactId>
     <name>Yak Ops SPI</name>
-    <description>Stable extension contracts for Yak Ops datasource capabilities</description>
+    <description>Shared Java SPI discovery and immutable provider registration</description>
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
