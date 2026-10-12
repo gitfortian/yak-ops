@@ -14,7 +14,7 @@ Must:
 - Query Task list with `syncType = REALTIME`.
 - Source Datasource must be MySQL.
 - Target Datasource may be MySQL / PostgreSQL / Oracle.
-- Reuse the shared Data Sync Task Editor for Catalog and field mapping.
+- Reuse the shared Data Sync Task Editor for Datasource and Catalog-backed single-table selection.
 - Treat backend validation as the source of truth for exact Source/Target primary-key correspondence; do not reimplement the PK contract in frontend state.
 - Do not expose REALTIME engine tuning or Retry Policy in Task Editor. Ordinary save requests omit `realtimeConfig` / `retryPolicy`; backend-owned defaults and SMART Retry are product policy, while persisted Task / Execution snapshots remain observable facts.
 - Persisted REALTIME configuration remains part of the Task and Execution snapshots and may be shown read-only in details. Editor saves preserve values outside the editable definition.

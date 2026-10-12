@@ -119,7 +119,7 @@ class MailboxProcessorTest {
         processor.runMailboxLoop();
         processor.close(new IllegalStateException("finished"));
 
-        // Flink-style mailbox fairness: a self-enqueueing mail must not monopolize
+        // Mailbox fairness: a self-enqueueing mail must not monopolize
         // the Task thread. Every input step gets a turn, even with pending controls.
         assertEquals(java.util.List.of(
                 "mail", "input", "mail", "input", "mail", "input", "mail", "input"), sequence);
