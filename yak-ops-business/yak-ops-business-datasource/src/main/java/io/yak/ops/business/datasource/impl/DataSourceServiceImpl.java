@@ -101,7 +101,8 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
 
         String submitted = JSONUtils.toJson(dto.getConnectionParams());
-        String json = DataSourceCredentialUtils.retainOnUpdate(provider.descriptor(), submitted, existing.getConnectionParams());
+        String json = DataSourceCredentialUtils.retainOnUpdate(
+                provider.descriptor(), submitted, existing.getConnectionParams());
         DataSourceConnection connection = parseConnection(provider, json);
         existing.setName(name);
         existing.setJdbcUrl(connection.jdbcUrl());
@@ -243,8 +244,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             if (!dbType.equals(existing.getDbType())) {
                 throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "连接测试的数据源类型与已保存数据源不一致");
             }
-            connectionJson =
-                    DataSourceCredentialUtils.retainOnUpdate(provider.descriptor(), connectionJson, existing.getConnectionParams());
+            connectionJson = DataSourceCredentialUtils.retainOnUpdate(
+                    provider.descriptor(), connectionJson, existing.getConnectionParams());
         }
 
         try {
@@ -360,7 +361,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             DataSourceConnection connection = parseConnection(provider, source.getConnectionParams());
             target.setDatabase(connection.database());
             target.setSchema(connection.schema());
-            target.setDisplayJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), provider.displayJdbcUrl(connection)));
+            String displayUrl = provider.displayJdbcUrl(connection);
+            target.setDisplayJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), displayUrl));
         }
         if (source.getEnvironment() != null) {
             target.setEnvironment(source.getEnvironment().name());
@@ -370,7 +372,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             target.setConnStatus(source.getConnStatus().name());
         }
         if (includeOriginalJson) {
-            target.setOriginalJson(DataSourceCredentialUtils.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
+            target.setOriginalJson(
+                    DataSourceCredentialUtils.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
         }
         return target;
     }

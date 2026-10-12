@@ -71,7 +71,8 @@ public final class DataSourceCredentialUtils {
      * @param storedJson saved connection configuration containing current credentials
      * @return edited JSON with unchanged credentials restored from the saved configuration
      */
-    public static String retainOnUpdate(DataSourcePluginDescriptor descriptor, String submittedJson, String storedJson) {
+    public static String retainOnUpdate(
+            DataSourcePluginDescriptor descriptor, String submittedJson, String storedJson) {
         ObjectNode submitted = readObject(submittedJson);
         ObjectNode stored = readObject(storedJson);
         retainObject(submitted, stored, secretFields(descriptor));
@@ -214,11 +215,7 @@ public final class DataSourceCredentialUtils {
         } catch (IllegalArgumentException exception) {
             // A malformed encoded name is still checked using its literal characters.
         }
-        return name.trim()
-                .replace("_", "")
-                .replace("-", "")
-                .replace(".", "")
-                .toLowerCase(Locale.ROOT);
+        return name.trim().replace("_", "").replace("-", "").replace(".", "").toLowerCase(Locale.ROOT);
     }
 
     private static ObjectNode readObject(String value) {
