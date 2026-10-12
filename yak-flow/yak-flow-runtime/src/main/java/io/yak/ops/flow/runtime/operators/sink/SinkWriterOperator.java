@@ -183,8 +183,9 @@ public final class SinkWriterOperator<T> implements OneInputStreamOperator<T, Vo
     @Override
     public void finish() throws Exception {
         requireOpen();
-        writer.flush(true);
+        // A failed final flush can have committed externally. Never attempt it again in this Writer.
         finished = true;
+        writer.flush(true);
     }
 
     private void requireOpen() {
