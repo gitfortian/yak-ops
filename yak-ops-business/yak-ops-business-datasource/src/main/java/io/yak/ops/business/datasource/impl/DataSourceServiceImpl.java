@@ -3,7 +3,7 @@ package io.yak.ops.business.datasource.impl;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.security.DataSourceCredentials;
+import io.yak.ops.business.datasource.util.DataSourceCredentialUtils;
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
@@ -50,9 +50,6 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Resource
     private DataSourcePluginRegistry pluginRegistry;
-
-    @Resource
-    private DataSourceCredentials credentials;
 
     @Resource
     private DataSourceProperties properties;
@@ -104,7 +101,8 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
 
         String submitted = JSONUtils.toJson(dto.getConnectionParams());
-        String json = credentials.retainOnUpdate(provider.descriptor(), submitted, existing.getConnectionParams());
+        String json = DataSourceCredentialUtils.retainOnUpdate(
+                provider.descriptor(), submitted, existing.getConnectionParams());
         DataSourceConnection connection = parseConnection(provider, json);
         existing.setName(name);
         existing.setJdbcUrl(connection.jdbcUrl());
@@ -246,8 +244,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             if (!dbType.equals(existing.getDbType())) {
                 throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "连接测试的数据源类型与已保存数据源不一致");
             }
-            connectionJson =
-                    credentials.retainOnUpdate(provider.descriptor(), connectionJson, existing.getConnectionParams());
+            connectionJson = DataSourceCredentialUtils.retainOnUpdate(
+                    provider.descriptor(), connectionJson, existing.getConnectionParams());
         }
 
         try {
@@ -330,10 +328,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             return provider.parseConnection(json);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-                    credentials.maskText(provider.descriptor(), exception.getMessage()),
-                    exception);
+            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }
     }
 
@@ -345,10 +340,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             provider.testConnection(connection, timeoutSeconds);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.CONNECT_FAILED,
-                    credentials.maskText(provider.descriptor(), exception.getMessage()),
-                    exception);
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
         }
     }
 
@@ -356,20 +348,21 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (exception instanceof DataSourceException dataSourceException) {
             return dataSourceException;
         }
-        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, exception.getMessage(), exception);
+        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {
         DataSourceVO target =
                 BeanCopyUtils.copy(source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
         DataSourcePlugin provider = plugin(source.getDbType());
-        target.setJdbcUrl(credentials.maskText(provider.descriptor(), source.getJdbcUrl()));
+        target.setJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), source.getJdbcUrl()));
         target.setDisplayJdbcUrl(target.getJdbcUrl());
         if (StringUtils.isNotBlank(source.getConnectionParams())) {
             DataSourceConnection connection = parseConnection(provider, source.getConnectionParams());
             target.setDatabase(connection.database());
             target.setSchema(connection.schema());
-            target.setDisplayJdbcUrl(credentials.maskText(provider.descriptor(), provider.displayJdbcUrl(connection)));
+            String displayUrl = provider.displayJdbcUrl(connection);
+            target.setDisplayJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), displayUrl));
         }
         if (source.getEnvironment() != null) {
             target.setEnvironment(source.getEnvironment().name());
@@ -379,7 +372,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             target.setConnStatus(source.getConnStatus().name());
         }
         if (includeOriginalJson) {
-            target.setOriginalJson(credentials.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
+            target.setOriginalJson(
+                    DataSourceCredentialUtils.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
         }
         return target;
     }

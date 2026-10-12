@@ -1,18 +1,20 @@
-package io.yak.ops.business.datasource.security;
+package io.yak.ops.business.datasource.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.yak.ops.business.datasource.exception.DataSourceException;
+import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** Verifies secret redaction and credential retention at the datasource edit boundary. */
-class DataSourceCredentialsTest {
+class DataSourceCredentialUtilsTest {
 
-    private final DataSourceCredentials credentials = new DataSourceCredentials();
     private final DataSourcePluginDescriptor descriptor = new DataSourcePluginDescriptor(
             "MYSQL", Set.of(), DataSourcePluginDescriptor.CURRENT_API_VERSION, Set.of(), Set.of("apiCredential"));
 
@@ -27,7 +29,7 @@ class DataSourceCredentialsTest {
                 }
                 """;
 
-        String result = credentials.maskForDisplay(descriptor, json);
+        String result = DataSourceCredentialUtils.maskForDisplay(descriptor, json);
         assertFalse(result.contains("database-secret"));
         assertFalse(result.contains("url-secret"));
         assertFalse(result.contains("access-secret"));
@@ -43,7 +45,7 @@ class DataSourceCredentialsTest {
     @Test
     void masksCredentialsInsideOracleJdbcDescriptors() {
         String url = "jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=oracle-secret)))";
-        String result = credentials.maskText(descriptor, url);
+        String result = DataSourceCredentialUtils.maskText(descriptor, url);
 
         assertFalse(result.contains("oracle-secret"));
         assertTrue(result.contains("PASSWORD=******"));
@@ -62,7 +64,7 @@ class DataSourceCredentialsTest {
                 }
                 """;
 
-        var result = JSONUtils.readTree(credentials.retainOnUpdate(descriptor, submitted, stored));
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(descriptor, submitted, stored));
         assertEquals(
                 "jdbc:mysql://new-host/db?password=stored-password&sslmode=disable",
                 result.path("jdbcUrl").asText());
@@ -77,7 +79,7 @@ class DataSourceCredentialsTest {
                 {"jdbcUrl":"jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=******))(HOST=new))"}
                 """;
 
-        var result = JSONUtils.readTree(credentials.retainOnUpdate(descriptor, submitted, stored));
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(descriptor, submitted, stored));
         assertEquals(
                 "jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=stored-secret))(HOST=new))",
                 result.path("jdbcUrl").asText());
@@ -102,7 +104,7 @@ class DataSourceCredentialsTest {
                 }
                 """;
 
-        var result = JSONUtils.readTree(credentials.retainOnUpdate(descriptor, submitted, stored));
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(descriptor, submitted, stored));
         assertEquals("stored-password", result.path("password").asText());
         assertEquals("new-host", result.path("host").asText());
         assertEquals("stored-token", result.path("properties").path("secretAccessKey").asText());
@@ -112,8 +114,87 @@ class DataSourceCredentialsTest {
 
     @Test
     void honorsExplicitCredentialReplacement() {
-        var result = JSONUtils.readTree(credentials.retainOnUpdate(
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(
                 descriptor, "{\"password\":\"new-password\"}", "{\"password\":\"old-password\"}"));
         assertEquals("new-password", result.path("password").asText());
     }
+
+    @Test
+    void masksPostgreSqlAdvancedPropertiesAndJdbcParameters() {
+        DataSourcePluginDescriptor pg = new DataSourcePluginDescriptor(
+                "POSTGRE_SQL", Set.of(), DataSourcePluginDescriptor.CURRENT_API_VERSION, Set.of(), Set.of());
+        String json = """
+                {
+                  "jdbcUrl": "jdbc:postgresql://localhost:5432/orders?password=pg-secret&sslmode=require",
+                  "properties": {"client_secret": "property-secret", "applicationName": "yak-ops"}
+                }
+                """;
+
+        String masked = DataSourceCredentialUtils.maskForDisplay(pg, json);
+
+        assertFalse(masked.contains("pg-secret"));
+        assertFalse(masked.contains("property-secret"));
+        assertTrue(masked.contains("password=******"));
+        assertEquals("******", JSONUtils.readTree(masked).path("properties").path("client_secret").asText());
+        assertEquals("yak-ops", JSONUtils.readTree(masked).path("properties").path("applicationName").asText());
+    }
+
+    @Test
+    void retainsEmbeddedCredentialsInAdvancedPropertyValues() {
+        String stored = """
+                {"properties":{"sessionVariables":"password=stored-secret&mode=old"}}
+                """;
+        String edited = """
+                {"properties":{"sessionVariables":"password=******&mode=new"}}
+                """;
+
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(descriptor, edited, stored));
+
+        assertEquals(
+                "password=stored-secret&mode=new",
+                result.path("properties").path("sessionVariables").asText());
+    }
+
+    @Test
+    void leavesUnrelatedMaskLiteralsInJdbcUrlsUntouched() {
+        String stored = """
+                {"jdbcUrl":"jdbc:mysql://localhost/db?password=old-password&note=old"}
+                """;
+        String edited = """
+                {"jdbcUrl":"jdbc:mysql://localhost/db?password=******&note=******"}
+                """;
+
+        var result = JSONUtils.readTree(DataSourceCredentialUtils.retainOnUpdate(descriptor, edited, stored));
+
+        assertEquals(
+                "jdbc:mysql://localhost/db?password=old-password&note=******",
+                result.path("jdbcUrl").asText());
+    }
+
+    @Test
+    void rejectsMaskedUrlCredentialsWithoutAStoredValue() {
+        String stored = """
+                {"jdbcUrl":"jdbc:mysql://localhost/db?sslmode=require"}
+                """;
+        String edited = """
+                {"jdbcUrl":"jdbc:mysql://localhost/db?password=******"}
+                """;
+
+        DataSourceException failure = assertThrows(
+                DataSourceException.class,
+                () -> DataSourceCredentialUtils.retainOnUpdate(descriptor, edited, stored));
+        assertEquals(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, failure.getErrorCode());
+    }
+
+    @Test
+    void rejectsUnsupportedConnectionArraysInsteadOfExposingCredentials() {
+        String connection = """
+                {"options":[{"password":"unexpected-secret"}]}
+                """;
+
+        DataSourceException failure = assertThrows(
+                DataSourceException.class, () -> DataSourceCredentialUtils.maskForDisplay(descriptor, connection));
+        assertEquals(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, failure.getErrorCode());
+    }
+
 }
