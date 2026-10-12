@@ -8,7 +8,7 @@ import java.util.Set;
 /**
  * Logical table schema with ordered columns and ordered primary-key names.
  *
- * <p>It is a value model rather than an active database catalog or a product task definition.
+ * <p>The immutable value model provides table shape for planning and schema validation.
  */
 public record TableSchema(List<Column> columns, List<String> primaryKeys) {
 

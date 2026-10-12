@@ -5,9 +5,8 @@ import java.util.Objects;
 /**
  * Fixed KeyGroup identifiers decouple key ownership from a particular task parallelism.
  *
- * <p>Implements the same MurmurHash and key-group-to-subtask arithmetic as Flink's
- * KeyGroupRangeAssignment. Key-group identity is stable across parallelism changes, but rescaling
- * and state redistribution are not supported.
+ * <p>Uses Murmur3 hashing and max-parallelism-based key-group assignment. Key-group identity
+ * is stable across parallelism changes; rescaling and state redistribution are unsupported.
  */
 public final class KeyGroupRangeAssignment {
 
@@ -59,7 +58,7 @@ public final class KeyGroupRangeAssignment {
         }
     }
 
-    /** Murmur3 32-bit hash of a single integer, matching Flink's MathUtils.murmurHash. */
+    /** Computes the nonnegative Murmur3 32-bit integer hash for key-group assignment. */
     public static int murmurHash(int code) {
         code *= 0xcc9e2d51;
         code = Integer.rotateLeft(code, 15);

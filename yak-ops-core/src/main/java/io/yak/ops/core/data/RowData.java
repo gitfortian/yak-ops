@@ -16,7 +16,7 @@ import java.util.Objects;
 /**
  * The internal field-access contract for one YakFlow row, independent of its physical storage.
  *
- * <p>Unlike JDBC ResultSet, values have one stable Java representation per resolved logical type:
+ * <p>Values have one stable Java representation per resolved logical type:
  * numbers use their boxed primitive types, DECIMAL uses BigDecimal, textual data uses String,
  * binary uses byte[], and temporal values use java.time classes. JDBC-to-internal conversion
  * belongs to the Connector, not to this interface.

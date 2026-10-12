@@ -4,7 +4,7 @@ import io.yak.ops.core.api.operators.KeySelector;
 import io.yak.ops.flow.runtime.state.KeyGroupRangeAssignment;
 import java.util.Objects;
 
-/** Flink-style KEYED routing: key hash → stable KeyGroup → current downstream subtask. */
+/** Routes records by stable key-group identity to the assigned downstream subtask. */
 public final class KeyedPartitioner<T> implements StreamPartitioner<T> {
 
     private final KeySelector<T> keySelector;

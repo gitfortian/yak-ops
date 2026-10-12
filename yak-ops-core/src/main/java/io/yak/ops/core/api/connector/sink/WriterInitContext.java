@@ -20,8 +20,8 @@ public interface WriterInitContext {
     /**
      * Returns task-owned processing-time timers for the current Writer.
      *
-     * <p>Callbacks execute on the owning task mailbox, not on the timer thread. Legacy test
-     * contexts may omit this capability, but a Writer configured with timed flush must require it.
+     * <p>Timer callbacks execute on the owning task mailbox. Writers configured for timed flush
+     * require the processing-time timer capability.
      */
     default ProcessingTimeService getProcessingTimeService() {
         throw new UnsupportedOperationException("Sink processing-time timers are not available");

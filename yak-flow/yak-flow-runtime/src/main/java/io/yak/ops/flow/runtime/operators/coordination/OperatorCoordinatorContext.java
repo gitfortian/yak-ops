@@ -7,8 +7,8 @@ import java.util.Objects;
 /**
  * Immutable coordinator-side identity and resolved parallelism of one Source operator.
  *
- * <p>Unlike a TaskEnvironment, this context owns no active Reader, task cancellation
- * signal or configuration. Attempt numbers belong to registered reader attempts.
+ * <p>Contains the coordinator's stable Job and operator identity and resolved parallelism.
+ * Registered reader attempts own their attempt-specific state and lifecycle.
  */
 public record OperatorCoordinatorContext(JobID jobID, int operatorId, int parallelism) {
 
