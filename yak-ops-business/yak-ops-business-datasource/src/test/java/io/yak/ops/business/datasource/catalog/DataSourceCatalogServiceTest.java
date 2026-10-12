@@ -109,7 +109,6 @@ class DataSourceCatalogServiceTest {
 
         TableId table = new TableId(null, "APP", "PRODUCTS");
         assertEquals(1, catalogService.tables(plugin, settings, 10, null, "APP", "prod", 10).size());
-        assertTrue(catalogService.table(plugin, settings, 10, table).isPresent());
         var columns = catalogService.columns(plugin, settings, 10, table);
         assertEquals(3, columns.size());
         assertEquals(2, columns.getFirst().primaryKeyPosition());

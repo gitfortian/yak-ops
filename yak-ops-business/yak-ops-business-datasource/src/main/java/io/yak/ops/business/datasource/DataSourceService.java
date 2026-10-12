@@ -13,7 +13,6 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.List;
 
 /**
@@ -74,13 +73,6 @@ public interface DataSourceService {
      * @return dialect-normalized ordered columns and primary keys
      */
     TableSchema queryTableSchema(String id, DataSourceTablePathDTO path);
-
-    /**
-     * Resolves the saved datasource into a trusted runtime connection.
-     *
-     * <p>The result contains credentials and must never be exposed over HTTP, serialized or logged.
-     */
-    DataSourceConnection resolveRuntimeConnection(String id);
 
     /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);

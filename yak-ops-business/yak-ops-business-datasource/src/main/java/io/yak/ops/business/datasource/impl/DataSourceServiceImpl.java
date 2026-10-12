@@ -235,12 +235,6 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     @Override
-    public DataSourceConnection resolveRuntimeConnection(String id) {
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        return parseConnection(plugin(entity.getDbType()), entity.getConnectionParams());
-    }
-
-    @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deleteDataSource(String id) {
         String workspaceId = requireWorkspaceId();

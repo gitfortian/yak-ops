@@ -134,7 +134,12 @@ public class DataSourceCredentials {
         Matcher matcher = ASSIGNMENT.matcher(value);
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
-            String fieldName = URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8);
+            String fieldName;
+            try {
+                fieldName = URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException exception) {
+                fieldName = matcher.group(2);
+            }
             String replacement = matcher.group();
             if (isSecret(fieldName, keys)) {
                 replacement = matcher.group(1) + matcher.group(2) + "=" + SensitiveUtils.MASKED_VALUE;

@@ -13,7 +13,6 @@ import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,11 +45,6 @@ public class DataSourceCatalogService {
                 connection,
                 timeoutSeconds,
                 catalog -> catalog.listTableInfos(database, schema, keyword, limit));
-    }
-
-    public Optional<JdbcTableInfo> table(
-            DataSourcePlugin plugin, DataSourceConnection connection, int timeoutSeconds, TableId tableId) {
-        return query(plugin, connection, timeoutSeconds, catalog -> catalog.findTable(tableId));
     }
 
     public List<JdbcColumnInfo> columns(
