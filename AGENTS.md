@@ -1,66 +1,61 @@
-# Yak Ops Agent Context Router
+# Yak Ops AI Agent Instructions
 
-Scope: Whole repository
+Guidance for contributors and AI coding agents working in this repository. Follow the [Apache Flink contribution process](https://flink.apache.org/how-to-contribute/contribute-code/) and [Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) where applicable. Yak Ops build tools and product boundaries remain repository-specific.
 
-本文件只路由任务，不复制业务契约、组件参数或开发进度。文档归属与更新规则由 [Engineering Context Model](docs/engineering-context-model.md) 定义。
+## Prerequisites and Commands
 
-## Context Loading
+- Java 21, the checked-in Maven wrapper, and Git. Use Bash or WSL for the repository's `mvnw` wrapper on Windows.
+- Backend verification: `bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify`.
+- Java formatting: `bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply`.
+- Java format check: use the same command with `:check` instead of `:apply`.
+- Frontend verification and tooling: `yak-ops-ui/docs/tooling.md`.
 
-1. 确认目标分支和修改范围，文档、代码与验证使用同一基线。
-2. 行为变更先定位对应 Capability / 组件 Contract；目录或依赖变更读取所属 Architecture；实现读取适用的全局及就近规则。
-3. 再读取目标代码、直接依赖和相关验证入口。已知路径直接读取，不先遍历整个文档树。
+For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only report checks that actually ran; a skipped integration test is not a pass.
 
-导航链接不是必读清单。`Depends On` 用于定位适用约束，不要求递归加载所有链接；全局安全、兼容性和验证约束仍须遵守。
+## Repository Structure
 
-## Capability Context
+- `yak-ops-core`: public, database-neutral flow contracts; must not depend on Runtime.
+- `yak-flow`: local execution runtime and JDBC/CDC connectors.
+- `yak-ops-business`: datasource and task-definition business operations.
+- `yak-ops-plugins`: plugin APIs and implementations.
+- `yak-ops-dao`: persistence, repositories and Flyway migrations.
+- `yak-ops-platform`: security, workspace and user preferences.
+- `yak-ops-common`: cross-module shared types and utilities.
+- `yak-ops-boot`: HTTP boundary and application assembly.
+- `yak-ops-ui`: frontend application and shared UI components.
 
-业务能力从 [Docs Index](docs/README.md) 定位；只读当前任务涉及的专题。共享 UI 组件从 `yak-ops-ui/packages/yak-ui/docs/` 定位已有契约。
+Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Do not infer current functionality from an old release document or an implementation proposal.
 
-没有现成 Contract 时，先检查实现，再在合适的现有文档补充最小行为约束；没有独立职责就不新增文档。历史 PR、Release 材料和手工 E2E 只在任务涉及追溯、发布或验收时加载，不作为普通开发的默认前置上下文。
+## Architecture Boundaries
 
-## Backend Context
+- Do not introduce reverse dependencies from Core to Runtime or from business modules to Boot.
+- Keep credentials out of task definitions and user-facing plugin parameters.
+- Keep Workspace isolation, immutable task versions, migration history and existing safety checks intact.
+- Do not claim exactly-once processing, distributed execution or product runtime integration without executable evidence.
+- Do not add interfaces, factories, managers or compatibility layers without a real owner and caller.
 
-Java 变更先读 `ARCHITECTURE.md` 和 `JAVA_RULES.md`，再按目标读取下列规则及其适用约束：
+## Common Change Patterns
 
-| 修改范围 | 规则入口 |
-| --- | --- |
-| 日志 | `LOGGING_RULES.md` |
-| HTTP Controller | `CONTROLLER_RULES.md` |
-| Platform | `yak-ops-platform/PLATFORM_RULES.md`；按 Security / Workspace / Preference 读取同目录的 `SECURITY_RULES.md` / `WORKSPACE_RULES.md` / `USER_PREFERENCE_RULES.md` |
-| Business | `yak-ops-business/BUSINESS_RULES.md`；Task Definition CRUD 读 `yak-ops-business/yak-ops-business-task/TASK_RULES.md`，数据源读 `yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md` |
-| Common / DTO / VO | `yak-ops-common/COMMON_RULES.md`；共享 DTO / VO 另读同目录 `DTO_VO_RULES.md` |
-| DAO / Entity / Migration | `yak-ops-dao/DAO_RULES.md`；按修改内容读取同目录 `ENTITY_RULES.md` / `FLYWAY_RULES.md` |
-| Core / SPI | `yak-ops-core/CORE_RULES.md` / `yak-ops-spi/SPI_RULES.md` |
-| Datasource Plugin | `yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN_RULES.md` |
-| Task Plugin | `yak-ops-plugins/yak-ops-plugin-task/TASK_PLUGIN_RULES.md` |
-| YakFlow | `yak-flow/YAK_FLOW_RULES.md` |
+- **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
+- **New major subsystem or public contract change:** discuss and accept a YAK-FLIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [FLIP template](.github/FLIP_TEMPLATE.md).
+- **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
+- **Database migration:** add a forward-only Flyway migration, check upgrades and test the affected compatibility boundary.
+- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; this documentation migration does not rewrite frontend rules.
 
-## Frontend Context
+## Code Quality and Review
 
-前端变更先读 `yak-ops-ui/ARCHITECTURE.md` 和 `yak-ops-ui/FRONTEND_RULES.md`。
+- Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
+- Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
+- Preserve current static checks, CI and real-database acceptance workflows. Never weaken or skip them simply to make a PR green.
+- Read the applicable existing module `*_RULES.md` for implementation constraints **while those files remain in the repository**. Their descriptions are not a requirement to edit Markdown after ordinary code changes.
+- For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
+- Keep one issue or coherent change per PR and explain purpose, tests, public impact and any FLIP in the PR body.
 
-当前 Web Root 是 `yak-ops-ui/apps/web`：业务在 `app/<domain>`，后端通信在 `service/<domain>`，共享 UI 在 `yak-ops-ui/packages/yak-ui`。不按旧迁移描述重建 `src / pages / shared`。
+## References
 
-以下路径相对于 `yak-ops-ui/`，只读命中项：
-
-| 修改范围 | 规则入口 |
-| --- | --- |
-| 产品页面、路由、Shell | `apps/web/APP_RULES.md` 和就近领域规则；表单另读 `apps/web/FORM_RULES.md` |
-| API 调用与后端类型 | `SERVICE_RULES.md` |
-| 共享 UI 组件 | `packages/yak-ui/UI_RULES.md` 和目标组件已有文档，不加载其他组件细节 |
-| 依赖、Vite、TypeScript、格式、构建脚本 | `docs/tooling.md` |
-
-## Documentation Context
-
-文档变更先读 Engineering Context Model，再读目标权威正文及直接引用。发布任务从 `docs/release/README.md` 进入对应版本材料。
-
-遇到旧 Phase / PR 叙述或文档与实现冲突，按 Engineering Context Model 核对，不把历史阶段当成当前约束，也不擅自改代码迁就旧文档。
-
-## Execution Rules
-
-- 一个 PR 解决一个明确问题；优先修改已有实现、复用已有工具，不为对称性添加 Manager / Coordinator / Handler / Assembler / Adapter 或新层级。
-- 不重新引入已删除领域、外部 yak-framework 依赖或未经任务要求的新框架。
-- 代码变更维护相关现有测试和门禁，不用删除检查、跳过测试或降低约束让结果变绿。
-- 验证命令使用所属规则和现有脚本；Java 遵循 `JAVA_RULES.md` 的 Spotless 要求，前端遵循 `FRONTEND_RULES.md` 的独立质量门禁。
-- 文档变更校验引用、路由及机器读取字段；一次执行的结果放在 PR / CI 或对应版本证据，不追加进当前规则正文。
-- 明确报告实际执行、未执行、失败和环境限制；不把计划、局部检查或条件跳过写成完整验收通过。
+- [Development](DEVELOPMENT.md) — local setup and verification.
+- [Contribution process](.github/CONTRIBUTING.md) — discuss, implement, review.
+- [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
+- [FLIP template](.github/FLIP_TEMPLATE.md) — major design proposals.
+- [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
+- [Existing backend formatter rules](JAVA_RULES.md) and [frontend rules](yak-ops-ui/FRONTEND_RULES.md) — retained until the planned cleanup.
