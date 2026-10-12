@@ -136,7 +136,7 @@ public class UserServiceImpl implements UserService {
         user.initUpdate(operator);
         userRepository.update(user);
         invalidateUserSessions(userId);
-        LOG.info("User password reset by administrator, userId={}", userId);
+        LOG.info("Administrator reset user account credentials, userId={}", userId);
         return Result.success();
     }
 
