@@ -274,12 +274,16 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (dto.getSorts() != null && !dto.getSorts().isEmpty()) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "数据源分页暂不支持自定义排序");
         }
+        String dbType = null;
+        if (StringUtils.hasText(dto.getDbType())) {
+            dbType = plugin(dto.getDbType()).descriptor().type();
+        }
         DataSourcePageQuery query = new DataSourcePageQuery(
                 dto.getPageNo(),
                 dto.getPageSize(),
                 normalizeNullable(dto.getName()),
                 normalizeNullable(dto.getKeyword()),
-                StringUtils.hasText(dto.getDbType()) ? plugin(dto.getDbType()).descriptor().type() : null,
+                dbType,
                 StringUtils.hasText(dto.getEnvironment()) ? parseEnvironment(dto.getEnvironment()) : null,
                 StringUtils.hasText(dto.getConnStatus()) ? parseConnectionStatus(dto.getConnStatus()) : null);
         return PagingData.from(repository.queryPage(workspaceId, query).map(value -> toDataSourceVO(value, false)));
@@ -333,8 +337,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             if (!dbType.equals(existing.getDbType())) {
                 throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "连接测试的数据源类型与已保存数据源不一致");
             }
-            connectionJson = credentials.retainOnUpdate(
-                    provider.descriptor(), connectionJson, existing.getConnectionParams());
+            connectionJson =
+                    credentials.retainOnUpdate(provider.descriptor(), connectionJson, existing.getConnectionParams());
         }
 
         try {
@@ -536,8 +540,7 @@ public class DataSourceServiceImpl implements DataSourceService {
             return null;
         }
         DataSourcePlugin provider = source.getDbType() == null ? null : plugin(source.getDbType());
-        target.setJdbcUrl(credentials.maskText(
-                provider == null ? null : provider.descriptor(), source.getJdbcUrl()));
+        target.setJdbcUrl(credentials.maskText(provider == null ? null : provider.descriptor(), source.getJdbcUrl()));
         target.setDisplayJdbcUrl(target.getJdbcUrl());
         if (provider != null && StringUtils.hasText(source.getConnectionParams())) {
             DataSourceConnection connection = parseConnection(provider, source.getConnectionParams());
@@ -556,5 +559,4 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
         return target;
     }
-
 }
