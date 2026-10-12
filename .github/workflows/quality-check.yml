@@ -39,11 +39,9 @@ jobs:
         id: scope
         run: bash scripts/ci/detect-changes.sh
 
-      - name: Verify CI scope and backend boundaries
+      - name: Verify CI scope
         if: steps.scope.outputs.backend == 'true'
-        run: |
-          bash scripts/ci/test-detect-changes.sh
-          bash scripts/ci/verify-backend-boundaries.sh
+        run: bash scripts/ci/test-detect-changes.sh
 
       - name: Setup Java
         if: steps.scope.outputs.backend == 'true'
@@ -61,13 +59,16 @@ jobs:
 
       - name: Backend logging rules
         if: steps.scope.outputs.backend == 'true'
-        run: python3 scripts/verify_logging_rules.py
-
-      - name: Java comment conventions
-        if: steps.scope.outputs.backend == 'true'
         run: |
-          python3 scripts/ci/test_verify_java_comments.py
-          python3 scripts/ci/verify_java_comments.py
+          python3 scripts/ci/test_logging_rules.py
+          python3 scripts/verify_logging_rules.py
+
+      - name: Backend Checkstyle
+        if: steps.scope.outputs.backend == 'true'
+        run: >-
+          bash mvnw -B -ntp
+          -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist'
+          org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
 
       - name: Backend format
         if: steps.scope.outputs.backend == 'true'
@@ -81,7 +82,17 @@ jobs:
         run: >-
           bash mvnw -q
           -pl '!yak-ops-ui,!yak-ops-dist'
+          -Dspotless.check.skip=true -Dcheckstyle.skip=true
           verify
+
+      - name: Upload failed test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-failures
+          path: '**/target/surefire-reports/**'
+          if-no-files-found: warn
+          retention-days: 7
 
   frontend-quality:
     name: Frontend Quality

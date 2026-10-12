@@ -30,7 +30,7 @@ A FLIP is appropriate for a significant new subsystem, externally supported API,
 
 Code, types and tests describe the implemented behavior. Update JavaDoc for contracts that callers cannot infer; update user guides when visible behavior, compatibility or operations change. Do **not** require updates to Architecture, Capability or module Rules Markdown solely because a class, method or package changed. Do not create new descriptions of existing implementation just to satisfy a PR checklist.
 
-Legacy backend Capability/Architecture/Rules documents are retired. Investigate conflicts against code, JavaDoc, tests, persisted data and accepted FLIP decisions. Do not recreate legacy descriptions or weaken security, CI, migration checks or release validation. Do not retrospectively write FLIPs for completed changes.
+Use code, JavaDoc, tests, persisted data and accepted FLIP decisions for current behavior. Preserve security, CI, migration checks and release validation. Write FLIPs for significant proposed designs, not routine changes.
 
 ## Pull Requests
 
