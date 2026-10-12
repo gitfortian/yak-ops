@@ -33,7 +33,8 @@ public final class DataSourcePluginRegistry {
                 throw new IllegalStateException("Datasource plugin type does not match its descriptor: " + type);
             }
             if (!DataSourcePluginDescriptor.CURRENT_API_VERSION.equals(descriptor.apiVersion())) {
-                throw new IllegalStateException("Unsupported datasource plugin API version: " + descriptor.apiVersion());
+                throw new IllegalStateException(
+                        "Unsupported datasource plugin API version: " + descriptor.apiVersion());
             }
             register(discovered, type, plugin);
             for (String alias : descriptor.aliases()) {
