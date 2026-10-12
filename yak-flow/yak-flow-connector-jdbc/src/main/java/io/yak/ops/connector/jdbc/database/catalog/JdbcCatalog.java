@@ -11,8 +11,8 @@ import java.util.Optional;
  * Exposes read-only database, schema and table metadata for JDBC source/sink planning.
  *
  * <p>Database, schema and table names remain separate identifiers. Implementations open
- * independent connections per metadata operation and return YakFlow logical types, without
- * importing Flink Table API or product Datasource metadata DTOs.
+ * independent connections per metadata operation and return YakFlow {@code TableId}
+ * and {@code TableSchema} values.
  */
 public interface JdbcCatalog extends AutoCloseable, Serializable {
 

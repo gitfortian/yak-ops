@@ -61,9 +61,9 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     /**
      * Validates adjacent UPDATE_BEFORE / UPDATE_AFTER events before entering the sole row buffer.
      *
-     * <p>Flink CDC carries both images in one event, while YakFlow TableRecord carries one
-     * RowKind. Until an atomic update contract exists, split updates must arrive consecutively
-     * on the same Sink subtask; malformed or interleaved pairs fail closed.
+     * <p>Each YakFlow {@code TableRecord} carries one {@code RowKind}. UPDATE_BEFORE and
+     * UPDATE_AFTER must arrive consecutively on the same Sink subtask; malformed or
+     * interleaved pairs fail closed.
      *
      * @param record source table ID, mutation kind and source-ordered row values
      * @return a validated, detached target-ordered row for the sole batch buffer

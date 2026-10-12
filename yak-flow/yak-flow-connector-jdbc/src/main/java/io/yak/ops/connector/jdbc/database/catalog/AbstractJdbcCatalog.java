@@ -18,9 +18,9 @@ import java.util.Optional;
 /**
  * Metadata-driven JDBC Catalog implementation shared by all built-in database vendors.
  *
- * <p>Like Flink's AbstractJdbcCatalog, it centralizes table discovery, exact metadata
- * resolution and ordered primary-key extraction. Every operation owns its JDBC connection;
- * no connection, statement or result set is retained in checkpointable Catalog state.
+ * <p>Centralizes table discovery, exact metadata resolution and ordered primary-key
+ * extraction. Every metadata operation owns its JDBC connection; checkpointable Catalog
+ * state contains no live connection, statement or result set.
  */
 public abstract class AbstractJdbcCatalog implements JdbcCatalog {
 

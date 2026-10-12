@@ -10,8 +10,8 @@ import java.util.Locale;
 /**
  * PostgreSQL Catalog exposes the current connected database and its accessible schemas.
  *
- * <p>Unlike a Flink Table SQL Catalog that constructs a different JDBC URL per database,
- * this Catalog never opens a different database through an existing ConnectionProvider.
+ * <p>Metadata operations are scoped to the supplied connection's current database.
+ * Requested catalog names must match that database.
  */
 public final class PostgresCatalog extends AbstractJdbcCatalog {
 

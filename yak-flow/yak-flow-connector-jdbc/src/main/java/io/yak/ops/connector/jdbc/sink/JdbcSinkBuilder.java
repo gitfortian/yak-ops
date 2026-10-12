@@ -34,7 +34,8 @@ public final class JdbcSinkBuilder {
     /**
      * Uses DriverManager connections and resolves the dialect from the supplied JDBC URL.
      *
-     * <p>This replaces any previously configured custom connection provider.
+     * <p>These connection options select DriverManager and clear any configured custom
+     * connection provider.
      */
     public JdbcSinkBuilder withConnectionOptions(JdbcConnectionOptions options) {
         connectionOptions = Objects.requireNonNull(options, "options");

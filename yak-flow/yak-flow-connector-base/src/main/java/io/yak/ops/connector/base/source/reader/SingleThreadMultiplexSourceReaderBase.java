@@ -10,8 +10,8 @@ import java.util.function.Supplier;
 /**
  * Reader foundation for a single blocking SplitReader per parallel Source subtask.
  *
- * <p>Unlike SourceReaderBase, this constructor chooses the single-fetcher ownership and queue
- * policy so concrete JDBC/CDC readers do not create or share worker threads themselves.
+ * <p>Provides single-fetcher thread ownership and a bounded handover queue for JDBC/CDC
+ * readers. Each parallel Source subtask owns its fetcher and queue.
  */
 public abstract class SingleThreadMultiplexSourceReaderBase<E, T, SplitT extends SourceSplit, StateT>
         extends SourceReaderBase<E, T, SplitT, StateT> {

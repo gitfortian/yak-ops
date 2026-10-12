@@ -8,7 +8,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * Oracle DATE retains its time-of-day and is emitted as LocalDateTime, unlike JDBC DATE.
+ * Oracle DATE retains its time-of-day and is emitted as {@code LocalDateTime}.
  *
  * <p>Oracle NUMBER remains a checked decimal unless the source actually declares a JDBC
  * integer type; no lossy automatic conversion to Long or Boolean is performed.
