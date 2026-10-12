@@ -1,7 +1,7 @@
 package io.yak.ops.boot.config;
 
+import io.yak.ops.business.datasource.DataSourceCatalogService;
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
@@ -21,6 +21,9 @@ public class DataSourceTaskValidationContext implements TaskValidationContext {
     @Resource
     private DataSourceService dataSourceService;
 
+    @Resource
+    private DataSourceCatalogService catalogService;
+
     @Override
     public DataSourceInfo dataSource(String id) {
         DataSourceVO value = dataSourceService.queryDataSource(id);
@@ -29,10 +32,6 @@ public class DataSourceTaskValidationContext implements TaskValidationContext {
 
     @Override
     public TableSchema tableSchema(String datasourceId, TableId tableId) {
-        DataSourceTablePathDTO path = new DataSourceTablePathDTO();
-        path.setDatabase(tableId.catalog());
-        path.setSchema(tableId.schema());
-        path.setTable(tableId.table());
-        return dataSourceService.queryTableSchema(datasourceId, path);
+        return catalogService.getTableSchema(datasourceId, tableId);
     }
 }

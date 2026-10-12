@@ -1,18 +1,13 @@
 package io.yak.ops.business.datasource;
 
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
-import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 
 /**
@@ -49,30 +44,6 @@ public interface DataSourceService {
      * @return candidate property names
      */
     DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType);
-
-    /** Lists databases visible through the saved datasource connection. */
-    List<String> queryCatalogDatabases(String id);
-
-    /** Lists schemas visible under the selected database. */
-    List<String> queryCatalogSchemas(String id, String database);
-
-    /** Lists physical tables and views visible through the saved datasource. */
-    List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
-
-    /** Lists column metadata for the selected physical table. */
-    List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
-
-    /**
-     * Resolves the Connector-normalized physical table schema for internal execution planning.
-     *
-     * <p>Workspace ownership and saved credentials are validated by Datasource. HTTP clients
-     * continue to use the existing column browse endpoint and never receive a Connection.
-     *
-     * @param id workspace-scoped datasource ID
-     * @param path exact physical table
-     * @return dialect-normalized ordered columns and primary keys
-     */
-    TableSchema queryTableSchema(String id, DataSourceTablePathDTO path);
 
     /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);
