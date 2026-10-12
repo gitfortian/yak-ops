@@ -52,4 +52,4 @@ npm run build
 
 ## Verification Record
 
-组件文档中的验收步骤描述可重复执行的方法，不表示已经通过。一次结果放在 PR / CI；发布结果放对应版本证据，并按 [Engineering Context Model](../../docs/engineering-context-model.md#evidence-chain) 记录提交、环境、执行范围和证据。局部样式夹具、真实 React 运行时、产品 E2E 分开报告；未执行、失败和 skipped 不写成完整验收通过。
+组件文档中的验收步骤描述可重复执行的方法，不表示已经通过。一次结果放在 PR / CI，并记录提交、环境、执行范围和证据；发布结果保存在 GitHub Release 与 Actions 产物中。局部样式夹具、真实 React 运行时、产品 E2E 分开报告；未执行、失败和 skipped 不写成完整验收通过。

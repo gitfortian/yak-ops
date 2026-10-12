@@ -4,7 +4,7 @@ Status: Active
 
 Scope: `app/data-sync/task-editor.tsx` 及其编辑器辅助组件。
 
-业务语义见 [Data Sync Contract](../../../../../docs/capabilities/data-sync/README.md)；App 职责见 [App Rules](../../APP_RULES.md)。实例列表和任务运维虽复用 `app/data-sync` 目录，但不是编辑器的职责。
+当前接口语义以实际代码和测试为准；App 职责见 [App Rules](../../APP_RULES.md)。实例列表和任务运维虽复用 `app/data-sync` 目录，但不是编辑器的职责。
 
 ## Ownership
 

@@ -4,7 +4,7 @@ Status: Active
 
 Scope: `yak-ops-ui/apps/**`、`yak-ops-ui/packages/**`。
 
-系统模块边界见 [Repository Architecture](../ARCHITECTURE.md)。本文件只定义前端目录、职责和依赖；实现约束见 [Frontend Rules](FRONTEND_RULES.md)。
+后端边界从当前源码和 [Agent Instructions](../AGENTS.md) 读取；本文件只定义前端目录、职责和依赖，实现约束见 [Frontend Rules](FRONTEND_RULES.md)。
 
 ## Web Root Ownership
 
@@ -37,7 +37,7 @@ scripts/          工具与架构检查
 - `app/operations`：运维入口，复用 `app/data-sync` 的任务运行与实例组件；界面职责见 [Operations Rules](apps/web/app/operations/OPERATIONS_RULES.md)。
 - `app/management`：用户与工作空间管理；`app/login`：登录产品页面。
 
-Task、Execution、Attempt、Schedule 的业务含义由 [Data Sync Contract](../docs/capabilities/data-sync/README.md) 及其专题定义，不在前端架构中重述。共享编辑器规则见 [Task Editor Rules](apps/web/app/data-sync/DATA_SYNC_TASK_EDITOR_RULES.md)。
+Task、Execution、Attempt、Schedule 的实际业务支持范围以后端接口和类型为准，不在前端架构中重述。共享编辑器规则见 [Task Editor Rules](apps/web/app/data-sync/DATA_SYNC_TASK_EDITOR_RULES.md)。
 
 ## Dependency Direction
 
