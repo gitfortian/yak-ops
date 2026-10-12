@@ -1,12 +1,14 @@
 package io.yak.ops.plugin.database.jdbc.mysql;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.mysql.enums.MySqlDriverId;
 import io.yak.ops.plugin.database.jdbc.runtime.IsolatedJdbcDriverRuntime;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.sql.Connection;
 import java.sql.DriverPropertyInfo;
 import java.util.Map;
@@ -16,6 +18,7 @@ import java.util.Set;
 /**
  * Defines MySQL provider defaults for ports, driver selection, JDBC URLs and connection properties.
  */
+@AutoService(DataSourcePlugin.class)
 public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
     private static final IsolatedJdbcDriverRuntime DRIVER_RUNTIME = IsolatedJdbcDriverRuntime.getInstance();

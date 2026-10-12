@@ -5,7 +5,7 @@ Status: Active — Task Definition parameter parsing and validation only.
 ## Ownership
 
 - `yak-ops-plugin-task-api` exposes the provider-neutral `TaskPlugin`, `TaskParameters`, `TaskPluginRegistry`, and resource validation contract.
-- Direct `ServiceLoader<TaskPlugin>` discovery registers one stateless plugin for one exact canonical type; no redundant Factory or inferred type aliases. Reject duplicates on startup.
+- Task implementations declare `@AutoService(TaskPlugin.class)`; Maven generates the `META-INF/services` descriptor, and `ServiceLoader<TaskPlugin>` still discovers providers at runtime. Do not commit hand-written descriptors or add a redundant Factory. Reject duplicate plugin types on startup.
 - The Registry only discovers providers and delegates parsing and validation. It never implements an extra parameter-validation flow.
 - The selected plugin checks local parameter structure once in `parse`, and authorized Workspace resource constraints once in `validate`. `validate` does not mutate or replace the submitted configuration.
 - Task Business alone owns Workspace, Definition identity, immutable versions and publishing. JSON is the sole accepted parameter format and versioned storage format.
