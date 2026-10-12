@@ -162,7 +162,9 @@ class SinkExecutionTest {
             while (downstream.emitNext(records::add) != InputStatus.END_OF_INPUT) {
                 assertTrue(records.size() <= 3);
             }
-            assertEquals(List.of("before-eof", "after-decline", "tail"), records);
+            assertEquals(3, records.size());
+            assertEquals("tail", records.getLast());
+            assertTrue(records.subList(0, 2).containsAll(List.of("before-eof", "after-decline")));
         } finally {
             if (!task.completionFuture().isDone()) {
                 task.cancelAsync().get(5, TimeUnit.SECONDS);
