@@ -327,10 +327,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             return provider.parseConnection(json);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-                    DataSourceCredentialUtils.maskText(provider.descriptor(), exception.getMessage()),
-                    exception);
+            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }
     }
 
@@ -342,10 +339,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             provider.testConnection(connection, timeoutSeconds);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(
-                    DataSourceErrorCode.CONNECT_FAILED,
-                    DataSourceCredentialUtils.maskText(provider.descriptor(), exception.getMessage()),
-                    exception);
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
         }
     }
 
@@ -353,7 +347,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (exception instanceof DataSourceException dataSourceException) {
             return dataSourceException;
         }
-        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, exception.getMessage(), exception);
+        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {
