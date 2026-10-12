@@ -15,6 +15,7 @@ import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.Source;
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReader;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.SourceSplit;
@@ -29,6 +30,7 @@ import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.flow.runtime.execution.EmbeddedJobClient;
 import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
+import io.yak.ops.flow.runtime.executiongraph.ExecutionState;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
@@ -173,6 +175,93 @@ class CheckpointRecoveryTest {
     }
 
     @Test
+    void publishedCheckpointSurvivesFailedEnumeratorCompletionNotification() throws Exception {
+        OffsetSource source = new OffsetSource(4);
+        source.failNextEnumeratorCompletion();
+        CapturedSink sink = new CapturedSink();
+        EmbeddedJobClient job = (EmbeddedJobClient) new EmbeddedPipelineExecutor()
+                .execute(graph(source, sink), configuration(false)).get(5, TimeUnit.SECONDS);
+        awaitCount(sink.rows, 8);
+
+        try {
+            CompletableFuture<CheckpointSnapshot> checkpoint = job.checkpoint();
+            assertTrue(source.completionNotificationEntered.await(5, TimeUnit.SECONDS));
+            CheckpointSnapshot published = checkpoint.get(5, TimeUnit.SECONDS);
+            assertEquals(1, published.checkpointId(), "Durable publication must not await the listener");
+            assertTrue(Files.exists(checkpointDirectory.resolve("checkpoint.bin")));
+        } finally {
+            source.releaseCompletionNotification.countDown();
+        }
+
+        assertThrows(java.util.concurrent.ExecutionException.class,
+                () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
+        assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
+        assertEquals(0, job.getExecutionGraph().getJobVertices().getFirst()
+                .getTaskVertex(0).getCurrentExecutionAttempt().getAttemptNumber());
+        try (FileCheckpointStore store = new FileCheckpointStore(checkpointDirectory)) {
+            assertEquals(1, store.loadLatest(FileCheckpointStore.graphSignature(graph(source, sink)))
+                    .orElseThrow().checkpointId());
+        }
+    }
+
+    @Test
+    void restartsFromThePublishedCheckpointWhenCompletionNotificationFails() throws Exception {
+        OffsetSource source = new OffsetSource(4);
+        source.failNextEnumeratorCompletion();
+        CapturedSink sink = new CapturedSink();
+        Configuration config = configuration(false);
+        config.set(ExecutionOptions.MAX_RESTART_ATTEMPTS, 1);
+        EmbeddedJobClient job = (EmbeddedJobClient) new EmbeddedPipelineExecutor()
+                .execute(graph(source, sink), config).get(5, TimeUnit.SECONDS);
+        awaitCount(sink.rows, 8);
+
+        try {
+            CompletableFuture<CheckpointSnapshot> checkpoint = job.checkpoint();
+            assertTrue(source.completionNotificationEntered.await(5, TimeUnit.SECONDS));
+            assertEquals(1, checkpoint.get(5, TimeUnit.SECONDS).checkpointId());
+        } finally {
+            source.releaseCompletionNotification.countDown();
+        }
+
+        awaitAttempt(job, 1);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!source.restoredOffsets.contains(4) && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue(source.restoredOffsets.contains(4), "Recovery must resume from published CP-1");
+        source.setLimit(6);
+        awaitCount(sink.rows, 12);
+        assertEquals(12, sink.rows.size(), "Restored Source must not replay records before CP-1");
+        job.cancel().get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void sourceEndOfInputMustNotMaskFailedCheckpointEventDelivery() throws Exception {
+        OffsetSource source = new OffsetSource(4);
+        source.enableBoundedInput();
+        source.sendEventOnNextCheckpoint();
+        WaitingSink sink = new WaitingSink();
+        EmbeddedJobClient job = (EmbeddedJobClient) new EmbeddedPipelineExecutor()
+                .execute(graph(source, sink), configuration(false)).get(5, TimeUnit.SECONDS);
+        awaitCount(sink.rows, 8);
+
+        CompletableFuture<CheckpointSnapshot> checkpoint = job.checkpoint();
+        try {
+            assertTrue(sink.checkpointFlushEntered.await(5, TimeUnit.SECONDS));
+            source.releaseBoundedInput();
+            awaitSourceFinished(job);
+        } finally {
+            sink.releaseCheckpoint.countDown();
+        }
+
+        assertEquals(1, checkpoint.get(5, TimeUnit.SECONDS).checkpointId());
+        assertThrows(java.util.concurrent.ExecutionException.class,
+                () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
+        assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
+        assertTrue(Files.exists(checkpointDirectory.resolve("checkpoint.bin")));
+    }
+
+    @Test
     void shouldNotRetryWhenNoCompletedCheckpointExists() throws Exception {
         OffsetSource source = new OffsetSource(3, false, false, true);
         CapturedSink sink = new CapturedSink();
@@ -198,6 +287,18 @@ class CheckpointRecoveryTest {
         }
         assertEquals(expected, client.getExecutionGraph().getJobVertices().getFirst()
                 .getTaskVertex(0).getCurrentExecutionAttempt().getAttemptNumber());
+    }
+
+    private static void awaitSourceFinished(EmbeddedJobClient client) throws Exception {
+        var sourceTasks = client.getExecutionGraph().getJobVertices().getFirst().getTaskVertices();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (sourceTasks.stream().anyMatch(task -> task.getCurrentExecutionAttempt().getState()
+                        != ExecutionState.FINISHED)
+                && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue(sourceTasks.stream()
+                .allMatch(task -> task.getCurrentExecutionAttempt().getState() == ExecutionState.FINISHED));
     }
 
     @Test
@@ -456,9 +557,13 @@ class CheckpointRecoveryTest {
         }
     }
 
+    private record CheckpointSourceEvent() implements SourceEvent {}
+
     private static final class OffsetSource implements Source<String, OffsetSplit, Integer> {
 
         private volatile int limit;
+        private volatile boolean bounded;
+        private volatile boolean finishAllowed;
         private final boolean failSerialization;
         private final boolean failAfterCheckpoint;
         private final boolean failBeforeCheckpoint;
@@ -470,6 +575,14 @@ class CheckpointRecoveryTest {
                 new java.util.concurrent.atomic.AtomicBoolean();
         private final java.util.concurrent.atomic.AtomicBoolean faultTriggered =
                 new java.util.concurrent.atomic.AtomicBoolean();
+        private final java.util.concurrent.atomic.AtomicBoolean failEnumeratorCompletion =
+                new java.util.concurrent.atomic.AtomicBoolean();
+        private final java.util.concurrent.atomic.AtomicBoolean sendEventOnCompletion =
+                new java.util.concurrent.atomic.AtomicBoolean();
+        private final java.util.concurrent.CountDownLatch completionNotificationEntered =
+                new java.util.concurrent.CountDownLatch(1);
+        private final java.util.concurrent.CountDownLatch releaseCompletionNotification =
+                new java.util.concurrent.CountDownLatch(1);
 
         private OffsetSource(int limit) {
             this(limit, false);
@@ -495,8 +608,28 @@ class CheckpointRecoveryTest {
             availabilityWaiters.clear();
         }
 
+        private void failNextEnumeratorCompletion() {
+            failEnumeratorCompletion.set(true);
+        }
+
+        private void sendEventOnNextCheckpoint() {
+            sendEventOnCompletion.set(true);
+        }
+
+        private void enableBoundedInput() {
+            bounded = true;
+        }
+
+        private void releaseBoundedInput() {
+            finishAllowed = true;
+            setLimit(limit);
+        }
+
         @Override
         public Boundedness getBoundedness() {
+            if (bounded) {
+                return Boundedness.BOUNDED;
+            }
             return Boundedness.CONTINUOUS_UNBOUNDED;
         }
 
@@ -529,6 +662,9 @@ class CheckpointRecoveryTest {
                         assignedMask |= flag;
                         context.assignSplit(new OffsetSplit("stream-" + subtask, 0), subtask);
                     }
+                    if (bounded) {
+                        context.signalNoMoreSplits(subtask);
+                    }
                 }
 
                 @Override
@@ -542,6 +678,20 @@ class CheckpointRecoveryTest {
                 }
 
                 @Override
+                public void notifyCheckpointComplete(long checkpointId) throws Exception {
+                    if (failEnumeratorCompletion.compareAndSet(true, false)) {
+                        completionNotificationEntered.countDown();
+                        if (!releaseCompletionNotification.await(5, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("Timed out awaiting Enumerator notification test");
+                        }
+                        throw new IllegalStateException("Enumerator notification failed after durable checkpoint");
+                    }
+                    if (sendEventOnCompletion.compareAndSet(true, false)) {
+                        context.sendEventToSourceReader(0, new CheckpointSourceEvent());
+                    }
+                }
+
+                @Override
                 public void close() {}
             };
         }
@@ -552,6 +702,7 @@ class CheckpointRecoveryTest {
             return new SourceReader<>() {
                 private OffsetSplit current;
                 private CompletableFuture<Void> idle = new CompletableFuture<>();
+                private boolean noMoreSplits;
 
                 @Override
                 public void start() {
@@ -572,6 +723,9 @@ class CheckpointRecoveryTest {
                         current.advance();
                         emittedRecords.incrementAndGet();
                         return InputStatus.MORE_AVAILABLE;
+                    }
+                    if (bounded && noMoreSplits && finishAllowed) {
+                        return InputStatus.END_OF_INPUT;
                     }
                     if (idle.isDone()) {
                         idle = new CompletableFuture<>();
@@ -595,7 +749,10 @@ class CheckpointRecoveryTest {
                 }
 
                 @Override
-                public void notifyNoMoreSplits() {}
+                public void notifyNoMoreSplits() {
+                    noMoreSplits = true;
+                    idle.complete(null);
+                }
 
                 @Override
                 public List<OffsetSplit> snapshotState(long checkpointId) {
