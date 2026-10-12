@@ -178,14 +178,22 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (StringUtils.isNotBlank(dto.getDbType())) {
             dbType = plugin(dto.getDbType()).descriptor().type();
         }
+        DataSourceEnvironment environment = null;
+        if (StringUtils.isNotBlank(dto.getEnvironment())) {
+            environment = parseEnvironment(dto.getEnvironment());
+        }
+        DataSourceConnStatus status = null;
+        if (StringUtils.isNotBlank(dto.getConnStatus())) {
+            status = parseConnectionStatus(dto.getConnStatus());
+        }
         DataSourcePageQuery query = new DataSourcePageQuery(
                 dto.getPageNo(),
                 dto.getPageSize(),
                 StringUtils.trimToNull(dto.getName()),
                 StringUtils.trimToNull(dto.getKeyword()),
                 dbType,
-                StringUtils.isNotBlank(dto.getEnvironment()) ? parseEnvironment(dto.getEnvironment()) : null,
-                StringUtils.isNotBlank(dto.getConnStatus()) ? parseConnectionStatus(dto.getConnStatus()) : null);
+                environment,
+                status);
         return PagingData.from(repository.queryPage(workspaceId, query).map(value -> toDataSourceVO(value, false)));
     }
 
@@ -226,8 +234,10 @@ public class DataSourceServiceImpl implements DataSourceService {
     @Override
     public boolean testConnection(DataSourceConnectTestDTO dto) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        DataSourceEntity existing =
-                dto.getDataSourceId() == null ? null : requireEntity(workspaceId, dto.getDataSourceId());
+        DataSourceEntity existing = null;
+        if (dto.getDataSourceId() != null) {
+            existing = requireEntity(workspaceId, dto.getDataSourceId());
+        }
         DataSourcePlugin provider = plugin(dto.getDbType());
         String dbType = provider.descriptor().type();
         String connectionJson = JSONUtils.toJson(dto.getConnectionParams());
@@ -361,12 +371,13 @@ public class DataSourceServiceImpl implements DataSourceService {
             target.setSchema(connection.schema());
             target.setDisplayJdbcUrl(credentials.maskText(provider.descriptor(), provider.displayJdbcUrl(connection)));
         }
-        target.setEnvironment(
-                source.getEnvironment() == null ? null : source.getEnvironment().name());
-        target.setEnvironmentName(
-                source.getEnvironment() == null ? null : source.getEnvironment().getDisplayName());
-        target.setConnStatus(
-                source.getConnStatus() == null ? null : source.getConnStatus().name());
+        if (source.getEnvironment() != null) {
+            target.setEnvironment(source.getEnvironment().name());
+            target.setEnvironmentName(source.getEnvironment().getDisplayName());
+        }
+        if (source.getConnStatus() != null) {
+            target.setConnStatus(source.getConnStatus().name());
+        }
         if (includeOriginalJson) {
             target.setOriginalJson(credentials.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
         }

@@ -67,6 +67,4 @@ public class DataSourceController {
     public Result<PagingData<DataSourceVO>> page(@Valid @RequestBody DataSourceQueryDTO dto) {
         return Result.success(dataSourceService.queryDataSourcePage(dto));
     }
-
-
 }
