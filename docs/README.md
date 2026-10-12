@@ -1,10 +1,10 @@
 # Yak Ops Docs
 
-这是知识导航，不维护阶段进度或验证结果。已知目标时直接读取对应文档，不必通读索引中的所有入口。
+这是迁移期间保留的历史文档索引，不再定义日常后端开发的文档同步义务。新的开发与 FLIP 入口见 [CONTRIBUTING](../.github/CONTRIBUTING.md) 和 [DEVELOPMENT](../DEVELOPMENT.md)。已知目标时直接读取实现和相关测试。
 
-## Engineering Context Model
+## Migration Note
 
-文档归属、冲突处理和证据规则见 [Engineering Context Model](engineering-context-model.md)。任务到代码规则的路由见 [AGENTS.md](../AGENTS.md)。
+旧的 [Engineering Context Model](engineering-context-model.md) 已退役。任务入口见 [AGENTS.md](../AGENTS.md)；相关历史文档尚待独立清理，不要求随普通实现 PR 同步。
 
 ## Current Knowledge Map
 
@@ -35,8 +35,8 @@
 
 ## Context Loading
 
-选择本次任务对应的入口，再跟随必要专题和代码引用。索引描述用于定位，不代替专题正文；遇到旧阶段描述或相互矛盾的内容，按 Engineering Context Model 核对后处理。
+按本次修改范围定位代码、调用方和测试。旧文档用于查找历史背景，不是现行实现的自动权威；存在冲突时核对代码、测试及已接受的 FLIP。
 
 ## Engineering Rules
 
-后端从 [Architecture](../ARCHITECTURE.md) 与 [Java Rules](../JAVA_RULES.md) 进入目标模块规则；前端使用上述前端入口。具体路径由 AGENTS.md 路由，本索引不重复维护全量模块规则清单。
+后端开发入口为 [AGENTS](../AGENTS.md) 和 [DEVELOPMENT](../DEVELOPMENT.md)。现有 Architecture / Rules 文件在清理完成前可以按需参考，但普通代码变更不要求同步描述 Markdown。前端规则在本轮保持不变。

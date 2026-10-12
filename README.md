@@ -33,6 +33,10 @@ Management Center
 
 ## 文档
 
+- [开发环境与验证](DEVELOPMENT.md)
+- [贡献规范与 FLIP](.github/CONTRIBUTING.md)
+- [FLIP 提案模板](.github/FLIP_TEMPLATE.md)
+
 - [文档入口](docs/README.md)
 - [架构](ARCHITECTURE.md)
 - [版本管理](docs/release/README.md)
