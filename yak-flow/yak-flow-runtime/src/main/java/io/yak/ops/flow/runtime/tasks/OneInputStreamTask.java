@@ -146,7 +146,7 @@ public final class OneInputStreamTask extends StreamTask {
         if (sinkOperator != null) {
             return input.emitNext(value -> sinkOperator.processElement(value, ignored -> {}), barrierHandler);
         }
-        return input.emitNext(value -> operator.processElement(value, output::collect), this::onCheckpointBarrier);
+        return input.emitNext(value -> operator.processElement(value, output::collect), barrierHandler);
     }
 
     private void onCheckpointBarrier(long checkpointId) throws Exception {

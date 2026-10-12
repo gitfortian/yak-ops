@@ -89,12 +89,13 @@ public final class OperatorChain implements ReaderOutput<Object>, AutoCloseable 
         if (!opened || finished || closed) {
             throw new IllegalStateException("OperatorChain cannot finish again");
         }
+        // An operator finish may emit output before failing; replaying it could duplicate effects.
+        finished = true;
         for (int i = 0; i < operators.size(); i++) {
             int next = i + 1;
             operators.get(i).finish(output -> forward(next, output));
         }
         sinkOperator.finish();
-        finished = true;
     }
 
     /** Forwards a non-blocking cancellation signal to the inline Sink Writer. */

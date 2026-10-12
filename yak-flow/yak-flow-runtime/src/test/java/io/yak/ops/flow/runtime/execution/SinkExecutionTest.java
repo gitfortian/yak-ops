@@ -21,15 +21,23 @@ import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.api.operators.Collector;
+import io.yak.ops.flow.runtime.checkpoint.CheckpointDeclinedException;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
+import io.yak.ops.flow.runtime.graph.StreamEdge;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
+import io.yak.ops.flow.runtime.graph.StreamNode;
+import io.yak.ops.flow.runtime.io.RecordWriterOutput;
+import io.yak.ops.flow.runtime.io.partition.InputGate;
+import io.yak.ops.flow.runtime.io.partition.ResultPartition;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
+import io.yak.ops.flow.runtime.operators.OperatorChain;
 import io.yak.ops.flow.runtime.operators.sink.SinkWriterOperator;
 import io.yak.ops.flow.runtime.support.TestSplitSerializers;
+import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
 import io.yak.ops.flow.runtime.transformations.OneInputTransformation;
 import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
@@ -37,8 +45,10 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -92,6 +102,126 @@ class SinkExecutionTest {
         assertTrue(sink.created.stream().allMatch(ctx -> ctx.getTaskInfo().getNumberOfParallelSubtasks() == 2));
         assertTrue(sink.created.stream().allMatch(ctx -> ctx.getTaskInfo().getMaxNumberOfParallelSubtasks() == 256));
         assertTrue(sink.operatorIds.stream().allMatch(id -> id == output.getId()));
+    }
+
+
+    @Test
+    void intermediateOperatorMustTreatCheckpointDeclineAtEofAsNonFatal() throws Exception {
+        SourceTransformation<String> source = new SourceTransformation<>(
+                "source", new SplitSource(), String.class, 2);
+        AtomicInteger finishes = new AtomicInteger();
+        AtomicInteger closes = new AtomicInteger();
+        OneInputTransformation<String, String> transform = new OneInputTransformation<>(
+                source, "middle", () -> new OneInputStreamOperator<>() {
+                    @Override
+                    public void processElement(String record, Collector<String> output) throws Exception {
+                        output.collect(record);
+                    }
+
+                    @Override
+                    public void finish(Collector<String> output) throws Exception {
+                        finishes.incrementAndGet();
+                        output.collect("tail");
+                    }
+
+                    @Override
+                    public void close() {
+                        closes.incrementAndGet();
+                    }
+                }, String.class, 1);
+        StreamNode node = StreamNode.fromTransformation(transform, 1);
+        InputGate<Object> input = new InputGate<>(8, 2);
+        ResultPartition<Object> first = new ResultPartition<>(0, List.of(input));
+        ResultPartition<Object> second = new ResultPartition<>(1, List.of(input));
+        InputGate<Object> downstream = new InputGate<>(8, 1);
+        RecordWriterOutput<Object> output = new RecordWriterOutput<>(
+                new StreamEdge(node.getId(), node.getId() + 1), 0, 1,
+                new ResultPartition<>(0, List.of(downstream)));
+        TaskEnvironment environment = new TaskEnvironment(
+                new RuntimeTaskInfo(JobID.generate(), node.getId(), 0, 1, 0, 128), configuration(1, 128));
+        OneInputStreamTask task = new OneInputStreamTask(node, environment, input, output);
+
+        try {
+            task.start().get(5, TimeUnit.SECONDS);
+            CompletableFuture<Map<String, io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot.SerializedState>>
+                    checkpoint = task.expectCheckpoint(7);
+            first.broadcastBarrier(7);
+            second.emitRecord(0, "before-eof");
+            second.finish(); // Producer ends without the matching barrier; only CP-7 is declined.
+            first.emitRecord(0, "after-decline");
+            first.finish();
+
+            ExecutionException declined = assertThrows(
+                    ExecutionException.class, () -> checkpoint.get(5, TimeUnit.SECONDS));
+            assertTrue(declined.getCause() instanceof CheckpointDeclinedException);
+            task.completionFuture().get(5, TimeUnit.SECONDS);
+            assertEquals(1, finishes.get());
+            assertEquals(1, closes.get());
+
+            List<Object> records = new java.util.ArrayList<>();
+            while (downstream.emitNext(records::add) != InputStatus.END_OF_INPUT) {
+                assertTrue(records.size() <= 3);
+            }
+            assertEquals(3, records.size());
+            assertEquals("tail", records.getLast());
+            assertTrue(records.subList(0, 2).containsAll(List.of("before-eof", "after-decline")));
+        } finally {
+            if (!task.completionFuture().isDone()) {
+                task.cancelAsync().get(5, TimeUnit.SECONDS);
+            }
+        }
+    }
+
+
+    @Test
+    void inlineOperatorFinishFailureMustNotReplayFinalOutput() throws Exception {
+        SourceTransformation<String> source = new SourceTransformation<>(
+                "source", new SplitSource(), String.class, 1);
+        AtomicInteger finishes = new AtomicInteger();
+        AtomicInteger closes = new AtomicInteger();
+        OneInputTransformation<String, String> transform = new OneInputTransformation<>(
+                source, "middle", () -> new OneInputStreamOperator<>() {
+                    @Override
+                    public void processElement(String record, Collector<String> output) throws Exception {
+                        output.collect(record);
+                    }
+
+                    @Override
+                    public void finish(Collector<String> output) throws Exception {
+                        finishes.incrementAndGet();
+                        output.collect("tail");
+                        throw new IllegalStateException("operator finish failed");
+                    }
+
+                    @Override
+                    public void close() {
+                        closes.incrementAndGet();
+                    }
+                }, String.class, 1);
+        RecordingSink sink = new RecordingSink();
+        SinkTransformation<String> sinkTransformation = new SinkTransformation<>(
+                transform, "sink", sink, 1);
+        OperatorChain chain = new OperatorChain(
+                List.of(StreamNode.fromTransformation(transform, 1)),
+                StreamNode.fromTransformation(sinkTransformation, 1));
+        TaskEnvironment environment = new TaskEnvironment(
+                new RuntimeTaskInfo(JobID.generate(), source.getId(), 0, 1, 0, 128), configuration(1, 128));
+
+        try {
+            chain.open(environment);
+            chain.collect("head");
+            IllegalStateException failure = assertThrows(IllegalStateException.class, chain::finish);
+            assertEquals("operator finish failed", failure.getMessage());
+            IllegalStateException repeated = assertThrows(IllegalStateException.class, chain::finish);
+            assertTrue(repeated.getMessage().contains("cannot finish again"));
+        } finally {
+            chain.close();
+        }
+        assertEquals(1, finishes.get());
+        assertEquals(1, closes.get());
+        assertEquals(List.of("head", "tail"), sink.rows);
+        assertEquals(0, sink.finalFlushes.get());
+        assertEquals(1, sink.closed.get());
     }
 
     @Test

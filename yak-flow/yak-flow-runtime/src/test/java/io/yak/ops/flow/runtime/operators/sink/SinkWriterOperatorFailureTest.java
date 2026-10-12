@@ -99,6 +99,8 @@ class SinkWriterOperatorFailureTest {
             assertEquals(3, (int) restoredState.get("writer-0", restoredSink.getWriterStateSerializer()).orElseThrow());
             restored.finish();
             assertEquals(1, restoredSink.writer.finalFlushes);
+            assertThrows(IllegalStateException.class, restored::finish);
+            assertThrows(IllegalStateException.class, () -> restored.snapshotState(9, restoredState));
             assertThrows(IllegalStateException.class, () -> restored.processElement("after-finish", ignored -> {}));
         } finally {
             restored.close();
@@ -130,6 +132,10 @@ class SinkWriterOperatorFailureTest {
             operator.processElement("a", ignored -> {});
             IOException failure = assertThrows(IOException.class, operator::finish);
             assertEquals("final flush failed", failure.getMessage());
+            // A failed final flush may already have committed: this Writer is terminal.
+            assertThrows(IllegalStateException.class, operator::finish);
+            assertThrows(IllegalStateException.class, () -> operator.processElement("b", ignored -> {}));
+            assertThrows(IllegalStateException.class, () -> operator.snapshotState(12, newState(Map.of())));
         } finally {
             operator.close();
         }
