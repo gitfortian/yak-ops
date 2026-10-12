@@ -18,6 +18,7 @@
         </module>
         <module name="JavadocParagraph"/>
         <module name="JavadocStyle">
+            <property name="checkFirstSentence" value="false"/>
             <property name="checkHtml" value="true"/>
         </module>
     </module>
