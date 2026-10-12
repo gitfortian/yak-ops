@@ -55,15 +55,17 @@ The HTTP response means the request has been persisted, not that the YakFlow Job
 
 ### Execution Plugin Capability
 
-The existing TaskPlugin contract continues to own Task type, parameter schema version, parsing, and resource validation. Its methods are not repurposed for Job submission or state management.
+TaskPlugin remains the single registration SPI. It owns Task type, parameter schema version, parsing, and resource validation. A plugin that supports execution also implements the optional `ExecutableTaskPlugin extends TaskPlugin` capability. Definition-only plugins can remain TaskPlugin implementations. TaskPluginRegistry remains the single type-keyed registry; no second execution-plugin registry is introduced.
 
-Introduce a task-type-specific execution capability that builds a YakFlow Pipeline using pinned Task parameters and a trusted execution context. The execution capability does not create Task Instances, submit the Pipeline, or own the Job lifecycle. The proposal favors a separate execution SPI over adding stateful execute methods to TaskPlugin. Exact interface names and registration mechanics remain an implementation detail unless they affect plugin interoperability.
+An executable plugin starts its task with pinned TaskParameters and a trusted TaskExecutionContext, using the engine appropriate to that Task type. It returns an asynchronous, engine-neutral TaskHandle supporting a runtime reference when available, terminal completion observation, and cancellation. The handle is scoped to one execution and is not a persistent Task Instance, an execution-state store, or a replacement for engine-specific APIs. The plugin starts the physical execution but does not persist business Instances or Attempts, or decide business lifecycle transitions.
 
-The execution context carries explicit authorized Workspace and Instance identity, resource access, and effective execution configuration. Credentials and connections are resolved at the trusted execution boundary, not serialized into Task parameters, Instance persistence, or log records.
+Boot is the composition root for Task plugins. It constructs plugin instances with their explicitly declared dependencies and supplies them to the existing TaskPluginRegistry(Iterable<? extends TaskPlugin>) entry point. Built-in executable plugins do not require zero-argument ServiceLoader construction, a second registration mechanism, or Spring-aware plugin API types. The active application uses a single Boot-managed registration path, retaining the Registry's duplicate-type validation.
+
+TaskExecutionContext is immutable execution identity and metadata, including the authorized Workspace, pinned Definition version, Instance, and Attempt identities. It does not expose service lookup, ApplicationContext, PipelineExecutor, arbitrary Spring beans, or credentials. Task-type-specific runtime dependencies are injected explicitly at plugin construction. Trusted resource operations must independently enforce Workspace scope; metadata in TaskExecutionContext alone is not an authorization grant.
 
 ### YakFlow Execution Boundary
 
-Use the existing PipelineExecutor.execute(Pipeline, Configuration) to submit the compiled Pipeline and JobClient to observe JobID, JobStatus, cancellation, and successful completion or exceptional result.
+The DATA_SYNC executable plugin builds a YakFlow Pipeline using its explicitly injected runtime resources, submits it through the existing PipelineExecutor.execute(Pipeline, Configuration), and adapts the returned JobClient into a TaskHandle. The generic Task Execution platform consumes TaskHandle and does not require a YakFlow Pipeline or expose JobClient to other Task types.
 
 YakFlow remains authoritative for JobGraph, ExecutionGraph, StreamTask state, checkpoint storage format, and runtime-internal restart. Business Controllers and Services must not manipulate ExecutionGraph or Source/Sink Task internals.
 
@@ -75,7 +77,7 @@ Task Definition owns stable task identity, immutable parameter versions, publica
 
 Task Execution owns Instance and Attempt persistence, request deduplication, submission coordination, observation of JobClient outcomes, cancellation, and durable business status.
 
-The Task execution plugin owns type-specific Pipeline construction. For DATA_SYNC, it translates one Source/one Sink configuration into YakFlow Source/Sink transformations, uses trusted Datasource metadata and Connector APIs, and produces a StreamGraph. The effective physical configuration is supplied by the platform and validated by Runtime, not placed in user-defined Task JSON.
+An executable Task plugin owns task-specific physical execution startup and returns a TaskHandle. It does not own durable Instance or Attempt state. For DATA_SYNC, the plugin translates one Source/one Sink configuration into YakFlow Source/Sink transformations, uses its injected trusted Datasource capabilities and Connector APIs, creates a StreamGraph, and invokes PipelineExecutor. The effective physical configuration is supplied by the platform and validated by Runtime, not placed in user-defined Task JSON.
 
 YakFlow owns Job execution and checkpoint/recovery mechanics. Core remains database-neutral; Runtime must not depend on product Controllers, DAO, or business persistence.
 
@@ -87,11 +89,11 @@ A successful request follows this logical sequence:
 2. Atomically persist the Instance and the first Attempt, including the caller's request identity.
 3. Commit the business transaction before dispatching a runtime Job.
 4. Claim the committed execution request for asynchronous processing.
-5. Resolve authorized runtime resources, validate current resource availability, and construct the Pipeline.
-6. Submit through PipelineExecutor and persist the returned JobID on the Attempt.
-7. Observe JobClient completion and record a terminal Instance/Attempt outcome.
+5. Resolve the Boot-assembled executable capability and its trusted runtime resources scoped to the persisted Workspace.
+6. Ask the executable plugin to start the task and persist the returned handle's runtime reference (YakFlow JobID for DATA_SYNC) when available.
+7. Observe TaskHandle completion and record a terminal Instance/Attempt outcome.
 
-Submission is nonblocking from the HTTP client's perspective. A successful JobClient submission is not a FINISHED Task Instance. Completion of the Runtime Job and required finalization must precede FINISHED. A failed or canceled Runtime Job cannot be recorded as a successful business execution.
+Submission is nonblocking from the HTTP client's perspective. A successfully returned execution handle is not a FINISHED Task Instance. Completion of the Runtime Job and required finalization must precede FINISHED. A failed or canceled Runtime Job cannot be recorded as a successful business execution.
 
 The submission claim, persistence updates, and terminal callbacks must be idempotent. A crash or lost acknowledgement between starting the embedded Job and recording JobID leaves an uncertain submission: the platform must not blindly submit another Job and risk duplicate external effects. On restart it must reconcile known outcomes or fail the Instance with an explicit interruption/uncertainty reason. An unknown JobID is not evidence that no Job ran.
 
@@ -99,7 +101,7 @@ An embedded JobClient handle is process-local. Persisting a JobID alone does not
 
 ### Cancellation and terminal races
 
-Cancel-before-dispatch must prevent a later launch. Cancel-after-dispatch delegates to JobClient.cancel() and observes its result. CANCELLING does not imply CANCELED; if the Runtime has already finished or failed, the actual terminal result must be preserved. An Instance must not transition from FINISHED or FAILED to CANCELED due to a late cancel request.
+Cancel-before-dispatch must prevent a later launch. Cancel-after-dispatch delegates through TaskHandle.cancel() (to JobClient.cancel() for DATA_SYNC) and observes its result. CANCELLING does not imply CANCELED; if the Runtime has already finished or failed, the actual terminal result must be preserved. An Instance must not transition from FINISHED or FAILED to CANCELED due to a late cancel request.
 
 Cancellation does not guarantee a new checkpoint or a recoverable stopped position. A separate resume/restart operation must validate checkpoint compatibility and external delivery semantics before it can be supported.
 
@@ -112,7 +114,7 @@ The initial DATA_SYNC execution capability supports:
 - A single logical Source, no Transform stage, a single logical Sink, and currently supported local linear YakFlow graph shapes.
 - Existing DATA_SYNC supported write modes and table/schema compatibility checks.
 
-The Task Definition stores datasource IDs, namespaces, table selectors, and write mode; it does not store runtime JDBC credentials. The execution context explicitly scopes Datasource resolution to the persisted Workspace, including when work runs outside the HTTP request thread. Thread-local request Workspace state must not be assumed to propagate to an asynchronous worker.
+The Task Definition stores datasource IDs, namespaces, table selectors, and write mode; it does not store runtime JDBC credentials. A narrow, Boot-injected DATA_SYNC runtime-resource capability resolves authorized connections and table schemas using the persisted Workspace identity. TaskExecutionContext carries that identity but is not a credential or proof of authorization. Resource lookup must enforce Workspace scope without assuming that the HTTP request's thread-local Workspace state propagates to an asynchronous worker.
 
 Operator identities used for recoverable jobs must be stable for the pinned Definition topology. Runtime-specific graph planning and checkpoint capabilities are reused rather than reimplemented in Task Execution.
 
@@ -134,11 +136,10 @@ The embedded Runtime is the execution target for this proposal. Worker dispatch,
 
 The design review should resolve the following before acceptance:
 
-1. **Execution plugin boundary:** Should Pipeline construction use a separate SPI keyed by Task type, or an optional capability on TaskPlugin? Preserve the distinction between parameter validation, planning, and execution regardless of the form.
-2. **Submission identity:** Should a caller-provided idempotency key be mandatory for manual execution, and what is the durable uniqueness scope across future scheduler/workflow triggers?
-3. **Overlapping runs:** Should the initial platform permit multiple concurrent Instances for the same Definition, or reject a second active DATA_SYNC run until target-write conflicts have an explicit policy?
-4. **Process failure semantics:** Is fail-closed interruption acceptable for the first embedded executor, with automatic restart/reconciliation designed separately rather than silently replaying an uncertain submission?
-5. **Attempt semantics:** Should an explicitly requested restore create a new platform Attempt under the same Instance, while YakFlow internal checkpoint restarts remain within the existing Attempt?
+1. **Submission identity:** Should a caller-provided idempotency key be mandatory for manual execution, and what is the durable uniqueness scope across future scheduler/workflow triggers?
+2. **Overlapping runs:** Should the initial platform permit multiple concurrent Instances for the same Definition, or reject a second active DATA_SYNC run until target-write conflicts have an explicit policy?
+3. **Process failure semantics:** Is fail-closed interruption acceptable for the first embedded executor, with automatic restart/reconciliation designed separately rather than silently replaying an uncertain submission?
+4. **Attempt semantics:** Should an explicitly requested restore create a new platform Attempt under the same Instance, while YakFlow internal checkpoint restarts remain within the existing Attempt?
 
 ## Compatibility, Deprecation, and Migration Plan
 
@@ -146,7 +147,7 @@ Task Definition IDs, immutable versions, plugin parameter schema, existing REST 
 
 Add Task Instance/Attempt persistence through a new forward-only Flyway migration. Published migrations are immutable; the current task-definition-only schema remains authoritative for Definitions. No credentials, serialized live JobClient references, or Runtime-internal ExecutionGraph objects are added to the database.
 
-The Task execution capability is additive. No existing Core Connector SPI, JobClient, PipelineExecutor, YakFlow checkpoint bytes, or user Task JSON shape must change as a prerequisite to the initial product execution path. Unsupported graph shapes and incompatible recovery state must be rejected rather than silently downgraded.
+The optional executable capability is additive to TaskPlugin and preserves the Registry's exact-type lookup and duplicate-type rejection. Boot will assemble built-in Task plugins with explicit dependencies instead of relying on zero-argument ServiceLoader instantiation; the active application must not register the same plugin through both paths. This registration change is part of the future implementation, not an implemented behavior of this proposal. No existing Core Connector SPI, JobClient, PipelineExecutor, YakFlow checkpoint bytes, or user Task JSON shape must change as a prerequisite to the initial product execution path. Unsupported graph shapes and incompatible recovery state must be rejected rather than silently downgraded.
 
 The initial implementation does not claim distributed execution, exactly-once delivery, automatic process-level failover, or a guarantee that cancel performs a checkpoint.
 
@@ -163,13 +164,18 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 7. **Submission uncertainty:** Simulated process interruption before submission, after job start but before JobID persistence, and after terminal completion before business update. Reconciliation cannot blindly replay uncertain external writes.
 8. **Checkpoint isolation:** Independent Instances use distinct checkpoint namespaces; compatible explicit restore follows pinned Definition and stable UIDs; missing or incompatible state fails clearly.
 9. **Observability:** Persist Instance/Attempt identity, timestamps, JobID and log reference without connection secrets; a restart does not leave stale RUNNING indefinitely.
-10. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
+10. **Plugin composition:** Boot injects each executable plugin's required dependencies and registers it once in TaskPluginRegistry; duplicate type or missing dependency fails startup. Definition-only plugins continue to work, and no runtime service lookup is available through TaskExecutionContext.
+11. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
 
 ## Rejected Alternatives
 
 - **Require one Workflow Instance for each Task:** Independent Task execution is a platform feature, and a Workflow is only one potential caller.
 - **Submit directly from TaskDefinitionController or DefinitionService:** Definition CRUD, HTTP processing, and long-running Job execution have different ownership and transaction lifecycles.
-- **Make TaskPlugin own Job submission and mutable execution state:** Definition parsing/validation and Pipeline preparation must remain separate from Instance/Attempt lifecycle ownership.
+- **Require all plugins to produce a YakFlow Pipeline:** Executable plugins may use different engines, while DATA_SYNC uses the existing YakFlow PipelineExecutor.
+- **Maintain two independently registered Task plugin SPIs:** Optional execution capability uses the same TaskPluginRegistry and exact Task type.
+- **Resolve runtime services through TaskExecutionContext:** Dependencies are explicit at Boot composition; a generic service locator would obscure ownership and authorization.
+- **Require a no-argument ServiceLoader constructor for executable plugins:** Explicit dependencies belong to plugin construction, while Boot controls application composition.
+- **Make a Task plugin own durable business execution state:** The plugin may start physical execution and return TaskHandle, but the platform owns Instance/Attempt persistence and lifecycle decisions.
 - **Duplicate YakFlow execution state or checkpoint coordination in business modules:** The Job and its physical task lifecycle remain Runtime concerns.
 - **Treat a persisted JobID as sufficient for embedded process recovery:** It does not restore an in-memory JobClient or prove the outcome of an uncertain external submission.
 - **Automatically rerun every nonterminal Instance after application restart:** An uncertain prior Job may already have committed external effects.
