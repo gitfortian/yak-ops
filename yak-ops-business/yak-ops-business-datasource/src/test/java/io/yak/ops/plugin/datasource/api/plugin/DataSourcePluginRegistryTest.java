@@ -1,0 +1,112 @@
+package io.yak.ops.plugin.datasource.api.plugin;
+
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import io.yak.ops.business.datasource.impl.H2TestDataSourcePlugin;
+import java.sql.Connection;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+
+/** Verifies SPI discovery, registered aliases and descriptor conflicts. */
+class DataSourcePluginRegistryTest {
+
+    @Test
+    void loadsTestProviderThroughSpi() {
+        assertSame(H2TestDataSourcePlugin.class, DataSourcePluginRegistry.get("TEST_H2").getClass());
+        DataSourcePluginRegistry.load();
+    }
+
+    @Test
+    void resolvesAliasesWithoutChangingGlobalRegistration() {
+        DataSourcePlugin provider = provider("POSTGRE_SQL", Set.of("POSTGRES", "POSTGRESQL"));
+        Map<String, DataSourcePlugin> registered = DataSourcePluginRegistry.registerProviders(List.of(provider));
+
+        assertSame(provider, registered.get("POSTGRE_SQL"));
+        assertSame(provider, registered.get("POSTGRES"));
+        assertSame(provider, registered.get("POSTGRESQL"));
+        assertThrows(UnsupportedOperationException.class, () -> registered.put("MYSQL", provider));
+        assertThrows(NoSuchElementException.class, () -> DataSourcePluginRegistry.get("UNREGISTERED_TYPE"));
+    }
+
+    @Test
+    void rejectsDuplicateAliases() {
+        assertThrows(
+                IllegalStateException.class,
+                () -> DataSourcePluginRegistry.registerProviders(List.of(
+                        provider("MYSQL", Set.of("DATABASE")),
+                        provider("ORACLE", Set.of("DATABASE")))));
+    }
+
+    @Test
+    void rejectsDuplicateTypes() {
+        assertThrows(
+                IllegalStateException.class,
+                () -> DataSourcePluginRegistry.registerProviders(List.of(
+                        provider("MYSQL", Set.of()), provider("MYSQL", Set.of()))));
+    }
+
+    @Test
+    void rejectsIncompatibleProviderVersion() {
+        DataSourcePlugin plugin = new DataSourcePlugin() {
+            @Override
+            public String type() {
+                return "MYSQL";
+            }
+
+            @Override
+            public DataSourcePluginDescriptor descriptor() {
+                return new DataSourcePluginDescriptor("MYSQL", Set.of(), "999", Set.of(), Set.of());
+            }
+
+            @Override
+            public DataSourceConnection parseConnection(String json) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void testConnection(DataSourceConnection connection, int timeoutSeconds) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Connection openConnection(DataSourceConnection connection, int timeoutSeconds) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        assertThrows(IllegalStateException.class, () -> DataSourcePluginRegistry.registerProviders(List.of(plugin)));
+    }
+
+    private DataSourcePlugin provider(String type, Set<String> aliases) {
+        return new DataSourcePlugin() {
+            @Override
+            public String type() {
+                return type;
+            }
+
+            @Override
+            public DataSourcePluginDescriptor descriptor() {
+                return new DataSourcePluginDescriptor(
+                        type, aliases, DataSourcePluginDescriptor.CURRENT_API_VERSION, Set.of(), Set.of());
+            }
+
+            @Override
+            public DataSourceConnection parseConnection(String json) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void testConnection(DataSourceConnection connection, int timeoutSeconds) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Connection openConnection(DataSourceConnection connection, int timeoutSeconds) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+}

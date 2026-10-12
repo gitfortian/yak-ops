@@ -49,9 +49,6 @@ public class DataSourceServiceImpl implements DataSourceService {
     private DataSourceEntityRepository repository;
 
     @Resource
-    private DataSourcePluginRegistry pluginRegistry;
-
-    @Resource
     private DataSourceProperties properties;
 
     @Override
@@ -316,7 +313,7 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     private DataSourcePlugin plugin(String type) {
         try {
-            return pluginRegistry.get(type);
+            return DataSourcePluginRegistry.get(type);
         } catch (IllegalArgumentException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, exception.getMessage(), exception);
         } catch (NoSuchElementException exception) {

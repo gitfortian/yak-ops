@@ -39,9 +39,6 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     private DataSourceEntityRepository repository;
 
     @Resource
-    private DataSourcePluginRegistry pluginRegistry;
-
-    @Resource
     private DataSourceProperties properties;
 
     @Override
@@ -113,7 +110,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
         DataSourcePlugin plugin;
         try {
-            plugin = pluginRegistry.get(entity.getDbType());
+            plugin = DataSourcePluginRegistry.get(entity.getDbType());
         } catch (IllegalArgumentException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, null, exception);
         } catch (NoSuchElementException exception) {
