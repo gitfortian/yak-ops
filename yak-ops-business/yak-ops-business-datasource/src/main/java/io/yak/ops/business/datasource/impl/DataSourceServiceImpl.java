@@ -49,7 +49,8 @@ import org.springframework.util.StringUtils;
 /**
  * Implements Workspace-scoped datasource CRUD, search, connectivity tests and Entity-to-VO projection.
  *
- * <p>Owns Workspace validation and persistence. Plugins resolve connections; the Catalog and credential services own their respective operations.
+ * <p>Owns Workspace validation and persistence. Plugins resolve connections;
+ * the Catalog and credential services own their respective operations.
  */
 @Service
 public class DataSourceServiceImpl implements DataSourceService {
