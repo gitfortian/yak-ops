@@ -50,6 +50,7 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -373,6 +374,40 @@ class CheckpointRecoveryTest {
         assertThrows(java.util.concurrent.ExecutionException.class,
                 () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
         assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
+        assertEquals(0, sink.createdWriters.get());
+    }
+
+    @Test
+    void shouldRejectFinishedCheckpointRestoreBeforeFinishedOnRestoreExists() throws Exception {
+        OffsetSource source = new OffsetSource(4);
+        CapturedSink sink = new CapturedSink();
+        String signature = FileCheckpointStore.graphSignature(graph(source, sink));
+        var enumerator = new CheckpointSnapshot.SerializedState(
+                source.getEnumeratorCheckpointSerializer().getVersion(),
+                source.getEnumeratorCheckpointSerializer().serialize(0));
+        var snapshot = new CheckpointSnapshot(
+                9,
+                signature,
+                enumerator,
+                Map.of(),
+                Map.of(),
+                System.currentTimeMillis(),
+                Map.of(),
+                Set.of("checkpoint-stable-source"),
+                Set.of());
+        try (FileCheckpointStore store = new FileCheckpointStore(checkpointDirectory)) {
+            store.save(snapshot);
+        }
+
+        JobClient job = new EmbeddedPipelineExecutor()
+                .execute(graph(source, sink), configuration(true))
+                .get(5, TimeUnit.SECONDS);
+        java.util.concurrent.ExecutionException failure = assertThrows(
+                java.util.concurrent.ExecutionException.class,
+                () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
+        assertTrue(failure.getCause().toString().contains("Finished-on-Restore"));
+        assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
+        assertEquals(0, source.createdReaders.get());
         assertEquals(0, sink.createdWriters.get());
     }
 
