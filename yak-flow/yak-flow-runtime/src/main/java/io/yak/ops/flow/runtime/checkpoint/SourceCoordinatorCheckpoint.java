@@ -28,7 +28,8 @@ public record SourceCoordinatorCheckpoint<SplitT extends SourceSplit, EnumStateT
             throw new IllegalArgumentException("checkpointId must not be negative");
         }
         Objects.requireNonNull(enumeratorState, "enumeratorState must not be null");
-        Objects.requireNonNull(assignedSinceLastCompletedCheckpoint, "assignedSinceLastCompletedCheckpoint must not be null");
+        Objects.requireNonNull(
+                assignedSinceLastCompletedCheckpoint, "assignedSinceLastCompletedCheckpoint must not be null");
         Map<Integer, List<SplitT>> copy = new LinkedHashMap<>();
         assignedSinceLastCompletedCheckpoint.forEach((id, splits) -> {
             if (id == null || id < 0) {

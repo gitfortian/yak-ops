@@ -29,7 +29,8 @@ public final class SplitAssignmentTracker<SplitT extends SourceSplit> {
         }
         LinkedHashMap<String, SplitT> splits = outstanding.computeIfAbsent(subtaskId, ignored -> new LinkedHashMap<>());
         if (splits.putIfAbsent(split.splitId(), split) != null) {
-            throw new IllegalArgumentException("Split was reassigned before its checkpoint completed: " + split.splitId());
+            throw new IllegalArgumentException(
+                    "Split was reassigned before its checkpoint completed: " + split.splitId());
         }
     }
 

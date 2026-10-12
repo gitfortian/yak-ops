@@ -41,7 +41,8 @@ public final class StreamNode {
         }
         if (transformation.getParallelism() != Transformation.DEFAULT_PARALLELISM
                 && transformation.getParallelism() != resolvedParallelism) {
-            throw new IllegalArgumentException("Resolved parallelism does not match the Transformation's declared parallelism");
+            throw new IllegalArgumentException(
+                    "Resolved parallelism does not match the Transformation's declared parallelism");
         }
 
         this.id = transformation.getId();
@@ -74,8 +75,8 @@ public final class StreamNode {
                 this.sink = sinkTransformation.getSink();
             }
             default ->
-                throw new IllegalArgumentException(
-                        "Unsupported Transformation type: " + transformation.getClass().getName());
+                throw new IllegalArgumentException("Unsupported Transformation type: "
+                        + transformation.getClass().getName());
         }
     }
 

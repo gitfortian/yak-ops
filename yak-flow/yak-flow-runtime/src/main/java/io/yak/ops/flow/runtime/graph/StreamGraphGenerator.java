@@ -144,7 +144,8 @@ public final class StreamGraphGenerator {
         private void visit(Transformation<?> transformation) {
             Objects.requireNonNull(transformation, "Transformation must not be null");
             if (visiting.contains(transformation)) {
-                throw new IllegalArgumentException("Transformation contains a cycle, node ID=" + transformation.getId());
+                throw new IllegalArgumentException(
+                        "Transformation contains a cycle, node ID=" + transformation.getId());
             }
             if (visited.contains(transformation)) {
                 return;
@@ -159,7 +160,9 @@ public final class StreamGraphGenerator {
                 }
 
                 if (!autoGenerateUids && transformation.getUid() == null) {
-                    throw new IllegalArgumentException("Stable operator UID is required when automatic UID generation is disabled, node ID=" + transformation.getId());
+                    throw new IllegalArgumentException(
+                            "Stable operator UID is required when automatic UID generation is disabled, node ID="
+                                    + transformation.getId());
                 }
 
                 int parallelism = transformation.getParallelism() == Transformation.DEFAULT_PARALLELISM

@@ -42,7 +42,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleBusinessException(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
         if (errorCode == null) {
-            LOG.warn("Business exception has no error code, exceptionType={}", exception.getClass().getSimpleName());
+            LOG.warn(
+                    "Business exception has no error code, exceptionType={}",
+                    exception.getClass().getSimpleName());
             String message = exception.getMessage();
             Result<Void> body = message == null || message.isBlank()
                     ? Result.fail(CommonErrorCode.PARAM_NOT_VALID)
@@ -51,7 +53,8 @@ public class GlobalExceptionHandler {
         }
 
         HttpStatus status = businessStatus(errorCode);
-        if (status.is5xxServerError()) LOG.error("Business request failed, errorCode={}", errorCode.getCode(), exception);
+        if (status.is5xxServerError())
+            LOG.error("Business request failed, errorCode={}", errorCode.getCode(), exception);
         Result<Void> body = exception instanceof DataSourceException dataSourceException
                 ? Result.fail(errorCode.getCode(), dataSourceException.getUserMessage())
                 : Result.fail(errorCode);
@@ -68,7 +71,9 @@ public class GlobalExceptionHandler {
         IllegalArgumentException.class
     })
     public ResponseEntity<Result<Void>> handleInvalidRequest(Exception exception) {
-        LOG.debug("Request validation failed, exceptionType={}", exception.getClass().getSimpleName());
+        LOG.debug(
+                "Request validation failed, exceptionType={}",
+                exception.getClass().getSimpleName());
         return ResponseEntity.badRequest().body(Result.fail(CommonErrorCode.PARAM_NOT_VALID));
     }
 

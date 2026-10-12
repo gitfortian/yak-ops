@@ -85,7 +85,11 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (repository.add(entity) == null) {
             throw new DataSourceException(DataSourceErrorCode.CREATE_FAILED);
         }
-        LOG.info("Datasource created, workspaceId={}, dataSourceId={}, type={}", workspaceId, entity.getId(), entity.getDbType());
+        LOG.info(
+                "Datasource created, workspaceId={}, dataSourceId={}, type={}",
+                workspaceId,
+                entity.getId(),
+                entity.getDbType());
         return true;
     }
 

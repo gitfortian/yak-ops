@@ -85,7 +85,8 @@ public final class StreamingJobGraphGenerator {
             throw new IllegalArgumentException("execution.restart.max-attempts must not be negative");
         }
         if (maxRestarts > 0 && !checkpointEnabled()) {
-            throw new UnsupportedOperationException("Automatic recovery requires persistent Source-to-Sink checkpoints to avoid replay from the beginning");
+            throw new UnsupportedOperationException(
+                    "Automatic recovery requires persistent Source-to-Sink checkpoints to avoid replay from the beginning");
         }
         int maxParallelism = configuration.get(PipelineOptions.MAX_PARALLELISM);
         if (maxParallelism <= 0 || maxParallelism > 32768) {
@@ -98,14 +99,17 @@ public final class StreamingJobGraphGenerator {
         boolean autoGenerateUids = configuration.get(PipelineOptions.AUTO_GENERATE_UIDS);
         for (StreamNode node : streamGraph.getStreamNodes()) {
             if (node.getParallelism() > maxParallelism) {
-                throw new IllegalArgumentException("maxParallelism must be at least the operator parallelism: " + node.getId());
+                throw new IllegalArgumentException(
+                        "maxParallelism must be at least the operator parallelism: " + node.getId());
             }
             if (node.usesDefaultParallelism() && node.getParallelism() != defaultParallelism) {
-                throw new IllegalArgumentException("StreamNode " + node.getId() + " default parallelism differs from the submitted configuration: "
-                        + node.getParallelism() + " != " + defaultParallelism);
+                throw new IllegalArgumentException(
+                        "StreamNode " + node.getId() + " default parallelism differs from the submitted configuration: "
+                                + node.getParallelism() + " != " + defaultParallelism);
             }
             if (!autoGenerateUids && node.getUid() == null) {
-                throw new IllegalArgumentException("Stable operator UID is required when automatic UID generation is disabled: " + node.getId());
+                throw new IllegalArgumentException(
+                        "Stable operator UID is required when automatic UID generation is disabled: " + node.getId());
             }
         }
 
@@ -132,7 +136,8 @@ public final class StreamingJobGraphGenerator {
         for (int i = 0; i < nodes.size(); i++) {
             StreamNode node = nodes.get(i);
             if (node.getParallelism() <= 0 || node.getParallelism() > MAX_PARALLELISM) {
-                throw new UnsupportedOperationException("Operator parallelism must be between 1 and " + MAX_PARALLELISM + " for operator: " + node.getId());
+                throw new UnsupportedOperationException("Operator parallelism must be between 1 and " + MAX_PARALLELISM
+                        + " for operator: " + node.getId());
             }
             subtasks += node.getParallelism();
             if (i == 0) {
@@ -157,7 +162,8 @@ public final class StreamingJobGraphGenerator {
                     throw new UnsupportedOperationException("Multiple Sinks and branching data routes are unsupported");
                 }
                 if (i > 0 && !node.isOperator()) {
-                    throw new UnsupportedOperationException("Intermediate nodes in linear graphs must be one-input operators");
+                    throw new UnsupportedOperationException(
+                            "Intermediate nodes in linear graphs must be one-input operators");
                 }
             }
         }

@@ -132,7 +132,8 @@ public record CheckpointSnapshot(
             if (version < 0) {
                 throw new IllegalArgumentException("State serializer version must not be negative");
             }
-            bytes = Objects.requireNonNull(bytes, "Serialized state bytes must not be null").clone();
+            bytes = Objects.requireNonNull(bytes, "Serialized state bytes must not be null")
+                    .clone();
         }
 
         @Override

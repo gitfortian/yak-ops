@@ -260,10 +260,12 @@ public final class ExecutionGraph {
      */
     public CompletableFuture<CheckpointSnapshot> checkpoint() {
         if (!checkpointConfigured) {
-            return CompletableFuture.failedFuture(new UnsupportedOperationException("Persistent checkpoints are not enabled for this job"));
+            return CompletableFuture.failedFuture(
+                    new UnsupportedOperationException("Persistent checkpoints are not enabled for this job"));
         }
         if (status.isTerminalState() || cancellationRequested) {
-            return CompletableFuture.failedFuture(new IllegalStateException("Cannot trigger a checkpoint for a terminal or cancelling job"));
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Cannot trigger a checkpoint for a terminal or cancelling job"));
         }
         return checkpointController
                 .thenCompose(AlignedCheckpointCoordinator::trigger)

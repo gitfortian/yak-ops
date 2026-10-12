@@ -74,10 +74,12 @@ public final class StreamGraph implements Pipeline {
             }
             if (edge.partitioning() == StreamPartitioning.FORWARD
                     && source.getParallelism() != target.getParallelism()) {
-                throw new IllegalArgumentException("FORWARD partitioning requires equal upstream and downstream parallelism: " + edge);
+                throw new IllegalArgumentException(
+                        "FORWARD partitioning requires equal upstream and downstream parallelism: " + edge);
             }
             if (source.isSink() || target.isSource()) {
-                throw new IllegalArgumentException("Edges cannot originate from Sinks or terminate at Sources: " + edge);
+                throw new IllegalArgumentException(
+                        "Edges cannot originate from Sinks or terminate at Sources: " + edge);
             }
             Class<?> expectedInput = target.getInputType().orElseThrow();
             if (!expectedInput.isAssignableFrom(source.getOutputType())) {
@@ -96,12 +98,14 @@ public final class StreamGraph implements Pipeline {
             int outDegree = out.get(node.getId()).size();
             if (node.isSource()) {
                 if (inDegree != 0 || outDegree == 0) {
-                    throw new IllegalArgumentException("Source must have no inputs and at least one output: " + node.getId());
+                    throw new IllegalArgumentException(
+                            "Source must have no inputs and at least one output: " + node.getId());
                 }
                 sources.add(node);
             } else if (node.isOperator()) {
                 if (inDegree != 1 || outDegree == 0) {
-                    throw new IllegalArgumentException("One-input operator must have one input and at least one output: " + node.getId());
+                    throw new IllegalArgumentException(
+                            "One-input operator must have one input and at least one output: " + node.getId());
                 }
             } else if (node.isSink()) {
                 if (inDegree != 1 || outDegree != 0) {

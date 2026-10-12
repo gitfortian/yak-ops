@@ -31,7 +31,8 @@ public final class TaskEnvironment implements WriterInitContext {
             ProcessingTimeService processingTimeService) {
         this.taskInfo = Objects.requireNonNull(taskInfo, "taskInfo must not be null");
         this.configuration = new Configuration(Objects.requireNonNull(configuration, "configuration must not be null"));
-        this.cancellationRequested = Objects.requireNonNull(cancellationRequested, "cancellationRequested must not be null");
+        this.cancellationRequested =
+                Objects.requireNonNull(cancellationRequested, "cancellationRequested must not be null");
         this.processingTimeService = processingTimeService;
     }
 

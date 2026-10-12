@@ -58,7 +58,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     /** Restores enumerator state from a completed checkpoint; reader splits are restored separately. */
     public static <SplitT extends SourceSplit, EnumStateT> SourceCoordinator<SplitT, EnumStateT> restore(
             Source<?, SplitT, EnumStateT> source, OperatorCoordinatorContext coordinatorContext, EnumStateT state) {
-        return new SourceCoordinator<>(source, coordinatorContext, Objects.requireNonNull(state, "Restored state must not be null"), true);
+        return new SourceCoordinator<>(
+                source, coordinatorContext, Objects.requireNonNull(state, "Restored state must not be null"), true);
     }
 
     private SourceCoordinator(
@@ -146,8 +147,9 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
                         new IllegalArgumentException("Operator event subtask or attempt does not match the sender"));
             }
         } else if (!(event instanceof SourceEventWrapper)) {
-            return CompletableFuture.failedFuture(new IllegalArgumentException(
-                    "Unsupported operator event for coordinator: " + event.getClass().getName()));
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("Unsupported operator event for coordinator: "
+                            + event.getClass().getName()));
         }
         return submit(() -> {
             ensureStarted();
@@ -224,7 +226,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         return submit(() -> {
             ensureStarted();
             context.ensureDeliveriesCompleted();
-            return Objects.requireNonNull(enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
+            return Objects.requireNonNull(
+                    enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
         });
     }
 
@@ -239,7 +242,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         return submit(() -> {
             ensureStarted();
             context.ensureDeliveriesCompleted();
-            EnumStateT state = Objects.requireNonNull(enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
+            EnumStateT state = Objects.requireNonNull(
+                    enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
             Map<Integer, java.util.List<SplitT>> assignments =
                     context.assignmentTracker().snapshot(checkpointId);
             return new SourceCoordinatorCheckpoint<>(checkpointId, state, assignments);
@@ -278,7 +282,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         return submit(() -> {
             context.checkRegistered(taskInfo);
             fail(new IllegalStateException(
-                    "Source reader failure requires full job recovery: " + taskInfo.subtaskIndex() + "，attempt=" + taskInfo.attemptNumber(),
+                    "Source reader failure requires full job recovery: " + taskInfo.subtaskIndex() + ", attempt="
+                            + taskInfo.attemptNumber(),
                     failure));
             return null;
         });

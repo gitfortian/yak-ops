@@ -148,7 +148,8 @@ final class TaskDeployment {
                 restoredCheckpoint = checkpointStore
                         .loadLatest(FileCheckpointStore.graphSignature(
                                 jobGraph.graph(), jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM)))
-                        .orElseThrow(() -> new IllegalStateException("No complete recoverable checkpoint exists in the state directory"));
+                        .orElseThrow(() -> new IllegalStateException(
+                                "No complete recoverable checkpoint exists in the state directory"));
                 if (restoredCheckpoint.hasFinishedOperators()) {
                     // PR3 provides the physical finished-on-restore control Tasks.
                     // Ordinary Reader/Writer deployment would replay finished business work.

@@ -62,8 +62,8 @@ public final class SourceReaderRuntimeContext implements SourceReaderContext {
         }
         CompletionStage<Void> response;
         try {
-            response =
-                    Objects.requireNonNull(eventGateway.sendEventToCoordinator(event), "OperatorEventGateway returned null");
+            response = Objects.requireNonNull(
+                    eventGateway.sendEventToCoordinator(event), "OperatorEventGateway returned null");
         } catch (Throwable failure) {
             asyncFailureHandler.accept(failure);
             return;

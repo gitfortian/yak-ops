@@ -110,7 +110,8 @@ public abstract class StreamTask implements AutoCloseable {
     public final CompletableFuture<Void> start() {
         synchronized (lifecycleLock) {
             if (startRequested || cancelRequested) {
-                return CompletableFuture.failedFuture(new IllegalStateException("StreamTask cannot start more than once or after cancellation"));
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("StreamTask cannot start more than once or after cancellation"));
             }
             startRequested = true;
             Thread thread = Thread.ofVirtual().name(taskInfo().threadName()).unstarted(this::run);
@@ -186,7 +187,8 @@ public abstract class StreamTask implements AutoCloseable {
         Objects.requireNonNull(action, "action must not be null");
         synchronized (lifecycleLock) {
             if (!startRequested || cancelRequested || completion.isDone()) {
-                return CompletableFuture.failedFuture(new IllegalStateException("StreamTask has not started or has already terminated"));
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("StreamTask has not started or has already terminated"));
             }
             return mailboxExecutor.submit(action);
         }
@@ -251,7 +253,8 @@ public abstract class StreamTask implements AutoCloseable {
                     // completed readiness future instead of spinning with arbitrary retry limits.
                     availability.join();
                     if (readyWithoutInput) {
-                        throw new IllegalStateException("SourceReader.isAvailable() remains completed without readable input");
+                        throw new IllegalStateException(
+                                "SourceReader.isAvailable() remains completed without readable input");
                     }
                     readyWithoutInput = true;
                     return;
@@ -330,7 +333,8 @@ public abstract class StreamTask implements AutoCloseable {
                 }
             }
             if (!started.isDone()) {
-                started.completeExceptionally(failure == null ? new IllegalStateException("StreamTask was not started") : failure);
+                started.completeExceptionally(
+                        failure == null ? new IllegalStateException("StreamTask was not started") : failure);
             }
             mailboxProcessor.close(failure == null ? new IllegalStateException("StreamTask has terminated") : failure);
             if (failure == null) {

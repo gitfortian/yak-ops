@@ -191,7 +191,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             Map<String, SourceSplit> splits = result.computeIfAbsent(section.getKey(), id -> new LinkedHashMap<>());
             for (var state : section.getValue()) {
                 SourceSplit split = Objects.requireNonNull(
-                        serializer.deserialize(state.version(), state.bytes()), "Deserialized source split must not be null");
+                        serializer.deserialize(state.version(), state.bytes()),
+                        "Deserialized source split must not be null");
                 splits.put(split.splitId(), split);
             }
         }

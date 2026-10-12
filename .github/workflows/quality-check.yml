@@ -77,14 +77,6 @@ jobs:
           -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist'
           com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
 
-      - name: Report required Java formatting
-        if: ${{ failure() && steps.scope.outputs.backend == 'true' }}
-        run: |
-          bash mvnw -q -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
-          echo 'SPOTLESS_PATCH_BEGIN'
-          git diff --no-ext-diff --no-color
-          echo 'SPOTLESS_PATCH_END'
-
       - name: Backend verify
         if: steps.scope.outputs.backend == 'true'
         run: >-

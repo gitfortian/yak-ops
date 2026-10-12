@@ -144,7 +144,8 @@ public final class FileCheckpointStore implements AutoCloseable {
             throw new IOException("Invalid checkpoint state contents", failure);
         }
         if (!expectedGraphSignature.equals(snapshot.graphSignature())) {
-            throw new IllegalStateException("Checkpoint graph, operator UID or parallelism does not match the current job");
+            throw new IllegalStateException(
+                    "Checkpoint graph, operator UID or parallelism does not match the current job");
         }
         return Optional.of(snapshot);
     }

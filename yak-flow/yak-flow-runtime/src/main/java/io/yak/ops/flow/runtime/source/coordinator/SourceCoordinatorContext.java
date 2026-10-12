@@ -78,7 +78,9 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         checkSubtask(subtaskId);
         Objects.requireNonNull(gateway, "gateway must not be null");
         if (readers.putIfAbsent(subtaskId, gateway) != null) {
-            throw new IllegalArgumentException("Reader is already registered; replacing an individual reader attempt is unsupported: " + subtaskId);
+            throw new IllegalArgumentException(
+                    "Reader is already registered; replacing an individual reader attempt is unsupported: "
+                            + subtaskId);
         }
         readerIdentities.put(subtaskId, taskInfo);
     }
@@ -88,8 +90,8 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         operatorContext.validateTask(taskInfo);
         RuntimeTaskInfo active = readerIdentities.get(taskInfo.subtaskIndex());
         if (!taskInfo.equals(active)) {
-            throw new IllegalStateException(
-                    "Reader is unregistered or stale, subtask=" + taskInfo.subtaskIndex() + "，attempt=" + taskInfo.attemptNumber());
+            throw new IllegalStateException("Reader is unregistered or stale, subtask=" + taskInfo.subtaskIndex()
+                    + ", attempt=" + taskInfo.attemptNumber());
         }
     }
 
@@ -248,13 +250,14 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             throw new IllegalStateException("Reader is not registered: " + subtaskId);
         }
         try {
-            CompletionStage<Void> delivered =
-                    Objects.requireNonNull(gateway.sendEvent(new SourceEventWrapper(event)), "SubtaskGateway returned null");
+            CompletionStage<Void> delivered = Objects.requireNonNull(
+                    gateway.sendEvent(new SourceEventWrapper(event)), "SubtaskGateway returned null");
             pendingSourceEvents.add(delivered);
             delivered.whenComplete((unused, failure) -> post(() -> {
                 pendingSourceEvents.remove(delivered);
                 if (failure != null) {
-                    onFailure.accept(new IllegalStateException("SourceEvent delivery failed: subtask=" + subtaskId, failure));
+                    onFailure.accept(
+                            new IllegalStateException("SourceEvent delivery failed: subtask=" + subtaskId, failure));
                 }
             }));
         } catch (Throwable failure) {

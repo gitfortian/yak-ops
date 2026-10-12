@@ -85,8 +85,8 @@ public final class SourceOperator<T, SplitT extends SourceSplit> implements Oper
             ensureInitialized();
             reader.handleSourceEvents(wrapper.sourceEvent());
         } else {
-            throw new IllegalArgumentException(
-                    "Unsupported operator event for SourceOperator: " + event.getClass().getName());
+            throw new IllegalArgumentException("Unsupported operator event for SourceOperator: "
+                    + event.getClass().getName());
         }
     }
 
@@ -141,7 +141,8 @@ public final class SourceOperator<T, SplitT extends SourceSplit> implements Oper
         if (checkpointId < 0) {
             throw new IllegalArgumentException("checkpointId must not be negative");
         }
-        return List.copyOf(Objects.requireNonNull(reader.snapshotState(checkpointId), "Reader snapshot must not be null"));
+        return List.copyOf(
+                Objects.requireNonNull(reader.snapshotState(checkpointId), "Reader snapshot must not be null"));
     }
 
     public void notifyCheckpointComplete(long checkpointId) throws Exception {

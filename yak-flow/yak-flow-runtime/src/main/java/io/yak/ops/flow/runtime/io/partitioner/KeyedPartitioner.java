@@ -31,7 +31,8 @@ public final class KeyedPartitioner<T> implements StreamPartitioner<T> {
         }
         Object key = Objects.requireNonNull(keySelector.getKey(record), "KEYED partitioning requires a non-null key");
         if (key.getClass().isArray()) {
-            throw new IllegalArgumentException("KEYED partitioning does not support array keys because their default hash is identity-based");
+            throw new IllegalArgumentException(
+                    "KEYED partitioning does not support array keys because their default hash is identity-based");
         }
         return KeyGroupRangeAssignment.assignKeyToParallelOperator(key, maxParallelism, numberOfChannels);
     }
