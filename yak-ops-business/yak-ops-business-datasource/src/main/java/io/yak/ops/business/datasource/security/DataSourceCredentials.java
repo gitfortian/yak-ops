@@ -145,8 +145,7 @@ public class DataSourceCredentials {
         while (submittedParameters.find()) {
             String name = normalizeField(decodeField(submittedParameters.group(2)));
             String replacement = submittedParameters.group();
-            if (isSecret(name, keys)
-                    && SensitiveUtils.MASKED_VALUE.equals(submittedParameters.group(4))) {
+            if (isSecret(name, keys) && SensitiveUtils.MASKED_VALUE.equals(submittedParameters.group(4))) {
                 String previous = storedSecrets.get(name);
                 if (previous == null) {
                     throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接地址中的凭据需要重新输入");
