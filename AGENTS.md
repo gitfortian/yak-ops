@@ -39,15 +39,23 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
 - **New major subsystem or public contract change:** discuss and accept a YAK-FLIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [FLIP template](.github/FLIP_TEMPLATE.md).
 - **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
-- **Database migration:** add a forward-only Flyway migration, check upgrades and test the affected compatibility boundary.
+- **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
 - **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; this documentation migration does not rewrite frontend rules.
+
+## Repository-Specific Invariants
+
+- Keep task-definition identity, Workspace authorization and immutable definition versions in the business/persistence boundary. Plugin validation must not access credentials or silently rewrite requested parameters; accepted task configuration is JSON.
+- Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
+- Keep published Flyway migrations frozen; draft migrations must be reconciled before the release migration gate. The release scripts verify names and sequence, not the semantic safety of SQL.
+- Logging must not expose credentials or sensitive data. JavaDoc and implementation comments must be English; existing application log events follow the repository's established language conventions.
+- Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Existing code and tests—not historic descriptions—determine which features are implemented.
 
 ## Code Quality and Review
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
 - Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
-- Preserve current static checks, CI and real-database acceptance workflows. Never weaken or skip them simply to make a PR green.
-- Read the applicable existing module `*_RULES.md` for implementation constraints **while those files remain in the repository**. Their descriptions are not a requirement to edit Markdown after ordinary code changes.
+- Preserve Spotless, Java comment/logging validators, backend boundary checks, CI and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
+- Treat implementation code, API JavaDoc, tests and enforced tools as the authoritative source for behavior. Do not recreate deleted backend `*_RULES.md`, Capability descriptions or a parallel Architecture/Contract index.
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
 - Keep one issue or coherent change per PR and explain purpose, tests, public impact and any FLIP in the PR body.
 
@@ -58,4 +66,4 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
 - [FLIP template](.github/FLIP_TEMPLATE.md) — major design proposals.
 - [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
-- [Existing backend formatter rules](JAVA_RULES.md) and [frontend rules](yak-ops-ui/FRONTEND_RULES.md) — retained until the planned cleanup.
+- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — unchanged by the backend documentation cleanup.

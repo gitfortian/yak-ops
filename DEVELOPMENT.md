@@ -34,12 +34,21 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 
 Use the [Apache Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) for code review principles: small, focused changes; meaningful names; explicit ownership; readable tests; no redundant comments.
 
-The currently enforced formatter is **Spotless + Palantir Java Format**, not Flink's google-java-format. The existing [Java rules](JAVA_RULES.md) and [JavaDoc rules](JAVA_COMMENT_RULES.md) continue to define mechanical and concrete code conventions until replaced through a separately scoped PR. Do not alter these tools as part of documentation restructuring.
+The currently enforced formatter is **Spotless + Palantir Java Format**, not Flink's google-java-format. Keep its current versions and checks; changing formatting or the Java baseline requires a separate review. For additional enforcement run:
+
+```sh
+python3 scripts/ci/test_verify_java_comments.py
+python3 scripts/ci/verify_java_comments.py
+python3 scripts/verify_logging_rules.py
+bash scripts/ci/verify-backend-boundaries.sh
+```
+
+Write concise English JavaDoc for repository-owned top-level types and non-obvious public contracts, including lifecycle, nullability, ownership and compatibility; do not restate obvious methods. The comment scanner enforces English-only Java comments and required top-level documentation for its covered modules. The logging validator enforces the existing logger shape, event language and sensitive-data restrictions. These scripts and CI are the executable style baseline, not a second prose-based rule system.
 
 ## Documentation and Design
 
 - Major design changes and public contract changes go through the [YAK-FLIP process](.github/CONTRIBUTING.md#flink-improvement-proposals-flips) before implementation.
 - Ordinary implementation details belong in code, JavaDoc, tests and the GitHub PR; no companion descriptive Markdown is required.
 - Change user documentation for new or changed user-visible functionality, compatibility or operation procedures.
-- Legacy Capability/Architecture/Rules documents are being retired in a separate cleanup. Never implement obsolete behavior merely to match them.
+- Backend Capability/Architecture/Rules descriptions have been retired. Consult current source, relevant JavaDoc, tests and accepted YAK-FLIPs; do not recreate them during routine implementation changes.
 - Release decisions are recorded as Release Gate artifacts; version notes and immutable asset evidence belong in GitHub Releases, not source-tree Markdown files.

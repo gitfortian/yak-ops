@@ -4,7 +4,7 @@ Status: Active
 
 Scope: `apps/web/app/datasource/**`、`apps/web/service/datasource/**`。
 
-数据源能力、连接模式和常用类型行为见 [Datasource Contract](../../../../../docs/capabilities/datasource/README.md)；通用布局见 [Form Rules](../../FORM_RULES.md)。本文件维护页面特有的组合与交互约束。
+数据源能力以实际 Service 类型和后端接口为准；通用布局见 [Form Rules](../../FORM_RULES.md)。本文件维护页面特有的组合与交互约束。
 
 ## Ownership
 
