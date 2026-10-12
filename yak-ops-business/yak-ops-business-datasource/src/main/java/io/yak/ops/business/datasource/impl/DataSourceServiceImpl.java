@@ -49,7 +49,7 @@ import org.springframework.util.StringUtils;
 /**
  * Implements Workspace-scoped datasource CRUD, search, connectivity tests and Entity-to-VO projection.
  *
- * <p>Owns business validation and persistence orchestration; delegates database-specific behavior and credential handling to the plugin registry.
+ * <p>Owns Workspace validation and persistence. Plugins resolve connections; the Catalog and credential services own their respective operations.
  */
 @Service
 public class DataSourceServiceImpl implements DataSourceService {
@@ -539,10 +539,10 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (target == null) {
             return null;
         }
-        DataSourcePlugin provider = source.getDbType() == null ? null : plugin(source.getDbType());
-        target.setJdbcUrl(credentials.maskText(provider == null ? null : provider.descriptor(), source.getJdbcUrl()));
+        DataSourcePlugin provider = plugin(source.getDbType());
+        target.setJdbcUrl(credentials.maskText(provider.descriptor(), source.getJdbcUrl()));
         target.setDisplayJdbcUrl(target.getJdbcUrl());
-        if (provider != null && StringUtils.hasText(source.getConnectionParams())) {
+        if (StringUtils.hasText(source.getConnectionParams())) {
             DataSourceConnection connection = parseConnection(provider, source.getConnectionParams());
             target.setDatabase(connection.database());
             target.setSchema(connection.schema());
@@ -554,7 +554,7 @@ public class DataSourceServiceImpl implements DataSourceService {
                 source.getEnvironment() == null ? null : source.getEnvironment().getDisplayName());
         target.setConnStatus(
                 source.getConnStatus() == null ? null : source.getConnStatus().name());
-        if (includeOriginalJson && provider != null) {
+        if (includeOriginalJson) {
             target.setOriginalJson(credentials.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
         }
         return target;
