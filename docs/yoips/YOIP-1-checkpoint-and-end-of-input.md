@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: https://github.com/weifuwan/yak-ops/pull/1575
+Discussion: https://github.com/weifuwan/yak-ops/pull/1576 (convergence); https://github.com/weifuwan/yak-ops/pull/1575 (initial)
 
 Decision: Pending
 
@@ -14,111 +14,112 @@ Related FLIPs: [FLIP-27](https://cwiki.apache.org/confluence/spaces/FLINK/pages/
 
 ## Motivation
 
-YakFlow already has mailbox-driven Source and Sink tasks, aligned checkpoint barriers, durable local checkpoint storage, and end-of-input flushing. The remaining gap is the contract between **input exhaustion**, **operator completion**, **physical task termination**, and **checkpoint recovery**.
+YakFlow's local Runtime already supports mailbox-driven Source/Sink tasks, aligned barriers, a versioned local checkpoint store, whole-job restart from a completed checkpoint, and normal end-of-input flushing. Today, `SourceReader.END_OF_INPUT` leads directly to `finishTask()` and physical output completion. Once a Source task finishes, periodic checkpoint triggering stops; finished downstream tasks cannot acknowledge another checkpoint.
 
-Today:
+This is adequate for current local at-least-once JDBC execution, but it cannot support a final checkpoint after logical input completion or checkpoints while some operators have already finished. In particular, a completed checkpoint is not the same as successful delivery of completion callbacks, a finished operator is not necessarily a terminated physical task, and checkpoint persistence is not an external Sink commit.
 
-- A bounded SourceReader reports `END_OF_INPUT` after `NoMoreSplits`; the task finishes its operator chain and closes the output partition.
-- An InputGate declines an in-flight checkpoint when an upstream producer finishes before delivering the required barrier. The data pipeline can still finish normally.
-- The checkpoint coordinator stops periodic triggering when any Source task has finished. A completed downstream task cannot acknowledge a new checkpoint.
-- The checkpoint format records Source/Reader/Operator state, but not whether an operator has finished. Normal Sink `flush(true)` is not a durable checkpoint or transactional commit.
-
-These behaviors are appropriate safeguards for the existing local runtime, but do not provide checkpoints **after** a bounded part of a future mixed bounded/unbounded pipeline has finished. Recovery cannot safely infer whether completed work should run again.
-
-This proposal defines the lifecycle and checkpoint rules before extending the runtime. It follows the reasoning of FLIP-147 without treating YakFlow as a distributed Flink implementation.
+This YOIP defines these boundaries and their recovery semantics. It does not claim they are already implemented.
 
 ## Public Interfaces
 
-- **Core connector APIs:** No change to `Source`, `SourceReader`, `SplitEnumerator`, `InputStatus`, `Sink`, or `SinkWriter`. `END_OF_INPUT` remains a Reader result, not a declaration that the Job has finished.
-- **Runtime control protocol:** Distinguish a logical `EndOfData` signal from physical `EndOfPartition`. These are internal task/channel events, not new connector APIs.
-- **Checkpoint persistence:** A future checkpoint format must be able to identify fully finished operators by stable operator UID, alongside the current Source, Reader, assignment, and operator state. A checkpoint containing finish markers is a new versioned format; old snapshots remain readable.
-- **User-facing configuration, REST, plugin SPI, task definitions, and database schema:** No changes proposed. No new user-controlled checkpoint tuning is required.
+- **Core Connector API:** Keep `Source`, `SourceReader`, `SplitEnumerator`, `InputStatus`, `Sink`, and `SinkWriter` unchanged. `END_OF_INPUT` remains a Reader-local result.
+- **Internal Runtime protocol:** Specify logical `EndOfData` separately from physical `EndOfPartition`. Introducing actual events is deferred until they have an execution and checkpoint consumer.
+- **Checkpoint format:** Future finished-operator/subtask information is versioned and keyed by stable logical operator UID (and subtask index where needed). The current file format versions 1 and 2 remain readable, without inferred finish markers.
+- **Product interfaces:** No REST, plugin SPI, persisted task-definition, Flyway, frontend, or user-facing configuration changes. No new public Job status is proposed.
 
 ## Proposed Changes
 
-### Scope and lifecycle
+### Scope and implementation boundaries
 
-The initial implementation target remains the **local, aligned, single-input YakFlow runtime**. Multi-source and mixed bounded/unbounded execution are motivation and future acceptance targets, not functionality claimed to exist today. This YOIP does not introduce distributed scheduling, rescaling, unaligned checkpoints, or an exactly-once Sink protocol.
+**Stage A — existing local lifecycle:** Preserve the current supported graph types and at-least-once JDBC behavior. Define and test EOF, barrier decline, Sink final flush, checkpoint publication, notification failure, and Job completion independently. Do not require a new `EndOfData` event or Final Checkpoint just to describe the semantics.
 
-The normal completion sequence is:
+**Stage B — checkpointing with finished tasks:** Implement separate logical/physical termination, checkpoint participation after operators finish, a required final checkpoint for checkpoint-enabled bounded jobs on supported paths, finished-state persistence, and finished-on-restore execution. Enable each behavior only together with its corresponding recovery tests; do not turn it on for unsupported inline chains or graph shapes.
+
+Distributed execution, multi-source/multi-input scheduling, rescaling, unaligned checkpoints, and mixed bounded/unbounded topologies are outside the initial implementation. This design should not prevent them, but this YOIP does not claim they work.
+
+### End-of-data and normal completion
+
+The intended ordering for a bounded execution is:
 
 ```text
-NoMoreSplits
-  -> SourceReader END_OF_INPUT after all assigned records are emitted
-  -> EndOfData after the final record on each output channel
-  -> downstream inputs consume their final records and all EndOfData signals
-  -> operator / SinkWriter finish
-  -> any required final checkpoint or commit completes
-  -> EndOfPartition and physical task cleanup
-  -> Job FINISHED after all tasks complete successfully
+NoMoreSplits + all assigned Source splits exhausted
+  -> SourceReader END_OF_INPUT
+  -> operator finish (may emit final records)
+  -> EndOfData on each outgoing channel after its final record
+  -> downstream consumes all records and EndOfData
+  -> downstream operator / Sink Writer finishes
+  -> required final checkpoint and/or required external finalization completes
+  -> EndOfPartition; Task completion and resource cleanup
+  -> all required executions completed -> Job FINISHED
 ```
 
-`NoMoreSplits` means that the enumerator will assign no more splits; it does not prove that assigned splits have finished. An operator's `finish` must run exactly once per successful execution attempt after its complete logical input. `close` releases resources; failure and cancellation must not invoke normal final flushing.
+This ordering describes dependencies, not a single synchronous call chain. `NoMoreSplits` means there will be no new assignments; it does not prove existing splits are consumed. `EndOfData` stops **records**, not ordered checkpoint-control events. `EndOfPartition` terminates the physical channel and its control traffic.
 
-Logical `EndOfData` and physical `EndOfPartition` are separate so a task can stop accepting records while remaining alive to participate in a required final checkpoint. For today's at-least-once JDBC Sink, successful final `flush(true)` completes normal bounded output; **an unconditional final checkpoint is not required**. Any future Sink that depends on checkpoint completion to commit must wait for that checkpoint before physical termination. The commit protocol itself belongs in a separate YOIP.
+For each successful execution attempt, `finish()` runs at most once after complete logical input, and may emit additional output. Failure and cancellation must not run normal final flush or implicitly commit pending output. `close()` releases resources and is not a substitute for `finish()`. Single-task operator chaining needs equivalent logical guarantees without synthetic network events.
 
-### Checkpoints racing with end-of-input
+### Final checkpoint and Job FINISHED
 
-A checkpoint cut is valid only when every required barrier has been accounted for, all participating operator snapshots have succeeded, and the snapshot has been durably published. A Source snapshot or Sink flush alone is not checkpoint completion.
+Checkpoint completion means all required participants acknowledged a consistent cut and the checkpoint store published recoverable metadata. It is **necessary but not sufficient** for a Job to be `FINISHED`.
 
-- A barrier already ordered before `EndOfData` may complete its checkpoint if all required inputs align and acknowledge it.
-- If an upstream channel reaches its terminal event without a required barrier, **decline that checkpoint**, unblock its channels, and preserve all ordinary records. EOF alone must not fail an otherwise healthy job.
-- If a task finishes while checkpoint participants are being selected, the attempt must either establish a consistent cut or decline promptly. It must not wait indefinitely for an acknowledgement from a terminated task.
-- Actual read/write errors, failed final `flush(true)`, invalid state, and unrecoverable serialization/storage errors remain failures, not harmless EOF declines.
-- A failed or declined checkpoint must never replace the last successfully published checkpoint. Cancellation must not silently publish state or commit buffered output.
+When checkpointing with finished tasks is implemented and enabled for a supported bounded job, a final checkpoint must cover the terminal data boundary before normal termination; a checkpoint taken **before** that boundary cannot be treated as final. Runtime should trigger or arrange it without depending on an unbounded wait for the next periodic interval. Failure handling remains bounded by an explicit timeout/retry policy and may not hold the Job indefinitely.
 
-### Checkpoints after operators finish
+When checkpointing is disabled, successful data processing and required final output suffice; there is no final checkpoint. Existing JDBC at-least-once jobs must retain their current normal `flush(true)` completion path until the Stage B protocol is implemented and accepted by tests; no unconditional final checkpoint is introduced by this proposal.
 
-Checkpoint participation follows **running operators**, not the assumption that every original Source task is still active.
+`ExecutionGraph` remains the only owner of `JobStatus.FINISHED`. It may report success only after all required Task completions, finalization obligations, and cleanup have succeeded. A successful checkpoint never directly changes Job status. The current JDBC `flush(false)` and `flush(true)` may commit records outside checkpoint transactions, so neither checkpointing nor a final flush implies exactly-once delivery. Recoverable external commit protocols belong to a separate Sink YOIP.
 
-- When an operator is fully finished, its stable UID is recorded in subsequent completed checkpoints. Recovery can then skip its execution without replaying its completed work.
-- A running operator whose predecessors are all finished becomes a new checkpoint trigger root; otherwise it receives ordered barriers from its still-running predecessors. Finished input channels count as terminal for future alignment, rather than waiting for barriers they can no longer produce.
-- The checkpoint coordinator must base trigger roots and completion metadata on a consistent view of task/operator state. A finish/trigger race declines only the affected checkpoint.
-- A **partially finished** operator cannot be declared fully finished. Persist only state that is sufficient for correct recovery; where split ownership or state redistribution cannot be proven safe, decline the checkpoint explicitly instead of silently discarding progress.
+### Checkpoint failure, publication, and notifications
 
-The first code change should establish the logical/physical finish boundary for currently supported graphs. Finished-operator checkpoint triggering and partial-finish recovery should be enabled only with the necessary end-to-end tests and topology support, rather than approximated with synthetic acknowledgements.
+- A missing barrier caused by normal EOF **declines that checkpoint** and preserves all records; it does not by itself fail a healthy legacy bounded Job. If a final checkpoint is required, another valid attempt must be obtained or normal completion must fail.
+- A transient failure **before publication** may retry the checkpoint in the same live Execution Attempt when no state/ownership is invalidated. Retry count and elapsed time must be bounded. Actual Task, I/O, state, or Sink-finalization failures follow Execution failure/restart rules instead.
+- After all required acknowledgements, **successful durable publication is the checkpoint completion point**. A timeout or `notifyCheckpointComplete` exception **after publication** cannot revoke it. If CP-100 was published, recovery must prefer CP-100 rather than automatically return to CP-99.
+- Completion callbacks are post-publication signals, not a second checkpoint commit phase. A correctness-critical callback or asynchronous follow-up delivery failure fails the current Attempt; generic re-invocation of `notifyCheckpointComplete` is not safe unless that implementation explicitly guarantees repeatability. Auxiliary metrics/cleanup errors that do not affect correctness do not automatically fail a Job.
+- `ExecutionGraph` controls whole-job restart using the existing attempt limit and a validated, compatible latest completed checkpoint. The existing default maximum restart attempts remains zero. If the latest checkpoint is invalid, its publication is uncertain, or the required recovery/commit protocol cannot be proven safe, fail clearly; do not silently fall back to older state or fabricate a successful finish.
+- A published checkpoint and a successfully delivered completion notification must be observable as distinct outcomes. In particular, a post-publication notification error must not masquerade as an unpublished checkpoint failure. The single-file `checkpoint.bin` store is not assumed to retain CP-99 after publishing CP-100.
 
-### Durable state and recovery
+### Finished-operator state and recovery
 
-The finish marker belongs to the **logical operator UID**, not the numeric JobVertex ID or a physical Task object. Fully finished operators must not be redeployed when restoring a checkpoint that explicitly marks them finished. Their downstream inputs must be reconstructed as completed; remaining active operators resume from their own saved state.
+A Task's **logical operator finish**, its **physical Execution FINISHED** status, and a **durably published Fully Finished marker** are distinct facts. `SourceReader.END_OF_INPUT` or one `finish()` return value alone is insufficient.
 
-Source split discovery and completed assignment progress remain the SourceCoordinator/Enumerator's responsibility. A finished marker is not a substitute for correct, versioned Source state. Restore continues to reject incompatible graph signatures, operator UIDs, serializer versions, and unsupported parallelism changes.
+The Checkpoint Coordinator determines the finished-state metadata from a consistent checkpoint plan and Task acknowledgements. A fully finished logical operator requires all of its parallel subtasks to be demonstrably complete, with every final output either covered by the consistent cut or safely owned by recoverable downstream state/obligations. A partially finished operator cannot be promoted to Fully Finished. Partially finished state is acceptable only when the remaining work and state distribution can be safely restored; otherwise decline the checkpoint.
 
-Until a checkpoint format includes explicit finish metadata, old checkpoints are interpreted with their original behavior; no finished operator is inferred from missing state. A completed Job does not automatically restart merely because a checkpoint file exists.
+Flink distinguishes Task `FINISHED` at checkpoint planning time from a still-running Task that reports that its operators have called `finish()` in its snapshot. YakFlow should preserve that distinction: **an operator may have finished in memory without being Fully Finished in the checkpoint**. No later event may retroactively change a published snapshot.
 
-### Delivery guarantees
+On restore, the published checkpoint is authoritative. Fully finished operators **must not re-execute their business logic**; Runtime may still deploy lightweight finished-on-restore physical tasks for downstream EOF and checkpoint control. Unfinished operators restore their captured state and continue. Do not reread completed Source splits, rerun an already recorded operator final output, or repeat a finished Writer's final flush. However, pending external commit obligations must remain recoverable; a Finished Writer marker does not silently complete a separate Committer.
 
-Checkpoint recovery is **at-least-once** for the existing JDBC Sink. `SinkWriter.flush(false)` during a checkpoint and `flush(true)` on normal end-of-data must remain distinct lifecycle operations. Neither is a two-phase commit, and neither makes external JDBC writes exactly-once.
+Older checkpoints without finished metadata retain their previous meaning. No completed state may be inferred from missing bytes, final logs, previous Attempt memory, or a merely successful notification.
 
 ## Compatibility, Deprecation, and Migration Plan
 
-No existing Core connector signatures or product persistence formats are changed by accepting this design.
+The proposal leaves existing Source/Sink signatures, JobStatus values, task-definition JSON, Flyway history, and ordinary local at-least-once execution unchanged. Stage B changes are opt-in only through proven supported Runtime capabilities, not a misleading user setting.
 
-Implementation must keep reading the current `FileCheckpointStore` format versions 1 and 2. Finished-operator metadata is written only by a new, explicitly versioned format with round-trip and backward-read tests; corrupted, mismatched, or unsupported state is rejected. No published checkpoint is silently rewritten, and no compatibility shim is added without a real migration need.
+A future checkpoint format must explicitly version fully/partially finished state, preserve reading local format versions 1 and 2, validate topology/UID/serializer/parallelism compatibility, and atomically publish a recoverable snapshot. Existing `FileCheckpointStore` remains single-file until a separately justified retention design is accepted. Corrupt or incompatible state must fail closed; neither silent downgrade nor implicit migration is allowed.
 
-The currently supported local graphs and at-least-once Sink behavior remain valid. Runtime support for checkpoints after finished operators must be gated by actual supported graph and state semantics, not a configuration flag that suggests unsupported guarantees. There is no migration for REST APIs, Flyway tables, frontend configuration, or release artifacts.
+The final checkpoint protocol is not an exactly-once guarantee. Any transaction preparation, idempotent external commit, and uncertain-commit recovery contract is reserved for the future Sink YOIP.
 
 ## Test Plan
 
-Existing behavior must remain covered by `CheckpointRecoveryTest`, `AlignedBarrierInputGateTest`, `ResultPartitionInputGateTest`, and `SinkWriterOperatorFailureTest`.
+Retain the current `CheckpointRecoveryTest`, `AlignedBarrierInputGateTest`, `ResultPartitionInputGateTest`, `SourceCoordinatorContractTest`, and `SinkWriterOperatorFailureTest` expectations. The following are required **for the stage that implements the relevant feature**, not claimed as existing tests:
 
-Required acceptance cases for implementation:
+1. **Current bounded behavior (A):** All records delivered; Source/Operator finish once per successful attempt; JDBC `flush(true)` on normal EOF; no forced final checkpoint. Failure/cancel does not perform normal final flush.
+2. **Barrier vs EOF (A):** A valid barrier-before-EOF completes; a missing barrier due to EOF declines only the checkpoint, preserves ordinary data, and neither deadlocks nor publishes partial state.
+3. **Checkpoint publication (A):** Snapshot/persistence failure preserves the last completed checkpoint. A published CP-100 followed by listener failure remains the newest valid recovery point; reported publication status stays distinct from notification status.
+4. **Critical notification and restart (A):** Fail after Enumerator callback, after assignment-tracker callback, and on asynchronous Reader event delivery; no blind callback retry. Whole-job restart obeys configured attempts (including the default zero) and validates the latest checkpoint.
+5. **Final checkpoint completion (B):** Checkpoint-enabled bounded Job waits for a checkpoint covering the terminal data boundary; transient failures have bounded retry, hard failures cannot report `FINISHED`, and successful CP alone never completes a Job.
+6. **Finished vs running state (B):** A Task logically finished during a checkpoint is not automatically a fully finished operator; all parallel subtasks and final downstream output must be accounted for before marking it fully finished.
+7. **Finished-on-restore (B):** Recovery from CP-100 skips business execution and final flush for fully finished operators, while still propagating required downstream termination/control events. A checkpoint made before finish does not skip that work.
+8. **Partial completion (B):** Safe partial state resumes remaining work; unsupported state ownership/redistribution explicitly declines the checkpoint instead of silently discarding work.
+9. **State format (B):** New finished-state format round-trips stable UIDs and subtask status, reads v1/v2 unchanged, and rejects corrupt, mismatched, or unsupported data.
+10. **Future graph acceptance:** Once mixed bounded/unbounded topologies are supported, the unbounded branch continues checkpointing after its bounded predecessor has completed. This does not establish support today.
 
-1. **Bounded completion:** All produced records reach the Sink; `finish` and final `flush(true)` occur once per successful attempt. Physical EOF follows logical finish. A failed final flush fails the job.
-2. **Barrier/EOF ordering:** Checkpoint-before-EOF can finish; EOF-before-missing-barrier declines only the checkpoint. Neither path loses data, deadlocks, or publishes partial state.
-3. **Failed/cancelled execution:** No success path or implicit final commit runs. A failed checkpoint preserves the previous durable snapshot.
-4. **Finished operator recovery:** After full completion is recorded in a new checkpoint, restore skips that operator, does not reassign completed splits, and resumes still-running downstream work correctly.
-5. **Partial completion:** A checkpoint either restores all remaining work correctly or explicitly declines when recovery semantics are unsupported; it never marks a partially finished operator as fully finished.
-6. **Format compatibility:** Legacy v1/v2 checkpoints remain readable with unchanged meaning; the new format round-trips finished UIDs and rejects corrupt or incompatible metadata.
-7. **Mixed bounded/unbounded pipeline:** Once such a topology is supported, periodic checkpoints continue after the bounded operator finishes. This case is a future integration gate, **not** a claim about today's runtime.
-
-Run targeted runtime unit tests, followed by the existing Maven verification and relevant real-connector acceptance where the implementation touches persistence or Sink behavior. A proposal-only PR does not count as passing these tests.
+Run targeted unit/runtime tests and the existing Maven verification as appropriate to each implementation change; real-connector acceptance is required where JDBC/CDC behavior or persisted state changes. This documentation-only proposal supplies no new test evidence.
 
 ## Rejected Alternatives
 
-- **Stop checkpointing permanently after any Source finishes:** Keeps the current limitation and prevents bounded/unbounded mixtures from making durable progress.
-- **Keep every finished Task alive indefinitely:** Wastes resources and conflates operator finish with physical task lifetime.
-- **Carry final state from every finished Task into every later checkpoint:** Adds state ownership and retention complexity where a stable logical finished marker is sufficient.
-- **Treat EOF as an implicit successful checkpoint:** Cannot prove all operator acknowledgements, durability, or external Sink commit.
-- **Require an exactly-once/final-commit protocol for all Sinks:** Breaks the current JDBC at-least-once contract and mixes this lifecycle proposal with Sink transaction design.
-- **Implement distributed, unaligned, rescaling, and mixed-source support in this first step:** Broadens the change without the corresponding runtime and acceptance foundations.
+- **Treat `END_OF_INPUT`, `EndOfData`, and `EndOfPartition` as one event forever:** Prevents checkpoints and control events after logical input completion.
+- **Immediately add Flink's full event/finished-task class hierarchy:** Adds abstractions before supported callers and recovery tests exist.
+- **Require Final Checkpoint for every current at-least-once JDBC Job:** Changes established behavior without a completed terminal-checkpoint protocol.
+- **Mark Fully Finished when one Reader or Operator finishes:** Can lose in-flight final records, other subtasks' work, or pending external effects.
+- **Skip all physical Tasks on finished restore:** Loses necessary downstream termination and checkpoint control events.
+- **Revoke CP-100 or automatically restore CP-99 when its completion notification fails:** Confuses durable publication with best-effort post-publication callbacks.
+- **Blindly retry completion listeners in place:** Existing Enumerator/assignment and async Source event callbacks do not universally guarantee repeatable side effects.
+- **Merge transactional Sink commit, distributed failover, rescaling, or mixed-source execution into YOIP-1:** Those mechanisms need their own contracts and executable acceptance.
