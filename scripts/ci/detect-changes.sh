@@ -60,7 +60,7 @@ for file in "${changed[@]}"; do
                     ;;
             esac
             ;;
-        yak-ops-dist/*|Dockerfile|docker/*|compose.yaml|compose.without-mysql.yaml|.env.example|README.md|NOTICE)
+        yak-ops-dist/*|Dockerfile|docker/*|compose.yaml|compose.without-mysql.yaml|.env.example|NOTICE)
             distribution=true
             ;;
         release.env|scripts/release/*)

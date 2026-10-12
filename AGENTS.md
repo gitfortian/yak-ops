@@ -24,7 +24,7 @@ For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only
 - `yak-ops-boot`: HTTP boundary and application assembly.
 - `yak-ops-ui`: frontend application and shared UI components.
 
-Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Do not infer current functionality from an old release document or an implementation proposal.
+Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Derive current functionality from code, tests and supported public interfaces.
 
 ## Architecture Boundaries
 
@@ -40,22 +40,22 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - **New major subsystem or public contract change:** discuss and accept a YAK-FLIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [FLIP template](.github/FLIP_TEMPLATE.md).
 - **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
 - **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
-- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; this documentation migration does not rewrite frontend rules.
+- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; follow the existing frontend checks.
 
 ## Repository-Specific Invariants
 
 - Keep task-definition identity, Workspace authorization and immutable definition versions in the business/persistence boundary. Plugin validation must not access credentials or silently rewrite requested parameters; accepted task configuration is JSON.
 - Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
 - Keep published Flyway migrations frozen; draft migrations must be reconciled before the release migration gate. The release scripts verify names and sequence, not the semantic safety of SQL.
-- Logging must not expose credentials or sensitive data. JavaDoc and implementation comments must be English; existing application log events follow the repository's established language conventions.
+- Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English; logs may use the language appropriate to the product.
 - Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Existing code and tests—not historic descriptions—determine which features are implemented.
 
 ## Code Quality and Review
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
 - Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
-- Preserve Spotless, Java comment/logging validators, backend boundary checks, CI and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
-- Treat implementation code, API JavaDoc, tests and enforced tools as the authoritative source for behavior. Do not recreate deleted backend `*_RULES.md`, Capability descriptions or a parallel Architecture/Contract index.
+- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
+- Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
 - Keep one issue or coherent change per PR and explain purpose, tests, public impact and any FLIP in the PR body.
 

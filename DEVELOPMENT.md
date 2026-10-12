@@ -26,7 +26,7 @@ bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.
 bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
 ```
 
-Run relevant tests before the full reactor where possible. Connector real-database ITs, release acceptance and the published runtime product checks are separate from an ordinary Maven `verify`. The actual CI scope and job names are defined by [Quality Check](.github/workflows/quality-check.yml) and [CI Gates](.github/CI_GATES.md). Skipped acceptance is not successful acceptance.
+Run relevant tests before the full reactor where possible. Connector real-database ITs and product acceptance are separate from Maven `verify`. Current CI scopes and required checks are defined by [Quality Check](.github/workflows/quality-check.yml). Skipped acceptance is not successful acceptance.
 
 Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
 
@@ -34,21 +34,20 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 
 Use the [Apache Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) for code review principles: small, focused changes; meaningful names; explicit ownership; readable tests; no redundant comments.
 
-The currently enforced formatter is **Spotless + Palantir Java Format**, not Flink's google-java-format. Keep its current versions and checks; changing formatting or the Java baseline requires a separate review. For additional enforcement run:
+The formatter is **Spotless + Palantir Java Format**, not Flink's google-java-format. Maven Checkstyle validates JavaDoc and ArchUnit tests validate module dependency boundaries during `verify`.
 
 ```sh
-python3 scripts/ci/test_verify_java_comments.py
-python3 scripts/ci/verify_java_comments.py
+bash mvnw -B -ntp -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
+python3 scripts/ci/test_logging_rules.py
 python3 scripts/verify_logging_rules.py
-bash scripts/ci/verify-backend-boundaries.sh
 ```
 
-Write concise English JavaDoc for repository-owned top-level types and non-obvious public contracts, including lifecycle, nullability, ownership and compatibility; do not restate obvious methods. The comment scanner enforces English-only Java comments and required top-level documentation for its covered modules. The logging validator enforces the existing logger shape, event language and sensitive-data restrictions. These scripts and CI are the executable style baseline, not a second prose-based rule system.
+Keep JavaDoc and implementation comments in English. Checkstyle covers the previously checked backend source packages; public interfaces and non-obvious lifecycle contracts require useful documentation. Logging validation enforces SLF4J structure and sensitive-data safety without imposing a log language or disallowing TRACE. In CI, Checkstyle and Spotless run before `verify`; their repeated Maven executions are skipped only after both checks pass. Plain local `verify` still enforces them.
 
 ## Documentation and Design
 
 - Major design changes and public contract changes go through the [YAK-FLIP process](.github/CONTRIBUTING.md#flink-improvement-proposals-flips) before implementation.
 - Ordinary implementation details belong in code, JavaDoc, tests and the GitHub PR; no companion descriptive Markdown is required.
 - Change user documentation for new or changed user-visible functionality, compatibility or operation procedures.
-- Backend Capability/Architecture/Rules descriptions have been retired. Consult current source, relevant JavaDoc, tests and accepted YAK-FLIPs; do not recreate them during routine implementation changes.
+- Consult current code, JavaDoc, tests and accepted YAK-FLIPs for behavior and design decisions.
 - Release decisions are recorded as Release Gate artifacts; version notes and immutable asset evidence belong in GitHub Releases, not source-tree Markdown files.

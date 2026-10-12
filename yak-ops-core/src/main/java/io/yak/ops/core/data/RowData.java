@@ -148,6 +148,7 @@ public interface RowData {
         return row -> row.isNullAt(position) ? null : getter.getFieldOrNull(row);
     }
 
+    /** Extracts a field value from a row. */
     @FunctionalInterface
     interface FieldGetter extends Serializable {
 

@@ -12,6 +12,7 @@ public final class ConfigOptions {
         return new OptionBuilder(key);
     }
 
+    /** Selects the value type of a configuration key. */
     public static final class OptionBuilder {
         private final String key;
 
@@ -59,6 +60,7 @@ public final class ConfigOptions {
         }
     }
 
+    /** Adds the default-value policy for a typed configuration key. */
     public static final class TypedBuilder<T> {
         private final String key;
         private final Class<T> clazz;

@@ -30,7 +30,6 @@ LOGGER_FIELD = re.compile(
 )
 
 LOG_CALL_START = re.compile(r"\bLOG\.(trace|debug|info|warn|error)\s*\(")
-CHINESE_TEXT = re.compile(r"[\u3400-\u9fff]")
 SENSITIVE_LOG_TERM = re.compile(
     r"(?i)\b(?:password|passwd|pwd|authorization|cookie|sessionId|jsessionid|"
     r"secret|connectionJson|connectionParams|originalJson|jdbcUrl|privateKey|"
@@ -164,20 +163,15 @@ def verify_file(path):
                 )
             )
 
-    for level, start, call in extract_log_calls(text):
+    for _level, start, call in extract_log_calls(text):
         line = line_number(text, start)
-        if level == "trace":
-            violations.append((line, "Yak Ops V1 禁止 TRACE 日志"))
-
         message = first_string_literal(call)
         if message is None:
             violations.append((line, "日志首个参数必须是直接字符串字面量，保持事件文本稳定可检索"))
-        elif not CHINESE_TEXT.search(message):
-            violations.append((line, "仓库自有日志事件描述必须包含中文"))
 
-        if re.search(r'LOG\.(?:debug|info|warn|error)\s*\(\s*String\.format\s*\(', call, re.S):
+        if re.search(r'LOG\.(?:trace|debug|info|warn|error)\s*\(\s*String\.format\s*\(', call, re.S):
             violations.append((line, "日志禁止使用 String.format，统一使用 SLF4J {} 占位符"))
-        if re.search(r'LOG\.(?:debug|info|warn|error)\s*\(\s*"[^"]*"\s*\+', call, re.S):
+        if re.search(r'LOG\.(?:trace|debug|info|warn|error)\s*\(\s*"[^"]*"\s*\+', call, re.S):
             violations.append((line, "日志禁止字符串拼接，统一使用 SLF4J {} 占位符"))
 
         sensitive = SENSITIVE_LOG_TERM.search(call)
