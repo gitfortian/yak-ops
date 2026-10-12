@@ -9,8 +9,8 @@ import java.util.Objects;
 /**
  * Configures an unbounded MySQL Binlog source with explicit, frozen table schemas.
  *
- * <p>PR1 supports a fresh current-position start and recovery from a completed YakFlow
- * checkpoint. Historical initial offsets and snapshot/backfill belong to the hybrid phase.
+ * <p>Supports a current-position Binlog start and recovery from a completed YakFlow checkpoint.
+ * Initial snapshots and Binlog handoff are provided by {@link MySqlHybridCdcSource}.
  */
 public final class MySqlCdcSourceBuilder {
 

@@ -30,8 +30,8 @@ import java.util.Objects;
  * events off the mailbox, while Connector Base delivers detached rows on the mailbox
  * and checkpoints the last successfully emitted offset and required Schema History.
  *
- * <p>PR1 deliberately excludes snapshot/backfill, arbitrary historical startup offsets,
- * automatic schema evolution and end-to-end exactly-once delivery.
+ * <p>Provides continuous Binlog consumption with at-least-once delivery. Initial table
+ * snapshots use the separate {@link #initialSnapshot(int)} Source.
  */
 public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSplit, MySqlPendingSplitsState> {
 
@@ -56,8 +56,8 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     /**
      * Builds an independent initial-snapshot CDC Source from this reusable Binlog definition.
      *
-     * <p>The hybrid mode uses its own checkpoint namespace and cannot restore a stream-only
-     * Binlog checkpoint. Existing stream-only callers remain unchanged.
+     * <p>Hybrid snapshots use a separate checkpoint namespace and restore from a Hybrid
+     * checkpoint. Binlog-only checkpoints restore this Source.
      *
      * @param chunkSize maximum approximate rows in a BIGINT-key snapshot range
      * @return a Hybrid Snapshot/continuous Binlog source
@@ -86,7 +86,7 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     @Override
     public SourceReader<TableRecord, MySqlBinlogSplit> createReader(SourceReaderContext context) {
         if (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0) {
-            throw new IllegalArgumentException("MySQL Binlog Source PR1 requires exactly one SourceReader");
+            throw new IllegalArgumentException("MySQL Binlog Source requires exactly one SourceReader");
         }
         return new MySqlSourceReader(config, fingerprint, context);
     }

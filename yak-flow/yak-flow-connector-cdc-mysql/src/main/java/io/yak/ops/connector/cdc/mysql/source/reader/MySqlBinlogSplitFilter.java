@@ -16,9 +16,9 @@ import java.util.Objects;
 /**
  * Filters Binlog changes already contained in per-chunk normalized snapshot output.
  *
- * <p>Follows Flink CDC's finished-split High Watermark filtering, rather than dropping
- * all changes before one global cutoff. A primary-key move can have a different fence
- * for its old and new keys; if only one half survives, convert that half to standalone
+ * <p>Each completed snapshot chunk contributes a High Watermark fence. A primary-key
+ * move can have different fences for its old and new keys; if only one half survives,
+ * convert that half to standalone
  * DELETE or INSERT so the downstream JDBC Sink never sees an incomplete UPDATE pair.
  */
 public final class MySqlBinlogSplitFilter {

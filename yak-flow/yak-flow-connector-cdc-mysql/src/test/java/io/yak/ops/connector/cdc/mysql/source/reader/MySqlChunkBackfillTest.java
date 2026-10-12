@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Exercises Flink CDC-style in-chunk snapshot normalization without any live database. */
+/** Verifies in-chunk snapshot normalization independently of a live database. */
 class MySqlChunkBackfillTest {
 
     private static final TableId TABLE = new TableId("shop", null, "orders");
