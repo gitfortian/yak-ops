@@ -1,6 +1,6 @@
 <!--
 Following Apache Flink's PR conventions: keep the change focused, explain the
-design and its verification, and link an accepted YAK-FLIP for major changes.
+design and its verification, and link an accepted YOIP for major changes.
 Documentation is required for user-facing changes, not routine refactors.
 See .github/CONTRIBUTING.md.
 -->
@@ -26,7 +26,7 @@ blocked or manual checks from passing automated tests. -->
 - Runtime hot paths, checkpoint or recovery: no / yes (explain)
 - Security, credentials or Workspace isolation: no / yes (explain)
 - Deployment or release behavior: no / yes (explain)
-- Accepted FLIP: N/A / link
+- Accepted YOIP: N/A / link
 
 ## Documentation
 

@@ -37,7 +37,7 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 ## Common Change Patterns
 
 - **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
-- **New major subsystem or public contract change:** discuss and accept a YAK-FLIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [FLIP template](.github/FLIP_TEMPLATE.md).
+- **New major subsystem or public contract change:** discuss and accept a YOIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [YOIP template](.github/YOIP_TEMPLATE.md).
 - **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
 - **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
 - **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; follow the existing frontend checks.
@@ -57,13 +57,13 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
 - Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
-- Keep one issue or coherent change per PR and explain purpose, tests, public impact and any FLIP in the PR body.
+- Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
 
 ## References
 
 - [Development](DEVELOPMENT.md) — local setup and verification.
 - [Contribution process](.github/CONTRIBUTING.md) — discuss, implement, review.
 - [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
-- [FLIP template](.github/FLIP_TEMPLATE.md) — major design proposals.
+- [YOIP template](.github/YOIP_TEMPLATE.md) — major design proposals.
 - [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
 - [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — unchanged by the backend documentation cleanup.

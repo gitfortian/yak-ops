@@ -1,4 +1,4 @@
-# YAK-FLIP-XXXX: Title
+# YOIP-XXXX: Title
 
 Status: Discussion
 
@@ -10,12 +10,14 @@ Implementation: N/A until accepted
 
 Release: N/A until released
 
+Related FLIPs: N/A
+
 <!--
 Based on the Apache Flink FLIP template:
 https://cwiki.apache.org/confluence/spaces/FLINK/pages/65145553/FLIP+Template
 
-Use this only for major design or public interface changes. The permanent FLIP
-lives at docs/flips/YAK-FLIP-XXXX-short-title.md; discussions and the recorded
+Use this only for major design or public interface changes. The permanent YOIP
+lives at docs/yoips/YOIP-XXXX-short-title.md; discussions and the recorded
 decision live in its proposal PR. Do not turn it into an implementation diary.
 -->
 
