@@ -108,6 +108,9 @@ final class TaskDeployment {
                 }
                 throw failure;
             }
+            if (checkpointCoordinator != null) {
+                await(checkpointCoordinator.awaitPendingCheckpoints());
+            }
             Throwable failure = firstFailure.get();
             if (failure != null) {
                 throwFailure(failure);
