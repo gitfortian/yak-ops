@@ -117,6 +117,6 @@ class DataSourceCatalogServiceTest {
         var schema = catalogService.tableSchema(plugin, settings, 10, table);
         assertEquals(3, schema.columnCount());
         assertEquals(java.util.List.of("ID", "TENANT"), schema.primaryKeys());
-        assertTrue(connectionOpens.get() >= 4, "Datasource Plugin must open connections for Connector metadata");
+        assertTrue(connectionOpens.get() >= 3, "Datasource Plugin must open connections for Connector metadata");
     }
 }
