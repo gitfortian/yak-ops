@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class DataSyncRetryPolicyVO {
 
-    /** Retry policy mode; missing values in older configurations are interpreted as FIXED. */
+    /** Retry policy mode; an absent value resolves to FIXED. */
     private DataSyncRetryPolicyMode mode;
 
     /** Maximum attempt count, including the initial execution. */

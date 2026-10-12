@@ -8,6 +8,6 @@ public enum DataSyncRetryPolicyMode {
     /** Determines retry eligibility using system rules and write-safety constraints. */
     SMART,
 
-    /** Retries with explicit maxAttempts and backoffSeconds for legacy compatibility. */
+    /** Uses configured maximum attempts and fixed backoff between retries. */
     FIXED
 }

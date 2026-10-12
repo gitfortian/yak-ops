@@ -51,7 +51,7 @@ public final class JdbcConnectionProperties implements DataSourceConnection {
     /** Persistable normalized connection JSON; may contain credentials. */
     private final String normalizedJson;
 
-    /** Retains the existing constructor for compatibility with plugin and test callers. */
+    /** Creates immutable connection properties from the JDBC URL and supplied credentials. */
     public JdbcConnectionProperties(
             String type,
             String jdbcUrl,

@@ -9,7 +9,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Consumes native Oracle JDBC URLs and retains a service-name URL fallback for legacy structured connection settings.
+ * Accepts native Oracle JDBC URLs and builds service-name URLs from structured host,
+ * port and database settings.
  */
 @AutoService(DataSourcePlugin.class)
 public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {

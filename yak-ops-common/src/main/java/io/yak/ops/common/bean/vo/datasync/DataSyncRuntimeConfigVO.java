@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class DataSyncRuntimeConfigVO {
 
-    /** Runtime planning policy; older configurations without a policy use FIXED. */
+    /** Runtime planning policy; an absent value resolves to FIXED. */
     private DataSyncRuntimePolicy policy;
 
     /** JDBC cursor fetch size. */

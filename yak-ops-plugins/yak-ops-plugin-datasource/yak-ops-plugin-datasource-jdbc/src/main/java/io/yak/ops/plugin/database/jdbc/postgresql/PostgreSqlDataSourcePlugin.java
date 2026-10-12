@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Defines PostgreSQL provider defaults, driver, URL, properties and compatibility aliases.
+ * Defines PostgreSQL provider defaults, driver, URL, connection properties and type aliases.
  *
  * <p>Schema belongs to Catalog namespaces or the optional currentSchema connection property.
  */
