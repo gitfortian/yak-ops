@@ -3,9 +3,22 @@ package io.yak.ops.plugin.database.jdbc.mysql;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
+import java.util.HashSet;
+import java.util.ServiceLoader;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class MySqlDataSourcePluginTest {
+
+    @Test
+    void discoversAllJdbcDatasourcePluginsThroughServiceLoader() {
+        Set<String> types = new HashSet<>();
+        for (DataSourcePlugin plugin : ServiceLoader.load(DataSourcePlugin.class)) {
+            types.add(plugin.type());
+        }
+        assertEquals(Set.of("MYSQL", "ORACLE", "POSTGRE_SQL"), types);
+    }
 
     @Test
     void shouldIncludeAdvancedPropertiesInDisplayJdbcUrl() {

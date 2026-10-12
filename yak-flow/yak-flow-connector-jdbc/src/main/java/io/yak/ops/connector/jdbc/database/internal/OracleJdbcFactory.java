@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.database.internal;
 
+import com.google.auto.service.AutoService;
 import io.yak.ops.connector.jdbc.database.JdbcFactory;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
@@ -8,6 +9,7 @@ import io.yak.ops.connector.jdbc.database.internal.catalog.OracleCatalog;
 import io.yak.ops.connector.jdbc.database.internal.dialect.OracleJdbcDialect;
 
 /** Oracle JDBC dialect registration for ServiceLoader discovery. */
+@AutoService(JdbcFactory.class)
 public final class OracleJdbcFactory implements JdbcFactory {
 
     @Override

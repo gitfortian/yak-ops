@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.task.datasync;
 
+import com.google.auto.service.AutoService;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
@@ -12,6 +13,7 @@ import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
  * <p>Parsing rejects malformed local definitions. Resource checks use the caller's Workspace
  * metadata but never rewrite submitted parameters or create YakFlow execution objects.
  */
+@AutoService(TaskPlugin.class)
 public final class SyncPlugin implements TaskPlugin {
 
     public static final String TYPE = "DATA_SYNC";

@@ -1,7 +1,9 @@
 package io.yak.ops.plugin.database.jdbc.oracle;
 
+import com.google.auto.service.AutoService;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -9,6 +11,7 @@ import java.util.Set;
 /**
  * Consumes native Oracle JDBC URLs and retains a service-name URL fallback for legacy structured connection settings.
  */
+@AutoService(DataSourcePlugin.class)
 public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
     private static final Map<String, String> PROPERTY_KEYS = Map.of(

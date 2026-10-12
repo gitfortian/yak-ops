@@ -67,8 +67,9 @@ Workflow nodes reference stable `TaskDefinitionId + Version`, not an embedded Pi
 ## API and validation simplification
 
 `TaskPlugin` exposes `type`, `parameterSchemaVersion`, `parse`, and `validate`.
-`TaskPluginRegistry` discovers `ServiceLoader<TaskPlugin>` entries directly; it does not create
-plugins through `TaskPluginFactory` or silently accept aliases such as `data-sync`.
+`TaskPluginRegistry` discovers `ServiceLoader<TaskPlugin>` entries directly; plugin implementations
+declare `@AutoService(TaskPlugin.class)`, which generates the provider metadata during compilation.
+It does not create plugins through factories or silently accept aliases such as `data-sync`.
 
 Parsing performs one local check, then `validate` performs one physical check for Definition
 writes/publishing. The validator is read-only: requested Database / Schema identifiers are not

@@ -70,6 +70,7 @@ Must:
 - each Provider owns one stable canonical string `type`, such as `MYSQL`.
 - canonical type is normalized and persisted as a string.
 - provider-specific compatibility names are declared through descriptor `aliases`.
+- `@AutoService(DataSourcePlugin.class)` generates the ServiceLoader provider registration at compile time; do not maintain a source `META-INF/services` descriptor.
 - ServiceLoader discovery registers both canonical type and aliases to the same Provider.
 - duplicate canonical types or aliases fail fast during plugin discovery.
 - adding a new Provider must not require modifying Common, Service Layer code or a central database-type list.

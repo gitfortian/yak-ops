@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.database.internal;
 
+import com.google.auto.service.AutoService;
 import io.yak.ops.connector.jdbc.database.JdbcFactory;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
@@ -8,6 +9,7 @@ import io.yak.ops.connector.jdbc.database.internal.catalog.AnsiCatalog;
 import io.yak.ops.connector.jdbc.database.internal.dialect.AnsiJdbcDialect;
 
 /** ANSI SQL dialect for H2 integration tests and embedded JDBC acceptance. */
+@AutoService(JdbcFactory.class)
 public final class AnsiJdbcFactory implements JdbcFactory {
 
     @Override

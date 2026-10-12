@@ -1,8 +1,10 @@
 package io.yak.ops.plugin.database.jdbc.postgresql;
 
+import com.google.auto.service.AutoService;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.Map;
 import java.util.Set;
@@ -12,6 +14,7 @@ import java.util.Set;
  *
  * <p>Schema belongs to Catalog namespaces or the optional currentSchema connection property.
  */
+@AutoService(DataSourcePlugin.class)
 public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
     private static final Map<String, String> PROPERTY_KEYS = Map.ofEntries(
