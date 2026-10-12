@@ -7,10 +7,9 @@ on:
       release_version:
         description: Stable product version to validate and release.
         required: true
-        default: "1.2.0"
         type: string
       manual_e2e_confirmed:
-        description: All required Manual E2E listed in this version's readiness document passed.
+        description: Required product Manual E2E passed; provide a traceable evidence reference.
         required: true
         default: false
         type: boolean
@@ -25,10 +24,26 @@ on:
         default: false
         type: boolean
       release_notes_confirmed:
-        description: Release notes, readiness and known limitations are ready.
+        description: Release summary and known limitations have been reviewed.
         required: true
         default: false
         type: boolean
+      manual_e2e_evidence:
+        description: Traceable report or run URL for passing Manual E2E.
+        required: true
+        type: string
+      migration_review_evidence:
+        description: Reviewed migration evidence (or no migration justification).
+        required: true
+        type: string
+      release_summary:
+        description: User-facing release summary.
+        required: true
+        type: string
+      known_limitations:
+        description: Known limitations or None.
+        required: true
+        type: string
 permissions:
   contents: read
 
@@ -258,12 +273,16 @@ jobs:
       MIGRATION_REVIEW_CONFIRMED: ${{ inputs.migration_review_confirmed }}
       BLOCKERS_CLEARED: ${{ inputs.blockers_cleared }}
       RELEASE_NOTES_CONFIRMED: ${{ inputs.release_notes_confirmed }}
+      MANUAL_E2E_EVIDENCE: ${{ inputs.manual_e2e_evidence }}
+      MIGRATION_REVIEW_EVIDENCE: ${{ inputs.migration_review_evidence }}
+      RELEASE_SUMMARY: ${{ inputs.release_summary }}
+      KNOWN_LIMITATIONS: ${{ inputs.known_limitations }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Verify release readiness confirmations
+      - name: Verify release decision and create attestation
         shell: bash
         run: |
           set -euo pipefail
@@ -278,11 +297,6 @@ jobs:
             exit 1
           fi
 
-          readiness="docs/release/v${RELEASE_VERSION}-readiness.md"
-          notes="docs/release/v${RELEASE_VERSION}-release-notes.md"
-          test -f "${readiness}"
-          test -f "${notes}"
-          test "$(grep -m1 '^Status:' "${readiness}")" = "Status: Ready"
 
           checks=(
             "Required Manual E2E:${MANUAL_E2E_CONFIRMED}"
@@ -300,5 +314,42 @@ jobs:
             fi
           done
 
+          for field in MANUAL_E2E_EVIDENCE MIGRATION_REVIEW_EVIDENCE RELEASE_SUMMARY KNOWN_LIMITATIONS; do
+            value="${!field}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              echo "Required release evidence is empty: ${field}"
+              exit 1
+            fi
+          done
+
+          mkdir -p release-attestations
+          {
+            printf '# Yak Ops v%s Release Notes\n\n' "${RELEASE_VERSION}"
+            printf '## Summary\n\n%s\n\n' "${RELEASE_SUMMARY}"
+            printf '## Known Limitations\n\n%s\n' "${KNOWN_LIMITATIONS}"
+          } > release-attestations/release-notes.md
+
+          {
+            printf '# Yak Ops v%s Release Decision\n\n' "${RELEASE_VERSION}"
+            printf -- '- Product Version: %s\n' "${RELEASE_VERSION}"
+            printf -- '- Candidate Commit: %s\n' "${GITHUB_SHA}"
+            printf -- '- Formal Gate Run: https://github.com/%s/actions/runs/%s\n' "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}"
+            printf -- '- Required Manual E2E: PASS\n'
+            printf -- '- Manual E2E Evidence: %s\n' "${MANUAL_E2E_EVIDENCE}"
+            printf -- '- Migration Review: PASS\n'
+            printf -- '- Migration Review Evidence: %s\n' "${MIGRATION_REVIEW_EVIDENCE}"
+            printf -- '- P0/P1 Release Blockers: CLEARED\n'
+            printf -- '- Release Notes and Known Limitations: CONFIRMED\n'
+          } > release-attestations/release-decision.md
+
+          cat release-attestations/release-decision.md >> "${GITHUB_STEP_SUMMARY}"
           echo "Yak Ops v${RELEASE_VERSION} release gate PASS."
           echo "This workflow does not create a Git tag or publish images."
+
+      - name: Upload release decision evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: yak-ops-${{ inputs.release_version }}-release-attestations
+          path: release-attestations/
+          if-no-files-found: error
+          retention-days: 90

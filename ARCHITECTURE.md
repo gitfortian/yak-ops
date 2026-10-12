@@ -115,7 +115,7 @@ Boot 仅装配 Task Plugin Registry、可信 Datasource 元信息验证接口和
 
 ### `yak-ops-dist`
 
-拥有分发包与发布装配。发布过程和版本证据见 [Version Management](docs/release/README.md)，不进入普通能力实现的默认上下文。
+拥有分发包与发布装配。发布过程和版本证据见 [Release Tooling](scripts/release/README.md)，不进入普通能力实现的默认上下文。
 
 ### `yak-ops-bom`
 

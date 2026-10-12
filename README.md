@@ -39,16 +39,8 @@ Management Center
 
 - [文档入口](docs/README.md)
 - [架构](ARCHITECTURE.md)
-- [版本管理](docs/release/README.md)
-- [v1.0.0 Release Contract](docs/release/v1.0.0.md)
-- [v1.1.0 Release Contract](docs/release/v1.1.0.md)（Released）
-- [v1.1.0 Release Readiness](docs/release/v1.1.0-readiness.md)
-- [v1.1.0 Release Notes](docs/release/v1.1.0-release-notes.md)
-- [v1.2.0 Release Contract](docs/release/v1.2.0.md)（Release Candidate / Ready for Gate）
-- [v1.2.0 Release Readiness](docs/release/v1.2.0-readiness.md)（Ready）
-- [v1.2.0 Release Notes](docs/release/v1.2.0-release-notes.md)
-- [v1.2.0 Release Evidence](docs/release/v1.2.0-release-evidence.md)
-- [Data Sync 手工 E2E](docs/e2e/data-sync/README.md)
+- [发布操作](scripts/release/README.md)
+- [历史版本与发布说明](https://github.com/weifuwan/yak-ops/releases)
 
 ## Distribution
 
@@ -89,4 +81,4 @@ Quality Check
 → Release Gate PASS
 ```
 
-详细规则见 [Version Management](docs/release/README.md)。
+发布操作见 [Release Tooling](scripts/release/README.md)。发布说明和证据以 GitHub Releases、Git Tags 及对应 Actions 为准。

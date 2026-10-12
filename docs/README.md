@@ -29,9 +29,7 @@
 
 ### 验收与发布
 
-[Version Management](release/README.md) 定位对应版本的范围、Readiness、Notes 和 Evidence。
-
-发布状态只在版本材料中维护，本索引不复制版本号、冻结状态或 PASS 结果。普通开发不默认读取这些材料。
+[Release Tooling](../scripts/release/README.md) 说明发布操作。[GitHub Releases](https://github.com/weifuwan/yak-ops/releases) 保存历史发布说明，Release Gate / Publish 的 Actions 产物保存验收和发布证据。普通开发不默认读取发布历史。
 
 ## Context Loading
 
