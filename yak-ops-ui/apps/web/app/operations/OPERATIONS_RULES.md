@@ -27,8 +27,8 @@ Must:
 - Do not derive Retry totals by summing Attempt metrics; dashboard readRows / writeRows already follow the backend Execution current/final Attempt mirror semantics.
 - Do not invent realtime throughput, events/s, CDC Lag or Checkpoint Lag from cumulative counters. Those require a persisted Metrics Time Series.
 - Dashboard roots are observability-only: they do not render Task definition tables, Instance history Tabs, Run / Start / Stop buttons, Schedule controls or Desired State controls.
-- Existing Operations Instance detail routes remain compatibility routes. They may still render the shared Execution detail and active-instance Stop behavior, but Dashboard pages do not link to them as primary navigation.
-- Compatibility detail routes return to the relevant Operations Dashboard rather than a removed Instance Tab.
+- Direct Operations Instance detail routes render shared Execution details and active-instance Stop behavior. Dashboard pages use Task detail as primary navigation.
+- Directly opened Instance detail routes return to their corresponding Operations Dashboard.
 - Preserve Workspace scoping through the Operations Center AppLayout and backend read model.
 
 Must Not:
