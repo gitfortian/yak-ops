@@ -1,5 +1,6 @@
 package io.yak.ops.boot;
 
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginRegistry;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
@@ -19,6 +20,7 @@ import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
 public class YakOpsApplication {
 
     public static void main(String[] args) {
+        DataSourcePluginRegistry.load();
         SpringApplication.run(YakOpsApplication.class, args);
     }
 }

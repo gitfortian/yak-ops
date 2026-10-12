@@ -7,18 +7,43 @@ import java.util.NoSuchElementException;
 import java.util.ServiceLoader;
 
 /**
- * Discovers datasource plugins and resolves registered provider types and aliases.
+ * Discovers datasource providers through Java SPI and resolves registered types and aliases.
+ *
+ * <p>The immutable registry is initialized once per class loader. Duplicate names and incompatible
+ * provider descriptors fail registration before they can be used by the application.
  */
 public final class DataSourcePluginRegistry {
 
-    private final Map<String, DataSourcePlugin> plugins;
+    private static final Map<String, DataSourcePlugin> PLUGINS =
+            registerProviders(ServiceLoader.load(DataSourcePlugin.class, contextClassLoader()));
 
-    public DataSourcePluginRegistry() {
-        this(ServiceLoader.load(DataSourcePlugin.class, contextClassLoader()));
+    private DataSourcePluginRegistry() {}
+
+    /** Ensures that datasource providers are discovered and validated during application startup. */
+    public static void load() {
+        if (PLUGINS.isEmpty()) {
+            throw new IllegalStateException("No datasource plugins are registered");
+        }
     }
 
-    /** Registers the supplied providers and rejects duplicate types or aliases. */
-    public DataSourcePluginRegistry(Iterable<? extends DataSourcePlugin> providers) {
+    /**
+     * Returns the provider registered under its type or alias.
+     *
+     * @param type canonical provider type or alias
+     * @return registered datasource provider
+     * @throws NoSuchElementException if the type or alias is not registered
+     */
+    public static DataSourcePlugin get(String type) {
+        String key = DataSourcePluginDescriptor.normalizeType(type);
+        DataSourcePlugin plugin = PLUGINS.get(key);
+        if (plugin == null) {
+            throw new NoSuchElementException("Datasource plugin not registered: " + key);
+        }
+        return plugin;
+    }
+
+    /** Registers providers without modifying the application-wide registry. */
+    static Map<String, DataSourcePlugin> registerProviders(Iterable<? extends DataSourcePlugin> providers) {
         Map<String, DataSourcePlugin> discovered = new LinkedHashMap<>();
         for (DataSourcePlugin plugin : providers) {
             if (plugin == null) {
@@ -41,17 +66,7 @@ public final class DataSourcePluginRegistry {
                 register(discovered, alias, plugin);
             }
         }
-        plugins = Collections.unmodifiableMap(discovered);
-    }
-
-    /** Returns the provider registered for the given canonical type or alias. */
-    public DataSourcePlugin get(String type) {
-        String key = DataSourcePluginDescriptor.normalizeType(type);
-        DataSourcePlugin plugin = plugins.get(key);
-        if (plugin == null) {
-            throw new NoSuchElementException("Datasource plugin not registered: " + key);
-        }
-        return plugin;
+        return Collections.unmodifiableMap(discovered);
     }
 
     private static void register(Map<String, DataSourcePlugin> providers, String type, DataSourcePlugin plugin) {
