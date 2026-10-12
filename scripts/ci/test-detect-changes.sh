@@ -28,6 +28,13 @@ expect_scope "${all_false}" README.md
 expect_scope "${backend_only}" yak-flow/yak-flow-runtime/src/main/java/StreamTask.java
 expect_scope "${backend_only}" yak-ops-business/yak-ops-business-task/src/main/java/DefinitionService.java
 expect_scope "${frontend_only}" yak-ops-ui/apps/web/app/layout/ProductSidebar.tsx
+expect_scope "${all_false}" yak-ops-ui/FRONTEND_RULES.md
+expect_scope "${all_false}" yak-ops-ui/docs/tooling.md
+expect_scope "${all_false}" yak-ops-ui/apps/web/app/feature/README.md
+expect_scope "${all_false}" yak-ops-ui/packages/yak-ui/docs/component.md
+expect_scope "${all_false}" yak-ops-ui/scripts/fixtures/example/README.md
+expect_scope "${frontend_only}" yak-ops-ui/scripts/check-architecture.mjs
+expect_scope "${frontend_only}" yak-ops-ui/apps/web/app/layout/ProductSidebar.tsx yak-ops-ui/FRONTEND_RULES.md
 expect_scope "${frontend_and_distribution}" yak-ops-ui/package-lock.json
 expect_scope "${distribution_only}" Dockerfile
 expect_scope "${backend_and_distribution}" pom.xml

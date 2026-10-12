@@ -40,7 +40,7 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - **New major subsystem or public contract change:** discuss and accept a YOIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [YOIP template](.github/YOIP_TEMPLATE.md).
 - **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
 - **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
-- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md` and the affected frontend code/tests; follow the existing frontend checks.
+- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md`, TypeScript contracts and affected tests; apply the repository-wide YOIP process to significant public changes, and use focused PRs for routine UI work.
 
 ## Repository-Specific Invariants
 
