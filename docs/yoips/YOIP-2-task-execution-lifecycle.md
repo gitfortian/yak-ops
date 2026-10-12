@@ -49,9 +49,13 @@ Propose the following HTTP operations, scoped to the authorized Workspace:
 - GET /api/v1/task-instances/{id}/attempts: inspect submission attempts and log references.
 - POST /api/v1/task-instances/{id}/cancel: asynchronously request cancellation.
 
-A submission includes a caller-stable request identity. An equivalent repeated request in the same Workspace and trigger scope resolves to the same Instance, including when the existing Instance is still active or has already terminated; reuse with conflicting submission data fails. A separate intentional run uses a new request identity. Authentication, Workspace authorization, and Definition publication checks remain mandatory.
+Manual execution requires an `Idempotency-Key` HTTP header identifying one intentional submission. The UI generates a new, sufficiently unpredictable key for each new Run action and reuses that key for every network retry of the same action. A missing or invalid key is rejected (HTTP 400); one new deliberate Run action uses a new key. The header is a caller-supplied submission identity, not an authentication or authorization token.
 
-A distinct DATA_SYNC request targeting a resource held by another nonterminal Instance is rejected with an execution conflict (HTTP 409), without creating another Instance or queuing it. This admission check does not change the result of a valid idempotent replay, which returns the originally created Instance.
+The platform persists request identity with a database uniqueness constraint on (workspace_id, trigger_type, request_id). MANUAL, SCHEDULE, and WORKFLOW are distinct trigger namespaces; future scheduling and workflow callers must derive a stable request identity from the underlying trigger event so replay of one event remains idempotent. A normalized submission fingerprint binds the key to the requested Definition and explicit request options. For the same authorized Workspace, trigger type, and key, an equivalent retry returns the original Instance and its pinned immutable Definition version, whether SUBMITTED, active, or terminal, even if the Definition is later unpublished or changed. A conflicting payload using the same key returns HTTP 409 and never changes the existing Instance. The fingerprint must not be silently reinterpreted using the Definition's current version during a retry. Authentication and Workspace authorization are required on every request, including replay.
+
+Idempotency lookup and new Instance/Attempt persistence must be atomic and safe under concurrent requests. The database uniqueness constraint is authoritative. A concurrent insert collision on the same equivalent key is resolved by reading and returning the committed original Instance; it is not mistaken for a separate execution conflict. No duplicate Instance, Attempt, or Runtime submission may be created by an equivalent retry.
+
+A distinct DATA_SYNC request targeting a resource held by another nonterminal Instance is rejected with an execution conflict (HTTP 409), without creating another Instance or queuing it. A valid idempotent replay is resolved before fresh resource-admission checks, so it returns the originally created Instance instead of an erroneous target conflict.
 
 The HTTP response means the request has been persisted, not that the YakFlow Job has started or succeeded. API clients must not receive connection credentials, local checkpoint contents, or raw internal exception details.
 
@@ -87,8 +91,8 @@ YakFlow owns Job execution and checkpoint/recovery mechanics. Core remains datab
 
 A successful request follows this logical sequence:
 
-1. Authorize the Workspace and the published Definition; bind its immutable current version.
-2. For DATA_SYNC, resolve its supported target-table resource identity and atomically acquire the execution claim together with the Instance and first Attempt, including the caller's request identity. Reject a conflicting new request before launch.
+1. Authenticate and authorize the Workspace, then resolve the request identity against any existing Instance before evaluating a new submission. An equivalent replay returns that Instance and pinned version; a conflicting replay fails.
+2. For a new submission, authorize the published Definition and pin its immutable current version. For DATA_SYNC, resolve its supported target-table resource identity and atomically acquire its execution claim together with the new Instance, first Attempt, request identity, and immutable fingerprint. Reject conflicting new resource claims before launch.
 3. Commit the business transaction and resource claim before dispatching a runtime Job.
 4. Claim the committed execution request for asynchronous processing.
 5. Resolve the Boot-assembled executable capability and its trusted runtime resources scoped to the persisted Workspace.
@@ -164,9 +168,8 @@ The embedded Runtime is the execution target for this proposal. Worker dispatch,
 
 The design review should resolve the following before acceptance:
 
-1. **Submission identity:** Should a caller-provided idempotency key be mandatory for manual execution, and what is the durable uniqueness scope across future scheduler/workflow triggers?
-2. **Same-Definition overlap:** Beyond mandatory DATA_SYNC target-table exclusion, should the generic Task platform also limit a Definition to one active Instance when its executions use disjoint resources or a different Task type?
-3. **Uncertain execution ownership:** How should the product API represent a nonterminal Instance whose previous embedded executor has not been proven stopped, while retaining its target claim and preventing a misleading healthy RUNNING display?
+1. **Same-Definition overlap:** Beyond mandatory DATA_SYNC target-table exclusion, should the generic Task platform also limit a Definition to one active Instance when its executions use disjoint resources or a different Task type?
+2. **Uncertain execution ownership:** How should the product API represent a nonterminal Instance whose previous embedded executor has not been proven stopped, while retaining its target claim and preventing a misleading healthy RUNNING display?
 
 ## Compatibility, Deprecation, and Migration Plan
 
@@ -183,7 +186,7 @@ The initial implementation does not claim distributed execution, exactly-once de
 Tests must cover the complete product chain rather than infer acceptance from Runtime-only integration tests:
 
 1. **Identity and authorization:** Published definitions can be started within the authorized Workspace. Unpublished, missing, or cross-Workspace definitions cannot be started. Instance version binding is immutable.
-2. **Submission idempotency:** Duplicate equivalent request identities create one Instance/Attempt; conflicting reuse is rejected. Concurrent requests obey the same database constraint.
+2. **Submission idempotency:** Manual execution requires an Idempotency-Key; missing/invalid keys receive HTTP 400. Concurrent or sequential equivalent retries in one Workspace and trigger namespace return exactly the same Instance/Attempt and pinned version, including after completion, unpublication, or a later Definition version change. Conflicting reuse receives HTTP 409. The database uniqueness constraint, stable request fingerprint, and authorized retry lookup prevent double submission; future scheduler/workflow triggers have separate namespaces and deterministic event identities.
 3. **Real bounded JDBC:** Controller to Task Definition to execution plugin to YakFlow to real JDBC Source/Sink completes; all expected data is delivered and the Instance reaches FINISHED.
 4. **Real continuous CDC:** Controller to MySQL CDC to JDBC Sink processes snapshot and binlog changes, records durable checkpoint progress, remains RUNNING until canceled, then reaches a truthful terminal state.
 5. **Failure reporting:** Invalid resource resolution, Pipeline planning errors, submission failure, Runtime failure, and persistence/update failures cannot produce a false FINISHED state; errors remain observable without leaking credentials.
@@ -211,4 +214,6 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 - **Reuse a terminal business Instance for a later manual run:** Each independent intent produces a new Instance; terminal records remain immutable.
 - **Allow simultaneous DATA_SYNC writers to an identifiable target table:** APPEND and UPSERT can interfere across different Definitions, so an exclusive durable admission claim is required.
 - **Use an in-memory target lock or timed claim expiration:** Neither protects admission across requests and restarts without risking concurrent external writes.
+- **Use Definition ID as the idempotency identity:** A successfully completed Definition must support later intentional runs; a stable request key distinguishes retries from new execution intents.
+- **Treat a new Idempotency-Key as proof of safe parallel execution:** Distinct submissions still undergo DATA_SYNC resource-admission checks and may be rejected without being queued.
 - **Introduce full Workflow, Quartz, Master/Worker, or distributed Job services in this proposal:** These can be layered on the stable Task execution contract when separately designed and verified.
