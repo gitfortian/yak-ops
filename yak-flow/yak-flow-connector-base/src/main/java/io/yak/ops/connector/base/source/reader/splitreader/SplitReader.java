@@ -30,8 +30,8 @@ public interface SplitReader<E, SplitT extends SourceSplit> extends AutoCloseabl
     /**
      * Stops active I/O when the owning fetcher is being shut down.
      *
-     * <p>Unlike wakeUp(), this signal is not used for normal split assignment. A JDBC reader
-     * may therefore cancel its active Statement without aborting a healthy running query.
+     * <p>Shutdown may cancel an active JDBC Statement. Normal split assignment signals the
+     * reader through {@link #wakeUp()}.
      */
     default void cancel() {
         wakeUp();

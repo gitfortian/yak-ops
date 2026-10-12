@@ -10,8 +10,8 @@ import java.util.ServiceLoader;
 /**
  * Discovers stateless Task plugins through Java ServiceLoader and dispatches by exact type.
  *
- * <p>Each plugin owns parsing, local validation and resource validation. The registry does not
- * implement a second validation flow or infer compatibility aliases.
+ * <p>Each plugin owns parsing, local validation and resource validation. The registry
+ * resolves only exact registered Task types and delegates validation to that plugin.
  */
 public final class TaskPluginRegistry {
 

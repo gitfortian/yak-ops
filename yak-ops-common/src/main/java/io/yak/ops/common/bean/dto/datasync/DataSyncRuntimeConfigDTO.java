@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class DataSyncRuntimeConfigDTO {
 
-    /** Runtime planning policy; historical configurations without one fall back to FIXED. */
+    /** Runtime planning policy; an absent value resolves to FIXED. */
     private DataSyncRuntimePolicy policy;
 
     /** JDBC cursor fetch size. */

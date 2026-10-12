@@ -8,8 +8,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Adapt a SourceOperator to StreamTaskInput without managing its Reader or SourceCoordinator.
- * Unlike network input, the records come directly from SourceReader.pollNext().
+ * Adapts a SourceOperator to StreamTaskInput by polling the owned SourceReader through
+ * the operator. Reader and SourceCoordinator lifecycles remain with their owners.
  */
 public final class StreamTaskSourceInput<T> implements StreamTaskInput<T> {
 

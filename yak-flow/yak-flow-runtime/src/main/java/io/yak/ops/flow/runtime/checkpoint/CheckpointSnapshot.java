@@ -47,7 +47,7 @@ public record CheckpointSnapshot(
         operatorStates = Map.copyOf(copy);
     }
 
-    /** Backwards compatible constructor for Source/Sink-only format v1. */
+    /** Creates a snapshot from format v1 Source and Sink state, with empty operator state. */
     public CheckpointSnapshot(
             long checkpointId,
             String graphSignature,

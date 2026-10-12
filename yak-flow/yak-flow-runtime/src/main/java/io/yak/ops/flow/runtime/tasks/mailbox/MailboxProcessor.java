@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.function.BooleanSupplier;
 
 /**
- * Flink-style mailbox loop: control mails and the input default action run on one Task thread.
+ * Runs control mails and the input default action on the owning Task thread.
  * When input is unavailable, the default action suspends; control mails still execute. Availability
  * callbacks resume the action without polling or busy sleeping.
  */

@@ -1,6 +1,6 @@
 # Developing Yak Ops
 
-This is the development entry point, following the structure of [Flink's DEVELOPMENT.md](https://github.com/apache/flink/blob/master/DEVELOPMENT.md). For the contribution process and YOIPs, see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
+This document covers the Yak Ops development environment and verification commands. For the contribution process and YOIPs, see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## Preparation
 
@@ -9,7 +9,7 @@ This is the development entry point, following the structure of [Flink's DEVELOP
 - Node.js and npm for `yak-ops-ui`; use the frontend's own package and tooling files for supported versions and commands.
 - Docker and database credentials only when running relevant integration or release checks.
 
-Clone the repository and open its root `pom.xml` as a Maven project in IntelliJ IDEA. Use the command line to distinguish Maven failures from IDE configuration problems. Do not copy Flink's Java 11/17 profiles or formatter configuration into this Java 21 project.
+Clone the repository and open its root `pom.xml` as a Maven project in IntelliJ IDEA. Use the command line to distinguish Maven failures from IDE configuration problems. Build with the repository's Java 21 and checked-in Maven configuration.
 
 ## Build and Test
 
@@ -34,7 +34,7 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 
 Use the [Apache Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) for code review principles: small, focused changes; meaningful names; explicit ownership; readable tests; no redundant comments.
 
-The formatter is **Spotless + Palantir Java Format**, not Flink's google-java-format. Maven Checkstyle validates JavaDoc and ArchUnit tests validate module dependency boundaries during `verify`.
+Java formatting uses **Spotless + Palantir Java Format**. Maven Checkstyle validates JavaDoc and ArchUnit tests validate module dependency boundaries during `verify`.
 
 ```sh
 bash mvnw -B -ntp -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
@@ -42,9 +42,11 @@ python3 scripts/ci/test_logging_rules.py
 python3 scripts/verify_logging_rules.py
 ```
 
-Keep JavaDoc and implementation comments in English. Checkstyle covers the previously checked backend source packages; public interfaces and non-obvious lifecycle contracts require useful documentation. Logging validation enforces SLF4J structure and sensitive-data safety without imposing a log language or disallowing TRACE. In CI, Checkstyle and Spotless run before `verify`; their repeated Maven executions are skipped only after both checks pass. Plain local `verify` still enforces them.
+Keep JavaDoc and implementation comments in English. Checkstyle validates the configured backend source packages; public interfaces and non-obvious lifecycle contracts require useful documentation. Logging validation enforces SLF4J structure and sensitive-data safety without imposing a log language or disallowing TRACE. In CI, Checkstyle and Spotless run before `verify`; their repeated Maven executions are skipped only after both checks pass. Plain local `verify` still enforces them.
 
 ## Documentation and Design
+
+Follow the [current-state comment and documentation rules](AGENTS.md#current-state-comments-and-documentation) when changing JavaDoc, implementation comments or active project guidance.
 
 - Major design changes and public contract changes go through the [YOIP process](.github/CONTRIBUTING.md#yak-ops-improvement-proposals-yoips) before implementation.
 - Ordinary implementation details belong in code, JavaDoc, tests and the GitHub PR; no companion descriptive Markdown is required.

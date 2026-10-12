@@ -15,7 +15,7 @@ import java.util.TreeMap;
 /**
  * Reconciles one bounded snapshot chunk with the ordered Binlog interval between its watermarks.
  *
- * <p>Like Flink CDC's snapshot buffering, INSERT and UPDATE_AFTER replace the row for a key,
+ * <p>INSERT and UPDATE_AFTER replace the row for a key,
  * while DELETE and UPDATE_BEFORE retract the old key. Both halves of a primary-key-changing
  * UPDATE are applied together. Rows are emitted only after the bounded backfill has ended.
  *

@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class DataSourceQueryDTO extends PageQueryDTO {
 
-    /** Name filter retained for compatibility with earlier callers. */
+    /** Filters datasource records by name. */
     @Size(max = 128, message = "数据源名称筛选不能超过 128 个字符")
     private String name;
 

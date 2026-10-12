@@ -188,7 +188,7 @@ public final class InputGate<T> {
         }
     }
 
-    /** Compatibility overload for pure data inputs that never receive a checkpoint barrier. */
+    /** Emits data for input streams configured without checkpoint barriers. */
     public InputStatus emitNext(ReaderOutput<T> output) throws Exception {
         return emitNext(output, id -> {
             throw new UnsupportedOperationException("Checkpoint barrier handler is missing");

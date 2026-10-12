@@ -24,8 +24,8 @@ import java.util.Objects;
  * Snapshot splits can run on parallel Readers; after their downstream output is covered by
  * a completed checkpoint, the original Binlog stream replays from the low watermark.
  *
- * <p>This conservative global replay approach is at-least-once and is distinct from
- * Flink CDC's per-chunk Low/High watermark snapshot normalization.
+ * <p>The checkpoint-protected snapshot-to-Binlog handoff provides at-least-once
+ * processing; replay starts at the captured low watermark.
  */
 public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybridSplit, MySqlHybridEnumeratorState> {
 

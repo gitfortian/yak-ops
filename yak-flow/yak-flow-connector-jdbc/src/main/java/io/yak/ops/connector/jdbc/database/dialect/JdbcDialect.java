@@ -55,8 +55,8 @@ public interface JdbcDialect extends java.io.Serializable {
     /**
      * Creates a writer-side binder for an already resolved target schema.
      *
-     * <p>Binding positions follow {@link TableSchema#columns()} exactly. Unlike the result-set
-     * overload, this operation does not inspect a connection or infer missing column types.
+     * <p>Binding positions follow {@link TableSchema#columns()} exactly. The resolved target
+     * schema supplies column types and order for the binder.
      *
      * @param schema ordered target columns with resolved logical types
      * @return a positional JDBC parameter binder for that schema

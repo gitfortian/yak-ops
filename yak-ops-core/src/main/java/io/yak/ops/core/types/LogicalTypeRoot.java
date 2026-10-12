@@ -1,7 +1,7 @@
 package io.yak.ops.core.types;
 
 /**
- * The subset of Flink-style logical type roots currently understood by YakFlow.
+ * Defines the logical type families supported by YakFlow.
  *
  * <p>Vendor SQL type names and JDBC {@code java.sql.Types} codes are not logical type roots.
  */

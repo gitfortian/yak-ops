@@ -16,11 +16,11 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task-owned wrapper around a SourceReader, following Flink's SourceOperator responsibilities.
+ * Task-owned operator that manages a SourceReader's execution and control events.
  *
- * <p>The owning mailbox thread creates, starts, polls and closes the reader; this class does
- * not own the SplitEnumerator or a second reader thread. Runtime context and backpressure
- * remain owned by the surrounding task.
+ * <p>The owning mailbox thread creates, starts, polls and closes the reader. The Source
+ * Coordinator manages split enumeration; the surrounding Task manages runtime context
+ * and backpressure.
  *
  * @param <T> the record type emitted by the Source
  * @param <SplitT> the reader split type

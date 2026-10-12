@@ -11,9 +11,8 @@ import java.util.Objects;
 /**
  * Orders two MySQL Binlog cursors for bounded backfill and finished-chunk filtering.
  *
- * <p>Follows Flink CDC's GTID-set, file/position and within-event row ordering. Unlike
- * comparing raw offset maps, incomparable GTID sets fail rather than silently imposing
- * an arbitrary direction. All positions must refer to the same Debezium source partition.
+ * <p>Orders GTID sets, Binlog file/position and within-event row positions. Incomparable
+ * GTID sets fail explicitly. All positions must refer to the same Debezium source partition.
  */
 public final class BinlogOffsetOrder {
 

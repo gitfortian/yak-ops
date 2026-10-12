@@ -20,7 +20,7 @@ public interface DefinitionService {
 
     PagingData<DefinitionVO> queryPage(DefinitionQueryDTO dto);
 
-    /** Returns saved versions without reinterpreting historical plugin parameters. */
+    /** Returns immutable stored definition versions with their saved plugin parameters. */
     List<DefinitionVersionVO> queryVersions(String id);
 
     /** Publishes the current validated definition version for future task use. */

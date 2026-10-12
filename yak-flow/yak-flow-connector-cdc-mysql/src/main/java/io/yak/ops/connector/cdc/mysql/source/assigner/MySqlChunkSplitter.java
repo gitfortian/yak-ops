@@ -20,8 +20,7 @@ import java.util.Objects;
 /**
  * Plans disjoint, half-open BIGINT-primary-key snapshot chunks using JDBC keyset boundaries.
  *
- * <p>Unlike numeric-span division, keyset boundaries accommodate sparse keys and avoid
- * scanning huge empty ranges. The total range is always open on both ends, so inserts
+ * <p>Keyset boundaries accommodate sparse keys and avoid scanning huge empty ranges. The total range is always open on both ends, so inserts
  * outside the initially observed key span remain covered by the post-snapshot Binlog replay.
  * Planning runs on the coordinator's background discovery thread.
  */

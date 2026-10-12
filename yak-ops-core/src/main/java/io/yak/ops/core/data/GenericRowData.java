@@ -9,8 +9,7 @@ import java.util.Objects;
  * Array-backed RowData for JDBC batches and general-purpose YakFlow operators.
  *
  * <p>Fields may be changed during construction but must not be mutated after the record enters
- * a fetch queue. Mutable binary and legacy timestamp values are defensively copied on access.
- * Future binary/columnar implementations may implement RowData without changing Connector APIs.
+ * a fetch queue. Mutable binary, JDBC timestamp and date values are defensively copied on access.
  */
 public final class GenericRowData implements RowData {
 

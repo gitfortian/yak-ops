@@ -10,8 +10,7 @@ import java.util.Objects;
 /**
  * Constructs read-only JDBC Catalog instances using the Connector's vendor factory SPI.
  *
- * <p>Catalog methods return YakFlow {@code TableSchema} and {@code TableId} contracts,
- * without a Flink Table API dependency or a duplicate Datasource Catalog implementation.
+ * <p>Catalog methods return YakFlow {@code TableSchema} and {@code TableId} contracts.
  * Vendor lookup is shared with JDBC Source/Sink dialect resolution.
  */
 public final class JdbcCatalogFactory {

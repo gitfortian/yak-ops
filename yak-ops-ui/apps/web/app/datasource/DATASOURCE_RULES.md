@@ -33,7 +33,7 @@ Create 默认环境为 DEVELOP，Edit 保留原环境；环境不是当前可编
 
 Create / Update / Connection Test 共用结构化 `connectionParams`，dbType 由外层字段路由，不重复塞入连接对象，也不由 App / Service 手工序列化成 JSON 字符串。
 
-MySQL / PostgreSQL 使用结构化 Host / Port / Database 和只读 JDBC Preview。Oracle 接收完整原生 JDBC URL；校验非空与 Vendor 前缀，不在产品表单解析或重写 SID / Service Name / RAC，不展示高级参数、驱动版本或结构化预览。历史 Oracle properties 编辑时可透明保留。
+MySQL / PostgreSQL 使用结构化 Host / Port / Database 和只读 JDBC Preview。Oracle 接收完整原生 JDBC URL；校验非空与 Vendor 前缀，不在产品表单解析或重写 SID / Service Name / RAC，不展示高级参数、驱动版本或结构化预览。编辑时透明保留已保存的 Oracle properties。
 
 PostgreSQL 采用数据库连接目标，不增加顶层 schema 或默认 public；默认 search path 通过通用 currentSchema 属性传递。端口默认值与 Preview 实现见 [form.tsx](form.tsx)，连接标准化和真实连接测试仍由后端负责。
 

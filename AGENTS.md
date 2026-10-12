@@ -48,7 +48,7 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
 - Keep published Flyway migrations frozen; draft migrations must be reconciled before the release migration gate. The release scripts verify names and sequence, not the semantic safety of SQL.
 - Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English; logs may use the language appropriate to the product.
-- Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Existing code and tests—not historic descriptions—determine which features are implemented.
+- Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Current code, tests, and accepted public contracts determine supported behavior.
 
 ## Code Quality and Review
 
@@ -59,6 +59,14 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
 - Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
 
+## Current-State Comments and Documentation
+
+- Describe current responsibilities, behavior, ownership, lifecycle, and invariants in the present tense. Comments and active rules must be understandable without implementation history or an upstream reference.
+- Remove development-phase labels, previous-implementation narratives, and comparisons such as `PR1`, `legacy implementation`, `Flink-style`, or `unlike Flink` from ordinary JavaDoc, code comments, and active guidance. Keep design provenance in relevant PR or YOIP discussions.
+- Preserve meaningful version numbers, persisted-format compatibility, safety constraints, recovery guarantees, and supported limitations. Express these as current behavioral contracts, not as reasons a compatibility layer was introduced.
+- Keep FLIP references, migration analysis, and rejected alternatives in design proposals where they inform decisions. Published Flyway migrations and third-party notices are immutable or externally owned and are excluded from prose cleanup.
+- Check rewritten descriptions against code and tests. Do not change public APIs, execution behavior, compatibility policies, or CI gates merely to improve wording.
+
 ## References
 
 - [Development](DEVELOPMENT.md) — local setup and verification.
@@ -66,4 +74,4 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
 - [YOIP template](.github/YOIP_TEMPLATE.md) — major design proposals.
 - [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
-- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — unchanged by the backend documentation cleanup.
+- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — frontend ownership, behavior and UI conventions.
