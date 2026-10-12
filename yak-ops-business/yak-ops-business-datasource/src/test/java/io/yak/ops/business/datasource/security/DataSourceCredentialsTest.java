@@ -36,9 +36,8 @@ class DataSourceCredentialsTest {
         assertFalse(result.contains("ssh-secret"));
         assertFalse(result.contains("key-secret"));
         assertTrue(result.contains("password=******"));
-        assertEquals(
-                "******",
-                JSONUtils.readTree(result).path("properties").path("apiCredential").asText());
+        var displayed = JSONUtils.readTree(result);
+        assertEquals("******", displayed.path("properties").path("apiCredential").asText());
     }
 
     @Test

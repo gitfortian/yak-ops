@@ -1,9 +1,9 @@
 package io.yak.ops.business.datasource.impl;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogService;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.catalog.DataSourceCatalogService;
 import io.yak.ops.business.datasource.security.DataSourceCredentials;
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
@@ -32,9 +32,9 @@ import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.dao.repository.datasource.DataSourcePageQuery;
 import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginRegistry;
-import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -80,7 +80,8 @@ public class DataSourceServiceImpl implements DataSourceService {
         DataSourcePlugin provider = plugin(dto.getDbType());
         String dbType = provider.descriptor().type();
         ensureNameAvailable(workspaceId, name, null);
-        DataSourceConnection connection = parseConnection(provider, serializeConnectionParams(dto.getConnectionParams()));
+        String connectionJson = serializeConnectionParams(dto.getConnectionParams());
+        DataSourceConnection connection = parseConnection(provider, connectionJson);
 
         DataSourceEntity entity = new DataSourceEntity();
         entity.setWorkspaceId(workspaceId);
@@ -118,8 +119,8 @@ public class DataSourceServiceImpl implements DataSourceService {
             throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "编辑数据源时不允许修改数据源类型");
         }
 
-        String json = credentials.retainOnUpdate(
-                provider.descriptor(), serializeConnectionParams(dto.getConnectionParams()), existing.getConnectionParams());
+        String submitted = serializeConnectionParams(dto.getConnectionParams());
+        String json = credentials.retainOnUpdate(provider.descriptor(), submitted, existing.getConnectionParams());
         DataSourceConnection connection = parseConnection(provider, json);
         existing.setName(name);
         existing.setJdbcUrl(connection.jdbcUrl());
