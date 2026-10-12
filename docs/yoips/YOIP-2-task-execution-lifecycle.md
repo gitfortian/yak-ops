@@ -26,7 +26,7 @@ This proposal establishes the business Task execution contract and its boundary 
 
 A **Task Instance** represents one requested run of a published Task Definition. It has its own stable instance identity, Workspace identity, pinned Definition ID and immutable version, Task type, trigger identity, submission/start/end timestamps, lifecycle status, and terminal failure reason where applicable. A new independent run creates a new Instance; it never rewrites the Definition.
 
-A **Task Attempt** records one platform-level execution submission associated with an Instance. Its identity, ordinal, submission/finish timestamps, status, YakFlow JobID when known, and opaque log reference are persisted. A Runtime-internal Execution Attempt or whole-Job checkpoint restart does not itself create another business Task Attempt. The first implementation creates one platform Attempt per Instance; additional platform retries require an explicitly designed policy.
+A **Task Attempt** records one platform-level execution submission associated with an Instance. Its identity, ordinal, submission/finish timestamps, status, YakFlow JobID when known, and opaque log reference are persisted. A Runtime-internal Execution Attempt or whole-Job checkpoint restart does not itself create another business Task Attempt or change its JobID. The initial embedded implementation creates exactly one platform Attempt per Instance. Process interruption records the outcome of that Attempt; no second Attempt is created automatically. Any later platform-level recovery that submits a new Job requires a separately accepted contract for a new Attempt on a nonterminal Instance, and must never reopen a terminal Instance.
 
 The initial externally visible Instance lifecycle is:
 
@@ -97,9 +97,23 @@ A successful request follows this logical sequence:
 
 Submission is nonblocking from the HTTP client's perspective. A successfully returned execution handle is not a FINISHED Task Instance. Completion of the Runtime Job and required finalization must precede FINISHED. A failed or canceled Runtime Job cannot be recorded as a successful business execution.
 
-The submission claim, persistence updates, and terminal callbacks must be idempotent. A crash or lost acknowledgement between starting the embedded Job and recording JobID leaves an uncertain submission: the platform must not blindly submit another Job and risk duplicate external effects. On restart it must reconcile known outcomes or fail the Instance with an explicit interruption/uncertainty reason. An unknown JobID is not evidence that no Job ran.
+The submission claim, persistence updates, and terminal callbacks must be idempotent. A crash or lost acknowledgement between starting the embedded Job and recording JobID leaves an uncertain submission: the platform must not blindly submit another Job and risk duplicate external effects. An unknown JobID is not evidence that no Job ran.
 
-An embedded JobClient handle is process-local. Persisting a JobID alone does not permit a new application process to reattach to a previously running embedded ExecutionGraph. Automatic platform-level restart or resubmission after process loss is not part of this initial proposal.
+An embedded JobClient handle is process-local. Persisting a JobID alone does not permit a new application process to reattach to a previously running embedded ExecutionGraph. Initial process-interruption reconciliation and the Attempt failure boundary are defined below.
+
+### Embedded process interruption and Attempt lifecycle
+
+The initial local executor uses a **fail-closed process-interruption policy**. It does not implement cross-process automatic recovery, checkpoint-driven resubmission, or a second platform Attempt within the same Instance. In-process, checkpoint-backed YakFlow whole-Job restart continues to follow YOIP-1 and ExecutionOptions.MAX_RESTART_ATTEMPTS under the same platform Attempt and JobID. The Task platform must not duplicate those retries.
+
+An accepted submission creates one Instance and one Attempt. If a live Job ultimately succeeds, fails, or is canceled, its observed TaskHandle result drives the corresponding terminal business transition. A failed Runtime Job is recorded as a failed Attempt and Instance, without an unconditional second Task submission.
+
+At application startup, the platform reconciles persisted nonterminal Instances and their Attempts before accepting conflicting writes. An earlier embedded JobClient is not reattached by JobID. Reconciliation must establish whether the prior embedded execution owner has stopped and whether a durable terminal result was already recorded. Deployment of the initial embedded mode requires a verifiable single-active-owner assumption; concurrently active application executors are not implicitly supported.
+
+When the previous execution owner is conclusively stopped and no durable success/cancellation result can be established, the Attempt records an interruption/unknown-outcome reason and the Instance transitions to FAILED. This is a **platform execution failure**, not proof that externally written JDBC data was rolled back. Terminal persistence and the release of DATA_SYNC target claims are atomic and owner-checked. Checkpoint data may remain available for diagnosis or a future separately specified recovery mechanism, but is not automatically replayed by the initial platform.
+
+If the old execution owner may still be active, reconciliation must not declare terminal success/failure, release its target claim, or dispatch another writer. The Instance must be visibly distinguished as requiring reconciliation, rather than falsely presented as a healthy confirmed RUNNING execution. The exact nonterminal API representation for unresolved ownership is an open review question; it cannot be resolved by a timeout-based claim release.
+
+For a separate intentional run after a terminal Instance, create a new Instance and its first Attempt using a new request identity. Future automatic process recovery, if adopted, must explicitly define how a new Attempt is created while the logical Instance remains nonterminal, how prior execution is fenced, and how compatible checkpoints and external side effects are handled. No already-terminal Instance may be revived.
 
 ### Cancellation and terminal races
 
@@ -136,7 +150,7 @@ This exclusion prevents overlapping writes for identifiable targets. It is not a
 
 YakFlow owns checkpoint serialization, completion, publication, and restore semantics as defined by YOIP-1. Task Execution owns the association between an Instance, its effective configuration, and its checkpoint namespace. Independent new Instances must not share a writable checkpoint directory. A future explicit recovery for the same Instance must retain the pinned Definition version and validate stable UIDs, topology, and state compatibility before restoring.
 
-The initial FileCheckpointStore requires durable local storage accessible to the embedded executor. A checkpoint is not an external transactional commit; supported JDBC and CDC paths retain their documented at-least-once limitations.
+The initial FileCheckpointStore requires durable local storage accessible to the embedded executor. A checkpoint is not an external transactional commit; supported JDBC and CDC paths retain their documented at-least-once limitations. The presence of checkpoint.bin alone is insufficient evidence of an Instance's final outcome or authorization to start a replacement Job. The first-stage platform does not automatically restore or resume an Instance following application-process interruption.
 
 Each Attempt records a structured failure reason and opaque log reference. Logging and metrics can be obtained from the relevant Runtime/operations sources, but credentials, connection strings containing secrets, and sensitive state must not be included in persisted diagnostic fields or public API responses.
 
@@ -152,8 +166,7 @@ The design review should resolve the following before acceptance:
 
 1. **Submission identity:** Should a caller-provided idempotency key be mandatory for manual execution, and what is the durable uniqueness scope across future scheduler/workflow triggers?
 2. **Same-Definition overlap:** Beyond mandatory DATA_SYNC target-table exclusion, should the generic Task platform also limit a Definition to one active Instance when its executions use disjoint resources or a different Task type?
-3. **Process failure semantics:** Is fail-closed interruption acceptable for the first embedded executor, with automatic restart/reconciliation designed separately rather than silently replaying an uncertain submission?
-4. **Attempt semantics:** Should an explicitly requested restore create a new platform Attempt under the same Instance, while YakFlow internal checkpoint restarts remain within the existing Attempt?
+3. **Uncertain execution ownership:** How should the product API represent a nonterminal Instance whose previous embedded executor has not been proven stopped, while retaining its target claim and preventing a misleading healthy RUNNING display?
 
 ## Compatibility, Deprecation, and Migration Plan
 
@@ -163,7 +176,7 @@ Add Task Instance/Attempt persistence through a new forward-only Flyway migratio
 
 The optional executable capability is additive to TaskPlugin and preserves the Registry's exact-type lookup and duplicate-type rejection. Boot will assemble built-in Task plugins with explicit dependencies instead of relying on zero-argument ServiceLoader instantiation; the active application must not register the same plugin through both paths. This registration change is part of the future implementation, not an implemented behavior of this proposal. No existing Core Connector SPI, JobClient, PipelineExecutor, YakFlow checkpoint bytes, or user Task JSON shape must change as a prerequisite to the initial product execution path. Unsupported graph shapes and incompatible recovery state must be rejected rather than silently downgraded.
 
-The initial implementation does not claim distributed execution, exactly-once delivery, automatic process-level failover, or a guarantee that cancel performs a checkpoint.
+The initial implementation does not claim distributed execution, exactly-once delivery, automatic process-level failover, or a guarantee that cancel performs a checkpoint. It must enforce a single verified embedded execution owner. Restart reconciliation may terminally fail an Instance after proving the previous owner stopped; no cross-process restore or second business Attempt is implicitly scheduled. Recovery of a still-nonterminal Instance with another Attempt remains a future design.
 
 ## Test Plan
 
@@ -175,9 +188,9 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 4. **Real continuous CDC:** Controller to MySQL CDC to JDBC Sink processes snapshot and binlog changes, records durable checkpoint progress, remains RUNNING until canceled, then reaches a truthful terminal state.
 5. **Failure reporting:** Invalid resource resolution, Pipeline planning errors, submission failure, Runtime failure, and persistence/update failures cannot produce a false FINISHED state; errors remain observable without leaking credentials.
 6. **Cancellation races:** Cancel while SUBMITTED, while RUNNING, and against a concurrent Runtime terminal result. No canceled request starts a late untracked Job.
-7. **Submission uncertainty:** Simulated process interruption before submission, after job start but before JobID persistence, and after terminal completion before business update. Reconciliation cannot blindly replay uncertain external writes.
-8. **Checkpoint isolation:** Independent Instances use distinct checkpoint namespaces; compatible explicit restore follows pinned Definition and stable UIDs; missing or incompatible state fails clearly.
-9. **Observability:** Persist Instance/Attempt identity, timestamps, JobID and log reference without connection secrets; a restart does not leave stale RUNNING indefinitely.
+7. **Submission uncertainty and process interruption:** Simulate process failure before dispatch, after Job start but before JobID persistence, and after Runtime completion but before the business terminal update. A restarted application must not replay uncertain external writes or create a second Attempt. Confirmed dead execution ownership with unknown outcome produces explicit failed Instance/Attempt evidence without claiming external rollback.
+8. **Checkpoint isolation:** Independent Instances use distinct checkpoint namespaces. Completed checkpoints remain valid according to YOIP-1 but are not automatically restored or resubmitted after application restart in the initial product implementation.
+9. **Observability and claim safety:** Persist Instance/Attempt identity, timestamps, JobID and log reference without secrets. Reconcile nonterminal records at startup; after proving the old embedded execution stopped, record terminal interruption and release owned target claims atomically. If execution ownership is uncertain, expose that uncertainty, retain the claim, and block conflicting writers without leaving an unqualified healthy RUNNING status.
 10. **DATA_SYNC target exclusion:** Two simultaneous requests for different DATA_SYNC Definitions writing the same identified target table admit only one Instance; the other receives a conflict without launching a Job. Distinct targets may run concurrently. Confirm APPEND and UPSERT behavior, SUBMITTED/RUNNING/CANCELLING claim retention, repeat-request idempotency, failure/cancellation terminal release, owner-checked late callbacks, and persistence across application interruption. Alias targets outside supported identity are not claimed to be protected.
 11. **Plugin composition:** Boot injects each executable plugin's required dependencies and registers it once in TaskPluginRegistry; duplicate type or missing dependency fails startup. Definition-only plugins continue to work, and no runtime service lookup is available through TaskExecutionContext.
 12. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
@@ -194,6 +207,8 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 - **Duplicate YakFlow execution state or checkpoint coordination in business modules:** The Job and its physical task lifecycle remain Runtime concerns.
 - **Treat a persisted JobID as sufficient for embedded process recovery:** It does not restore an in-memory JobClient or prove the outcome of an uncertain external submission.
 - **Automatically rerun every nonterminal Instance after application restart:** An uncertain prior Job may already have committed external effects.
+- **Treat a published checkpoint as authority to create another platform Attempt after process death:** Checkpoint publication does not prove Job termination or a safe external replay, and embedded JobClient cannot be reattached by persisted JobID.
+- **Reuse a terminal business Instance for a later manual run:** Each independent intent produces a new Instance; terminal records remain immutable.
 - **Allow simultaneous DATA_SYNC writers to an identifiable target table:** APPEND and UPSERT can interfere across different Definitions, so an exclusive durable admission claim is required.
 - **Use an in-memory target lock or timed claim expiration:** Neither protects admission across requests and restarts without risking concurrent external writes.
 - **Introduce full Workflow, Quartz, Master/Worker, or distributed Job services in this proposal:** These can be layered on the stable Task execution contract when separately designed and verified.
