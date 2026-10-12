@@ -120,6 +120,44 @@ class AlignedBarrierInputGateTest {
         assertEquals(InputStatus.END_OF_INPUT, gate.emitNext(rows::add, handler));
     }
 
+
+    @Test
+    void checkpointBarrierAfterAnotherProducerFinishedMustDeclineWithoutLosingRecords() throws Exception {
+        InputGate<String> gate = new InputGate<>(4, 2);
+        ResultPartition<String> first = new ResultPartition<>(0, List.of(gate));
+        ResultPartition<String> second = new ResultPartition<>(1, List.of(gate));
+        first.emitRecord(0, "before-eof");
+        first.finish();
+
+        second.emitRecord(0, "before-barrier");
+        // The already-finished producer cannot provide this newly triggered checkpoint's barrier.
+        second.broadcastBarrier(9);
+        second.emitRecord(0, "after-decline");
+        second.finish();
+
+        List<String> received = new ArrayList<>();
+        List<Long> declined = new ArrayList<>();
+        InputGate.BarrierHandler handler = new InputGate.BarrierHandler() {
+            @Override
+            public void onBarrier(long checkpointId) {
+                throw new AssertionError("Checkpoint with finished producer must not align");
+            }
+
+            @Override
+            public void onCheckpointDeclined(long checkpointId) {
+                declined.add(checkpointId);
+            }
+        };
+
+        while (gate.emitNext(received::add, handler) != InputStatus.END_OF_INPUT) {
+            assertTrue(received.size() <= 3);
+        }
+        assertEquals(List.of(9L), declined);
+        assertEquals(List.of("before-eof", "before-barrier", "after-decline"), received);
+        assertEquals(0, gate.queuedRecords());
+        assertTrue(gate.drainedFuture().isDone());
+    }
+
     @Test
     void overlappingProducerBarriersRemainInvalid() throws Exception {
         InputGate<String> gate = new InputGate<>(1, 2);
