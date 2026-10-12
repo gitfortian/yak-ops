@@ -99,16 +99,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                         if (closed.get() || cancelled.getAsBoolean() || anySourceFinished()) {
                             return;
                         }
-                        try {
-                            performCheckpoint();
-                        } catch (Throwable failure) {
-                            if (!isCheckpointDeclined(failure)
-                                    && !closed.get()
-                                    && !cancelled.getAsBoolean()
-                                    && !anySourceFinished()) {
-                                onFailure.accept(failure);
-                            }
-                        }
+                        runCheckpoint(new CompletableFuture<>());
                     },
                     intervalMillis,
                     Math.max(intervalMillis, minPauseMillis),
@@ -119,8 +110,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     /**
      * Requests one checkpoint on the same serialized executor used for periodic checkpoints.
      *
-     * @return a future completed after the checkpoint is durably published, or exceptionally
-     *         if the attempt fails
+     * @return the durable publication outcome, independent of subsequent completion notifications
      */
     public CompletableFuture<CheckpointSnapshot> trigger() {
         CompletableFuture<CheckpointSnapshot> result = new CompletableFuture<>();
@@ -129,23 +119,40 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             return result;
         }
         try {
-            timer.execute(() -> {
-                try {
-                    result.complete(performCheckpoint());
-                } catch (Throwable failure) {
-                    result.completeExceptionally(failure);
-                    if (!isCheckpointDeclined(failure)
-                            && !closed.get()
-                            && !cancelled.getAsBoolean()
-                            && !anySourceFinished()) {
-                        onFailure.accept(failure);
-                    }
-                }
-            });
+            timer.execute(() -> runCheckpoint(result));
         } catch (java.util.concurrent.RejectedExecutionException error) {
             result.completeExceptionally(error);
         }
-        return result;
+        return result.copy();
+    }
+
+    /**
+     * Waits for checkpoint attempts already queued on the serialized checkpoint executor.
+     *
+     * <p>Job completion must not overtake a durable checkpoint's completion listeners.
+     */
+    public CompletableFuture<Void> awaitPendingCheckpoints() {
+        CompletableFuture<Void> completed = new CompletableFuture<>();
+        try {
+            timer.execute(() -> completed.complete(null));
+        } catch (java.util.concurrent.RejectedExecutionException failure) {
+            completed.completeExceptionally(failure);
+        }
+        return completed;
+    }
+
+    private void runCheckpoint(CompletableFuture<CheckpointSnapshot> published) {
+        try {
+            performCheckpoint(published);
+        } catch (Throwable failure) {
+            boolean checkpointPublished = published.isDone();
+            published.completeExceptionally(failure);
+            if (!closed.get()
+                    && !cancelled.getAsBoolean()
+                    && (checkpointPublished || (!isCheckpointDeclined(failure) && !anySourceFinished()))) {
+                onFailure.accept(failure);
+            }
+        }
     }
 
     /**
@@ -188,7 +195,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         }
     }
 
-    private CheckpointSnapshot performCheckpoint() throws Exception {
+    private void performCheckpoint(CompletableFuture<CheckpointSnapshot> published) throws Exception {
         ensureActive();
         long checkpointId = nextCheckpointId.incrementAndGet();
         checkpointDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
@@ -262,6 +269,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                     operatorStates);
             storage.save(snapshot);
             stored = true;
+            published.complete(snapshot);
             if (System.nanoTime() >= checkpointDeadlineNanos) {
                 throw new IllegalStateException("Checkpoint persisted after deadline; refusing completion callback");
             }
@@ -269,7 +277,6 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
                 await(sourceTask.notifyCheckpointComplete(checkpointId));
             }
-            return snapshot;
         } catch (Exception | Error failure) {
             originalFailure = failure;
             throw failure;

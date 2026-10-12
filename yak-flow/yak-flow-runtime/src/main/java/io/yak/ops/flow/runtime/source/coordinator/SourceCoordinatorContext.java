@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -44,6 +45,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     private final Map<Integer, SubtaskGateway> readers = new HashMap<>();
     private final Map<Integer, RuntimeTaskInfo> readerIdentities = new HashMap<>();
     private final Map<String, Integer> inFlight = new HashMap<>();
+    private final Set<CompletionStage<Void>> pendingSourceEvents = new HashSet<>();
     private final Set<Integer> noMoreRequested = new HashSet<>();
     private final Set<Integer> noMoreDispatched = new HashSet<>();
     private final Set<Integer> pendingNoMore = new HashSet<>();
@@ -129,6 +131,14 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         }
     }
 
+    /** Waits for SourceEvents emitted by a completed checkpoint callback to reach the Reader. */
+    CompletableFuture<Void> awaitSourceEventDeliveries() {
+        assertCoordinatorThread();
+        return CompletableFuture.allOf(pendingSourceEvents.stream()
+                .map(CompletionStage::toCompletableFuture)
+                .toArray(CompletableFuture<?>[]::new));
+    }
+
     SplitAssignmentTracker<SplitT> assignmentTracker() {
         assertCoordinatorThread();
         return assignments;
@@ -141,6 +151,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         readerIdentities.clear();
         postponedDiscoveryCallbacks.clear();
         inFlight.clear();
+        pendingSourceEvents.clear();
         pendingNoMore.clear();
         noMoreRequested.clear();
         noMoreDispatched.clear();
@@ -239,7 +250,9 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         try {
             CompletionStage<Void> delivered =
                     Objects.requireNonNull(gateway.sendEvent(new SourceEventWrapper(event)), "SubtaskGateway 返回了 null");
+            pendingSourceEvents.add(delivered);
             delivered.whenComplete((unused, failure) -> post(() -> {
+                pendingSourceEvents.remove(delivered);
                 if (failure != null) {
                     onFailure.accept(new IllegalStateException("SourceEvent 交付失败：subtask=" + subtaskId, failure));
                 }
