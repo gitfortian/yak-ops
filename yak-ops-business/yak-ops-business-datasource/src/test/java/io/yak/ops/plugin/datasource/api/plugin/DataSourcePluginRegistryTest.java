@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.datasource.api.plugin;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
