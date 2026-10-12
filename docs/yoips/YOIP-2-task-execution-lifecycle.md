@@ -39,6 +39,8 @@ The initial externally visible Instance lifecycle is:
 
 Terminal states are immutable. Updates must be guarded against concurrent callbacks and stale submit/cancel results. Definition publication state is distinct from Instance state: unpublishing prevents new submissions but does not retroactively cancel existing Instances.
 
+A Task Definition does not itself constitute an exclusive execution resource. Distinct valid submissions may create concurrent Instances for the same Definition unless their Task-type-specific declared execution resources conflict. The Task platform must not impose a generic single-active-Instance constraint or serialize all runs by Definition ID.
+
 ### Task Execution API
 
 Propose the following HTTP operations, scoped to the authorized Workspace:
@@ -144,7 +146,9 @@ The initial DATA_SYNC product execution path requires **exclusive ownership of e
 
 The admission identity is the authorized Workspace, the saved target Datasource ID, and the resolved structured target TableId (catalog, schema, table). Namespace resolution must follow the Datasource binding and Connector/catalog rules; it must not flatten names into ambiguous strings or indiscriminately lowercase case-sensitive table identifiers. A target whose identity cannot be determined safely cannot bypass admission and start writing. Distinct Datasource IDs that point to the same physical system, or independently configured Workspaces, are not proven aliases by this identity; this proposal does not claim global physical-table isolation.
 
-The plugin declares its target resource before producing external write effects. The Task Execution platform owns the durable claim and enforces uniqueness at the database boundary, not through an in-memory check. Instance/Attempt creation, request-idempotency handling, and admission claim acquisition form one atomic transaction. A distinct conflicting request is rejected and not queued; an idempotent retry of the existing request returns the existing Instance.
+Each executable Task type may declare the resources whose simultaneous use must be exclusive; an empty declaration means that the platform does not impose a resource-based concurrency limit for that type. This is an execution-admission capability, not a second Task plugin registration SPI or a configurable generic Definition concurrency quota.
+
+DATA_SYNC declares its resolved target table before producing external write effects. The Task Execution platform owns the durable claim and enforces uniqueness at the database boundary, not through an in-memory check. Instance/Attempt creation, request-idempotency handling, and admission claim acquisition form one atomic transaction. A distinct conflicting request is rejected and not queued; an idempotent retry of the existing request returns the existing Instance. Two independent runs of the *same* DATA_SYNC Definition are also rejected from overlapping execution when they claim the same target table; the rejection is based on their target resource, not on their shared Definition ID.
 
 SUBMITTED, RUNNING, and CANCELLING Instances retain claims. A claim is released only by an owner-checked update after the execution is conclusively terminal and cannot continue writing. Application interruption, unknown JobID, or uncertain cancellation does not authorize time-based or speculative release. Terminal-state persistence and claim release must be atomic to prevent late callbacks releasing another Instance's claim. The initial implementation does not introduce general-purpose distributed locks, resource scheduling, or configurable concurrency quotas.
 
@@ -168,8 +172,7 @@ The embedded Runtime is the execution target for this proposal. Worker dispatch,
 
 The design review should resolve the following before acceptance:
 
-1. **Same-Definition overlap:** Beyond mandatory DATA_SYNC target-table exclusion, should the generic Task platform also limit a Definition to one active Instance when its executions use disjoint resources or a different Task type?
-2. **Uncertain execution ownership:** How should the product API represent a nonterminal Instance whose previous embedded executor has not been proven stopped, while retaining its target claim and preventing a misleading healthy RUNNING display?
+1. **Uncertain execution ownership:** How should the product API represent a nonterminal Instance whose previous embedded executor has not been proven stopped, while retaining its target claim and preventing a misleading healthy RUNNING display?
 
 ## Compatibility, Deprecation, and Migration Plan
 
@@ -194,7 +197,7 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 7. **Submission uncertainty and process interruption:** Simulate process failure before dispatch, after Job start but before JobID persistence, and after Runtime completion but before the business terminal update. A restarted application must not replay uncertain external writes or create a second Attempt. Confirmed dead execution ownership with unknown outcome produces explicit failed Instance/Attempt evidence without claiming external rollback.
 8. **Checkpoint isolation:** Independent Instances use distinct checkpoint namespaces. Completed checkpoints remain valid according to YOIP-1 but are not automatically restored or resubmitted after application restart in the initial product implementation.
 9. **Observability and claim safety:** Persist Instance/Attempt identity, timestamps, JobID and log reference without secrets. Reconcile nonterminal records at startup; after proving the old embedded execution stopped, record terminal interruption and release owned target claims atomically. If execution ownership is uncertain, expose that uncertainty, retain the claim, and block conflicting writers without leaving an unqualified healthy RUNNING status.
-10. **DATA_SYNC target exclusion:** Two simultaneous requests for different DATA_SYNC Definitions writing the same identified target table admit only one Instance; the other receives a conflict without launching a Job. Distinct targets may run concurrently. Confirm APPEND and UPSERT behavior, SUBMITTED/RUNNING/CANCELLING claim retention, repeat-request idempotency, failure/cancellation terminal release, owner-checked late callbacks, and persistence across application interruption. Alias targets outside supported identity are not claimed to be protected.
+10. **DATA_SYNC target exclusion and generic concurrency:** Two simultaneous requests for different DATA_SYNC Definitions writing the same identified target table admit only one Instance; the other receives a conflict without launching a Job. Two distinct Run requests for the same DATA_SYNC Definition also conflict on that same target claim. Distinct targets may run concurrently. Verify with a separate test execution plugin that two independent Instances of the same Definition can run concurrently when no exclusive resource is declared. Confirm APPEND and UPSERT behavior, SUBMITTED/RUNNING/CANCELLING claim retention, repeat-request idempotency, failure/cancellation terminal release, owner-checked late callbacks, and persistence across application interruption. Alias targets outside supported identity are not claimed to be protected.
 11. **Plugin composition:** Boot injects each executable plugin's required dependencies and registers it once in TaskPluginRegistry; duplicate type or missing dependency fails startup. Definition-only plugins continue to work, and no runtime service lookup is available through TaskExecutionContext.
 12. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
 
@@ -216,4 +219,5 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 - **Use an in-memory target lock or timed claim expiration:** Neither protects admission across requests and restarts without risking concurrent external writes.
 - **Use Definition ID as the idempotency identity:** A successfully completed Definition must support later intentional runs; a stable request key distinguishes retries from new execution intents.
 - **Treat a new Idempotency-Key as proof of safe parallel execution:** Distinct submissions still undergo DATA_SYNC resource-admission checks and may be rejected without being queued.
+- **Enforce one active Instance per Task Definition globally:** A Definition is a reusable immutable configuration; exclusive access is defined by the Task type's actual execution resources, not by the Definition ID.
 - **Introduce full Workflow, Quartz, Master/Worker, or distributed Job services in this proposal:** These can be layered on the stable Task execution contract when separately designed and verified.
