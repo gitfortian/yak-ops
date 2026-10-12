@@ -13,9 +13,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Defines the Datasource business boundary exposed to Boot.
@@ -61,12 +59,6 @@ public interface DataSourceService {
     /** Lists physical tables and views visible through the saved datasource. */
     List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
 
-    /** Looks up table or view metadata; returns empty when the object does not exist. */
-    Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto);
-
-    /** Requires table or view metadata; throws a business exception if absent. */
-    DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto);
-
     /** Lists column metadata for the selected physical table. */
     List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
 
@@ -81,13 +73,6 @@ public interface DataSourceService {
      * @return dialect-normalized ordered columns and primary keys
      */
     TableSchema queryTableSchema(String id, DataSourceTablePathDTO path);
-
-    /**
-     * Resolves the saved datasource into a trusted runtime connection.
-     *
-     * <p>The result contains credentials and must never be exposed over HTTP, serialized or logged.
-     */
-    DataSourceConnection resolveRuntimeConnection(String id);
 
     /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);
