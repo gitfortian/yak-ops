@@ -52,6 +52,9 @@ for file in "${changed[@]}"; do
         .github/workflows/*|scripts/ci/*)
             mark_all
             ;;
+        yak-ops-ui/*.md)
+            # Markdown-only changes do not require npm build or type checks.
+            ;;
         yak-ops-ui/*)
             frontend=true
             case "${file}" in
