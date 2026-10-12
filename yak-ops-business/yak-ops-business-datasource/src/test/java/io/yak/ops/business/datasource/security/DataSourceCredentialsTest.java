@@ -50,6 +50,40 @@ class DataSourceCredentialsTest {
     }
 
     @Test
+    void retainsMaskedParametersWhenEditingJdbcUrls() {
+        String stored = """
+                {
+                  "jdbcUrl": "jdbc:mysql://old-host/db?password=stored-password&sslmode=require"
+                }
+                """;
+        String submitted = """
+                {
+                  "jdbcUrl": "jdbc:mysql://new-host/db?password=******&sslmode=disable"
+                }
+                """;
+
+        var result = JSONUtils.readTree(credentials.retainOnUpdate(descriptor, submitted, stored));
+        assertEquals(
+                "jdbc:mysql://new-host/db?password=stored-password&sslmode=disable",
+                result.path("jdbcUrl").asText());
+    }
+
+    @Test
+    void retainsMaskedOracleDescriptorPasswords() {
+        String stored = """
+                {"jdbcUrl":"jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=stored-secret))(HOST=old))"}
+                """;
+        String submitted = """
+                {"jdbcUrl":"jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=******))(HOST=new))"}
+                """;
+
+        var result = JSONUtils.readTree(credentials.retainOnUpdate(descriptor, submitted, stored));
+        assertEquals(
+                "jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=stored-secret))(HOST=new))",
+                result.path("jdbcUrl").asText());
+    }
+
+    @Test
     void retainsOnlyUnchangedCredentialsDuringEditing() {
         String stored = """
                 {

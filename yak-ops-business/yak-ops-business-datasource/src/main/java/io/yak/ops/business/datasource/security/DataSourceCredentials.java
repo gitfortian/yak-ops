@@ -3,6 +3,7 @@ package io.yak.ops.business.datasource.security;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.util.JSONUtils;
@@ -12,6 +13,7 @@ import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -94,7 +96,7 @@ public class DataSourceCredentials {
             } else if (value.isArray()) {
                 maskArray((ArrayNode) value, keys);
             } else if (value.isTextual()) {
-                array.put(index, maskText(value.asText(), keys));
+                array.set(index, TextNode.valueOf(maskText(value.asText(), keys)));
             }
         }
     }
@@ -111,8 +113,53 @@ public class DataSourceCredentials {
                 submitted.set(name, previous.deepCopy());
             } else if (previous.isObject() && current != null && current.isObject()) {
                 retainSecrets((ObjectNode) current, (ObjectNode) previous, keys);
+            } else if (("jdbcUrl".equals(name) || "url".equals(name))
+                    && previous.isTextual()
+                    && current != null
+                    && current.isTextual()) {
+                submitted.put(name, retainUrlSecrets(current.asText(), previous.asText(), keys));
             }
         }
+    }
+
+    private String retainUrlSecrets(String submitted, String stored, Set<String> keys) {
+        if (!submitted.contains(SensitiveUtils.MASKED_VALUE)) {
+            return submitted;
+        }
+
+        Map<String, String> storedSecrets = new LinkedHashMap<>();
+        Matcher storedParameters = ASSIGNMENT.matcher(stored);
+        while (storedParameters.find()) {
+            String name = normalizeField(decodeField(storedParameters.group(2)));
+            if (isSecret(name, keys)) {
+                String previous = storedSecrets.putIfAbsent(name, storedParameters.group(4));
+                if (previous != null) {
+                    throw new DataSourceException(
+                            DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接地址中的敏感参数重复，请重新输入凭据");
+                }
+            }
+        }
+
+        Matcher submittedParameters = ASSIGNMENT.matcher(submitted);
+        StringBuffer result = new StringBuffer();
+        while (submittedParameters.find()) {
+            String name = normalizeField(decodeField(submittedParameters.group(2)));
+            String replacement = submittedParameters.group();
+            if (isSecret(name, keys)
+                    && SensitiveUtils.MASKED_VALUE.equals(submittedParameters.group(4))) {
+                String previous = storedSecrets.get(name);
+                if (previous == null) {
+                    throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接地址中的凭据需要重新输入");
+                }
+                replacement = submittedParameters.group(1) + submittedParameters.group(2) + "=" + previous;
+            }
+            submittedParameters.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        submittedParameters.appendTail(result);
+        if (result.indexOf(SensitiveUtils.MASKED_VALUE) >= 0) {
+            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接地址中的凭据需要重新输入");
+        }
+        return result.toString();
     }
 
     private boolean isUnchanged(JsonNode value) {
@@ -133,12 +180,7 @@ public class DataSourceCredentials {
         Matcher matcher = ASSIGNMENT.matcher(value);
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
-            String fieldName;
-            try {
-                fieldName = URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8);
-            } catch (IllegalArgumentException exception) {
-                fieldName = matcher.group(2);
-            }
+            String fieldName = decodeField(matcher.group(2));
             String replacement = matcher.group();
             if (isSecret(fieldName, keys)) {
                 replacement = matcher.group(1) + matcher.group(2) + "=" + SensitiveUtils.MASKED_VALUE;
@@ -147,6 +189,14 @@ public class DataSourceCredentials {
         }
         matcher.appendTail(result);
         return SensitiveUtils.mask(result.toString());
+    }
+
+    private String decodeField(String field) {
+        try {
+            return URLDecoder.decode(field, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            return field;
+        }
     }
 
     private boolean isSecret(String field, Set<String> keys) {
