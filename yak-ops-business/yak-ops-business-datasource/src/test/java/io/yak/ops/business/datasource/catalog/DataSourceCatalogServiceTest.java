@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.plugin;
+package io.yak.ops.business.datasource.catalog;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,7 +8,6 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
-import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -18,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** Verifies that Datasource delegates its JDBC metadata queries to one Connector Catalog. */
-class DataSourcePluginRegistryCatalogTest {
+class DataSourceCatalogServiceTest {
 
     @Test
     void injectedProviderOwnsEveryPhysicalAndLogicalMetadataConnection() throws Exception {
@@ -106,20 +105,17 @@ class DataSourcePluginRegistryCatalogTest {
                 return DriverManager.getConnection(url, "sa", "");
             }
         };
-        DataSourcePluginRegistry registry = new DataSourcePluginRegistry();
-        Field plugins = DataSourcePluginRegistry.class.getDeclaredField("plugins");
-        plugins.setAccessible(true);
-        plugins.set(registry, Map.of("TEST_H2", plugin));
+        DataSourceCatalogService catalogService = new DataSourceCatalogService();
 
         TableId table = new TableId(null, "APP", "PRODUCTS");
-        assertEquals(1, registry.catalogTables("TEST_H2", "{}", 10, null, "APP", "prod", 10).size());
-        assertTrue(registry.catalogTable("TEST_H2", "{}", 10, table).isPresent());
-        var columns = registry.catalogColumns("TEST_H2", "{}", 10, table);
+        assertEquals(1, catalogService.tables(plugin, settings, 10, null, "APP", "prod", 10).size());
+        assertTrue(catalogService.table(plugin, settings, 10, table).isPresent());
+        var columns = catalogService.columns(plugin, settings, 10, table);
         assertEquals(3, columns.size());
         assertEquals(2, columns.getFirst().primaryKeyPosition());
         assertEquals(1, columns.get(1).primaryKeyPosition());
         assertFalse(columns.get(2).primaryKey());
-        var schema = registry.catalogTableSchema("TEST_H2", "{}", 10, table);
+        var schema = catalogService.tableSchema(plugin, settings, 10, table);
         assertEquals(3, schema.columnCount());
         assertEquals(java.util.List.of("ID", "TENANT"), schema.primaryKeys());
         assertTrue(connectionOpens.get() >= 4, "Datasource Plugin must open connections for Connector metadata");

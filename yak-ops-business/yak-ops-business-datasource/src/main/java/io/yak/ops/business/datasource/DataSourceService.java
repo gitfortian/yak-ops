@@ -15,7 +15,6 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Defines the Datasource business boundary exposed to Boot.
@@ -60,12 +59,6 @@ public interface DataSourceService {
 
     /** Lists physical tables and views visible through the saved datasource. */
     List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto);
-
-    /** Looks up table or view metadata; returns empty when the object does not exist. */
-    Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto);
-
-    /** Requires table or view metadata; throws a business exception if absent. */
-    DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto);
 
     /** Lists column metadata for the selected physical table. */
     List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto);
