@@ -1,7 +1,6 @@
 package io.yak.ops.flow.runtime.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,6 +34,7 @@ import io.yak.ops.flow.runtime.io.RecordWriterOutput;
 import io.yak.ops.flow.runtime.io.partition.InputGate;
 import io.yak.ops.flow.runtime.io.partition.ResultPartition;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
+import io.yak.ops.flow.runtime.operators.OperatorChain;
 import io.yak.ops.flow.runtime.operators.sink.SinkWriterOperator;
 import io.yak.ops.flow.runtime.support.TestSplitSerializers;
 import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
@@ -168,6 +168,58 @@ class SinkExecutionTest {
                 task.cancelAsync().get(5, TimeUnit.SECONDS);
             }
         }
+    }
+
+
+    @Test
+    void inlineOperatorFinishFailureMustNotReplayFinalOutput() throws Exception {
+        SourceTransformation<String> source = new SourceTransformation<>(
+                "source", new SplitSource(), String.class, 1);
+        AtomicInteger finishes = new AtomicInteger();
+        AtomicInteger closes = new AtomicInteger();
+        OneInputTransformation<String, String> transform = new OneInputTransformation<>(
+                source, "middle", () -> new OneInputStreamOperator<>() {
+                    @Override
+                    public void processElement(String record, Collector<String> output) throws Exception {
+                        output.collect(record);
+                    }
+
+                    @Override
+                    public void finish(Collector<String> output) throws Exception {
+                        finishes.incrementAndGet();
+                        output.collect("tail");
+                        throw new IllegalStateException("operator finish failed");
+                    }
+
+                    @Override
+                    public void close() {
+                        closes.incrementAndGet();
+                    }
+                }, String.class, 1);
+        RecordingSink sink = new RecordingSink();
+        SinkTransformation<String> sinkTransformation = new SinkTransformation<>(
+                transform, "sink", sink, 1);
+        OperatorChain chain = new OperatorChain(
+                List.of(StreamNode.fromTransformation(transform, 1)),
+                StreamNode.fromTransformation(sinkTransformation, 1));
+        TaskEnvironment environment = new TaskEnvironment(
+                new RuntimeTaskInfo(JobID.generate(), source.getId(), 0, 1, 0, 128), configuration(1, 128));
+
+        try {
+            chain.open(environment);
+            chain.collect("head");
+            IllegalStateException failure = assertThrows(IllegalStateException.class, chain::finish);
+            assertEquals("operator finish failed", failure.getMessage());
+            IllegalStateException repeated = assertThrows(IllegalStateException.class, chain::finish);
+            assertTrue(repeated.getMessage().contains("cannot finish again"));
+        } finally {
+            chain.close();
+        }
+        assertEquals(1, finishes.get());
+        assertEquals(1, closes.get());
+        assertEquals(List.of("head", "tail"), sink.rows);
+        assertEquals(0, sink.finalFlushes.get());
+        assertEquals(1, sink.closed.get());
     }
 
     @Test
