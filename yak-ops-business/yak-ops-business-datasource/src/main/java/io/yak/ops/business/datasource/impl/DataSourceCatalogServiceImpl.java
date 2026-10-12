@@ -56,13 +56,14 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
     @Override
     public List<DataSourceCatalogTableVO> listTables(String datasourceId, DataSourceCatalogQueryDTO parameters) {
-        return query(datasourceId, catalog -> catalog
-                .listTableInfos(
+        var tables = query(
+                datasourceId,
+                catalog -> catalog.listTableInfos(
                         StringUtils.trimToNull(parameters.getDatabase()),
                         StringUtils.trimToNull(parameters.getSchema()),
                         StringUtils.trimToNull(parameters.getKeyword()),
-                        parameters.getLimit())
-                .stream()
+                        parameters.getLimit()));
+        return tables.stream()
                 .map(table -> {
                     DataSourceCatalogTableVO result = new DataSourceCatalogTableVO();
                     result.setDatabase(table.tableId().catalog());
@@ -72,7 +73,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
                     result.setRemarks(table.remarks());
                     return result;
                 })
-                .toList());
+                .toList();
     }
 
     @Override
@@ -81,7 +82,8 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
                 StringUtils.trimToNull(path.getDatabase()),
                 StringUtils.trimToNull(path.getSchema()),
                 path.getTable().trim());
-        return query(datasourceId, catalog -> catalog.getColumns(tableId).stream()
+        var columns = query(datasourceId, catalog -> catalog.getColumns(tableId));
+        return columns.stream()
                 .map(column -> {
                     DataSourceCatalogColumnVO result = new DataSourceCatalogColumnVO();
                     result.setName(column.name());
@@ -96,7 +98,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
                     result.setRemarks(column.remarks());
                     return result;
                 })
-                .toList());
+                .toList();
     }
 
     @Override

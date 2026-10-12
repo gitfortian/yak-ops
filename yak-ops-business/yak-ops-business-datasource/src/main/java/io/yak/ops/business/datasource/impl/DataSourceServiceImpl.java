@@ -265,7 +265,9 @@ public class DataSourceServiceImpl implements DataSourceService {
     private boolean testSavedConnection(String workspaceId, DataSourceEntity entity) {
         try {
             testPluginConnection(
-                    plugin(entity.getDbType()), entity.getConnectionParams(), Math.max(1, properties.getConnectionTestTimeoutSeconds()));
+                    plugin(entity.getDbType()),
+                    entity.getConnectionParams(),
+                    Math.max(1, properties.getConnectionTestTimeoutSeconds()));
             entity.setConnStatus(DataSourceConnStatus.CONNECTED);
             entity.initUpdate();
             repository.update(workspaceId, entity);
