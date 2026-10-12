@@ -1,6 +1,6 @@
 # Contributing to Yak Ops
 
-Yak Ops follows the Apache Flink [Contribute Code](https://flink.apache.org/how-to-contribute/contribute-code/) process and [Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/). The project uses GitHub instead of Flink's JIRA, developer mailing list and Confluence.
+Yak Ops follows the Apache Flink [Contribute Code](https://flink.apache.org/how-to-contribute/contribute-code/) process and [Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/). Yak Ops records proposals, discussions and reviews through GitHub.
 
 ## Discuss, Implement, Review
 

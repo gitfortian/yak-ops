@@ -31,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "::warning::Runtime E2E NOT RUN: the legacy execution engine and JDBC/CDC connectors were removed; no replacement is integrated."
+          echo "::warning::Runtime E2E NOT RUN: the Data Sync product execution path is not integrated with real-database JDBC/CDC acceptance."
           {
             echo "## Runtime E2E: NOT EXECUTED"
             echo ""
             echo "This is an informational status report, **not an acceptance pass**."
-            echo "Data Sync UI/Controller/Service/DAO remain, but JDBC/CDC runtime integration and"
+            echo "Data Sync UI/Controller/Service/DAO are available, but JDBC/CDC runtime integration and"
             echo "real database end-to-end tests are not available yet."
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "::error::Full Runtime E2E is unavailable. Restore JDBC/CDC connectors and real acceptance tests before release."
+          echo "::error::Full Runtime E2E is unavailable. Integrate JDBC/CDC execution and real-database acceptance before release."
           {
             echo "## Full Runtime E2E: BLOCKED"
             echo ""
