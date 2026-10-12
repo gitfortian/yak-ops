@@ -1,6 +1,6 @@
 # Developing Yak Ops
 
-This is the development entry point, following the structure of [Flink's DEVELOPMENT.md](https://github.com/apache/flink/blob/master/DEVELOPMENT.md). For the contribution process and FLIPs, see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
+This is the development entry point, following the structure of [Flink's DEVELOPMENT.md](https://github.com/apache/flink/blob/master/DEVELOPMENT.md). For the contribution process and YOIPs, see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## Preparation
 
@@ -46,8 +46,8 @@ Keep JavaDoc and implementation comments in English. Checkstyle covers the previ
 
 ## Documentation and Design
 
-- Major design changes and public contract changes go through the [YAK-FLIP process](.github/CONTRIBUTING.md#flink-improvement-proposals-flips) before implementation.
+- Major design changes and public contract changes go through the [YOIP process](.github/CONTRIBUTING.md#yak-ops-improvement-proposals-yoips) before implementation.
 - Ordinary implementation details belong in code, JavaDoc, tests and the GitHub PR; no companion descriptive Markdown is required.
 - Change user documentation for new or changed user-visible functionality, compatibility or operation procedures.
-- Consult current code, JavaDoc, tests and accepted YAK-FLIPs for behavior and design decisions.
+- Consult current code, JavaDoc, tests and accepted YOIPs for behavior and design decisions.
 - Release decisions are recorded as Release Gate artifacts; version notes and immutable asset evidence belong in GitHub Releases, not source-tree Markdown files.
