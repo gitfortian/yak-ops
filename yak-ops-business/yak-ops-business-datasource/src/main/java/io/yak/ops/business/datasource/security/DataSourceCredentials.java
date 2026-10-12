@@ -43,7 +43,7 @@ public class DataSourceCredentials {
             "privatekeypassphrase",
             "clientsecret");
 
-    private static final Pattern ASSIGNMENT = Pattern.compile("(^|[?&;(\\s])([A-Za-z0-9_.%+-]+)(=)([^&;\\s)]+)");
+    private static final Pattern ASSIGNMENT = Pattern.compile("(^|[?&;(\\s])([A-Za-z0-9_.%+-]+)(=)([^&;\\s()]+)");
 
     /** Masks credential fields and embedded JDBC URL parameters in the editable connection JSON. */
     public String maskForDisplay(DataSourcePluginDescriptor descriptor, String connectionJson) {

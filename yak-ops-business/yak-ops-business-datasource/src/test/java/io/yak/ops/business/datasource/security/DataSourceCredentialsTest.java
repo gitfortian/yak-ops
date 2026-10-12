@@ -41,6 +41,15 @@ class DataSourceCredentialsTest {
     }
 
     @Test
+    void masksCredentialsInsideOracleJdbcDescriptors() {
+        String url = "jdbc:oracle:thin:@(DESCRIPTION=(CONNECT_DATA=(PASSWORD=oracle-secret)))";
+        String result = credentials.maskText(descriptor, url);
+
+        assertFalse(result.contains("oracle-secret"));
+        assertTrue(result.contains("PASSWORD=******"));
+    }
+
+    @Test
     void retainsOnlyUnchangedCredentialsDuringEditing() {
         String stored = """
                 {
