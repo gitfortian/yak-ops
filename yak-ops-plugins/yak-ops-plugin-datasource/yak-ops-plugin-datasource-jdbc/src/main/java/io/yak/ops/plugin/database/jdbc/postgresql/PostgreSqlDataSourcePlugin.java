@@ -1,11 +1,11 @@
 package io.yak.ops.plugin.database.jdbc.postgresql;
 
-import com.google.auto.service.AutoService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
-import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.util.Map;
 import java.util.Set;
 

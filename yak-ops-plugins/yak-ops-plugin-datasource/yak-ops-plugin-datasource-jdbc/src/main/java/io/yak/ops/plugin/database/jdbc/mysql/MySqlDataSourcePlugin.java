@@ -1,7 +1,7 @@
 package io.yak.ops.plugin.database.jdbc.mysql;
 
-import com.google.auto.service.AutoService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
