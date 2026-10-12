@@ -246,15 +246,15 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         });
     }
 
-    /** Commits assignment history only after the complete job checkpoint is durable. */
+    /** Commits assignment history and awaits Reader events emitted by the completion callback. */
     public CompletableFuture<Void> notifyCheckpointComplete(long checkpointId) {
         validateCheckpointId(checkpointId);
         return submit(() -> {
             ensureStarted();
             enumerator.notifyCheckpointComplete(checkpointId);
             context.assignmentTracker().notifyCheckpointComplete(checkpointId);
-            return null;
-        });
+            return context.awaitSourceEventDeliveries();
+        }).thenCompose(deliveries -> deliveries);
     }
 
     /** Aborts an unsuccessful checkpoint without discarding outstanding assignments. */
