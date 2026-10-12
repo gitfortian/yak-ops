@@ -42,4 +42,4 @@ The currently enforced formatter is **Spotless + Palantir Java Format**, not Fli
 - Ordinary implementation details belong in code, JavaDoc, tests and the GitHub PR; no companion descriptive Markdown is required.
 - Change user documentation for new or changed user-visible functionality, compatibility or operation procedures.
 - Legacy Capability/Architecture/Rules documents are being retired in a separate cleanup. Never implement obsolete behavior merely to match them.
-- Existing release evidence and release workflows remain unchanged until the separate release migration PR.
+- Release decisions are recorded as Release Gate artifacts; version notes and immutable asset evidence belong in GitHub Releases, not source-tree Markdown files.
