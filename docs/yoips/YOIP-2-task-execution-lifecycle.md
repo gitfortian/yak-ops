@@ -49,7 +49,9 @@ Propose the following HTTP operations, scoped to the authorized Workspace:
 - GET /api/v1/task-instances/{id}/attempts: inspect submission attempts and log references.
 - POST /api/v1/task-instances/{id}/cancel: asynchronously request cancellation.
 
-A submission includes a caller-stable request identity. An equivalent repeated request in the same Workspace and trigger scope resolves to the same Instance; reuse with conflicting submission data fails. A separate intentional run uses a new request identity. Authentication, Workspace authorization, and Definition publication checks remain mandatory.
+A submission includes a caller-stable request identity. An equivalent repeated request in the same Workspace and trigger scope resolves to the same Instance, including when the existing Instance is still active or has already terminated; reuse with conflicting submission data fails. A separate intentional run uses a new request identity. Authentication, Workspace authorization, and Definition publication checks remain mandatory.
+
+A distinct DATA_SYNC request targeting a resource held by another nonterminal Instance is rejected with an execution conflict (HTTP 409), without creating another Instance or queuing it. This admission check does not change the result of a valid idempotent replay, which returns the originally created Instance.
 
 The HTTP response means the request has been persisted, not that the YakFlow Job has started or succeeded. API clients must not receive connection credentials, local checkpoint contents, or raw internal exception details.
 
@@ -86,8 +88,8 @@ YakFlow owns Job execution and checkpoint/recovery mechanics. Core remains datab
 A successful request follows this logical sequence:
 
 1. Authorize the Workspace and the published Definition; bind its immutable current version.
-2. Atomically persist the Instance and the first Attempt, including the caller's request identity.
-3. Commit the business transaction before dispatching a runtime Job.
+2. For DATA_SYNC, resolve its supported target-table resource identity and atomically acquire the execution claim together with the Instance and first Attempt, including the caller's request identity. Reject a conflicting new request before launch.
+3. Commit the business transaction and resource claim before dispatching a runtime Job.
 4. Claim the committed execution request for asynchronous processing.
 5. Resolve the Boot-assembled executable capability and its trusted runtime resources scoped to the persisted Workspace.
 6. Ask the executable plugin to start the task and persist the returned handle's runtime reference (YakFlow JobID for DATA_SYNC) when available.
@@ -118,6 +120,18 @@ The Task Definition stores datasource IDs, namespaces, table selectors, and writ
 
 Operator identities used for recoverable jobs must be stable for the pinned Definition topology. Runtime-specific graph planning and checkpoint capabilities are reused rather than reimplemented in Task Execution.
 
+### DATA_SYNC target-table execution exclusion
+
+The initial DATA_SYNC product execution path requires **exclusive ownership of each identifiable target table** for the full active lifetime of an Instance. Concurrent runs of different Definitions targeting the same identifiable resource must not both be admitted. JDBC APPEND can duplicate records; UPSERT can race on the same keys. The exclusivity requirement applies to both supported DATA_SYNC write modes and is independent of the Task's trigger source.
+
+The admission identity is the authorized Workspace, the saved target Datasource ID, and the resolved structured target TableId (catalog, schema, table). Namespace resolution must follow the Datasource binding and Connector/catalog rules; it must not flatten names into ambiguous strings or indiscriminately lowercase case-sensitive table identifiers. A target whose identity cannot be determined safely cannot bypass admission and start writing. Distinct Datasource IDs that point to the same physical system, or independently configured Workspaces, are not proven aliases by this identity; this proposal does not claim global physical-table isolation.
+
+The plugin declares its target resource before producing external write effects. The Task Execution platform owns the durable claim and enforces uniqueness at the database boundary, not through an in-memory check. Instance/Attempt creation, request-idempotency handling, and admission claim acquisition form one atomic transaction. A distinct conflicting request is rejected and not queued; an idempotent retry of the existing request returns the existing Instance.
+
+SUBMITTED, RUNNING, and CANCELLING Instances retain claims. A claim is released only by an owner-checked update after the execution is conclusively terminal and cannot continue writing. Application interruption, unknown JobID, or uncertain cancellation does not authorize time-based or speculative release. Terminal-state persistence and claim release must be atomic to prevent late callbacks releasing another Instance's claim. The initial implementation does not introduce general-purpose distributed locks, resource scheduling, or configurable concurrency quotas.
+
+This exclusion prevents overlapping writes for identifiable targets. It is not a guarantee against duplicates from sequential APPEND runs, replay within at-least-once recovery, or target aliases outside the supported identity.
+
 ### Checkpoint, storage, and operational evidence
 
 YakFlow owns checkpoint serialization, completion, publication, and restore semantics as defined by YOIP-1. Task Execution owns the association between an Instance, its effective configuration, and its checkpoint namespace. Independent new Instances must not share a writable checkpoint directory. A future explicit recovery for the same Instance must retain the pinned Definition version and validate stable UIDs, topology, and state compatibility before restoring.
@@ -137,7 +151,7 @@ The embedded Runtime is the execution target for this proposal. Worker dispatch,
 The design review should resolve the following before acceptance:
 
 1. **Submission identity:** Should a caller-provided idempotency key be mandatory for manual execution, and what is the durable uniqueness scope across future scheduler/workflow triggers?
-2. **Overlapping runs:** Should the initial platform permit multiple concurrent Instances for the same Definition, or reject a second active DATA_SYNC run until target-write conflicts have an explicit policy?
+2. **Same-Definition overlap:** Beyond mandatory DATA_SYNC target-table exclusion, should the generic Task platform also limit a Definition to one active Instance when its executions use disjoint resources or a different Task type?
 3. **Process failure semantics:** Is fail-closed interruption acceptable for the first embedded executor, with automatic restart/reconciliation designed separately rather than silently replaying an uncertain submission?
 4. **Attempt semantics:** Should an explicitly requested restore create a new platform Attempt under the same Instance, while YakFlow internal checkpoint restarts remain within the existing Attempt?
 
@@ -164,8 +178,9 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 7. **Submission uncertainty:** Simulated process interruption before submission, after job start but before JobID persistence, and after terminal completion before business update. Reconciliation cannot blindly replay uncertain external writes.
 8. **Checkpoint isolation:** Independent Instances use distinct checkpoint namespaces; compatible explicit restore follows pinned Definition and stable UIDs; missing or incompatible state fails clearly.
 9. **Observability:** Persist Instance/Attempt identity, timestamps, JobID and log reference without connection secrets; a restart does not leave stale RUNNING indefinitely.
-10. **Plugin composition:** Boot injects each executable plugin's required dependencies and registers it once in TaskPluginRegistry; duplicate type or missing dependency fails startup. Definition-only plugins continue to work, and no runtime service lookup is available through TaskExecutionContext.
-11. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
+10. **DATA_SYNC target exclusion:** Two simultaneous requests for different DATA_SYNC Definitions writing the same identified target table admit only one Instance; the other receives a conflict without launching a Job. Distinct targets may run concurrently. Confirm APPEND and UPSERT behavior, SUBMITTED/RUNNING/CANCELLING claim retention, repeat-request idempotency, failure/cancellation terminal release, owner-checked late callbacks, and persistence across application interruption. Alias targets outside supported identity are not claimed to be protected.
+11. **Plugin composition:** Boot injects each executable plugin's required dependencies and registers it once in TaskPluginRegistry; duplicate type or missing dependency fails startup. Definition-only plugins continue to work, and no runtime service lookup is available through TaskExecutionContext.
+12. **Release acceptance:** Run real-database product E2E as a required executable gate. A green unit build or connector-only acceptance job is not reported as product E2E.
 
 ## Rejected Alternatives
 
@@ -179,4 +194,6 @@ Tests must cover the complete product chain rather than infer acceptance from Ru
 - **Duplicate YakFlow execution state or checkpoint coordination in business modules:** The Job and its physical task lifecycle remain Runtime concerns.
 - **Treat a persisted JobID as sufficient for embedded process recovery:** It does not restore an in-memory JobClient or prove the outcome of an uncertain external submission.
 - **Automatically rerun every nonterminal Instance after application restart:** An uncertain prior Job may already have committed external effects.
+- **Allow simultaneous DATA_SYNC writers to an identifiable target table:** APPEND and UPSERT can interfere across different Definitions, so an exclusive durable admission claim is required.
+- **Use an in-memory target lock or timed claim expiration:** Neither protects admission across requests and restarts without risking concurrent external writes.
 - **Introduce full Workflow, Quartz, Master/Worker, or distributed Job services in this proposal:** These can be layered on the stable Task execution contract when separately designed and verified.
