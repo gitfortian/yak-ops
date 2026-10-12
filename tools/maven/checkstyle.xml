@@ -8,6 +8,11 @@
         <module name="MissingJavadocType">
             <property name="scope" value="private"/>
         </module>
+        <!-- The top-level type owns the file contract; nested implementation types may inherit it. -->
+        <module name="SuppressionXpathSingleFilter">
+            <property name="checks" value="MissingJavadocType"/>
+            <property name="query" value="//*[self::CLASS_DEF or self::INTERFACE_DEF or self::ENUM_DEF or self::RECORD_DEF or self::ANNOTATION_DEF][ancestor::*[self::CLASS_DEF or self::INTERFACE_DEF or self::ENUM_DEF or self::RECORD_DEF or self::ANNOTATION_DEF]]"/>
+        </module>
         <module name="JavadocType">
             <property name="allowMissingParamTags" value="true"/>
         </module>
