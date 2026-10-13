@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.task.submission.AdmissionRequest;
-import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
@@ -28,12 +27,11 @@ import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -47,10 +45,10 @@ class AdmissionServiceTest {
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
     private final ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
     private final TaskParameters parameters = mock(TaskParameters.class);
-    private final TaskExecutionContext context =
-            new TaskExecutionContext("ws", "definition-1", 2, "instance-1", "attempt-1");
+    private final TaskExecutionIdentity context =
+            new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1", "attempt-1");
     private final ExecutionResource target = new ExecutionResource("DATA_SYNC_TARGET", "source/table");
-    private final TaskExecutionPlan plan = new TaskExecutionPlan(List.of(target), "resource-v1");
+    private final TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(target), "resource-v1");
 
     AdmissionServiceTest() {
         inject("definitions", definitions);
@@ -58,7 +56,6 @@ class AdmissionServiceTest {
         inject("instances", instances);
         inject("attempts", attempts);
         inject("claims", claims);
-        WorkspaceContext.bind("ws");
 
         DefinitionEntity definition = new DefinitionEntity();
         definition.setWorkspaceId("ws");
@@ -71,11 +68,6 @@ class AdmissionServiceTest {
                 .thenReturn(Optional.of(new DefinitionVersionEntity()));
         when(plugin.type()).thenReturn("DATA_SYNC");
         when(plugin.plan(parameters, context)).thenReturn(plan);
-    }
-
-    @AfterEach
-    void clearWorkspace() {
-        WorkspaceContext.clear();
     }
 
     @Test
@@ -103,7 +95,7 @@ class AdmissionServiceTest {
 
     @Test
     void rejectsResourceBindingChangeBeforeDatabaseWrites() {
-        when(plugin.plan(parameters, context)).thenReturn(new TaskExecutionPlan(List.of(target), "resource-v2"));
+        when(plugin.plan(parameters, context)).thenReturn(new TaskAdmissionPlan(List.of(target), "resource-v2"));
         assertThrows(BusinessException.class, () -> service.admit(request()));
         verify(instances, never()).add(any());
         verify(attempts, never()).add(any());
@@ -132,8 +124,28 @@ class AdmissionServiceTest {
         verify(claims, never()).add(any());
     }
 
+    @Test
+    void workflowAdmissionPersistsTheTriggerWithExplicitWorkspace() {
+        AdmissionRequest workflow = new AdmissionRequest(
+                context,
+                TaskTriggerType.WORKFLOW,
+                "workflow-123",
+                "WORKFLOW:definition-1",
+                "system",
+                parameters,
+                plan,
+                plugin);
+
+        service.admit(workflow);
+
+        ArgumentCaptor<InstanceEntity> saved = ArgumentCaptor.forClass(InstanceEntity.class);
+        verify(instances).add(saved.capture());
+        assertEquals(TaskTriggerType.WORKFLOW, saved.getValue().getTriggerType());
+        verify(instances).findByRequest("ws", TaskTriggerType.WORKFLOW, "workflow-123");
+    }
+
     private AdmissionRequest request() {
-        return new AdmissionRequest(context, "request-123", "MANUAL:definition-1", "actor", parameters, plan, plugin);
+        return new AdmissionRequest(context, TaskTriggerType.MANUAL, "request-123", "MANUAL:definition-1", "actor", parameters, plan, plugin);
     }
 
     private void inject(String name, Object dependency) {
