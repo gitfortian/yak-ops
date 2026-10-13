@@ -24,8 +24,7 @@ public final class OptionRuleMetadata {
         return List.copyOf(definitions.values());
     }
 
-    private static void collect(
-            OptionRule rule, Map<String, OptionDefinition> definitions, boolean conditional) {
+    private static void collect(OptionRule rule, Map<String, OptionDefinition> definitions, boolean conditional) {
         for (RequiredOption required : rule.getRequiredOptions()) {
             boolean unconditional = !conditional && required.kind() == RequiredOption.Kind.REQUIRED;
             for (Option<?> option : required.options()) {
