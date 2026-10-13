@@ -279,15 +279,14 @@ def acceptance():
         assert query_postgres(
             "SELECT COUNT(*) FROM public.ods_orders") == "2"
         assert claim_count(first) == 0
-        attempts = client.call(
-            "GET", f"/api/v1/task-instances/{first}/attempts")
-        assert len(attempts) == 1 and attempts[0]["status"] == "FINISHED"
 
         # Public operations must reflect the admitted Definition version and lifecycle.
         instance = client.call("GET", f"/api/v1/task-instances/{first}")
         assert instance["definitionId"] == jdbc
         assert instance["triggerType"] == "MANUAL"
         assert instance["status"] == "FINISHED"
+        assert instance["runtimeEngine"] == "YAKFLOW"
+        assert instance["runtimeId"]
         snapshot = client.call("GET", f"/api/v1/task-instances/{first}/definition")
         assert snapshot["definitionId"] == jdbc
         assert snapshot["version"] == accepted["definitionVersion"]
@@ -354,9 +353,9 @@ def acceptance():
         assert claim_count(interrupted_id) == 2
         conflict, _ = submit(client, cdc, expected=409)
         assert conflict is None
-        old_attempt = client.call(
-            "GET", f"/api/v1/task-instances/{interrupted_id}/attempts")
-        assert len(old_attempt) == 1
+        uncertain = client.call("GET", f"/api/v1/task-instances/{interrupted_id}")
+        assert uncertain["runtimeId"]
+        assert uncertain["failureCode"] == "EXECUTION_OWNER_UNCERTAIN"
         print(
             "PRODUCT E2E PASS: JDBC, CDC, idempotency, resource exclusion, "
             "cancellation and restart reconciliation")

@@ -12,7 +12,6 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
@@ -25,22 +24,19 @@ class InstanceServiceTest {
 
     private final InstanceServiceImpl service = new InstanceServiceImpl();
     private final InstanceRepository instances = mock(InstanceRepository.class);
-    private final AttemptRepository attempts = mock(AttemptRepository.class);
     private final DefinitionRepository definitions = mock(DefinitionRepository.class);
     private final DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
 
     InstanceServiceTest() {
         inject("instances", instances);
-        inject("attempts", attempts);
         inject("definitions", definitions);
         inject("versions", versions);
     }
 
     @Test
-    void readsAttemptsOnlyAfterInstanceOwnershipCheck() {
+    void rejectsUnknownWorkspaceInstance() {
         when(instances.findById("ws", "i")).thenReturn(Optional.empty());
-        assertThrows(BusinessException.class, () -> service.attempts("ws", "i"));
-        verify(attempts, never()).findByInstance("ws", "i");
+        assertThrows(BusinessException.class, () -> service.instance("ws", "i"));
     }
 
     @Test

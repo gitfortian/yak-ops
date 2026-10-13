@@ -16,11 +16,9 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
@@ -43,7 +41,6 @@ class SubmissionServiceTest {
     private final DefinitionRepository definitions = mock(DefinitionRepository.class);
     private final DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
     private final InstanceRepository instances = mock(InstanceRepository.class);
-    private final AttemptRepository attempts = mock(AttemptRepository.class);
     private final TaskPluginRegistry registry = mock(TaskPluginRegistry.class);
     private final TaskValidationContext validation = mock(TaskValidationContext.class);
     private final TaskValidationContextFactory validationContexts = mock(TaskValidationContextFactory.class);
@@ -55,7 +52,6 @@ class SubmissionServiceTest {
         inject("definitions", definitions);
         inject("versions", versions);
         inject("instances", instances);
-        inject("attempts", attempts);
         inject("plugins", registry);
         inject("validationContexts", validationContexts);
         inject("admission", admission);
@@ -81,7 +77,7 @@ class SubmissionServiceTest {
     @Test
     void admissionDoesNotStartThePlugin() {
         SubmissionResult accepted =
-                new SubmissionResult("instance-1", "attempt-1", 2, TaskInstanceStatus.SUBMITTED, false);
+                new SubmissionResult("instance-1", 2, TaskInstanceStatus.SUBMITTED, false);
         when(admission.admit(any())).thenReturn(accepted);
         assertEquals(accepted, service.submit(manual("request-123")));
         verify(plugin, never()).start(any(), any(), any());
@@ -90,7 +86,7 @@ class SubmissionServiceTest {
     @Test
     void scheduledSubmissionPreservesTriggerAndExplicitWorkspace() {
         SubmissionResult accepted =
-                new SubmissionResult("instance-1", "attempt-1", 2, TaskInstanceStatus.SUBMITTED, false);
+                new SubmissionResult("instance-1", 2, TaskInstanceStatus.SUBMITTED, false);
         when(admission.admit(any())).thenReturn(accepted);
         TaskSubmissionCommand command =
                 new TaskSubmissionCommand("ws", "definition-1", TaskTriggerType.SCHEDULE, "scheduled-123", "scheduler");
@@ -111,9 +107,6 @@ class SubmissionServiceTest {
         InstanceEntity instance = existing("definition-1");
         when(instances.findByRequest("ws", TaskTriggerType.MANUAL, "request-123"))
                 .thenReturn(Optional.of(instance));
-        AttemptEntity attempt = new AttemptEntity();
-        attempt.setId("attempt-1");
-        when(attempts.findByInstance("ws", "instance-1")).thenReturn(List.of(attempt));
 
         var result = service.submit(manual("request-123"));
         assertEquals(true, result.replayed());
@@ -135,9 +128,6 @@ class SubmissionServiceTest {
         when(admission.admit(any())).thenThrow(new DuplicateKeyException("request key already committed"));
         when(instances.findByRequest("ws", TaskTriggerType.MANUAL, "request-123"))
                 .thenReturn(Optional.empty(), Optional.of(existing("definition-1")));
-        AttemptEntity attempt = new AttemptEntity();
-        attempt.setId("attempt-1");
-        when(attempts.findByInstance("ws", "instance-1")).thenReturn(List.of(attempt));
 
         var result = service.submit(manual("request-123"));
         assertEquals("instance-1", result.instanceId());

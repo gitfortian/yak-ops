@@ -4,7 +4,6 @@ import {
   createTaskRunIdempotencyKey,
   getTaskInstance,
   getTaskInstanceDefinition,
-  listTaskAttempts,
   listTaskInstances,
   submitTaskInstance,
   type TaskInstanceRecord,
@@ -12,11 +11,7 @@ import {
   type TaskSubmissionResult,
 } from "@/service/task-execution";
 
-import {
-  matchesDataSyncInstance,
-  toDataSyncAttemptRecord,
-  toDataSyncInstanceRecord,
-} from "./execution";
+import { matchesDataSyncInstance, toDataSyncInstanceRecord } from "./execution";
 
 import {
   createDefinitionRequest,
@@ -26,7 +21,6 @@ import {
 } from "./definition";
 
 import type {
-  DataSyncAttemptRecord,
   DataSyncInstancePageParams,
   DataSyncInstancePageResult,
   DataSyncInstanceRecord,
@@ -134,7 +128,7 @@ export const listDataSyncInstances = async (
   // Active views query only nonterminal states instead of scanning all execution history.
   const statuses: Array<TaskInstanceStatus | undefined> =
     params.activeOnly && !params.status
-      ? ["SUBMITTED", "RUNNING", "CANCELLING", "RECONCILING"]
+      ? ["SUBMITTED", "LAUNCHING", "RUNNING", "CANCELLING", "RECONCILING"]
       : [params.status];
 
   const batches = await Promise.all(
@@ -180,6 +174,3 @@ export const listDataSyncInstances = async (
 
 export const cancelDataSyncInstance = (id: string): Promise<TaskInstanceStatus> =>
   cancelTaskInstance(id);
-
-export const listDataSyncAttempts = async (id: string): Promise<DataSyncAttemptRecord[]> =>
-  (await listTaskAttempts(id)).map((attempt) => toDataSyncAttemptRecord(attempt, id));

@@ -1,11 +1,9 @@
 import type {
-  TaskAttemptRecord,
   TaskInstanceDefinitionRecord,
   TaskInstanceRecord,
   TaskInstanceStatus,
 } from "../task-execution/types";
 import type {
-  DataSyncAttemptRecord,
   DataSyncInstancePageParams,
   DataSyncInstanceRecord,
   DataSyncType,
@@ -14,12 +12,13 @@ import type {
 
 export const isTaskInstanceActive = (status: TaskInstanceStatus): boolean =>
   status === "SUBMITTED" ||
+  status === "LAUNCHING" ||
   status === "RUNNING" ||
   status === "CANCELLING" ||
   status === "RECONCILING";
 
 export const canCancelTaskInstance = (status: TaskInstanceStatus): boolean =>
-  status === "SUBMITTED" || status === "RUNNING";
+  status === "SUBMITTED" || status === "LAUNCHING" || status === "RUNNING";
 
 export function toDataSyncInstanceRecord(
   instance: TaskInstanceRecord,
@@ -47,6 +46,8 @@ export function toDataSyncInstanceRecord(
     syncType,
     triggerType: instance.triggerType,
     status: instance.status,
+    runtimeEngine: instance.runtimeEngine ?? undefined,
+    runtimeId: instance.runtimeId ?? undefined,
     startTime: instance.startTime ?? undefined,
     finishTime: instance.endTime ?? undefined,
     errorMessage: instance.failureCode ?? undefined,
@@ -70,25 +71,6 @@ export function toDataSyncInstanceRecord(
         table: sink.table,
       },
     },
-  };
-}
-
-export function toDataSyncAttemptRecord(
-  attempt: TaskAttemptRecord,
-  instanceId: string,
-): DataSyncAttemptRecord {
-  return {
-    id: attempt.id,
-    executionId: instanceId,
-    attemptNo: attempt.attemptNumber,
-    status: attempt.status,
-    runtimeEngine: attempt.runtimeEngine ?? undefined,
-    runtimeId: attempt.runtimeId ?? undefined,
-    logReference: attempt.logReference ?? undefined,
-    failureCode: attempt.failureCode ?? undefined,
-    errorMessage: attempt.failureCode ?? undefined,
-    startTime: attempt.startTime ?? undefined,
-    finishTime: attempt.endTime ?? undefined,
   };
 }
 

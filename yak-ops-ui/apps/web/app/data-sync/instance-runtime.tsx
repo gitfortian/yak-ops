@@ -20,9 +20,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   cancelDataSyncInstance,
   getDataSyncInstance,
-  listDataSyncAttempts,
   listDataSyncInstances,
-  type DataSyncAttemptRecord,
   type DataSyncInstanceRecord,
   type DataSyncInstanceStatus,
   type DataSyncType,
@@ -186,6 +184,7 @@ export function DataSyncInstances({ syncType, basePath, taskId }: DataSyncInstan
   const statusOptions: Array<[DataSyncInstanceStatus | "ALL", string]> = [
     ["ALL", "全部状态"],
     ["SUBMITTED", "等待"],
+    ["LAUNCHING", "启动中"],
     ["RUNNING", "运行中"],
     ["CANCELLING", "正在停止"],
     ["RECONCILING", "待确认"],
@@ -281,23 +280,18 @@ export function DataSyncInstanceDetailPage({
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [record, setRecord] = useState<DataSyncInstanceRecord>();
-  const [attempts, setAttempts] = useState<DataSyncAttemptRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [value, attemptItems] = await Promise.all([
-      getDataSyncInstance(id),
-      listDataSyncAttempts(id),
-    ]);
+    const value = await getDataSyncInstance(id);
     if (value.syncType !== syncType) {
       toast.error("实例类型与当前页面不匹配");
       navigate(resolvedListPath, { replace: true });
       return;
     }
     setRecord(value);
-    setAttempts(attemptItems || []);
     setLoading(false);
   }, [id, navigate, resolvedListPath, syncType]);
 
@@ -353,7 +347,7 @@ export function DataSyncInstanceDetailPage({
       />
 
       <div className="px-6 pb-8 pt-5 max-md:px-4">
-        <DataSyncExecutionDetailContent record={record} attempts={attempts} realtime={realtime} />
+        <DataSyncExecutionDetailContent record={record} realtime={realtime} />
         <div className="mt-4">
           <DataSyncExecutionConfigContent record={record} realtime={realtime} />
         </div>

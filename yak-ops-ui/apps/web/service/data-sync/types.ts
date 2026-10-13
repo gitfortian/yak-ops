@@ -1,4 +1,4 @@
-import type { TaskAttemptStatus, TaskInstanceStatus } from "../task-execution/types";
+import type { TaskInstanceStatus } from "../task-execution/types";
 
 export type DataSyncWriteMode = "APPEND" | "UPSERT";
 
@@ -202,10 +202,8 @@ export interface DataSyncInstanceRecord {
   syncType: DataSyncType | string;
   triggerType?: "MANUAL" | "SCHEDULE" | "WORKFLOW";
   status: DataSyncInstanceStatus;
-  maxAttempts?: number;
-  backoffSeconds?: number;
-  currentAttempt?: number;
-  nextRetryTime?: string;
+  runtimeEngine?: string;
+  runtimeId?: string;
   readRows?: number;
   writeRows?: number;
   startTime?: string;
@@ -233,23 +231,4 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
-}
-
-export interface DataSyncAttemptRecord {
-  id: string;
-  executionId: string;
-  attemptNo: number;
-  status: TaskAttemptStatus;
-  runtimeEngine?: string;
-  runtimeId?: string;
-  logReference?: string;
-  failureCode?: string;
-  readRows?: number;
-  writeRows?: number;
-  startTime?: string;
-  finishTime?: string;
-  errorCode?: number;
-  errorMessage?: string;
-  createTime?: string;
-  updateTime?: string;
 }

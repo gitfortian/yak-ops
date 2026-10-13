@@ -11,7 +11,6 @@ public final class DispatchTicket {
 
     private final String workspaceId;
     private final String instanceId;
-    private final String attemptId;
     private final String definitionId;
     private final int definitionVersion;
     private final String taskType;
@@ -23,7 +22,6 @@ public final class DispatchTicket {
      *
      * @param workspaceId owning Workspace
      * @param instanceId logical Task Instance
-     * @param attemptId physical execution Attempt
      * @param definitionId pinned Task Definition
      * @param definitionVersion pinned Task Definition version
      * @param taskType executable Task plugin type
@@ -33,7 +31,6 @@ public final class DispatchTicket {
     public DispatchTicket(
             String workspaceId,
             String instanceId,
-            String attemptId,
             String definitionId,
             int definitionVersion,
             String taskType,
@@ -41,7 +38,6 @@ public final class DispatchTicket {
             String dispatchToken) {
         this.workspaceId = workspaceId;
         this.instanceId = instanceId;
-        this.attemptId = attemptId;
         this.definitionId = definitionId;
         this.definitionVersion = definitionVersion;
         this.taskType = taskType;
@@ -55,10 +51,6 @@ public final class DispatchTicket {
 
     public String instanceId() {
         return instanceId;
-    }
-
-    public String attemptId() {
-        return attemptId;
     }
 
     public String definitionId() {
@@ -92,7 +84,6 @@ public final class DispatchTicket {
         return definitionVersion == that.definitionVersion
                 && Objects.equals(workspaceId, that.workspaceId)
                 && Objects.equals(instanceId, that.instanceId)
-                && Objects.equals(attemptId, that.attemptId)
                 && Objects.equals(definitionId, that.definitionId)
                 && Objects.equals(taskType, that.taskType)
                 && Objects.equals(resourceRevision, that.resourceRevision)
@@ -102,18 +93,11 @@ public final class DispatchTicket {
     @Override
     public int hashCode() {
         return Objects.hash(
-                workspaceId,
-                instanceId,
-                attemptId,
-                definitionId,
-                definitionVersion,
-                taskType,
-                resourceRevision,
-                dispatchToken);
+                workspaceId, instanceId, definitionId, definitionVersion, taskType, resourceRevision, dispatchToken);
     }
 
     @Override
     public String toString() {
-        return "DispatchTicket{instanceId=" + instanceId + ", attemptId=" + attemptId + ", dispatchToken=redacted}";
+        return "DispatchTicket{instanceId=" + instanceId + ", dispatchToken=redacted}";
     }
 }

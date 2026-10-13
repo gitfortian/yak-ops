@@ -10,56 +10,57 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.task.instance.DispatchTicket;
 import io.yak.ops.business.task.instance.PendingRun;
-import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
+import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** Verifies transactional dispatch fencing and terminal claim release semantics. */
+/** Verifies one-time dispatch fencing, cancellation, and terminal claim release. */
 class InstanceLifecycleServiceTest {
 
     private final InstanceLifecycleServiceImpl service = new InstanceLifecycleServiceImpl();
     private final InstanceRepository instances = mock(InstanceRepository.class);
-    private final AttemptRepository attempts = mock(AttemptRepository.class);
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
 
     InstanceLifecycleServiceTest() {
         inject("instances", instances);
-        inject("attempts", attempts);
         inject("claims", claims);
     }
 
     @Test
-    void claimsExactlyOnePendingAttempt() {
-        InstanceEntity instance = instance(TaskInstanceStatus.SUBMITTED);
-        AttemptEntity attempt = attempt(TaskAttemptStatus.PENDING);
-        when(instances.findByIdForUpdate("ws", "i")).thenReturn(Optional.of(instance));
-        when(attempts.findByInstance("ws", "i")).thenReturn(List.of(attempt));
-        when(attempts.claimPending("ws", "a", "owner-1", "token-1")).thenReturn(true);
+    void claimsOnlyOneSubmittedInstance() {
+        when(instances.findByIdForUpdate("ws", "i"))
+                .thenReturn(Optional.of(instance(TaskInstanceStatus.SUBMITTED)));
+        when(instances.claim("ws", "i", "owner-1", "token-1")).thenReturn(true);
 
         DispatchTicket ticket = service.claim("ws", "i", "owner-1", "token-1");
-        assertEquals("a", ticket.attemptId());
+
+        assertEquals("i", ticket.instanceId());
         assertEquals("token-1", ticket.dispatchToken());
         assertNull(service.claim("ws", "i", "owner-1", "token-2"));
-        verify(attempts).claimPending("ws", "a", "owner-1", "token-2");
+        verify(instances).claim("ws", "i", "owner-1", "token-2");
     }
 
     @Test
-    void cancelBeforeDispatchTerminatesAndReleasesClaims() {
+    void recordsJobIdentityUnderTheWinningToken() {
+        when(instances.markRunning("ws", "i", "token-1", "YAKFLOW", "job-1"))
+                .thenReturn(true);
+
+        service.started(ticket(), new TaskRuntimeReference("YAKFLOW", "job-1"));
+        verify(instances).markRunning("ws", "i", "token-1", "YAKFLOW", "job-1");
+    }
+
+    @Test
+    void cancellationBeforeLaunchReleasesTheResourceClaim() {
         when(instances.findByIdForUpdate("ws", "i"))
                 .thenReturn(Optional.of(instance(TaskInstanceStatus.SUBMITTED)));
-        when(attempts.findByInstance("ws", "i"))
-                .thenReturn(List.of(attempt(TaskAttemptStatus.PENDING)));
-        when(attempts.cancelPending("ws", "a")).thenReturn(true);
-        when(instances.markTerminal("ws", "i", TaskInstanceStatus.CANCELED, null)).thenReturn(true);
+        when(instances.cancelSubmitted("ws", "i")).thenReturn(true);
 
         assertEquals(TaskInstanceStatus.CANCELED, service.cancel("ws", "i"));
         verify(claims).releaseOwned("ws", "i");
@@ -67,12 +68,21 @@ class InstanceLifecycleServiceTest {
     }
 
     @Test
-    void terminalExecutionIsRecordedWithoutRestartingAnAttempt() {
+    void cancellationDuringLaunchKeepsTheClaimUntilTermination() {
+        when(instances.findByIdForUpdate("ws", "i"))
+                .thenReturn(Optional.of(instance(TaskInstanceStatus.LAUNCHING)));
+        when(instances.markCancelling("ws", "i")).thenReturn(true);
+
+        assertEquals(TaskInstanceStatus.CANCELLING, service.cancel("ws", "i"));
+        verify(instances).markCancelling("ws", "i");
+        verify(claims, never()).releaseOwned("ws", "i");
+    }
+
+    @Test
+    void terminalExecutionIsRecordedAndReleasesTheClaim() {
         when(instances.findByIdForUpdate("ws", "i"))
                 .thenReturn(Optional.of(instance(TaskInstanceStatus.RUNNING)));
-        when(attempts.markTerminal("ws", "a", "token-1", TaskAttemptStatus.FINISHED, null))
-                .thenReturn(true);
-        when(instances.markTerminal("ws", "i", TaskInstanceStatus.FINISHED, null))
+        when(instances.markTerminal("ws", "i", "token-1", TaskInstanceStatus.FINISHED, null))
                 .thenReturn(true);
 
         service.complete(ticket(), TaskOutcome.FINISHED);
@@ -81,37 +91,32 @@ class InstanceLifecycleServiceTest {
     }
 
     @Test
-    void pendingSubmissionRemainsRecoverableAfterHttpResponseIsLost() {
-        when(attempts.pending()).thenReturn(List.of(attempt(TaskAttemptStatus.PENDING)));
-        when(instances.findById("ws", "i")).thenReturn(Optional.of(instance(TaskInstanceStatus.SUBMITTED)));
+    void cancellationCompletionIsAuthoritative() {
+        when(instances.findByIdForUpdate("ws", "i"))
+                .thenReturn(Optional.of(instance(TaskInstanceStatus.CANCELLING)));
+        when(instances.markTerminal("ws", "i", "token-1", TaskInstanceStatus.CANCELED, null))
+                .thenReturn(true);
 
-        assertEquals(List.of(new PendingRun("ws", "i")), service.pendingRuns());
-        verify(attempts, never()).claimPending("ws", "a", "owner-1", "token-1");
+        service.complete(ticket(), TaskOutcome.CANCELED);
+
+        verify(claims).releaseOwned("ws", "i");
     }
 
     @Test
-    void uncertainOutcomeRetainsClaims() {
+    void pendingSubmissionIsRecoverableAfterLostHttpResponse() {
+        when(instances.pending()).thenReturn(List.of(instance(TaskInstanceStatus.SUBMITTED)));
+        assertEquals(List.of(new PendingRun("ws", "i")), service.pendingRuns());
+        verify(instances, never()).claim("ws", "i", "owner-1", "token-1");
+    }
+
+    @Test
+    void uncertainPhysicalOutcomeRetainsTheClaim() {
         when(instances.findByIdForUpdate("ws", "i"))
                 .thenReturn(Optional.of(instance(TaskInstanceStatus.RUNNING)));
 
         service.uncertain(ticket());
 
-        verify(instances).markReconciling("ws", "i");
-        verify(claims, never()).releaseOwned("ws", "i");
-    }
-
-    @Test
-    void cancelAfterLaunchRetainsClaimsUntilPhysicalCompletion() {
-        when(instances.findByIdForUpdate("ws", "i"))
-                .thenReturn(Optional.of(instance(TaskInstanceStatus.RUNNING)));
-        when(attempts.findByInstance("ws", "i"))
-                .thenReturn(List.of(attempt(TaskAttemptStatus.RUNNING)));
-        when(instances.findById("ws", "i"))
-                .thenReturn(Optional.of(instance(TaskInstanceStatus.CANCELLING)));
-
-        assertEquals(TaskInstanceStatus.CANCELLING, service.cancel("ws", "i"));
-
-        verify(instances).markCancelling("ws", "i");
+        verify(instances).markReconciling("ws", "i", "token-1");
         verify(claims, never()).releaseOwned("ws", "i");
     }
 
@@ -123,34 +128,28 @@ class InstanceLifecycleServiceTest {
         assertThrows(IllegalStateException.class, () -> service.complete(ticket(), TaskOutcome.FINISHED));
 
         verify(claims, never()).releaseOwned("ws", "i");
-        verify(instances, never()).markTerminal("ws", "i", TaskInstanceStatus.FINISHED, null);
     }
 
     @Test
-    void startupDoesNotReplayActiveAttemptFromPreviousOwner() {
-        AttemptEntity previous = attempt(TaskAttemptStatus.RUNNING);
+    void startupDoesNotResubmitThePreviousOwnersExecution() {
+        InstanceEntity previous = instance(TaskInstanceStatus.RUNNING);
         previous.setOwnerIncarnation("previous-owner");
-        when(attempts.activeByOtherOwner("new-owner")).thenReturn(List.of(previous));
-        when(instances.findByIdForUpdate("ws", "i"))
-                .thenReturn(Optional.of(instance(TaskInstanceStatus.RUNNING)));
+        previous.setDispatchToken("token-1");
+        when(instances.activeByOtherOwner("new-owner")).thenReturn(List.of(previous));
+        when(instances.findByIdForUpdate("ws", "i")).thenReturn(Optional.of(previous));
 
         service.reconcilePrevious("new-owner");
 
-        verify(instances).markReconciling("ws", "i");
-        verify(attempts, never()).claimPending("ws", "a", "new-owner", "new-token");
+        verify(instances).markReconciling("ws", "i", "token-1");
         verify(claims, never()).releaseOwned("ws", "i");
     }
 
     @Test
-    void repeatedTerminalNotificationPreservesImmutableOutcome() {
+    void repeatedTerminalCallbackPreservesTheOriginalOutcome() {
         when(instances.findByIdForUpdate("ws", "i"))
                 .thenReturn(Optional.of(instance(TaskInstanceStatus.FINISHED)));
-
         service.complete(ticket(), TaskOutcome.CANCELED);
-
         verify(claims, never()).releaseOwned("ws", "i");
-        verify(attempts, never())
-                .markTerminal("ws", "a", "token-1", TaskAttemptStatus.CANCELED, null);
     }
 
     private static InstanceEntity instance(TaskInstanceStatus status) {
@@ -165,18 +164,8 @@ class InstanceLifecycleServiceTest {
         return instance;
     }
 
-    private static AttemptEntity attempt(TaskAttemptStatus status) {
-        AttemptEntity attempt = new AttemptEntity();
-        attempt.setId("a");
-        attempt.setWorkspaceId("ws");
-        attempt.setInstanceId("i");
-        attempt.setAttemptNumber(1);
-        attempt.setStatus(status);
-        return attempt;
-    }
-
     private static DispatchTicket ticket() {
-        return new DispatchTicket("ws", "i", "a", "d", 1, "DATA_SYNC", "r", "token-1");
+        return new DispatchTicket("ws", "i", "d", 1, "DATA_SYNC", "r", "token-1");
     }
 
     private void inject(String fieldName, Object dependency) {

@@ -138,11 +138,7 @@ public class EmbeddedTaskDispatcher implements TaskExecutionCoordinator, AutoClo
                 return;
             }
             TaskExecutionIdentity context = new TaskExecutionIdentity(
-                    ticket.workspaceId(),
-                    ticket.definitionId(),
-                    ticket.definitionVersion(),
-                    ticket.instanceId(),
-                    ticket.attemptId());
+                    ticket.workspaceId(), ticket.definitionId(), ticket.definitionVersion(), ticket.instanceId());
             TaskPlugin plugin = registry.get(ticket.taskType());
             if (!(plugin instanceof ExecutableTaskPlugin executable)) {
                 lifecycle.complete(ticket, TaskOutcome.FAILED);

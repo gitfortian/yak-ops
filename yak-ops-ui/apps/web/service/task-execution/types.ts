@@ -1,6 +1,7 @@
 /** Public Task Execution responses from the Boot API. */
 export type TaskInstanceStatus =
   | "SUBMITTED"
+  | "LAUNCHING"
   | "RUNNING"
   | "CANCELLING"
   | "RECONCILING"
@@ -8,18 +9,8 @@ export type TaskInstanceStatus =
   | "FAILED"
   | "CANCELED";
 
-export type TaskAttemptStatus =
-  | "PENDING"
-  | "LAUNCHING"
-  | "RUNNING"
-  | "FINISHED"
-  | "FAILED"
-  | "CANCELED"
-  | "INTERRUPTED";
-
 export interface TaskSubmissionResult {
   instanceId: string;
-  attemptId: string;
   definitionVersion: number;
   status: TaskInstanceStatus;
   replayed: boolean;
@@ -32,22 +23,12 @@ export interface TaskInstanceRecord {
   taskType: string;
   triggerType: "MANUAL" | "SCHEDULE" | "WORKFLOW";
   status: TaskInstanceStatus;
+  runtimeEngine?: string | null;
+  runtimeId?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   failureCode?: string | null;
   createTime?: string | null;
-}
-
-export interface TaskAttemptRecord {
-  id: string;
-  attemptNumber: number;
-  status: TaskAttemptStatus;
-  runtimeEngine?: string | null;
-  runtimeId?: string | null;
-  logReference?: string | null;
-  failureCode?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
 }
 
 export interface TaskInstanceDefinitionRecord {
