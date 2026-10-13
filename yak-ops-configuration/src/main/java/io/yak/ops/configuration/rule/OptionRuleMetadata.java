@@ -40,8 +40,8 @@ public final class OptionRuleMetadata {
                 add(definitions, condition.option(), false);
             }
         }
-        for (ConditionRule conditional : rule.getConditionRules()) {
-            collect(conditional.optionRule(), definitions, true);
+        for (ConditionRule conditionRule : rule.getConditionRules()) {
+            collect(conditionRule.optionRule(), definitions, true);
         }
     }
 
