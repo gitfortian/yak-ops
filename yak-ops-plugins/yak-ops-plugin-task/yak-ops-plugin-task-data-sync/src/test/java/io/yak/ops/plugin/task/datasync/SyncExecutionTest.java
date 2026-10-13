@@ -22,7 +22,8 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.execution.SyncExecutionPlanner;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlan;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
@@ -68,6 +69,48 @@ class SyncExecutionTest {
         assertEquals(2, resources.connections.get());
     }
 
+
+    @Test
+    void preparesNonSecretLogicalJobPlanWithoutResolvingConnections() {
+        Resources resources = new Resources();
+        SyncJobPlanner planner = new SyncJobPlanner(resources);
+        SyncParameters parameters = parameters(true);
+
+        SyncJobPlan prepared = planner.prepare(parameters, CONTEXT);
+
+        assertEquals(parameters.source(), prepared.sourceParameters());
+        assertEquals(parameters.sink(), prepared.sinkParameters());
+        assertEquals("orders", prepared.source().table().table());
+        assertEquals("ods_orders", prepared.target().table().table());
+        assertEquals(planner.plan(parameters, CONTEXT), prepared.admissionPlan());
+        assertEquals(0, resources.connections.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void rejectsChangedTableSchemaBeforeLaunchingEvenWhenDatasourceRevisionIsStable() {
+        Resources resources = new Resources();
+        AtomicInteger submissions = new AtomicInteger();
+        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        SyncParameters parameters = parameters(false);
+        TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
+
+        resources.targetSchema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(64))),
+                List.of("id"));
+
+        CompletionException failure = assertThrows(
+                CompletionException.class,
+                () -> plugin.start(parameters, admitted, CONTEXT).toCompletableFuture().join());
+
+        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        assertEquals(0, submissions.get());
+        assertEquals(0, resources.connections.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
     @Test
     void refusesChangedDatasourceRevisionBeforeLaunching() {
         Resources resources = new Resources();
@@ -100,7 +143,7 @@ class SyncExecutionTest {
     }
 
     private static SyncTaskPlugin plugin(SyncRuntimeResources resources, PipelineExecutor executor) {
-        SyncExecutionPlanner planner = new SyncExecutionPlanner(resources);
+        SyncJobPlanner planner = new SyncJobPlanner(resources);
         return new SyncTaskPlugin(
                 planner, new SyncTaskExecutor(resources, planner, executor, Path.of("target/data-sync")));
     }
@@ -150,6 +193,7 @@ class SyncExecutionTest {
         private final AtomicInteger tables = new AtomicInteger();
         private final AtomicInteger openedConnections = new AtomicInteger();
         private long targetRevision = 1;
+        private TableSchema targetSchema = SCHEMA;
 
         @Override
         public SyncRuntimeTable table(
@@ -160,7 +204,7 @@ class SyncExecutionTest {
                 return new SyncRuntimeTable("MYSQL", new TableId("app", null, "orders"), SCHEMA, 1);
             }
             return new SyncRuntimeTable(
-                    "POSTGRE_SQL", new TableId(null, "public", "ods_orders"), SCHEMA, targetRevision);
+                    "POSTGRE_SQL", new TableId(null, "public", "ods_orders"), targetSchema, targetRevision);
         }
 
         @Override

@@ -21,6 +21,8 @@ import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlan;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
@@ -40,12 +42,12 @@ import java.util.concurrent.CompletionStage;
 public final class SyncTaskExecutor {
 
     private final SyncRuntimeResources resources;
-    private final SyncExecutionPlanner planner;
+    private final SyncJobPlanner planner;
     private final PipelineExecutor executor;
     private final Path stateRoot;
 
     public SyncTaskExecutor(
-            SyncRuntimeResources resources, SyncExecutionPlanner planner, PipelineExecutor executor, Path stateRoot) {
+            SyncRuntimeResources resources, SyncJobPlanner planner, PipelineExecutor executor, Path stateRoot) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
@@ -68,12 +70,12 @@ public final class SyncTaskExecutor {
             if (!(parameters instanceof SyncParameters pipeline)) {
                 throw new IllegalArgumentException("Invalid DATA_SYNC parameter type");
             }
-            SyncPipelinePlan prepared = planner.prepare(pipeline, context);
+            SyncJobPlan prepared = planner.prepare(pipeline, context);
             if (!plan.equals(prepared.admissionPlan())) {
                 throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
             }
-            SourceParameters source = pipeline.source();
-            JdbcSinkParameters sink = (JdbcSinkParameters) pipeline.sink();
+            SourceParameters source = prepared.sourceParameters();
+            JdbcSinkParameters sink = (JdbcSinkParameters) prepared.sinkParameters();
             SyncRuntimeTable from = prepared.source();
             SyncRuntimeTable to = prepared.target();
             SyncRuntimeConnection sourceConnection = resources.connection(context.workspaceId(), source.datasourceId());

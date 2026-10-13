@@ -2,21 +2,15 @@ package io.yak.ops.plugin.task.datasync;
 
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.util.StringUtils;
-import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.datasync.plan.SyncSchemaValidator;
 import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
 import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * DATA_SYNC definition checks, independent of execution and checkpoint state.
@@ -72,7 +66,7 @@ public final class SyncValidator {
         TableSchema to = context.tableSchema(sink.datasourceId(), sinkTable);
         boolean requireKeys =
                 source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT;
-        checkSchemaCompatibility(from, to, requireKeys);
+        SyncSchemaValidator.validate(from, to, requireKeys);
     }
 
     private static void checkTableFields(String datasourceId, String database, String schema, String table) {
@@ -109,45 +103,5 @@ public final class SyncValidator {
             return selected;
         }
         return bound;
-    }
-
-    public static void checkSchemaCompatibility(TableSchema source, TableSchema target, boolean requireKeys) {
-        Map<String, Column> sourceColumns = columns(source);
-        Map<String, Column> targetColumns = columns(target);
-        for (var entry : sourceColumns.entrySet()) {
-            Column other = targetColumns.get(entry.getKey());
-            if (other == null || !JdbcSchemaCompatibility.isCompatible(entry.getValue(), other)) {
-                throw new TaskPluginException("Source and target table schemas are incompatible");
-            }
-        }
-        for (var entry : targetColumns.entrySet()) {
-            if (!sourceColumns.containsKey(entry.getKey()) && !entry.getValue().nullable()) {
-                throw new TaskPluginException("Target contains an unmatched required column");
-            }
-        }
-        if (requireKeys) {
-            Set<String> sourceKeys = keys(source.primaryKeys());
-            if (sourceKeys.isEmpty() || !sourceKeys.equals(keys(target.primaryKeys()))) {
-                throw new TaskPluginException("UPSERT requires matching source and target primary keys");
-            }
-        }
-    }
-
-    private static Map<String, Column> columns(TableSchema schema) {
-        Map<String, Column> result = new LinkedHashMap<>();
-        for (Column column : schema.columns()) {
-            if (result.putIfAbsent(column.name().toLowerCase(Locale.ROOT), column) != null) {
-                throw new TaskPluginException("Ambiguous table column names");
-            }
-        }
-        return result;
-    }
-
-    private static Set<String> keys(java.util.List<String> values) {
-        Set<String> result = new HashSet<>();
-        for (String key : values) {
-            result.add(key.toLowerCase(Locale.ROOT));
-        }
-        return result;
     }
 }
