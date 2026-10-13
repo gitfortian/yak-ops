@@ -1,0 +1,22 @@
+name: Schedule Fire Workbench
+on:
+  push:
+    branches: [feat/yoip-4-quartz-fire-admission]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Export source
+        run: |
+          mkdir -p /tmp/schedule-fire
+          git archive HEAD -o /tmp/schedule-fire/head.tar
+          git rev-parse HEAD > /tmp/schedule-fire/revision.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: schedule-fire-source
+          path: /tmp/schedule-fire/
+          retention-days: 2
