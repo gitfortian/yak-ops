@@ -20,13 +20,14 @@ public final class OptionRuleMetadata {
     /** Returns every declared option exactly once, preserving declaration order. */
     public static List<OptionDefinition> describe(OptionRule rule) {
         Map<String, OptionDefinition> definitions = new LinkedHashMap<>();
-        collect(rule, definitions);
+        collect(rule, definitions, false);
         return List.copyOf(definitions.values());
     }
 
-    private static void collect(OptionRule rule, Map<String, OptionDefinition> definitions) {
+    private static void collect(
+            OptionRule rule, Map<String, OptionDefinition> definitions, boolean conditional) {
         for (RequiredOption required : rule.getRequiredOptions()) {
-            boolean unconditional = required.kind() == RequiredOption.Kind.REQUIRED;
+            boolean unconditional = !conditional && required.kind() == RequiredOption.Kind.REQUIRED;
             for (Option<?> option : required.options()) {
                 add(definitions, option, unconditional);
             }
@@ -40,7 +41,7 @@ public final class OptionRuleMetadata {
             }
         }
         for (ConditionRule conditional : rule.getConditionRules()) {
-            collect(conditional.optionRule(), definitions);
+            collect(conditional.optionRule(), definitions, true);
         }
     }
 
