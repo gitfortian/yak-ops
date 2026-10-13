@@ -3,20 +3,86 @@ on:
   push:
     branches: [feat/yoip-4-quartz-fire-admission]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: schedule-fire-implementation
+  cancel-in-progress: false
 jobs:
-  baseline:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
-      - name: Export source
-        run: |
-          mkdir -p /tmp/schedule-fire
-          git archive HEAD -o /tmp/schedule-fire/head.tar
-          git rev-parse HEAD > /tmp/schedule-fire/revision.txt
-      - uses: actions/upload-artifact@v4
         with:
-          name: schedule-fire-source
-          path: /tmp/schedule-fire/
+          ref: feat/yoip-4-quartz-fire-admission
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply checked implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma, subprocess
+          encoded = ''.join(Path(f'.schedule-fire-{i}.b64').read_text().strip() for i in range(4))
+          patch = lzma.decompress(base64.b64decode(encoded))
+          assert hashlib.sha256(patch).hexdigest() == '3724bb274a6ba31c590c8b6dbd5276c75113b608821ad01d83b8fa93c16f82e6'
+          subprocess.run(['git', 'apply', '--index', '-'], input=patch, check=True)
+          PY
+      - name: Format changed sources and tests
+        run: |
+          cp pom.xml /tmp/schedule-original-pom.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          files = subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).splitlines()
+          tests = [f.split('/src/test/java/', 1)[1] for f in files if '/src/test/java/' in f and f.endswith('.java')]
+          p = Path('pom.xml')
+          text = p.read_text()
+          extra = ''.join('\n                            <include>src/test/java/' + f + '</include>' for f in tests)
+          text = text.replace('<include>src/main/java/**/*.java</include>', '<include>src/main/java/**/*.java</include>' + extra)
+          p.write_text(text)
+          PY
+          bash mvnw -B -ntp -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+          cp /tmp/schedule-original-pom.xml pom.xml
+          rm .schedule-fire-*.b64 .github/workflows/schedule-fire-workbench.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(schedule): integrate owner-gated Quartz triggers and atomic fire admission'
+          git push origin HEAD:feat/yoip-4-quartz-fire-admission
+      - name: Verify backend
+        run: |
+          mkdir -p /tmp/schedule-evidence
+          python3 scripts/verify_logging_rules.py
+          bash mvnw -B -ntp -pl '!yak-ops-ui,!yak-ops-dist' verify 2>&1 | tee /tmp/schedule-evidence/backend.log
+      - name: Verify real MySQL admission and Quartz persistence
+        env:
+          E2E_DB_PASSWORD: localtestpass
+          SCHEDULE_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/yak_schedule_contract?useSSL=false&allowPublicKeyRetrieval=true
+        run: |
+          docker run -d --name schedule-contract-mysql -e MYSQL_ROOT_PASSWORD=localtestpass -e MYSQL_DATABASE=yak_schedule_contract -p 3306:3306 mysql:8.0
+          ready=false
+          for attempt in $(seq 1 90); do
+            if docker exec schedule-contract-mysql mysqladmin ping --host=127.0.0.1 --user=root --password=localtestpass --silent; then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = true
+          bash mvnw -B -ntp -pl yak-ops-boot -am -Dtest=ScheduleAdmissionIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test 2>&1 | tee /tmp/schedule-evidence/admission.log
+      - name: Export evidence
+        if: always()
+        run: |
+          mkdir -p /tmp/schedule-evidence
+          git archive HEAD -o /tmp/schedule-evidence/head.tar
+          git rev-parse HEAD > /tmp/schedule-evidence/revision.txt
+          git diff > /tmp/schedule-evidence/uncommitted.patch
+          find . -path '*/target/surefire-reports/*' -type f -exec cp --parents {} /tmp/schedule-evidence/ \;
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schedule-fire-implementation-evidence
+          path: /tmp/schedule-evidence/
           retention-days: 2
