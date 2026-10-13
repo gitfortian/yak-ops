@@ -16,9 +16,5 @@ public record DataSyncOperationsVO(Summary summary, List<TrendPoint> trend, List
 
     /** Failed Instance entry linking to its Task Definition and Instance details. */
     public record Failure(
-            String instanceId,
-            String definitionId,
-            String taskName,
-            String failureCode,
-            LocalDateTime createTime) {}
+            String instanceId, String definitionId, String taskName, String failureCode, LocalDateTime createTime) {}
 }
