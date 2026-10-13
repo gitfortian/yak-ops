@@ -1,19 +1,16 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
-import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
 import io.yak.ops.plugin.task.datasync.SyncValidator;
+import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
-import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
-import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -26,9 +23,11 @@ import java.util.Objects;
 public final class SyncJobPlanner {
 
     private final SyncRuntimeResources resources;
+    private final SyncConnectorFactoryRegistry factories;
 
-    public SyncJobPlanner(SyncRuntimeResources resources) {
+    public SyncJobPlanner(SyncRuntimeResources resources, SyncConnectorFactoryRegistry factories) {
         this.resources = Objects.requireNonNull(resources, "resources");
+        this.factories = Objects.requireNonNull(factories, "factories");
     }
 
     /**
@@ -52,20 +51,18 @@ public final class SyncJobPlanner {
      * @return immutable, non-secret logical DATA_SYNC plan
      */
     public SyncJobPlan prepare(SyncParameters parameters, TaskExecutionIdentity context) {
-        SyncValidator.checkParameters(parameters);
+        SyncValidator.checkParameters(parameters, factories);
         SourceParameters source = parameters.source();
-        JdbcSinkParameters sink = (JdbcSinkParameters) parameters.sink();
+        var sink = parameters.sink();
+        var sourceFactory = factories.source(source);
+        var sinkFactory = factories.sink(sink);
         SyncRuntimeTable from = resources.table(
                 context.workspaceId(), source.datasourceId(), source.database(), source.schema(), source.table());
         SyncRuntimeTable to = resources.table(
                 context.workspaceId(), sink.datasourceId(), sink.database(), sink.schema(), sink.table());
 
-        if (source instanceof MySqlCdcSourceParameters && !"MYSQL".equals(from.datasourceType())) {
-            throw new TaskPluginException("MySQL CDC requires a MySQL datasource");
-        }
-        boolean requireKeys =
-                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT;
-        SyncSchemaValidator.validate(from.schema(), to.schema(), requireKeys);
+        sourceFactory.validateDatasource(from.datasourceType());
+        sinkFactory.validateSchema(sink, from.schema(), to.schema(), sourceFactory.producesChangelog());
 
         String target = encodePart(sink.datasourceId()) + encodeTable(to.table());
         String binding = encodePart(context.workspaceId())

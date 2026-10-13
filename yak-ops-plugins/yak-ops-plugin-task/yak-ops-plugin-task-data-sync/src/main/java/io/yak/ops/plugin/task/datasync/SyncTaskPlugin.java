@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync;
 
-import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
@@ -8,6 +7,8 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.datasync.config.SyncParameterCodec;
+import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import java.util.Objects;
@@ -20,10 +21,14 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
 
     private final SyncJobPlanner planner;
     private final SyncTaskExecutor executor;
+    private final SyncConnectorFactoryRegistry factories;
+    private final SyncParameterCodec codec;
 
-    public SyncTaskPlugin(SyncJobPlanner planner, SyncTaskExecutor executor) {
+    public SyncTaskPlugin(SyncJobPlanner planner, SyncTaskExecutor executor, SyncConnectorFactoryRegistry factories) {
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
+        this.factories = Objects.requireNonNull(factories, "factories");
+        this.codec = new SyncParameterCodec(factories);
     }
 
     @Override
@@ -40,11 +45,11 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
     public TaskParameters parse(String content) {
         SyncParameters parameters;
         try {
-            parameters = JSONUtils.parseObject(content, SyncParameters.class);
+            parameters = codec.parse(content);
         } catch (IllegalArgumentException exception) {
             throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON");
         }
-        SyncValidator.checkParameters(parameters);
+        SyncValidator.checkParameters(parameters, factories);
         return parameters;
     }
 
@@ -53,7 +58,7 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
         if (!(parameters instanceof SyncParameters pipeline)) {
             throw new TaskPluginException("Invalid DATA_SYNC parameter type");
         }
-        SyncValidator.checkResources(pipeline, context);
+        SyncValidator.checkResources(pipeline, context, factories);
     }
 
     @Override

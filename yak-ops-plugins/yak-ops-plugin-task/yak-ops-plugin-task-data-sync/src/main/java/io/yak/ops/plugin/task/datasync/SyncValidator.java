@@ -1,72 +1,74 @@
 package io.yak.ops.plugin.task.datasync;
 
-import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.plan.SyncSchemaValidator;
-import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
-import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
-import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
+import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 
 /**
- * DATA_SYNC definition checks, independent of execution and checkpoint state.
+ * Validates DATA_SYNC parameters and authorized Datasource metadata.
  *
- * <p>Structure is checked once during parsing. Physical checks use Workspace-authorized
- * Datasource metadata and do not silently replace an explicit database or schema.
+ * <p>Source and Sink factories own their own execution capabilities. The current saved table path
+ * remains explicit, and planning never silently changes a selected namespace.
  */
 public final class SyncValidator {
 
     private SyncValidator() {}
 
-    public static void checkParameters(SyncParameters parameters) {
+    /**
+     * Checks the saved configuration without reading Datasource metadata.
+     *
+     * @param parameters decoded DATA_SYNC parameters
+     * @param factories discovered Connector capabilities
+     */
+    public static void checkParameters(SyncParameters parameters, SyncConnectorFactoryRegistry factories) {
         if (parameters == null || parameters.source() == null || parameters.sink() == null) {
             throw new TaskPluginException("DATA_SYNC requires one source and one sink");
-        }
-        if (!(parameters.source() instanceof JdbcSourceParameters)
-                && !(parameters.source() instanceof MySqlCdcSourceParameters)) {
-            throw new TaskPluginException("Unsupported DATA_SYNC source");
-        }
-        if (!(parameters.sink() instanceof JdbcSinkParameters sink)) {
-            throw new TaskPluginException("Unsupported DATA_SYNC sink");
         }
         if (!parameters.transform().isEmpty()) {
             throw new TaskPluginException("DATA_SYNC transforms are not supported yet");
         }
+        SourceParameters source = parameters.source();
+        var sourceFactory = factories.source(source);
+        var sinkFactory = factories.sink(parameters.sink());
+        checkTableFields(source.datasourceId(), source.database(), source.schema(), source.table());
         checkTableFields(
-                parameters.source().datasourceId(),
-                parameters.source().database(),
-                parameters.source().schema(),
-                parameters.source().table());
-        checkTableFields(sink.datasourceId(), sink.database(), sink.schema(), sink.table());
-        if (sink.writeMode() == null || sink.writeMode() == DataSyncWriteMode.OVERWRITE) {
-            throw new TaskPluginException("DATA_SYNC supports APPEND or UPSERT only");
-        }
-        if (parameters.source() instanceof MySqlCdcSourceParameters && sink.writeMode() != DataSyncWriteMode.UPSERT) {
-            throw new TaskPluginException("MySQL CDC requires UPSERT to preserve change events");
-        }
+                parameters.sink().datasourceId(),
+                parameters.sink().database(),
+                parameters.sink().schema(),
+                parameters.sink().table());
+        sinkFactory.validate(parameters.sink(), sourceFactory.producesChangelog());
     }
 
-    static void checkResources(SyncParameters parameters, TaskValidationContext context) {
-        var source = parameters.source();
-        var sink = (JdbcSinkParameters) parameters.sink();
+    /**
+     * Checks the authorized table and field mapping for the resolved Connectors.
+     *
+     * @param parameters decoded DATA_SYNC parameters
+     * @param context Workspace-bound datasource access
+     * @param factories discovered Connector capabilities
+     */
+    public static void checkResources(
+            SyncParameters parameters, TaskValidationContext context, SyncConnectorFactoryRegistry factories) {
+        SourceParameters source = parameters.source();
+        var sourceFactory = factories.source(source);
+        var sinkFactory = factories.sink(parameters.sink());
         DataSourceInfo sourceInfo = context.dataSource(source.datasourceId());
-        DataSourceInfo sinkInfo = context.dataSource(sink.datasourceId());
-
-        if (source instanceof MySqlCdcSourceParameters && !"MYSQL".equals(sourceInfo.type())) {
-            throw new TaskPluginException("MySQL CDC requires a MySQL datasource");
-        }
+        DataSourceInfo sinkInfo = context.dataSource(parameters.sink().datasourceId());
+        sourceFactory.validateDatasource(sourceInfo.type());
 
         TableId sourceTable = tablePath(sourceInfo, source.database(), source.schema(), source.table());
-        TableId sinkTable = tablePath(sinkInfo, sink.database(), sink.schema(), sink.table());
+        TableId sinkTable = tablePath(
+                sinkInfo,
+                parameters.sink().database(),
+                parameters.sink().schema(),
+                parameters.sink().table());
         TableSchema from = context.tableSchema(source.datasourceId(), sourceTable);
-        TableSchema to = context.tableSchema(sink.datasourceId(), sinkTable);
-        boolean requireKeys =
-                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT;
-        SyncSchemaValidator.validate(from, to, requireKeys);
+        TableSchema to = context.tableSchema(parameters.sink().datasourceId(), sinkTable);
+        sinkFactory.validateSchema(parameters.sink(), from, to, sourceFactory.producesChangelog());
     }
 
     private static void checkTableFields(String datasourceId, String database, String schema, String table) {
