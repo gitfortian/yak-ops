@@ -61,8 +61,7 @@ public final class SyncExecutionPlanner {
         SyncValidator.checkSchemaCompatibility(
                 from.schema(),
                 to.schema(),
-                source instanceof MySqlCdcSourceParameters
-                        || sink.writeMode() == DataSyncWriteMode.UPSERT);
+                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT);
         String target = encodePart(sink.datasourceId())
                 + encodePart(to.table().catalog())
                 + encodePart(to.table().schema())
@@ -70,8 +69,8 @@ public final class SyncExecutionPlanner {
         String binding = context.workspaceId()
                 + "|" + source.datasourceId() + "|" + from.revision() + "|" + encodeTable(from.table())
                 + "|" + sink.datasourceId() + "|" + to.revision() + "|" + encodeTable(to.table());
-        TaskExecutionPlan plan = new TaskExecutionPlan(
-                List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
+        TaskExecutionPlan plan =
+                new TaskExecutionPlan(List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
         return new SyncPipelinePlan(from, to, plan);
     }
 

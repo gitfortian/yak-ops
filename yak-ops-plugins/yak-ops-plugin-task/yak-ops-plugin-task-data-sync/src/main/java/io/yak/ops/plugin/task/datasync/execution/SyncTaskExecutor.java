@@ -49,7 +49,8 @@ public final class SyncTaskExecutor {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
-        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.stateRoot =
+                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
 
     /**
@@ -77,8 +78,7 @@ public final class SyncTaskExecutor {
             SyncRuntimeTable to = prepared.target();
             SyncRuntimeConnection sourceConnection = resources.connection(context.workspaceId(), source.datasourceId());
             SyncRuntimeConnection targetConnection = resources.connection(context.workspaceId(), sink.datasourceId());
-            if (sourceConnection.revision() != from.revision()
-                    || targetConnection.revision() != to.revision()) {
+            if (sourceConnection.revision() != from.revision() || targetConnection.revision() != to.revision()) {
                 throw new IllegalStateException("DATA_SYNC datasource revision changed before execution");
             }
             Configuration configuration = new Configuration()
