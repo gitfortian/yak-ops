@@ -11,7 +11,7 @@ import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.SourceSplit;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
