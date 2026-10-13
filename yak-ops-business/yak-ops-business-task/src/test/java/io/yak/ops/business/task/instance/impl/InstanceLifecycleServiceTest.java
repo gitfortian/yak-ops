@@ -49,6 +49,9 @@ class InstanceLifecycleServiceTest {
 
     @Test
     void recordsJobIdentityUnderTheWinningToken() {
+        when(instances.markRunning("ws", "i", "token-1", "YAKFLOW", "job-1"))
+                .thenReturn(true);
+
         service.started(ticket(), new TaskRuntimeReference("YAKFLOW", "job-1"));
         verify(instances).markRunning("ws", "i", "token-1", "YAKFLOW", "job-1");
     }
