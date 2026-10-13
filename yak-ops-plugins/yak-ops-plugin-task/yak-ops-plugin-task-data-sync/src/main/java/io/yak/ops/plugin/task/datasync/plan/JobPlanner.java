@@ -6,12 +6,14 @@ import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.plugin.task.datasync.DataSyncParameters;
-import io.yak.ops.plugin.task.datasync.DefinitionValidator;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.ConnectorExecutionIdentity;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.plugin.task.datasync.config.JobConfig;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
+import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
-import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,9 +26,9 @@ import java.util.Objects;
 public final class JobPlanner {
 
     private final RuntimeResources resources;
-    private final ConnectorFactoryRegistry factories;
+    private final FactoryUtil factories;
 
-    public JobPlanner(RuntimeResources resources, ConnectorFactoryRegistry factories) {
+    public JobPlanner(RuntimeResources resources, FactoryUtil factories) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
     }
@@ -38,7 +40,7 @@ public final class JobPlanner {
      * @param context trusted Task execution identity
      * @return admission claim validated against the effective schema
      */
-    public TaskAdmissionPlan admissionPlan(DataSyncParameters parameters, TaskExecutionIdentity context) {
+    public TaskAdmissionPlan admissionPlan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
         return plan(parameters, context).admissionPlan();
     }
 
@@ -51,33 +53,47 @@ public final class JobPlanner {
      * @param context trusted Task execution identity
      * @return immutable, non-secret logical DATA_SYNC plan
      */
-    public JobPlan plan(DataSyncParameters parameters, TaskExecutionIdentity context) {
-        DefinitionValidator.validateParameters(parameters, factories);
-        SourceParameters source = parameters.source();
-        var sink = parameters.sink();
-        var sourceFactory = factories.source(source);
-        var sinkFactory = factories.sink(sink);
+    public JobPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
+        JobConfig job = JobConfigValidator.validateConfig(parameters, factories);
+        ReadonlyConfig source = job.source();
+        ReadonlyConfig sink = job.sink();
+        String sourceId = source.get(JobOptions.DATASOURCE_ID);
+        String sinkId = sink.get(JobOptions.DATASOURCE_ID);
+        var sourceFactory = factories.source(source.get(JobOptions.TYPE));
+        var sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
         RuntimeTable from = resources.table(
-                context.workspaceId(), source.datasourceId(), source.database(), source.schema(), source.table());
+                context.workspaceId(),
+                sourceId,
+                source.get(JobOptions.DATABASE),
+                source.get(JobOptions.SCHEMA),
+                source.get(JobOptions.TABLE));
         RuntimeTable to = resources.table(
-                context.workspaceId(), sink.datasourceId(), sink.database(), sink.schema(), sink.table());
+                context.workspaceId(),
+                sinkId,
+                sink.get(JobOptions.DATABASE),
+                sink.get(JobOptions.SCHEMA),
+                sink.get(JobOptions.TABLE));
 
         sourceFactory.validateDatasource(from.datasourceType());
         sinkFactory.validateSchema(sink, from.schema(), to.schema(), sourceFactory.producesChangelog());
 
-        String target = encodePart(sink.datasourceId()) + encodeTable(to.table());
+        String target = encodePart(sinkId) + encodeTable(to.table());
         String binding = encodePart(context.workspaceId())
-                + encodePart(source.datasourceId())
+                + encodePart(sourceId)
                 + encodePart(Long.toString(from.revision()))
                 + encodeTable(from.table())
                 + encodeSchema(from.schema())
-                + encodePart(sink.datasourceId())
+                + encodePart(sinkId)
                 + encodePart(Long.toString(to.revision()))
                 + encodeTable(to.table())
                 + encodeSchema(to.schema());
         List<ExecutionResource> claims = new ArrayList<>();
         claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
-        claims.addAll(sourceFactory.exclusiveResources(source, context));
+        ConnectorExecutionIdentity identity = new ConnectorExecutionIdentity(
+                context.workspaceId(), context.definitionId(), context.instanceId());
+        for (var claim : sourceFactory.exclusiveResources(source, identity)) {
+            claims.add(new ExecutionResource(claim.type(), claim.key()));
+        }
         TaskAdmissionPlan admission = new TaskAdmissionPlan(claims, sha256(binding));
         return new JobPlan(source, sink, from, to, admission);
     }
