@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.source;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 /**
@@ -9,10 +8,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * <p>Only explicit source types are supported by this version of DATA_SYNC.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
-@JsonSubTypes({
-    @JsonSubTypes.Type(value = JdbcSourceParameters.class, name = "JDBC"),
-    @JsonSubTypes.Type(value = MySqlCdcSourceParameters.class, name = "MYSQL_CDC")
-})
 public interface SourceParameters {
     String datasourceId();
 
