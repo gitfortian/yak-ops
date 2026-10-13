@@ -82,6 +82,8 @@ export default {
   "pages.datasource.form.portPlaceholder": "端口",
   "pages.datasource.form.portRequired": "请输入端口",
   "pages.datasource.form.portInvalid": "端口必须是 1-65535 的整数",
+  "pages.datasource.form.parameterRequired": "该参数不能为空",
+  "pages.datasource.form.parameterInvalid": "该参数不合法",
   "pages.datasource.form.database": "数据库名称",
   "pages.datasource.form.databaseRequired": "请输入数据库名称",
   "pages.datasource.form.databasePlaceholder": "请输入数据库名称",
