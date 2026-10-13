@@ -1,11 +1,11 @@
 package io.yak.ops.connector.base.source.reader.fetcher;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.SourceReaderOptions;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import io.yak.ops.core.api.connector.source.SourceSplit;
-import io.yak.ops.configuration.Configuration;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;

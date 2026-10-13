@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.source.reader;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.database.connection.DriverManagerJdbcConnectionProvider;
@@ -7,7 +8,6 @@ import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Map;
 import java.util.Objects;
