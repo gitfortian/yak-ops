@@ -33,6 +33,15 @@ public class InstanceEntity extends BaseEntity {
     private String resourceRevision;
     /** Business lifecycle independent of the physical Job status. */
     private TaskInstanceStatus status;
+    /** Current embedded owner of the physical submission. */
+    private String ownerIncarnation;
+    /** One-time dispatch token. */
+    @ToString.Exclude
+    private String dispatchToken;
+    /** Engine responsible for the physical Job. */
+    private String runtimeEngine;
+    /** Engine-assigned Job identifier. */
+    private String runtimeId;
     /** Optimistic version guarding competing state transitions. */
     private Integer stateVersion;
     /** Observed start time, absent until execution begins. */

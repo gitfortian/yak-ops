@@ -10,6 +10,8 @@ public record InstanceVO(
         String taskType,
         String triggerType,
         String status,
+        String runtimeEngine,
+        String runtimeId,
         LocalDateTime startTime,
         LocalDateTime endTime,
         String failureCode,
