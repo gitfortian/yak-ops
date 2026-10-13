@@ -1,11 +1,11 @@
 package io.yak.ops.business.datasource.exception;
 
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.common.result.ErrorCode;
+import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.configuration.validation.ConfigValidationError;
 import io.yak.ops.configuration.validation.OptionValidationException;
 import java.util.List;
-import io.yak.ops.common.result.ErrorCode;
-import io.yak.ops.common.util.SensitiveUtils;
 
 /**
  * Represents Datasource business failures across service and plugin boundaries.

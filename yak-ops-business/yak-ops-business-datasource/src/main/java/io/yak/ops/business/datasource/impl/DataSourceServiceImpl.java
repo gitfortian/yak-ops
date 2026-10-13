@@ -1,8 +1,6 @@
 package io.yak.ops.business.datasource.impl;
 
 import io.yak.ops.business.datasource.DataSourceService;
-import io.yak.ops.configuration.ConfigParser;
-import io.yak.ops.configuration.rule.OptionRuleMetadata;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.util.DataSourceCredentialUtils;
@@ -22,6 +20,8 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.rule.OptionRuleMetadata;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.dao.repository.datasource.DataSourcePageQuery;

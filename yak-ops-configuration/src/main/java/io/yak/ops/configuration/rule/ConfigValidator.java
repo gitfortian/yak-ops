@@ -59,14 +59,22 @@ public final class ConfigValidator {
                     continue;
                 }
             }
-            List<Option<?>> present = group.options().stream().filter(config::contains).toList();
-            boolean valid = switch (group.kind()) {
-                case REQUIRED, CONDITIONAL -> present.size() == group.options().size();
-                case EXCLUSIVE -> present.size() == 1;
-                case BUNDLED -> present.isEmpty() || present.size() == group.options().size();
-            };
+            List<Option<?>> present =
+                    group.options().stream().filter(config::contains).toList();
+            boolean valid =
+                    switch (group.kind()) {
+                        case REQUIRED, CONDITIONAL ->
+                            present.size() == group.options().size();
+                        case EXCLUSIVE -> present.size() == 1;
+                        case BUNDLED ->
+                            present.isEmpty()
+                                    || present.size() == group.options().size();
+                    };
             if (!valid) {
-                String path = group.options().stream().map(Option::key).reduce((a, b) -> a + "," + b).orElse("");
+                String path = group.options().stream()
+                        .map(Option::key)
+                        .reduce((a, b) -> a + "," + b)
+                        .orElse("");
                 errors.add(new ConfigValidationError(path, group.kind().name(), "Option group constraint failed"));
                 if (group.kind() == RequiredOption.Kind.REQUIRED || group.kind() == RequiredOption.Kind.CONDITIONAL) {
                     group.options().stream()
@@ -111,10 +119,7 @@ public final class ConfigValidator {
     }
 
     private void checkOption(
-            Option<?> option,
-            List<ConfigValidationError> errors,
-            Set<String> invalidTypes,
-            Set<String> checkedTypes) {
+            Option<?> option, List<ConfigValidationError> errors, Set<String> invalidTypes, Set<String> checkedTypes) {
         if (!checkedTypes.add(option.key())) {
             return;
         }
@@ -128,8 +133,7 @@ public final class ConfigValidator {
         }
     }
 
-    private static void typeError(
-            String path, List<ConfigValidationError> errors, Set<String> invalidTypes) {
+    private static void typeError(String path, List<ConfigValidationError> errors, Set<String> invalidTypes) {
         if (invalidTypes.add(path)) {
             errors.add(new ConfigValidationError(path, "TYPE", "Invalid option value type"));
         }

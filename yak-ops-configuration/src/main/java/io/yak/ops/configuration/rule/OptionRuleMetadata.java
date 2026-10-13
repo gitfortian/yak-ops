@@ -48,13 +48,15 @@ public final class OptionRuleMetadata {
         OptionDefinition existing = definitions.get(option.key());
         if (existing != null) {
             if (required && !existing.required()) {
-                definitions.put(option.key(), new OptionDefinition(
-                        existing.key(),
-                        existing.type(),
-                        true,
-                        existing.defaultValue(),
-                        existing.allowedValues(),
-                        existing.description()));
+                definitions.put(
+                        option.key(),
+                        new OptionDefinition(
+                                existing.key(),
+                                existing.type(),
+                                true,
+                                existing.defaultValue(),
+                                existing.allowedValues(),
+                                existing.description()));
             }
             return;
         }
@@ -74,10 +76,13 @@ public final class OptionRuleMetadata {
                 ? "LIST"
                 : option.valueType().isMapLikeType()
                         ? "MAP"
-                        : option.getClazz().isEnum() ? "ENUM" : option.getClazz().getSimpleName().toUpperCase(Locale.ROOT);
+                        : option.getClazz().isEnum()
+                                ? "ENUM"
+                                : option.getClazz().getSimpleName().toUpperCase(Locale.ROOT);
         definitions.put(
                 option.key(),
-                new OptionDefinition(option.key(), type, required, defaultValue, List.copyOf(values), option.getDescription()));
+                new OptionDefinition(
+                        option.key(), type, required, defaultValue, List.copyOf(values), option.getDescription()));
     }
 
     /** Safe field metadata independent of configured values. */
