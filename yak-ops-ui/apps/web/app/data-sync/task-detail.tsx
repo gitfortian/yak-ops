@@ -308,9 +308,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           : "flex min-h-full flex-col bg-[#f6f6f6] text-[#242731] md:flex-row"
       }
     >
-      <aside
-        className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0"
-      >
+      <aside className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0">
         <div className="shrink-0 border-b border-[#eef0f3] px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-[#242731]">执行记录</span>
@@ -394,9 +392,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
         </div>
 
         {total > PAGE_SIZE ? (
-          <div
-            className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2"
-          >
+          <div className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2">
             <Button
               size="small"
               variant="ghost"
@@ -497,9 +493,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <Spinner size="medium" label="加载实例详情" />
                   </div>
                 ) : (
-                  <div className="py-12 text-center text-sm text-[#98a2b3]">
-                    选择左侧执行记录
-                  </div>
+                  <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
                 )}
               </TabsPanel>
 
@@ -511,9 +505,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <Spinner size="medium" label="加载配置快照" />
                   </div>
                 ) : (
-                  <div className="py-12 text-center text-sm text-[#98a2b3]">
-                    选择左侧执行记录
-                  </div>
+                  <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
                 )}
               </TabsPanel>
 
@@ -529,9 +521,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <Spinner size="medium" label="加载实例详情" />
                   </div>
                 ) : !selected ? (
-                  <div className="py-12 text-center text-sm text-[#98a2b3]">
-                    选择左侧执行记录
-                  </div>
+                  <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
                 ) : null}
               </TabsPanel>
             </Tabs>
