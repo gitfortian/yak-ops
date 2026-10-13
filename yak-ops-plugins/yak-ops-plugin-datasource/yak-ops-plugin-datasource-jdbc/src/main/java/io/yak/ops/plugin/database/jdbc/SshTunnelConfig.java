@@ -126,7 +126,16 @@ public final class SshTunnelConfig {
     @Override
     public int hashCode() {
         return Objects.hash(
-                enabled, host, port, username, authType, password, privateKey, passphrase, strictHostKeyChecking, knownHosts);
+                enabled,
+                host,
+                port,
+                username,
+                authType,
+                password,
+                privateKey,
+                passphrase,
+                strictHostKeyChecking,
+                knownHosts);
     }
 
     @Override
