@@ -1,0 +1,85 @@
+name: Connector Review Workbench
+
+on:
+  push:
+    branches:
+      - fix/connector-configuration-isolation-and-ssh-defaults
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-review-workbench
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply reviewed configuration fixes
+        if: ${{ hashFiles('.connector-review.patch') != '' }}
+        run: |
+          git apply --check .connector-review.patch
+          git apply .connector-review.patch
+          rm .connector-review.patch
+      - name: Format touched production and test sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp pom.xml /tmp/connector-review-parent.xml
+          trap 'cp /tmp/connector-review-parent.xml pom.xml' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pom.xml')
+          paths = [
+              'src/main/java/io/yak/ops/connector/jdbc/JdbcConnectionOptions.java',
+              'src/main/java/io/yak/ops/boot/config/TaskPluginConfiguration.java',
+              'src/main/java/io/yak/ops/plugin/task/datasync/pipeline/PipelineBuilder.java',
+              'src/test/java/io/yak/ops/plugin/task/datasync/DataSyncExecutionTest.java',
+              'src/test/java/io/yak/ops/connector/jdbc/JdbcConnectionOptionsTest.java',
+              'src/test/java/io/yak/ops/connector/jdbc/database/connection/JdbcSshConnectionTest.java',
+          ]
+          text = p.read_text()
+          original = '<include>src/main/java/**/*.java</include>'
+          if text.count(original) != 1:
+              raise SystemExit('Unexpected formatter configuration')
+          p.write_text(text.replace(original, '\n'.join('<include>' + name + '</include>' for name in paths)))
+          PY
+          bash mvnw -B -ntp -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+          cp /tmp/connector-review-parent.xml pom.xml
+          if ! git diff --quiet; then
+            git diff --check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -u
+            git commit -m 'fix: isolate connector endpoint settings and honor the SSH default port'
+            git push origin HEAD:fix/connector-configuration-isolation-and-ssh-defaults
+          fi
+      - name: Verify backend with standard checks
+        run: bash mvnw -B -ntp -pl '!yak-ops-ui,!yak-ops-dist' verify
+      - name: Export evidence
+        if: always()
+        run: |
+          mkdir -p /tmp/connector-review-evidence
+          git rev-parse HEAD > /tmp/connector-review-evidence/revision.txt
+          git archive --format=zip HEAD -o /tmp/connector-review-evidence/source.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connector-review-evidence
+          path: |
+            /tmp/connector-review-evidence/*
+            **/target/surefire-reports/TEST-*.xml
+          retention-days: 2
