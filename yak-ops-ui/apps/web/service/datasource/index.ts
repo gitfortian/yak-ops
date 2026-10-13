@@ -8,6 +8,7 @@ import type {
   DataSourceCatalogTable,
   DataSourceCatalogTablePath,
   DataSourceConnectionPropertyKeys,
+  DataSourceOptionRules,
   DataSourceId,
   DataSourcePageParams,
   DataSourcePageResult,
@@ -30,6 +31,11 @@ export const getDataSourceConnectionPropertyKeys = (
 ): Promise<DataSourceConnectionPropertyKeys> =>
   HttpUtils.getData<DataSourceConnectionPropertyKeys>(
     `${DATA_SOURCE_API_PREFIX}/connection-property-keys?dbType=${encodeURIComponent(dbType)}`,
+  );
+
+export const getDataSourceOptionRules = (dbType: string): Promise<DataSourceOptionRules> =>
+  HttpUtils.getData<DataSourceOptionRules>(
+    `${DATA_SOURCE_API_PREFIX}/option-rules?dbType=${encodeURIComponent(dbType)}`,
   );
 
 export const createDataSource = async (payload: DataSourceSavePayload): Promise<void> => {

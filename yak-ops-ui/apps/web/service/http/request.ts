@@ -182,6 +182,9 @@ export default async function request<T>(url: string, options: RequestOptions = 
       });
     }
 
+    if (isApiResponse(payload)) {
+      throw new BizError(message, payload.code, payload, protocol);
+    }
     throw new Error(message);
   }
 
