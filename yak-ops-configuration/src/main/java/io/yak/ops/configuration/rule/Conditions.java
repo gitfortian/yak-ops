@@ -17,35 +17,39 @@ public final class Conditions {
         return new Condition<>(option, ConditionOperator.NOT_EQUAL, expected, null, null);
     }
 
-    public static <T extends Number> Condition<T> greaterThan(Option<T> option, T threshold) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterThan(Option<T> option, T threshold) {
         return compare(option, ConditionOperator.GREATER_THAN, threshold);
     }
 
-    public static <T extends Number> Condition<T> greaterOrEqual(Option<T> option, T threshold) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterOrEqual(Option<T> option, T threshold) {
         return compare(option, ConditionOperator.GREATER_OR_EQUAL, threshold);
     }
 
-    public static <T extends Number> Condition<T> lessThan(Option<T> option, T threshold) {
+    public static <T extends Comparable<? super T>> Condition<T> lessThan(Option<T> option, T threshold) {
         return compare(option, ConditionOperator.LESS_THAN, threshold);
     }
 
-    public static <T extends Number> Condition<T> lessOrEqual(Option<T> option, T threshold) {
+    public static <T extends Comparable<? super T>> Condition<T> lessOrEqual(Option<T> option, T threshold) {
         return compare(option, ConditionOperator.LESS_OR_EQUAL, threshold);
     }
 
-    public static <T extends Number> Condition<T> lessThanField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> lessThanField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.LESS_THAN, compareOption);
     }
 
-    public static <T extends Number> Condition<T> lessOrEqualField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> lessOrEqualField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.LESS_OR_EQUAL, compareOption);
     }
 
-    public static <T extends Number> Condition<T> greaterThanField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterThanField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.GREATER_THAN, compareOption);
     }
 
-    public static <T extends Number> Condition<T> greaterOrEqualField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterOrEqualField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.GREATER_OR_EQUAL, compareOption);
     }
 
@@ -94,11 +98,12 @@ public final class Conditions {
                 Objects.requireNonNull(extension, "extension"));
     }
 
-    private static <T extends Number> Condition<T> compare(Option<T> option, ConditionOperator operator, T threshold) {
+    private static <T extends Comparable<? super T>> Condition<T> compare(
+            Option<T> option, ConditionOperator operator, T threshold) {
         return new Condition<>(option, operator, threshold, null, null);
     }
 
-    private static <T extends Number> Condition<T> compareFields(
+    private static <T extends Comparable<? super T>> Condition<T> compareFields(
             Option<T> option, ConditionOperator operator, Option<T> other) {
         return new Condition<>(option, operator, null, other, null);
     }

@@ -1,9 +1,8 @@
-package io.yak.ops.plugin.task.datasync.connector.jdbc;
+package io.yak.ops.connector.jdbc.sink;
 
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.TaskPluginException;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -29,7 +28,7 @@ public final class JdbcSinkSchemaValidator {
      * @param source source table schema
      * @param target target table schema
      * @param requireKeys whether the Sink consumes key-aware changes
-     * @throws TaskPluginException when the current JDBC Sink cannot write the projected rows
+     * @throws IllegalArgumentException when the current JDBC Sink cannot write the projected rows
      */
     public static void validate(TableSchema source, TableSchema target, boolean requireKeys) {
         Objects.requireNonNull(source, "source");
@@ -39,26 +38,27 @@ public final class JdbcSinkSchemaValidator {
 
         for (Column column : sourceColumns.values()) {
             if (!column.dataType().isResolved()) {
-                throw new TaskPluginException("DATA_SYNC source contains an unresolved logical type");
+                throw new IllegalArgumentException("DATA_SYNC source contains an unresolved logical type");
             }
         }
         for (Column targetColumn : targetColumns.values()) {
             Column sourceColumn = sourceColumns.get(targetColumn.name());
             if (sourceColumn == null) {
-                throw new TaskPluginException("DATA_SYNC target column has no source mapping: " + targetColumn.name());
+                throw new IllegalArgumentException(
+                        "DATA_SYNC target column has no source mapping: " + targetColumn.name());
             }
             if (!targetColumn.dataType().isResolved()
                     || sourceColumn.dataType().getTypeRoot()
                             != targetColumn.dataType().getTypeRoot()
                     || !JdbcSchemaCompatibility.isCompatible(sourceColumn, targetColumn)) {
-                throw new TaskPluginException(
+                throw new IllegalArgumentException(
                         "DATA_SYNC source and target column types are incompatible: " + targetColumn.name());
             }
         }
         if (requireKeys) {
             Set<String> sourceKeys = new HashSet<>(source.primaryKeys());
             if (sourceKeys.isEmpty() || !sourceKeys.equals(new HashSet<>(target.primaryKeys()))) {
-                throw new TaskPluginException("UPSERT requires matching source and target primary keys");
+                throw new IllegalArgumentException("UPSERT requires matching source and target primary keys");
             }
         }
     }
@@ -68,7 +68,7 @@ public final class JdbcSinkSchemaValidator {
         Set<String> names = new HashSet<>();
         for (Column column : schema.columns()) {
             if (!names.add(column.name().toLowerCase(Locale.ROOT))) {
-                throw new TaskPluginException("DATA_SYNC contains ambiguous table column names");
+                throw new IllegalArgumentException("DATA_SYNC contains ambiguous table column names");
             }
             result.put(column.name(), column);
         }

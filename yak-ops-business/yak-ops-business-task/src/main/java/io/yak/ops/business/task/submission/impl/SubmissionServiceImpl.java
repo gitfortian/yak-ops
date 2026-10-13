@@ -9,6 +9,7 @@ import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.util.IdUtils;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
@@ -16,7 +17,6 @@ import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
@@ -90,7 +90,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         int version = definition.getCurrentVersion();
         var snapshot = versions.queryCurrent(workspaceId, definitionId, version)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
-        TaskParameters parameters = executable.parse(snapshot.getParameters());
+        ReadonlyConfig parameters = executable.parse(snapshot.getParameters());
         executable.validate(parameters, validationContexts.forWorkspace(workspaceId));
         TaskExecutionIdentity context =
                 new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId(), IdUtils.nextId());

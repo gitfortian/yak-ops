@@ -1,6 +1,7 @@
 package io.yak.ops.business.task.definition.impl;
 
 import io.yak.ops.business.task.definition.DefinitionService;
+import io.yak.ops.business.task.definition.PublicationService;
 import io.yak.ops.common.bean.dto.task.CreateDefinitionDTO;
 import io.yak.ops.common.bean.dto.task.DefinitionQueryDTO;
 import io.yak.ops.common.bean.dto.task.UpdateDefinitionDTO;
@@ -13,14 +14,14 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.DateUtils;
-import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
@@ -44,6 +45,9 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     @Resource
     private TaskValidationContext validationContext;
+
+    @Resource
+    private PublicationService publicationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -93,14 +97,11 @@ public class DefinitionServiceImpl implements DefinitionService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
-        DefinitionEntity definition = requireDefinition(id, true);
-        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters());
-        definition.setStatus(DefinitionStatus.PUBLISHED);
-        definition.initUpdate(operatorId);
-        definitionRepository.update(definition.getWorkspaceId(), definition);
-        return toVO(definition);
+        DefinitionEntity definition = requireDefinition(id, false);
+        int expectedVersion = definition.getCurrentVersion();
+        validatePublication(definition.getTaskType(), currentVersion(definition).getParameters());
+        return toVO(publicationService.publish(id, expectedVersion, operatorId));
     }
 
     @Override
@@ -217,9 +218,16 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     private String validatedParameters(String type, String parameters) {
         TaskPlugin plugin = pluginRegistry.get(type);
-        TaskParameters parsed = plugin.parse(parameters);
+        ReadonlyConfig parsed = plugin.parse(parameters);
+        plugin.validateReferences(parsed, validationContext);
+        return ConfigParser.toJson(parsed);
+    }
+
+    private void validatePublication(String type, String parameters) {
+        TaskPlugin plugin = pluginRegistry.get(type);
+        ReadonlyConfig parsed = plugin.parse(parameters);
+        plugin.validateReferences(parsed, validationContext);
         plugin.validate(parsed, validationContext);
-        return JSONUtils.toJson(parsed);
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {

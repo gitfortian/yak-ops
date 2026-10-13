@@ -1,4 +1,4 @@
-package io.yak.ops.plugin.task.datasync.connector.jdbc;
+package io.yak.ops.connector.jdbc.sink;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,7 +9,6 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.TaskPluginException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -49,7 +48,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("optional", LogicalTypes.varchar(64)));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -61,7 +60,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.BIGINT));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -73,8 +72,8 @@ class JdbcSinkSchemaValidatorTest {
                 List.of(new Column("id", LogicalTypes.BIGINT), new Column("ID", LogicalTypes.BIGINT)),
                 List.of("id"));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(ambiguous, source, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(ambiguous, source, false));
     }
 
     @Test
@@ -86,7 +85,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("name", LogicalTypes.varchar(32)));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -97,7 +96,7 @@ class JdbcSinkSchemaValidatorTest {
         TableSchema source = new TableSchema(columns, List.of("id"));
         TableSchema target = new TableSchema(columns, List.of("name"));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, true));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, true));
     }
 
     @Test
@@ -109,7 +108,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.decimal(20, 2)));
 
-        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     private static TableSchema table(Column... columns) {

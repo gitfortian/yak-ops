@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.core.api.common.JobExecutionResult;
 import io.yak.ops.core.api.common.JobID;
@@ -13,6 +12,12 @@ import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.api.dag.Pipeline;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.plugin.task.datasync.config.JobConfig;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
@@ -31,17 +36,11 @@ import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
-import io.yak.ops.plugin.task.datasync.config.RuntimeOptions;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
-import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcOptions;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
-import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
-import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
-import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -67,7 +66,7 @@ class DataSyncExecutionTest {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(false);
+        ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertEquals(1, plan.exclusiveResources().size());
         assertEquals("DATA_SYNC_TARGET", plan.exclusiveResources().getFirst().type());
@@ -86,13 +85,13 @@ class DataSyncExecutionTest {
     @Test
     void preparesNonSecretLogicalJobPlanWithoutResolvingConnections() {
         Resources resources = new Resources();
-        JobPlanner planner = new JobPlanner(resources, new ConnectorFactoryRegistry());
-        DataSyncParameters parameters = parameters(true);
+        JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
+        ReadonlyConfig parameters = parameters(true);
 
         JobPlan prepared = planner.plan(parameters, CONTEXT);
 
-        assertEquals(parameters.source(), prepared.sourceParameters());
-        assertEquals(parameters.sink(), prepared.sinkParameters());
+        assertEquals(JobConfig.from(parameters).source(), prepared.sourceParameters());
+        assertEquals(JobConfig.from(parameters).sink(), prepared.sinkParameters());
         assertEquals("orders", prepared.source().table().table());
         assertEquals("ods_orders", prepared.target().table().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
@@ -105,7 +104,7 @@ class DataSyncExecutionTest {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(false);
+        ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
 
         resources.targetSchema = new TableSchema(
@@ -129,7 +128,7 @@ class DataSyncExecutionTest {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(false);
+        ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
         resources.targetRevision++;
         CompletionException failure = assertThrows(
@@ -146,7 +145,7 @@ class DataSyncExecutionTest {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(true);
+        ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertTrue(plan.resourceRevision().length() <= 128);
         var handle = plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join();
@@ -169,7 +168,7 @@ class DataSyncExecutionTest {
         };
         DataSyncTaskPlugin plugin = plugin(resources, capture);
 
-        DataSyncParameters jdbc = parameters(false);
+        ReadonlyConfig jdbc = parameters(false);
         plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT).toCompletableFuture().join();
 
         StreamGraph bounded = lastGraph.get();
@@ -180,7 +179,7 @@ class DataSyncExecutionTest {
         assertEquals("data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
         assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
 
-        DataSyncParameters cdc = parameters(true);
+        ReadonlyConfig cdc = parameters(true);
         plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT).toCompletableFuture().join();
 
         StreamGraph continuous = lastGraph.get();
@@ -196,7 +195,7 @@ class DataSyncExecutionTest {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(false);
+        ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         resources.sourceConnectionRevision = 2;
 
@@ -215,7 +214,7 @@ class DataSyncExecutionTest {
         resources.sourceTunneled = true;
         AtomicInteger submissions = new AtomicInteger();
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        DataSyncParameters parameters = parameters(true);
+        ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
 
         CompletionException failure = assertThrows(
@@ -231,8 +230,8 @@ class DataSyncExecutionTest {
     @Test
     void cdcPlanReservesTheReplicationServerIdAlongsideTheTarget() {
         Resources resources = new Resources();
-        JobPlanner planner = new JobPlanner(resources, new ConnectorFactoryRegistry());
-        DataSyncParameters parameters = parameters(true);
+        JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
+        ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan admitted = planner.admissionPlan(parameters, CONTEXT);
         TaskExecutionIdentity anotherAttempt =
                 new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-456");
@@ -249,14 +248,16 @@ class DataSyncExecutionTest {
     @Test
     void systemRuntimeOptionsControlGraphParallelismAndSameJobRecovery() {
         Resources resources = new Resources();
-        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
-        RuntimeOptions options = new RuntimeOptions(2, 1, Duration.ofMillis(750), 2);
+        ReadonlyConfig options = runtimeOptions(2, 1, Duration.ofMillis(750), 2);
         PipelineBuilder builder =
                 new PipelineBuilder(resources, factories, options,
                         new ExecutionConfigurationFactory(options, Path.of("target/data-sync"),
-                                new MySqlCdcOptions(512, 64).configuration()));
-        DataSyncParameters parameters = parameters(true);
+                                new Configuration()
+                                        .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, 512)
+                                        .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, 64)));
+        ReadonlyConfig parameters = parameters(true);
 
         var compiled = builder.build(planner.plan(parameters, CONTEXT), CONTEXT);
 
@@ -264,8 +265,8 @@ class DataSyncExecutionTest {
         assertEquals(1, compiled.graph().getSinkNodes().getFirst().getParallelism());
         assertEquals(Duration.ofMillis(750), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         assertEquals(2, compiled.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
-        assertEquals(512, compiled.configuration().get(MySqlCdcOptions.SNAPSHOT_CHUNK_SIZE));
-        assertEquals(64, compiled.configuration().get(MySqlCdcOptions.QUEUE_CAPACITY));
+        assertEquals(512, compiled.configuration().get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE));
+        assertEquals(64, compiled.configuration().get(MySqlCdcSourceOptions.QUEUE_CAPACITY));
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
@@ -274,13 +275,13 @@ class DataSyncExecutionTest {
     @Test
     void refusesChangelogSinkScalingBeforeLoadingConnectionCredentials() {
         Resources resources = new Resources();
-        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
-        RuntimeOptions settings = new RuntimeOptions(2, 2, Duration.ofSeconds(10), 1);
+        ReadonlyConfig settings = runtimeOptions(2, 2, Duration.ofSeconds(10), 1);
         PipelineBuilder builder =
                 new PipelineBuilder(resources, factories, settings,
                         new ExecutionConfigurationFactory(settings, Path.of("target/data-sync")));
-        DataSyncParameters parameters = parameters(true);
+        ReadonlyConfig parameters = parameters(true);
 
         assertThrows(
                 UnsupportedOperationException.class,
@@ -290,21 +291,32 @@ class DataSyncExecutionTest {
     }
 
     private static DataSyncTaskPlugin plugin(RuntimeResources resources, PipelineExecutor executor) {
-        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
         return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
     }
 
-    private static DataSyncParameters parameters(boolean cdc) {
-        var source = cdc
-                ? new MySqlCdcSourceParameters("source", null, null, "orders")
-                : new JdbcSourceParameters("source", null, null, "orders");
-        return new DataSyncParameters(
-                source,
-                List.of(),
-                new JdbcSinkParameters(
-                        "target", null, null, "ods_orders", cdc ? DataSyncWriteMode.UPSERT : DataSyncWriteMode.APPEND));
+    private static ReadonlyConfig parameters(boolean cdc) {
+        String type = cdc ? "MYSQL_CDC" : "JDBC";
+        String writeMode = cdc ? "UPSERT" : "APPEND";
+        return ConfigParser.parseJson("""
+                {
+                  "source": {"type":"%s","datasourceId":"source","table":"orders"},
+                  "transform": [],
+                  "sink": {"type":"JDBC","datasourceId":"target","table":"ods_orders","writeMode":"%s"}
+                }
+                """.formatted(type, writeMode));
+    }
+
+    private static ReadonlyConfig runtimeOptions(
+            int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
+        return new Configuration()
+                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
+                .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(JobOptions.CHECKPOINT_INTERVAL, checkpointInterval)
+                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .toReadonlyConfig();
     }
 
     private static PipelineExecutor finishedExecutor(AtomicInteger submissions) {

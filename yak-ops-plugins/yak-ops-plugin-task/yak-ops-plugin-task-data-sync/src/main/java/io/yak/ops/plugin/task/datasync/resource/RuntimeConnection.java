@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.task.datasync.resource;
 
+import io.yak.ops.connector.jdbc.JdbcConnectorResource;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import java.util.Objects;
 
@@ -75,6 +76,11 @@ public final class RuntimeConnection {
 
     public boolean tunneled() {
         return tunneled;
+    }
+
+    /** Builds the trusted Connector resource without exposing credentials to Task definitions. */
+    public JdbcConnectorResource connectorResource() {
+        return new JdbcConnectorResource(provider, jdbcUrl, datasourceType, username, password, host, port, tunneled);
     }
 
     @Override

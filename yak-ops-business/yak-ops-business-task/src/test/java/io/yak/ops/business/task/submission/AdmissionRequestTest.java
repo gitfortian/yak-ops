@@ -9,7 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import io.yak.ops.common.enums.task.TaskTriggerType;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
@@ -22,7 +22,7 @@ class AdmissionRequestTest {
     void preservesAdmittedInputsAndExecutablePluginIdentity() {
         TaskExecutionIdentity identity =
                 new TaskExecutionIdentity("workspace", "definition", 2, "instance", "attempt");
-        TaskParameters parameters = mock(TaskParameters.class);
+        ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
         ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
         TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(), "resource-revision");
 
@@ -47,7 +47,7 @@ class AdmissionRequestTest {
     @Test
     void diagnosticsNeverInvokePluginOrRenderSubmissionInputs() {
         ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
-        TaskParameters parameters = mock(TaskParameters.class);
+        ReadonlyConfig parameters = mock(ReadonlyConfig.class);
         AdmissionRequest request = new AdmissionRequest(
                 new TaskExecutionIdentity("workspace", "definition", 2, "instance", "attempt"),
                 TaskTriggerType.WORKFLOW,

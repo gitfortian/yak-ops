@@ -54,6 +54,16 @@ public final class OptionRule {
 
         private Builder() {}
 
+        /** Includes the complete rules declared by another component. */
+        public Builder include(OptionRule other) {
+            Objects.requireNonNull(other, "other");
+            optionalOptions.addAll(other.getOptionalOptions());
+            requiredOptions.addAll(other.getRequiredOptions());
+            valueConstraints.addAll(other.getValueConstraints());
+            conditionRules.addAll(other.getConditionRules());
+            return this;
+        }
+
         public Builder required(Option<?>... options) {
             requiredOptions.add(new RequiredOption(RequiredOption.Kind.REQUIRED, Arrays.asList(options), null));
             return this;

@@ -10,7 +10,9 @@ import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcOptions;
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import java.nio.file.Path;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -27,7 +29,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void boundedSourceRunsWithoutPeriodicCheckpointsOrAutomaticRestarts() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(RuntimeOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
         var configuration = factory.create(FIRST, Boundedness.BOUNDED);
 
         assertEquals(RuntimeExecutionMode.BATCH, configuration.get(ExecutionOptions.RUNTIME_MODE));
@@ -41,8 +43,10 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void continuousSourceUsesCheckpointGatedSameJobRestartsAndTypedCdcOptions() {
-        RuntimeOptions options = new RuntimeOptions(2, 1, Duration.ofMillis(500), 3);
-        var cdc = new MySqlCdcOptions(512, 64).configuration();
+        ReadonlyConfig options = runtimeOptions(2, 1, Duration.ofMillis(500), 3);
+        var cdc = new Configuration()
+                .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, 512)
+                .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, 64);
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(options, stateRoot, cdc);
         var configuration = factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED);
 
@@ -51,15 +55,15 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(1, configuration.get(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS));
         assertEquals(3, configuration.get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
         assertEquals(false, configuration.get(CheckpointingOptions.RESTORE_LATEST));
-        assertEquals(512, configuration.get(MySqlCdcOptions.SNAPSHOT_CHUNK_SIZE));
-        assertEquals(64, configuration.get(MySqlCdcOptions.QUEUE_CAPACITY));
-        assertEquals(2, options.sourceParallelism());
-        assertEquals(1, options.sinkParallelism());
+        assertEquals(512, configuration.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE));
+        assertEquals(64, configuration.get(MySqlCdcSourceOptions.QUEUE_CAPACITY));
+        assertEquals(2, options.get(JobOptions.SOURCE_PARALLELISM));
+        assertEquals(1, options.get(JobOptions.SINK_PARALLELISM));
     }
 
     @Test
     void isolatesDifferentInstancesAndRetainsStateDirectoryAcrossInternalAttempts() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(RuntimeOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
         TaskExecutionIdentity sameInstance =
                 new TaskExecutionIdentity("ws", "definition", 1, "instance-100", "attempt-2");
         TaskExecutionIdentity nextInstance =
@@ -80,7 +84,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void rejectsUnsafeInstanceIdentifiers() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(RuntimeOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
         TaskExecutionIdentity unsafe =
                 new TaskExecutionIdentity("ws", "definition", 1, "../outside", "attempt");
 
@@ -89,12 +93,24 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void rejectsInvalidSystemOwnedAndConnectorSettings() {
-        assertThrows(IllegalArgumentException.class, () -> new RuntimeOptions(0, 1, Duration.ofSeconds(10), 1));
-        assertThrows(IllegalArgumentException.class, () -> new RuntimeOptions(1, 17, Duration.ofSeconds(10), 1));
-        assertThrows(IllegalArgumentException.class, () -> new RuntimeOptions(1, 1, Duration.ZERO, 1));
-        assertThrows(IllegalArgumentException.class, () -> new RuntimeOptions(1, 1, Duration.ofSeconds(10), -1));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlCdcOptions(0, 256));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlCdcOptions(1024, 10001));
-        assertTrue(RuntimeOptions.defaults().maxRestarts() > 0);
+        assertThrows(IllegalArgumentException.class,
+                () -> new ExecutionConfigurationFactory(runtimeOptions(0, 1, Duration.ofSeconds(10), 1), stateRoot));
+        assertThrows(IllegalArgumentException.class,
+                () -> new ExecutionConfigurationFactory(runtimeOptions(1, 17, Duration.ofSeconds(10), 1), stateRoot));
+        assertThrows(IllegalArgumentException.class,
+                () -> new ExecutionConfigurationFactory(runtimeOptions(1, 1, Duration.ZERO, 1), stateRoot));
+        assertThrows(IllegalArgumentException.class,
+                () -> new ExecutionConfigurationFactory(runtimeOptions(1, 1, Duration.ofSeconds(10), -1), stateRoot));
+        assertTrue(JobOptions.defaults().get(JobOptions.MAX_RESTARTS) > 0);
+    }
+
+    private static ReadonlyConfig runtimeOptions(
+            int sourceParallelism, int sinkParallelism, Duration interval, int maxRestarts) {
+        return new Configuration()
+                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
+                .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(JobOptions.CHECKPOINT_INTERVAL, interval)
+                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .toReadonlyConfig();
     }
 }

@@ -10,10 +10,14 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.plugin.task.datasync.config.JobConfig;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
@@ -26,8 +30,6 @@ import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import java.nio.file.Path;
 import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
-import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -50,14 +52,14 @@ class DataSyncTaskPluginContractTest {
 
     @Test
     void parsesJDBCAndMySqlCdcWithoutAddingExecutionState() {
-        DataSyncParameters jdbc = (DataSyncParameters) registry.get("DATA_SYNC").parse(offlineJson());
-        DataSyncParameters cdc = (DataSyncParameters) registry.get("DATA_SYNC").parse(realtimeJson());
-        assertInstanceOf(JdbcSourceParameters.class, jdbc.source());
-        assertInstanceOf(MySqlCdcSourceParameters.class, cdc.source());
-        assertEquals("JDBC", JSONUtils.readTree(JSONUtils.toJson(jdbc)).path("source").path("type").asText());
-        assertEquals("MYSQL_CDC", JSONUtils.readTree(JSONUtils.toJson(cdc)).path("source").path("type").asText());
-        assertEquals(3, JSONUtils.readTree(JSONUtils.toJson(jdbc)).size());
-        assertEquals(jdbc, registry.get("DATA_SYNC").parse(JSONUtils.toJson(jdbc)));
+        ReadonlyConfig jdbc = (ReadonlyConfig) registry.get("DATA_SYNC").parse(offlineJson());
+        ReadonlyConfig cdc = (ReadonlyConfig) registry.get("DATA_SYNC").parse(realtimeJson());
+        assertEquals("JDBC", JobConfig.from(jdbc).source().get(JobOptions.TYPE));
+        assertEquals("MYSQL_CDC", JobConfig.from(cdc).source().get(JobOptions.TYPE));
+        assertEquals("JDBC", JSONUtils.readTree(ConfigParser.toJson(jdbc)).path("source").path("type").asText());
+        assertEquals("MYSQL_CDC", JSONUtils.readTree(ConfigParser.toJson(cdc)).path("source").path("type").asText());
+        assertEquals(3, JSONUtils.readTree(ConfigParser.toJson(jdbc)).size());
+        assertEquals(jdbc, registry.get("DATA_SYNC").parse(ConfigParser.toJson(jdbc)));
     }
 
     @Test
@@ -85,19 +87,43 @@ class DataSyncTaskPluginContractTest {
     }
 
     @Test
+    void draftValidationChecksAuthorizedReferencesWithoutReadingTableSchemas() {
+        TaskPlugin plugin = registry.get("DATA_SYNC");
+        ReadonlyConfig parameters = plugin.parse(realtimeJson());
+        TaskValidationContext context = new TaskValidationContext() {
+            @Override
+            public DataSourceInfo dataSource(String id) {
+                return "source".equals(id)
+                        ? new DataSourceInfo("MYSQL", "app", null)
+                        : new DataSourceInfo("POSTGRE_SQL", null, "ods");
+            }
+
+            @Override
+            public TableSchema tableSchema(String datasourceId, TableId tableId) {
+                throw new AssertionError("Draft validation must not request external table metadata");
+            }
+        };
+
+        plugin.validateReferences(parameters, context);
+
+        assertEquals(null, JobConfig.from(parameters).source().get(JobOptions.DATABASE));
+        assertEquals(null, JobConfig.from(parameters).sink().get(JobOptions.SCHEMA));
+    }
+
+    @Test
     void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
         Metadata context = new Metadata();
-        DataSyncParameters parameters =
-                (DataSyncParameters) parseAndValidate(realtimeJson(), context);
-        assertInstanceOf(MySqlCdcSourceParameters.class, parameters.source());
-        assertEquals(null, parameters.source().database());
-        assertEquals(null, parameters.sink().schema());
+        ReadonlyConfig parameters =
+                (ReadonlyConfig) parseAndValidate(realtimeJson(), context);
+        assertEquals("MYSQL_CDC", JobConfig.from(parameters).source().get(JobOptions.TYPE));
+        assertEquals(null, JobConfig.from(parameters).source().get(JobOptions.DATABASE));
+        assertEquals(null, JobConfig.from(parameters).sink().get(JobOptions.SCHEMA));
         assertEquals("app", context.lastSourceTable.catalog());
         assertEquals("ods", context.lastTargetTable.schema());
 
-        DataSyncParameters bounded =
-                (DataSyncParameters) parseAndValidate(offlineJson(), context);
-        assertInstanceOf(JdbcSourceParameters.class, bounded.source());
+        ReadonlyConfig bounded =
+                (ReadonlyConfig) parseAndValidate(offlineJson(), context);
+        assertEquals("JDBC", JobConfig.from(bounded).source().get(JobOptions.TYPE));
     }
 
     @Test
@@ -145,18 +171,26 @@ class DataSyncTaskPluginContractTest {
             }
 
             @Override
-            public TaskParameters parse(String content) {
-                parses.incrementAndGet();
-                return new TaskParameters() {};
+            public OptionRule optionRule() {
+                return OptionRule.builder().build();
             }
 
             @Override
-            public void validate(TaskParameters parameters, TaskValidationContext context) {
+            public ReadonlyConfig parse(String content) {
+                parses.incrementAndGet();
+                return ReadonlyConfig.fromMap(java.util.Map.of());
+            }
+
+            @Override
+            public void validateReferences(ReadonlyConfig parameters, TaskValidationContext context) {}
+
+            @Override
+            public void validate(ReadonlyConfig parameters, TaskValidationContext context) {
                 validations.incrementAndGet();
             }
         };
         TaskPlugin registered = new TaskPluginRegistry(List.of(plugin)).get("TEST");
-        TaskParameters parameters = registered.parse("{}");
+        ReadonlyConfig parameters = registered.parse("{}");
         registered.validate(parameters, new Metadata());
         assertEquals(1, parses.get());
         assertEquals(1, validations.get());
@@ -175,15 +209,15 @@ class DataSyncTaskPluginContractTest {
             }
         };
         PipelineExecutor executor = new EmbeddedPipelineExecutor();
-        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(unsupported, factories);
         PipelineBuilder builder = new PipelineBuilder(unsupported, factories, Path.of("test-state"));
         return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
     }
 
-    private TaskParameters parseAndValidate(String json, TaskValidationContext context) {
+    private ReadonlyConfig parseAndValidate(String json, TaskValidationContext context) {
         TaskPlugin plugin = registry.get("DATA_SYNC");
-        TaskParameters parameters = plugin.parse(json);
+        ReadonlyConfig parameters = plugin.parse(json);
         plugin.validate(parameters, context);
         return parameters;
     }

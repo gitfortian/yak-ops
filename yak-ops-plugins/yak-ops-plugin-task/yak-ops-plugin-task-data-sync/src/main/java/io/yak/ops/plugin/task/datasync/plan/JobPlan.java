@@ -1,9 +1,8 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
-import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
-import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.util.Objects;
 
 /**
@@ -20,8 +19,8 @@ import java.util.Objects;
  * @param admissionPlan exclusive target claim and resource binding fingerprint
  */
 public record JobPlan(
-        SourceParameters sourceParameters,
-        SinkParameters sinkParameters,
+        ReadonlyConfig sourceParameters,
+        ReadonlyConfig sinkParameters,
         RuntimeTable source,
         RuntimeTable target,
         TaskAdmissionPlan admissionPlan) {

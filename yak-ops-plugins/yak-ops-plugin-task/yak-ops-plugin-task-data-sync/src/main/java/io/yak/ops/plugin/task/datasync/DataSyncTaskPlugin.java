@@ -1,34 +1,35 @@
 package io.yak.ops.plugin.task.datasync;
 
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.config.DefinitionParser;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
+import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
-/** Defines DATA_SYNC parameters and delegates planning and physical execution to dedicated components. */
+/** Owns DATA_SYNC Task definition rules and delegates physical planning and execution. */
 public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
 
     public static final String TYPE = "DATA_SYNC";
 
     private final JobPlanner planner;
     private final DataSyncTaskExecutor executor;
-    private final ConnectorFactoryRegistry factories;
-    private final DefinitionParser parser;
+    private final FactoryUtil factories;
 
-    public DataSyncTaskPlugin(JobPlanner planner, DataSyncTaskExecutor executor, ConnectorFactoryRegistry factories) {
+    public DataSyncTaskPlugin(JobPlanner planner, DataSyncTaskExecutor executor, FactoryUtil factories) {
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.factories = Objects.requireNonNull(factories, "factories");
-        this.parser = new DefinitionParser(factories);
     }
 
     @Override
@@ -42,36 +43,38 @@ public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
     }
 
     @Override
-    public TaskParameters parse(String content) {
-        DataSyncParameters parameters;
+    public OptionRule optionRule() {
+        return JobOptions.PIPELINE_RULE;
+    }
+
+    @Override
+    public ReadonlyConfig parse(String content) {
         try {
-            parameters = parser.parse(content);
-        } catch (IllegalArgumentException exception) {
-            throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON");
+            ReadonlyConfig parsed = ConfigParser.parseJson(content);
+            return JobConfigValidator.validateConfig(parsed, factories).parameters();
+        } catch (RuntimeException failure) {
+            throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON", failure);
         }
-        DefinitionValidator.validateParameters(parameters, factories);
-        return parameters;
     }
 
     @Override
-    public void validate(TaskParameters parameters, TaskValidationContext context) {
-        if (!(parameters instanceof DataSyncParameters pipeline)) {
-            throw new TaskPluginException("Invalid DATA_SYNC parameter type");
-        }
-        DefinitionValidator.validateResources(pipeline, context, factories);
+    public void validateReferences(ReadonlyConfig parameters, TaskValidationContext context) {
+        JobConfigValidator.validateReferences(parameters, context, factories);
     }
 
     @Override
-    public TaskAdmissionPlan plan(TaskParameters parameters, TaskExecutionIdentity context) {
-        if (!(parameters instanceof DataSyncParameters pipeline)) {
-            throw new TaskPluginException("Invalid DATA_SYNC parameter type");
-        }
-        return planner.admissionPlan(pipeline, context);
+    public void validate(ReadonlyConfig parameters, TaskValidationContext context) {
+        JobConfigValidator.validateResources(parameters, context, factories);
+    }
+
+    @Override
+    public TaskAdmissionPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
+        return planner.admissionPlan(parameters, context);
     }
 
     @Override
     public CompletionStage<TaskHandle> start(
-            TaskParameters parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context) {
+            ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context) {
         return executor.start(parameters, plan, context);
     }
 }

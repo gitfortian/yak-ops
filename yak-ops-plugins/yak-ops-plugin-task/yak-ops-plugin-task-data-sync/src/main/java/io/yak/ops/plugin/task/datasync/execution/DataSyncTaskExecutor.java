@@ -1,12 +1,11 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.core.execution.PipelineExecutor;
-import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.DataSyncParameters;
 import io.yak.ops.plugin.task.datasync.pipeline.CompiledPipeline;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
@@ -37,13 +36,10 @@ public final class DataSyncTaskExecutor {
      * @return asynchronous execution handle or pre-submission rejection
      */
     public CompletionStage<TaskHandle> start(
-            TaskParameters parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity) {
+            ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity) {
         CompiledPipeline pipeline;
         try {
-            if (!(parameters instanceof DataSyncParameters definition)) {
-                throw new IllegalArgumentException("Invalid DATA_SYNC parameter type");
-            }
-            JobPlan prepared = planner.plan(definition, identity);
+            JobPlan prepared = planner.plan(parameters, identity);
             if (!plan.equals(prepared.admissionPlan())) {
                 throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
             }

@@ -1,7 +1,7 @@
 package io.yak.ops.business.task.submission;
 
 import io.yak.ops.common.enums.task.TaskTriggerType;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
@@ -20,7 +20,7 @@ public final class AdmissionRequest {
     private final String requestId;
     private final String requestFingerprint;
     private final String operatorId;
-    private final TaskParameters parameters;
+    private final ReadonlyConfig parameters;
     private final TaskAdmissionPlan plan;
     private final ExecutableTaskPlugin plugin;
 
@@ -42,7 +42,7 @@ public final class AdmissionRequest {
             String requestId,
             String requestFingerprint,
             String operatorId,
-            TaskParameters parameters,
+            ReadonlyConfig parameters,
             TaskAdmissionPlan plan,
             ExecutableTaskPlugin plugin) {
         this.identity = identity;
@@ -81,7 +81,7 @@ public final class AdmissionRequest {
     }
 
     /** Returns the validated Task parameters. */
-    public TaskParameters parameters() {
+    public ReadonlyConfig parameters() {
         return parameters;
     }
 
