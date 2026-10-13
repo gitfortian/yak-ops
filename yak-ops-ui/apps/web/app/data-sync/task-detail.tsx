@@ -17,9 +17,13 @@ import {
   TabsTab,
   toast,
 } from "@yak-ops/yak-ui";
-import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Copy, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+
+import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
+import { getDataSource, type DataSourceRecord } from "@/service/datasource";
+import { getUsersByIds } from "@/service/user";
 
 import {
   cancelDataSyncInstance,
@@ -37,7 +41,9 @@ import { canCancelTaskInstance } from "@/service/data-sync/execution";
 import {
   DataSyncExecutionConfigContent,
   DataSyncExecutionDetailContent,
+  dataSyncDurationText,
   dataSyncInstanceStatusMeta,
+  dataSyncWriteModeText,
   dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
@@ -46,6 +52,15 @@ import { DataSyncTaskStatusBadge } from "./task-lifecycle";
 
 const PAGE_SIZE = 20;
 const POLL_MILLIS = 2000;
+
+function BasicInfoField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] items-start gap-2 text-sm">
+      <span className="text-xs leading-5 text-[#98a2b3]">{label}</span>
+      <div className="min-w-0 break-words text-[#344054]">{children}</div>
+    </div>
+  );
+}
 
 const INSTANCE_STATUS_ITEMS: Record<DataSyncInstanceStatus | "ALL", string> = {
   ALL: "全部状态",
@@ -76,10 +91,15 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   const [searchParams, setSearchParams] = useSearchParams();
   const executionId = searchParams.get("executionId");
   const tab = searchParams.get("tab");
-  const activeTab = tab === "config" || tab === "log" ? tab : "status";
+  const activeTab = tab === "log" ? "log" : "status";
 
   const [task, setTask] = useState<DataSyncTaskRecord>();
   const [taskLoading, setTaskLoading] = useState(true);
+  const [dataSources, setDataSources] = useState<{
+    source?: DataSourceRecord;
+    target?: DataSourceRecord;
+  }>({});
+  const [updatedBy, setUpdatedBy] = useState("-");
   const [instances, setInstances] = useState<DataSyncInstanceRecord[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(true);
   const [status, setStatus] = useState<DataSyncInstanceStatus | "ALL">("ALL");
@@ -140,6 +160,46 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
       disposed = true;
     };
   }, [basePath, navigate, syncType, taskId]);
+
+  useEffect(() => {
+    const sourceId = task?.sourceDataSourceId;
+    const targetId = task?.targetDataSourceId;
+    if (!sourceId || !targetId) {
+      setDataSources({});
+      return;
+    }
+    let disposed = false;
+    setDataSources({});
+    void Promise.all([
+      getDataSource(sourceId).catch(() => undefined),
+      getDataSource(targetId).catch(() => undefined),
+    ]).then(([source, target]) => {
+      if (!disposed) setDataSources({ source, target });
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [task?.sourceDataSourceId, task?.targetDataSourceId]);
+
+  useEffect(() => {
+    const userId = task?.updateBy;
+    if (!userId || userId === "system") {
+      setUpdatedBy(userId === "system" ? "SYSTEM" : "-");
+      return;
+    }
+    let disposed = false;
+    setUpdatedBy("-");
+    void getUsersByIds([userId])
+      .then((users) => {
+        if (!disposed) setUpdatedBy(users[0]?.realName || users[0]?.userName || "-");
+      })
+      .catch(() => {
+        if (!disposed) setUpdatedBy("-");
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [task?.updateBy]);
 
   useEffect(() => {
     void loadInstances();
@@ -295,6 +355,16 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     }
   };
 
+  const copyTaskId = async () => {
+    if (!task) return;
+    try {
+      await navigator.clipboard.writeText(task.id);
+      toast.success("已复制任务 ID");
+    } catch {
+      toast.error("复制失败");
+    }
+  };
+
   if (taskLoading || !task) {
     return (
       <div className="flex h-full items-center justify-center bg-[#f6f6f6]">
@@ -383,11 +453,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                         {instance.startTime || instance.createTime || "-"}
                       </span>
                     </div>
-                    <div className="mt-1 truncate text-xs text-[#667085]" title={instance.id}>
-                      {instance.id}
-                    </div>
-                    <div className="mt-1 text-xs text-[#98a2b3]">
-                      v{instance.taskVersion} · {dataSyncTriggerText(instance.triggerType)}
+                    <div className="mt-2 truncate text-xs text-[#667085]">
+                      {dataSyncTriggerText(instance.triggerType)} · v{instance.taskVersion} ·{" "}
+                      {dataSyncDurationText(instance)}
                     </div>
                   </button>
                 );
@@ -437,7 +505,11 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 <Button size="small" loading={running} onClick={() => void run()}>
                   运行
                 </Button>
-              ) : null}
+              ) : (
+                <Button size="small" onClick={() => navigate(basePath + "/" + task.id)}>
+                  编辑
+                </Button>
+              )}
               <Button size="small" onClick={() => navigate(basePath)}>
                 返回任务列表
               </Button>
@@ -447,40 +519,53 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 max-md:px-4">
           <div className="space-y-4">
-            <SectionCard title="任务配置">
-              <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-1">
-                <div className="min-w-0">
-                  <div className="text-xs text-[#98a2b3]">版本</div>
-                  <div className="mt-1 text-sm text-[#344054]">v{task.definitionVersion}</div>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-[#98a2b3]">来源</div>
-                  <div className="mt-1 break-all text-sm text-[#344054]">
-                    {task.sourceDataSourceId} · {task.sourceTable}
+            <SectionCard title="基本信息">
+              <div className="grid grid-cols-2 gap-x-10 gap-y-5 max-lg:grid-cols-1">
+                <BasicInfoField label="任务 ID">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate" title={task.id}>{task.id}</span>
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 px-0"
+                      aria-label="复制任务 ID"
+                      onClick={() => void copyTaskId()}
+                    >
+                      <Copy size={13} />
+                    </Button>
                   </div>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-[#98a2b3]">去向</div>
-                  <div className="mt-1 break-all text-sm text-[#344054]">
-                    {task.targetDataSourceId} · {task.targetTable}
+                </BasicInfoField>
+                <BasicInfoField label="修改人">{updatedBy}</BasicInfoField>
+                <BasicInfoField label="数据源">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <DatabaseIcons dbType={dataSources.source?.dbType} width="16px" height="16px" />
+                    <span>{dataSources.source?.name || "-"}</span>
+                    <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" />
+                    <DatabaseIcons dbType={dataSources.target?.dbType} width="16px" height="16px" />
+                    <span>{dataSources.target?.name || "-"}</span>
                   </div>
-                </div>
+                </BasicInfoField>
+                <BasicInfoField label="同步方案">{realtime ? "实时同步" : "离线同步"}</BasicInfoField>
+                <BasicInfoField label="创建时间">{task.createTime || "-"}</BasicInfoField>
+                <BasicInfoField label="更新时间">{task.updateTime || "-"}</BasicInfoField>
+                <BasicInfoField label="写入方式">{dataSyncWriteModeText(task.writeMode)}</BasicInfoField>
+                <BasicInfoField label="当前版本">v{task.definitionVersion}</BasicInfoField>
+                <BasicInfoField label="调试模式">{task.debug ? "开启" : "关闭"}</BasicInfoField>
+                {task.remark ? <BasicInfoField label="备注">{task.remark}</BasicInfoField> : null}
               </div>
             </SectionCard>
 
             <Tabs value={activeTab} onValueChange={changeTab}>
               <TabsList>
-                <TabsTab value="status">执行情况</TabsTab>
-                <TabsTab value="config">配置快照</TabsTab>
-                <TabsTab value="log">执行日志</TabsTab>
+                <TabsTab value="status">执行状态</TabsTab>
+                <TabsTab value="log">运行日志</TabsTab>
               </TabsList>
 
               <TabsPanel value="status" className="pt-4">
                 {selected ? (
                   <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="break-all text-xs text-[#667085]">{selected.id}</span>
-                      {canCancelTaskInstance(selected.status) ? (
+                    {canCancelTaskInstance(selected.status) ? (
+                      <div className="flex justify-end">
                         <Button
                           size="small"
                           variant="danger"
@@ -489,28 +574,36 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                         >
                           停止
                         </Button>
-                      ) : null}
-                    </div>
-                    <DataSyncExecutionDetailContent record={selected} realtime={realtime} />
+                      </div>
+                    ) : null}
+                    <DataSyncExecutionDetailContent
+                      record={selected}
+                      realtime={realtime}
+                      onViewLog={() => changeTab("log")}
+                    />
+                    {selected.definitionSnapshot ? (
+                      <details className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
+                        <summary className="cursor-pointer text-sm font-medium text-[#344054]">
+                          本次运行配置
+                        </summary>
+                        <div className="pt-4">
+                          <DataSyncExecutionConfigContent
+                            record={selected}
+                            realtime={realtime}
+                            sectionCard={false}
+                          />
+                        </div>
+                      </details>
+                    ) : null}
                   </div>
                 ) : selectedLoading ? (
                   <div className="flex min-h-40 items-center justify-center">
                     <Spinner size="medium" label="加载实例详情" />
                   </div>
                 ) : (
-                  <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
-                )}
-              </TabsPanel>
-
-              <TabsPanel value="config" className="pt-4">
-                {selected ? (
-                  <DataSyncExecutionConfigContent record={selected} realtime={realtime} />
-                ) : selectedLoading ? (
-                  <div className="flex min-h-40 items-center justify-center">
-                    <Spinner size="medium" label="加载配置快照" />
+                  <div className="py-12 text-center text-sm text-[#98a2b3]">
+                    {instances.length === 0 ? "暂无执行记录" : "选择左侧执行记录"}
                   </div>
-                ) : (
-                  <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
                 )}
               </TabsPanel>
 
