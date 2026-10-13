@@ -1,12 +1,12 @@
 package io.yak.ops.plugin.database.jdbc.mysql;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
+import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
-import com.google.auto.service.AutoService;
-import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.mysql.enums.MySqlDriverId;
@@ -25,13 +25,13 @@ import java.util.Set;
 @AutoService(DataSourcePlugin.class)
 public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
-
     private static final Option<String> DRIVER_ID = Options.key("driverId")
             .singleChoice(String.class, java.util.List.of("AUTO", "MYSQL_8", "MYSQL_5"))
             .defaultValue("AUTO");
     private static final Option<String> SSL_MODE = Options.key("properties.sslMode")
-            .singleChoice(String.class, java.util.List.of(
-                    "DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"))
+            .singleChoice(
+                    String.class,
+                    java.util.List.of("DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"))
             .noDefaultValue();
     private static final Option<Integer> CONNECT_TIMEOUT =
             Options.key("properties.connectTimeout").intType().noDefaultValue();
@@ -59,8 +59,15 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     @Override
     protected OptionRule providerOptionRule() {
         return OptionRule.builder()
-                .optional(DRIVER_ID, SSL_MODE, USE_UNICODE, USE_SSL, REQUIRE_SSL, PUBLIC_KEY,
-                        AFFECTED_ROWS, LOCAL_TRANSACTIONS)
+                .optional(
+                        DRIVER_ID,
+                        SSL_MODE,
+                        USE_UNICODE,
+                        USE_SSL,
+                        REQUIRE_SSL,
+                        PUBLIC_KEY,
+                        AFFECTED_ROWS,
+                        LOCAL_TRANSACTIONS)
                 .optional(CONNECT_TIMEOUT, Conditions.greaterOrEqual(CONNECT_TIMEOUT, 0))
                 .optional(SOCKET_TIMEOUT, Conditions.greaterOrEqual(SOCKET_TIMEOUT, 0))
                 .optional(CHARACTER_ENCODING, Conditions.notBlank(CHARACTER_ENCODING))
@@ -151,8 +158,12 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     protected Map<String, String> normalizeProperties(Map<String, String> properties) {
         Map<String, String> normalized = canonicalizeProperties(properties, PROPERTY_KEYS);
         for (String key : java.util.List.of(
-                "useUnicode", "useSSL", "requireSSL", "allowPublicKeyRetrieval",
-                "useAffectedRows", "useLocalTransactionState")) {
+                "useUnicode",
+                "useSSL",
+                "requireSSL",
+                "allowPublicKeyRetrieval",
+                "useAffectedRows",
+                "useLocalTransactionState")) {
             String value = normalized.get(key);
             if (value != null) {
                 normalized.put(key, value.trim().toLowerCase(java.util.Locale.ROOT));

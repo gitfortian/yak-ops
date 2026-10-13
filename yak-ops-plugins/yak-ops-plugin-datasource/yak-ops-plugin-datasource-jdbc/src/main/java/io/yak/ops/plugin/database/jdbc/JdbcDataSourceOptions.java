@@ -7,13 +7,19 @@ import java.util.Map;
 /** Canonical JDBC datasource connection options shared by the JDBC providers. */
 public final class JdbcDataSourceOptions {
 
-    public static final Option<String> DB_TYPE = Options.key("dbType").stringType().noDefaultValue();
-    public static final Option<String> JDBC_URL = Options.key("jdbcUrl").stringType().noDefaultValue();
+    public static final Option<String> DB_TYPE =
+            Options.key("dbType").stringType().noDefaultValue();
+    public static final Option<String> JDBC_URL =
+            Options.key("jdbcUrl").stringType().noDefaultValue();
     public static final Option<String> HOST = Options.key("host").stringType().noDefaultValue();
-    public static final Option<String> DATABASE = Options.key("database").stringType().noDefaultValue();
-    public static final Option<String> SCHEMA = Options.key("schema").stringType().noDefaultValue();
-    public static final Option<String> USERNAME = Options.key("username").stringType().noDefaultValue();
-    public static final Option<String> PASSWORD = Options.key("password").stringType().noDefaultValue();
+    public static final Option<String> DATABASE =
+            Options.key("database").stringType().noDefaultValue();
+    public static final Option<String> SCHEMA =
+            Options.key("schema").stringType().noDefaultValue();
+    public static final Option<String> USERNAME =
+            Options.key("username").stringType().noDefaultValue();
+    public static final Option<String> PASSWORD =
+            Options.key("password").stringType().noDefaultValue();
     public static final Option<String> DRIVER_CLASS_NAME =
             Options.key("driverClassName").stringType().noDefaultValue();
     public static final Option<Map<String, String>> PROPERTIES =

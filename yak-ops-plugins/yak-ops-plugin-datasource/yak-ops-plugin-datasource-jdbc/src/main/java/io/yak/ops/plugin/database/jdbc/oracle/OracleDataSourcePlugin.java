@@ -1,11 +1,11 @@
 package io.yak.ops.plugin.database.jdbc.oracle;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
-import com.google.auto.service.AutoService;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.util.List;
@@ -24,7 +24,6 @@ public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
             "oracle.jdbc.readtimeout", "oracle.jdbc.ReadTimeout",
             "defaultrowprefetch", "defaultRowPrefetch",
             "oracle.jdbc.fanenabled", "oracle.jdbc.fanEnabled");
-
 
     private static final Option<Integer> CONNECT_TIMEOUT =
             Options.key("properties.oracle.net.CONNECT_TIMEOUT").intType().noDefaultValue();

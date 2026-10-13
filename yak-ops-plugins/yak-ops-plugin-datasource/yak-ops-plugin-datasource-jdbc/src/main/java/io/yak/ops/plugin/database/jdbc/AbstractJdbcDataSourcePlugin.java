@@ -1,16 +1,5 @@
 package io.yak.ops.plugin.database.jdbc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.configuration.Option;
-import io.yak.ops.configuration.Options;
-import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.configuration.rule.Condition;
-import io.yak.ops.configuration.rule.Conditions;
-import io.yak.ops.configuration.rule.ConfigValidator;
-import io.yak.ops.configuration.rule.Expression;
-import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.configuration.validation.OptionValidationException;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DATABASE;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DB_TYPE;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DRIVER_CLASS_NAME;
@@ -30,10 +19,22 @@ import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.SSH_PRIVATE_
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.SSH_STRICT_HOST_KEY_CHECKING;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.SSH_USERNAME;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.USERNAME;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.SensitiveUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.Condition;
+import io.yak.ops.configuration.rule.Conditions;
+import io.yak.ops.configuration.rule.ConfigValidator;
+import io.yak.ops.configuration.rule.Expression;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.configuration.validation.OptionValidationException;
 import io.yak.ops.plugin.database.jdbc.enums.SshAuthType;
 import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
 import io.yak.ops.plugin.datasource.api.enums.DataSourcePluginOperation;
@@ -85,13 +86,19 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 .required(SSH_USERNAME, Conditions.notBlank(SSH_USERNAME))
                 .conditionalRule(
                         Expression.of(Condition.of(SSH_AUTH_TYPE, "PASSWORD")),
-                        OptionRule.builder().required(SSH_PASSWORD, Conditions.notBlank(SSH_PASSWORD)).build())
+                        OptionRule.builder()
+                                .required(SSH_PASSWORD, Conditions.notBlank(SSH_PASSWORD))
+                                .build())
                 .conditionalRule(
                         Expression.of(Condition.of(SSH_AUTH_TYPE, "PRIVATE_KEY")),
-                        OptionRule.builder().required(SSH_PRIVATE_KEY, Conditions.notBlank(SSH_PRIVATE_KEY)).build())
+                        OptionRule.builder()
+                                .required(SSH_PRIVATE_KEY, Conditions.notBlank(SSH_PRIVATE_KEY))
+                                .build())
                 .conditionalRule(
                         Expression.of(Condition.of(SSH_STRICT_HOST_KEY_CHECKING, true)),
-                        OptionRule.builder().required(SSH_KNOWN_HOSTS, Conditions.notBlank(SSH_KNOWN_HOSTS)).build())
+                        OptionRule.builder()
+                                .required(SSH_KNOWN_HOSTS, Conditions.notBlank(SSH_KNOWN_HOSTS))
+                                .build())
                 .build();
 
         Option<Integer> port = portOption();
@@ -100,10 +107,17 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 .optional(JDBC_URL, Conditions.notBlank(JDBC_URL))
                 .optional(HOST, DATABASE, SCHEMA, PASSWORD, DB_TYPE, DRIVER_CLASS_NAME, PROPERTIES)
                 .optional(port, Conditions.greaterOrEqual(port, 1).and(Conditions.lessOrEqual(port, 65535)))
-                .optional(SSH_ENABLED, SSH_HOST, SSH_USERNAME, SSH_AUTH_TYPE, SSH_PASSWORD, SSH_PRIVATE_KEY,
-                        SSH_PASSPHRASE, SSH_STRICT_HOST_KEY_CHECKING, SSH_KNOWN_HOSTS)
-                .optional(SSH_PORT,
-                        Conditions.greaterOrEqual(SSH_PORT, 1).and(Conditions.lessOrEqual(SSH_PORT, 65535)))
+                .optional(
+                        SSH_ENABLED,
+                        SSH_HOST,
+                        SSH_USERNAME,
+                        SSH_AUTH_TYPE,
+                        SSH_PASSWORD,
+                        SSH_PRIVATE_KEY,
+                        SSH_PASSPHRASE,
+                        SSH_STRICT_HOST_KEY_CHECKING,
+                        SSH_KNOWN_HOSTS)
+                .optional(SSH_PORT, Conditions.greaterOrEqual(SSH_PORT, 1).and(Conditions.lessOrEqual(SSH_PORT, 65535)))
                 .conditionalRule(Expression.of(Condition.of(JDBC_URL, null)), structured)
                 .conditionalRule(Expression.of(Condition.of(SSH_ENABLED, true)), sshEnabled)
                 .include(providerOptionRule())
@@ -168,7 +182,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         }
         values.remove(alias);
     }
-
 
     private static final Set<String> RESERVED_CONNECTION_PROPERTY_KEYS = Set.of(
             "host",
