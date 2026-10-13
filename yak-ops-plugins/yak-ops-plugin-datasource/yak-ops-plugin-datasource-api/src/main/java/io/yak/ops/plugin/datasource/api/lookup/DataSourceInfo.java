@@ -20,7 +20,9 @@ public record DataSourceInfo(String type, String database, String schema) {
         if (bound != null && !bound.isBlank() && selected != null && !selected.isBlank() && !bound.equals(selected)) {
             throw new IllegalArgumentException("Selected namespace differs from datasource binding");
         }
-        if (selected == null || selected.isBlank()) { return bound; }
+        if (selected == null || selected.isBlank()) {
+            return bound;
+        }
         return selected;
     }
 }

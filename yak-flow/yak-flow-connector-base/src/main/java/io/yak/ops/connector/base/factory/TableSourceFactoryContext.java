@@ -22,9 +22,21 @@ public final class TableSourceFactoryContext {
         this.table = Objects.requireNonNull(table, "table");
         this.schema = Objects.requireNonNull(schema, "schema");
     }
-    public ReadonlyConfig options() { return options; }
-    public TableId table() { return table; }
-    public TableSchema schema() { return schema; }
+
+    public ReadonlyConfig options() {
+        return options;
+    }
+
+    public TableId table() {
+        return table;
+    }
+
+    public TableSchema schema() {
+        return schema;
+    }
+
     @Override
-    public String toString() { return "TableSourceFactoryContext{configuration=redacted}"; }
+    public String toString() {
+        return "TableSourceFactoryContext{configuration=redacted}";
+    }
 }

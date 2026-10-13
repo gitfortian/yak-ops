@@ -3,7 +3,6 @@ package io.yak.ops.connector.jdbc.database.connection;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
-import io.yak.ops.connector.jdbc.database.connection.SshAuthType;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 

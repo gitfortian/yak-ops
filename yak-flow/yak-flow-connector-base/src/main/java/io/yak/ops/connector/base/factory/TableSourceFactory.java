@@ -1,6 +1,5 @@
 package io.yak.ops.connector.base.factory;
 
-import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;

@@ -66,7 +66,9 @@ public final class JobOptions {
     /** Returns Connector operation settings without platform routing and datasource references. */
     public static ReadonlyConfig connectorOptions(ReadonlyConfig endpoint) {
         Map<String, Object> values = new java.util.LinkedHashMap<>(endpoint.getSourceMap());
-        for (Option<?> option : List.of(TYPE, DATASOURCE_ID, DATABASE, SCHEMA, TABLE)) { values.remove(option.key()); }
+        for (Option<?> option : List.of(TYPE, DATASOURCE_ID, DATABASE, SCHEMA, TABLE)) {
+            values.remove(option.key());
+        }
         return ReadonlyConfig.fromMap(values);
     }
 

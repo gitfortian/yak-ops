@@ -16,21 +16,40 @@ import java.util.List;
 @AutoService(TableSourceFactory.class)
 public final class JdbcSourceFactory implements TableSourceFactory {
     @Override
-    public String factoryIdentifier() { return "JDBC"; }
+    public String factoryIdentifier() {
+        return "JDBC";
+    }
+
     @Override
-    public OptionRule optionRule() { return OptionRule.builder().build(); }
+    public OptionRule optionRule() {
+        return OptionRule.builder().build();
+    }
+
     @Override
     public OptionRule creationOptionRule() {
-        return OptionRule.builder().include(optionRule()).include(JdbcConnectionOptions.RULE).include(JdbcSourceOptions.RULE).build();
+        return OptionRule.builder()
+                .include(optionRule())
+                .include(JdbcConnectionOptions.RULE)
+                .include(JdbcSourceOptions.RULE)
+                .build();
     }
+
     @Override
-    public Boundedness boundedness() { return Boundedness.BOUNDED; }
+    public Boundedness boundedness() {
+        return Boundedness.BOUNDED;
+    }
+
     @Override
-    public boolean producesChangelog() { return false; }
+    public boolean producesChangelog() {
+        return false;
+    }
+
     @Override
     public Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context) {
         FactoryUtil.validateCreation(context.options(), this);
-        return new JdbcSource(new JdbcConnectionOptions(context.options()), List.of(context.table()),
+        return new JdbcSource(
+                new JdbcConnectionOptions(context.options()),
+                List.of(context.table()),
                 JdbcSourceOptions.configuration(context.options()));
     }
 }

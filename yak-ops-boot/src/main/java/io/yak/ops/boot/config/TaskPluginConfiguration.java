@@ -6,6 +6,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.datasync.DataSyncTaskPlugin;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
@@ -13,7 +14,6 @@ import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -80,7 +80,11 @@ public class TaskPluginConfiguration {
             ReadonlyConfig runtimeOptions,
             ExecutionConfigurationFactory configurationFactory,
             io.yak.ops.configuration.Configuration connectorConfiguration) {
-        return new PipelineBuilder(resources, factories, runtimeOptions, configurationFactory,
+        return new PipelineBuilder(
+                resources,
+                factories,
+                runtimeOptions,
+                configurationFactory,
                 Map.of("MYSQL_CDC", connectorConfiguration.toReadonlyConfig()));
     }
 

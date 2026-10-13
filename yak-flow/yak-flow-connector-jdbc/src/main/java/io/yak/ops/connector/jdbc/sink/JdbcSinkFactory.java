@@ -3,12 +3,12 @@ package io.yak.ops.connector.jdbc.sink;
 import com.google.auto.service.AutoService;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSinkFactory;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
-import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
-import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
+import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.TableSchema;
@@ -31,7 +31,10 @@ public final class JdbcSinkFactory implements TableSinkFactory {
 
     @Override
     public OptionRule creationOptionRule() {
-        return OptionRule.builder().include(optionRule()).include(JdbcConnectionOptions.RULE).build();
+        return OptionRule.builder()
+                .include(optionRule())
+                .include(JdbcConnectionOptions.RULE)
+                .build();
     }
 
     @Override

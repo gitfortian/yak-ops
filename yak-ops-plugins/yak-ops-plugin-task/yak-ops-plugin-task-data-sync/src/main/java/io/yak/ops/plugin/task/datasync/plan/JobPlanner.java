@@ -1,27 +1,27 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /** Resolves authorized DATA_SYNC metadata and constructs the logical Job and admission plans. */
@@ -91,7 +91,8 @@ public final class JobPlanner {
                 + encodeSchema(to.schema());
         List<ExecutionResource> claims = new ArrayList<>();
         claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
-        Map<String, Object> prepared = new LinkedHashMap<>(JobOptions.connectorOptions(source).getSourceMap());
+        Map<String, Object> prepared =
+                new LinkedHashMap<>(JobOptions.connectorOptions(source).getSourceMap());
         if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
             String instanceId = context.instanceId();
             prepared.put(MySqlCdcSourceOptions.SERVER_ID.key(), MySqlCdcReplicationIdentity.serverId(instanceId));

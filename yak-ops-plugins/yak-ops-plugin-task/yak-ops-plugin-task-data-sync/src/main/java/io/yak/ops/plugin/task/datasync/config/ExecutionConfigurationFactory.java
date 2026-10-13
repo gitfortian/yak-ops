@@ -28,7 +28,8 @@ public final class ExecutionConfigurationFactory {
     public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot) {
         this.options = Objects.requireNonNull(options, "options");
         ConfigValidator.of(options).validate(JobOptions.RUNTIME_RULE);
-        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.stateRoot =
+                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
 
     /**

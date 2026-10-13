@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.database.jdbc;
 
-import io.yak.ops.connector.jdbc.database.connection.SshTunnelConfig;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DATABASE;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DB_TYPE;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.DRIVER_CLASS_NAME;
@@ -21,8 +20,6 @@ import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.SSH_STRICT_H
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.SSH_USERNAME;
 import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.USERNAME;
 
-import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
-import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,7 +35,10 @@ import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.Expression;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.configuration.validation.OptionValidationException;
+import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.SshAuthType;
+import io.yak.ops.connector.jdbc.database.connection.SshTunnelConfig;
 import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
 import io.yak.ops.plugin.datasource.api.enums.DataSourcePluginOperation;
 import io.yak.ops.plugin.datasource.api.exception.DataSourcePluginException;
@@ -360,7 +360,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
     protected Connection openJdbcConnection(JdbcConnectionProperties connection, int timeoutSeconds) throws Exception {
         return new DefaultJdbcConnectionProvider(
-                new JdbcConnectionOptions(connectionOptions(connection, timeoutSeconds)))
+                        new JdbcConnectionOptions(connectionOptions(connection, timeoutSeconds)))
                 .getConnection();
     }
 
@@ -390,9 +390,10 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             values.put(JdbcConnectionOptions.SSH_PASSPHRASE.key(), ssh.passphrase());
             values.put(JdbcConnectionOptions.SSH_STRICT_HOST_KEYS.key(), ssh.strictHostKeyChecking());
             values.put(JdbcConnectionOptions.SSH_KNOWN_HOSTS.key(), ssh.knownHosts());
-            String loopbackUrl = buildJdbcUrl("127.0.0.1", 0, jdbc.database(), JSONUtils.readTree(jdbc.normalizedJson()));
-            values.put(JdbcConnectionOptions.SSH_JDBC_URL.key(),
-                    loopbackUrl.replace("127.0.0.1:0", "127.0.0.1:{port}"));
+            String loopbackUrl =
+                    buildJdbcUrl("127.0.0.1", 0, jdbc.database(), JSONUtils.readTree(jdbc.normalizedJson()));
+            values.put(
+                    JdbcConnectionOptions.SSH_JDBC_URL.key(), loopbackUrl.replace("127.0.0.1:0", "127.0.0.1:{port}"));
         }
         return ReadonlyConfig.fromMap(values);
     }

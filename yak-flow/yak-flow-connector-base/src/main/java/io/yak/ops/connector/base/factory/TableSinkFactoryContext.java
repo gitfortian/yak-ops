@@ -21,19 +21,41 @@ public final class TableSinkFactoryContext {
      * @param targetTable destination table identity
      * @param targetSchema destination table schema
      */
-    public TableSinkFactoryContext(ReadonlyConfig options, TableId sourceTable, TableSchema sourceSchema,
-            TableId targetTable, TableSchema targetSchema) {
+    public TableSinkFactoryContext(
+            ReadonlyConfig options,
+            TableId sourceTable,
+            TableSchema sourceSchema,
+            TableId targetTable,
+            TableSchema targetSchema) {
         this.options = Objects.requireNonNull(options, "options");
         this.sourceTable = Objects.requireNonNull(sourceTable, "sourceTable");
         this.sourceSchema = Objects.requireNonNull(sourceSchema, "sourceSchema");
         this.targetTable = Objects.requireNonNull(targetTable, "targetTable");
         this.targetSchema = Objects.requireNonNull(targetSchema, "targetSchema");
     }
-    public ReadonlyConfig options() { return options; }
-    public TableId sourceTable() { return sourceTable; }
-    public TableSchema sourceSchema() { return sourceSchema; }
-    public TableId targetTable() { return targetTable; }
-    public TableSchema targetSchema() { return targetSchema; }
+
+    public ReadonlyConfig options() {
+        return options;
+    }
+
+    public TableId sourceTable() {
+        return sourceTable;
+    }
+
+    public TableSchema sourceSchema() {
+        return sourceSchema;
+    }
+
+    public TableId targetTable() {
+        return targetTable;
+    }
+
+    public TableSchema targetSchema() {
+        return targetSchema;
+    }
+
     @Override
-    public String toString() { return "TableSinkFactoryContext{configuration=redacted}"; }
+    public String toString() {
+        return "TableSinkFactoryContext{configuration=redacted}";
+    }
 }

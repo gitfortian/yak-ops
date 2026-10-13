@@ -102,7 +102,8 @@ public final class JdbcDriverLoader {
                     return driver;
                 }
                 classLoader.close();
-                throw new IllegalStateException("JDBC driver class does not implement java.sql.Driver: " + driverClassName);
+                throw new IllegalStateException(
+                        "JDBC driver class does not implement java.sql.Driver: " + driverClassName);
             } catch (Exception exception) {
                 classLoader.close();
                 throw exception;
@@ -110,7 +111,8 @@ public final class JdbcDriverLoader {
         } catch (RuntimeException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new IllegalStateException("Unable to load JDBC driver: " + driverClassName + ", directory: " + directory, exception);
+            throw new IllegalStateException(
+                    "Unable to load JDBC driver: " + driverClassName + ", directory: " + directory, exception);
         }
     }
 

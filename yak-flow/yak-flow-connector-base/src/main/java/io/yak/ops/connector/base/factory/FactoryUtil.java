@@ -4,8 +4,8 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.spi.SpiRegistry;
-import java.util.Collections;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -25,19 +25,27 @@ public final class FactoryUtil {
     }
 
     public TableSourceFactory source(String identifier) {
-        try { return sources.get(identifier); }
-        catch (NoSuchElementException failure) { throw new IllegalArgumentException("Unknown Source factory identifier", failure); }
+        try {
+            return sources.get(identifier);
+        } catch (NoSuchElementException failure) {
+            throw new IllegalArgumentException("Unknown Source factory identifier", failure);
+        }
     }
 
     public TableSinkFactory sink(String identifier) {
-        try { return sinks.get(identifier); }
-        catch (NoSuchElementException failure) { throw new IllegalArgumentException("Unknown Sink factory identifier", failure); }
+        try {
+            return sinks.get(identifier);
+        } catch (NoSuchElementException failure) {
+            throw new IllegalArgumentException("Unknown Sink factory identifier", failure);
+        }
     }
 
     /** Validates caller-supplied operation options before connection settings are resolved. */
     public static void validate(ReadonlyConfig config, Factory factory, OptionRule common) {
-        OptionRule rule = OptionRule.builder().include(Objects.requireNonNull(common, "common"))
-                .include(factory.optionRule()).build();
+        OptionRule rule = OptionRule.builder()
+                .include(Objects.requireNonNull(common, "common"))
+                .include(factory.optionRule())
+                .build();
         validate(config, rule, factory.factoryIdentifier());
     }
 

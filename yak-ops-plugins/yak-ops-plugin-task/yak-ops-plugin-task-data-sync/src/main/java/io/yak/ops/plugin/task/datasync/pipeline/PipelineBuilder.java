@@ -12,14 +12,14 @@ import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
 import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
-import java.util.Map;
-import java.util.LinkedHashMap;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /** Compiles an authorized JobPlan to a physical single-table YakFlow pipeline. */
@@ -41,14 +41,21 @@ public final class PipelineBuilder {
     }
 
     /** Constructs a builder using Connector defaults. */
-    public PipelineBuilder(DataSourceLookupService resources, FactoryUtil factories, ReadonlyConfig options,
+    public PipelineBuilder(
+            DataSourceLookupService resources,
+            FactoryUtil factories,
+            ReadonlyConfig options,
             ExecutionConfigurationFactory configurationFactory) {
         this(resources, factories, options, configurationFactory, Map.of());
     }
 
     /** Constructs a builder with per-Connector physical settings, separate from engine settings. */
-    public PipelineBuilder(DataSourceLookupService resources, FactoryUtil factories, ReadonlyConfig options,
-            ExecutionConfigurationFactory configurationFactory, Map<String, ReadonlyConfig> connectorOptions) {
+    public PipelineBuilder(
+            DataSourceLookupService resources,
+            FactoryUtil factories,
+            ReadonlyConfig options,
+            ExecutionConfigurationFactory configurationFactory,
+            Map<String, ReadonlyConfig> connectorOptions) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
         this.options = Objects.requireNonNull(options, "options");
@@ -77,10 +84,14 @@ public final class PipelineBuilder {
         Configuration configuration = configurationFactory.create(identity, sourceFactory.boundedness());
         String sourceId = plan.sourceParameters().get(JobOptions.DATASOURCE_ID);
         String sinkId = plan.sinkParameters().get(JobOptions.DATASOURCE_ID);
-        ReadonlyConfig sourceConnection = resources.connectionOptions(identity.workspaceId(), sourceId, plan.source().revision());
-        ReadonlyConfig targetConnection = resources.connectionOptions(identity.workspaceId(), sinkId, plan.target().revision());
-        ReadonlyConfig sourceOptions = creationOptions(sourceFactory.factoryIdentifier(), plan.sourceOptions(), sourceConnection);
-        ReadonlyConfig sinkOptions = creationOptions(sinkFactory.factoryIdentifier(), JobOptions.connectorOptions(plan.sinkParameters()), targetConnection);
+        ReadonlyConfig sourceConnection = resources.connectionOptions(
+                identity.workspaceId(), sourceId, plan.source().revision());
+        ReadonlyConfig targetConnection = resources.connectionOptions(
+                identity.workspaceId(), sinkId, plan.target().revision());
+        ReadonlyConfig sourceOptions =
+                creationOptions(sourceFactory.factoryIdentifier(), plan.sourceOptions(), sourceConnection);
+        ReadonlyConfig sinkOptions = creationOptions(
+                sinkFactory.factoryIdentifier(), JobOptions.connectorOptions(plan.sinkParameters()), targetConnection);
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(new TableSourceFactoryContext(
                 sourceOptions, plan.source().table(), plan.source().schema()));
         if (source.getBoundedness() != sourceFactory.boundedness()) {
@@ -105,10 +116,11 @@ public final class PipelineBuilder {
     private ReadonlyConfig creationOptions(String identifier, ReadonlyConfig operation, ReadonlyConfig connection) {
         Map<String, Object> values = new LinkedHashMap<>();
         ReadonlyConfig configured = connectorOptions.get(identifier);
-        if (configured != null) { values.putAll(configured.getSourceMap()); }
+        if (configured != null) {
+            values.putAll(configured.getSourceMap());
+        }
         values.putAll(operation.getSourceMap());
         values.putAll(connection.getSourceMap());
         return ReadonlyConfig.fromMap(values);
     }
-
 }
