@@ -1,4 +1,11 @@
-import { Badge, Button, SectionCard, Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
+import {
+  Badge,
+  Button,
+  SectionCard,
+  Table,
+  type BadgeProps,
+  type TableColumns,
+} from "@yak-ops/yak-ui";
 import type { ReactNode } from "react";
 
 import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
