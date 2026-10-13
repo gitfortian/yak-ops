@@ -48,6 +48,7 @@ class FileCheckpointStoreTest {
             assertTrue(store.loadLatest(signature).isEmpty());
             store.save(checkpoint);
             CheckpointSnapshot loaded = store.loadLatest(signature).orElseThrow();
+            assertEquals(checkpoint, loaded);
             assertEquals(7, loaded.checkpointId());
             assertTrue(loaded.fullyFinishedOperators().isEmpty());
             assertTrue(loaded.finishedSubtasks().isEmpty());
@@ -103,6 +104,7 @@ class FileCheckpointStoreTest {
         try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
             store.save(complete);
             var recovered = store.loadLatest(signature).orElseThrow();
+            assertEquals(complete, recovered);
             assertEquals(2, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             assertTrue(recovered.fullyFinishedOperators().isEmpty());
             assertTrue(recovered.finishedSubtasks().isEmpty());
@@ -136,6 +138,7 @@ class FileCheckpointStoreTest {
             store.save(snapshot);
             assertEquals(3, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             CheckpointSnapshot recovered = store.loadLatest(signature).orElseThrow();
+            assertEquals(snapshot, recovered);
             assertEquals(Set.of("source-stable-uid"), recovered.fullyFinishedOperators());
             assertEquals(Set.of(finished), recovered.finishedSubtasks());
             assertEquals(4, recovered.operatorStates().get(active).get("operator/pending").version());

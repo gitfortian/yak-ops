@@ -3,6 +3,8 @@ package io.yak.ops.core.data;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,7 +17,9 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RowDataTest {
@@ -129,6 +133,37 @@ class RowDataTest {
         };
         TableRecord record = new TableRecord(new TableId(null, null, "orders"), RowKind.INSERT, row);
         assertTrue(record.toString().contains("row=redacted"));
+    }
+
+    @Test
+    void tableRecordHasStableIdentityWhilePayloadCanBeMutatedBeforeHandoff() {
+        TableId table = new TableId(null, "public", "orders");
+        GenericRowData mutable = GenericRowData.of(1L, "before");
+        TableRecord record = new TableRecord(table, RowKind.INSERT, mutable);
+        TableRecord another = new TableRecord(table, RowKind.INSERT, mutable);
+        Set<TableRecord> inFlight = new HashSet<>();
+        inFlight.add(record);
+
+        assertSame(mutable, record.row());
+        assertNotEquals(record, another);
+        assertFalse(record.getClass().isRecord());
+
+        mutable.setField(1, "after");
+        assertTrue(inFlight.contains(record));
+        assertEquals("after", record.row().getString(1));
+        assertFalse(inFlight.contains(another));
+    }
+
+    @Test
+    void detachedRowCopiesDoNotShareMutableFieldStorage() {
+        TableId table = new TableId(null, "public", "orders");
+        GenericRowData senderRow = GenericRowData.of(1L, new byte[] {1, 2});
+        TableRecord receiverRecord = new TableRecord(table, RowKind.INSERT, senderRow.copy());
+
+        senderRow.setField(0, 2L);
+        senderRow.setField(1, new byte[] {9, 9});
+        assertEquals(1L, receiverRecord.row().getLong(0));
+        assertArrayEquals(new byte[] {1, 2}, receiverRecord.row().getBinary(1));
     }
 
     @Test
