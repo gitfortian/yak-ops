@@ -67,7 +67,9 @@ public final class SyncParameterCodec {
     }
 
     private static String type(JsonNode node) {
-        if (!(node instanceof ObjectNode) || !node.hasNonNull("type") || !node.get("type").isTextual()) {
+        if (!(node instanceof ObjectNode)
+                || !node.hasNonNull("type")
+                || !node.get("type").isTextual()) {
             throw new IllegalArgumentException("DATA_SYNC endpoint type is required");
         }
         String value = node.get("type").textValue();

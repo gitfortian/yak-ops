@@ -45,10 +45,7 @@ public final class JdbcSyncSinkFactory implements SyncSinkFactory {
 
     @Override
     public void validateSchema(
-            SinkParameters parameters,
-            TableSchema source,
-            TableSchema target,
-            boolean sourceProducesChangelog) {
+            SinkParameters parameters, TableSchema source, TableSchema target, boolean sourceProducesChangelog) {
         JdbcSinkParameters sink = (JdbcSinkParameters) parameters;
         validate(parameters, sourceProducesChangelog);
         SyncSchemaValidator.validate(

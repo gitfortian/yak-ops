@@ -64,7 +64,9 @@ public final class SyncPipelineCompiler {
         var sinkFactory = factories.sink(plan.sinkParameters());
         Configuration configuration = new Configuration()
                 .set(PipelineOptions.AUTO_GENERATE_UIDS, false)
-                .set(CheckpointingOptions.STATE_DIRECTORY, stateRoot.resolve(identity.instanceId()).toString());
+                .set(
+                        CheckpointingOptions.STATE_DIRECTORY,
+                        stateRoot.resolve(identity.instanceId()).toString());
         if (sourceFactory.producesChangelog()) {
             configuration.set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(10));
         }
@@ -76,8 +78,7 @@ public final class SyncPipelineCompiler {
                 plan.sinkParameters(), new SyncSinkContext(targetConnection, plan.source(), plan.target()));
         SourceTransformation<TableRecord> input =
                 new SourceTransformation<>("data-sync-source", source, TableRecord.class, 1);
-        SinkTransformation<TableRecord> output =
-                new SinkTransformation<>(input, "data-sync-sink", sink, 1);
+        SinkTransformation<TableRecord> output = new SinkTransformation<>(input, "data-sync-sink", sink, 1);
         input.setUid("data-sync-source-" + identity.definitionId());
         output.setUid("data-sync-sink-" + identity.definitionId());
         StreamGraph graph = new StreamGraphGenerator(output, configuration).generate();

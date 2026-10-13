@@ -15,8 +15,7 @@ public final class SyncSinkContext {
     private final SyncRuntimeTable source;
     private final SyncRuntimeTable target;
 
-    public SyncSinkContext(
-            SyncRuntimeConnection connection, SyncRuntimeTable source, SyncRuntimeTable target) {
+    public SyncSinkContext(SyncRuntimeConnection connection, SyncRuntimeTable source, SyncRuntimeTable target) {
         this.connection = Objects.requireNonNull(connection, "connection");
         this.source = Objects.requireNonNull(source, "source");
         this.target = Objects.requireNonNull(target, "target");

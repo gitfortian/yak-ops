@@ -31,10 +31,7 @@ public interface SyncSinkFactory {
      * @param sourceProducesChangelog whether the selected Source emits changes
      */
     void validateSchema(
-            SinkParameters parameters,
-            TableSchema source,
-            TableSchema target,
-            boolean sourceProducesChangelog);
+            SinkParameters parameters, TableSchema source, TableSchema target, boolean sourceProducesChangelog);
 
     /**
      * Creates the physical Sink definition without starting a Writer.
