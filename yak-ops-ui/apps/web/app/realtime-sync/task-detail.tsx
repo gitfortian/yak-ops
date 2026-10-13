@@ -5,7 +5,6 @@ export function RealtimeSyncTaskDetailPage() {
     <DataSyncTaskDetailPage
       syncType="REALTIME"
       basePath="/realtime-sync"
-      title="实时同步任务详情"
       localScroll
     />
   );

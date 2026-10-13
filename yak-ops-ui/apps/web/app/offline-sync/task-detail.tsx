@@ -5,7 +5,6 @@ export function OfflineSyncTaskDetailPage() {
     <DataSyncTaskDetailPage
       syncType="OFFLINE"
       basePath="/offline-sync"
-      title="离线同步任务详情"
       localScroll
     />
   );
