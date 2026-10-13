@@ -87,6 +87,30 @@ class DataSyncTaskPluginContractTest {
     }
 
     @Test
+    void draftValidationChecksAuthorizedReferencesWithoutReadingTableSchemas() {
+        TaskPlugin plugin = registry.get("DATA_SYNC");
+        ReadonlyConfig parameters = plugin.parse(realtimeJson());
+        TaskValidationContext context = new TaskValidationContext() {
+            @Override
+            public DataSourceInfo dataSource(String id) {
+                return "source".equals(id)
+                        ? new DataSourceInfo("MYSQL", "app", null)
+                        : new DataSourceInfo("POSTGRE_SQL", null, "ods");
+            }
+
+            @Override
+            public TableSchema tableSchema(String datasourceId, TableId tableId) {
+                throw new AssertionError("Draft validation must not request external table metadata");
+            }
+        };
+
+        plugin.validateReferences(parameters, context);
+
+        assertEquals(null, JobConfig.from(parameters).source().get(JobOptions.DATABASE));
+        assertEquals(null, JobConfig.from(parameters).sink().get(JobOptions.SCHEMA));
+    }
+
+    @Test
     void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
         Metadata context = new Metadata();
         ReadonlyConfig parameters =
