@@ -431,7 +431,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
             <Button
               size="small"
               variant="ghost"
-              className="h-7 w-7 px-0"
+              className="sync-execution-icon-button h-7 w-7"
               aria-label="刷新执行记录"
               title="刷新"
               disabled={instancesLoading}
@@ -567,7 +567,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <Button
                       size="small"
                       variant="ghost"
-                      className="h-6 w-6 shrink-0 px-0"
+                      className="sync-execution-icon-button h-6 w-6 shrink-0"
                       aria-label="复制任务 ID"
                       onClick={() => void copyTaskId()}
                     >
@@ -597,12 +597,8 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
             <Tabs value={activeTab} onValueChange={changeTab} className="sync-execution-tabs">
               <TabsList>
-                <TabsTab value="status">
-                  执行状态
-                </TabsTab>
-                <TabsTab value="log">
-                  运行日志
-                </TabsTab>
+                <TabsTab value="status">执行状态</TabsTab>
+                <TabsTab value="log">运行日志</TabsTab>
               </TabsList>
 
               <TabsPanel value="status" className="pt-4">
@@ -622,7 +618,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                         </label>
                         <Button
                           size="small"
-                          className="h-7 w-7 px-0"
+                          className="sync-execution-icon-button h-7 w-7"
                           aria-label="刷新执行状态"
                           title="刷新"
                           loading={refreshing}

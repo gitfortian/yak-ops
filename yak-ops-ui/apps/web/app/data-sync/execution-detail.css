@@ -95,3 +95,11 @@
     opacity: 0.7;
   }
 }
+
+.sync-execution-icon-button {
+  padding: 0;
+}
+
+.sync-execution-icon-button svg {
+  flex-shrink: 0;
+}

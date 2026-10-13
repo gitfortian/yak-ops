@@ -30,7 +30,7 @@ jobs:
           source = subprocess.check_output(['git', 'show', '36b29fb1e2e17129e8fa36073bd4c5f788a405af:.github/workflows/data-sync-view-acceptance-1629.yml'], text=True)
           block = source.split('      run: |\n', 1)[1].split('    - uses: actions/upload-artifact@v4', 1)[0]
           script = '\n'.join(line[8:] for line in block.splitlines())
-          script = script.replace('const value=await bar.getAttribute("aria-valuenow");', 'const value=await bar.getAttribute("aria-valuenow"); assert.equal(await page.getByRole("tab",{name:"执行状态"}).evaluate(node=>getComputedStyle(node).color),"rgb(51, 93, 255)");')
+          script = script.replace('const value=await bar.getAttribute("aria-valuenow");', 'const value=await bar.getAttribute("aria-valuenow"); assert.equal(await page.getByRole("tab",{name:"执行状态"}).evaluate(node=>getComputedStyle(node).color),"rgb(51, 93, 255)"); assert.ok(await page.getByRole("button",{name:"刷新执行状态"}).locator("svg").evaluate(node=>node.getBoundingClientRect().width)>=13);')
           Path('/tmp/execution-view-test.sh').write_text(script)
           PY
           bash /tmp/execution-view-test.sh
@@ -38,7 +38,5 @@ jobs:
         if: always()
         with:
           name: execution-view-browser
-          path: |
-            /tmp/execution-view-artifacts
-            /tmp/execution-view-dist
+          path: /tmp/execution-view-artifacts
           retention-days: 7
