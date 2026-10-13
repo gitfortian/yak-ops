@@ -90,6 +90,11 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   const [running, setRunning] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const listRequest = useRef(0);
+  const searchParamsSetter = useRef(setSearchParams);
+
+  useEffect(() => {
+    searchParamsSetter.current = setSearchParams;
+  }, [setSearchParams]);
 
   const loadInstances = useCallback(async () => {
     if (!taskId) return;
@@ -142,7 +147,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
   useEffect(() => {
     if (instancesLoading || executionId || instances.length === 0) return;
-    setSearchParams(
+    searchParamsSetter.current(
       (previous) => {
         if (previous.has("executionId")) return previous;
         const next = new URLSearchParams(previous);
@@ -151,7 +156,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
       },
       { replace: true },
     );
-  }, [executionId, instances, instancesLoading, setSearchParams]);
+  }, [executionId, instances, instancesLoading]);
 
   useEffect(() => {
     if (!executionId) {
@@ -167,7 +172,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
       .then((value) => {
         if (disposed) return;
         if (value.taskId !== taskId || value.syncType !== syncType) {
-          setSearchParams(
+          searchParamsSetter.current(
             (previous) => {
               if (previous.get("executionId") !== executionId) return previous;
               const next = new URLSearchParams(previous);
@@ -182,7 +187,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
       })
       .catch(() => {
         if (disposed) return;
-        setSearchParams(
+        searchParamsSetter.current(
           (previous) => {
             if (previous.get("executionId") !== executionId) return previous;
             const next = new URLSearchParams(previous);
@@ -199,7 +204,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     return () => {
       disposed = true;
     };
-  }, [executionId, setSearchParams, syncType, taskId]);
+  }, [executionId, syncType, taskId]);
 
   useEffect(() => {
     if (!instances.some(isActiveDataSyncInstance) && !isActiveDataSyncInstance(selected)) return;
