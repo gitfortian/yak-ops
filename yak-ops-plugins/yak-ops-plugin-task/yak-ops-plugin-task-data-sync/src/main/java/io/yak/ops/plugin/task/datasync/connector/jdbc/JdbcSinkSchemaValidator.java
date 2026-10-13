@@ -1,4 +1,4 @@
-package io.yak.ops.plugin.task.datasync.plan;
+package io.yak.ops.plugin.task.datasync.connector.jdbc;
 
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.core.types.Column;
@@ -12,16 +12,16 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Validates the executable single-table DATA_SYNC field mapping.
+ * Validates the executable JDBC target projection for a single-table pipeline.
  *
  * <p>The current JDBC Sink binds each target column to a source column with the same exact name.
  * Source-only columns may be ignored; target columns must all be mapped. Logical type roots must
  * match, and nullable or capacity changes must also satisfy the JDBC write contract. This
  * validation is shared by Definition validation and runtime planning.
  */
-public final class SyncSchemaValidator {
+public final class JdbcSinkSchemaValidator {
 
-    private SyncSchemaValidator() {}
+    private JdbcSinkSchemaValidator() {}
 
     /**
      * Checks the field mapping and primary-key requirements of the selected write mode.

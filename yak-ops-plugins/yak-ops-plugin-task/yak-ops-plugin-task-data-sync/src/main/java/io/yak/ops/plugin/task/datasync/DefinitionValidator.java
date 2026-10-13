@@ -6,7 +6,7 @@ import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 
 /**
@@ -15,9 +15,9 @@ import io.yak.ops.plugin.task.datasync.source.SourceParameters;
  * <p>Source and Sink factories own their own execution capabilities. The current saved table path
  * remains explicit, and planning never silently changes a selected namespace.
  */
-public final class SyncValidator {
+public final class DefinitionValidator {
 
-    private SyncValidator() {}
+    private DefinitionValidator() {}
 
     /**
      * Checks the saved configuration without reading Datasource metadata.
@@ -25,7 +25,7 @@ public final class SyncValidator {
      * @param parameters decoded DATA_SYNC parameters
      * @param factories discovered Connector capabilities
      */
-    public static void checkParameters(SyncParameters parameters, SyncConnectorFactoryRegistry factories) {
+    public static void validateParameters(DataSyncParameters parameters, ConnectorFactoryRegistry factories) {
         if (parameters == null || parameters.source() == null || parameters.sink() == null) {
             throw new TaskPluginException("DATA_SYNC requires one source and one sink");
         }
@@ -51,8 +51,8 @@ public final class SyncValidator {
      * @param context Workspace-bound datasource access
      * @param factories discovered Connector capabilities
      */
-    public static void checkResources(
-            SyncParameters parameters, TaskValidationContext context, SyncConnectorFactoryRegistry factories) {
+    public static void validateResources(
+            DataSyncParameters parameters, TaskValidationContext context, ConnectorFactoryRegistry factories) {
         SourceParameters source = parameters.source();
         var sourceFactory = factories.source(source);
         var sinkFactory = factories.sink(parameters.sink());

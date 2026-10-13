@@ -6,11 +6,11 @@ import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.plugin.task.datasync.SyncParameters;
-import io.yak.ops.plugin.task.datasync.SyncValidator;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
+import io.yak.ops.plugin.task.datasync.DataSyncParameters;
+import io.yak.ops.plugin.task.datasync.DefinitionValidator;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,12 +21,12 @@ import java.util.List;
 import java.util.Objects;
 
 /** Resolves authorized DATA_SYNC metadata and constructs the logical Job and admission plans. */
-public final class SyncJobPlanner {
+public final class JobPlanner {
 
-    private final SyncRuntimeResources resources;
-    private final SyncConnectorFactoryRegistry factories;
+    private final RuntimeResources resources;
+    private final ConnectorFactoryRegistry factories;
 
-    public SyncJobPlanner(SyncRuntimeResources resources, SyncConnectorFactoryRegistry factories) {
+    public JobPlanner(RuntimeResources resources, ConnectorFactoryRegistry factories) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
     }
@@ -38,8 +38,8 @@ public final class SyncJobPlanner {
      * @param context trusted Task execution identity
      * @return admission claim validated against the effective schema
      */
-    public TaskAdmissionPlan plan(SyncParameters parameters, TaskExecutionIdentity context) {
-        return prepare(parameters, context).admissionPlan();
+    public TaskAdmissionPlan admissionPlan(DataSyncParameters parameters, TaskExecutionIdentity context) {
+        return plan(parameters, context).admissionPlan();
     }
 
     /**
@@ -51,15 +51,15 @@ public final class SyncJobPlanner {
      * @param context trusted Task execution identity
      * @return immutable, non-secret logical DATA_SYNC plan
      */
-    public SyncJobPlan prepare(SyncParameters parameters, TaskExecutionIdentity context) {
-        SyncValidator.checkParameters(parameters, factories);
+    public JobPlan plan(DataSyncParameters parameters, TaskExecutionIdentity context) {
+        DefinitionValidator.validateParameters(parameters, factories);
         SourceParameters source = parameters.source();
         var sink = parameters.sink();
         var sourceFactory = factories.source(source);
         var sinkFactory = factories.sink(sink);
-        SyncRuntimeTable from = resources.table(
+        RuntimeTable from = resources.table(
                 context.workspaceId(), source.datasourceId(), source.database(), source.schema(), source.table());
-        SyncRuntimeTable to = resources.table(
+        RuntimeTable to = resources.table(
                 context.workspaceId(), sink.datasourceId(), sink.database(), sink.schema(), sink.table());
 
         sourceFactory.validateDatasource(from.datasourceType());
@@ -79,7 +79,7 @@ public final class SyncJobPlanner {
         claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
         claims.addAll(sourceFactory.exclusiveResources(source, context));
         TaskAdmissionPlan admission = new TaskAdmissionPlan(claims, sha256(binding));
-        return new SyncJobPlan(source, sink, from, to, admission);
+        return new JobPlan(source, sink, from, to, admission);
     }
 
     private static String encodeTable(TableId table) {

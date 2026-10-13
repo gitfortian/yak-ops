@@ -3,8 +3,8 @@ package io.yak.ops.plugin.task.datasync.config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.common.util.JSONUtils;
-import io.yak.ops.plugin.task.datasync.SyncParameters;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.DataSyncParameters;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.util.ArrayList;
@@ -13,27 +13,27 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Decodes the saved DATA_SYNC JSON using the parameter types declared by Connector SPI factories.
+ * Parses the saved DATA_SYNC JSON using the parameter types declared by Connector SPI factories.
  *
  * <p>The persisted source/transform/sink contract and its type identifiers remain unchanged.
  * Unrecognized JSON members are rejected before they can become executable parameters.
  */
-public final class SyncParameterCodec {
+public final class DefinitionParser {
 
     private static final Set<String> FIELDS = Set.of("source", "transform", "sink");
-    private final SyncConnectorFactoryRegistry factories;
+    private final ConnectorFactoryRegistry factories;
 
-    public SyncParameterCodec(SyncConnectorFactoryRegistry factories) {
+    public DefinitionParser(ConnectorFactoryRegistry factories) {
         this.factories = Objects.requireNonNull(factories, "factories");
     }
 
     /**
-     * Decodes one Definition without exposing untrusted JSON in diagnostics.
+     * Parses one Definition without exposing untrusted JSON in diagnostics.
      *
      * @param content pinned Definition JSON
      * @return resolved DATA_SYNC parameters
      */
-    public SyncParameters parse(String content) {
+    public DataSyncParameters parse(String content) {
         JsonNode document = JSONUtils.readTree(content);
         if (!(document instanceof ObjectNode)) {
             throw new IllegalArgumentException("DATA_SYNC definition must be an object");
@@ -53,7 +53,7 @@ public final class SyncParameterCodec {
             }
             transform.forEach(steps::add);
         }
-        return new SyncParameters(source, steps, sink);
+        return new DataSyncParameters(source, steps, sink);
     }
 
     private SourceParameters source(JsonNode node) {

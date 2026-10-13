@@ -1,7 +1,7 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
 import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.util.Objects;
@@ -19,14 +19,14 @@ import java.util.Objects;
  * @param target authorized target table and logical schema
  * @param admissionPlan exclusive target claim and resource binding fingerprint
  */
-public record SyncJobPlan(
+public record JobPlan(
         SourceParameters sourceParameters,
         SinkParameters sinkParameters,
-        SyncRuntimeTable source,
-        SyncRuntimeTable target,
+        RuntimeTable source,
+        RuntimeTable target,
         TaskAdmissionPlan admissionPlan) {
 
-    public SyncJobPlan {
+    public JobPlan {
         Objects.requireNonNull(sourceParameters, "sourceParameters");
         Objects.requireNonNull(sinkParameters, "sinkParameters");
         Objects.requireNonNull(source, "source");

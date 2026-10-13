@@ -7,28 +7,28 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.config.SyncParameterCodec;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
-import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
+import io.yak.ops.plugin.task.datasync.config.DefinitionParser;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
 /** Defines DATA_SYNC parameters and delegates planning and physical execution to dedicated components. */
-public final class SyncTaskPlugin implements ExecutableTaskPlugin {
+public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
 
     public static final String TYPE = "DATA_SYNC";
 
-    private final SyncJobPlanner planner;
-    private final SyncTaskExecutor executor;
-    private final SyncConnectorFactoryRegistry factories;
-    private final SyncParameterCodec codec;
+    private final JobPlanner planner;
+    private final DataSyncTaskExecutor executor;
+    private final ConnectorFactoryRegistry factories;
+    private final DefinitionParser parser;
 
-    public SyncTaskPlugin(SyncJobPlanner planner, SyncTaskExecutor executor, SyncConnectorFactoryRegistry factories) {
+    public DataSyncTaskPlugin(JobPlanner planner, DataSyncTaskExecutor executor, ConnectorFactoryRegistry factories) {
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.factories = Objects.requireNonNull(factories, "factories");
-        this.codec = new SyncParameterCodec(factories);
+        this.parser = new DefinitionParser(factories);
     }
 
     @Override
@@ -43,30 +43,30 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
 
     @Override
     public TaskParameters parse(String content) {
-        SyncParameters parameters;
+        DataSyncParameters parameters;
         try {
-            parameters = codec.parse(content);
+            parameters = parser.parse(content);
         } catch (IllegalArgumentException exception) {
             throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON");
         }
-        SyncValidator.checkParameters(parameters, factories);
+        DefinitionValidator.validateParameters(parameters, factories);
         return parameters;
     }
 
     @Override
     public void validate(TaskParameters parameters, TaskValidationContext context) {
-        if (!(parameters instanceof SyncParameters pipeline)) {
+        if (!(parameters instanceof DataSyncParameters pipeline)) {
             throw new TaskPluginException("Invalid DATA_SYNC parameter type");
         }
-        SyncValidator.checkResources(pipeline, context, factories);
+        DefinitionValidator.validateResources(pipeline, context, factories);
     }
 
     @Override
     public TaskAdmissionPlan plan(TaskParameters parameters, TaskExecutionIdentity context) {
-        if (!(parameters instanceof SyncParameters pipeline)) {
+        if (!(parameters instanceof DataSyncParameters pipeline)) {
             throw new TaskPluginException("Invalid DATA_SYNC parameter type");
         }
-        return planner.plan(pipeline, context);
+        return planner.admissionPlan(pipeline, context);
     }
 
     @Override

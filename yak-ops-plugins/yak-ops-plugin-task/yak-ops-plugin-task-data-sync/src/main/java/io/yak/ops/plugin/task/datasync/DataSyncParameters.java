@@ -12,9 +12,9 @@ import java.util.List;
  * <p>Transforms are reserved but must remain empty until a real transform implementation exists.
  * Neither Task retry policies nor YakFlow physical connector configurations are persisted here.
  */
-public record SyncParameters(SourceParameters source, List<JsonNode> transform, SinkParameters sink)
+public record DataSyncParameters(SourceParameters source, List<JsonNode> transform, SinkParameters sink)
         implements TaskParameters {
-    public SyncParameters {
+    public DataSyncParameters {
         if (transform == null) {
             transform = List.of();
         } else {
