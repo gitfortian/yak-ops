@@ -24,6 +24,14 @@ public interface TaskPlugin {
     /** Parses and statically validates persisted JSON as an immutable configuration. */
     ReadonlyConfig parse(String content);
 
+    /**
+     * Checks Workspace-authorized resource references without reading external table schemas.
+     *
+     * @param parameters locally validated configuration
+     * @param context Workspace-scoped read-only resource view
+     */
+    void validateReferences(ReadonlyConfig parameters, TaskValidationContext context);
+
     /** Validates resources referenced by an already parsed Task configuration. */
     void validate(ReadonlyConfig parameters, TaskValidationContext context);
 }

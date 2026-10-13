@@ -158,6 +158,9 @@ class DataSyncTaskPluginContractTest {
             }
 
             @Override
+            public void validateReferences(ReadonlyConfig parameters, TaskValidationContext context) {}
+
+            @Override
             public void validate(ReadonlyConfig parameters, TaskValidationContext context) {
                 validations.incrementAndGet();
             }

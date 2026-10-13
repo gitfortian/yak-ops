@@ -40,6 +40,24 @@ public final class JobConfigValidator {
         }
     }
 
+    /**
+     * Checks authorized Datasource identities and explicit namespace bindings without
+     * opening tables or reading schema metadata.
+     */
+    public static void validateReferences(
+            ReadonlyConfig parameters, TaskValidationContext context, FactoryUtil factories) {
+        JobConfig job = validateConfig(parameters, factories);
+        try {
+            DataSourceInfo sourceInfo = context.dataSource(job.source().get(JobOptions.DATASOURCE_ID));
+            DataSourceInfo sinkInfo = context.dataSource(job.sink().get(JobOptions.DATASOURCE_ID));
+            factories.source(job.source().get(JobOptions.TYPE)).validateDatasource(sourceInfo.type());
+            tablePath(sourceInfo, job.source());
+            tablePath(sinkInfo, job.sink());
+        } catch (RuntimeException failure) {
+            throw new TaskPluginException("Invalid DATA_SYNC Datasource reference", failure);
+        }
+    }
+
     /** Checks authorized resource bindings and executable source-to-target Schema. */
     public static void validateResources(
             ReadonlyConfig parameters, TaskValidationContext context, FactoryUtil factories) {

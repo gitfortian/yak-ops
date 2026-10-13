@@ -96,7 +96,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
-        validatedParameters(definition.getTaskType(), currentVersion(definition).getParameters());
+        validatePublication(definition.getTaskType(), currentVersion(definition).getParameters());
         definition.setStatus(DefinitionStatus.PUBLISHED);
         definition.initUpdate(operatorId);
         definitionRepository.update(definition.getWorkspaceId(), definition);
@@ -218,8 +218,15 @@ public class DefinitionServiceImpl implements DefinitionService {
     private String validatedParameters(String type, String parameters) {
         TaskPlugin plugin = pluginRegistry.get(type);
         ReadonlyConfig parsed = plugin.parse(parameters);
-        plugin.validate(parsed, validationContext);
+        plugin.validateReferences(parsed, validationContext);
         return ConfigParser.toJson(parsed);
+    }
+
+    private void validatePublication(String type, String parameters) {
+        TaskPlugin plugin = pluginRegistry.get(type);
+        ReadonlyConfig parsed = plugin.parse(parameters);
+        plugin.validateReferences(parsed, validationContext);
+        plugin.validate(parsed, validationContext);
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {

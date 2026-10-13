@@ -58,6 +58,11 @@ public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
     }
 
     @Override
+    public void validateReferences(ReadonlyConfig parameters, TaskValidationContext context) {
+        JobConfigValidator.validateReferences(parameters, context, factories);
+    }
+
+    @Override
     public void validate(ReadonlyConfig parameters, TaskValidationContext context) {
         JobConfigValidator.validateResources(parameters, context, factories);
     }
