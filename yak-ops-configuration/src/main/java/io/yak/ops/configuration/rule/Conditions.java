@@ -33,19 +33,23 @@ public final class Conditions {
         return compare(option, ConditionOperator.LESS_OR_EQUAL, threshold);
     }
 
-    public static <T extends Comparable<? super T>> Condition<T> lessThanField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> lessThanField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.LESS_THAN, compareOption);
     }
 
-    public static <T extends Comparable<? super T>> Condition<T> lessOrEqualField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> lessOrEqualField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.LESS_OR_EQUAL, compareOption);
     }
 
-    public static <T extends Comparable<? super T>> Condition<T> greaterThanField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterThanField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.GREATER_THAN, compareOption);
     }
 
-    public static <T extends Comparable<? super T>> Condition<T> greaterOrEqualField(Option<T> option, Option<T> compareOption) {
+    public static <T extends Comparable<? super T>> Condition<T> greaterOrEqualField(
+            Option<T> option, Option<T> compareOption) {
         return compareFields(option, ConditionOperator.GREATER_OR_EQUAL, compareOption);
     }
 
@@ -94,7 +98,8 @@ public final class Conditions {
                 Objects.requireNonNull(extension, "extension"));
     }
 
-    private static <T extends Comparable<? super T>> Condition<T> compare(Option<T> option, ConditionOperator operator, T threshold) {
+    private static <T extends Comparable<? super T>> Condition<T> compare(
+            Option<T> option, ConditionOperator operator, T threshold) {
         return new Condition<>(option, operator, threshold, null, null);
     }
 

@@ -15,10 +15,13 @@ public final class MySqlCdcSourceOptions {
             Options.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 
     public static final OptionRule PHYSICAL_RULE = OptionRule.builder()
-            .optional(SNAPSHOT_CHUNK_SIZE, Conditions.greaterOrEqual(SNAPSHOT_CHUNK_SIZE, 1)
-                    .and(Conditions.lessOrEqual(SNAPSHOT_CHUNK_SIZE, 100_000)))
-            .optional(QUEUE_CAPACITY, Conditions.greaterOrEqual(QUEUE_CAPACITY, 1)
-                    .and(Conditions.lessOrEqual(QUEUE_CAPACITY, 10_000)))
+            .optional(
+                    SNAPSHOT_CHUNK_SIZE,
+                    Conditions.greaterOrEqual(SNAPSHOT_CHUNK_SIZE, 1)
+                            .and(Conditions.lessOrEqual(SNAPSHOT_CHUNK_SIZE, 100_000)))
+            .optional(
+                    QUEUE_CAPACITY,
+                    Conditions.greaterOrEqual(QUEUE_CAPACITY, 1).and(Conditions.lessOrEqual(QUEUE_CAPACITY, 10_000)))
             .build();
 
     private MySqlCdcSourceOptions() {}
