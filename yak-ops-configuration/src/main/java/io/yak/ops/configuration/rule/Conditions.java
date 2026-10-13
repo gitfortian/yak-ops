@@ -94,8 +94,7 @@ public final class Conditions {
                 Objects.requireNonNull(extension, "extension"));
     }
 
-    private static <T extends Number> Condition<T> compare(
-            Option<T> option, ConditionOperator operator, T threshold) {
+    private static <T extends Number> Condition<T> compare(Option<T> option, ConditionOperator operator, T threshold) {
         return new Condition<>(option, operator, threshold, null, null);
     }
 

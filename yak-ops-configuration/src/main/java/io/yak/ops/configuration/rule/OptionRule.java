@@ -66,8 +66,7 @@ public final class OptionRule {
             return this;
         }
 
-        public Builder required(
-                Option<?> first, Option<?> second, Condition<?> condition, Condition<?>... conditions) {
+        public Builder required(Option<?> first, Option<?> second, Condition<?> condition, Condition<?>... conditions) {
             required(first, second);
             valueConstraints.add(Objects.requireNonNull(condition, "condition"));
             valueConstraints.addAll(Arrays.asList(conditions));
@@ -112,9 +111,7 @@ public final class OptionRule {
             return conditionalRule(
                     option,
                     expected,
-                    OptionRule.builder()
-                            .withConstraints(first, rest)
-                            .build());
+                    OptionRule.builder().withConstraints(first, rest).build());
         }
 
         public <T> Builder conditionalRule(Option<T> option, T expected, OptionRule rule) {

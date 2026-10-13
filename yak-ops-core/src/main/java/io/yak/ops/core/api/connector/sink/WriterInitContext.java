@@ -1,7 +1,7 @@
 package io.yak.ops.core.api.connector.sink;
 
-import io.yak.ops.core.api.common.TaskInfo;
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.core.api.common.TaskInfo;
 
 /**
  * Read-only task metadata and configuration supplied when creating a Sink Writer.

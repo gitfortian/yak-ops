@@ -121,7 +121,6 @@ public final class Condition<T> {
         if (operator == ConditionOperator.EXTENSION) {
             return extension.description();
         }
-        return option.key() + " " + operator
-                + (compareOption == null ? "" : " " + compareOption.key());
+        return option.key() + " " + operator + (compareOption == null ? "" : " " + compareOption.key());
     }
 }

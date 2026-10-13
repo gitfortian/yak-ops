@@ -50,17 +50,24 @@ public final class ConfigValidator {
             if (group.kind() == RequiredOption.Kind.CONDITIONAL && !group.when().evaluate(config)) {
                 continue;
             }
-            List<Option<?>> present = group.options().stream().filter(config::contains).toList();
-            boolean valid = switch (group.kind()) {
-                case REQUIRED, CONDITIONAL -> present.size() == group.options().size();
-                case EXCLUSIVE -> present.size() == 1;
-                case BUNDLED -> present.isEmpty() || present.size() == group.options().size();
-            };
+            List<Option<?>> present =
+                    group.options().stream().filter(config::contains).toList();
+            boolean valid =
+                    switch (group.kind()) {
+                        case REQUIRED, CONDITIONAL ->
+                            present.size() == group.options().size();
+                        case EXCLUSIVE -> present.size() == 1;
+                        case BUNDLED ->
+                            present.isEmpty()
+                                    || present.size() == group.options().size();
+                    };
             if (!valid) {
-                String groupPath = group.options().stream().map(Option::key).reduce((a, b) -> a + "," + b).orElse("");
+                String groupPath = group.options().stream()
+                        .map(Option::key)
+                        .reduce((a, b) -> a + "," + b)
+                        .orElse("");
                 errors.add(new ConfigValidationError(groupPath, group.kind().name(), "Option group constraint failed"));
-                if (group.kind() == RequiredOption.Kind.REQUIRED
-                        || group.kind() == RequiredOption.Kind.CONDITIONAL) {
+                if (group.kind() == RequiredOption.Kind.REQUIRED || group.kind() == RequiredOption.Kind.CONDITIONAL) {
                     group.options().stream()
                             .filter(option -> !config.contains(option))
                             .map(Option::key)
@@ -68,8 +75,7 @@ public final class ConfigValidator {
                 }
             }
             for (Option<?> option : present) {
-                if (!option.allowedValues().isEmpty()
-                        && !option.allowedValues().contains(config.get(option))) {
+                if (!option.allowedValues().isEmpty() && !option.allowedValues().contains(config.get(option))) {
                     errors.add(new ConfigValidationError(option.key(), "SINGLE_CHOICE", "Invalid option choice"));
                 }
             }

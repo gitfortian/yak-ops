@@ -22,9 +22,8 @@ public final class ConditionEvaluators {
             return evaluate(condition.left(), config) || evaluate(condition.right(), config);
         }
         Object value = config.get(condition.option());
-        Object expected = condition.compareOption() == null
-                ? condition.expected()
-                : config.get(condition.compareOption());
+        Object expected =
+                condition.compareOption() == null ? condition.expected() : config.get(condition.compareOption());
         return switch (condition.operator()) {
             case EQUAL -> Objects.equals(value, expected);
             case NOT_EQUAL -> !Objects.equals(value, expected);
@@ -37,13 +36,14 @@ public final class ConditionEvaluators {
             case CONTAINS -> value instanceof String text && text.contains((String) expected);
             case MATCHES -> value instanceof String text && text.matches((String) expected);
             case NOT_EMPTY -> value instanceof Collection<?> collection && !collection.isEmpty();
-            case UNIQUE -> value instanceof Collection<?> collection
-                    && new HashSet<>(collection).size() == collection.size();
+            case UNIQUE ->
+                value instanceof Collection<?> collection && new HashSet<>(collection).size() == collection.size();
             case MAP_NOT_EMPTY -> value instanceof Map<?, ?> map && !map.isEmpty();
             case MAP_CONTAINS_KEY -> value instanceof Map<?, ?> map && map.containsKey(expected);
-            case MAP_CONTAINS_KEYS -> value instanceof Map<?, ?> map
-                    && expected instanceof Collection<?> keys
-                    && map.keySet().containsAll(keys);
+            case MAP_CONTAINS_KEYS ->
+                value instanceof Map<?, ?> map
+                        && expected instanceof Collection<?> keys
+                        && map.keySet().containsAll(keys);
             case EXTENSION -> evaluateExtension(condition, config, value);
             case AND, OR -> throw new IllegalStateException("Composite condition handled above");
         };
