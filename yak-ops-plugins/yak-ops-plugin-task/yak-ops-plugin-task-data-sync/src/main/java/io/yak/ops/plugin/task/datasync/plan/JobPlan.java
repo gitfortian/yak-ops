@@ -1,8 +1,8 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
-import io.yak.ops.configuration.ReadonlyConfig;
 import java.util.Objects;
 
 /**

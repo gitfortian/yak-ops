@@ -78,8 +78,8 @@ public final class PipelineBuilder {
                 || targetConnection.revision() != plan.target().revision()) {
             throw new IllegalStateException("DATA_SYNC datasource revision changed before execution");
         }
-        ConnectorExecutionIdentity connectorIdentity = new ConnectorExecutionIdentity(
-                identity.workspaceId(), identity.definitionId(), identity.instanceId());
+        ConnectorExecutionIdentity connectorIdentity =
+                new ConnectorExecutionIdentity(identity.workspaceId(), identity.definitionId(), identity.instanceId());
 
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(new TableSourceFactoryContext(
                 plan.sourceParameters(),

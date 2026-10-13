@@ -1,7 +1,7 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
-import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;

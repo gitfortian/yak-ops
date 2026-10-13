@@ -80,8 +80,7 @@ public final class RuntimeConnection {
 
     /** Builds the trusted Connector resource without exposing credentials to Task definitions. */
     public JdbcConnectorResource connectorResource() {
-        return new JdbcConnectorResource(
-                provider, jdbcUrl, datasourceType, username, password, host, port, tunneled);
+        return new JdbcConnectorResource(provider, jdbcUrl, datasourceType, username, password, host, port, tunneled);
     }
 
     @Override

@@ -56,8 +56,7 @@ public final class JobConfigValidator {
             TableId sinkTable = tablePath(sinkInfo, job.sink());
             TableSchema sourceSchema = context.tableSchema(sourceId, sourceTable);
             TableSchema sinkSchema = context.tableSchema(sinkId, sinkTable);
-            sinkFactory.validateSchema(
-                    job.sink(), sourceSchema, sinkSchema, sourceFactory.producesChangelog());
+            sinkFactory.validateSchema(job.sink(), sourceSchema, sinkSchema, sourceFactory.producesChangelog());
         } catch (RuntimeException failure) {
             throw new TaskPluginException("Invalid DATA_SYNC resource binding or Schema", failure);
         }
@@ -71,8 +70,7 @@ public final class JobConfigValidator {
     }
 
     private static String namespace(String bound, String selected) {
-        if (bound != null && !bound.isBlank() && selected != null && !selected.isBlank()
-                && !bound.equals(selected)) {
+        if (bound != null && !bound.isBlank() && selected != null && !selected.isBlank() && !bound.equals(selected)) {
             throw new TaskPluginException("Selected namespace differs from the authorized Datasource");
         }
         return selected == null || selected.isBlank() ? bound : selected;

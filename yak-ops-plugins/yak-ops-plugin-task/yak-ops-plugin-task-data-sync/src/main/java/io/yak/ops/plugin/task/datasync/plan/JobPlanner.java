@@ -1,19 +1,19 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.ConnectorExecutionIdentity;
+import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.connector.base.factory.ConnectorExecutionIdentity;
-import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
-import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
+import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -89,8 +89,8 @@ public final class JobPlanner {
                 + encodeSchema(to.schema());
         List<ExecutionResource> claims = new ArrayList<>();
         claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
-        ConnectorExecutionIdentity identity = new ConnectorExecutionIdentity(
-                context.workspaceId(), context.definitionId(), context.instanceId());
+        ConnectorExecutionIdentity identity =
+                new ConnectorExecutionIdentity(context.workspaceId(), context.definitionId(), context.instanceId());
         for (var claim : sourceFactory.exclusiveResources(source, identity)) {
             claims.add(new ExecutionResource(claim.type(), claim.key()));
         }
