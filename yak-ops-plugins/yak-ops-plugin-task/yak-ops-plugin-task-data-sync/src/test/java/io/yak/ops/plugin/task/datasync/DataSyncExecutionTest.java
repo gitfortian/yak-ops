@@ -233,15 +233,15 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
         ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan admitted = planner.admissionPlan(parameters, CONTEXT);
-        TaskExecutionIdentity anotherAttempt =
-                new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-456");
+        TaskExecutionIdentity repeatedPlan =
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-123");
 
         assertEquals(2, admitted.exclusiveResources().size());
         assertTrue(admitted.exclusiveResources().stream().anyMatch(
                 resource -> resource.type().equals("DATA_SYNC_TARGET")));
         assertTrue(admitted.exclusiveResources().stream().anyMatch(
                 resource -> resource.type().equals("MYSQL_CDC_SERVER_ID")));
-        assertEquals(admitted, planner.admissionPlan(parameters, anotherAttempt));
+        assertEquals(admitted, planner.admissionPlan(parameters, repeatedPlan));
         assertEquals(0, resources.connections.get());
     }
 

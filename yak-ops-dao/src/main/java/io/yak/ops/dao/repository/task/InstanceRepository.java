@@ -91,8 +91,7 @@ public interface InstanceRepository {
      * @param runtimeId physical Job identifier
      * @return true when the launch is still owned by the caller
      */
-    boolean markRunning(
-            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
+    boolean markRunning(String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
 
     /**
      * Atomically cancels a SUBMITTED Instance before dispatch.
@@ -134,5 +133,4 @@ public interface InstanceRepository {
      * @return true if reconciliation was recorded
      */
     boolean markReconciling(String workspaceId, String instanceId, String dispatchToken);
-
 }

@@ -247,10 +247,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 </Button>
               </div>
             ) : null}
-            <DataSyncExecutionDetailContent
-              record={selected}
-              realtime={realtime}
-            />
+            <DataSyncExecutionDetailContent record={selected} realtime={realtime} />
             <DataSyncExecutionConfigContent record={selected} realtime={realtime} />
           </>
         ) : null}
