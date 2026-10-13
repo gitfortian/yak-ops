@@ -10,6 +10,7 @@ import io.yak.ops.dao.repository.schedule.SchedulePageQuery;
 import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -18,6 +19,50 @@ import org.springframework.stereotype.Repository;
 public class ScheduleRepositoryImpl implements ScheduleRepository {
     @Resource
     private ScheduleMapper mapper;
+
+    @Override
+    public Optional<ScheduleEntity> queryIncludingDeleted(String workspaceId, String id) {
+        return Optional.ofNullable(mapper.selectOne(Wrappers.<ScheduleEntity>lambdaQuery()
+                .eq(ScheduleEntity::getWorkspaceId, workspaceId)
+                .eq(ScheduleEntity::getId, id)));
+    }
+
+    @Override
+    public Optional<ScheduleEntity> lockIncludingDeleted(String workspaceId, String id) {
+        return Optional.ofNullable(mapper.selectOne(Wrappers.<ScheduleEntity>lambdaQuery()
+                .eq(ScheduleEntity::getWorkspaceId, workspaceId)
+                .eq(ScheduleEntity::getId, id)
+                .last("FOR UPDATE")));
+    }
+
+    @Override
+    public List<ScheduleEntity> scan(String afterId, int limit) {
+        if (limit < 1 || limit > 200) {
+            throw new IllegalArgumentException("Schedule scan size must be between one and 200");
+        }
+        return mapper.selectList(Wrappers.<ScheduleEntity>lambdaQuery()
+                .gt(afterId != null, ScheduleEntity::getId, afterId)
+                .orderByAsc(ScheduleEntity::getId)
+                .last("LIMIT " + limit));
+    }
+
+    @Override
+    public boolean setEnabled(
+            String workspaceId, String id, long revision, boolean enabled, LocalDateTime at, String operator) {
+        var update = Wrappers.<ScheduleEntity>lambdaUpdate()
+                .eq(ScheduleEntity::getWorkspaceId, workspaceId)
+                .eq(ScheduleEntity::getId, id)
+                .isNull(ScheduleEntity::getDeletedAt)
+                .eq(ScheduleEntity::getRevision, revision)
+                .set(ScheduleEntity::isEnabled, enabled)
+                .set(ScheduleEntity::getRevision, Math.addExact(revision, 1))
+                .set(ScheduleEntity::getUpdateTime, at)
+                .set(ScheduleEntity::getUpdateBy, operator);
+        if (enabled) {
+            update.set(ScheduleEntity::getEnabledAt, at).set(ScheduleEntity::getEnabledBy, operator);
+        }
+        return mapper.update(null, update) == 1;
+    }
 
     @Override
     public void add(ScheduleEntity entity) {

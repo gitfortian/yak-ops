@@ -19,6 +19,15 @@ public class ExecutionOwnerRepositoryImpl implements ExecutionOwnerRepository {
     private JdbcTemplate jdbc;
 
     @Override
+    public boolean isCurrentForAdmission(String incarnation) {
+        List<String> current = jdbc.queryForList(
+                "SELECT owner_incarnation FROM yak_ops_task_execution_owner WHERE id = ? FOR SHARE",
+                String.class,
+                OWNER_ID);
+        return current.size() == 1 && incarnation.equals(current.getFirst());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void register(String hostId, String stateRoot, String incarnation) {
         List<Map<String, Object>> owners = jdbc.queryForList(

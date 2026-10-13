@@ -136,7 +136,9 @@ public class GlobalExceptionHandler {
 
         if (errorCode instanceof ScheduleErrorCode code) {
             return switch (code) {
-                case INVALID_TIME_RULE -> HttpStatus.BAD_REQUEST;
+                case INVALID_TIME_RULE, NOT_SCHEDULABLE, NO_FUTURE_FIRE -> HttpStatus.BAD_REQUEST;
+                case TARGET_UNPUBLISHED -> HttpStatus.CONFLICT;
+                case ACCESS_DENIED -> HttpStatus.FORBIDDEN;
                 case REVISION_CONFLICT, MUST_BE_DISABLED, TARGET_ALREADY_SCHEDULED -> HttpStatus.CONFLICT;
             };
         }

@@ -12,6 +12,8 @@ on:
       - 'yak-ops-platform/**'
       - 'yak-ops-common/**'
       - 'yak-ops-boot/**'
+      - 'yak-ops-business/yak-ops-business-schedule/**'
+      - 'yak-ops-plugins/yak-ops-plugin-scheduler/**'
       - 'yak-ops-business/yak-ops-business-task/**'
       - 'yak-ops-business/yak-ops-business-datasource/**'
       - 'yak-ops-task-execution/**'
@@ -60,6 +62,13 @@ jobs:
           done
           docker logs yak-task-postgres
           exit 1
+      - name: Verify scheduled admission on real MySQL
+        env:
+          E2E_DB_PASSWORD: localtestpass
+          SCHEDULE_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/yak_schedule_contract?useSSL=false&allowPublicKeyRetrieval=true
+        run: |
+          docker exec yak-task-mysql mysql -uroot -plocaltestpass -e 'CREATE DATABASE yak_schedule_contract'
+          bash mvnw -B -ntp -pl yak-ops-boot -am -Dtest=ScheduleAdmissionIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Package Yak Ops executable
         run: bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
       - name: Exercise authenticated Task execution and reconciliation

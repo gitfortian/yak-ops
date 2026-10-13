@@ -23,6 +23,12 @@ public class ScheduleSummaryVO {
     private long revision;
     /** PENDING until an engine observation can prove applied state. */
     private String registrationStatus;
+    /** Safe reason for a failed registration observation, absent when healthy. */
+    private String registrationReason;
+    /** UTC time of the current engine observation. */
+    private Instant registrationObservedTime;
+    /** Whether the enabled finite time rule has no future occurrence. */
+    private boolean exhausted;
     /** Engine-observed next fire instant; null when registration is unobserved. */
     private Instant nextFireTime;
 }

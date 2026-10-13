@@ -96,6 +96,10 @@ public class TaskInstanceController {
     }
 
     private InstanceVO toInstance(InstanceEntity value) {
+        java.time.Instant scheduledTime = null;
+        if (value.getScheduledTime() != null) {
+            scheduledTime = value.getScheduledTime().toInstant(java.time.ZoneOffset.UTC);
+        }
         return new InstanceVO(
                 value.getId(),
                 value.getDefinitionId(),
@@ -109,6 +113,9 @@ public class TaskInstanceController {
                 value.getStartTime(),
                 value.getEndTime(),
                 value.getFailureCode(),
-                value.getCreateTime());
+                value.getCreateTime(),
+                value.getScheduleId(),
+                value.getScheduleRevision(),
+                scheduledTime);
     }
 }

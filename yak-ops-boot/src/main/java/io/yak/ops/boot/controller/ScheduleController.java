@@ -2,9 +2,12 @@ package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.schedule.ScheduleService;
 import io.yak.ops.common.bean.dto.schedule.CreateScheduleDTO;
+import io.yak.ops.common.bean.dto.schedule.ScheduleFireQueryDTO;
 import io.yak.ops.common.bean.dto.schedule.SchedulePreviewDTO;
 import io.yak.ops.common.bean.dto.schedule.ScheduleQueryDTO;
+import io.yak.ops.common.bean.dto.schedule.ScheduleRevisionDTO;
 import io.yak.ops.common.bean.dto.schedule.UpdateScheduleDTO;
+import io.yak.ops.common.bean.vo.schedule.ScheduleFireVO;
 import io.yak.ops.common.bean.vo.schedule.SchedulePreviewVO;
 import io.yak.ops.common.bean.vo.schedule.ScheduleSummaryVO;
 import io.yak.ops.common.bean.vo.schedule.ScheduleVO;
@@ -61,6 +64,24 @@ public class ScheduleController {
     public Result<Boolean> delete(@PathVariable String id, @RequestParam long revision) {
         service.delete(WorkspaceContext.requireWorkspaceId(), id, revision, authenticationManager.getLoginUserId());
         return Result.success(true);
+    }
+
+    @PostMapping("/{id}/enable")
+    public Result<ScheduleVO> enable(@PathVariable String id, @Valid @RequestBody ScheduleRevisionDTO dto) {
+        return Result.success(service.enable(
+                WorkspaceContext.requireWorkspaceId(), id, dto.revision(), authenticationManager.getLoginUserId()));
+    }
+
+    @PostMapping("/{id}/disable")
+    public Result<ScheduleVO> disable(@PathVariable String id, @Valid @RequestBody ScheduleRevisionDTO dto) {
+        return Result.success(service.disable(
+                WorkspaceContext.requireWorkspaceId(), id, dto.revision(), authenticationManager.getLoginUserId()));
+    }
+
+    @PostMapping("/{id}/fires/page")
+    public Result<PagingData<ScheduleFireVO>> fires(
+            @PathVariable String id, @Valid @RequestBody ScheduleFireQueryDTO dto) {
+        return Result.success(PagingData.from(service.fires(WorkspaceContext.requireWorkspaceId(), id, dto)));
     }
 
     @PostMapping("/preview")

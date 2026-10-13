@@ -201,7 +201,7 @@ def create_datasource(client, name, kind, database, username, port):
     return found[0]
 
 
-def create_task(client, name, source, target, streaming, debug=False):
+def create_task(client, name, source, target, streaming, debug=False, sink_table="ods_orders"):
     params = {
         "source": {
             "type": "MYSQL_CDC" if streaming else "JDBC",
@@ -210,7 +210,7 @@ def create_task(client, name, source, target, streaming, debug=False):
         "transform": [],
         "sink": {
             "type": "JDBC", "datasourceId": target,
-            "schema": "public", "table": "ods_orders",
+            "schema": "public", "table": sink_table,
             "writeMode": "UPSERT" if streaming else "APPEND",
         },
     }
@@ -260,7 +260,7 @@ def verify_schedule_configuration(client, definition):
     identity = created["id"]
     assert created["enabled"] is False and created["revision"] == 1
     assert created["schedulable"] is True
-    assert created["registrationStatus"] == "PENDING"
+    assert created["registrationStatus"] == "APPLIED"
     assert created.get("nextFireTime") is None
     client.call("POST", base, payload, status=409)
     client.call("POST", base, dict(payload, targetType="WORKFLOW"), status=400)
@@ -304,6 +304,67 @@ def verify_schedule_configuration(client, definition):
     else:
         raise AssertionError("MySQL allowed duplicate live schedule target")
     return restored["id"]
+
+
+
+def fire_page(client, schedule):
+    return client.call("POST", f"/api/v1/schedules/{schedule}/fires/page", {
+        "pageNo": 1, "pageSize": 100})
+
+
+def verify_periodic_jdbc(client, source, target):
+    """Require an actual Quartz callback through admission, dispatch and a physical JDBC transfer."""
+    query_postgres("CREATE TABLE public.scheduled_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
+    definition = create_task(client, "scheduled-" + uuid.uuid4().hex[:8], source, target, False,
+                             debug=True, sink_table="scheduled_orders")
+    schedule = client.call("POST", "/api/v1/schedules", {
+        "targetType": "TASK", "targetId": definition, "cronExpression": "0/10 * * * * ?", "timeZone": "UTC"})
+    identity = schedule["id"]
+    enabled = client.call("POST", f"/api/v1/schedules/{identity}/enable", {"revision": 1})
+    assert enabled["enabled"] and enabled["revision"] == 2
+    until("Quartz registration", lambda: client.call("GET", f"/api/v1/schedules/{identity}"),
+          lambda value: value["registrationStatus"] == "APPLIED", timeout=45)
+    page = until("Scheduled JDBC admission", lambda: fire_page(client, identity),
+                 lambda value: any(row["outcome"] == "ADMITTED" for row in value["bizData"]), timeout=60)
+    stopped = client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})
+    assert not stopped["enabled"] and stopped["revision"] == 3
+    # Repeating a stopped intent is harmless, even when the supplied prior revision is stale.
+    assert client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})["revision"] == 3
+    fire = next(row for row in page["bizData"] if row["outcome"] == "ADMITTED")
+    instance_id = fire["instanceId"]
+    wait_status(client, instance_id, {"FINISHED"})
+    instance = client.call("GET", f"/api/v1/task-instances/{instance_id}")
+    assert instance["triggerType"] == "SCHEDULE" and instance["scheduleId"] == identity
+    assert instance["scheduleRevision"] == 2 and instance["scheduledTime"] == fire["scheduledTime"]
+    assert instance["definitionId"] == definition and instance["definitionVersion"] == 1
+    assert query_postgres("SELECT COUNT(*) FROM public.scheduled_orders") == "2"
+    assert claim_count(instance_id) == 0
+    logs = client.download(f"/api/v1/task-instances/{instance_id}/logs/download").decode("utf-8")
+    assert "JDBC query executed" in logs and "JDBC sink summary" in logs and DB_PASSWORD not in logs
+    assert query_mysql("SELECT COUNT(*) FROM yak_security.YAK_QRTZ_JOB_DETAILS WHERE JOB_NAME='"
+                       + client.workspace + "/" + identity + "'") == "0"
+    # A second actual Cron boundary after stop must not produce another admitted instance.
+    deadline = time.monotonic() + 11
+    while time.monotonic() < deadline:
+        assert query_mysql("SELECT COUNT(*) FROM yak_security.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "1"
+        time.sleep(0.5)
+    print("PASS scheduled JDBC: Quartz -> fire admission -> Instance -> dispatcher -> JDBC", flush=True)
+
+
+def verify_busy_schedule(client, source, target):
+    """A continuous writer owns the same target; the new periodic fire must be a durable skip."""
+    definition = create_task(client, "busy-schedule-" + uuid.uuid4().hex[:8], source, target, False)
+    schedule = client.call("POST", "/api/v1/schedules", {
+        "targetType": "TASK", "targetId": definition, "cronExpression": "0/5 * * * * ?", "timeZone": "UTC"})
+    identity = schedule["id"]
+    client.call("POST", f"/api/v1/schedules/{identity}/enable", {"revision": 1})
+    page = until("Resource-busy schedule fire", lambda: fire_page(client, identity),
+                 lambda value: value["pagination"]["total"] > 0, timeout=45)
+    client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})
+    assert all(row["outcome"] == "SKIPPED" and row["reason"] == "RESOURCE_BUSY"
+               and row.get("instanceId") is None for row in page["bizData"])
+    assert query_mysql("SELECT COUNT(*) FROM yak_security.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "0"
+    print("PASS scheduled resource conflict: durable skip without an Instance", flush=True)
 
 
 def acceptance():
@@ -411,26 +472,33 @@ def acceptance():
             "status": "RUNNING"})
         assert excluded["pagination"]["total"] == 0
 
+        verify_periodic_jdbc(client, source, target)
+
         # A soft-deleted Definition cannot remove a historical Instance's pinned version.
-        query_mysql("UPDATE yak_security.yak_ops_schedule SET enabled=1,enabled_at=UTC_TIMESTAMP(3),enabled_by=create_by WHERE id='" + schedule_id + "'")
+        # Use a future yearly expression, then activate via the real authenticated API.
+        client.call("PUT", f"/api/v1/schedules/{schedule_id}", {
+            "revision": 1, "cronExpression": "0 0 0 1 1 ?", "timeZone": "UTC"})
+        client.call("POST", f"/api/v1/schedules/{schedule_id}/enable", {"revision": 2})
         client.call("POST", f"/api/v1/task-definitions/{jdbc}/unpublish")
         stopped = client.call("GET", f"/api/v1/schedules/{schedule_id}")
-        assert stopped["enabled"] is False and stopped["revision"] == 2
+        assert stopped["enabled"] is False and stopped["revision"] == 4
         assert stopped["eligibilityReason"] == "TARGET_UNPUBLISHED"
         client.call("DELETE", f"/api/v1/task-definitions/{jdbc}")
         assert client.call("GET", f"/api/v1/task-instances/{first}/definition") == snapshot
         assert client.call("GET", f"/api/v1/schedules/{schedule_id}")["eligibilityReason"] == "TARGET_DELETED"
-        client.call("DELETE", f"/api/v1/schedules/{schedule_id}?revision=2")
+        client.call("DELETE", f"/api/v1/schedules/{schedule_id}?revision=4")
 
         cdc = create_task(client, "cdc-" + uuid.uuid4().hex[:8],
                           source, target, True)
         cdc_schedule = client.call("POST", "/api/v1/schedules", {
             "targetType": "TASK", "targetId": cdc, "cronExpression": "0 * * * * ?", "timeZone": "UTC"})
         assert not cdc_schedule["schedulable"] and cdc_schedule["eligibilityReason"] == "NOT_SCHEDULABLE"
+        client.call("POST", f"/api/v1/schedules/{cdc_schedule['id']}/enable", {"revision": 1}, status=400)
         continuous, _ = submit(client, cdc)
         running = continuous["instanceId"]
         wait_status(client, running, {"RUNNING"})
         assert claim_count(running) == 2
+        verify_busy_schedule(client, source, target)
         assert client.call("GET", f"/api/v1/task-instances/{running}")["debug"] is False
         live_metrics = client.call(
             "GET", dashboard_path + "?syncType=REALTIME&range=LAST_7_DAYS")

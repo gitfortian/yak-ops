@@ -51,8 +51,8 @@ class TaskExecutionServiceTest {
 
     @Test
     void workflowSubmissionDispatchesInItsExplicitWorkspace() {
-        TaskSubmissionCommand command =
-                new TaskSubmissionCommand("workflow-workspace", "d", TaskTriggerType.WORKFLOW, "workflow-123", "system");
+        TaskSubmissionCommand command = new TaskSubmissionCommand(
+                "workflow-workspace", "d", TaskTriggerType.WORKFLOW, "workflow-123", "system", null, null, null);
         SubmissionResult result = new SubmissionResult("i", 2, TaskInstanceStatus.SUBMITTED, false);
         when(submissions.submit(command)).thenReturn(result);
 
@@ -68,7 +68,7 @@ class TaskExecutionServiceTest {
     }
 
     private TaskSubmissionCommand manual() {
-        return new TaskSubmissionCommand("ws", "d", TaskTriggerType.MANUAL, "request-123", "user");
+        return new TaskSubmissionCommand("ws", "d", TaskTriggerType.MANUAL, "request-123", "user", null, null, null);
     }
 
     private void inject(String fieldName, Object dependency) {

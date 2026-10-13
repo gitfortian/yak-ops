@@ -4,6 +4,7 @@ import io.yak.ops.common.enums.schedule.ScheduleTargetType;
 import io.yak.ops.common.page.PageData;
 import io.yak.ops.dao.entity.schedule.ScheduleEntity;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /** Workspace-scoped schedule persistence; mutations follow the Definition-before-Schedule lock order. */
@@ -13,6 +14,43 @@ public interface ScheduleRepository {
      * @param entity initialized schedule with an explicit Workspace and audit identity
      */
     void add(ScheduleEntity entity);
+
+    /**
+     * Reads retained identity for trigger resolution and historical authorization.
+     * @param workspaceId owning Workspace
+     * @param id schedule identity
+     * @return row including logical deletion, or empty
+     */
+    Optional<ScheduleEntity> queryIncludingDeleted(String workspaceId, String id);
+
+    /**
+     * Locks retained identity after its Definition is locked.
+     * @param workspaceId owning Workspace
+     * @param id schedule identity
+     * @return locked row including logical deletion, or empty
+     */
+    Optional<ScheduleEntity> lockIncludingDeleted(String workspaceId, String id);
+
+    /**
+     * Scans retained rows for owner-controlled reconciliation and history cleanup.
+     * @param afterId exclusive last scanned identifier, null for the first page
+     * @param limit maximum batch size
+     * @return next stable ID-ordered batch, including deleted identities
+     */
+    List<ScheduleEntity> scan(String afterId, int limit);
+
+    /**
+     * Changes desired enablement after Definition/Schedule locks and authorization checks.
+     * @param workspaceId owning Workspace
+     * @param id live schedule
+     * @param revision expected locked revision
+     * @param enabled desired enablement
+     * @param at UTC mutation and activation time
+     * @param operator authorizing actor
+     * @return true when the expected row was changed
+     */
+    boolean setEnabled(
+            String workspaceId, String id, long revision, boolean enabled, LocalDateTime at, String operator);
 
     /**
      * Reads a live schedule without locking it.
