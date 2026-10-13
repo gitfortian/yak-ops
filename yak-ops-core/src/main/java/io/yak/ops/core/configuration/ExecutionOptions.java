@@ -2,7 +2,6 @@ package io.yak.ops.core.configuration;
 
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
-
 import io.yak.ops.core.api.RuntimeExecutionMode;
 
 /**
