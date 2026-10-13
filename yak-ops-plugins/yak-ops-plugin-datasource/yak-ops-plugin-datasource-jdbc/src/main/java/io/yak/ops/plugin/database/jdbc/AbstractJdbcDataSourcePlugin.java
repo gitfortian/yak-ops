@@ -61,6 +61,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 .build();
 
         OptionRule sshEnabled = OptionRule.builder()
+                .required(HOST, Conditions.notBlank(HOST))
+                .required(DATABASE, Conditions.notBlank(DATABASE))
                 .required(SSH_HOST, Conditions.notBlank(SSH_HOST))
                 .required(SSH_USERNAME, Conditions.notBlank(SSH_USERNAME))
                 .conditionalRule(
@@ -235,15 +237,12 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             String password = options.get(PASSWORD);
             String driverId = normalizeDriverId(root);
             String driver = normalizeDriverClassName(root, driverId);
-            SshTunnelConfig sshTunnel = parseSshTunnel(root);
+            SshTunnelConfig sshTunnel = parseSshTunnel(options);
 
             String jdbcUrl;
             if (sshTunnel.enabled()) {
                 // A stored normalized tunnel configuration also contains a generated jdbcUrl.
                 // Always construct the tunnel target from its authorized structured fields.
-                if (StringUtils.isBlank(host) || StringUtils.isBlank(database)) {
-                    throw parameterError("SSH tunnel requires structured host and database", null);
-                }
                 jdbcUrl = buildJdbcUrl(host, port, database, root);
             } else if (explicitUrl == null) {
                 jdbcUrl = buildJdbcUrl(host, port, database, root);
@@ -441,87 +440,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         return normalized;
     }
 
-    protected final void normalizeBooleanProperty(Map<String, String> properties, String key) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
-            throw parameterError("JDBC 属性 " + key + " 仅支持 true 或 false", null);
-        }
-        properties.put(key, value.toLowerCase(Locale.ROOT));
-    }
-
-    protected final void normalizeUpperCaseEnumProperty(
-            Map<String, String> properties, String key, Set<String> allowedValues) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        String normalized = value.toUpperCase(Locale.ROOT);
-        if (!allowedValues.contains(normalized)) {
-            throw parameterError("JDBC 属性 " + key + " 不支持值：" + value, null);
-        }
-        properties.put(key, normalized);
-    }
-
-    protected final void normalizeLowerCaseEnumProperty(
-            Map<String, String> properties, String key, Set<String> allowedValues) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        String normalized = value.toLowerCase(Locale.ROOT);
-        if (!allowedValues.contains(normalized)) {
-            throw parameterError("JDBC 属性 " + key + " 不支持值：" + value, null);
-        }
-        properties.put(key, normalized);
-    }
-
-    protected final void validateNonNegativeIntegerProperty(Map<String, String> properties, String key) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        try {
-            if (Integer.parseInt(value) < 0) {
-                throw parameterError("JDBC 属性 " + key + " 不能小于 0", null);
-            }
-        } catch (NumberFormatException exception) {
-            throw parameterError("JDBC 属性 " + key + " 必须是整数", exception);
-        }
-        properties.put(key, value);
-    }
-
-    protected final void validatePositiveIntegerProperty(Map<String, String> properties, String key) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        try {
-            if (Integer.parseInt(value) <= 0) {
-                throw parameterError("JDBC 属性 " + key + " 必须大于 0", null);
-            }
-        } catch (NumberFormatException exception) {
-            throw parameterError("JDBC 属性 " + key + " 必须是整数", exception);
-        }
-        properties.put(key, value);
-    }
-
-    protected final void validateNonBlankProperty(Map<String, String> properties, String key) {
-        if (!properties.containsKey(key)) return;
-        String value = StringUtils.trimToNull(properties.get(key));
-        if (value == null) {
-            throw parameterError("JDBC 属性 " + key + " 不能为空", null);
-        }
-        properties.put(key, value);
-    }
-
     protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {}
 
     protected String inferDatabase(String jdbcUrl) {
@@ -573,69 +491,21 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 .replace("+", "%20");
     }
 
-    private SshTunnelConfig parseSshTunnel(JsonNode root) {
-        JsonNode node = root.get("sshTunnel");
-        if (node == null || node.isNull()) {
-            node = root.get("ssh");
-        }
-        if (node == null || node.isNull()) {
+    private SshTunnelConfig parseSshTunnel(ReadonlyConfig options) {
+        if (!options.get(SSH_ENABLED)) {
             return SshTunnelConfig.disabled();
         }
-        if (!node.isObject()) {
-            throw parameterError("sshTunnel 必须是 JSON 对象", null);
-        }
-
-        boolean enabled = booleanValue(node, false, "enabled");
-        if (!enabled) {
-            return SshTunnelConfig.disabled();
-        }
-
-        String host = StringUtils.trimToNull(JSONUtils.firstText(node, "host", "sshHost"));
-        int port = intValue(node, 22, "port");
-        String username = StringUtils.trimToNull(JSONUtils.firstText(node, "username", "user"));
-        String authValue = StringUtils.trimToNull(JSONUtils.firstText(node, "authType", "authenticationType"));
-        if (authValue == null) authValue = SshAuthType.PASSWORD.name();
-        authValue = authValue.toUpperCase(Locale.ROOT);
-        SshAuthType authType;
-        try {
-            authType = SshAuthType.valueOf(authValue);
-        } catch (IllegalArgumentException exception) {
-            throw parameterError("SSH 认证方式仅支持 PASSWORD 或 PRIVATE_KEY", exception);
-        }
-
-        String sshPassword = JSONUtils.firstText(node, "password");
-        String privateKey = JSONUtils.firstText(node, "privateKey", "privateKeyContent");
-        String passphrase = JSONUtils.firstText(node, "passphrase", "privateKeyPassphrase");
-        boolean strictHostKeyChecking = booleanValue(node, false, "strictHostKeyChecking");
-        String knownHosts = JSONUtils.firstText(node, "knownHosts", "knownHostsContent");
-
-        if (StringUtils.isBlank(host)) {
-            throw parameterError("SSH host 不能为空", null);
-        }
-        if (StringUtils.isBlank(username)) {
-            throw parameterError("SSH username 不能为空", null);
-        }
-        if (authType == SshAuthType.PASSWORD && StringUtils.isBlank(sshPassword)) {
-            throw parameterError("SSH password 不能为空", null);
-        }
-        if (authType == SshAuthType.PRIVATE_KEY && StringUtils.isBlank(privateKey)) {
-            throw parameterError("SSH privateKey 不能为空", null);
-        }
-        if (strictHostKeyChecking && StringUtils.isBlank(knownHosts)) {
-            throw parameterError("开启 SSH 严格主机校验后 knownHosts 不能为空", null);
-        }
-
         return new SshTunnelConfig(
                 true,
-                host,
-                port,
-                username,
-                authType,
-                sshPassword,
-                privateKey,
-                passphrase,
-                strictHostKeyChecking,
-                knownHosts);
+                options.get(SSH_HOST).trim(),
+                options.get(SSH_PORT),
+                options.get(SSH_USERNAME).trim(),
+                SshAuthType.valueOf(options.get(SSH_AUTH_TYPE)),
+                options.get(SSH_PASSWORD),
+                options.get(SSH_PRIVATE_KEY),
+                options.get(SSH_PASSPHRASE),
+                options.get(SSH_STRICT_HOST_KEY_CHECKING),
+                options.get(SSH_KNOWN_HOSTS));
     }
 
     private void writeSshTunnel(ObjectNode normalized, SshTunnelConfig config) {
@@ -696,29 +566,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         } catch (Exception exception) {
             throw parameterError("properties 不是合法 JSON", exception);
         }
-    }
-
-    private int intValue(JsonNode root, int defaultValue, String key) {
-        JsonNode value = root.get(key);
-        if (value == null || value.isNull() || StringUtils.isBlank(value.asText())) {
-            return defaultValue;
-        }
-        int port = value.asInt(-1);
-        if (port < 1 || port > 65535) {
-            throw parameterError(key + " 必须在 1 到 65535 之间", null);
-        }
-        return port;
-    }
-
-    private boolean booleanValue(JsonNode root, boolean defaultValue, String key) {
-        JsonNode value = root.get(key);
-        if (value == null || value.isNull() || StringUtils.isBlank(value.asText())) {
-            return defaultValue;
-        }
-        if (value.isBoolean()) {
-            return value.asBoolean();
-        }
-        return Boolean.parseBoolean(value.asText());
     }
 
     private void putIfText(ObjectNode target, String key, String value) {
