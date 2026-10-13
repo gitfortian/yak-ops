@@ -1,0 +1,70 @@
+name: Connector Refactor Workbench
+
+on:
+  push:
+    branches:
+      - refactor/connector-factory-datasource-access-simplification
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-refactor-workbench
+  cancel-in-progress: false
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        if: ${{ hashFiles('.connector-refactor.patch') != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply reviewed refactor patch
+        if: ${{ hashFiles('.connector-refactor.patch') != '' }}
+        run: |
+          git apply --check .connector-refactor.patch
+          git apply .connector-refactor.patch
+          rm .connector-refactor.patch
+          bash mvnw -B -ntp -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'refactor: simplify connector factories and datasource access'
+          git push origin HEAD
+      - name: Verify refactor
+        if: ${{ hashFiles('.connector-refactor.patch') != '' || contains(github.event.head_commit.message, 'verify connector refactor') }}
+        run: bash mvnw -B -ntp -pl '!yak-ops-ui,!yak-ops-dist' verify
+      - name: Export tracked source
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, zipfile
+          paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          with zipfile.ZipFile('/tmp/connector-refactor-source.zip', 'w', zipfile.ZIP_DEFLATED) as output:
+              for name in paths:
+                  if name and pathlib.Path(name).is_file():
+                      output.write(name, name)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connector-refactor-source
+          path: /tmp/connector-refactor-source.zip
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: connector-refactor-test-reports
+          path: '**/target/surefire-reports/**'
+          if-no-files-found: ignore
+          retention-days: 2
