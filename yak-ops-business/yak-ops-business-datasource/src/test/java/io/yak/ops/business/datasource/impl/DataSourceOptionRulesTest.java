@@ -32,6 +32,8 @@ class DataSourceOptionRulesTest {
         assertNull(value(mysql, "password").defaultValue());
         assertNull(value(mysql, "sshTunnel.password").defaultValue());
         assertNull(value(mysql, "sshTunnel.privateKey").defaultValue());
+        assertTrue(value(mysql, "username").required());
+        assertTrue(!value(mysql, "sshTunnel.host").required());
         assertTrue(mysql.options().stream().noneMatch(option -> option.key().equals("private-secret")));
     }
 
