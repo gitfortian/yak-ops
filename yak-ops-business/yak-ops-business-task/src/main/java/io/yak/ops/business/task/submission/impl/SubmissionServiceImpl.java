@@ -4,10 +4,9 @@ import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.business.task.submission.AdmissionService;
 import io.yak.ops.business.task.submission.SubmissionResult;
 import io.yak.ops.business.task.submission.SubmissionService;
-import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.business.task.submission.TaskSubmissionCommand;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.task.DefinitionStatus;
-import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.util.IdUtils;
 import io.yak.ops.dao.entity.task.AttemptEntity;
@@ -21,9 +20,9 @@ import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
-import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.validation.TaskValidationContextFactory;
 import jakarta.annotation.Resource;
 import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
@@ -52,22 +51,28 @@ public class SubmissionServiceImpl implements SubmissionService {
     private TaskPluginRegistry plugins;
 
     @Resource
-    private TaskValidationContext validationContext;
+    private TaskValidationContextFactory validationContexts;
 
     @Resource
     private AdmissionService admission;
 
     @Override
-    public SubmissionResult submitManual(String definitionId, String requestId, String operatorId) {
-        String workspaceId = WorkspaceContext.requireWorkspaceId();
-        if (definitionId == null
-                || definitionId.isBlank()
-                || requestId == null
-                || !requestId.matches("[A-Za-z0-9_-]{8,128}")) {
+    public SubmissionResult submit(TaskSubmissionCommand command) {
+        if (command == null
+                || command.workspaceId() == null
+                || command.workspaceId().isBlank()
+                || command.triggerType() == null
+                || command.definitionId() == null
+                || command.definitionId().isBlank()
+                || command.requestId() == null
+                || !command.requestId().matches("[A-Za-z0-9_-]{8,128}")) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
-        String fingerprint = "MANUAL:" + definitionId;
-        var existing = instances.findByRequest(workspaceId, TaskTriggerType.MANUAL, requestId);
+        String workspaceId = command.workspaceId();
+        String definitionId = command.definitionId();
+        String requestId = command.requestId();
+        String fingerprint = command.triggerType().name() + ":" + definitionId;
+        var existing = instances.findByRequest(workspaceId, command.triggerType(), requestId);
         if (existing.isPresent()) {
             return replay(existing.orElseThrow(), fingerprint);
         }
@@ -86,17 +91,17 @@ public class SubmissionServiceImpl implements SubmissionService {
         var snapshot = versions.queryCurrent(workspaceId, definitionId, version)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         TaskParameters parameters = executable.parse(snapshot.getParameters());
-        executable.validate(parameters, validationContext);
-        TaskExecutionContext context =
-                new TaskExecutionContext(workspaceId, definitionId, version, IdUtils.nextId(), IdUtils.nextId());
-        TaskExecutionPlan plan = executable.plan(parameters, context);
+        executable.validate(parameters, validationContexts.forWorkspace(workspaceId));
+        TaskExecutionIdentity context =
+                new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId(), IdUtils.nextId());
+        TaskAdmissionPlan plan = executable.plan(parameters, context);
         AdmissionRequest request =
-                new AdmissionRequest(context, requestId, fingerprint, operatorId, parameters, plan, executable);
+                new AdmissionRequest(context, command.triggerType(), requestId, fingerprint, command.operatorId(), parameters, plan, executable);
         try {
             return admission.admit(request);
         } catch (DuplicateKeyException duplicate) {
             return instances
-                    .findByRequest(workspaceId, TaskTriggerType.MANUAL, requestId)
+                    .findByRequest(workspaceId, command.triggerType(), requestId)
                     .map(instance -> replay(instance, fingerprint))
                     .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION));
         }
