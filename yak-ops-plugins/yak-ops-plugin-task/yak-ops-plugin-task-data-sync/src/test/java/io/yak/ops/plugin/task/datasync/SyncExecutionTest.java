@@ -18,8 +18,8 @@ import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.execution.SyncExecutionPlanner;
@@ -45,8 +45,8 @@ class SyncExecutionTest {
                     new Column("id", LogicalTypes.BIGINT.copy(false)),
                     new Column("name", LogicalTypes.varchar(32))),
             List.of("id"));
-    private static final TaskExecutionContext CONTEXT =
-            new TaskExecutionContext("ws", "definition", 1, "instance-123", "attempt-123");
+    private static final TaskExecutionIdentity CONTEXT =
+            new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-123");
 
     @Test
     void boundedJdbcRunsThroughExistingPipelineExecutor() {
@@ -54,7 +54,7 @@ class SyncExecutionTest {
         AtomicInteger submissions = new AtomicInteger();
         SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
         SyncParameters parameters = parameters(false);
-        TaskExecutionPlan plan = plugin.plan(parameters, CONTEXT);
+        TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertEquals(1, plan.exclusiveResources().size());
         assertEquals("DATA_SYNC_TARGET", plan.exclusiveResources().getFirst().type());
         assertEquals(0, resources.connections.get());
@@ -74,7 +74,7 @@ class SyncExecutionTest {
         AtomicInteger submissions = new AtomicInteger();
         SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
         SyncParameters parameters = parameters(false);
-        TaskExecutionPlan admitted = plugin.plan(parameters, CONTEXT);
+        TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
         resources.targetRevision++;
         CompletionException failure = assertThrows(
                 CompletionException.class,
@@ -91,7 +91,7 @@ class SyncExecutionTest {
         AtomicInteger submissions = new AtomicInteger();
         SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
         SyncParameters parameters = parameters(true);
-        TaskExecutionPlan plan = plugin.plan(parameters, CONTEXT);
+        TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertTrue(plan.resourceRevision().length() <= 128);
         var handle = plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join();
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
