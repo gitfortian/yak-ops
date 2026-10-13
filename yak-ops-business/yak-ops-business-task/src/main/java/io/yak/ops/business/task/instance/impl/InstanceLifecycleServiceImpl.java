@@ -51,7 +51,11 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Transactional(rollbackFor = Exception.class)
     public void started(DispatchTicket ticket, TaskRuntimeReference reference) {
         if (!instances.markRunning(
-                ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), reference.engine(), reference.id())) {
+                ticket.workspaceId(),
+                ticket.instanceId(),
+                ticket.dispatchToken(),
+                reference.engine(),
+                reference.id())) {
             throw new IllegalStateException("Task Instance launch ownership changed");
         }
     }
@@ -125,11 +129,14 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Transactional(rollbackFor = Exception.class)
     public void reconcilePrevious(String currentOwner) {
         for (InstanceEntity instance : instances.activeByOtherOwner(currentOwner)) {
-            instances.findByIdForUpdate(instance.getWorkspaceId(), instance.getId()).ifPresent(locked -> {
-                if (!locked.getStatus().isTerminal()) {
-                    instances.markReconciling(locked.getWorkspaceId(), locked.getId(), locked.getDispatchToken());
-                }
-            });
+            instances
+                    .findByIdForUpdate(instance.getWorkspaceId(), instance.getId())
+                    .ifPresent(locked -> {
+                        if (!locked.getStatus().isTerminal()) {
+                            instances.markReconciling(
+                                    locked.getWorkspaceId(), locked.getId(), locked.getDispatchToken());
+                        }
+                    });
         }
     }
 }
