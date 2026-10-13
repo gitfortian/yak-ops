@@ -12,7 +12,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.source.split.JdbcSchemaFingerprint;
 import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
