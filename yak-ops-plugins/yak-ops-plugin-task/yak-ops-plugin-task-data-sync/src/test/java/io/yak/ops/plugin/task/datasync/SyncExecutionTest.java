@@ -13,6 +13,7 @@ import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.api.dag.Pipeline;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.connector.jdbc.source.JdbcSource;
@@ -32,6 +33,7 @@ import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
+import io.yak.ops.plugin.task.datasync.pipeline.SyncRuntimeOptions;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
@@ -40,6 +42,7 @@ import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -219,6 +222,63 @@ class SyncExecutionTest {
 
         assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
         assertEquals(0, submissions.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+
+    @Test
+    void cdcPlanReservesTheReplicationServerIdAlongsideTheTarget() {
+        Resources resources = new Resources();
+        SyncJobPlanner planner = new SyncJobPlanner(resources, new SyncConnectorFactoryRegistry());
+        SyncParameters parameters = parameters(true);
+        TaskAdmissionPlan admitted = planner.plan(parameters, CONTEXT);
+        TaskExecutionIdentity anotherAttempt =
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-456");
+
+        assertEquals(2, admitted.exclusiveResources().size());
+        assertTrue(admitted.exclusiveResources().stream().anyMatch(
+                resource -> resource.type().equals("DATA_SYNC_TARGET")));
+        assertTrue(admitted.exclusiveResources().stream().anyMatch(
+                resource -> resource.type().equals("MYSQL_CDC_SERVER_ID")));
+        assertEquals(admitted, planner.plan(parameters, anotherAttempt));
+        assertEquals(0, resources.connections.get());
+    }
+
+    @Test
+    void systemRuntimeOptionsControlGraphParallelismAndSameJobRecovery() {
+        Resources resources = new Resources();
+        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
+        SyncRuntimeOptions options = new SyncRuntimeOptions(2, 1, 512, 64, Duration.ofMillis(750), 2);
+        SyncPipelineCompiler compiler =
+                new SyncPipelineCompiler(resources, factories, options, Path.of("target/data-sync"));
+        SyncParameters parameters = parameters(true);
+
+        var compiled = compiler.compile(planner.prepare(parameters, CONTEXT), CONTEXT);
+
+        assertEquals(2, compiled.graph().getSourceNodes().getFirst().getParallelism());
+        assertEquals(1, compiled.graph().getSinkNodes().getFirst().getParallelism());
+        assertEquals(Duration.ofMillis(750), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertEquals(2, compiled.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
+        assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
+        assertEquals(2, resources.connections.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void refusesChangelogSinkScalingBeforeLoadingConnectionCredentials() {
+        Resources resources = new Resources();
+        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
+        SyncRuntimeOptions settings = new SyncRuntimeOptions(2, 2, 1024, 256, Duration.ofSeconds(10), 1);
+        SyncPipelineCompiler compiler =
+                new SyncPipelineCompiler(resources, factories, settings, Path.of("target/data-sync"));
+        SyncParameters parameters = parameters(true);
+
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> compiler.compile(planner.prepare(parameters, CONTEXT), CONTEXT));
+        assertEquals(0, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
     }
 

@@ -15,6 +15,7 @@ import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -74,8 +75,10 @@ public final class SyncJobPlanner {
                 + encodePart(Long.toString(to.revision()))
                 + encodeTable(to.table())
                 + encodeSchema(to.schema());
-        TaskAdmissionPlan admission =
-                new TaskAdmissionPlan(List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
+        List<ExecutionResource> claims = new ArrayList<>();
+        claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
+        claims.addAll(sourceFactory.exclusiveResources(source, context));
+        TaskAdmissionPlan admission = new TaskAdmissionPlan(claims, sha256(binding));
         return new SyncJobPlan(source, sink, from, to, admission);
     }
 
