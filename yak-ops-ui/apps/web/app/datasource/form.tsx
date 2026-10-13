@@ -27,12 +27,12 @@ import { useEffect, useState } from "react";
 
 import {
   createDataSource,
+  datasourceValidationErrors,
   getDataSourceConnectionPropertyKeys,
   getDataSourceOptionRules,
   testDataSourceConnectionWithParams,
   updateDataSource,
 } from "@/service/datasource";
-import { BizError } from "@/service/http/request";
 import {
   listUserPreferences,
   recordUserPreferenceUsage,
@@ -51,7 +51,6 @@ import type {
   DataSourceOptionRules,
   DataSourceRecord,
   DataSourceSavePayload,
-  DataSourceValidationError,
 } from "./types";
 
 interface DataSourceFormProps {
@@ -406,8 +405,8 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
   }, [createStep, open, values.dbType]);
 
   const applyValidationErrors = (error: unknown) => {
-    if (!(error instanceof BizError) || !Array.isArray(error.response?.data)) return;
-    const reported = error.response.data as DataSourceValidationError[];
+    const reported = datasourceValidationErrors(error);
+    if (!reported.length) return;
     const next: FormErrors = {};
     const fields = new Set<FormErrorKey>([
       "jdbcUrl",
