@@ -1,6 +1,9 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.task.submission.SubmissionResult;
+import io.yak.ops.business.task.submission.TaskSubmissionCommand;
+import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
@@ -27,7 +30,13 @@ public class TaskExecutionController {
     @PostMapping("/{id}/instances")
     public ResponseEntity<Result<SubmissionResult>> run(
             @PathVariable String id, @RequestHeader(value = "Idempotency-Key", required = false) String requestId) {
-        SubmissionResult result = service.submitManual(id, requestId, authenticationManager.getLoginUserId());
+        TaskSubmissionCommand command = new TaskSubmissionCommand(
+                WorkspaceContext.requireWorkspaceId(),
+                id,
+                TaskTriggerType.MANUAL,
+                requestId,
+                authenticationManager.getLoginUserId());
+        SubmissionResult result = service.submit(command);
         return ResponseEntity.accepted().body(Result.success(result));
     }
 }
