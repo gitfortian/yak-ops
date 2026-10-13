@@ -42,14 +42,14 @@ public class TaskPluginConfiguration {
             @Value("${yak.task.data-sync.sink-parallelism:1}") int sinkParallelism,
             @Value("${yak.task.data-sync.cdc.snapshot-chunk-size:1024}") int snapshotChunkSize,
             @Value("${yak.task.data-sync.cdc.queue-capacity:256}") int cdcQueueCapacity,
-            @Value("${yak.task.data-sync.cdc.checkpoint-interval:PT10S}") Duration checkpointInterval,
+            @Value("${yak.task.data-sync.cdc.checkpoint-interval:PT10S}") String checkpointInterval,
             @Value("${yak.task.data-sync.cdc.max-restarts:1}") int maxRestarts) {
         return new SyncRuntimeOptions(
                 sourceParallelism,
                 sinkParallelism,
                 snapshotChunkSize,
                 cdcQueueCapacity,
-                checkpointInterval,
+                Duration.parse(checkpointInterval),
                 maxRestarts);
     }
 
