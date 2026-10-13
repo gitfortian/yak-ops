@@ -32,7 +32,8 @@ public final class ConnectorFactoryRegistry {
 
     /** Registers explicit factories for embedding and tests. */
     public ConnectorFactoryRegistry(
-            Iterable<? extends TableSourceFactory> sourceFactories, Iterable<? extends TableSinkFactory> sinkFactories) {
+            Iterable<? extends TableSourceFactory> sourceFactories,
+            Iterable<? extends TableSinkFactory> sinkFactories) {
         this(
                 SpiRegistry.of(sourceFactories, factory -> List.of(factory.identifier())),
                 SpiRegistry.of(sinkFactories, factory -> List.of(factory.identifier())));

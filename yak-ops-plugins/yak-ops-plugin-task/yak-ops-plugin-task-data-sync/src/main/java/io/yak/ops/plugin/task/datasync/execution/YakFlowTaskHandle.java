@@ -38,7 +38,7 @@ final class YakFlowTaskHandle implements TaskHandle {
                         case CANCELED -> TaskOutcome.CANCELED;
                         case FAILED -> TaskOutcome.FAILED;
                         default ->
-                                throw new IllegalStateException("YakFlow returned a result before terminal Job state");
+                            throw new IllegalStateException("YakFlow returned a result before terminal Job state");
                     };
                 }));
     }

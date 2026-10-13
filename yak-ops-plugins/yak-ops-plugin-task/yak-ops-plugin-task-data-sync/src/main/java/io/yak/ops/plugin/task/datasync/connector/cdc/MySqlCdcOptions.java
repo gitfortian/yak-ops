@@ -15,8 +15,10 @@ import io.yak.ops.core.configuration.Configuration;
  */
 public record MySqlCdcOptions(int snapshotChunkSize, int queueCapacity) {
 
-    public static final ConfigOption<Integer> SNAPSHOT_CHUNK_SIZE =
-            ConfigOptions.key("data-sync.mysql-cdc.snapshot-chunk-size").intType().defaultValue(1024);
+    public static final ConfigOption<Integer> SNAPSHOT_CHUNK_SIZE = ConfigOptions.key(
+                    "data-sync.mysql-cdc.snapshot-chunk-size")
+            .intType()
+            .defaultValue(1024);
     public static final ConfigOption<Integer> QUEUE_CAPACITY =
             ConfigOptions.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 
@@ -36,8 +38,6 @@ public record MySqlCdcOptions(int snapshotChunkSize, int queueCapacity) {
 
     /** Creates a typed configuration for Connector construction. */
     public Configuration configuration() {
-        return new Configuration()
-                .set(SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
-                .set(QUEUE_CAPACITY, queueCapacity);
+        return new Configuration().set(SNAPSHOT_CHUNK_SIZE, snapshotChunkSize).set(QUEUE_CAPACITY, queueCapacity);
     }
 }
