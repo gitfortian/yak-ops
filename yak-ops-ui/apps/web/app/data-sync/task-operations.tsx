@@ -9,6 +9,8 @@ import {
 } from "@yak-ops/yak-ui";
 import { useCallback, useEffect, useState } from "react";
 
+import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
+
 import {
   cancelDataSyncInstance,
   listDataSyncOperationTasks,
@@ -22,15 +24,12 @@ const PAGE_SIZE = 20;
 const POLL_INTERVAL_MILLIS = 2000;
 
 const isActive = (instance?: DataSyncInstanceRecord) =>
-  instance?.status === "PENDING" ||
-  instance?.status === "RUNNING" ||
-  instance?.status === "RETRY_WAITING";
+  instance ? isTaskInstanceActive(instance.status) : false;
 
 const triggerText = (triggerType?: string) => {
   if (triggerType === "MANUAL") return "手动";
   if (triggerType === "SCHEDULE") return "调度";
-  if (triggerType === "AUTO_RECOVERY") return "自动恢复";
-  if (triggerType === "RETRY") return "重试";
+  if (triggerType === "WORKFLOW") return "工作流";
   return triggerType || "-";
 };
 
@@ -48,20 +47,20 @@ const instanceStatusMeta = (
     return { label: "待处理", tone: "warning" };
   }
   switch (latest.status) {
-    case "PENDING":
+    case "SUBMITTED":
       return { label: "等待", tone: "neutral" };
     case "RUNNING":
       return { label: "运行中", tone: "info" };
-    case "RETRY_WAITING":
-      return { label: "等待重试", tone: "warning" };
-    case "SUCCEEDED":
+    case "CANCELLING":
+      return { label: "正在停止", tone: "warning" };
+    case "RECONCILING":
+      return { label: "待确认", tone: "warning" };
+    case "FINISHED":
       return { label: "成功", tone: "success" };
     case "FAILED":
       return { label: "失败", tone: "danger" };
     case "CANCELED":
       return { label: record.syncType === "REALTIME" ? "已停止" : "已取消", tone: "neutral" };
-    case "LOST":
-      return { label: "已丢失", tone: "warning" };
     default:
       return { label: latest.status || "-", tone: "neutral" };
   }
@@ -137,9 +136,9 @@ export function DataSyncTaskOperations({
     setActionKey(`${record.id}:run`);
     try {
       const instance = await runDataSyncTask(record.id);
-      toast.success(realtime ? "实时同步任务已启动" : "同步任务已启动");
+      toast.success("运行请求已提交");
       await loadTasks();
-      onOpenInstanceDetail(instance.id);
+      onOpenInstanceDetail(instance.instanceId);
     } finally {
       setActionKey(undefined);
     }
@@ -147,11 +146,11 @@ export function DataSyncTaskOperations({
 
   const stopTask = async (record: DataSyncTaskOperationRecord) => {
     const activeInstance = record.latestInstance;
-    if (!isActive(activeInstance) || !activeInstance || actionKey) return;
+    if (!activeInstance || !canCancelTaskInstance(activeInstance.status) || actionKey) return;
     setActionKey(`${record.id}:stop`);
     try {
       await cancelDataSyncInstance(activeInstance.id);
-      toast.success(realtime ? "实时同步实例已停止" : "同步实例已停止");
+      toast.success("已发送停止请求");
       await loadTasks();
     } finally {
       setActionKey(undefined);
@@ -180,11 +179,6 @@ export function DataSyncTaskOperations({
             <Badge tone={record.desiredState === "RUNNING" ? "success" : "neutral"}>
               {record.desiredState === "RUNNING" ? "期望运行" : "期望停止"}
             </Badge>
-            <div className="mt-1 text-xs text-[#98a2b3]">
-              {record.latestInstance?.triggerType === "AUTO_RECOVERY"
-                ? "最近由自动恢复拉起"
-                : "Desired State"}
-            </div>
           </div>
         ) : record.schedule ? (
           <div>
@@ -256,29 +250,8 @@ export function DataSyncTaskOperations({
     {
       key: "attempt",
       title: "Attempt",
-      minWidth: 150,
-      render: (_value, record) => {
-        const latest = record.latestInstance;
-        if (!latest) return "-";
-        const current = latest.currentAttempt || 1;
-        const max = latest.maxAttempts || record.retryPolicy?.maxAttempts || 1;
-        return (
-          <div>
-            <div className="text-xs font-medium text-[#475467]">
-              {current} / {max}
-            </div>
-            {latest.status === "RETRY_WAITING" ? (
-              <div className="mt-1 text-xs text-[#b54708]">
-                {latest.nextRetryTime ? `${latest.nextRetryTime} 重试` : "等待重试"}
-              </div>
-            ) : max > 1 ? (
-              <div className="mt-1 text-xs text-[#98a2b3]">
-                Backoff {latest.backoffSeconds ?? record.retryPolicy?.backoffSeconds ?? 0}s
-              </div>
-            ) : null}
-          </div>
-        );
-      },
+      minWidth: 120,
+      render: (_value, record) => (record.latestInstance ? "1" : "-"),
     },
     {
       key: "actions",
@@ -303,7 +276,10 @@ export function DataSyncTaskOperations({
               variant="ghost"
               size="small"
               loading={actionLoading}
-              disabled={Boolean(actionKey) && !actionLoading}
+              disabled={
+                (active && !canCancelTaskInstance(record.latestInstance!.status)) ||
+                (Boolean(actionKey) && !actionLoading)
+              }
               className={
                 active
                   ? "px-1 text-xs font-normal text-[#d92d20]"

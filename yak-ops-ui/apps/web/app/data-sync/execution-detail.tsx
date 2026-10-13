@@ -1,36 +1,42 @@
 import { Alert, Badge, SectionCard, Table, type BadgeProps } from "@yak-ops/yak-ui";
 import type { ReactNode } from "react";
 
+import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
+import type { TaskAttemptStatus } from "@/service/task-execution";
+
 import type {
   DataSyncAttemptRecord,
   DataSyncInstanceRecord,
   DataSyncInstanceStatus,
 } from "@/service/data-sync";
 
-export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord) =>
-  record?.status === "PENDING" ||
-  record?.status === "RUNNING" ||
-  record?.status === "RETRY_WAITING";
+export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord): boolean =>
+  record ? isTaskInstanceActive(record.status) : false;
 
 export const dataSyncInstanceStatusMeta = (
-  status: DataSyncInstanceStatus,
+  status: DataSyncInstanceStatus | TaskAttemptStatus,
   realtime: boolean,
 ): { label: string; tone: BadgeProps["tone"] } => {
   switch (status) {
     case "PENDING":
+    case "SUBMITTED":
       return { label: "等待", tone: "neutral" };
+    case "LAUNCHING":
+      return { label: "启动中", tone: "info" };
     case "RUNNING":
       return { label: "运行中", tone: "info" };
-    case "RETRY_WAITING":
-      return { label: "等待重试", tone: "warning" };
-    case "SUCCEEDED":
+    case "CANCELLING":
+      return { label: "正在停止", tone: "warning" };
+    case "RECONCILING":
+      return { label: "待确认", tone: "warning" };
+    case "FINISHED":
       return { label: "成功", tone: "success" };
     case "FAILED":
       return { label: "失败", tone: "danger" };
+    case "INTERRUPTED":
+      return { label: "已中断", tone: "warning" };
     case "CANCELED":
       return { label: realtime ? "已停止" : "已取消", tone: "neutral" };
-    case "LOST":
-      return { label: "已丢失", tone: "warning" };
     default:
       return { label: status || "-", tone: "neutral" };
   }
@@ -39,10 +45,11 @@ export const dataSyncInstanceStatusMeta = (
 export const dataSyncTriggerText = (triggerType?: string) => {
   if (triggerType === "MANUAL") return "手动运行";
   if (triggerType === "SCHEDULE") return "调度触发";
-  if (triggerType === "AUTO_RECOVERY") return "自动恢复";
-  if (triggerType === "RETRY") return "重试";
+  if (triggerType === "WORKFLOW") return "工作流触发";
   return triggerType || "-";
 };
+
+const metricCountText = (count?: number): string => count?.toLocaleString() ?? "-";
 
 export const dataSyncDurationText = (record: DataSyncInstanceRecord) => {
   if (!record.startTime) return "-";
@@ -274,13 +281,12 @@ export function DataSyncExecutionDetailContent({
   const failureMessage =
     record.errorMessage ||
     [...attempts].reverse().find((attempt) => attempt.errorMessage)?.errorMessage;
-  const showAttemptHistory =
-    attempts.length > 1 || (record.currentAttempt || 1) > 1 || record.status === "RETRY_WAITING";
+  const showAttemptHistory = attempts.length > 0;
 
   return (
     <div className="space-y-4">
-      {showRealtimeStopCaution && realtime && isActiveDataSyncInstance(record) ? (
-        <Alert>停止后将从最近 Checkpoint 续跑，少量未确认事件可能重复消费。</Alert>
+      {showRealtimeStopCaution && realtime && canCancelTaskInstance(record.status) ? (
+        <Alert>停止后不会自动恢复，重新运行会创建新的实例。</Alert>
       ) : null}
 
       <DetailSection
@@ -292,7 +298,7 @@ export function DataSyncExecutionDetailContent({
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone={meta.tone}>{meta.label}</Badge>
           <span className="text-sm text-[#667085]">
-            {record.startTime || record.createTime || "-"} → {record.finishTime || "运行中"}
+            {record.startTime || record.createTime || "-"} → {record.finishTime || "-"}
           </span>
           <span className="text-xs text-[#98a2b3]">{dataSyncTriggerText(record.triggerType)}</span>
         </div>
@@ -308,9 +314,9 @@ export function DataSyncExecutionDetailContent({
 
         <div className="mt-5 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-md:grid-cols-1">
           {[
-            [readLabel, (record.readRows ?? 0).toLocaleString()],
-            [writeLabel, (record.writeRows ?? 0).toLocaleString()],
-            ["尝试次数", `${record.currentAttempt || 1} / ${record.maxAttempts || 1}`],
+            [readLabel, metricCountText(record.readRows)],
+            [writeLabel, metricCountText(record.writeRows)],
+            ["尝试次数", attempts.length ? String(attempts.length) : "-"],
             ["耗时", dataSyncDurationText(record)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg bg-[#fafafa] px-4 py-3">
@@ -319,17 +325,11 @@ export function DataSyncExecutionDetailContent({
             </div>
           ))}
         </div>
-
-        {realtime ? (
-          <div className="mt-3 text-xs leading-5 text-[#98a2b3]">
-            实时指标统计 YakFlow 变更事件；UPDATE 会产生 UPDATE_BEFORE 与 UPDATE_AFTER 两个事件。
-          </div>
-        ) : null}
       </DetailSection>
 
       {showAttemptHistory ? (
         <DetailSection
-          title="重试记录"
+          title="执行尝试"
           sectionCard={sectionCard}
           legacyClassName="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white"
         >
@@ -356,8 +356,7 @@ export function DataSyncExecutionDetailContent({
                 minWidth: 260,
                 render: (_value, attempt) => (
                   <div className="text-xs text-[#667085]">
-                    {attempt.startTime || attempt.createTime || "-"} →{" "}
-                    {attempt.finishTime || "运行中"}
+                    {attempt.startTime || attempt.createTime || "-"} → {attempt.finishTime || "-"}
                   </div>
                 ),
               },
@@ -367,7 +366,7 @@ export function DataSyncExecutionDetailContent({
                 width: 140,
                 align: "right",
                 render: (_value, attempt) =>
-                  `${(attempt.readRows ?? 0).toLocaleString()} / ${(attempt.writeRows ?? 0).toLocaleString()}`,
+                  `${metricCountText(attempt.readRows)} / ${metricCountText(attempt.writeRows)}`,
               },
               {
                 key: "error",
@@ -388,17 +387,9 @@ export function DataSyncExecutionDetailContent({
             bordered
             size="small"
             pagination={false}
-            emptyText="旧实例或未执行实例暂无独立 Attempt 记录"
+            emptyText="暂无 Attempt"
             scroll={{ x: 900 }}
           />
-          {record.status === "RETRY_WAITING" ? (
-            <div className="border-t border-[#eef0f3] px-4 py-3 text-xs text-[#b54708]">
-              下一次重试：{record.nextRetryTime || "待执行"}
-              {record.definitionSnapshot?.retryPolicy?.mode === "SMART"
-                ? " · 智能退避"
-                : ` · Backoff ${record.backoffSeconds || 0}s`}
-            </div>
-          ) : null}
         </DetailSection>
       ) : null}
     </div>
