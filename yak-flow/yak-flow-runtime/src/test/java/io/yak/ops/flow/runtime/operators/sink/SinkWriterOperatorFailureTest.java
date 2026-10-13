@@ -12,7 +12,7 @@ import io.yak.ops.core.api.connector.sink.SupportsWriterState;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import io.yak.ops.flow.runtime.state.OperatorStateBackend;

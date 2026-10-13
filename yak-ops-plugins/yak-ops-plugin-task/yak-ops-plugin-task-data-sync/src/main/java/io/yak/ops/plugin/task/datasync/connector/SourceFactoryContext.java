@@ -1,6 +1,6 @@
 package io.yak.ops.plugin.task.datasync.connector;
 
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;

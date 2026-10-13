@@ -1,4 +1,4 @@
-package io.yak.ops.core.configuration;
+package io.yak.ops.configuration;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * Copy operations isolate the container's explicit entries. Diagnostic {@code toString()} masks commonly sensitive keys, while {@code toMap()}
  * exports original values.
  */
-public class Configuration implements ReadableConfig, WritableConfig, Serializable, Cloneable {
+public class Configuration implements Serializable, Cloneable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -37,7 +37,8 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
 
     /** Copies the explicitly configured entries into a new independent container. */
     public Configuration(Configuration other) {
-        values.putAll(Objects.requireNonNull(other, "other must not be null").snapshot());
+        values.putAll(ConfigValues.copyMap(
+                Objects.requireNonNull(other, "other must not be null").snapshot()));
     }
 
     /** Creates a configuration from explicitly stored string-valued entries. */
@@ -47,25 +48,22 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
         return config;
     }
 
-    @Override
-    public synchronized <T> Configuration set(ConfigOption<T> option, T value) {
+    public synchronized <T> Configuration set(Option<T> option, T value) {
         Objects.requireNonNull(option, "option must not be null");
         Objects.requireNonNull(value, "value must not be null");
         if (!option.getClazz().isInstance(value)) {
             throw new IllegalArgumentException("Wrong value type for configuration key: " + option.key());
         }
-        values.put(option.key(), value);
+        values.put(option.key(), ConfigValues.copy(value));
         return this;
     }
 
-    @Override
-    public <T> T get(ConfigOption<T> option) {
+    public <T> T get(Option<T> option) {
         Objects.requireNonNull(option, "option must not be null");
         return getOptional(option).orElseGet(option::defaultValue);
     }
 
-    @Override
-    public synchronized <T> Optional<T> getOptional(ConfigOption<T> option) {
+    public synchronized <T> Optional<T> getOptional(Option<T> option) {
         Objects.requireNonNull(option, "option must not be null");
         Object stored = values.get(option.key());
         return stored == null ? Optional.empty() : Optional.of(convert(stored, option));
@@ -89,7 +87,7 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
      *
      * <p>Its default value does not count as an explicit entry.
      */
-    public synchronized boolean contains(ConfigOption<?> option) {
+    public synchronized boolean contains(Option<?> option) {
         Objects.requireNonNull(option, "option must not be null");
         return values.containsKey(option.key());
     }
@@ -99,8 +97,7 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
         return values.containsKey(key);
     }
 
-    @Override
-    public synchronized <T> boolean removeConfig(ConfigOption<T> option) {
+    public synchronized <T> boolean removeConfig(Option<T> option) {
         Objects.requireNonNull(option, "option must not be null");
         return values.remove(option.key()) != null;
     }
@@ -128,39 +125,36 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
         Map<String, Object> incoming =
                 Objects.requireNonNull(other, "other must not be null").snapshot();
         synchronized (this) {
-            values.putAll(incoming);
+            values.putAll(ConfigValues.copyMap(incoming));
         }
     }
 
-    @Override
     public synchronized Map<String, String> toMap() {
         Map<String, String> result = new LinkedHashMap<>();
         values.forEach((key, value) -> result.put(key, String.valueOf(value)));
         return result;
     }
 
-    @Override
+    public ReadonlyConfig toReadonlyConfig() {
+        return ReadonlyConfig.fromMap(snapshot());
+    }
+
     public Configuration clone() {
         return new Configuration(this);
     }
 
-    @Override
     public boolean equals(Object other) {
         return this == other
                 || other instanceof Configuration config && snapshot().equals(config.snapshot());
     }
 
-    @Override
     public int hashCode() {
         return snapshot().hashCode();
     }
 
     /** Masks sensitive values in diagnostics; {@link #toMap()} intentionally does not mask them. */
-    @Override
     public String toString() {
-        Map<String, Object> masked = new LinkedHashMap<>();
-        snapshot().forEach((key, value) -> masked.put(key, sensitive(key) ? "******" : value));
-        return masked.toString();
+        return ConfigValues.diagnostic(snapshot());
     }
 
     private synchronized Map<String, Object> snapshot() {
@@ -173,18 +167,10 @@ public class Configuration implements ReadableConfig, WritableConfig, Serializab
         }
     }
 
-    private static boolean sensitive(String key) {
-        String lower = key.toLowerCase(Locale.ROOT);
-        return lower.contains("password")
-                || lower.contains("passwd")
-                || lower.contains("secret")
-                || lower.contains("token")
-                || lower.contains("credential")
-                || lower.contains("private-key")
-                || lower.contains("access-key");
-    }
-
-    private static <T> T convert(Object value, ConfigOption<T> option) {
+    static <T> T convert(Object value, Option<T> option) {
+        if (option.hasStructuredType()) {
+            return ConfigValues.convertStructured(value, option);
+        }
         Class<T> type = option.getClazz();
         if (type.isInstance(value)) {
             return type.cast(value);

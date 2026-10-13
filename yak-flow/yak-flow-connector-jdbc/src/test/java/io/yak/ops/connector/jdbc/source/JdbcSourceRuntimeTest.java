@@ -15,7 +15,7 @@ import io.yak.ops.core.api.connector.sink.SinkWriter;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.common.JobStatus;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.execution.JobClient;

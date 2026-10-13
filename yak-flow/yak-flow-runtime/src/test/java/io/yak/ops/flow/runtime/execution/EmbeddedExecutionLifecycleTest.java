@@ -23,7 +23,7 @@ import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.support.TestSplitSerializers;
 import io.yak.ops.core.api.operators.Collector;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.flow.runtime.graph.StreamGraph;

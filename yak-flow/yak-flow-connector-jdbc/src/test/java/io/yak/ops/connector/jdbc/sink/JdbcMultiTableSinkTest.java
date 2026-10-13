@@ -13,7 +13,7 @@ import io.yak.ops.connector.jdbc.database.internal.dialect.AnsiJdbcDialect;
 import io.yak.ops.core.api.common.TaskInfo;
 import io.yak.ops.core.api.connector.sink.SinkWriter;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;

@@ -24,7 +24,7 @@ import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.api.operators.Collector;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointDeclinedException;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.flow.runtime.graph.StreamEdge;

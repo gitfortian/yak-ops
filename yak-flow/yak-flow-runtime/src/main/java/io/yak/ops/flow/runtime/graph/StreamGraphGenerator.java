@@ -1,9 +1,9 @@
 package io.yak.ops.flow.runtime.graph;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.dag.Transformation;
 import io.yak.ops.core.api.operators.KeySelector;
-import io.yak.ops.core.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;

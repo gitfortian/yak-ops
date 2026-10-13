@@ -11,7 +11,7 @@ import io.yak.ops.connector.jdbc.database.internal.dialect.AnsiJdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.connector.jdbc.source.enumerator.JdbcSplitPlanner;
 import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.TableId;
 import java.sql.Connection;
 import java.sql.Statement;

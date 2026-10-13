@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.source;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
 import io.yak.ops.connector.jdbc.database.connection.DriverManagerJdbcConnectionProvider;
@@ -20,7 +21,6 @@ import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-import io.yak.ops.core.configuration.Configuration;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import java.nio.charset.StandardCharsets;

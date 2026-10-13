@@ -1,6 +1,6 @@
 package io.yak.ops.core.api.connector.source;
 
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 
 /**
  * Minimal runtime context for one SourceReader.

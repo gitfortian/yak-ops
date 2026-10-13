@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.core.api.common.JobID;
 import io.yak.ops.core.api.connector.source.InputStatus;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.flow.runtime.tasks.StreamTask;
 import java.util.concurrent.CompletableFuture;

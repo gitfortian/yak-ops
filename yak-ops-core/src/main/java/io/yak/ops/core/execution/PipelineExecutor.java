@@ -1,7 +1,7 @@
 package io.yak.ops.core.execution;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.api.dag.Pipeline;
-import io.yak.ops.core.configuration.Configuration;
 import java.util.concurrent.CompletableFuture;
 
 /**
