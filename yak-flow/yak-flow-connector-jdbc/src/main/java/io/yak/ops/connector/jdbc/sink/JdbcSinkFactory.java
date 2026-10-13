@@ -30,7 +30,7 @@ public final class JdbcSinkFactory implements TableSinkFactory {
     @Override
     public void validate(ReadonlyConfig options, boolean sourceProducesChangelog) {
         JdbcWriteMode mode = options.get(JdbcSinkOptions.WRITE_MODE);
-        if (mode == null || mode == JdbcWriteMode.OVERWRITE) {
+        if (mode == null) {
             throw new IllegalArgumentException("JDBC Sink supports APPEND or UPSERT only");
         }
         if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT) {
