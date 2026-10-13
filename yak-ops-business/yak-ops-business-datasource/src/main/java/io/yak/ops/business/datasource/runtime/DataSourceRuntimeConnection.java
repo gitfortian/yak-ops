@@ -5,6 +5,7 @@ import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.net.URI;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
 
@@ -63,7 +64,11 @@ public final class DataSourceRuntimeConnection {
     public JdbcConnectionProvider provider() {
         return () -> {
             try {
-                return plugin.openConnection(connection, timeoutSeconds);
+                Connection opened = plugin.openConnection(connection, timeoutSeconds);
+                if (opened == null) {
+                    throw new SQLException("Datasource provider returned a null JDBC connection");
+                }
+                return opened;
             } catch (SQLException exception) {
                 throw exception;
             } catch (Exception exception) {
