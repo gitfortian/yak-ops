@@ -523,7 +523,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
               <div className="grid grid-cols-2 gap-x-10 gap-y-5 max-lg:grid-cols-1">
                 <BasicInfoField label="任务 ID">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate" title={task.id}>{task.id}</span>
+                    <span className="truncate" title={task.id}>
+                      {task.id}
+                    </span>
                     <Button
                       size="small"
                       variant="ghost"
@@ -545,7 +547,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <span>{dataSources.target?.name || "-"}</span>
                   </div>
                 </BasicInfoField>
-                <BasicInfoField label="同步方案">{realtime ? "实时同步" : "离线同步"}</BasicInfoField>
+                <BasicInfoField label="同步方案">
+                  {realtime ? "实时同步" : "离线同步"}
+                </BasicInfoField>
                 <BasicInfoField label="创建时间">{task.createTime || "-"}</BasicInfoField>
                 <BasicInfoField label="更新时间">{task.updateTime || "-"}</BasicInfoField>
                 <BasicInfoField label="写入方式">
