@@ -1,0 +1,185 @@
+name: Execution View Browser Acceptance
+'on':
+  pull_request:
+    branches:
+    - main
+permissions:
+  contents: read
+jobs:
+  browser:
+    if: github.head_ref == 'feat/data-sync-execution-status-visualization'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: yak-ops-ui
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '22.13'
+    - run: npm ci --prefer-offline --no-audit --no-fund
+    - name: Verify actual page components with explicit service fixtures
+      run: |
+        npm install --prefix /tmp/execution-browser --no-audit --no-fund playwright@1.51.1
+        export CHROME_PATH="$(command -v google-chrome || command -v chromium)"
+        cat > apps/web/__execution-view.tsx <<'FIXTURE'
+        import ReactDOM from "react-dom/client";
+        import { MemoryRouter, Routes, Route } from "react-router-dom";
+        import { ThemeProvider } from "./context/theme-context";
+        import { DataSyncTaskDetailPage } from "./app/data-sync/task-detail";
+        import "./app/styles/global.css";
+        import "./themes/index.css";
+
+        const statuses = ["FAILED", "FINISHED", "RUNNING", "SUBMITTED", "LAUNCHING", "CANCELLING", "RECONCILING", "CANCELED"];
+        const state = new URLSearchParams(location.search).get("state") || "FAILED";
+        const realtime = new URLSearchParams(location.search).get("realtime") === "true";
+        const source = {dataSourceId:"ds1",database:"history",schema:"public",table:"orders"};
+        const target = {dataSourceId:"ds2",database:"warehouse",schema:"public",table:"ods_orders"};
+        window.fixture = {
+          detailReads: [], delays: {},
+          task: { id:"task-1",name:"sync1",status:"PUBLISHED",syncType:realtime?"REALTIME":"OFFLINE",definitionVersion:2,
+            debug:true,writeMode:"APPEND",sourceDataSourceId:"ds1",targetDataSourceId:"ds2",sourceTable:"new_orders",targetTable:"new_target",
+            createTime:"2026-10-13 17:36:22",updateTime:"2026-10-13 17:36:23",updateBy:"admin" },
+          records: state === "EMPTY" ? [] : statuses.map((status,index)=>({id:status,taskId:"task-1",taskName:"sync1",taskVersion:1,
+            syncType:realtime?"REALTIME":"OFFLINE",triggerType:"MANUAL",status,createTime:"2026-10-13 17:36:29",
+            startTime:status==="SUBMITTED"?undefined:"2026-10-13 17:36:29",
+            finishTime:["FAILED","FINISHED","CANCELED"].includes(status)?"2026-10-13 17:36:30":undefined,
+            errorMessage:status==="FAILED"?"RUNTIME_FAILED":undefined,
+            definitionSnapshot:{taskId:"task-1",taskName:"sync1",taskVersion:1,source,target,writeMode:"APPEND"}}))
+        };
+        ReactDOM.createRoot(document.getElementById("root")).render(
+          <ThemeProvider><MemoryRouter initialEntries={["/sync/task-1/detail"+(state==="EMPTY"?"":"?executionId="+state)]}>
+            <Routes><Route path="/sync/:taskId/detail" element={<DataSyncTaskDetailPage syncType={realtime?"REALTIME":"OFFLINE"} basePath="/sync" localScroll />} /></Routes>
+          </MemoryRouter></ThemeProvider>
+        );
+        FIXTURE
+        cat > apps/web/__execution-mocks.ts <<'FIXTURE'
+        export async function getDataSyncTask() { return structuredClone(window.fixture.task); }
+        export async function getDataSyncInstance(id) {
+          window.fixture.detailReads.push(id);
+          const value = window.fixture.records.find(item=>item.id===id);
+          if (!value) throw new Error("Fixture not found");
+          const copy = structuredClone(value);
+          const delay = window.fixture.delays[id] || 0;
+          if(delay) await new Promise(resolve=>setTimeout(resolve,delay));
+          return copy;
+        }
+        export async function listDataSyncInstances({status,pageNo,pageSize}) {
+          const records=window.fixture.records.filter(item=>!status||item.status===status);
+          return {bizData:structuredClone(records.slice((pageNo-1)*pageSize,pageNo*pageSize)),pagination:{total:records.length,pageNo,pageSize}};
+        }
+        export async function runDataSyncTask() { return {instanceId:"SUBMITTED"}; }
+        export async function cancelDataSyncInstance(id) { window.fixture.records.find(item=>item.id===id).status="CANCELLING"; }
+        export async function getDataSource(id) { return {id,name:id==="ds1"?"mysql_source":"mysql_target",dbType:"MYSQL"}; }
+        export async function getUsersByIds() { return [{id:"admin",realName:"系统管理员"}]; }
+        export async function getTaskInstanceLogs(id,cursor) { return {content:cursor?"":"[INFO] Instance "+id+"\n[ERROR] Example diagnostic for "+id+"\n",nextCursor:"done",hasMore:false}; }
+        export async function downloadTaskInstanceLogs(id) { return new Blob(["Instance "+id+"\n"],{type:"text/plain"}); }
+        FIXTURE
+        cat > __execution-view.config.ts <<'FIXTURE'
+        import {fileURLToPath,URL} from "node:url";
+        import base from "./apps/web/vite.config";
+        const mock=fileURLToPath(new URL("./apps/web/__execution-mocks.ts",import.meta.url));
+        const exact=["@/service/data-sync","@/service/datasource","@/service/user","@/service/task-execution"].map(find=>({find:new RegExp("^"+find+"$"),replacement:mock}));
+        export default {...base,resolve:{...base.resolve,alias:[...exact,...Object.entries(base.resolve.alias).map(([find,replacement])=>({find,replacement}))]},server:{...base.server,host:"127.0.0.1",port:4175}};
+        FIXTURE
+        cat > __execution-view-test.mjs <<'FIXTURE'
+        import assert from "node:assert/strict";
+        import {createRequire} from "node:module";
+        import {mkdirSync,writeFileSync} from "node:fs";
+        const {chromium}=createRequire(import.meta.url)("/tmp/execution-browser/node_modules/playwright");
+        const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,args:["--no-sandbox"]});
+        const context=await browser.newContext({viewport:{width:1440,height:900},acceptDownloads:true});
+        const page=await context.newPage();
+        const errors=[];page.on("pageerror",error=>errors.push(error.message));
+        const out="/tmp/execution-view-artifacts";mkdirSync(out,{recursive:true});
+        const reports=[];
+        async function open(state,realtime=false){
+          await page.goto("http://127.0.0.1:4175/__execution-view.html?state="+state+"&realtime="+realtime);
+          await page.getByRole("progressbar").waitFor();
+        }
+        async function select(state){await page.locator("aside button").filter({has:page.locator('[data-status="'+state+'"]')}).click();}
+        try{
+          for(const state of ["FAILED","FINISHED","RUNNING","SUBMITTED","LAUNCHING","CANCELLING","RECONCILING","CANCELED"]){
+            await open(state);
+            const bar=page.getByRole("progressbar");
+            const value=await bar.getAttribute("aria-valuenow");
+            assert.equal(value,state==="FAILED"?"0":state==="FINISHED"?"100":null);
+            assert.equal(await page.getByText("已上线",{exact:true}).count(),0);
+            for(const text of ["写入方式","调试模式","本次运行配置","RUNTIME_FAILED"]){assert.equal(await page.getByText(text,{exact:true}).count(),0);}
+            assert.equal(await page.getByText("history.public.orders",{exact:true}).count(),1);
+            assert.equal(await page.getByText("new_orders",{exact:true}).count(),0);
+            if(state==="FAILED")assert.equal(await page.getByText("失败",{exact:true}).count(),1);
+            const running=state==="RUNNING";
+            assert.equal(await page.locator(".sync-execution-flow-arrow").count(),running?24:0);
+            if(["FAILED","FINISHED","RUNNING"].includes(state))await page.screenshot({path:out+"/"+state.toLowerCase()+"-desktop.png",fullPage:true});
+            reports.push({state,value,mode:await bar.getAttribute("data-mode")});
+          }
+          await open("RUNNING",true);
+          assert.equal(await page.getByRole("progressbar").getAttribute("aria-label"),"实时同步");
+          assert.equal(await page.locator(".sync-execution-flow-end").count(),2);
+          await page.emulateMedia({reducedMotion:"reduce"});
+          assert.equal(await page.locator(".sync-execution-flow-arrow").first().evaluate(node=>getComputedStyle(node).animationName),"none");
+          await page.emulateMedia({reducedMotion:"no-preference"});
+          assert.equal(await page.locator(".sync-execution-flow-arrow").first().evaluate(node=>getComputedStyle(node).animationName),"sync-execution-flow");
+          const toggle=page.getByRole("switch",{name:"自动刷新"});
+          assert.equal(await toggle.isChecked(),true);await toggle.click();
+          await page.waitForTimeout(300);
+          const before=await page.evaluate(()=>window.fixture.detailReads.length);
+          await page.waitForTimeout(2300);
+          assert.equal(await page.evaluate(()=>window.fixture.detailReads.length),before);
+          await page.getByRole("button",{name:"刷新执行状态"}).click();
+          await page.waitForTimeout(300);
+          assert.ok(await page.evaluate(()=>window.fixture.detailReads.length)>before);
+          await toggle.focus();await page.keyboard.press("Space");
+          assert.equal(await toggle.isChecked(),true);
+          const autoBefore=await page.evaluate(()=>window.fixture.detailReads.length);
+          await page.waitForTimeout(2400);
+          assert.ok(await page.evaluate(()=>window.fixture.detailReads.length)>autoBefore);
+          await toggle.click();
+          await page.evaluate(()=>window.fixture.delays.FAILED=400);
+          await select("FAILED");await select("FINISHED");await page.waitForTimeout(600);
+          assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"),"100");
+          await page.getByRole("tab",{name:"运行日志"}).click();
+          await page.locator("pre").filter({hasText:"Instance FINISHED"}).waitFor();
+          await select("RUNNING");
+          await page.locator("pre").filter({hasText:"Instance RUNNING"}).waitFor();
+          assert.equal((await page.locator("pre").innerText()).includes("Instance FINISHED"),false);
+          const downloadPromise=page.waitForEvent("download");
+          await page.getByRole("button",{name:"下载",exact:true}).click();
+          const download=await downloadPromise;await download.saveAs(out+"/fixture.log");
+          await page.getByRole("tab",{name:"执行状态"}).click();
+          await page.getByRole("button",{name:"停止",exact:true}).click();
+          await page.waitForTimeout(300);
+          assert.equal(await page.getByRole("progressbar").getAttribute("data-mode"),"idle");
+          await page.setViewportSize({width:390,height:844});
+          await open("RUNNING");
+          await page.screenshot({path:out+"/running-mobile.png",fullPage:true});
+          assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+          await page.goto("http://127.0.0.1:4175/__execution-view.html?state=EMPTY");
+          await page.getByText("基本信息",{exact:true}).waitFor();
+          assert.equal(await page.getByRole("progressbar").count(),0);
+          assert.deepEqual(errors,[]);
+          reports.push({interactions:"auto refresh, manual refresh, keyboard toggle, stale response, log switch/download, cancel, mobile, reduced motion, empty state passed"});
+          writeFileSync(out+"/results.json",JSON.stringify(reports,null,2));
+          console.log(JSON.stringify(reports));
+        }catch(error){console.error(error);console.error(errors);await page.screenshot({path:out+"/failure.png",fullPage:true});throw error;}
+        finally{await browser.close();}
+        FIXTURE
+        cat > apps/web/__execution-view.html <<'HTML'
+        <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><div id="root" style="height:100vh"></div><script type="module" src="/__execution-view.tsx"></script></body></html>
+        HTML
+        node_modules/.bin/vite --config __execution-view.config.ts > /tmp/execution-view-vite.log 2>&1 &
+        VITE_PID=$!
+        trap 'kill "$VITE_PID" 2>/dev/null || true' EXIT
+        for attempt in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:4175/__execution-view.html > /dev/null; then break; fi
+          sleep 1
+        done
+        node __execution-view-test.mjs
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: execution-view-browser
+        path: /tmp/execution-view-artifacts
+        retention-days: 7
