@@ -3,12 +3,10 @@ package io.yak.ops.business.task.submission.impl;
 import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.business.task.submission.AdmissionService;
 import io.yak.ops.business.task.submission.SubmissionResult;
-import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
-import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
@@ -20,8 +18,8 @@ import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import jakarta.annotation.Resource;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -51,12 +49,9 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SubmissionResult admit(AdmissionRequest request) {
-        TaskExecutionContext context = request.context();
+        TaskExecutionIdentity context = request.identity();
         String workspaceId = context.workspaceId();
-        if (!workspaceId.equals(WorkspaceContext.requireWorkspaceId())) {
-            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
-        }
-        var replay = instances.findByRequest(workspaceId, TaskTriggerType.MANUAL, request.requestId());
+        var replay = instances.findByRequest(workspaceId, request.triggerType(), request.requestId());
         if (replay.isPresent()) {
             InstanceEntity existing = replay.orElseThrow();
             if (!existing.getRequestFingerprint().equals(request.requestFingerprint())) {
@@ -85,7 +80,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
         }
 
-        TaskExecutionPlan currentPlan = request.plugin().plan(request.parameters(), context);
+        TaskAdmissionPlan currentPlan = request.plugin().plan(request.parameters(), context);
         if (!request.plan().equals(currentPlan)) {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
         }
@@ -96,7 +91,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         instance.setDefinitionId(context.definitionId());
         instance.setDefinitionVersion(context.definitionVersion());
         instance.setTaskType(definition.getTaskType());
-        instance.setTriggerType(TaskTriggerType.MANUAL);
+        instance.setTriggerType(request.triggerType());
         instance.setRequestId(request.requestId());
         instance.setRequestFingerprint(request.requestFingerprint());
         instance.setResourceRevision(currentPlan.resourceRevision());

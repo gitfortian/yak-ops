@@ -16,8 +16,8 @@ import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
 import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
 import io.yak.ops.plugin.task.api.TaskParameters;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
@@ -62,14 +62,14 @@ public final class SyncTaskExecutor {
      * @return asynchronous execution handle or pre-submission rejection
      */
     public CompletionStage<TaskHandle> start(
-            TaskParameters parameters, TaskExecutionPlan plan, TaskExecutionContext context) {
+            TaskParameters parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context) {
         boolean runtimeSubmissionInvoked = false;
         try {
             if (!(parameters instanceof SyncParameters pipeline)) {
                 throw new IllegalArgumentException("Invalid DATA_SYNC parameter type");
             }
             SyncPipelinePlan prepared = planner.prepare(pipeline, context);
-            if (!plan.equals(prepared.resourcePlan())) {
+            if (!plan.equals(prepared.admissionPlan())) {
                 throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
             }
             SourceParameters source = pipeline.source();

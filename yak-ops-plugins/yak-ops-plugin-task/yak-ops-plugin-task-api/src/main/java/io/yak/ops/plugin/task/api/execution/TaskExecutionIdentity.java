@@ -3,10 +3,10 @@ package io.yak.ops.plugin.task.api.execution;
 import java.util.Objects;
 
 /** Immutable identity of one authorized Task execution attempt. */
-public record TaskExecutionContext(
+public record TaskExecutionIdentity(
         String workspaceId, String definitionId, int definitionVersion, String instanceId, String attemptId) {
 
-    public TaskExecutionContext {
+    public TaskExecutionIdentity {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(definitionId, "definitionId");
         Objects.requireNonNull(instanceId, "instanceId");

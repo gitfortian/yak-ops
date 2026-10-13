@@ -10,7 +10,7 @@
     </parent>
     <artifactId>yak-ops-task-execution</artifactId>
     <name>Yak Ops Task Execution</name>
-    <description>Embedded Task dispatch, ownership, and terminal observation</description>
+    <description>Task execution coordination, embedded dispatch, ownership and terminal observation</description>
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>

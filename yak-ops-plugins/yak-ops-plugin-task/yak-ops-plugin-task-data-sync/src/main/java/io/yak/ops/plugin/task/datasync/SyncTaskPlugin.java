@@ -4,8 +4,8 @@ import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import io.yak.ops.plugin.task.datasync.execution.SyncExecutionPlanner;
@@ -57,7 +57,7 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
     }
 
     @Override
-    public TaskExecutionPlan plan(TaskParameters parameters, TaskExecutionContext context) {
+    public TaskAdmissionPlan plan(TaskParameters parameters, TaskExecutionIdentity context) {
         if (!(parameters instanceof SyncParameters pipeline)) {
             throw new TaskPluginException("Invalid DATA_SYNC parameter type");
         }
@@ -66,7 +66,7 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
 
     @Override
     public CompletionStage<TaskHandle> start(
-            TaskParameters parameters, TaskExecutionPlan plan, TaskExecutionContext context) {
+            TaskParameters parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context) {
         return executor.start(parameters, plan, context);
     }
 }

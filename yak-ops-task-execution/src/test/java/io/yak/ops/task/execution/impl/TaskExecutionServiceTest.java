@@ -8,55 +8,67 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.task.submission.SubmissionResult;
 import io.yak.ops.business.task.submission.SubmissionService;
-import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.business.task.submission.TaskSubmissionCommand;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
-import io.yak.ops.task.execution.dispatch.EmbeddedTaskDispatcher;
+import io.yak.ops.common.enums.task.TaskTriggerType;
+import io.yak.ops.task.execution.dispatch.TaskExecutionCoordinator;
 import java.lang.reflect.Field;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-/** Verifies durable admission and idempotent dispatch behavior at the Task execution boundary. */
+/** Verifies durable admission and idempotent dispatch without an HTTP Workspace context. */
 class TaskExecutionServiceTest {
 
     private final TaskExecutionServiceImpl service = new TaskExecutionServiceImpl();
     private final SubmissionService submissions = mock(SubmissionService.class);
-    private final EmbeddedTaskDispatcher dispatcher = mock(EmbeddedTaskDispatcher.class);
+    private final TaskExecutionCoordinator dispatcher = mock(TaskExecutionCoordinator.class);
 
     TaskExecutionServiceTest() {
         inject("submissions", submissions);
         inject("dispatcher", dispatcher);
-        WorkspaceContext.bind("ws");
-    }
-
-    @AfterEach
-    void unbindWorkspace() {
-        WorkspaceContext.clear();
     }
 
     @Test
     void dispatchesNewSubmissionAfterAdmission() {
+        TaskSubmissionCommand command = manual();
         SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.SUBMITTED, false);
-        when(submissions.submitManual("d", "request-123", "user")).thenReturn(result);
+        when(submissions.submit(command)).thenReturn(result);
 
-        assertEquals(result, service.submitManual("d", "request-123", "user"));
+        assertEquals(result, service.submit(command));
 
         verify(dispatcher).dispatch("ws", "i");
     }
 
     @Test
     void idempotentReplayDoesNotDispatchAgain() {
+        TaskSubmissionCommand command = manual();
         SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.RUNNING, true);
-        when(submissions.submitManual("d", "request-123", "user")).thenReturn(result);
+        when(submissions.submit(command)).thenReturn(result);
 
-        assertEquals(result, service.submitManual("d", "request-123", "user"));
+        assertEquals(result, service.submit(command));
 
         verify(dispatcher, never()).dispatch("ws", "i");
+    }
+
+    @Test
+    void workflowSubmissionDispatchesInItsExplicitWorkspace() {
+        TaskSubmissionCommand command =
+                new TaskSubmissionCommand("workflow-workspace", "d", TaskTriggerType.WORKFLOW, "workflow-123", "system");
+        SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.SUBMITTED, false);
+        when(submissions.submit(command)).thenReturn(result);
+
+        assertEquals(result, service.submit(command));
+
+        verify(dispatcher).dispatch("workflow-workspace", "i");
     }
 
     @Test
     void cancellationUsesTheDispatcherFence() {
         when(dispatcher.cancel("ws", "i")).thenReturn(TaskInstanceStatus.CANCELLING);
         assertEquals(TaskInstanceStatus.CANCELLING, service.cancel("ws", "i"));
+    }
+
+    private TaskSubmissionCommand manual() {
+        return new TaskSubmissionCommand("ws", "d", TaskTriggerType.MANUAL, "request-123", "user");
     }
 
     private void inject(String fieldName, Object dependency) {
