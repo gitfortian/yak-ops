@@ -1,3 +1,10 @@
+.sync-execution-tabs {
+  --yak-components-tab-active: #335dff;
+  --yak-components-tab-text-active: #335dff;
+  --yak-components-switch-bg-checked: #335dff;
+  --yak-components-switch-bg-checked-hover: #2548d6;
+}
+
 .sync-execution-status {
   display: inline-flex;
   flex-shrink: 0;

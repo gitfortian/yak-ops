@@ -595,18 +595,12 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
               </div>
             </section>
 
-            <Tabs value={activeTab} onValueChange={changeTab}>
+            <Tabs value={activeTab} onValueChange={changeTab} className="sync-execution-tabs">
               <TabsList>
-                <TabsTab
-                  value="status"
-                  className="data-active:border-[#335dff] data-active:text-[#335dff]"
-                >
+                <TabsTab value="status">
                   执行状态
                 </TabsTab>
-                <TabsTab
-                  value="log"
-                  className="data-active:border-[#335dff] data-active:text-[#335dff]"
-                >
+                <TabsTab value="log">
                   运行日志
                 </TabsTab>
               </TabsList>
