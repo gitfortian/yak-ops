@@ -24,7 +24,7 @@ import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
@@ -44,7 +44,7 @@ class AdmissionServiceTest {
     private final AttemptRepository attempts = mock(AttemptRepository.class);
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
     private final ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
-    private final TaskParameters parameters = mock(TaskParameters.class);
+    private final ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
     private final TaskExecutionIdentity context =
             new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1", "attempt-1");
     private final ExecutionResource target = new ExecutionResource("DATA_SYNC_TARGET", "source/table");

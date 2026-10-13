@@ -24,7 +24,7 @@ import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
@@ -49,7 +49,7 @@ class SubmissionServiceTest {
     private final TaskValidationContextFactory validationContexts = mock(TaskValidationContextFactory.class);
     private final AdmissionService admission = mock(AdmissionService.class);
     private final ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
-    private final TaskParameters params = mock(TaskParameters.class);
+    private final ReadonlyConfig params = ReadonlyConfig.fromMap(java.util.Map.of());
 
     SubmissionServiceTest() {
         inject("definitions", definitions);
@@ -70,6 +70,8 @@ class SubmissionServiceTest {
         when(definitions.queryById("ws", "definition-1")).thenReturn(Optional.of(definition));
         DefinitionVersionEntity version = new DefinitionVersionEntity();
         version.setParameters("{}");
+        version.setParameterSchemaVersion(2);
+        when(plugin.parameterSchemaVersion()).thenReturn(2);
         when(versions.queryCurrent("ws", "definition-1", 2)).thenReturn(Optional.of(version));
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
         when(plugin.parse("{}")).thenReturn(params);

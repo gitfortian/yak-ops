@@ -18,7 +18,7 @@ import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
@@ -39,7 +39,6 @@ class DefinitionCrudContractTest {
     private final Map<Integer, DefinitionVersionEntity> snapshots = new HashMap<>();
     private DefinitionEntity stored;
 
-    private record Parameters(String sourceTable) implements TaskParameters {}
 
     DefinitionCrudContractTest() {
         inject("definitionRepository", definitions);
@@ -50,8 +49,11 @@ class DefinitionCrudContractTest {
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
         when(plugin.parse(anyString()))
-                .thenAnswer(args -> new Parameters(io.yak.ops.common.util.JSONUtils
-                        .readTree(args.getArgument(0)).path("sourceTable").asText()));
+                 .thenAnswer(args -> ReadonlyConfig.fromMap(Map.of(
+                        "sourceTable",
+                        io.yak.ops.common.util.JSONUtils.readTree(args.getArgument(0))
+                                .path("sourceTable")
+                                .asText())));
         when(definitions.add(any())).thenAnswer(args -> {
             stored = args.getArgument(0);
             return stored;
