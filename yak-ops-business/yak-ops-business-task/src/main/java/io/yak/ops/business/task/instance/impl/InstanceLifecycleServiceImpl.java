@@ -29,7 +29,8 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DispatchTicket claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken) {
-        InstanceEntity instance = instances.findByIdForUpdate(workspaceId, instanceId).orElse(null);
+        InstanceEntity instance =
+                instances.findByIdForUpdate(workspaceId, instanceId).orElse(null);
         if (instance == null || instance.getStatus() != TaskInstanceStatus.SUBMITTED) {
             return null;
         }
@@ -64,11 +65,12 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
         if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
             return;
         }
-        TaskInstanceStatus status = switch (outcome) {
-            case FINISHED -> TaskInstanceStatus.FINISHED;
-            case FAILED -> TaskInstanceStatus.FAILED;
-            case CANCELED -> TaskInstanceStatus.CANCELED;
-        };
+        TaskInstanceStatus status =
+                switch (outcome) {
+                    case FINISHED -> TaskInstanceStatus.FINISHED;
+                    case FAILED -> TaskInstanceStatus.FAILED;
+                    case CANCELED -> TaskInstanceStatus.CANCELED;
+                };
         String reason = outcome == TaskOutcome.FAILED ? "RUNTIME_FAILED" : null;
         if (!instances.markTerminal(
                 ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), status, reason)) {
@@ -94,7 +96,9 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
                 .findByIdForUpdate(workspaceId, instanceId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         TaskInstanceStatus status = instance.getStatus();
-        if (status.isTerminal() || status == TaskInstanceStatus.RECONCILING || status == TaskInstanceStatus.CANCELLING) {
+        if (status.isTerminal()
+                || status == TaskInstanceStatus.RECONCILING
+                || status == TaskInstanceStatus.CANCELLING) {
             return status;
         }
         if (status == TaskInstanceStatus.SUBMITTED) {

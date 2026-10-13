@@ -18,7 +18,6 @@ import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import jakarta.annotation.Resource;
-import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,11 +50,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             if (!existing.getRequestFingerprint().equals(request.requestFingerprint())) {
                 throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
             }
-            return new SubmissionResult(
-                    existing.getId(),
-                    existing.getDefinitionVersion(),
-                    existing.getStatus(),
-                    true);
+            return new SubmissionResult(existing.getId(), existing.getDefinitionVersion(), existing.getStatus(), true);
         }
 
         DefinitionEntity definition = definitions
@@ -99,9 +94,6 @@ public class AdmissionServiceImpl implements AdmissionService {
             claims.add(claim);
         }
         return new SubmissionResult(
-                context.instanceId(),
-                context.definitionVersion(),
-                TaskInstanceStatus.SUBMITTED,
-                false);
+                context.instanceId(), context.definitionVersion(), TaskInstanceStatus.SUBMITTED, false);
     }
 }

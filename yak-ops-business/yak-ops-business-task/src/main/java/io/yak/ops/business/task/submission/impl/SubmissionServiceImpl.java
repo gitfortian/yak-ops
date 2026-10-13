@@ -86,8 +86,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         ReadonlyConfig parameters = executable.parse(snapshot.getParameters());
         executable.validate(parameters, validationContexts.forWorkspace(workspaceId));
-        TaskExecutionIdentity context =
-                new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId());
+        TaskExecutionIdentity context = new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId());
         TaskAdmissionPlan plan = executable.plan(parameters, context);
         AdmissionRequest request = new AdmissionRequest(
                 context,
@@ -112,10 +111,6 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (!fingerprint.equals(instance.getRequestFingerprint())) {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
         }
-        return new SubmissionResult(
-                instance.getId(),
-                instance.getDefinitionVersion(),
-                instance.getStatus(),
-                true);
+        return new SubmissionResult(instance.getId(), instance.getDefinitionVersion(), instance.getStatus(), true);
     }
 }

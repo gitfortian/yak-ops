@@ -93,13 +93,7 @@ public final class DispatchTicket {
     @Override
     public int hashCode() {
         return Objects.hash(
-                workspaceId,
-                instanceId,
-                definitionId,
-                definitionVersion,
-                taskType,
-                resourceRevision,
-                dispatchToken);
+                workspaceId, instanceId, definitionId, definitionVersion, taskType, resourceRevision, dispatchToken);
     }
 
     @Override
