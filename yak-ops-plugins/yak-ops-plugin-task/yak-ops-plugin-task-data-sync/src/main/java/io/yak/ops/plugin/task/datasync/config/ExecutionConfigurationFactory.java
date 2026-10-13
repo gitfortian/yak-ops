@@ -1,6 +1,8 @@
 package io.yak.ops.plugin.task.datasync.config;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.configuration.CheckpointingOptions;
@@ -19,18 +21,23 @@ import java.util.Objects;
  */
 public final class ExecutionConfigurationFactory {
 
-    private final RuntimeOptions options;
+    private final ReadonlyConfig options;
     private final Path stateRoot;
     private final Configuration connectorConfiguration;
 
     /** Creates a factory with Connector defaults. */
-    public ExecutionConfigurationFactory(RuntimeOptions options, Path stateRoot) {
+    public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot) {
         this(options, stateRoot, new Configuration());
     }
 
     /** Creates a factory with application-owned Connector options. */
-    public ExecutionConfigurationFactory(RuntimeOptions options, Path stateRoot, Configuration connectorConfiguration) {
+    public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot, Configuration connectorConfiguration) {
         this.options = Objects.requireNonNull(options, "options");
+        ConfigValidator.of(options).validate(JobOptions.RUNTIME_RULE);
+        if (options.get(JobOptions.CHECKPOINT_INTERVAL).isNegative()
+                || options.get(JobOptions.CHECKPOINT_INTERVAL).isZero()) {
+            throw new IllegalArgumentException("DATA_SYNC checkpoint interval must be positive");
+        }
         this.stateRoot =
                 Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
         this.connectorConfiguration =
@@ -62,9 +69,9 @@ public final class ExecutionConfigurationFactory {
 
         return configuration
                 .set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING)
-                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.checkpointInterval())
+                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(JobOptions.CHECKPOINT_INTERVAL))
                 .set(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS, 1)
-                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.maxRestarts());
+                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(JobOptions.MAX_RESTARTS));
     }
 
     private Path stateDirectory(String instanceId) {

@@ -1,6 +1,11 @@
 package io.yak.ops.plugin.task.datasync.pipeline;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.ConnectorExecutionIdentity;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
+import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
@@ -10,43 +15,35 @@ import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
-import io.yak.ops.plugin.task.datasync.config.RuntimeOptions;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.connector.SinkFactoryContext;
-import io.yak.ops.plugin.task.datasync.connector.SourceFactoryContext;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
 import java.nio.file.Path;
 import java.util.Objects;
 
-/**
- * Builds a single-table YakFlow StreamGraph from an authorized logical Job plan.
- *
- * <p>Connector factories own concrete Source and Sink creation. The builder checks resource
- * revisions and constructs transformations without opening JDBC connections or submitting a Job.
- */
+/** Compiles an authorized JobPlan to a physical single-table YakFlow pipeline. */
 public final class PipelineBuilder {
 
     private final RuntimeResources resources;
-    private final ConnectorFactoryRegistry factories;
-    private final RuntimeOptions options;
+    private final FactoryUtil factories;
+    private final ReadonlyConfig options;
     private final ExecutionConfigurationFactory configurationFactory;
 
     /** Creates a builder with system defaults for embedded execution. */
-    public PipelineBuilder(RuntimeResources resources, ConnectorFactoryRegistry factories, Path stateRoot) {
+    public PipelineBuilder(RuntimeResources resources, FactoryUtil factories, Path stateRoot) {
         this(
                 resources,
                 factories,
-                RuntimeOptions.defaults(),
-                new ExecutionConfigurationFactory(RuntimeOptions.defaults(), stateRoot));
+                JobOptions.defaults(),
+                new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot));
     }
 
-    /** Creates a builder using the supplied execution options and configuration factory. */
+    /** Constructs a builder with application-owned runtime options and configuration factory. */
     public PipelineBuilder(
             RuntimeResources resources,
-            ConnectorFactoryRegistry factories,
-            RuntimeOptions options,
+            FactoryUtil factories,
+            ReadonlyConfig options,
             ExecutionConfigurationFactory configurationFactory) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
@@ -55,43 +52,52 @@ public final class PipelineBuilder {
     }
 
     /**
-     * Builds the physical topology with stable operator UIDs.
+     * Compiles one physical job with stable operator UIDs and validated resource revisions.
      *
-     * @param plan non-secret, authorized logical Job plan
-     * @param identity trusted Task Instance identity
-     * @return graph and effective YakFlow configuration for submission
+     * @param plan authorized logical Job plan
+     * @param identity Task Instance and Attempt identity
+     * @return compiled topology and execution configuration
      */
     public CompiledPipeline build(JobPlan plan, TaskExecutionIdentity identity) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
-
-        var sourceFactory = factories.source(plan.sourceParameters());
-        var sinkFactory = factories.sink(plan.sinkParameters());
-        int sourceParallelism = options.sourceParallelism();
-        int sinkParallelism = options.sinkParallelism();
+        var sourceFactory = factories.source(plan.sourceParameters().get(JobOptions.TYPE));
+        var sinkFactory = factories.sink(plan.sinkParameters().get(JobOptions.TYPE));
+        int sourceParallelism = options.get(JobOptions.SOURCE_PARALLELISM);
+        int sinkParallelism = options.get(JobOptions.SINK_PARALLELISM);
         if (sourceFactory.producesChangelog() && sinkParallelism != 1) {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
         }
         Configuration configuration = configurationFactory.create(identity, sourceFactory.boundedness());
-
-        RuntimeConnection sourceConnection = resources.connection(
-                identity.workspaceId(), plan.sourceParameters().datasourceId());
-        RuntimeConnection targetConnection = resources.connection(
-                identity.workspaceId(), plan.sinkParameters().datasourceId());
+        String sourceId = plan.sourceParameters().get(JobOptions.DATASOURCE_ID);
+        String sinkId = plan.sinkParameters().get(JobOptions.DATASOURCE_ID);
+        RuntimeConnection sourceConnection = resources.connection(identity.workspaceId(), sourceId);
+        RuntimeConnection targetConnection = resources.connection(identity.workspaceId(), sinkId);
         if (sourceConnection.revision() != plan.source().revision()
                 || targetConnection.revision() != plan.target().revision()) {
             throw new IllegalStateException("DATA_SYNC datasource revision changed before execution");
         }
+        ConnectorExecutionIdentity connectorIdentity = new ConnectorExecutionIdentity(
+                identity.workspaceId(), identity.definitionId(), identity.instanceId());
 
-        Source<TableRecord, ?, ?> source = sourceFactory.createSource(
+        Source<TableRecord, ?, ?> source = sourceFactory.createSource(new TableSourceFactoryContext(
                 plan.sourceParameters(),
-                new SourceFactoryContext(sourceConnection, plan.source(), configuration, identity));
+                sourceConnection.connectorResource(),
+                plan.source().table(),
+                plan.source().schema(),
+                configuration,
+                connectorIdentity));
         if (source.getBoundedness() != sourceFactory.boundedness()) {
             throw new IllegalStateException("DATA_SYNC Source boundedness differs from its Factory contract");
         }
-        Sink<TableRecord> sink = sinkFactory.createSink(
-                plan.sinkParameters(), new SinkFactoryContext(targetConnection, plan.source(), plan.target()));
+        Sink<TableRecord> sink = sinkFactory.createSink(new TableSinkFactoryContext(
+                plan.sinkParameters(),
+                targetConnection.connectorResource(),
+                plan.source().table(),
+                plan.source().schema(),
+                plan.target().table(),
+                plan.target().schema()));
         SourceTransformation<TableRecord> input =
                 new SourceTransformation<>("data-sync-source", source, TableRecord.class, sourceParallelism);
         SinkTransformation<TableRecord> output =
