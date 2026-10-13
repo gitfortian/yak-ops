@@ -42,6 +42,7 @@ class MySqlHybridSplitSerializerTest {
         assertEquals(high, restored.highWatermark());
         assertEquals(low, restored.binlog().offset());
         assertArrayEquals(new byte[] {1, 2, 3}, restored.binlog().schemaHistory());
+        assertArrayEquals(codec.serialize(running), codec.serialize(restored));
         assertThrows(IllegalStateException.class, () -> paused.withEmittedOffset(high, new byte[] {1}));
     }
 

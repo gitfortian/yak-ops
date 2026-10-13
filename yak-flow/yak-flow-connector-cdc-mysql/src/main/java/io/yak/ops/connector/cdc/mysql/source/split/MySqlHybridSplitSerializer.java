@@ -13,7 +13,7 @@ import java.util.Objects;
 /**
  * Versioned transport of snapshot ranges and paused/running Binlog checkpoint state.
  *
- * <p>The original stream-only Binlog serializer is unchanged, preserving PR1 checkpoints.
+ * <p>The standalone Binlog serializer retains its independent versioned checkpoint format.
  */
 public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializer<MySqlHybridSplit> {
 
