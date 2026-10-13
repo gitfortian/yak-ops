@@ -109,6 +109,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
      */
     private static ReadonlyConfig connectionOptions(ReadonlyConfig supplied) {
         Map<String, Object> fields = new LinkedHashMap<>(supplied.getSourceMap());
+        // HTTP DTOs represent omitted optional fields as null. Unknown values remain errors.
+        fields.values().removeIf(java.util.Objects::isNull);
         useKey(fields, "jdbcUrl", "url");
         useKey(fields, "host", "hostname");
         useKey(fields, "database", "databaseName");
