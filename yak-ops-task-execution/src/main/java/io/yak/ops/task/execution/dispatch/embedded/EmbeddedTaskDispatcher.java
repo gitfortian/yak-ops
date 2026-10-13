@@ -141,8 +141,7 @@ public class EmbeddedTaskDispatcher implements TaskExecutionCoordinator, AutoClo
                     ticket.workspaceId(),
                     ticket.definitionId(),
                     ticket.definitionVersion(),
-                    ticket.instanceId(),
-                    ticket.attemptId());
+                    ticket.instanceId());
             TaskPlugin plugin = registry.get(ticket.taskType());
             if (!(plugin instanceof ExecutableTaskPlugin executable)) {
                 lifecycle.complete(ticket, TaskOutcome.FAILED);

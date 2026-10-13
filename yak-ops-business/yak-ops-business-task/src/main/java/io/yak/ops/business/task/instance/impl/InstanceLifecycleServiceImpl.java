@@ -4,12 +4,9 @@ import io.yak.ops.business.task.instance.DispatchTicket;
 import io.yak.ops.business.task.instance.InstanceLifecycleService;
 import io.yak.ops.business.task.instance.PendingRun;
 import io.yak.ops.common.enums.common.CommonErrorCode;
-import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.exception.BusinessException;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
@@ -19,7 +16,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Atomic business lifecycle transitions that fence cancellation against dispatch. */
+/** Owns single-submission dispatch arbitration, cancellation and durable Task Instance outcomes. */
 @Service
 public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
 
@@ -27,28 +24,21 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     private InstanceRepository instances;
 
     @Resource
-    private AttemptRepository attempts;
-
-    @Resource
     private ExecutionClaimRepository claims;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DispatchTicket claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken) {
-        InstanceEntity instance =
-                instances.findByIdForUpdate(workspaceId, instanceId).orElse(null);
+        InstanceEntity instance = instances.findByIdForUpdate(workspaceId, instanceId).orElse(null);
         if (instance == null || instance.getStatus() != TaskInstanceStatus.SUBMITTED) {
             return null;
         }
-        List<AttemptEntity> list = attempts.findByInstance(workspaceId, instanceId);
-        if (list.size() != 1
-                || !attempts.claimPending(workspaceId, list.getFirst().getId(), ownerIncarnation, dispatchToken)) {
+        if (!instances.claim(workspaceId, instanceId, ownerIncarnation, dispatchToken)) {
             return null;
         }
         return new DispatchTicket(
                 workspaceId,
                 instanceId,
-                list.getFirst().getId(),
                 instance.getDefinitionId(),
                 instance.getDefinitionVersion(),
                 instance.getTaskType(),
@@ -59,11 +49,10 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void started(DispatchTicket ticket, TaskRuntimeReference reference) {
-        if (!attempts.markRunning(
-                ticket.workspaceId(), ticket.attemptId(), ticket.dispatchToken(), reference.engine(), reference.id())) {
-            throw new IllegalStateException("Task Attempt launch ownership changed");
+        if (!instances.markRunning(
+                ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), reference.engine(), reference.id())) {
+            throw new IllegalStateException("Task Instance launch ownership changed");
         }
-        instances.markRunning(ticket.workspaceId(), ticket.instanceId());
     }
 
     @Override
@@ -75,24 +64,14 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
         if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
             return;
         }
-        TaskAttemptStatus attemptStatus =
-                switch (outcome) {
-                    case FINISHED -> TaskAttemptStatus.FINISHED;
-                    case FAILED -> TaskAttemptStatus.FAILED;
-                    case CANCELED -> TaskAttemptStatus.CANCELED;
-                };
-        TaskInstanceStatus instanceStatus =
-                switch (outcome) {
-                    case FINISHED -> TaskInstanceStatus.FINISHED;
-                    case FAILED -> TaskInstanceStatus.FAILED;
-                    case CANCELED -> TaskInstanceStatus.CANCELED;
-                };
+        TaskInstanceStatus status = switch (outcome) {
+            case FINISHED -> TaskInstanceStatus.FINISHED;
+            case FAILED -> TaskInstanceStatus.FAILED;
+            case CANCELED -> TaskInstanceStatus.CANCELED;
+        };
         String reason = outcome == TaskOutcome.FAILED ? "RUNTIME_FAILED" : null;
-        if (!attempts.markTerminal(
-                ticket.workspaceId(), ticket.attemptId(), ticket.dispatchToken(), attemptStatus, reason)) {
-            throw new IllegalStateException("Task Attempt terminal update rejected");
-        }
-        if (!instances.markTerminal(ticket.workspaceId(), ticket.instanceId(), instanceStatus, reason)) {
+        if (!instances.markTerminal(
+                ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), status, reason)) {
             throw new IllegalStateException("Task Instance terminal update rejected");
         }
         claims.releaseOwned(ticket.workspaceId(), ticket.instanceId());
@@ -103,7 +82,7 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     public void uncertain(DispatchTicket ticket) {
         instances.findByIdForUpdate(ticket.workspaceId(), ticket.instanceId()).ifPresent(instance -> {
             if (!instance.getStatus().isTerminal()) {
-                instances.markReconciling(ticket.workspaceId(), ticket.instanceId());
+                instances.markReconciling(ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken());
             }
         });
     }
@@ -114,47 +93,39 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
         InstanceEntity instance = instances
                 .findByIdForUpdate(workspaceId, instanceId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
-        if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
-            return instance.getStatus();
+        TaskInstanceStatus status = instance.getStatus();
+        if (status.isTerminal() || status == TaskInstanceStatus.RECONCILING || status == TaskInstanceStatus.CANCELLING) {
+            return status;
         }
-        List<AttemptEntity> list = attempts.findByInstance(workspaceId, instanceId);
-        if (list.size() != 1) {
-            throw new IllegalStateException("Task Instance must have exactly one initial Attempt");
-        }
-        AttemptEntity attempt = list.getFirst();
-        if (attempt.getStatus() == TaskAttemptStatus.PENDING && attempts.cancelPending(workspaceId, attempt.getId())) {
-            if (!instances.markTerminal(workspaceId, instanceId, TaskInstanceStatus.CANCELED, null)) {
-                throw new IllegalStateException("Unable to complete pending cancellation");
+        if (status == TaskInstanceStatus.SUBMITTED) {
+            if (!instances.cancelSubmitted(workspaceId, instanceId)) {
+                throw new IllegalStateException("Task Instance cancellation rejected");
             }
             claims.releaseOwned(workspaceId, instanceId);
             return TaskInstanceStatus.CANCELED;
         }
-        instances.markCancelling(workspaceId, instanceId);
-        return instances.findById(workspaceId, instanceId).orElseThrow().getStatus();
+        if (!instances.markCancelling(workspaceId, instanceId)) {
+            throw new IllegalStateException("Task Instance cancellation rejected");
+        }
+        return TaskInstanceStatus.CANCELLING;
     }
 
     @Override
     public List<PendingRun> pendingRuns() {
-        return attempts.pending().stream()
-                .filter(attempt -> instances
-                        .findById(attempt.getWorkspaceId(), attempt.getInstanceId())
-                        .map(instance -> instance.getStatus() == TaskInstanceStatus.SUBMITTED)
-                        .orElse(false))
-                .map(attempt -> new PendingRun(attempt.getWorkspaceId(), attempt.getInstanceId()))
+        return instances.pending().stream()
+                .map(instance -> new PendingRun(instance.getWorkspaceId(), instance.getId()))
                 .toList();
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reconcilePrevious(String currentOwner) {
-        for (AttemptEntity attempt : attempts.activeByOtherOwner(currentOwner)) {
-            instances
-                    .findByIdForUpdate(attempt.getWorkspaceId(), attempt.getInstanceId())
-                    .ifPresent(instance -> {
-                        if (!instance.getStatus().isTerminal()) {
-                            instances.markReconciling(instance.getWorkspaceId(), instance.getId());
-                        }
-                    });
+        for (InstanceEntity instance : instances.activeByOtherOwner(currentOwner)) {
+            instances.findByIdForUpdate(instance.getWorkspaceId(), instance.getId()).ifPresent(locked -> {
+                if (!locked.getStatus().isTerminal()) {
+                    instances.markReconciling(locked.getWorkspaceId(), locked.getId(), locked.getDispatchToken());
+                }
+            });
         }
     }
 }

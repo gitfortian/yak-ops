@@ -6,9 +6,7 @@ import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.page.PageData;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
@@ -16,15 +14,12 @@ import jakarta.annotation.Resource;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
-/** Workspace-scoped read operations for persisted Task Instances and Attempts. */
+/** Workspace-scoped read operations for persisted Task Instances. */
 @Service
 public class InstanceServiceImpl implements InstanceService {
 
     @Resource
     private InstanceRepository instances;
-
-    @Resource
-    private AttemptRepository attempts;
 
     @Resource
     private DefinitionRepository definitions;
@@ -54,12 +49,6 @@ public class InstanceServiceImpl implements InstanceService {
                 instance.getTaskType(),
                 version.getParameterSchemaVersion(),
                 version.getParameters());
-    }
-
-    @Override
-    public List<AttemptEntity> attempts(String workspaceId, String instanceId) {
-        instance(workspaceId, instanceId);
-        return attempts.findByInstance(workspaceId, instanceId);
     }
 
     @Override

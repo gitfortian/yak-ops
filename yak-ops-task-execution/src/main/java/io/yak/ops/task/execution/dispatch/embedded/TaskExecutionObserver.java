@@ -94,7 +94,7 @@ public class TaskExecutionObserver implements AutoCloseable {
         active.put(instanceId, handle);
         try {
             TaskRuntimeReference reference =
-                    handle.runtimeReference().orElse(new TaskRuntimeReference(ticket.taskType(), ticket.attemptId()));
+                    handle.runtimeReference().orElse(new TaskRuntimeReference(ticket.taskType(), ticket.instanceId()));
             lifecycle.started(ticket, reference);
             if (instances.instance(ticket.workspaceId(), instanceId).getStatus() == TaskInstanceStatus.CANCELLING) {
                 handle.cancel();

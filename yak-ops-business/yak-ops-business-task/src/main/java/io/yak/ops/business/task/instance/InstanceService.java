@@ -3,11 +3,10 @@ package io.yak.ops.business.task.instance;
 import io.yak.ops.common.bean.vo.task.InstanceDefinitionVO;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.page.PageData;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import java.util.List;
 
-/** Queries persisted Task Instances and their physical submission attempts within a Workspace. */
+/** Queries persisted Task Instances within a Workspace. */
 public interface InstanceService {
 
     /**
@@ -27,15 +26,6 @@ public interface InstanceService {
      * @return immutable execution Definition snapshot
      */
     InstanceDefinitionVO definition(String workspaceId, String instanceId);
-
-    /**
-     * Returns physical submission attempts for an authorized Instance.
-     *
-     * @param workspaceId authorized Workspace
-     * @param instanceId logical Task Instance identity
-     * @return Attempts ordered by submission number
-     */
-    List<AttemptEntity> attempts(String workspaceId, String instanceId);
 
     /**
      * Returns recent Workspace-owned Instances.

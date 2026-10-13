@@ -10,10 +10,8 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.util.IdUtils;
 import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
@@ -24,7 +22,6 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContextFactory;
 import jakarta.annotation.Resource;
-import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
@@ -43,9 +40,6 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     @Resource
     private InstanceRepository instances;
-
-    @Resource
-    private AttemptRepository attempts;
 
     @Resource
     private TaskPluginRegistry plugins;
@@ -93,7 +87,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         ReadonlyConfig parameters = executable.parse(snapshot.getParameters());
         executable.validate(parameters, validationContexts.forWorkspace(workspaceId));
         TaskExecutionIdentity context =
-                new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId(), IdUtils.nextId());
+                new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId());
         TaskAdmissionPlan plan = executable.plan(parameters, context);
         AdmissionRequest request = new AdmissionRequest(
                 context,
@@ -118,13 +112,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (!fingerprint.equals(instance.getRequestFingerprint())) {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
         }
-        List<AttemptEntity> previous = attempts.findByInstance(instance.getWorkspaceId(), instance.getId());
-        if (previous.isEmpty()) {
-            throw new IllegalStateException("Task Instance has no persisted Attempt");
-        }
         return new SubmissionResult(
                 instance.getId(),
-                previous.getFirst().getId(),
                 instance.getDefinitionVersion(),
                 instance.getStatus(),
                 true);
