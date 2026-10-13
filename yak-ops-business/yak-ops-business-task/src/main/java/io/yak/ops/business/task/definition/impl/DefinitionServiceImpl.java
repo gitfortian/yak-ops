@@ -13,14 +13,14 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.DateUtils;
-import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
-import io.yak.ops.plugin.task.api.TaskParameters;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
@@ -217,9 +217,9 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     private String validatedParameters(String type, String parameters) {
         TaskPlugin plugin = pluginRegistry.get(type);
-        TaskParameters parsed = plugin.parse(parameters);
+        ReadonlyConfig parsed = plugin.parse(parameters);
         plugin.validate(parsed, validationContext);
-        return JSONUtils.toJson(parsed);
+        return ConfigParser.toJson(parsed);
     }
 
     private void appendVersion(DefinitionEntity entity, String json, String operator) {

@@ -1,37 +1,29 @@
 package io.yak.ops.plugin.task.api;
 
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 
 /**
- * Defines the parameter contract for one registered Task type.
+ * Defines the configuration contract for one registered Task type.
  *
- * <p>Parsing checks the local parameter structure without accessing Datasource. Validation
- * checks authorized resources without mutating the submitted parameters. Plugins do not
- * persist definitions, construct YakFlow jobs, or own execution state.
+ * <p>Parsing and static validation do not access Datasource. Resource validation uses only
+ * authorized Workspace metadata and does not mutate persisted configuration.
  */
 public interface TaskPlugin {
 
-    /** Stable plugin identifier; aliases are not inferred from case or punctuation. */
+    /** Stable type identifier, matched exactly in persisted Task Definitions. */
     String type();
 
-    /** Schema version used for newly persisted immutable definition parameters. */
+    /** Schema version supported by the plugin's persisted configuration. */
     int parameterSchemaVersion();
 
-    /**
-     * Parses JSON parameters into a typed definition.
-     *
-     * <p>The result must have passed plugin-owned local structural validation. This method
-     * must not access Workspace resources or evaluate system properties.
-     *
-     * @throws TaskPluginException for invalid JSON or plugin parameters
-     */
-    TaskParameters parse(String content);
+    /** Declares task-level options independently of Connector-specific rules. */
+    OptionRule optionRule();
 
-    /**
-     * Checks external resource constraints once for a locally valid definition.
-     *
-     * <p>The trusted context resolves Datasource metadata within the current Workspace.
-     * Implementations must not silently replace an explicitly selected database or schema.
-     */
-    void validate(TaskParameters parameters, TaskValidationContext context);
+    /** Parses and statically validates persisted JSON as an immutable configuration. */
+    ReadonlyConfig parse(String content);
+
+    /** Validates resources referenced by an already parsed Task configuration. */
+    void validate(ReadonlyConfig parameters, TaskValidationContext context);
 }
