@@ -1,4 +1,4 @@
-package io.yak.ops.plugin.task.datasync.plan;
+package io.yak.ops.plugin.task.datasync.connector.jdbc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Verifies the Definition and Job planning checks against executable JDBC table mappings. */
-class SyncSchemaValidatorTest {
+/** Verifies JDBC target projection checks against executable table mappings. */
+class JdbcSinkSchemaValidatorTest {
 
     private static final TableId SOURCE = new TableId("app", null, "orders");
     private static final TableId TARGET = new TableId(null, "public", "orders_copy");
@@ -34,7 +34,7 @@ class SyncSchemaValidatorTest {
                         new Column("id", LogicalTypes.BIGINT.copy(false))),
                 List.of("id"));
 
-        SyncSchemaValidator.validate(source, target, true);
+        JdbcSinkSchemaValidator.validate(source, target, true);
         JdbcTableWritePlan writePlan =
                 new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source, Map.of());
 
@@ -49,7 +49,7 @@ class SyncSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("optional", LogicalTypes.varchar(64)));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -61,7 +61,7 @@ class SyncSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.BIGINT));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -73,8 +73,8 @@ class SyncSchemaValidatorTest {
                 List.of(new Column("id", LogicalTypes.BIGINT), new Column("ID", LogicalTypes.BIGINT)),
                 List.of("id"));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, false));
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(ambiguous, source, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(ambiguous, source, false));
     }
 
     @Test
@@ -86,7 +86,7 @@ class SyncSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("name", LogicalTypes.varchar(32)));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     @Test
@@ -97,7 +97,7 @@ class SyncSchemaValidatorTest {
         TableSchema source = new TableSchema(columns, List.of("id"));
         TableSchema target = new TableSchema(columns, List.of("name"));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, true));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, true));
     }
 
     @Test
@@ -109,7 +109,7 @@ class SyncSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.decimal(20, 2)));
 
-        assertThrows(TaskPluginException.class, () -> SyncSchemaValidator.validate(source, target, false));
+        assertThrows(TaskPluginException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
     }
 
     private static TableSchema table(Column... columns) {

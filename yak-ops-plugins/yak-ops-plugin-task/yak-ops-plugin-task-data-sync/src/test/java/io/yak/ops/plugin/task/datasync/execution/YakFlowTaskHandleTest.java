@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.yak.ops.core.api.common.JobExecutionResult;
 import io.yak.ops.core.api.common.JobID;
@@ -11,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 /** Checks that exceptional Job results preserve authoritative terminal status. */
-class SyncJobHandleTest {
+class YakFlowTaskHandleTest {
 
     @Test
     void successfulJobProducesFinishedOutcome() {
@@ -28,7 +29,38 @@ class SyncJobHandleTest {
         assertEquals(TaskOutcome.FAILED, handle(JobStatus.FAILED).completion().toCompletableFuture().join());
     }
 
-    private static SyncJobHandle handle(JobStatus terminal) {
+    @Test
+    void completionWaitsAsynchronouslyForTerminalJobStatus() {
+        JobID identity = JobID.generate();
+        CompletableFuture<JobStatus> status = new CompletableFuture<>();
+        JobClient client = new JobClient() {
+            @Override
+            public JobID getJobID() {
+                return identity;
+            }
+
+            @Override
+            public CompletableFuture<JobStatus> getJobStatus() {
+                return status;
+            }
+
+            @Override
+            public CompletableFuture<Void> cancel() {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public CompletableFuture<JobExecutionResult> getJobExecutionResult() {
+                return CompletableFuture.completedFuture(new JobExecutionResult(identity, 1));
+            }
+        };
+        var completion = new YakFlowTaskHandle(client).completion().toCompletableFuture();
+        assertFalse(completion.isDone());
+        status.complete(JobStatus.FINISHED);
+        assertEquals(TaskOutcome.FINISHED, completion.join());
+    }
+
+    private static YakFlowTaskHandle handle(JobStatus terminal) {
         JobID identity = JobID.generate();
         JobClient client = new JobClient() {
             @Override
@@ -54,6 +86,6 @@ class SyncJobHandleTest {
                 return CompletableFuture.failedFuture(new IllegalStateException("Job has no successful result"));
             }
         };
-        return new SyncJobHandle(client);
+        return new YakFlowTaskHandle(client);
     }
 }

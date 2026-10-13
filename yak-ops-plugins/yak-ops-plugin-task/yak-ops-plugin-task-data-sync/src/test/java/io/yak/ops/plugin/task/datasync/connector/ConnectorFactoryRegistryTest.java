@@ -11,35 +11,35 @@ import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.datasync.config.SyncParameterCodec;
-import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcSyncSourceFactory;
-import io.yak.ops.plugin.task.datasync.connector.jdbc.JdbcSyncSinkFactory;
-import io.yak.ops.plugin.task.datasync.connector.jdbc.JdbcSyncSourceFactory;
+import io.yak.ops.plugin.task.datasync.config.DefinitionParser;
+import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcSourceFactory;
+import io.yak.ops.plugin.task.datasync.connector.jdbc.JdbcSinkFactory;
+import io.yak.ops.plugin.task.datasync.connector.jdbc.JdbcSourceFactory;
 import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Verifies SPI discovery and saved JSON type resolution without changing the central parser. */
-class SyncConnectorFactoryRegistryTest {
+class ConnectorFactoryRegistryTest {
 
     @Test
     void discoversBuiltInFactoriesThroughJavaSpi() {
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
 
-        assertInstanceOf(JdbcSyncSourceFactory.class, factories.source("JDBC"));
-        assertInstanceOf(MySqlCdcSyncSourceFactory.class, factories.source("MYSQL_CDC"));
-        assertInstanceOf(JdbcSyncSinkFactory.class, factories.sink("JDBC"));
+        assertInstanceOf(JdbcSourceFactory.class, factories.source("JDBC"));
+        assertInstanceOf(MySqlCdcSourceFactory.class, factories.source("MYSQL_CDC"));
+        assertInstanceOf(JdbcSinkFactory.class, factories.sink("JDBC"));
         assertThrows(TaskPluginException.class, () -> factories.source("UNKNOWN"));
         assertThrows(TaskPluginException.class, () -> factories.sink("UNKNOWN"));
     }
 
     @Test
     void resolvesAnAdditionalSourceFromRegisteredParametersClass() {
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry(
-                List.of(new JdbcSyncSourceFactory(), new ExternalSourceFactory()),
-                List.of(new JdbcSyncSinkFactory()));
-        var parameters = new SyncParameterCodec(factories).parse("""
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry(
+                List.of(new JdbcSourceFactory(), new ExternalSourceFactory()),
+                List.of(new JdbcSinkFactory()));
+        var parameters = new DefinitionParser(factories).parse("""
                 {"source":{"type":"EXTERNAL","datasourceId":"a","table":"orders"},
                  "transform":[],
                  "sink":{"type":"JDBC","datasourceId":"b","table":"copy","writeMode":"APPEND"}}
@@ -55,19 +55,19 @@ class SyncConnectorFactoryRegistryTest {
     void rejectsDuplicateIdentifiersAndParameterTypes() {
         assertThrows(
                 IllegalStateException.class,
-                () -> new SyncConnectorFactoryRegistry(
-                        List.of(new JdbcSyncSourceFactory(), new JdbcSyncSourceFactory()),
-                        List.of(new JdbcSyncSinkFactory())));
+                () -> new ConnectorFactoryRegistry(
+                        List.of(new JdbcSourceFactory(), new JdbcSourceFactory()),
+                        List.of(new JdbcSinkFactory())));
         assertThrows(
                 IllegalStateException.class,
-                () -> new SyncConnectorFactoryRegistry(
-                        List.of(new JdbcSyncSourceFactory(), new ConflictingSourceFactory()),
-                        List.of(new JdbcSyncSinkFactory())));
+                () -> new ConnectorFactoryRegistry(
+                        List.of(new JdbcSourceFactory(), new ConflictingSourceFactory()),
+                        List.of(new JdbcSinkFactory())));
     }
 
     @Test
     void doesNotRegisterConcreteFactoriesInParameterInterfaces() {
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
         assertTrue(factories.source("MYSQL_CDC").producesChangelog());
         assertTrue(!factories.source("JDBC").producesChangelog());
     }
@@ -82,7 +82,7 @@ class SyncConnectorFactoryRegistryTest {
         }
     }
 
-    private static class ExternalSourceFactory implements SyncSourceFactory {
+    private static class ExternalSourceFactory implements TableSourceFactory {
         @Override
         public String identifier() {
             return "EXTERNAL";
@@ -104,7 +104,7 @@ class SyncConnectorFactoryRegistryTest {
         }
 
         @Override
-        public Source<TableRecord, ?, ?> create(SourceParameters parameters, SyncSourceContext context) {
+        public Source<TableRecord, ?, ?> createSource(SourceParameters parameters, SourceFactoryContext context) {
             throw new UnsupportedOperationException("External test Source cannot execute");
         }
     }

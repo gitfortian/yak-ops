@@ -11,13 +11,13 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskParameters;
-import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
-import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
+import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
+import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
@@ -33,14 +33,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** Verifies stateless plugin discovery and independent local and physical validation boundaries. */
-class SyncTaskPluginContractTest {
+class DataSyncTaskPluginContractTest {
 
     private final TaskPluginRegistry registry = new TaskPluginRegistry(List.of(plugin()));
 
     @Test
     void registersBootConstructedPluginWithOneRegistry() {
         assertTrue(registry.types().contains("DATA_SYNC"));
-        assertInstanceOf(SyncTaskPlugin.class, registry.get("DATA_SYNC"));
+        assertInstanceOf(DataSyncTaskPlugin.class, registry.get("DATA_SYNC"));
         assertEquals(2, registry.get("DATA_SYNC").parameterSchemaVersion());
         assertThrows(TaskPluginException.class, () -> registry.get("data-sync"));
         assertThrows(TaskPluginException.class, () -> registry.get("data_sync"));
@@ -50,8 +50,8 @@ class SyncTaskPluginContractTest {
 
     @Test
     void parsesJDBCAndMySqlCdcWithoutAddingExecutionState() {
-        SyncParameters jdbc = (SyncParameters) registry.get("DATA_SYNC").parse(offlineJson());
-        SyncParameters cdc = (SyncParameters) registry.get("DATA_SYNC").parse(realtimeJson());
+        DataSyncParameters jdbc = (DataSyncParameters) registry.get("DATA_SYNC").parse(offlineJson());
+        DataSyncParameters cdc = (DataSyncParameters) registry.get("DATA_SYNC").parse(realtimeJson());
         assertInstanceOf(JdbcSourceParameters.class, jdbc.source());
         assertInstanceOf(MySqlCdcSourceParameters.class, cdc.source());
         assertEquals("JDBC", JSONUtils.readTree(JSONUtils.toJson(jdbc)).path("source").path("type").asText());
@@ -87,16 +87,16 @@ class SyncTaskPluginContractTest {
     @Test
     void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
         Metadata context = new Metadata();
-        SyncParameters parameters =
-                (SyncParameters) parseAndValidate(realtimeJson(), context);
+        DataSyncParameters parameters =
+                (DataSyncParameters) parseAndValidate(realtimeJson(), context);
         assertInstanceOf(MySqlCdcSourceParameters.class, parameters.source());
         assertEquals(null, parameters.source().database());
         assertEquals(null, parameters.sink().schema());
         assertEquals("app", context.lastSourceTable.catalog());
         assertEquals("ods", context.lastTargetTable.schema());
 
-        SyncParameters bounded =
-                (SyncParameters) parseAndValidate(offlineJson(), context);
+        DataSyncParameters bounded =
+                (DataSyncParameters) parseAndValidate(offlineJson(), context);
         assertInstanceOf(JdbcSourceParameters.class, bounded.source());
     }
 
@@ -162,23 +162,23 @@ class SyncTaskPluginContractTest {
         assertEquals(1, validations.get());
     }
 
-    private static SyncTaskPlugin plugin() {
-        SyncRuntimeResources unsupported = new SyncRuntimeResources() {
+    private static DataSyncTaskPlugin plugin() {
+        RuntimeResources unsupported = new RuntimeResources() {
             @Override
-            public SyncRuntimeTable table(String workspace, String id, String database, String schema, String name) {
+            public RuntimeTable table(String workspace, String id, String database, String schema, String name) {
                 throw new UnsupportedOperationException("Physical resource access is disabled in definition tests");
             }
 
             @Override
-            public SyncRuntimeConnection connection(String workspace, String id) {
+            public RuntimeConnection connection(String workspace, String id) {
                 throw new UnsupportedOperationException("Physical resource access is disabled in definition tests");
             }
         };
         PipelineExecutor executor = new EmbeddedPipelineExecutor();
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
-        SyncJobPlanner planner = new SyncJobPlanner(unsupported, factories);
-        SyncPipelineCompiler compiler = new SyncPipelineCompiler(unsupported, factories, Path.of("test-state"));
-        return new SyncTaskPlugin(planner, new SyncTaskExecutor(planner, compiler, executor), factories);
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        JobPlanner planner = new JobPlanner(unsupported, factories);
+        PipelineBuilder builder = new PipelineBuilder(unsupported, factories, Path.of("test-state"));
+        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
     }
 
     private TaskParameters parseAndValidate(String json, TaskValidationContext context) {

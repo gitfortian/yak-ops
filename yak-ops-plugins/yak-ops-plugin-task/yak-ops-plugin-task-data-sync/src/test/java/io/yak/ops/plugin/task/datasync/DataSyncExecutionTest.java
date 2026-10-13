@@ -28,15 +28,17 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.plan.SyncJobPlan;
-import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
-import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
-import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
-import io.yak.ops.plugin.task.datasync.pipeline.SyncRuntimeOptions;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
-import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
+import io.yak.ops.plugin.task.datasync.plan.JobPlan;
+import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
+import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
+import io.yak.ops.plugin.task.datasync.config.RuntimeOptions;
+import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
+import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcOptions;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeConnection;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeResources;
+import io.yak.ops.plugin.task.datasync.resource.RuntimeTable;
 import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
 import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
@@ -51,7 +53,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /** Verifies product DATA_SYNC planning and execution without opening physical JDBC connections. */
-class SyncExecutionTest {
+class DataSyncExecutionTest {
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(
                     new Column("id", LogicalTypes.BIGINT.copy(false)),
@@ -64,8 +66,8 @@ class SyncExecutionTest {
     void boundedJdbcRunsThroughExistingPipelineExecutor() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(false);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertEquals(1, plan.exclusiveResources().size());
         assertEquals("DATA_SYNC_TARGET", plan.exclusiveResources().getFirst().type());
@@ -84,16 +86,16 @@ class SyncExecutionTest {
     @Test
     void preparesNonSecretLogicalJobPlanWithoutResolvingConnections() {
         Resources resources = new Resources();
-        SyncJobPlanner planner = new SyncJobPlanner(resources, new SyncConnectorFactoryRegistry());
-        SyncParameters parameters = parameters(true);
+        JobPlanner planner = new JobPlanner(resources, new ConnectorFactoryRegistry());
+        DataSyncParameters parameters = parameters(true);
 
-        SyncJobPlan prepared = planner.prepare(parameters, CONTEXT);
+        JobPlan prepared = planner.plan(parameters, CONTEXT);
 
         assertEquals(parameters.source(), prepared.sourceParameters());
         assertEquals(parameters.sink(), prepared.sinkParameters());
         assertEquals("orders", prepared.source().table().table());
         assertEquals("ods_orders", prepared.target().table().table());
-        assertEquals(planner.plan(parameters, CONTEXT), prepared.admissionPlan());
+        assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
         assertEquals(0, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
     }
@@ -102,8 +104,8 @@ class SyncExecutionTest {
     void rejectsChangedTableSchemaBeforeLaunchingEvenWhenDatasourceRevisionIsStable() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(false);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(false);
         TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
 
         resources.targetSchema = new TableSchema(
@@ -126,8 +128,8 @@ class SyncExecutionTest {
     void refusesChangedDatasourceRevisionBeforeLaunching() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(false);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(false);
         TaskAdmissionPlan admitted = plugin.plan(parameters, CONTEXT);
         resources.targetRevision++;
         CompletionException failure = assertThrows(
@@ -143,8 +145,8 @@ class SyncExecutionTest {
     void mySqlCdcBuildsHybridSnapshotPipeline() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(true);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertTrue(plan.resourceRevision().length() <= 128);
         var handle = plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join();
@@ -155,7 +157,7 @@ class SyncExecutionTest {
 
 
     @Test
-    void compilerSelectsJdbcAndCdcWithoutOpeningRuntimeConnections() {
+    void builderSelectsJdbcAndCdcWithoutOpeningRuntimeConnections() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
         AtomicReference<StreamGraph> lastGraph = new AtomicReference<>();
@@ -165,9 +167,9 @@ class SyncExecutionTest {
             lastConfiguration.set(new Configuration(configuration));
             return finishedExecutor(submissions).execute(graph, configuration);
         };
-        SyncTaskPlugin plugin = plugin(resources, capture);
+        DataSyncTaskPlugin plugin = plugin(resources, capture);
 
-        SyncParameters jdbc = parameters(false);
+        DataSyncParameters jdbc = parameters(false);
         plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT).toCompletableFuture().join();
 
         StreamGraph bounded = lastGraph.get();
@@ -178,7 +180,7 @@ class SyncExecutionTest {
         assertEquals("data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
         assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
 
-        SyncParameters cdc = parameters(true);
+        DataSyncParameters cdc = parameters(true);
         plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT).toCompletableFuture().join();
 
         StreamGraph continuous = lastGraph.get();
@@ -193,8 +195,8 @@ class SyncExecutionTest {
     void refusesChangedConnectionRevisionBeforePhysicalSubmission() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(false);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         resources.sourceConnectionRevision = 2;
 
@@ -212,8 +214,8 @@ class SyncExecutionTest {
         Resources resources = new Resources();
         resources.sourceTunneled = true;
         AtomicInteger submissions = new AtomicInteger();
-        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
-        SyncParameters parameters = parameters(true);
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        DataSyncParameters parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
 
         CompletionException failure = assertThrows(
@@ -229,9 +231,9 @@ class SyncExecutionTest {
     @Test
     void cdcPlanReservesTheReplicationServerIdAlongsideTheTarget() {
         Resources resources = new Resources();
-        SyncJobPlanner planner = new SyncJobPlanner(resources, new SyncConnectorFactoryRegistry());
-        SyncParameters parameters = parameters(true);
-        TaskAdmissionPlan admitted = planner.plan(parameters, CONTEXT);
+        JobPlanner planner = new JobPlanner(resources, new ConnectorFactoryRegistry());
+        DataSyncParameters parameters = parameters(true);
+        TaskAdmissionPlan admitted = planner.admissionPlan(parameters, CONTEXT);
         TaskExecutionIdentity anotherAttempt =
                 new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-456");
 
@@ -240,26 +242,30 @@ class SyncExecutionTest {
                 resource -> resource.type().equals("DATA_SYNC_TARGET")));
         assertTrue(admitted.exclusiveResources().stream().anyMatch(
                 resource -> resource.type().equals("MYSQL_CDC_SERVER_ID")));
-        assertEquals(admitted, planner.plan(parameters, anotherAttempt));
+        assertEquals(admitted, planner.admissionPlan(parameters, anotherAttempt));
         assertEquals(0, resources.connections.get());
     }
 
     @Test
     void systemRuntimeOptionsControlGraphParallelismAndSameJobRecovery() {
         Resources resources = new Resources();
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
-        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
-        SyncRuntimeOptions options = new SyncRuntimeOptions(2, 1, 512, 64, Duration.ofMillis(750), 2);
-        SyncPipelineCompiler compiler =
-                new SyncPipelineCompiler(resources, factories, options, Path.of("target/data-sync"));
-        SyncParameters parameters = parameters(true);
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        RuntimeOptions options = new RuntimeOptions(2, 1, Duration.ofMillis(750), 2);
+        PipelineBuilder builder =
+                new PipelineBuilder(resources, factories, options,
+                        new ExecutionConfigurationFactory(options, Path.of("target/data-sync"),
+                                new MySqlCdcOptions(512, 64).configuration()));
+        DataSyncParameters parameters = parameters(true);
 
-        var compiled = compiler.compile(planner.prepare(parameters, CONTEXT), CONTEXT);
+        var compiled = builder.build(planner.plan(parameters, CONTEXT), CONTEXT);
 
         assertEquals(2, compiled.graph().getSourceNodes().getFirst().getParallelism());
         assertEquals(1, compiled.graph().getSinkNodes().getFirst().getParallelism());
         assertEquals(Duration.ofMillis(750), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         assertEquals(2, compiled.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
+        assertEquals(512, compiled.configuration().get(MySqlCdcOptions.SNAPSHOT_CHUNK_SIZE));
+        assertEquals(64, compiled.configuration().get(MySqlCdcOptions.QUEUE_CAPACITY));
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
@@ -268,32 +274,33 @@ class SyncExecutionTest {
     @Test
     void refusesChangelogSinkScalingBeforeLoadingConnectionCredentials() {
         Resources resources = new Resources();
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
-        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
-        SyncRuntimeOptions settings = new SyncRuntimeOptions(2, 2, 1024, 256, Duration.ofSeconds(10), 1);
-        SyncPipelineCompiler compiler =
-                new SyncPipelineCompiler(resources, factories, settings, Path.of("target/data-sync"));
-        SyncParameters parameters = parameters(true);
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        RuntimeOptions settings = new RuntimeOptions(2, 2, Duration.ofSeconds(10), 1);
+        PipelineBuilder builder =
+                new PipelineBuilder(resources, factories, settings,
+                        new ExecutionConfigurationFactory(settings, Path.of("target/data-sync")));
+        DataSyncParameters parameters = parameters(true);
 
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> compiler.compile(planner.prepare(parameters, CONTEXT), CONTEXT));
+                () -> builder.build(planner.plan(parameters, CONTEXT), CONTEXT));
         assertEquals(0, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
     }
 
-    private static SyncTaskPlugin plugin(SyncRuntimeResources resources, PipelineExecutor executor) {
-        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
-        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
-        SyncPipelineCompiler compiler = new SyncPipelineCompiler(resources, factories, Path.of("target/data-sync"));
-        return new SyncTaskPlugin(planner, new SyncTaskExecutor(planner, compiler, executor), factories);
+    private static DataSyncTaskPlugin plugin(RuntimeResources resources, PipelineExecutor executor) {
+        ConnectorFactoryRegistry factories = new ConnectorFactoryRegistry();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
+        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
     }
 
-    private static SyncParameters parameters(boolean cdc) {
+    private static DataSyncParameters parameters(boolean cdc) {
         var source = cdc
                 ? new MySqlCdcSourceParameters("source", null, null, "orders")
                 : new JdbcSourceParameters("source", null, null, "orders");
-        return new SyncParameters(
+        return new DataSyncParameters(
                 source,
                 List.of(),
                 new JdbcSinkParameters(
@@ -329,7 +336,7 @@ class SyncExecutionTest {
         };
     }
 
-    private static final class Resources implements SyncRuntimeResources {
+    private static final class Resources implements RuntimeResources {
         private final AtomicInteger connections = new AtomicInteger();
         private final AtomicInteger tables = new AtomicInteger();
         private final AtomicInteger openedConnections = new AtomicInteger();
@@ -339,30 +346,30 @@ class SyncExecutionTest {
         private TableSchema targetSchema = SCHEMA;
 
         @Override
-        public SyncRuntimeTable table(
+        public RuntimeTable table(
                 String workspace, String datasource, String database, String schema, String table) {
             assertEquals("ws", workspace);
             tables.incrementAndGet();
             if ("source".equals(datasource)) {
-                return new SyncRuntimeTable("MYSQL", new TableId("app", null, "orders"), SCHEMA, 1);
+                return new RuntimeTable("MYSQL", new TableId("app", null, "orders"), SCHEMA, 1);
             }
-            return new SyncRuntimeTable(
+            return new RuntimeTable(
                     "POSTGRE_SQL", new TableId(null, "public", "ods_orders"), targetSchema, targetRevision);
         }
 
         @Override
-        public SyncRuntimeConnection connection(String workspace, String datasource) {
+        public RuntimeConnection connection(String workspace, String datasource) {
             connections.incrementAndGet();
             JdbcConnectionProvider provider = () -> {
                 openedConnections.incrementAndGet();
                 throw new SQLException("Physical JDBC connections are not opened during graph planning");
             };
             if ("source".equals(datasource)) {
-                return new SyncRuntimeConnection(
+                return new RuntimeConnection(
                         provider, "jdbc:mysql://localhost:3306/app", "MYSQL",
                         "user", "secret", "localhost", 3306, sourceConnectionRevision, sourceTunneled);
             }
-            return new SyncRuntimeConnection(
+            return new RuntimeConnection(
                     provider, "jdbc:postgresql://localhost:5432/app", "POSTGRE_SQL",
                     "user", "secret", "localhost", 5432, targetRevision, false);
         }
