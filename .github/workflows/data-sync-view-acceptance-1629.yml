@@ -81,7 +81,7 @@ jobs:
         import base from "./apps/web/vite.config";
         const mock=fileURLToPath(new URL("./apps/web/__execution-mocks.ts",import.meta.url));
         const exact=["@/service/data-sync","@/service/datasource","@/service/user","@/service/task-execution"].map(find=>({find:new RegExp("^"+find+"$"),replacement:mock}));
-        export default {...base,resolve:{...base.resolve,alias:[...exact,...Object.entries(base.resolve.alias).map(([find,replacement])=>({find,replacement}))]},server:{...base.server,host:"127.0.0.1",port:4175}};
+        export default {...base,resolve:{...base.resolve,dedupe:["react","react-dom"],alias:[...exact,...Object.entries(base.resolve.alias).map(([find,replacement])=>({find,replacement}))]},server:{...base.server,host:"127.0.0.1",port:4175},build:{...base.build,outDir:"/tmp/execution-view-dist",rollupOptions:{input:fileURLToPath(new URL("./apps/web/__execution-view.html",import.meta.url))}}};
         FIXTURE
         cat > __execution-view-test.mjs <<'FIXTURE'
         import assert from "node:assert/strict";
@@ -91,7 +91,7 @@ jobs:
         const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,args:["--no-sandbox"]});
         const context=await browser.newContext({viewport:{width:1440,height:900},acceptDownloads:true});
         const page=await context.newPage();
-        const errors=[];page.on("pageerror",error=>errors.push(error.message));
+        const errors=[];page.on("pageerror",error=>errors.push(error.stack || error.message));
         const out="/tmp/execution-view-artifacts";mkdirSync(out,{recursive:true});
         const reports=[];
         async function open(state,realtime=false){
@@ -169,7 +169,9 @@ jobs:
         cat > apps/web/__execution-view.html <<'HTML'
         <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><div id="root" style="height:100vh"></div><script type="module" src="/__execution-view.tsx"></script></body></html>
         HTML
-        node_modules/.bin/vite --config __execution-view.config.ts > /tmp/execution-view-vite.log 2>&1 &
+        npm ls react react-dom
+        node_modules/.bin/vite build --config __execution-view.config.ts
+        node_modules/.bin/vite preview --config __execution-view.config.ts --host 127.0.0.1 --port 4175 > /tmp/execution-view-vite.log 2>&1 &
         VITE_PID=$!
         trap 'kill "$VITE_PID" 2>/dev/null || true' EXIT
         for attempt in $(seq 1 30); do
