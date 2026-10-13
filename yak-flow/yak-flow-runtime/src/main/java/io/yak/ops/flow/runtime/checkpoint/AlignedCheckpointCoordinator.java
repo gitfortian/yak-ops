@@ -4,6 +4,7 @@ import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.configuration.CheckpointingOptions;
+import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.flow.runtime.jobgraph.JobGraph;
 import io.yak.ops.flow.runtime.source.coordinator.PendingCheckpointDeliveriesException;
@@ -24,12 +25,16 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * Single-JVM aligned barrier checkpoint.
@@ -41,6 +46,8 @@ import java.util.function.Consumer;
  * <p>Only linear, single-input local graphs are supported. No distributed exactly-once.
  */
 public final class AlignedCheckpointCoordinator implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AlignedCheckpointCoordinator.class);
 
     private final JobGraph jobGraph;
     private final Source<?, SourceSplit, Object> source;
@@ -59,8 +66,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     private final CompletableFuture<Void> finalCheckpointCompleted = new CompletableFuture<>();
     private long checkpointDeadlineNanos;
     private long finalCheckpointDeadlineNanos;
-    private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(
-            Thread.ofVirtual().name("yak-local-checkpoint-", 0).factory());
+    private final ScheduledExecutorService timer;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     public AlignedCheckpointCoordinator(
@@ -74,6 +80,18 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure) {
         this.jobGraph = Objects.requireNonNull(plan, "plan must not be null");
+        String logId = plan.configuration().get(ExecutionOptions.LOG_ID);
+        ThreadFactory threads =
+                Thread.ofVirtual().name("yak-local-checkpoint-", 0).factory();
+        this.timer = Executors.newSingleThreadScheduledExecutor(action -> threads.newThread(() -> {
+            if (logId == null || logId.isBlank()) {
+                action.run();
+            } else {
+                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId)) {
+                    action.run();
+                }
+            }
+        }));
         this.source = Objects.requireNonNull(source, "source must not be null");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator must not be null");
         this.sourceTasks = List.copyOf(sourceTasks);
@@ -415,6 +433,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             }
             storage.save(snapshot);
             stored = true;
+            LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
             published.complete(snapshot);
             if (System.nanoTime() >= checkpointDeadlineNanos) {
                 throw new IllegalStateException("Checkpoint persisted after deadline; refusing completion callback");
