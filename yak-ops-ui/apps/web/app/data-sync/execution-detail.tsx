@@ -2,10 +2,7 @@ import { Badge, SectionCard, type BadgeProps } from "@yak-ops/yak-ui";
 import type { ReactNode } from "react";
 
 import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
-import type {
-  DataSyncInstanceRecord,
-  DataSyncInstanceStatus,
-} from "@/service/data-sync";
+import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
 export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord): boolean =>
   record ? isTaskInstanceActive(record.status) : false;
