@@ -11,7 +11,7 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskParameters;
-import io.yak.ops.plugin.task.datasync.execution.SyncExecutionPlanner;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
@@ -173,7 +173,7 @@ class SyncTaskPluginContractTest {
             }
         };
         PipelineExecutor executor = new EmbeddedPipelineExecutor();
-        SyncExecutionPlanner planner = new SyncExecutionPlanner(unsupported);
+        SyncJobPlanner planner = new SyncJobPlanner(unsupported);
         return new SyncTaskPlugin(planner, new SyncTaskExecutor(unsupported, planner, executor, Path.of("test-state")));
     }
 
