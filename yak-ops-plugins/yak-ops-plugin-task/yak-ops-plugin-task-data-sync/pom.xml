@@ -19,6 +19,10 @@
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-configuration</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-plugin-task-api</artifactId>
         </dependency>
         <dependency>
