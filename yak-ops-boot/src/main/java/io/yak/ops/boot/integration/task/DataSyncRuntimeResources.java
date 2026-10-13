@@ -17,11 +17,9 @@ public class DataSyncRuntimeResources implements RuntimeResources {
     private DataSourceRuntimeService datasources;
 
     @Override
-    public RuntimeTable table(
-            String workspaceId, String datasourceId, String database, String schema, String table) {
+    public RuntimeTable table(String workspaceId, String datasourceId, String database, String schema, String table) {
         DataSourceRuntimeTable selected = datasources.table(workspaceId, datasourceId, database, schema, table);
-        return new RuntimeTable(
-                selected.datasourceType(), selected.table(), selected.schema(), selected.revision());
+        return new RuntimeTable(selected.datasourceType(), selected.table(), selected.schema(), selected.revision());
     }
 
     @Override
