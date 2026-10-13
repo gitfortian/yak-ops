@@ -113,7 +113,6 @@ public final class OptionRule {
                     option,
                     expected,
                     OptionRule.builder()
-                            .optional(first.option())
                             .withConstraints(first, rest)
                             .build());
         }

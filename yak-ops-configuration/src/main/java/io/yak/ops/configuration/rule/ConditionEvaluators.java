@@ -56,7 +56,7 @@ public final class ConditionEvaluators {
 
     private static int compare(Object value, Object expected) {
         if (!(value instanceof Number left) || !(expected instanceof Number right)) {
-            return -1;
+            throw new IllegalArgumentException("Numeric constraint requires numeric values");
         }
         return new BigDecimal(left.toString()).compareTo(new BigDecimal(right.toString()));
     }

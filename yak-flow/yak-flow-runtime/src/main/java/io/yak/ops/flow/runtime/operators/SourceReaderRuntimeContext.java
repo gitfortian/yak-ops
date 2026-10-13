@@ -2,7 +2,7 @@ package io.yak.ops.flow.runtime.operators;
 
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorEventGateway;
 import io.yak.ops.flow.runtime.source.event.RequestSplitEvent;
