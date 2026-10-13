@@ -307,7 +307,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             ObjectNode propertiesNode = normalized.putObject("properties");
             properties.forEach(propertiesNode::put);
             writeSshTunnel(normalized, sshTunnel);
-            appendNormalizedFields(root, normalized);
 
             return new JdbcConnectionProperties(
                     type(),
@@ -437,8 +436,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         return properties;
     }
 
-    protected void validateProperties(Map<String, String> properties) {}
-
     protected String normalizeSchema(String schema) {
         return StringUtils.trimToNull(schema);
     }
@@ -472,8 +469,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         }
         return normalized;
     }
-
-    protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {}
 
     protected String inferDatabase(String jdbcUrl) {
         if (StringUtils.isBlank(jdbcUrl)) {
