@@ -67,6 +67,10 @@ interface Props {
 
 export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false }: Props) {
   const realtime = syncType === "REALTIME";
+  const statusItems = {
+    ...INSTANCE_STATUS_ITEMS,
+    CANCELED: realtime ? "已停止" : "已取消",
+  };
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -304,7 +308,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           : "flex min-h-full flex-col bg-[#f6f6f6] text-[#242731] md:flex-row"
       }
     >
-      <aside className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0">
+      <aside
+        className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0"
+      >
         <div className="shrink-0 border-b border-[#eef0f3] px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-[#242731]">执行记录</span>
@@ -322,17 +328,19 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           </div>
           <Select
             size="small"
-            items={INSTANCE_STATUS_ITEMS}
+            items={statusItems}
             value={status}
-            onValueChange={(value) => changeStatus(String(value || "ALL") as DataSyncInstanceStatus | "ALL")}
+            onValueChange={(value) =>
+              changeStatus(String(value || "ALL") as DataSyncInstanceStatus | "ALL")
+            }
           >
             <SelectTrigger variant="outlined" className="mt-3">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(INSTANCE_STATUS_ITEMS).map(([value, label]) => (
+              {Object.entries(statusItems).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
-                  <SelectItemText>{value === "CANCELED" && !realtime ? "已取消" : label}</SelectItemText>
+                  <SelectItemText>{label}</SelectItemText>
                   <SelectItemIndicator />
                 </SelectItem>
               ))}
@@ -386,7 +394,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
         </div>
 
         {total > PAGE_SIZE ? (
-          <div className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2">
+          <div
+            className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2"
+          >
             <Button
               size="small"
               variant="ghost"
