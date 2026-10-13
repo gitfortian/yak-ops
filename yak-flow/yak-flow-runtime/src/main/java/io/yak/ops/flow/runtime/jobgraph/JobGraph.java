@@ -1,8 +1,8 @@
 package io.yak.ops.flow.runtime.jobgraph;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.common.JobID;
-import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import java.util.HashSet;
 import java.util.List;

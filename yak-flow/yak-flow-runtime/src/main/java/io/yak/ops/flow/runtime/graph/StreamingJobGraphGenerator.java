@@ -1,10 +1,10 @@
 package io.yak.ops.flow.runtime.graph;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.common.JobID;
 import io.yak.ops.core.api.connector.sink.SupportsWriterState;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;

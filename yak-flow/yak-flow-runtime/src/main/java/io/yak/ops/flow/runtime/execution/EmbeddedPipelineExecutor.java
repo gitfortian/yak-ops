@@ -1,7 +1,7 @@
 package io.yak.ops.flow.runtime.execution;
 
-import io.yak.ops.core.api.dag.Pipeline;
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.core.api.dag.Pipeline;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.flow.runtime.executiongraph.ExecutionGraph;

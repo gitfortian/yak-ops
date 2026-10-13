@@ -37,7 +37,8 @@ public class Configuration implements Serializable, Cloneable {
 
     /** Copies the explicitly configured entries into a new independent container. */
     public Configuration(Configuration other) {
-        values.putAll(ConfigValues.copyMap(Objects.requireNonNull(other, "other must not be null").snapshot()));
+        values.putAll(ConfigValues.copyMap(
+                Objects.requireNonNull(other, "other must not be null").snapshot()));
     }
 
     /** Creates a configuration from explicitly stored string-valued entries. */
