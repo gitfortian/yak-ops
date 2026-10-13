@@ -1,13 +1,14 @@
 package io.yak.ops.boot.config;
 
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.datasync.DataSyncTaskPlugin;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
-import io.yak.ops.plugin.task.datasync.config.RuntimeOptions;
-import io.yak.ops.plugin.task.datasync.connector.ConnectorFactoryRegistry;
-import io.yak.ops.plugin.task.datasync.connector.cdc.MySqlCdcOptions;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
@@ -19,7 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Constructs and registers built-in Task plugins with their execution dependencies. */
+/** Constructs task plugins, physical options and Connector factories for the application. */
 @Configuration(proxyBeanMethods = false)
 public class TaskPluginConfiguration {
 
@@ -29,44 +30,57 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
-    ConnectorFactoryRegistry connectorFactoryRegistry() {
-        return new ConnectorFactoryRegistry();
+    FactoryUtil connectorFactoryUtil() {
+        return new FactoryUtil();
     }
 
     @Bean
-    JobPlanner jobPlanner(RuntimeResources resources, ConnectorFactoryRegistry factories) {
+    JobPlanner jobPlanner(RuntimeResources resources, FactoryUtil factories) {
         return new JobPlanner(resources, factories);
     }
 
     @Bean
-    RuntimeOptions dataSyncRuntimeOptions(
+    ReadonlyConfig dataSyncRuntimeOptions(
             @Value("${yak.task.data-sync.source-parallelism:1}") int sourceParallelism,
             @Value("${yak.task.data-sync.sink-parallelism:1}") int sinkParallelism,
             @Value("${yak.task.data-sync.cdc.checkpoint-interval:PT10S}") String checkpointInterval,
             @Value("${yak.task.data-sync.cdc.max-restarts:1}") int maxRestarts) {
-        return new RuntimeOptions(sourceParallelism, sinkParallelism, Duration.parse(checkpointInterval), maxRestarts);
+        return new io.yak.ops.configuration.Configuration()
+                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
+                .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(JobOptions.CHECKPOINT_INTERVAL, Duration.parse(checkpointInterval))
+                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .toReadonlyConfig();
     }
 
     @Bean
-    MySqlCdcOptions mySqlCdcOptions(
+    io.yak.ops.configuration.Configuration mySqlCdcConnectorConfiguration(
             @Value("${yak.task.data-sync.cdc.snapshot-chunk-size:1024}") int snapshotChunkSize,
             @Value("${yak.task.data-sync.cdc.queue-capacity:256}") int queueCapacity) {
-        return new MySqlCdcOptions(snapshotChunkSize, queueCapacity);
+        if (snapshotChunkSize < 1 || snapshotChunkSize > 100_000) {
+            throw new IllegalArgumentException("Invalid MySQL CDC snapshot chunk size");
+        }
+        if (queueCapacity < 1 || queueCapacity > 10_000) {
+            throw new IllegalArgumentException("Invalid MySQL CDC queue capacity");
+        }
+        return new io.yak.ops.configuration.Configuration()
+                .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
+                .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, queueCapacity);
     }
 
     @Bean
     ExecutionConfigurationFactory executionConfigurationFactory(
-            RuntimeOptions runtimeOptions,
-            MySqlCdcOptions cdcOptions,
+            ReadonlyConfig runtimeOptions,
+            io.yak.ops.configuration.Configuration connectorConfiguration,
             @Value("${yak.task.execution.state-directory:./data/task-state}") String stateDirectory) {
-        return new ExecutionConfigurationFactory(runtimeOptions, Path.of(stateDirectory), cdcOptions.configuration());
+        return new ExecutionConfigurationFactory(runtimeOptions, Path.of(stateDirectory), connectorConfiguration);
     }
 
     @Bean
     PipelineBuilder pipelineBuilder(
             RuntimeResources resources,
-            ConnectorFactoryRegistry factories,
-            RuntimeOptions runtimeOptions,
+            FactoryUtil factories,
+            ReadonlyConfig runtimeOptions,
             ExecutionConfigurationFactory configurationFactory) {
         return new PipelineBuilder(resources, factories, runtimeOptions, configurationFactory);
     }
@@ -77,8 +91,7 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
-    DataSyncTaskPlugin dataSyncTaskPlugin(
-            JobPlanner planner, DataSyncTaskExecutor executor, ConnectorFactoryRegistry factories) {
+    DataSyncTaskPlugin dataSyncTaskPlugin(JobPlanner planner, DataSyncTaskExecutor executor, FactoryUtil factories) {
         return new DataSyncTaskPlugin(planner, executor, factories);
     }
 
