@@ -1,7 +1,6 @@
 package io.yak.ops.configuration;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,7 +39,8 @@ public final class ConfigParser {
     /** Serializes only the explicit values of a validated configuration. */
     public static String toJson(ReadonlyConfig config) {
         try {
-            return MAPPER.writeValueAsString(Objects.requireNonNull(config, "config").getSourceMap());
+            return MAPPER.writeValueAsString(
+                    Objects.requireNonNull(config, "config").getSourceMap());
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Configuration JSON serialization failed", exception);
         }

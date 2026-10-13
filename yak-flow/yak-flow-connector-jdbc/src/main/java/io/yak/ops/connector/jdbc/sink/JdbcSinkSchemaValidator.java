@@ -44,7 +44,8 @@ public final class JdbcSinkSchemaValidator {
         for (Column targetColumn : targetColumns.values()) {
             Column sourceColumn = sourceColumns.get(targetColumn.name());
             if (sourceColumn == null) {
-                throw new IllegalArgumentException("DATA_SYNC target column has no source mapping: " + targetColumn.name());
+                throw new IllegalArgumentException(
+                        "DATA_SYNC target column has no source mapping: " + targetColumn.name());
             }
             if (!targetColumn.dataType().isResolved()
                     || sourceColumn.dataType().getTypeRoot()

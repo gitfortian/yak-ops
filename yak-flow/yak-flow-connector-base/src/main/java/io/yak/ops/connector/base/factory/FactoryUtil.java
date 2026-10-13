@@ -25,9 +25,7 @@ public final class FactoryUtil {
     }
 
     /** Registers explicit providers for deterministic tests and embedded applications. */
-    public FactoryUtil(
-            Iterable<? extends TableSourceFactory> sources,
-            Iterable<? extends TableSinkFactory> sinks) {
+    public FactoryUtil(Iterable<? extends TableSourceFactory> sources, Iterable<? extends TableSinkFactory> sinks) {
         this.sources = sourceFactories(sources);
         this.sinks = sinkFactories(sinks);
     }

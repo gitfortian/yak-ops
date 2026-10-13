@@ -27,41 +27,38 @@ public final class JobOptions {
             Options.key("database").stringType().noDefaultValue();
     public static final Option<String> SCHEMA =
             Options.key("schema").stringType().noDefaultValue();
-    public static final Option<String> TABLE =
-            Options.key("table").stringType().noDefaultValue();
+    public static final Option<String> TABLE = Options.key("table").stringType().noDefaultValue();
 
     public static final Option<Integer> SOURCE_PARALLELISM =
             Options.key("data-sync.source-parallelism").intType().defaultValue(1);
     public static final Option<Integer> SINK_PARALLELISM =
             Options.key("data-sync.sink-parallelism").intType().defaultValue(1);
-    public static final Option<Duration> CHECKPOINT_INTERVAL = Options.key("data-sync.checkpoint-interval")
-            .durationType()
-            .defaultValue(Duration.ofSeconds(10));
+    public static final Option<Duration> CHECKPOINT_INTERVAL =
+            Options.key("data-sync.checkpoint-interval").durationType().defaultValue(Duration.ofSeconds(10));
     public static final Option<Integer> MAX_RESTARTS =
             Options.key("data-sync.max-restarts").intType().defaultValue(1);
 
-    public static final OptionRule PIPELINE_RULE = OptionRule.builder()
-            .required(SOURCE, SINK)
-            .optional(TRANSFORM)
-            .build();
+    public static final OptionRule PIPELINE_RULE =
+            OptionRule.builder().required(SOURCE, SINK).optional(TRANSFORM).build();
 
     public static final OptionRule ENDPOINT_RULE = OptionRule.builder()
             .required(TYPE, Conditions.notBlank(TYPE))
             .required(
                     DATASOURCE_ID,
-                    Conditions.notBlank(DATASOURCE_ID)
-                            .and(Conditions.matches(DATASOURCE_ID, "(?s)^.{1,64}$")))
-            .required(
-                    TABLE, Conditions.notBlank(TABLE).and(Conditions.matches(TABLE, "(?s)^.{1,128}$")))
+                    Conditions.notBlank(DATASOURCE_ID).and(Conditions.matches(DATASOURCE_ID, "(?s)^.{1,64}$")))
+            .required(TABLE, Conditions.notBlank(TABLE).and(Conditions.matches(TABLE, "(?s)^.{1,128}$")))
             .optional(DATABASE, Conditions.matches(DATABASE, "(?s)^.{0,128}$"))
             .optional(SCHEMA, Conditions.matches(SCHEMA, "(?s)^.{0,128}$"))
             .build();
 
     public static final OptionRule RUNTIME_RULE = OptionRule.builder()
-            .optional(SOURCE_PARALLELISM, Conditions.greaterOrEqual(SOURCE_PARALLELISM, 1)
-                    .and(Conditions.lessOrEqual(SOURCE_PARALLELISM, 16)))
-            .optional(SINK_PARALLELISM, Conditions.greaterOrEqual(SINK_PARALLELISM, 1)
-                    .and(Conditions.lessOrEqual(SINK_PARALLELISM, 16)))
+            .optional(
+                    SOURCE_PARALLELISM,
+                    Conditions.greaterOrEqual(SOURCE_PARALLELISM, 1)
+                            .and(Conditions.lessOrEqual(SOURCE_PARALLELISM, 16)))
+            .optional(
+                    SINK_PARALLELISM,
+                    Conditions.greaterOrEqual(SINK_PARALLELISM, 1).and(Conditions.lessOrEqual(SINK_PARALLELISM, 16)))
             .optional(MAX_RESTARTS, Conditions.greaterOrEqual(MAX_RESTARTS, 0))
             .optional(CHECKPOINT_INTERVAL)
             .build();
