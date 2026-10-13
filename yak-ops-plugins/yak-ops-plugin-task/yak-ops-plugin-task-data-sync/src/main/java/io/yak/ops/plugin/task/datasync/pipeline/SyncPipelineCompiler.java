@@ -37,7 +37,8 @@ public final class SyncPipelineCompiler {
             SyncRuntimeResources resources, SyncConnectorFactoryRegistry factories, Path stateRoot) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
-        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.stateRoot =
+                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
 
     /**
@@ -50,10 +51,10 @@ public final class SyncPipelineCompiler {
     public SyncCompiledPipeline compile(SyncJobPlan plan, TaskExecutionIdentity identity) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
-        SyncRuntimeConnection sourceConnection =
-                resources.connection(identity.workspaceId(), plan.sourceParameters().datasourceId());
-        SyncRuntimeConnection targetConnection =
-                resources.connection(identity.workspaceId(), plan.sinkParameters().datasourceId());
+        SyncRuntimeConnection sourceConnection = resources.connection(
+                identity.workspaceId(), plan.sourceParameters().datasourceId());
+        SyncRuntimeConnection targetConnection = resources.connection(
+                identity.workspaceId(), plan.sinkParameters().datasourceId());
         if (sourceConnection.revision() != plan.source().revision()
                 || targetConnection.revision() != plan.target().revision()) {
             throw new IllegalStateException("DATA_SYNC datasource revision changed before execution");

@@ -24,8 +24,7 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
     private final SyncConnectorFactoryRegistry factories;
     private final SyncParameterCodec codec;
 
-    public SyncTaskPlugin(
-            SyncJobPlanner planner, SyncTaskExecutor executor, SyncConnectorFactoryRegistry factories) {
+    public SyncTaskPlugin(SyncJobPlanner planner, SyncTaskExecutor executor, SyncConnectorFactoryRegistry factories) {
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.factories = Objects.requireNonNull(factories, "factories");
