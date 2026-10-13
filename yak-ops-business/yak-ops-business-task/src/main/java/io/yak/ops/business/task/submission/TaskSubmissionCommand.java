@@ -15,8 +15,4 @@ import io.yak.ops.common.enums.task.TaskTriggerType;
  * @param operatorId actor or system principal requesting execution
  */
 public record TaskSubmissionCommand(
-        String workspaceId,
-        String definitionId,
-        TaskTriggerType triggerType,
-        String requestId,
-        String operatorId) {}
+        String workspaceId, String definitionId, TaskTriggerType triggerType, String requestId, String operatorId) {}

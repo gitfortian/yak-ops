@@ -20,8 +20,8 @@ import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContextFactory;
 import jakarta.annotation.Resource;
 import java.util.List;
@@ -95,8 +95,15 @@ public class SubmissionServiceImpl implements SubmissionService {
         TaskExecutionIdentity context =
                 new TaskExecutionIdentity(workspaceId, definitionId, version, IdUtils.nextId(), IdUtils.nextId());
         TaskAdmissionPlan plan = executable.plan(parameters, context);
-        AdmissionRequest request =
-                new AdmissionRequest(context, command.triggerType(), requestId, fingerprint, command.operatorId(), parameters, plan, executable);
+        AdmissionRequest request = new AdmissionRequest(
+                context,
+                command.triggerType(),
+                requestId,
+                fingerprint,
+                command.operatorId(),
+                parameters,
+                plan,
+                executable);
         try {
             return admission.admit(request);
         } catch (DuplicateKeyException duplicate) {
