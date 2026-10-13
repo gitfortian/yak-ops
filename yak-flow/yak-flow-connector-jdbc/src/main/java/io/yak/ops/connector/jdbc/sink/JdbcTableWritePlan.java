@@ -31,7 +31,7 @@ public record JdbcTableWritePlan(
         TableSchema sourceSchema,
         List<Integer> sourcePositions) {
 
-    /** Preserves the original target-ordered single-table contract. */
+    /** Creates a single-table write route with a target-ordered identity projection. */
     public JdbcTableWritePlan(TableId sourceTable, TableId targetTable, TableSchema schema, JdbcWriteMode writeMode) {
         this(sourceTable, targetTable, schema, writeMode, schema, identityPositions(schema));
     }
