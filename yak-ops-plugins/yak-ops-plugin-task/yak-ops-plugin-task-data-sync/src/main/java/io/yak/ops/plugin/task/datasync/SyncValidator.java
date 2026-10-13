@@ -5,9 +5,9 @@ import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.datasync.plan.SyncSchemaValidator;
 import io.yak.ops.plugin.task.api.validation.DataSourceInfo;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
+import io.yak.ops.plugin.task.datasync.plan.SyncSchemaValidator;
 import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
 import io.yak.ops.plugin.task.datasync.source.JdbcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
@@ -104,5 +104,4 @@ public final class SyncValidator {
         }
         return bound;
     }
-
 }

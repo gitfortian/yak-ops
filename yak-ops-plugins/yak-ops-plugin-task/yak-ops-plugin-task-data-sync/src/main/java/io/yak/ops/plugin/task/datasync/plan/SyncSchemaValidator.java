@@ -45,11 +45,11 @@ public final class SyncSchemaValidator {
         for (Column targetColumn : targetColumns.values()) {
             Column sourceColumn = sourceColumns.get(targetColumn.name());
             if (sourceColumn == null) {
-                throw new TaskPluginException(
-                        "DATA_SYNC target column has no source mapping: " + targetColumn.name());
+                throw new TaskPluginException("DATA_SYNC target column has no source mapping: " + targetColumn.name());
             }
             if (!targetColumn.dataType().isResolved()
-                    || sourceColumn.dataType().getTypeRoot() != targetColumn.dataType().getTypeRoot()
+                    || sourceColumn.dataType().getTypeRoot()
+                            != targetColumn.dataType().getTypeRoot()
                     || !JdbcSchemaCompatibility.isCompatible(sourceColumn, targetColumn)) {
                 throw new TaskPluginException(
                         "DATA_SYNC source and target column types are incompatible: " + targetColumn.name());

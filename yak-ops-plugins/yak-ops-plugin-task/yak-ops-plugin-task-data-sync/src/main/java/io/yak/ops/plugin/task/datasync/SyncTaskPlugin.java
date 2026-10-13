@@ -8,8 +8,8 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
