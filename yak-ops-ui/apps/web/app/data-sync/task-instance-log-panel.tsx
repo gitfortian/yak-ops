@@ -6,9 +6,10 @@ import { downloadTaskInstanceLogs, getTaskInstanceLogs } from "@/service/task-ex
 interface Props {
   instanceId: string;
   active: boolean;
+  embedded?: boolean;
 }
 
-export function TaskInstanceLogPanel({ instanceId, active }: Props) {
+export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: Props) {
   const [content, setContent] = useState("");
   const [error, setError] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -79,8 +80,8 @@ export function TaskInstanceLogPanel({ instanceId, active }: Props) {
     }
   };
 
-  return (
-    <SectionCard title="执行日志">
+  const contentView = (
+    <>
       <div className="flex justify-end gap-2">
         <Button size="small" onClick={() => setRevision((value) => value + 1)}>
           刷新
@@ -95,6 +96,9 @@ export function TaskInstanceLogPanel({ instanceId, active }: Props) {
       >
         {content || (error ? "日志加载失败" : "暂无日志")}
       </pre>
-    </SectionCard>
+    </>
   );
+
+  if (embedded) return contentView;
+  return <SectionCard title="执行日志">{contentView}</SectionCard>;
 }
