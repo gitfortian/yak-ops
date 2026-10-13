@@ -13,7 +13,7 @@ import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
 import io.yak.ops.flow.runtime.graph.StreamingJobGraphGenerator;
 import io.yak.ops.flow.runtime.jobgraph.JobGraph;
