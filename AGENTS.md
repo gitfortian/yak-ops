@@ -63,6 +63,14 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - Treat `toString()` as diagnostic output. Never expose credentials, dispatch tokens, database row values, checkpoint state bytes, or other sensitive payloads through generated or custom representations, including nested record and collection wrappers.
 - Keep mutable Reader and Writer state distinct from immutable checkpoint snapshots. Preserve public accessors and persisted serializer formats during type refactoring, with focused tests for equality, ownership, and safe diagnostics.
 
+## Java Naming and Vocabulary
+
+- Name project-owned Java types and methods for their actual responsibilities. Prefer established Apache Flink and SeaTunnel vocabulary when the corresponding contract and behavior match, rather than inventing a new abstraction name. Use `Parser` for parsing, `Serializer` for serialization, `Mapper` or `Converter` for well-defined mappings, and `Factory`, `Builder`, or `Generator` only when construction is the actual responsibility.
+- **Do not introduce `Codec` in names of new or renamed Yak Ops classes, interfaces, records, enums, methods, or packages.** A JSON reader with a `parse` method is a parser, not a generic codec. Existing externally owned APIs and third-party identifiers are not renamed by this rule.
+- Avoid redundant domain prefixes within an already scoped package, such as `Sync*` in `io.yak.ops.plugin.task.datasync`. Keep a domain qualifier on a public or cross-module type only when it prevents real ambiguity. Name technology-specific implementations with recognizable identifiers such as `Jdbc` or `MySqlCdc`.
+- Do not use broad labels such as `Compiler`, `Policy`, `Manager`, or `Handler` as substitutes for identifying a concrete operation. Such names require matching responsibilities; choose the narrower established term when applicable. Before introducing or renaming a type, check neighboring APIs, upstream precedents, package ownership and direct callers.
+- Naming-only refactors must preserve externally visible type identifiers, persisted JSON fields, configuration keys and checkpoint formats. Update source and tests consistently; do not add wrappers or compatibility aliases solely to retain old internal names.
+
 ## Code Quality and Review
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
