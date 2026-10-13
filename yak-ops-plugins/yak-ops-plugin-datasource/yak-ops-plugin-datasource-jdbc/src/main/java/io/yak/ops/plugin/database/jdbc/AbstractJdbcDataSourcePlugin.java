@@ -1,6 +1,17 @@
 package io.yak.ops.plugin.database.jdbc;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.Condition;
+import io.yak.ops.configuration.rule.Conditions;
+import io.yak.ops.configuration.rule.ConfigValidator;
+import io.yak.ops.configuration.rule.Expression;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.configuration.validation.OptionValidationException;
+import static io.yak.ops.plugin.database.jdbc.JdbcDataSourceOptions.*;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.SensitiveUtils;
@@ -33,6 +44,109 @@ import java.util.TreeSet;
  * Provides JDBC datasource plugin metadata, parameter normalization, connectivity testing and SSH-aware connections.
  */
 public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * Builds a single declarative JDBC connection contract including optional SSH settings.
+     *
+     * <p>A pre-existing normalized connection stores both host and jdbcUrl; the presence of
+     * jdbcUrl therefore skips host/database requirements without rejecting structured fields.
+     */
+    @Override
+    public final OptionRule optionRule() {
+        OptionRule structured = OptionRule.builder()
+                .required(HOST, Conditions.notBlank(HOST))
+                .required(DATABASE, Conditions.notBlank(DATABASE))
+                .build();
+
+        OptionRule sshEnabled = OptionRule.builder()
+                .required(SSH_HOST, Conditions.notBlank(SSH_HOST))
+                .required(SSH_USERNAME, Conditions.notBlank(SSH_USERNAME))
+                .conditionalRule(
+                        Expression.of(Condition.of(SSH_AUTH_TYPE, "PASSWORD")),
+                        OptionRule.builder().required(SSH_PASSWORD, Conditions.notBlank(SSH_PASSWORD)).build())
+                .conditionalRule(
+                        Expression.of(Condition.of(SSH_AUTH_TYPE, "PRIVATE_KEY")),
+                        OptionRule.builder().required(SSH_PRIVATE_KEY, Conditions.notBlank(SSH_PRIVATE_KEY)).build())
+                .conditionalRule(
+                        Expression.of(Condition.of(SSH_STRICT_HOST_KEY_CHECKING, true)),
+                        OptionRule.builder().required(SSH_KNOWN_HOSTS, Conditions.notBlank(SSH_KNOWN_HOSTS)).build())
+                .build();
+
+        Option<Integer> port = portOption();
+        return OptionRule.builder()
+                .required(USERNAME, Conditions.notBlank(USERNAME))
+                .optional(JDBC_URL, Conditions.notBlank(JDBC_URL))
+                .optional(HOST, DATABASE, SCHEMA, PASSWORD, DB_TYPE, DRIVER_CLASS_NAME, PROPERTIES)
+                .optional(port, Conditions.greaterOrEqual(port, 1).and(Conditions.lessOrEqual(port, 65535)))
+                .optional(SSH_ENABLED, SSH_HOST, SSH_USERNAME, SSH_AUTH_TYPE, SSH_PASSWORD, SSH_PRIVATE_KEY,
+                        SSH_PASSPHRASE, SSH_STRICT_HOST_KEY_CHECKING, SSH_KNOWN_HOSTS)
+                .optional(SSH_PORT,
+                        Conditions.greaterOrEqual(SSH_PORT, 1).and(Conditions.lessOrEqual(SSH_PORT, 65535)))
+                .conditionalRule(Expression.of(Condition.of(JDBC_URL, null)), structured)
+                .conditionalRule(Expression.of(Condition.of(SSH_ENABLED, true)), sshEnabled)
+                .include(providerOptionRule())
+                .build();
+    }
+
+    /** Returns the provider-specific additions to the shared connection rules. */
+    protected OptionRule providerOptionRule() {
+        return OptionRule.builder().build();
+    }
+
+    private Option<Integer> portOption() {
+        return Options.key("port").intType().defaultValue(defaultPort());
+    }
+
+    /**
+     * Converts recognized input names to canonical option keys before validation.
+     *
+     * <p>Saved connections already use the canonical names. This step preserves existing
+     * supported request aliases without introducing a second parsing API.
+     */
+    private static ReadonlyConfig connectionOptions(ReadonlyConfig supplied) {
+        Map<String, Object> fields = new LinkedHashMap<>(supplied.getSourceMap());
+        useKey(fields, "jdbcUrl", "url");
+        useKey(fields, "host", "hostname");
+        useKey(fields, "database", "databaseName");
+        useKey(fields, "database", "serviceName");
+        useKey(fields, "username", "user");
+        useKey(fields, "schema", "schemaName");
+        useKey(fields, "driverClassName", "driver");
+        useKey(fields, "dbType", "type");
+        useKey(fields, "dbType", "pluginType");
+        useKey(fields, "sshTunnel", "ssh");
+        Object tunnel = fields.get("sshTunnel");
+        if (tunnel instanceof Map<?, ?> values) {
+            Map<String, Object> ssh = new LinkedHashMap<>();
+            values.forEach((key, value) -> {
+                if (key instanceof String name) {
+                    ssh.put(name, value);
+                }
+            });
+            useKey(ssh, "host", "sshHost");
+            useKey(ssh, "username", "user");
+            useKey(ssh, "authType", "authenticationType");
+            useKey(ssh, "privateKey", "privateKeyContent");
+            useKey(ssh, "passphrase", "privateKeyPassphrase");
+            useKey(ssh, "knownHosts", "knownHostsContent");
+            Object auth = ssh.get("authType");
+            if (auth instanceof String text) {
+                ssh.put("authType", text.trim().toUpperCase(Locale.ROOT));
+            }
+            fields.put("sshTunnel", ssh);
+        }
+        return ReadonlyConfig.fromMap(fields);
+    }
+
+    private static void useKey(Map<String, Object> values, String field, String alias) {
+        if (!values.containsKey(field) && values.containsKey(alias)) {
+            values.put(field, values.get(alias));
+        }
+        values.remove(alias);
+    }
+
 
     private static final Set<String> RESERVED_CONNECTION_PROPERTY_KEYS = Set.of(
             "host",
@@ -98,45 +212,45 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
     }
 
     @Override
-    public DataSourceConnection parseConnection(String connectionJson) {
+    public DataSourceConnection parseConnection(ReadonlyConfig configuration) {
         try {
-            JsonNode root = JSONUtils.readTree(connectionJson);
-            if (root == null || !root.isObject()) {
-                throw parameterError("连接参数必须是 JSON 对象", null);
-            }
+            ReadonlyConfig input = connectionOptions(configuration);
+            JsonNode root = MAPPER.valueToTree(input.getSourceMap());
+            Map<String, String> properties = normalizeProperties(parseProperties(root.get("properties")));
 
+            Map<String, Object> values = new LinkedHashMap<>(input.getSourceMap());
+            values.put("properties", properties);
+            ReadonlyConfig options = ReadonlyConfig.fromMap(values);
+            OptionRule rule = optionRule();
+            ConfigValidator.validateUnknownKeys(options, rule, type());
+            ConfigValidator.of(options).validate(rule);
             validateDeclaredType(root);
-            String explicitUrl = JSONUtils.firstText(root, "jdbcUrl", "url");
-            String host = JSONUtils.firstText(root, "host", "hostname");
-            int port = intValue(root, defaultPort(), "port");
-            String database = JSONUtils.firstText(root, "database", "databaseName", "serviceName");
-            String schema = JSONUtils.firstText(root, "schema", "schemaName");
-            String username = JSONUtils.firstText(root, "username", "user");
-            String password = JSONUtils.firstText(root, "password");
+
+            String explicitUrl = StringUtils.trimToNull(options.get(JDBC_URL));
+            String host = StringUtils.trimToNull(options.get(HOST));
+            int port = options.get(portOption());
+            String database = StringUtils.trimToNull(options.get(DATABASE));
+            String schema = StringUtils.trimToNull(options.get(SCHEMA));
+            String username = options.get(USERNAME).trim();
+            String password = options.get(PASSWORD);
             String driverId = normalizeDriverId(root);
             String driver = normalizeDriverClassName(root, driverId);
             SshTunnelConfig sshTunnel = parseSshTunnel(root);
 
-            if (StringUtils.isBlank(username)) {
-                throw parameterError("username 不能为空", null);
-            }
-            if (sshTunnel.enabled() && !StringUtils.isBlank(explicitUrl)) {
-                throw parameterError("启用 SSH 隧道时请使用 host、port、database 参数，不支持自定义 JDBC 地址", null);
-            }
-
-            String jdbcUrl = explicitUrl;
-            if (StringUtils.isBlank(jdbcUrl)) {
-                if (StringUtils.isBlank(host)) {
-                    throw parameterError("host 不能为空", null);
+            String jdbcUrl;
+            if (sshTunnel.enabled()) {
+                // A stored normalized tunnel configuration also contains a generated jdbcUrl.
+                // Always construct the tunnel target from its authorized structured fields.
+                if (StringUtils.isBlank(host) || StringUtils.isBlank(database)) {
+                    throw parameterError("SSH tunnel requires structured host and database", null);
                 }
-                if (StringUtils.isBlank(database)) {
-                    throw parameterError("database 不能为空", null);
-                }
-                jdbcUrl = buildJdbcUrl(host.trim(), port, database.trim(), root);
+                jdbcUrl = buildJdbcUrl(host, port, database, root);
+            } else if (explicitUrl == null) {
+                jdbcUrl = buildJdbcUrl(host, port, database, root);
             } else {
-                jdbcUrl = jdbcUrl.trim();
+                jdbcUrl = explicitUrl;
                 if (!acceptsUrl(jdbcUrl)) {
-                    throw parameterError("JDBC 地址与插件类型不匹配：" + jdbcUrl, null);
+                    throw parameterError("JDBC URL does not match the selected provider", null);
                 }
             }
 
@@ -144,8 +258,6 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 database = inferDatabase(jdbcUrl);
             }
 
-            Map<String, String> properties = normalizeProperties(parseProperties(root.get("properties")));
-            validateProperties(properties);
             schema = normalizeSchema(schema);
             ObjectNode normalized = JSONUtils.createObjectNode();
             normalized.put("dbType", type());
@@ -167,22 +279,24 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
             return new JdbcConnectionProperties(
                     type(),
-                    StringUtils.trimToNull(host),
+                    host,
                     port,
                     jdbcUrl,
                     driver,
                     driverId,
-                    username.trim(),
+                    username,
                     password,
-                    StringUtils.trimToNull(database),
-                    StringUtils.trimToNull(schema),
+                    database,
+                    schema,
                     properties,
                     sshTunnel,
                     JSONUtils.toJson(normalized));
+        } catch (OptionValidationException exception) {
+            throw exception;
         } catch (DataSourcePluginException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw parameterError("连接参数解析失败：" + safeMessage(exception), exception);
+            throw parameterError("Invalid datasource connection parameters", exception);
         }
     }
 
