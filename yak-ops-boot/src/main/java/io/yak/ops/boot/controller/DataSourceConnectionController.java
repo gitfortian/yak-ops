@@ -7,6 +7,7 @@ import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceOptionRulesVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.result.Result;
 import jakarta.annotation.Resource;
@@ -34,6 +35,12 @@ public class DataSourceConnectionController {
     @GetMapping("/connection-property-keys")
     public Result<DataSourceConnectionPropertyKeysVO> connectionPropertyKeys(@RequestParam("dbType") String dbType) {
         return Result.success(dataSourceService.queryConnectionPropertyKeys(dbType));
+    }
+
+    @Operation(summary = "查询数据源连接参数规则")
+    @GetMapping("/option-rules")
+    public Result<DataSourceOptionRulesVO> optionRules(@RequestParam("dbType") String dbType) {
+        return Result.success(dataSourceService.queryOptionRules(dbType));
     }
 
     @Operation(summary = "测试已保存数据源连接")

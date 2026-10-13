@@ -1,6 +1,6 @@
 import type { TaskAttemptStatus, TaskInstanceStatus } from "../task-execution/types";
 
-export type DataSyncWriteMode = "APPEND" | "OVERWRITE" | "UPSERT";
+export type DataSyncWriteMode = "APPEND" | "UPSERT";
 
 export interface PaginationInfo {
   pageNo: number;

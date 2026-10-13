@@ -39,14 +39,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<Result<Void>> handleBusinessException(BusinessException exception) {
+    public ResponseEntity<Result<Object>> handleBusinessException(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
         if (errorCode == null) {
             LOG.warn(
                     "Business exception has no error code, exceptionType={}",
                     exception.getClass().getSimpleName());
             String message = exception.getMessage();
-            Result<Void> body = message == null || message.isBlank()
+            Result<Object> body = message == null || message.isBlank()
                     ? Result.fail(CommonErrorCode.PARAM_NOT_VALID)
                     : Result.fail(CommonErrorCode.PARAM_NOT_VALID.getCode(), message);
             return ResponseEntity.badRequest().body(body);
@@ -55,9 +55,14 @@ public class GlobalExceptionHandler {
         HttpStatus status = businessStatus(errorCode);
         if (status.is5xxServerError())
             LOG.error("Business request failed, errorCode={}", errorCode.getCode(), exception);
-        Result<Void> body = exception instanceof DataSourceException dataSourceException
+        Result<Object> body = exception instanceof DataSourceException dataSourceException
                 ? Result.fail(errorCode.getCode(), dataSourceException.getUserMessage())
                 : Result.fail(errorCode);
+        if (exception instanceof DataSourceException datasource
+                && errorCode == DataSourceErrorCode.INVALID_CONNECTION_PARAMS
+                && !datasource.getValidationErrors().isEmpty()) {
+            body.setData(datasource.getValidationErrors());
+        }
         return ResponseEntity.status(status).body(body);
     }
 

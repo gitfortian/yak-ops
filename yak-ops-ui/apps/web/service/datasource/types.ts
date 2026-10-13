@@ -71,6 +71,27 @@ export interface DataSourceConnectionPropertyKeys {
   acceptedPropertyKeys: string[];
 }
 
+/** Safe provider-defined parameter field available to the datasource editor. */
+export interface DataSourceOptionDefinition {
+  key: string;
+  type: string;
+  required: boolean;
+  defaultValue: string | number | boolean | null;
+  allowedValues: string[];
+  description: string;
+}
+
+export interface DataSourceOptionRules {
+  dbType: string;
+  options: DataSourceOptionDefinition[];
+}
+
+export interface DataSourceValidationError {
+  path: string;
+  rule: string;
+  message: string;
+}
+
 export interface DataSourceBatchConnectTestResult {
   dataSourceId: DataSourceId;
   connected: boolean;

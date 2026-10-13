@@ -1,4 +1,5 @@
 import HttpUtils from "@/service/http/HttpUtils";
+import { BizError } from "@/service/http/request";
 
 import type {
   DataSourceBatchConnectTestResult,
@@ -8,6 +9,8 @@ import type {
   DataSourceCatalogTable,
   DataSourceCatalogTablePath,
   DataSourceConnectionPropertyKeys,
+  DataSourceOptionRules,
+  DataSourceValidationError,
   DataSourceId,
   DataSourcePageParams,
   DataSourcePageResult,
@@ -18,6 +21,18 @@ import type {
 export type * from "./types";
 
 const DATA_SOURCE_API_PREFIX = "/api/v1/data-source";
+
+/** Extracts field validation issues from datasource HTTP failures without exposing transport details. */
+export const datasourceValidationErrors = (error: unknown): DataSourceValidationError[] => {
+  if (!(error instanceof BizError) || !Array.isArray(error.response?.data)) return [];
+  return error.response.data.filter(
+    (issue): issue is DataSourceValidationError =>
+      issue != null &&
+      typeof issue === "object" &&
+      typeof issue.path === "string" &&
+      typeof issue.rule === "string",
+  );
+};
 
 export const listDataSources = (params: DataSourcePageParams): Promise<DataSourcePageResult> =>
   HttpUtils.postData<DataSourcePageResult>(`${DATA_SOURCE_API_PREFIX}/page`, params);
@@ -30,6 +45,11 @@ export const getDataSourceConnectionPropertyKeys = (
 ): Promise<DataSourceConnectionPropertyKeys> =>
   HttpUtils.getData<DataSourceConnectionPropertyKeys>(
     `${DATA_SOURCE_API_PREFIX}/connection-property-keys?dbType=${encodeURIComponent(dbType)}`,
+  );
+
+export const getDataSourceOptionRules = (dbType: string): Promise<DataSourceOptionRules> =>
+  HttpUtils.getData<DataSourceOptionRules>(
+    `${DATA_SOURCE_API_PREFIX}/option-rules?dbType=${encodeURIComponent(dbType)}`,
   );
 
 export const createDataSource = async (payload: DataSourceSavePayload): Promise<void> => {

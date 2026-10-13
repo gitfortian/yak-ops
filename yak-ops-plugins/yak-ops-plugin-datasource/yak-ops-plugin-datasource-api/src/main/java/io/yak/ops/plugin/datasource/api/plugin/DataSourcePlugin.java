@@ -1,5 +1,7 @@
 package io.yak.ops.plugin.datasource.api.plugin;
 
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
 import java.sql.Connection;
 import java.util.List;
@@ -16,12 +18,19 @@ public interface DataSourcePlugin {
     DataSourcePluginDescriptor descriptor();
 
     /**
-     * Parses and normalizes provider connection parameters.
+     * Declares the accepted connection fields and their validation rules.
      *
-     * @param connectionJson raw connection JSON
-     * @return connection parameters ready for use by the provider
+     * @return complete provider option rules
      */
-    DataSourceConnection parseConnection(String connectionJson);
+    OptionRule optionRule();
+
+    /**
+     * Resolves a validated, immutable configuration to a normalized connection.
+     *
+     * @param configuration parsed connection values without credentials in diagnostics
+     * @return runtime connection settings owned by the provider
+     */
+    DataSourceConnection parseConnection(ReadonlyConfig configuration);
 
     /**
      * Performs one connection availability test.

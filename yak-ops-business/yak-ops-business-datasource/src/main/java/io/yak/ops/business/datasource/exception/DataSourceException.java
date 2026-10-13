@@ -3,6 +3,9 @@ package io.yak.ops.business.datasource.exception;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.common.util.SensitiveUtils;
+import io.yak.ops.configuration.validation.ConfigValidationError;
+import io.yak.ops.configuration.validation.OptionValidationException;
+import java.util.List;
 
 /**
  * Represents Datasource business failures across service and plugin boundaries.
@@ -43,6 +46,22 @@ public class DataSourceException extends BusinessException {
     /** @return safe user-visible message with sensitive values masked */
     public String getUserMessage() {
         return userMessage;
+    }
+
+    /**
+     * Returns non-sensitive option errors extracted from the registered provider's validator.
+     *
+     * @return immutable field-path errors, or an empty list for other failures
+     */
+    public List<ConfigValidationError> getValidationErrors() {
+        Throwable current = getCause();
+        while (current != null) {
+            if (current instanceof OptionValidationException validation) {
+                return validation.errors();
+            }
+            current = current.getCause();
+        }
+        return List.of();
     }
 
     private static String buildMessage(ErrorCode errorCode, String detail) {

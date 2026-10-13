@@ -6,6 +6,7 @@ import io.yak.ops.business.datasource.runtime.DataSourceRuntimeConnection;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeService;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeTable;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
+import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.catalog.factory.JdbcCatalogFactory;
 import io.yak.ops.core.data.TableId;
@@ -62,7 +63,7 @@ public class DataSourceRuntimeServiceImpl implements DataSourceRuntimeService {
 
         DataSourceConnection connection;
         try {
-            connection = plugin.parseConnection(entity.getConnectionParams());
+            connection = plugin.parseConnection(ConfigParser.parseJson(entity.getConnectionParams()));
         } catch (RuntimeException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }

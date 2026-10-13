@@ -6,6 +6,7 @@ import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceOptionRulesVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.page.PagingData;
 import java.util.List;
@@ -44,6 +45,14 @@ public interface DataSourceService {
      * @return candidate property names
      */
     DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType);
+
+    /**
+     * Returns the registered provider's public configuration options and their constraints.
+     *
+     * @param dbType provider type or alias
+     * @return safe option metadata without configured credentials
+     */
+    DataSourceOptionRulesVO queryOptionRules(String dbType);
 
     /** Deletes a datasource in the active Workspace. */
     boolean deleteDataSource(String id);

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.business.datasource.impl.H2TestDataSourcePlugin;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.spi.SpiRegistry;
 import java.sql.Connection;
 import java.util.List;
@@ -65,7 +67,12 @@ class DataSourcePluginRegistryTest {
             }
 
             @Override
-            public DataSourceConnection parseConnection(String json) {
+            public OptionRule optionRule() {
+                return OptionRule.builder().build();
+            }
+
+            @Override
+            public DataSourceConnection parseConnection(ReadonlyConfig configuration) {
                 throw new UnsupportedOperationException();
             }
 
@@ -96,7 +103,12 @@ class DataSourcePluginRegistryTest {
             }
 
             @Override
-            public DataSourceConnection parseConnection(String json) {
+            public OptionRule optionRule() {
+                return OptionRule.builder().build();
+            }
+
+            @Override
+            public DataSourceConnection parseConnection(ReadonlyConfig configuration) {
                 throw new UnsupportedOperationException();
             }
 

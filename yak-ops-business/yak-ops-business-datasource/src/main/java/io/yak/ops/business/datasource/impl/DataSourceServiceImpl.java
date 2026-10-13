@@ -10,6 +10,7 @@ import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceOptionRulesVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
@@ -19,6 +20,8 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.rule.OptionRuleMetadata;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.dao.repository.datasource.DataSourcePageQuery;
@@ -131,6 +134,21 @@ public class DataSourceServiceImpl implements DataSourceService {
         DataSourceConnectionPropertyKeysVO result = new DataSourceConnectionPropertyKeysVO();
         result.setAcceptedPropertyKeys(plugin(dbType).connectionPropertyKeys());
         return result;
+    }
+
+    @Override
+    public DataSourceOptionRulesVO queryOptionRules(String dbType) {
+        DataSourcePlugin provider = plugin(dbType);
+        var options = OptionRuleMetadata.describe(provider.optionRule()).stream()
+                .map(option -> new DataSourceOptionRulesVO.OptionDefinitionVO(
+                        option.key(),
+                        option.type(),
+                        option.required(),
+                        option.defaultValue(),
+                        option.allowedValues(),
+                        option.description()))
+                .toList();
+        return new DataSourceOptionRulesVO(provider.descriptor().type(), options);
     }
 
     @Override
@@ -323,7 +341,7 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     private DataSourceConnection parseConnection(DataSourcePlugin provider, String json) {
         try {
-            return provider.parseConnection(json);
+            return provider.parseConnection(ConfigParser.parseJson(json));
         } catch (RuntimeException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }

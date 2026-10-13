@@ -1,6 +1,8 @@
 package io.yak.ops.business.datasource.impl;
 
 import com.google.auto.service.AutoService;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginDescriptor;
@@ -78,7 +80,12 @@ public final class H2TestDataSourcePlugin implements DataSourcePlugin {
     }
 
     @Override
-    public DataSourceConnection parseConnection(String json) {
+    public OptionRule optionRule() {
+        return OptionRule.builder().build();
+    }
+
+    @Override
+    public DataSourceConnection parseConnection(ReadonlyConfig configuration) {
         return CONNECTION;
     }
 

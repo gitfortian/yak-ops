@@ -27,7 +27,9 @@ import { useEffect, useState } from "react";
 
 import {
   createDataSource,
+  datasourceValidationErrors,
   getDataSourceConnectionPropertyKeys,
+  getDataSourceOptionRules,
   testDataSourceConnectionWithParams,
   updateDataSource,
 } from "@/service/datasource";
@@ -44,7 +46,12 @@ import {
 } from "./constants";
 import DatabaseIcons from "./icons/DatabaseIcons";
 import { useIntl } from "./i18n";
-import type { DataSourceConnectionParams, DataSourceRecord, DataSourceSavePayload } from "./types";
+import type {
+  DataSourceConnectionParams,
+  DataSourceOptionRules,
+  DataSourceRecord,
+  DataSourceSavePayload,
+} from "./types";
 
 interface DataSourceFormProps {
   open: boolean;
@@ -290,6 +297,7 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     [],
   );
   const [propertyKeyOptions, setPropertyKeyOptions] = useState<string[]>([]);
+  const [optionRules, setOptionRules] = useState<DataSourceOptionRules | null>(null);
   const [propertyKeysLoading, setPropertyKeysLoading] = useState(false);
   const editing = Boolean(record?.id);
   const busy = testing || submitting;
@@ -366,6 +374,60 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       active = false;
     };
   }, [createStep, open, values.dbType]);
+
+  useEffect(() => {
+    if (!open || createStep !== "config" || !values.dbType) {
+      setOptionRules(null);
+      return;
+    }
+    let active = true;
+    setOptionRules(null);
+    void getDataSourceOptionRules(values.dbType)
+      .then((rules) => {
+        if (!active) return;
+        setOptionRules(rules);
+        const declaredPort = rules.options.find((option) => option.key === "port")?.defaultValue;
+        if (typeof declaredPort !== "number") return;
+        setValues((current) => {
+          if (normalizeDataSourceType(current.dbType) !== normalizeDataSourceType(rules.dbType)) {
+            return current;
+          }
+          if (current.port !== defaultPort(current.dbType)) return current;
+          return { ...current, port: String(declaredPort) };
+        });
+      })
+      .catch(() => {
+        if (active) setOptionRules(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [createStep, open, values.dbType]);
+
+  const applyValidationErrors = (error: unknown) => {
+    const reported = datasourceValidationErrors(error);
+    if (!reported.length) return;
+    const next: FormErrors = {};
+    const fields = new Set<FormErrorKey>([
+      "jdbcUrl",
+      "host",
+      "port",
+      "database",
+      "username",
+      "properties",
+    ]);
+    for (const issue of reported) {
+      if (!issue || typeof issue.path !== "string" || typeof issue.rule !== "string") continue;
+      const field = issue.path.split(",")[0] as FormErrorKey;
+      if (fields.has(field) && !next[field]) {
+        next[field] =
+          issue.rule === "REQUIRED" || issue.rule === "CONDITIONAL"
+            ? intl.formatMessage({ id: "pages.datasource.form.parameterRequired" })
+            : intl.formatMessage({ id: "pages.datasource.form.parameterInvalid" });
+      }
+    }
+    if (Object.keys(next).length) setErrors((current) => ({ ...current, ...next }));
+  };
 
   const patch = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -508,6 +570,8 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
         connectionParams: connectionParams(),
       });
       if (connected) toast.success(intl.formatMessage({ id: "pages.datasource.test.success" }));
+    } catch (error) {
+      applyValidationErrors(error);
     } finally {
       setTesting(false);
     }
@@ -537,6 +601,8 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
       );
       onOpenChange(false);
       onSaved();
+    } catch (error) {
+      applyValidationErrors(error);
     } finally {
       setSubmitting(false);
     }
@@ -800,6 +866,14 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     MYSQL_5: intl.formatMessage({ id: "pages.datasource.form.versionMysql5" }),
   };
 
+  const serverDriverIds = optionRules?.options.find(
+    (option) => option.key === "driverId",
+  )?.allowedValues;
+  const availableDriverIds = (serverDriverIds ?? ["AUTO", "MYSQL_8", "MYSQL_5"]).filter(
+    (driverId): driverId is MySqlDriverId =>
+      driverId === "AUTO" || driverId === "MYSQL_8" || driverId === "MYSQL_5",
+  );
+
   const versionField = (
     <div className="grid grid-cols-[104px_minmax(0,1fr)] items-start gap-3">
       <span className="pt-1.5 text-xs font-medium text-[#344054]">
@@ -817,18 +891,12 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="AUTO">
-            <SelectItemText>{mysqlDriverItems.AUTO}</SelectItemText>
-            <SelectItemIndicator />
-          </SelectItem>
-          <SelectItem value="MYSQL_8">
-            <SelectItemText>{mysqlDriverItems.MYSQL_8}</SelectItemText>
-            <SelectItemIndicator />
-          </SelectItem>
-          <SelectItem value="MYSQL_5">
-            <SelectItemText>{mysqlDriverItems.MYSQL_5}</SelectItemText>
-            <SelectItemIndicator />
-          </SelectItem>
+          {availableDriverIds.map((driverId) => (
+            <SelectItem key={driverId} value={driverId}>
+              <SelectItemText>{mysqlDriverItems[driverId]}</SelectItemText>
+              <SelectItemIndicator />
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
