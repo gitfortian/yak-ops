@@ -8,11 +8,11 @@ import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import java.util.List;
 import io.yak.ops.plugin.task.datasync.connector.SyncSourceContext;
 import io.yak.ops.plugin.task.datasync.connector.SyncSourceFactory;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
+import java.util.List;
 
 /** Creates the initial Snapshot and continuous Binlog Source for an authorized MySQL table. */
 @AutoService(SyncSourceFactory.class)
@@ -39,8 +39,7 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
     }
 
     @Override
-    public List<ExecutionResource> exclusiveResources(
-            SourceParameters parameters, TaskExecutionIdentity identity) {
+    public List<ExecutionResource> exclusiveResources(SourceParameters parameters, TaskExecutionIdentity identity) {
         return List.of(MySqlCdcReplicationIdentity.exclusiveResource(identity));
     }
 

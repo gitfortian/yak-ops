@@ -25,7 +25,8 @@ public final class SyncRuntimePolicy {
 
     public SyncRuntimePolicy(SyncRuntimeOptions options, Path stateRoot) {
         this.options = Objects.requireNonNull(options, "options");
-        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.stateRoot =
+                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
 
     /**
