@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
@@ -71,9 +71,15 @@ class SyncConnectorFactoryRegistryTest {
         assertTrue(!factories.source("JDBC").producesChangelog());
     }
 
-    @JsonTypeName("EXTERNAL")
     public record ExternalSourceParameters(String datasourceId, String database, String schema, String table)
-            implements SourceParameters {}
+            implements SourceParameters {
+
+        @Override
+        @JsonProperty("type")
+        public String type() {
+            return "EXTERNAL";
+        }
+    }
 
     private static class ExternalSourceFactory implements SyncSourceFactory {
         @Override

@@ -72,7 +72,7 @@ public final class SyncConnectorFactoryRegistry {
     /** Resolves an already-decoded Source by its exact parameters class. */
     public SyncSourceFactory source(SourceParameters parameters) {
         SyncSourceFactory factory = sourcesByClass.get(Objects.requireNonNull(parameters, "parameters").getClass());
-        if (factory == null) {
+        if (factory == null || !factory.identifier().equals(parameters.type())) {
             throw new TaskPluginException("Unsupported DATA_SYNC Source parameters");
         }
         return factory;
@@ -90,7 +90,7 @@ public final class SyncConnectorFactoryRegistry {
     /** Resolves an already-decoded Sink by its exact parameters class. */
     public SyncSinkFactory sink(SinkParameters parameters) {
         SyncSinkFactory factory = sinksByClass.get(Objects.requireNonNull(parameters, "parameters").getClass());
-        if (factory == null) {
+        if (factory == null || !factory.identifier().equals(parameters.type())) {
             throw new TaskPluginException("Unsupported DATA_SYNC Sink parameters");
         }
         return factory;

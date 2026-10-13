@@ -16,7 +16,7 @@ public final class JdbcSyncSourceFactory implements SyncSourceFactory {
 
     @Override
     public String identifier() {
-        return "JDBC";
+        return JdbcSourceParameters.TYPE;
     }
 
     @Override

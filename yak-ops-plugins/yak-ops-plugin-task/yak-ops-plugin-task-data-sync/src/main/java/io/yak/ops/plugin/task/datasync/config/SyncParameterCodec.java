@@ -58,12 +58,20 @@ public final class SyncParameterCodec {
 
     private SourceParameters source(JsonNode node) {
         var factory = factories.source(type(node));
-        return JSONUtils.parseObject(payload(node), factory.parametersType());
+        SourceParameters parameters = JSONUtils.parseObject(payload(node), factory.parametersType());
+        if (!factory.identifier().equals(parameters.type())) {
+            throw new IllegalArgumentException("DATA_SYNC Source type does not match its parameters");
+        }
+        return parameters;
     }
 
     private SinkParameters sink(JsonNode node) {
         var factory = factories.sink(type(node));
-        return JSONUtils.parseObject(payload(node), factory.parametersType());
+        SinkParameters parameters = JSONUtils.parseObject(payload(node), factory.parametersType());
+        if (!factory.identifier().equals(parameters.type())) {
+            throw new IllegalArgumentException("DATA_SYNC Sink type does not match its parameters");
+        }
+        return parameters;
     }
 
     private static String type(JsonNode node) {

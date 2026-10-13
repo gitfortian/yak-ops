@@ -16,7 +16,7 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
 
     @Override
     public String identifier() {
-        return "MYSQL_CDC";
+        return MySqlCdcSourceParameters.TYPE;
     }
 
     @Override

@@ -24,7 +24,7 @@ public final class JdbcSyncSinkFactory implements SyncSinkFactory {
 
     @Override
     public String identifier() {
-        return "JDBC";
+        return JdbcSinkParameters.TYPE;
     }
 
     @Override
