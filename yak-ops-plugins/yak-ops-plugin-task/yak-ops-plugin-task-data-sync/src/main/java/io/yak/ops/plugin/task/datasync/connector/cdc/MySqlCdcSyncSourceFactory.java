@@ -2,9 +2,13 @@ package io.yak.ops.plugin.task.datasync.connector.cdc;
 
 import com.google.auto.service.AutoService;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.api.TaskPluginException;
+import io.yak.ops.plugin.task.api.execution.ExecutionResource;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import java.util.List;
 import io.yak.ops.plugin.task.datasync.connector.SyncSourceContext;
 import io.yak.ops.plugin.task.datasync.connector.SyncSourceFactory;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
@@ -25,8 +29,19 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
     }
 
     @Override
+    public Boundedness boundedness() {
+        return Boundedness.CONTINUOUS_UNBOUNDED;
+    }
+
+    @Override
     public boolean producesChangelog() {
         return true;
+    }
+
+    @Override
+    public List<ExecutionResource> exclusiveResources(
+            SourceParameters parameters, TaskExecutionIdentity identity) {
+        return List.of(MySqlCdcReplicationIdentity.exclusiveResource(identity));
     }
 
     @Override
@@ -44,15 +59,15 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
 
-        int serverId = Math.floorMod(context.identity().instanceId().hashCode(), 2_000_000_000) + 1;
         return MySqlCdcSource.builder()
                 .hostname(connection.host())
                 .port(connection.port())
                 .username(connection.username())
                 .password(connection.password())
-                .serverId(serverId)
-                .topicPrefix("yakflow_" + context.identity().instanceId())
+                .serverId(MySqlCdcReplicationIdentity.serverId(context.identity()))
+                .topicPrefix(MySqlCdcReplicationIdentity.topicPrefix(context.identity()))
                 .table(context.table().table(), context.table().schema())
-                .buildHybrid(1024);
+                .queueCapacity(context.runtimeOptions().cdcQueueCapacity())
+                .buildHybrid(context.runtimeOptions().snapshotChunkSize());
     }
 }

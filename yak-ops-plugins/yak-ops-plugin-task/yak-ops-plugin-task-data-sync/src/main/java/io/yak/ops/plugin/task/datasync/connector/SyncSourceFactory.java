@@ -1,7 +1,11 @@
 package io.yak.ops.plugin.task.datasync.connector;
 
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.plugin.task.api.execution.ExecutionResource;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import java.util.List;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 
 /**
@@ -18,8 +22,23 @@ public interface SyncSourceFactory {
     /** Returns the concrete JSON parameters class supported by this factory. */
     Class<? extends SourceParameters> parametersType();
 
+    /** Returns the boundedness required by this Source's YakFlow runtime configuration. */
+    Boundedness boundedness();
+
     /** Indicates whether this Source may emit UPDATE or DELETE events. */
     boolean producesChangelog();
+
+    /**
+     * Declares Source-owned exclusive resources without resolving connection credentials.
+     *
+     * @param parameters pinned Source configuration
+     * @param identity trusted Task Instance identity
+     * @return deterministic durable admission claims
+     */
+    default List<ExecutionResource> exclusiveResources(
+            SourceParameters parameters, TaskExecutionIdentity identity) {
+        return List.of();
+    }
 
     /**
      * Validates the authorized Datasource type before an execution is admitted.

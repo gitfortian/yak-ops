@@ -2,9 +2,7 @@ package io.yak.ops.plugin.task.datasync.pipeline;
 
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.source.Source;
-import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.Configuration;
-import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
@@ -18,7 +16,6 @@ import io.yak.ops.plugin.task.datasync.plan.SyncJobPlan;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.Objects;
 
 /**
@@ -31,14 +28,28 @@ public final class SyncPipelineCompiler {
 
     private final SyncRuntimeResources resources;
     private final SyncConnectorFactoryRegistry factories;
-    private final Path stateRoot;
+    private final SyncRuntimePolicy runtimePolicy;
 
+    /** Creates a compiler using the built-in single-table execution settings. */
     public SyncPipelineCompiler(
             SyncRuntimeResources resources, SyncConnectorFactoryRegistry factories, Path stateRoot) {
+        this(resources, factories, new SyncRuntimePolicy(SyncRuntimeOptions.defaults(), stateRoot));
+    }
+
+    /** Creates a compiler with system-owned execution and recovery settings. */
+    public SyncPipelineCompiler(
+            SyncRuntimeResources resources,
+            SyncConnectorFactoryRegistry factories,
+            SyncRuntimeOptions runtimeOptions,
+            Path stateRoot) {
+        this(resources, factories, new SyncRuntimePolicy(runtimeOptions, stateRoot));
+    }
+
+    private SyncPipelineCompiler(
+            SyncRuntimeResources resources, SyncConnectorFactoryRegistry factories, SyncRuntimePolicy runtimePolicy) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.factories = Objects.requireNonNull(factories, "factories");
-        this.stateRoot =
-                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.runtimePolicy = Objects.requireNonNull(runtimePolicy, "runtimePolicy");
     }
 
     /**
@@ -51,6 +62,13 @@ public final class SyncPipelineCompiler {
     public SyncCompiledPipeline compile(SyncJobPlan plan, TaskExecutionIdentity identity) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
+
+        var sourceFactory = factories.source(plan.sourceParameters());
+        var sinkFactory = factories.sink(plan.sinkParameters());
+        int sourceParallelism = runtimePolicy.sourceParallelism();
+        int sinkParallelism = runtimePolicy.sinkParallelism(sourceFactory.producesChangelog());
+        Configuration configuration = runtimePolicy.configure(identity, sourceFactory.boundedness());
+
         SyncRuntimeConnection sourceConnection = resources.connection(
                 identity.workspaceId(), plan.sourceParameters().datasourceId());
         SyncRuntimeConnection targetConnection = resources.connection(
@@ -60,25 +78,19 @@ public final class SyncPipelineCompiler {
             throw new IllegalStateException("DATA_SYNC datasource revision changed before execution");
         }
 
-        var sourceFactory = factories.source(plan.sourceParameters());
-        var sinkFactory = factories.sink(plan.sinkParameters());
-        Configuration configuration = new Configuration()
-                .set(PipelineOptions.AUTO_GENERATE_UIDS, false)
-                .set(
-                        CheckpointingOptions.STATE_DIRECTORY,
-                        stateRoot.resolve(identity.instanceId()).toString());
-        if (sourceFactory.producesChangelog()) {
-            configuration.set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(10));
-        }
-
         Source<TableRecord, ?, ?> source = sourceFactory.create(
                 plan.sourceParameters(),
-                new SyncSourceContext(sourceConnection, plan.source(), configuration, identity));
+                new SyncSourceContext(
+                        sourceConnection, plan.source(), configuration, identity, runtimePolicy.options()));
+        if (source.getBoundedness() != sourceFactory.boundedness()) {
+            throw new IllegalStateException("DATA_SYNC Source boundedness differs from its Factory contract");
+        }
         Sink<TableRecord> sink = sinkFactory.create(
                 plan.sinkParameters(), new SyncSinkContext(targetConnection, plan.source(), plan.target()));
         SourceTransformation<TableRecord> input =
-                new SourceTransformation<>("data-sync-source", source, TableRecord.class, 1);
-        SinkTransformation<TableRecord> output = new SinkTransformation<>(input, "data-sync-sink", sink, 1);
+                new SourceTransformation<>("data-sync-source", source, TableRecord.class, sourceParallelism);
+        SinkTransformation<TableRecord> output =
+                new SinkTransformation<>(input, "data-sync-sink", sink, sinkParallelism);
         input.setUid("data-sync-source-" + identity.definitionId());
         output.setUid("data-sync-sink-" + identity.definitionId());
         StreamGraph graph = new StreamGraphGenerator(output, configuration).generate();

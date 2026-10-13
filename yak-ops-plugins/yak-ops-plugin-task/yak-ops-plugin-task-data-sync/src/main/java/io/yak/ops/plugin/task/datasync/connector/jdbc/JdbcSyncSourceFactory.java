@@ -2,6 +2,7 @@ package io.yak.ops.plugin.task.datasync.connector.jdbc;
 
 import com.google.auto.service.AutoService;
 import io.yak.ops.connector.jdbc.source.JdbcSource;
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.datasync.connector.SyncSourceContext;
@@ -22,6 +23,11 @@ public final class JdbcSyncSourceFactory implements SyncSourceFactory {
     @Override
     public Class<? extends SourceParameters> parametersType() {
         return JdbcSourceParameters.class;
+    }
+
+    @Override
+    public Boundedness boundedness() {
+        return Boundedness.BOUNDED;
     }
 
     @Override

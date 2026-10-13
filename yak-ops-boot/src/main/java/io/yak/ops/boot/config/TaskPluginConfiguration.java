@@ -7,9 +7,11 @@ import io.yak.ops.plugin.task.datasync.SyncTaskPlugin;
 import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
+import io.yak.ops.plugin.task.datasync.pipeline.SyncRuntimeOptions;
 import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -35,11 +37,29 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
+    SyncRuntimeOptions syncRuntimeOptions(
+            @Value("${yak.task.data-sync.source-parallelism:1}") int sourceParallelism,
+            @Value("${yak.task.data-sync.sink-parallelism:1}") int sinkParallelism,
+            @Value("${yak.task.data-sync.cdc.snapshot-chunk-size:1024}") int snapshotChunkSize,
+            @Value("${yak.task.data-sync.cdc.queue-capacity:256}") int cdcQueueCapacity,
+            @Value("${yak.task.data-sync.cdc.checkpoint-interval:PT10S}") Duration checkpointInterval,
+            @Value("${yak.task.data-sync.cdc.max-restarts:1}") int maxRestarts) {
+        return new SyncRuntimeOptions(
+                sourceParallelism,
+                sinkParallelism,
+                snapshotChunkSize,
+                cdcQueueCapacity,
+                checkpointInterval,
+                maxRestarts);
+    }
+
+    @Bean
     SyncPipelineCompiler syncPipelineCompiler(
             SyncRuntimeResources resources,
             SyncConnectorFactoryRegistry factories,
+            SyncRuntimeOptions runtimeOptions,
             @Value("${yak.task.execution.state-directory:./data/task-state}") String stateDirectory) {
-        return new SyncPipelineCompiler(resources, factories, Path.of(stateDirectory));
+        return new SyncPipelineCompiler(resources, factories, runtimeOptions, Path.of(stateDirectory));
     }
 
     @Bean
