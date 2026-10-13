@@ -1,4 +1,4 @@
-package io.yak.ops.task.execution.dispatch;
+package io.yak.ops.task.execution.dispatch.embedded;
 
 import io.yak.ops.business.task.instance.DispatchTicket;
 import io.yak.ops.business.task.instance.InstanceLifecycleService;
@@ -12,10 +12,11 @@ import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
+import io.yak.ops.task.execution.dispatch.TaskExecutionCoordinator;
 import io.yak.ops.task.execution.owner.EmbeddedExecutionOwner;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -35,7 +36,7 @@ import org.springframework.stereotype.Component;
 
 /** Executes already-admitted Tasks on the verified single embedded execution owner. */
 @Component
-public class EmbeddedTaskDispatcher implements AutoCloseable {
+public class EmbeddedTaskDispatcher implements TaskExecutionCoordinator, AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTaskDispatcher.class);
 
@@ -103,6 +104,7 @@ public class EmbeddedTaskDispatcher implements AutoCloseable {
      * @param workspaceId trusted Workspace captured by the HTTP admission boundary
      * @param instanceId durably admitted Task Instance
      */
+    @Override
     public void dispatch(String workspaceId, String instanceId) {
         owner.incarnation();
         workers.execute(() -> launch(workspaceId, instanceId));
@@ -115,6 +117,7 @@ public class EmbeddedTaskDispatcher implements AutoCloseable {
      * @param instanceId Task Instance to cancel
      * @return current persisted business status
      */
+    @Override
     public TaskInstanceStatus cancel(String workspaceId, String instanceId) {
         synchronized (launchFence(instanceId)) {
             TaskInstanceStatus result = lifecycle.cancel(workspaceId, instanceId);
@@ -134,7 +137,7 @@ public class EmbeddedTaskDispatcher implements AutoCloseable {
             if (ticket == null) {
                 return;
             }
-            TaskExecutionContext context = new TaskExecutionContext(
+            TaskExecutionIdentity context = new TaskExecutionIdentity(
                     ticket.workspaceId(),
                     ticket.definitionId(),
                     ticket.definitionVersion(),
@@ -149,7 +152,7 @@ public class EmbeddedTaskDispatcher implements AutoCloseable {
                     .queryCurrent(workspaceId, ticket.definitionId(), ticket.definitionVersion())
                     .orElseThrow(() -> new IllegalStateException("Pinned Task version is not available"));
             TaskParameters parameters = executable.parse(version.getParameters());
-            TaskExecutionPlan plan = executable.plan(parameters, context);
+            TaskAdmissionPlan plan = executable.plan(parameters, context);
             Set<ExecutionResource> owned = claims.findByInstance(workspaceId, instanceId).stream()
                     .map(this::resource)
                     .collect(java.util.stream.Collectors.toSet());

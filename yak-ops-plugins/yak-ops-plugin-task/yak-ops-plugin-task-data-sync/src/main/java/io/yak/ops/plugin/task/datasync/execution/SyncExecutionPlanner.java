@@ -4,8 +4,8 @@ import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.SyncParameters;
 import io.yak.ops.plugin.task.datasync.SyncValidator;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
@@ -36,8 +36,8 @@ public final class SyncExecutionPlanner {
      * @param context trusted Task identity
      * @return canonical exclusive claim and binding fingerprint
      */
-    public TaskExecutionPlan plan(SyncParameters parameters, TaskExecutionContext context) {
-        return prepare(parameters, context).resourcePlan();
+    public TaskAdmissionPlan plan(SyncParameters parameters, TaskExecutionIdentity context) {
+        return prepare(parameters, context).admissionPlan();
     }
 
     /**
@@ -47,7 +47,7 @@ public final class SyncExecutionPlanner {
      * @param context trusted Task identity
      * @return physical table metadata and non-secret resource binding
      */
-    public SyncPipelinePlan prepare(SyncParameters pipeline, TaskExecutionContext context) {
+    public SyncPipelinePlan prepare(SyncParameters pipeline, TaskExecutionIdentity context) {
         SyncValidator.checkParameters(pipeline);
         SourceParameters source = pipeline.source();
         JdbcSinkParameters sink = (JdbcSinkParameters) pipeline.sink();
@@ -69,8 +69,8 @@ public final class SyncExecutionPlanner {
         String binding = context.workspaceId()
                 + "|" + source.datasourceId() + "|" + from.revision() + "|" + encodeTable(from.table())
                 + "|" + sink.datasourceId() + "|" + to.revision() + "|" + encodeTable(to.table());
-        TaskExecutionPlan plan =
-                new TaskExecutionPlan(List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
+        TaskAdmissionPlan plan =
+                new TaskAdmissionPlan(List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
         return new SyncPipelinePlan(from, to, plan);
     }
 

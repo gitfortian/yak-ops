@@ -1,4 +1,4 @@
-package io.yak.ops.task.execution.dispatch;
+package io.yak.ops.task.execution.dispatch.embedded;
 
 import io.yak.ops.business.task.instance.DispatchTicket;
 import io.yak.ops.business.task.instance.InstanceLifecycleService;

@@ -1,20 +1,19 @@
 package io.yak.ops.task.execution;
 
 import io.yak.ops.business.task.submission.SubmissionResult;
+import io.yak.ops.business.task.submission.TaskSubmissionCommand;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 
-/** Coordinates durable Task submission and cancellation through the embedded execution owner. */
+/** Coordinates trusted Task submissions and cancellation without an engine-specific dependency. */
 public interface TaskExecutionService {
 
     /**
-     * Admits and dispatches one authorized manual Task submission.
+     * Admits and dispatches one trusted Task submission.
      *
-     * @param definitionId published Task Definition
-     * @param requestId stable idempotency key for this submission
-     * @param operatorId actor requesting execution
+     * @param command authorized Workspace, Definition and trigger identity
      * @return persisted Instance and Attempt identity, including idempotent replay status
      */
-    SubmissionResult submitManual(String definitionId, String requestId, String operatorId);
+    SubmissionResult submit(TaskSubmissionCommand command);
 
     /**
      * Persists cancellation intent and requests physical cancellation when a Job is active.

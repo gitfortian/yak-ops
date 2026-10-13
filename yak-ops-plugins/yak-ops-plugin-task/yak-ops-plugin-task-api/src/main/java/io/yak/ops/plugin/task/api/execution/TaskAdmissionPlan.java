@@ -12,9 +12,9 @@ import java.util.Objects;
  * <p>The revision identifies the non-secret resource binding checked again before
  * physical execution. Neither connection credentials nor running handles are part of a plan.
  */
-public record TaskExecutionPlan(List<ExecutionResource> exclusiveResources, String resourceRevision) {
+public record TaskAdmissionPlan(List<ExecutionResource> exclusiveResources, String resourceRevision) {
 
-    public TaskExecutionPlan {
+    public TaskAdmissionPlan {
         Objects.requireNonNull(exclusiveResources, "exclusiveResources");
         Objects.requireNonNull(resourceRevision, "resourceRevision");
         if (resourceRevision.isBlank() || resourceRevision.length() > 128) {

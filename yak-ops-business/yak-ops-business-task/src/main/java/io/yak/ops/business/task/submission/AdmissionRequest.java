@@ -1,9 +1,10 @@
 package io.yak.ops.business.task.submission;
 
+import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 
 /**
  * Prepared inputs for one Task admission transaction.
@@ -14,18 +15,20 @@ import io.yak.ops.plugin.task.api.execution.TaskExecutionPlan;
  */
 public final class AdmissionRequest {
 
-    private final TaskExecutionContext context;
+    private final TaskExecutionIdentity identity;
+    private final TaskTriggerType triggerType;
     private final String requestId;
     private final String requestFingerprint;
     private final String operatorId;
     private final TaskParameters parameters;
-    private final TaskExecutionPlan plan;
+    private final TaskAdmissionPlan plan;
     private final ExecutableTaskPlugin plugin;
 
     /**
      * Creates the inputs of a validated Task submission.
      *
-     * @param context trusted execution identity and pinned Definition version
+     * @param identity trusted execution identity and pinned Definition version
+     * @param triggerType namespace of the idempotent submission
      * @param requestId caller-stable idempotency key
      * @param requestFingerprint non-secret submission intent fingerprint
      * @param operatorId actor initiating execution
@@ -34,14 +37,16 @@ public final class AdmissionRequest {
      * @param plugin executable Task type used to prepare and revalidate the plan
      */
     public AdmissionRequest(
-            TaskExecutionContext context,
+            TaskExecutionIdentity identity,
+            TaskTriggerType triggerType,
             String requestId,
             String requestFingerprint,
             String operatorId,
             TaskParameters parameters,
-            TaskExecutionPlan plan,
+            TaskAdmissionPlan plan,
             ExecutableTaskPlugin plugin) {
-        this.context = context;
+        this.identity = identity;
+        this.triggerType = triggerType;
         this.requestId = requestId;
         this.requestFingerprint = requestFingerprint;
         this.operatorId = operatorId;
@@ -51,8 +56,13 @@ public final class AdmissionRequest {
     }
 
     /** Returns the pinned execution identity. */
-    public TaskExecutionContext context() {
-        return context;
+    public TaskExecutionIdentity identity() {
+        return identity;
+    }
+
+    /** Returns the idempotent submission trigger. */
+    public TaskTriggerType triggerType() {
+        return triggerType;
     }
 
     /** Returns the idempotency key associated with the submission. */
@@ -76,7 +86,7 @@ public final class AdmissionRequest {
     }
 
     /** Returns the admitted resource plan. */
-    public TaskExecutionPlan plan() {
+    public TaskAdmissionPlan plan() {
         return plan;
     }
 

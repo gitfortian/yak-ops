@@ -20,7 +20,7 @@ public interface ExecutableTaskPlugin extends TaskPlugin {
      * @param context authorized execution identity and pinned Definition version
      * @return a read-only execution plan to be admitted by the platform
      */
-    TaskExecutionPlan plan(TaskParameters parameters, TaskExecutionContext context);
+    TaskAdmissionPlan plan(TaskParameters parameters, TaskExecutionIdentity context);
 
     /**
      * Starts physical execution from an admitted plan.
@@ -33,5 +33,5 @@ public interface ExecutableTaskPlugin extends TaskPlugin {
      * @param context identity of the authorized Instance and Attempt
      * @return an asynchronous handle to the physical execution
      */
-    CompletionStage<TaskHandle> start(TaskParameters parameters, TaskExecutionPlan plan, TaskExecutionContext context);
+    CompletionStage<TaskHandle> start(TaskParameters parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context);
 }
