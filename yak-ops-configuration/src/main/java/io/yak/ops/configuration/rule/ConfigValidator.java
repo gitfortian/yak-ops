@@ -46,27 +46,28 @@ public final class ConfigValidator {
 
     private void collectErrors(OptionRule rule, List<ConfigValidationError> errors) {
         Set<String> missing = new HashSet<>();
+        Set<String> invalidTypes = new HashSet<>();
+        Set<String> checkedTypes = new HashSet<>();
         for (RequiredOption group : rule.getRequiredOptions()) {
-            if (group.kind() == RequiredOption.Kind.CONDITIONAL && !group.when().evaluate(config)) {
-                continue;
+            if (group.kind() == RequiredOption.Kind.CONDITIONAL) {
+                try {
+                    if (!group.when().evaluate(config)) {
+                        continue;
+                    }
+                } catch (RuntimeException exception) {
+                    typeError(String.join(",", group.when().condition().optionKeys()), errors, invalidTypes);
+                    continue;
+                }
             }
-            List<Option<?>> present =
-                    group.options().stream().filter(config::contains).toList();
-            boolean valid =
-                    switch (group.kind()) {
-                        case REQUIRED, CONDITIONAL ->
-                            present.size() == group.options().size();
-                        case EXCLUSIVE -> present.size() == 1;
-                        case BUNDLED ->
-                            present.isEmpty()
-                                    || present.size() == group.options().size();
-                    };
+            List<Option<?>> present = group.options().stream().filter(config::contains).toList();
+            boolean valid = switch (group.kind()) {
+                case REQUIRED, CONDITIONAL -> present.size() == group.options().size();
+                case EXCLUSIVE -> present.size() == 1;
+                case BUNDLED -> present.isEmpty() || present.size() == group.options().size();
+            };
             if (!valid) {
-                String groupPath = group.options().stream()
-                        .map(Option::key)
-                        .reduce((a, b) -> a + "," + b)
-                        .orElse("");
-                errors.add(new ConfigValidationError(groupPath, group.kind().name(), "Option group constraint failed"));
+                String path = group.options().stream().map(Option::key).reduce((a, b) -> a + "," + b).orElse("");
+                errors.add(new ConfigValidationError(path, group.kind().name(), "Option group constraint failed"));
                 if (group.kind() == RequiredOption.Kind.REQUIRED || group.kind() == RequiredOption.Kind.CONDITIONAL) {
                     group.options().stream()
                             .filter(option -> !config.contains(option))
@@ -75,21 +76,18 @@ public final class ConfigValidator {
                 }
             }
             for (Option<?> option : present) {
-                if (!option.allowedValues().isEmpty() && !option.allowedValues().contains(config.get(option))) {
-                    errors.add(new ConfigValidationError(option.key(), "SINGLE_CHOICE", "Invalid option choice"));
-                }
+                checkOption(option, errors, invalidTypes, checkedTypes);
             }
         }
         for (Option<?> option : rule.getOptionalOptions()) {
-            if (config.contains(option)
-                    && !option.allowedValues().isEmpty()
-                    && !option.allowedValues().contains(config.get(option))) {
-                errors.add(new ConfigValidationError(option.key(), "SINGLE_CHOICE", "Invalid option choice"));
+            if (config.contains(option)) {
+                checkOption(option, errors, invalidTypes, checkedTypes);
             }
         }
         for (Condition<?> condition : rule.getValueConstraints()) {
             if (!condition.optionKeys().stream().allMatch(config::containsKey)
-                    || condition.optionKeys().stream().anyMatch(missing::contains)) {
+                    || condition.optionKeys().stream().anyMatch(missing::contains)
+                    || condition.optionKeys().stream().anyMatch(invalidTypes::contains)) {
                 continue;
             }
             try {
@@ -98,14 +96,42 @@ public final class ConfigValidator {
                             String.join(",", condition.optionKeys()), "VALUE", condition.description()));
                 }
             } catch (RuntimeException exception) {
-                errors.add(new ConfigValidationError(
-                        String.join(",", condition.optionKeys()), "VALUE", "Invalid option value"));
+                typeError(String.join(",", condition.optionKeys()), errors, invalidTypes);
             }
         }
         for (ConditionRule conditionRule : rule.getConditionRules()) {
-            if (conditionRule.when().evaluate(config)) {
-                collectErrors(conditionRule.optionRule(), errors);
+            try {
+                if (conditionRule.when().evaluate(config)) {
+                    collectErrors(conditionRule.optionRule(), errors);
+                }
+            } catch (RuntimeException exception) {
+                typeError(String.join(",", conditionRule.when().condition().optionKeys()), errors, invalidTypes);
             }
+        }
+    }
+
+    private void checkOption(
+            Option<?> option,
+            List<ConfigValidationError> errors,
+            Set<String> invalidTypes,
+            Set<String> checkedTypes) {
+        if (!checkedTypes.add(option.key())) {
+            return;
+        }
+        try {
+            Object value = config.get(option);
+            if (!option.allowedValues().isEmpty() && !option.allowedValues().contains(value)) {
+                errors.add(new ConfigValidationError(option.key(), "SINGLE_CHOICE", "Invalid option choice"));
+            }
+        } catch (RuntimeException exception) {
+            typeError(option.key(), errors, invalidTypes);
+        }
+    }
+
+    private static void typeError(
+            String path, List<ConfigValidationError> errors, Set<String> invalidTypes) {
+        if (invalidTypes.add(path)) {
+            errors.add(new ConfigValidationError(path, "TYPE", "Invalid option value type"));
         }
     }
 
