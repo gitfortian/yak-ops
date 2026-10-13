@@ -28,7 +28,7 @@ public record DataSourcePluginDescriptor(
         Set<String> secretFieldKeys) {
 
     /** Datasource Plugin API version accepted by this runtime. */
-    public static final String CURRENT_API_VERSION = "4";
+    public static final String CURRENT_API_VERSION = "5";
 
     public DataSourcePluginDescriptor {
         type = normalizeType(type);
