@@ -1,6 +1,7 @@
 package io.yak.ops.business.task.definition.impl;
 
 import io.yak.ops.business.task.definition.DefinitionService;
+import io.yak.ops.business.task.definition.PublicationService;
 import io.yak.ops.common.bean.dto.task.CreateDefinitionDTO;
 import io.yak.ops.common.bean.dto.task.DefinitionQueryDTO;
 import io.yak.ops.common.bean.dto.task.UpdateDefinitionDTO;
@@ -44,6 +45,9 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     @Resource
     private TaskValidationContext validationContext;
+
+    @Resource
+    private PublicationService publicationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -93,14 +97,11 @@ public class DefinitionServiceImpl implements DefinitionService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public DefinitionVO publish(String id, String operatorId) {
-        DefinitionEntity definition = requireDefinition(id, true);
+        DefinitionEntity definition = requireDefinition(id, false);
+        int expectedVersion = definition.getCurrentVersion();
         validatePublication(definition.getTaskType(), currentVersion(definition).getParameters());
-        definition.setStatus(DefinitionStatus.PUBLISHED);
-        definition.initUpdate(operatorId);
-        definitionRepository.update(definition.getWorkspaceId(), definition);
-        return toVO(definition);
+        return toVO(publicationService.publish(id, expectedVersion, operatorId));
     }
 
     @Override

@@ -36,6 +36,7 @@ class DefinitionCrudContractTest {
     private final DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
     private final TaskPluginRegistry registry = mock(TaskPluginRegistry.class);
     private final TaskValidationContext context = mock(TaskValidationContext.class);
+    private final PublicationService publication = mock(PublicationService.class);
     private final Map<Integer, DefinitionVersionEntity> snapshots = new HashMap<>();
     private DefinitionEntity stored;
 
@@ -45,9 +46,17 @@ class DefinitionCrudContractTest {
         inject("versionRepository", versions);
         inject("pluginRegistry", registry);
         inject("validationContext", context);
+        inject("publicationService", publication);
         TaskPlugin plugin = mock(TaskPlugin.class);
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
+        when(publication.publish(anyString(), anyInt(), anyString())).thenAnswer(args -> {
+            if (!Integer.valueOf(args.getArgument(1)).equals(stored.getCurrentVersion())) {
+                throw new BusinessException(io.yak.ops.common.enums.common.CommonErrorCode.RESOURCE_DUPLICATION);
+            }
+            stored.setStatus(io.yak.ops.common.enums.task.DefinitionStatus.PUBLISHED);
+            return stored;
+        });
         when(plugin.parse(anyString()))
                  .thenAnswer(args -> ReadonlyConfig.fromMap(Map.of(
                         "sourceTable",
