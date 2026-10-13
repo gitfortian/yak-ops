@@ -17,4 +17,10 @@ public record BinlogEvent(List<TableRecord> records, BinlogOffset offset) {
         records = List.copyOf(Objects.requireNonNull(records, "records"));
         Objects.requireNonNull(offset, "offset");
     }
+
+    /** Reports batch size without exposing changed rows or source offsets. */
+    @Override
+    public String toString() {
+        return "BinlogEvent{recordCount=" + records.size() + ", offset=redacted}";
+    }
 }

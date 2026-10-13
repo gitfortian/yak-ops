@@ -25,4 +25,10 @@ public record MySqlHybridFetchedRecord(
             throw new IllegalArgumentException("Low watermark is a metadata event without rows");
         }
     }
+
+    /** Exposes only batch shape, never row values or checkpoint cursors. */
+    @Override
+    public String toString() {
+        return "MySqlHybridFetchedRecord{rowCount=" + rows.size() + ", lowWatermark=" + lowWatermark + "}";
+    }
 }

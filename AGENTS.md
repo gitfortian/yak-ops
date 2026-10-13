@@ -53,6 +53,16 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English.
 - Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Current code, tests, and accepted public contracts determine supported behavior.
 
+## Java Type Design and Package Ownership
+
+- Organize packages by functional ownership, such as `source`, `reader`, `writer`, `state`, `execution`, and `repository`, not by whether a type is a record, class, or interface. Keep a public contract and its directly related value types together when they share ownership.
+- Reserve `domain` for business domain concepts and behavior. Introduce `model` only for a cohesive, independently owned set of models; do not create generic buckets or one-type packages without a meaningful boundary.
+- Introduce interfaces for distinct implementation or caller contracts and abstract classes only for shared behavior or state. Keep resource-owning and lifecycle-managed implementations in concrete classes.
+- Prefer records for shallowly immutable value carriers with intentional component-wise equality. Prefer classes for mutable runtime state, connection and resource ownership, identity-driven lifecycles, and sensitive credentials or execution tokens. Do not change a type solely to match its upstream spelling.
+- Defensively copy mutable arrays and collections at ownership boundaries. Review record equality and hashing explicitly: arrays compare by reference in generated `equals` and `hashCode`, even when their contents are copied.
+- Treat `toString()` as diagnostic output. Never expose credentials, dispatch tokens, database row values, checkpoint state bytes, or other sensitive payloads through generated or custom representations, including nested record and collection wrappers.
+- Keep mutable Reader and Writer state distinct from immutable checkpoint snapshots. Preserve public accessors and persisted serializer formats during type refactoring, with focused tests for equality, ownership, and safe diagnostics.
+
 ## Code Quality and Review
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
