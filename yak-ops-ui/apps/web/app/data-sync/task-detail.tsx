@@ -84,12 +84,12 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
       return;
     }
     void getDataSyncInstance(executionId).then((instance) => {
-        if (instance.taskId !== taskId || instance.syncType !== syncType) {
-          setSearchParams({}, { replace: true });
-          return;
-        }
-        setSelected(instance);
-      });
+      if (instance.taskId !== taskId || instance.syncType !== syncType) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      setSelected(instance);
+    });
   }, [executionId, setSearchParams, syncType, taskId]);
 
   useEffect(() => {

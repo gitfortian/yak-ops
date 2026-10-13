@@ -30,7 +30,7 @@ class TaskExecutionServiceTest {
     @Test
     void dispatchesNewSubmissionAfterAdmission() {
         TaskSubmissionCommand command = manual();
-        SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.SUBMITTED, false);
+        SubmissionResult result = new SubmissionResult("i", 2, TaskInstanceStatus.SUBMITTED, false);
         when(submissions.submit(command)).thenReturn(result);
 
         assertEquals(result, service.submit(command));
@@ -41,7 +41,7 @@ class TaskExecutionServiceTest {
     @Test
     void idempotentReplayDoesNotDispatchAgain() {
         TaskSubmissionCommand command = manual();
-        SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.RUNNING, true);
+        SubmissionResult result = new SubmissionResult("i", 2, TaskInstanceStatus.RUNNING, true);
         when(submissions.submit(command)).thenReturn(result);
 
         assertEquals(result, service.submit(command));
@@ -53,7 +53,7 @@ class TaskExecutionServiceTest {
     void workflowSubmissionDispatchesInItsExplicitWorkspace() {
         TaskSubmissionCommand command =
                 new TaskSubmissionCommand("workflow-workspace", "d", TaskTriggerType.WORKFLOW, "workflow-123", "system");
-        SubmissionResult result = new SubmissionResult("i", "a", 2, TaskInstanceStatus.SUBMITTED, false);
+        SubmissionResult result = new SubmissionResult("i", 2, TaskInstanceStatus.SUBMITTED, false);
         when(submissions.submit(command)).thenReturn(result);
 
         assertEquals(result, service.submit(command));

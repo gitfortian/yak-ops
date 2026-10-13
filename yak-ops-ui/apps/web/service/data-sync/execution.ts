@@ -4,7 +4,6 @@ import type {
   TaskInstanceStatus,
 } from "../task-execution/types";
 import type {
-  DataSyncAttemptRecord,
   DataSyncInstancePageParams,
   DataSyncInstanceRecord,
   DataSyncType,

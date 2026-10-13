@@ -59,7 +59,7 @@ class DataSyncExecutionTest {
                     new Column("name", LogicalTypes.varchar(32))),
             List.of("id"));
     private static final TaskExecutionIdentity CONTEXT =
-            new TaskExecutionIdentity("ws", "definition", 1, "instance-123", "attempt-123");
+            new TaskExecutionIdentity("ws", "definition", 1, "instance-123");
 
     @Test
     void boundedJdbcRunsThroughExistingPipelineExecutor() {
