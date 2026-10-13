@@ -22,7 +22,10 @@ import org.junit.jupiter.api.io.TempDir;
 class ExecutionConfigurationFactoryTest {
     @TempDir
     Path stateRoot;
-    private static final TaskExecutionIdentity FIRST = new TaskExecutionIdentity("ws", "definition", 1, "instance-100", "attempt-1");
+
+    private static final TaskExecutionIdentity FIRST =
+            new TaskExecutionIdentity("ws", "definition", 1, "instance-100");
+
     @Test
     void boundedSourceRunsWithoutPeriodicCheckpointsOrAutomaticRestarts() {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
@@ -49,13 +52,20 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(1, options.get(JobOptions.SINK_PARALLELISM));
     }
     @Test
-    void isolatesDifferentInstancesAndRetainsStateDirectoryAcrossInternalAttempts() {
+    void isolatesDifferentInstancesAndKeepsStateDirectoryStable() {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
-        TaskExecutionIdentity sameInstance = new TaskExecutionIdentity("ws", "definition", 1, "instance-100", "attempt-2");
-        TaskExecutionIdentity nextInstance = new TaskExecutionIdentity("ws", "definition", 1, "instance-101", "attempt-3");
-        String first = factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED).get(CheckpointingOptions.STATE_DIRECTORY);
-        String resumed = factory.create(sameInstance, Boundedness.CONTINUOUS_UNBOUNDED).get(CheckpointingOptions.STATE_DIRECTORY);
-        String next = factory.create(nextInstance, Boundedness.CONTINUOUS_UNBOUNDED).get(CheckpointingOptions.STATE_DIRECTORY);
+        TaskExecutionIdentity sameInstance =
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-100");
+        TaskExecutionIdentity nextInstance =
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-101");
+
+        String first = factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED)
+                .get(CheckpointingOptions.STATE_DIRECTORY);
+        String resumed = factory.create(sameInstance, Boundedness.CONTINUOUS_UNBOUNDED)
+                .get(CheckpointingOptions.STATE_DIRECTORY);
+        String next = factory.create(nextInstance, Boundedness.CONTINUOUS_UNBOUNDED)
+                .get(CheckpointingOptions.STATE_DIRECTORY);
+
         assertEquals(first, resumed);
         assertNotEquals(first, next);
         assertEquals(false, factory.create(nextInstance, Boundedness.CONTINUOUS_UNBOUNDED).get(CheckpointingOptions.RESTORE_LATEST));
@@ -63,7 +73,9 @@ class ExecutionConfigurationFactoryTest {
     @Test
     void rejectsUnsafeInstanceIdentifiers() {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
-        TaskExecutionIdentity unsafe = new TaskExecutionIdentity("ws", "definition", 1, "../outside", "attempt");
+        TaskExecutionIdentity unsafe =
+                new TaskExecutionIdentity("ws", "definition", 1, "../outside");
+
         assertThrows(IllegalArgumentException.class, () -> factory.create(unsafe, Boundedness.CONTINUOUS_UNBOUNDED));
     }
     @Test

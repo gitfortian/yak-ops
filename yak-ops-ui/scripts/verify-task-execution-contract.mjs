@@ -4,7 +4,6 @@ import {
   canCancelTaskInstance,
   isTaskInstanceActive,
   matchesDataSyncInstance,
-  toDataSyncAttemptRecord,
   toDataSyncInstanceRecord,
 } from "../apps/web/service/data-sync/execution.ts";
 import { createTaskRunIdempotencyKey } from "../apps/web/service/task-execution/keys.ts";
@@ -38,6 +37,8 @@ const instance = {
   taskType: "DATA_SYNC",
   triggerType: "MANUAL",
   status: "RECONCILING",
+  runtimeEngine: "YAKFLOW",
+  runtimeId: "job-1",
   createTime: "2026-10-13T09:00:00",
   failureCode: "EXECUTION_OWNER_UNCERTAIN",
 };
@@ -47,6 +48,7 @@ assert.equal(mapped.taskId, "definition-1");
 assert.equal(mapped.taskVersion, 2);
 assert.equal(mapped.syncType, "REALTIME");
 assert.equal(mapped.status, "RECONCILING");
+assert.equal(mapped.runtimeId, "job-1");
 assert.equal(mapped.errorMessage, "EXECUTION_OWNER_UNCERTAIN");
 assert.equal(mapped.definitionSnapshot.source.dataSourceId, "mysql-source");
 assert.equal(mapped.definitionSnapshot.target.schema, "public");
@@ -56,8 +58,10 @@ assert.equal(mapped.triggerType, "MANUAL");
 assert.equal(isTaskInstanceActive(mapped.status), true);
 assert.equal(canCancelTaskInstance(mapped.status), false);
 assert.equal(canCancelTaskInstance("SUBMITTED"), true);
+assert.equal(canCancelTaskInstance("LAUNCHING"), true);
 assert.equal(canCancelTaskInstance("RUNNING"), true);
 assert.equal(canCancelTaskInstance("CANCELLING"), false);
+assert.equal(isTaskInstanceActive("LAUNCHING"), true);
 assert.equal(isTaskInstanceActive("FINISHED"), false);
 assert.equal(isTaskInstanceActive("CANCELED"), false);
 
@@ -86,25 +90,5 @@ assert.equal(
 
 assert.throws(() => toDataSyncInstanceRecord(instance, { ...version, version: 3 }));
 assert.throws(() => toDataSyncInstanceRecord({ ...instance, taskType: "UNKNOWN" }, version));
-
-const attempt = toDataSyncAttemptRecord(
-  {
-    id: "attempt-1",
-    attemptNumber: 1,
-    status: "INTERRUPTED",
-    runtimeEngine: "YAKFLOW",
-    runtimeId: "job-1",
-    logReference: "local:attempt-1",
-    failureCode: "EXECUTION_OWNER_UNCERTAIN",
-  },
-  instance.id,
-);
-assert.equal(attempt.executionId, instance.id);
-assert.equal(attempt.attemptNo, 1);
-assert.equal(attempt.status, "INTERRUPTED");
-assert.equal(attempt.runtimeId, "job-1");
-assert.equal(attempt.logReference, "local:attempt-1");
-assert.equal(attempt.failureCode, "EXECUTION_OWNER_UNCERTAIN");
-assert.equal(attempt.readRows, undefined);
 
 console.log("Task Execution frontend contract checks passed");

@@ -13,7 +13,6 @@ class DispatchTicketTest {
         DispatchTicket ticket = ticket();
         assertEquals("workspace-one", ticket.workspaceId());
         assertEquals("instance-one", ticket.instanceId());
-        assertEquals("attempt-one", ticket.attemptId());
         assertEquals("definition-one", ticket.definitionId());
         assertEquals(2, ticket.definitionVersion());
         assertEquals("DATA_SYNC", ticket.taskType());
@@ -35,7 +34,6 @@ class DispatchTicketTest {
         return new DispatchTicket(
                 "workspace-one",
                 "instance-one",
-                "attempt-one",
                 "definition-one",
                 2,
                 "DATA_SYNC",

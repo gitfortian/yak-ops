@@ -1,24 +1,18 @@
-import { Badge, SectionCard, Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
+import { Badge, SectionCard, type BadgeProps } from "@yak-ops/yak-ui";
 import type { ReactNode } from "react";
 
 import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
-import type {
-  DataSyncAttemptRecord,
-  DataSyncInstanceRecord,
-  DataSyncInstanceStatus,
-} from "@/service/data-sync";
-import type { TaskAttemptStatus } from "@/service/task-execution";
+import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
 export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord): boolean =>
   record ? isTaskInstanceActive(record.status) : false;
 
 export const dataSyncInstanceStatusMeta = (
-  status: DataSyncInstanceStatus | TaskAttemptStatus,
+  status: DataSyncInstanceStatus,
   realtime: boolean,
 ): { label: string; tone: BadgeProps["tone"] } => {
   switch (status) {
     case "SUBMITTED":
-    case "PENDING":
       return { label: "等待", tone: "neutral" };
     case "LAUNCHING":
       return { label: "启动中", tone: "info" };
@@ -34,8 +28,6 @@ export const dataSyncInstanceStatusMeta = (
       return { label: "失败", tone: "danger" };
     case "CANCELED":
       return { label: realtime ? "已停止" : "已取消", tone: "neutral" };
-    case "INTERRUPTED":
-      return { label: "已中断", tone: "warning" };
   }
 };
 
@@ -113,54 +105,12 @@ export function DataSyncExecutionConfigContent({ record }: ConfigProps) {
 
 interface DetailProps {
   record: DataSyncInstanceRecord;
-  attempts: DataSyncAttemptRecord[];
   realtime: boolean;
   showRealtimeStopCaution?: boolean;
   sectionCard?: boolean;
 }
 
-export function DataSyncExecutionDetailContent({ record, attempts, realtime }: DetailProps) {
-  const columns: TableColumns<DataSyncAttemptRecord> = [
-    {
-      key: "attemptNo",
-      title: "Attempt",
-      width: 100,
-      render: (_value, attempt) => `#${attempt.attemptNo}`,
-    },
-    {
-      key: "status",
-      title: "状态",
-      width: 105,
-      render: (_value, attempt) => {
-        const meta = dataSyncInstanceStatusMeta(attempt.status, realtime);
-        return <Badge tone={meta.tone}>{meta.label}</Badge>;
-      },
-    },
-    {
-      key: "runtimeId",
-      title: "Job ID",
-      minWidth: 185,
-      render: (_value, attempt) => attempt.runtimeId || "-",
-    },
-    {
-      key: "logReference",
-      title: "日志引用",
-      minWidth: 170,
-      render: (_value, attempt) => attempt.logReference || "-",
-    },
-    {
-      key: "endTime",
-      title: "完成时间",
-      width: 180,
-      render: (_value, attempt) => attempt.finishTime || "-",
-    },
-    {
-      key: "failureCode",
-      title: "失败原因",
-      minWidth: 180,
-      render: (_value, attempt) => attempt.failureCode || "-",
-    },
-  ];
+export function DataSyncExecutionDetailContent({ record, realtime }: DetailProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
 
   return (
@@ -175,6 +125,7 @@ export function DataSyncExecutionDetailContent({ record, attempts, realtime }: D
           <Value label="开始时间">{record.startTime || record.createTime || "-"}</Value>
           <Value label="完成时间">{record.finishTime || "-"}</Value>
           <Value label="耗时">{dataSyncDurationText(record)}</Value>
+          {record.runtimeId ? <Value label="Job ID">{record.runtimeId}</Value> : null}
         </div>
         {record.errorMessage ? (
           <div className="mt-4 text-sm text-[#b42318]">{record.errorMessage}</div>
@@ -186,19 +137,6 @@ export function DataSyncExecutionDetailContent({ record, attempts, realtime }: D
           <div className="mt-4 text-xs text-[#667085]">停止不会自动恢复；重新运行会创建新实例</div>
         ) : null}
       </SectionCard>
-      {attempts.length > 0 ? (
-        <SectionCard title="执行尝试">
-          <Table<DataSyncAttemptRecord>
-            columns={columns}
-            dataSource={attempts}
-            rowKey="id"
-            bordered
-            size="small"
-            pagination={false}
-            scroll={{ x: 980 }}
-          />
-        </SectionCard>
-      ) : null}
     </div>
   );
 }

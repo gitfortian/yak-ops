@@ -14,10 +14,8 @@ import {
   cancelDataSyncInstance,
   getDataSyncInstance,
   getDataSyncTask,
-  listDataSyncAttempts,
   listDataSyncInstances,
   runDataSyncTask,
-  type DataSyncAttemptRecord,
   type DataSyncInstanceRecord,
   type DataSyncTaskRecord,
   type DataSyncType,
@@ -50,7 +48,6 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   const [task, setTask] = useState<DataSyncTaskRecord>();
   const [instances, setInstances] = useState<DataSyncInstanceRecord[]>([]);
   const [selected, setSelected] = useState<DataSyncInstanceRecord>();
-  const [attempts, setAttempts] = useState<DataSyncAttemptRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNo, setPageNo] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -84,19 +81,15 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   useEffect(() => {
     if (!executionId) {
       setSelected(undefined);
-      setAttempts([]);
       return;
     }
-    void Promise.all([getDataSyncInstance(executionId), listDataSyncAttempts(executionId)]).then(
-      ([instance, records]) => {
-        if (instance.taskId !== taskId || instance.syncType !== syncType) {
-          setSearchParams({}, { replace: true });
-          return;
-        }
-        setSelected(instance);
-        setAttempts(records);
-      },
-    );
+    void getDataSyncInstance(executionId).then((instance) => {
+      if (instance.taskId !== taskId || instance.syncType !== syncType) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      setSelected(instance);
+    });
   }, [executionId, setSearchParams, syncType, taskId]);
 
   useEffect(() => {
@@ -104,13 +97,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     const timer = window.setInterval(() => {
       void loadInstances();
       if (executionId) {
-        void Promise.all([
-          getDataSyncInstance(executionId),
-          listDataSyncAttempts(executionId),
-        ]).then(([instance, records]) => {
-          setSelected(instance);
-          setAttempts(records);
-        });
+        void getDataSyncInstance(executionId).then(setSelected);
       }
     }, POLL_MILLIS);
     return () => window.clearInterval(timer);
@@ -260,11 +247,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 </Button>
               </div>
             ) : null}
-            <DataSyncExecutionDetailContent
-              record={selected}
-              attempts={attempts}
-              realtime={realtime}
-            />
+            <DataSyncExecutionDetailContent record={selected} realtime={realtime} />
             <DataSyncExecutionConfigContent record={selected} realtime={realtime} />
           </>
         ) : null}

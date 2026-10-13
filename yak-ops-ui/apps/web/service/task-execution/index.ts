@@ -1,7 +1,6 @@
 import HttpUtils from "@/service/http/HttpUtils";
 
 import type {
-  TaskAttemptRecord,
   TaskInstanceDefinitionRecord,
   TaskInstancePageParams,
   TaskInstancePageResult,
@@ -36,9 +35,6 @@ export const getTaskInstance = (id: string): Promise<TaskInstanceRecord> =>
 
 export const getTaskInstanceDefinition = (id: string): Promise<TaskInstanceDefinitionRecord> =>
   HttpUtils.getData<TaskInstanceDefinitionRecord>(`${TASK_INSTANCES_API}/${id}/definition`);
-
-export const listTaskAttempts = (id: string): Promise<TaskAttemptRecord[]> =>
-  HttpUtils.getData<TaskAttemptRecord[]>(`${TASK_INSTANCES_API}/${id}/attempts`);
 
 export const cancelTaskInstance = (id: string): Promise<TaskInstanceStatus> =>
   HttpUtils.postData<TaskInstanceStatus>(`${TASK_INSTANCES_API}/${id}/cancel`);

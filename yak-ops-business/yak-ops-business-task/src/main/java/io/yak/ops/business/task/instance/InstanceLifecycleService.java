@@ -9,7 +9,7 @@ import java.util.List;
 public interface InstanceLifecycleService {
 
     /**
-     * Acquires one committed PENDING Attempt under the locked Instance.
+     * Claims one committed SUBMITTED Instance before physical execution.
      *
      * @param workspaceId authorized Workspace
      * @param instanceId logical run
@@ -54,7 +54,7 @@ public interface InstanceLifecycleService {
     /**
      * Returns committed but unclaimed submissions that can be safely dispatched after startup.
      *
-     * @return Workspace-scoped identities of runnable PENDING Instances
+     * @return Workspace-scoped identities of runnable SUBMITTED Instances
      */
     List<PendingRun> pendingRuns();
 

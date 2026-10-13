@@ -83,15 +83,91 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
-    public boolean markRunning(String workspaceId, String instanceId) {
+    public List<InstanceEntity> pending() {
+        return mapper.selectList(Wrappers.<InstanceEntity>lambdaQuery()
+                .eq(InstanceEntity::getStatus, TaskInstanceStatus.SUBMITTED)
+                .orderByAsc(InstanceEntity::getCreateTime));
+    }
+
+    @Override
+    public List<InstanceEntity> activeByOtherOwner(String ownerIncarnation) {
+        return mapper.selectList(Wrappers.<InstanceEntity>lambdaQuery()
+                .in(
+                        InstanceEntity::getStatus,
+                        TaskInstanceStatus.LAUNCHING,
+                        TaskInstanceStatus.RUNNING,
+                        TaskInstanceStatus.CANCELLING)
+                .ne(InstanceEntity::getOwnerIncarnation, ownerIncarnation));
+    }
+
+    @Override
+    public boolean claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken) {
+        if (ownerIncarnation == null
+                || ownerIncarnation.isBlank()
+                || dispatchToken == null
+                || dispatchToken.isBlank()) {
+            throw new IllegalArgumentException("Dispatcher identity is required");
+        }
         return mapper.update(
                         null,
                         Wrappers.<InstanceEntity>lambdaUpdate()
                                 .eq(InstanceEntity::getWorkspaceId, workspaceId)
                                 .eq(InstanceEntity::getId, instanceId)
                                 .eq(InstanceEntity::getStatus, TaskInstanceStatus.SUBMITTED)
-                                .set(InstanceEntity::getStatus, TaskInstanceStatus.RUNNING)
+                                .set(InstanceEntity::getStatus, TaskInstanceStatus.LAUNCHING)
+                                .set(InstanceEntity::getOwnerIncarnation, ownerIncarnation)
+                                .set(InstanceEntity::getDispatchToken, dispatchToken)
+                                .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
+                                .setSql("state_version = state_version + 1"))
+                == 1;
+    }
+
+    @Override
+    public boolean markRunning(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId) {
+        int updated = mapper.update(
+                null,
+                Wrappers.<InstanceEntity>lambdaUpdate()
+                        .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                        .eq(InstanceEntity::getId, instanceId)
+                        .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                        .eq(InstanceEntity::getStatus, TaskInstanceStatus.LAUNCHING)
+                        .set(InstanceEntity::getStatus, TaskInstanceStatus.RUNNING)
+                        .set(InstanceEntity::getRuntimeEngine, engine)
+                        .set(InstanceEntity::getRuntimeId, runtimeId)
+                        .set(InstanceEntity::getStartTime, LocalDateTime.now())
+                        .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
+                        .setSql("state_version = state_version + 1"));
+        if (updated == 1) {
+            return true;
+        }
+        // Cancellation may win before the physical JobClient becomes observable.
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                                .eq(InstanceEntity::getStatus, TaskInstanceStatus.CANCELLING)
+                                .isNull(InstanceEntity::getRuntimeId)
+                                .set(InstanceEntity::getRuntimeEngine, engine)
+                                .set(InstanceEntity::getRuntimeId, runtimeId)
                                 .set(InstanceEntity::getStartTime, LocalDateTime.now())
+                                .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
+                                .setSql("state_version = state_version + 1"))
+                == 1;
+    }
+
+    @Override
+    public boolean cancelSubmitted(String workspaceId, String instanceId) {
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getStatus, TaskInstanceStatus.SUBMITTED)
+                                .set(InstanceEntity::getStatus, TaskInstanceStatus.CANCELED)
+                                .set(InstanceEntity::getEndTime, LocalDateTime.now())
                                 .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
                                 .setSql("state_version = state_version + 1"))
                 == 1;
@@ -104,7 +180,7 @@ public class InstanceRepositoryImpl implements InstanceRepository {
                         Wrappers.<InstanceEntity>lambdaUpdate()
                                 .eq(InstanceEntity::getWorkspaceId, workspaceId)
                                 .eq(InstanceEntity::getId, instanceId)
-                                .in(InstanceEntity::getStatus, TaskInstanceStatus.SUBMITTED, TaskInstanceStatus.RUNNING)
+                                .in(InstanceEntity::getStatus, TaskInstanceStatus.LAUNCHING, TaskInstanceStatus.RUNNING)
                                 .set(InstanceEntity::getStatus, TaskInstanceStatus.CANCELLING)
                                 .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
                                 .setSql("state_version = state_version + 1"))
@@ -112,7 +188,8 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
-    public boolean markTerminal(String workspaceId, String instanceId, TaskInstanceStatus status, String reason) {
+    public boolean markTerminal(
+            String workspaceId, String instanceId, String dispatchToken, TaskInstanceStatus status, String reason) {
         if (!status.isTerminal()) {
             throw new IllegalArgumentException("Terminal Task Instance status is required");
         }
@@ -121,9 +198,10 @@ public class InstanceRepositoryImpl implements InstanceRepository {
                         Wrappers.<InstanceEntity>lambdaUpdate()
                                 .eq(InstanceEntity::getWorkspaceId, workspaceId)
                                 .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
                                 .in(
                                         InstanceEntity::getStatus,
-                                        TaskInstanceStatus.SUBMITTED,
+                                        TaskInstanceStatus.LAUNCHING,
                                         TaskInstanceStatus.RUNNING,
                                         TaskInstanceStatus.CANCELLING)
                                 .set(InstanceEntity::getStatus, status)
@@ -135,15 +213,16 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
-    public boolean markReconciling(String workspaceId, String instanceId) {
+    public boolean markReconciling(String workspaceId, String instanceId, String dispatchToken) {
         return mapper.update(
                         null,
                         Wrappers.<InstanceEntity>lambdaUpdate()
                                 .eq(InstanceEntity::getWorkspaceId, workspaceId)
                                 .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
                                 .in(
                                         InstanceEntity::getStatus,
-                                        TaskInstanceStatus.SUBMITTED,
+                                        TaskInstanceStatus.LAUNCHING,
                                         TaskInstanceStatus.RUNNING,
                                         TaskInstanceStatus.CANCELLING)
                                 .set(InstanceEntity::getStatus, TaskInstanceStatus.RECONCILING)

@@ -67,7 +67,7 @@ public final class PipelineBuilder {
      * Compiles one physical job with stable operator UIDs and validated resource revisions.
      *
      * @param plan authorized logical Job plan
-     * @param identity Task Instance and Attempt identity
+     * @param identity trusted Task Instance identity
      * @return compiled topology and execution configuration
      */
     public CompiledPipeline build(JobPlan plan, TaskExecutionIdentity identity) {

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum TaskInstanceStatus {
     SUBMITTED("SUBMITTED"),
+    LAUNCHING("LAUNCHING"),
     RUNNING("RUNNING"),
     CANCELLING("CANCELLING"),
     RECONCILING("RECONCILING"),

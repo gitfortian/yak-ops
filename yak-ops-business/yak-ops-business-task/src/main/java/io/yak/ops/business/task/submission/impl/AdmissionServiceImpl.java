@@ -5,14 +5,11 @@ import io.yak.ops.business.task.submission.AdmissionService;
 import io.yak.ops.business.task.submission.SubmissionResult;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.task.DefinitionStatus;
-import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.exception.BusinessException;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.ExecutionClaimEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
@@ -21,12 +18,11 @@ import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import jakarta.annotation.Resource;
-import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Atomically pins a published Definition, persists one Attempt, and acquires all
+ * Atomically pins a published Definition, persists its Instance, and acquires all
  * declared resources. Physical execution must occur after this transaction commits.
  */
 @Service
@@ -39,9 +35,6 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Resource
     private InstanceRepository instances;
-
-    @Resource
-    private AttemptRepository attempts;
 
     @Resource
     private ExecutionClaimRepository claims;
@@ -57,16 +50,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             if (!existing.getRequestFingerprint().equals(request.requestFingerprint())) {
                 throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
             }
-            List<AttemptEntity> previous = attempts.findByInstance(workspaceId, existing.getId());
-            if (previous.isEmpty()) {
-                throw new IllegalStateException("Task Instance has no persisted Attempt");
-            }
-            return new SubmissionResult(
-                    existing.getId(),
-                    previous.getFirst().getId(),
-                    existing.getDefinitionVersion(),
-                    existing.getStatus(),
-                    true);
+            return new SubmissionResult(existing.getId(), existing.getDefinitionVersion(), existing.getStatus(), true);
         }
 
         DefinitionEntity definition = definitions
@@ -100,15 +84,6 @@ public class AdmissionServiceImpl implements AdmissionService {
         instance.initCreate(request.operatorId());
         instances.add(instance);
 
-        AttemptEntity attempt = new AttemptEntity();
-        attempt.setId(context.attemptId());
-        attempt.setWorkspaceId(workspaceId);
-        attempt.setInstanceId(context.instanceId());
-        attempt.setAttemptNumber(1);
-        attempt.setStatus(TaskAttemptStatus.PENDING);
-        attempt.initCreate(request.operatorId());
-        attempts.add(attempt);
-
         for (ExecutionResource resource : currentPlan.exclusiveResources()) {
             ExecutionClaimEntity claim = new ExecutionClaimEntity();
             claim.setWorkspaceId(workspaceId);
@@ -119,10 +94,6 @@ public class AdmissionServiceImpl implements AdmissionService {
             claims.add(claim);
         }
         return new SubmissionResult(
-                context.instanceId(),
-                context.attemptId(),
-                context.definitionVersion(),
-                TaskInstanceStatus.SUBMITTED,
-                false);
+                context.instanceId(), context.definitionVersion(), TaskInstanceStatus.SUBMITTED, false);
     }
 }

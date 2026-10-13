@@ -21,7 +21,7 @@ class AdmissionRequestTest {
     @Test
     void preservesAdmittedInputsAndExecutablePluginIdentity() {
         TaskExecutionIdentity identity =
-                new TaskExecutionIdentity("workspace", "definition", 2, "instance", "attempt");
+                new TaskExecutionIdentity("workspace", "definition", 2, "instance");
         ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
         ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
         TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(), "resource-revision");
@@ -49,7 +49,7 @@ class AdmissionRequestTest {
         ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
         ReadonlyConfig parameters = mock(ReadonlyConfig.class);
         AdmissionRequest request = new AdmissionRequest(
-                new TaskExecutionIdentity("workspace", "definition", 2, "instance", "attempt"),
+                new TaskExecutionIdentity("workspace", "definition", 2, "instance"),
                 TaskTriggerType.WORKFLOW,
                 "private-request-key",
                 "private-fingerprint",
