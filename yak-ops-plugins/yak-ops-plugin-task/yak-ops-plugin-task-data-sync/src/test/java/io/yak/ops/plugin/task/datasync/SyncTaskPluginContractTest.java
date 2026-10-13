@@ -13,6 +13,8 @@ import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskParameters;
 import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
@@ -173,8 +175,10 @@ class SyncTaskPluginContractTest {
             }
         };
         PipelineExecutor executor = new EmbeddedPipelineExecutor();
-        SyncJobPlanner planner = new SyncJobPlanner(unsupported);
-        return new SyncTaskPlugin(planner, new SyncTaskExecutor(unsupported, planner, executor, Path.of("test-state")));
+        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        SyncJobPlanner planner = new SyncJobPlanner(unsupported, factories);
+        SyncPipelineCompiler compiler = new SyncPipelineCompiler(unsupported, factories, Path.of("test-state"));
+        return new SyncTaskPlugin(planner, new SyncTaskExecutor(planner, compiler, executor), factories);
     }
 
     private TaskParameters parseAndValidate(String json, TaskValidationContext context) {

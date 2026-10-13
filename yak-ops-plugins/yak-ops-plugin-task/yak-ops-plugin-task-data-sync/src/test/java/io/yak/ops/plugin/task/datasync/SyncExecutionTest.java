@@ -11,8 +11,13 @@ import io.yak.ops.core.api.common.JobExecutionResult;
 import io.yak.ops.core.api.common.JobID;
 import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.api.dag.Pipeline;
+import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.Configuration;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.connector.jdbc.sink.JdbcSink;
+import io.yak.ops.connector.jdbc.source.JdbcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlHybridCdcSource;
+import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.core.types.Column;
@@ -25,6 +30,8 @@ import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.plan.SyncJobPlan;
 import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.connector.SyncConnectorFactoryRegistry;
+import io.yak.ops.plugin.task.datasync.pipeline.SyncPipelineCompiler;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeConnection;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeResources;
 import io.yak.ops.plugin.task.datasync.resource.SyncRuntimeTable;
@@ -37,6 +44,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /** Verifies product DATA_SYNC planning and execution without opening physical JDBC connections. */
@@ -73,7 +81,7 @@ class SyncExecutionTest {
     @Test
     void preparesNonSecretLogicalJobPlanWithoutResolvingConnections() {
         Resources resources = new Resources();
-        SyncJobPlanner planner = new SyncJobPlanner(resources);
+        SyncJobPlanner planner = new SyncJobPlanner(resources, new SyncConnectorFactoryRegistry());
         SyncParameters parameters = parameters(true);
 
         SyncJobPlan prepared = planner.prepare(parameters, CONTEXT);
@@ -142,10 +150,83 @@ class SyncExecutionTest {
         assertEquals(0, resources.openedConnections.get());
     }
 
+
+    @Test
+    void compilerSelectsJdbcAndCdcWithoutOpeningRuntimeConnections() {
+        Resources resources = new Resources();
+        AtomicInteger submissions = new AtomicInteger();
+        AtomicReference<StreamGraph> lastGraph = new AtomicReference<>();
+        AtomicReference<Configuration> lastConfiguration = new AtomicReference<>();
+        PipelineExecutor capture = (graph, configuration) -> {
+            lastGraph.set((StreamGraph) graph);
+            lastConfiguration.set(new Configuration(configuration));
+            return finishedExecutor(submissions).execute(graph, configuration);
+        };
+        SyncTaskPlugin plugin = plugin(resources, capture);
+
+        SyncParameters jdbc = parameters(false);
+        plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT).toCompletableFuture().join();
+
+        StreamGraph bounded = lastGraph.get();
+        assertTrue(bounded.isBounded());
+        assertInstanceOf(JdbcSource.class, bounded.getSourceNodes().getFirst().getSource().orElseThrow());
+        assertInstanceOf(JdbcSink.class, bounded.getSinkNodes().getFirst().getSink().orElseThrow());
+        assertEquals("data-sync-source-definition", bounded.getSourceNodes().getFirst().getUid());
+        assertEquals("data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
+        assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+
+        SyncParameters cdc = parameters(true);
+        plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT).toCompletableFuture().join();
+
+        StreamGraph continuous = lastGraph.get();
+        assertTrue(!continuous.isBounded());
+        assertInstanceOf(MySqlHybridCdcSource.class, continuous.getSourceNodes().getFirst().getSource().orElseThrow());
+        assertEquals(java.time.Duration.ofSeconds(10), lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertEquals(2, submissions.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void refusesChangedConnectionRevisionBeforePhysicalSubmission() {
+        Resources resources = new Resources();
+        AtomicInteger submissions = new AtomicInteger();
+        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        SyncParameters parameters = parameters(false);
+        TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
+        resources.sourceConnectionRevision = 2;
+
+        CompletionException failure = assertThrows(
+                CompletionException.class,
+                () -> plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join());
+
+        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        assertEquals(0, submissions.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void refusesTunneledCdcBeforePhysicalSubmission() {
+        Resources resources = new Resources();
+        resources.sourceTunneled = true;
+        AtomicInteger submissions = new AtomicInteger();
+        SyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        SyncParameters parameters = parameters(true);
+        TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
+
+        CompletionException failure = assertThrows(
+                CompletionException.class,
+                () -> plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join());
+
+        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        assertEquals(0, submissions.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
     private static SyncTaskPlugin plugin(SyncRuntimeResources resources, PipelineExecutor executor) {
-        SyncJobPlanner planner = new SyncJobPlanner(resources);
-        return new SyncTaskPlugin(
-                planner, new SyncTaskExecutor(resources, planner, executor, Path.of("target/data-sync")));
+        SyncConnectorFactoryRegistry factories = new SyncConnectorFactoryRegistry();
+        SyncJobPlanner planner = new SyncJobPlanner(resources, factories);
+        SyncPipelineCompiler compiler = new SyncPipelineCompiler(resources, factories, Path.of("target/data-sync"));
+        return new SyncTaskPlugin(planner, new SyncTaskExecutor(planner, compiler, executor), factories);
     }
 
     private static SyncParameters parameters(boolean cdc) {
@@ -193,6 +274,8 @@ class SyncExecutionTest {
         private final AtomicInteger tables = new AtomicInteger();
         private final AtomicInteger openedConnections = new AtomicInteger();
         private long targetRevision = 1;
+        private long sourceConnectionRevision = 1;
+        private boolean sourceTunneled;
         private TableSchema targetSchema = SCHEMA;
 
         @Override
@@ -217,7 +300,7 @@ class SyncExecutionTest {
             if ("source".equals(datasource)) {
                 return new SyncRuntimeConnection(
                         provider, "jdbc:mysql://localhost:3306/app", "MYSQL",
-                        "user", "secret", "localhost", 3306, 1, false);
+                        "user", "secret", "localhost", 3306, sourceConnectionRevision, sourceTunneled);
             }
             return new SyncRuntimeConnection(
                     provider, "jdbc:postgresql://localhost:5432/app", "POSTGRE_SQL",
