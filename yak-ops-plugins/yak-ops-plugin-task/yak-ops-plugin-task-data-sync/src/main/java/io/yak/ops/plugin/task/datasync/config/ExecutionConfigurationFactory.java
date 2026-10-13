@@ -3,7 +3,7 @@ package io.yak.ops.plugin.task.datasync.config;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;

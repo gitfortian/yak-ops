@@ -1,6 +1,6 @@
 package io.yak.ops.plugin.task.datasync.pipeline;
 
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import java.util.Objects;
 

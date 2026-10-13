@@ -1,8 +1,8 @@
 package io.yak.ops.plugin.task.datasync.connector.cdc;
 
-import io.yak.ops.core.configuration.ConfigOption;
-import io.yak.ops.core.configuration.ConfigOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+import io.yak.ops.configuration.Configuration;
 
 /**
  * System-owned MySQL CDC snapshot and queue settings.
@@ -15,12 +15,12 @@ import io.yak.ops.core.configuration.Configuration;
  */
 public record MySqlCdcOptions(int snapshotChunkSize, int queueCapacity) {
 
-    public static final ConfigOption<Integer> SNAPSHOT_CHUNK_SIZE = ConfigOptions.key(
+    public static final Option<Integer> SNAPSHOT_CHUNK_SIZE = Options.key(
                     "data-sync.mysql-cdc.snapshot-chunk-size")
             .intType()
             .defaultValue(1024);
-    public static final ConfigOption<Integer> QUEUE_CAPACITY =
-            ConfigOptions.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
+    public static final Option<Integer> QUEUE_CAPACITY =
+            Options.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 
     public MySqlCdcOptions {
         if (snapshotChunkSize < 1 || snapshotChunkSize > 100_000) {
