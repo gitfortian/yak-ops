@@ -55,11 +55,12 @@ public final class JdbcSyncSinkFactory implements SyncSinkFactory {
     @Override
     public Sink<TableRecord> create(SinkParameters parameters, SyncSinkContext context) {
         JdbcSinkParameters sink = (JdbcSinkParameters) parameters;
-        JdbcWriteMode writeMode = switch (sink.writeMode()) {
-            case APPEND -> JdbcWriteMode.APPEND;
-            case UPSERT -> JdbcWriteMode.UPSERT;
-            case OVERWRITE -> throw new TaskPluginException("DATA_SYNC does not support OVERWRITE");
-        };
+        JdbcWriteMode writeMode =
+                switch (sink.writeMode()) {
+                    case APPEND -> JdbcWriteMode.APPEND;
+                    case UPSERT -> JdbcWriteMode.UPSERT;
+                    case OVERWRITE -> throw new TaskPluginException("DATA_SYNC does not support OVERWRITE");
+                };
         JdbcTableWritePlan route = new JdbcTableWritePlan(
                 context.source().table(),
                 context.target().table(),
