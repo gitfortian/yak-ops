@@ -1,15 +1,23 @@
+import { Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
 import {
-  Badge,
-  Button,
-  SectionCard,
-  Table,
-  type BadgeProps,
-  type TableColumns,
-} from "@yak-ops/yak-ui";
+  CheckCircle2,
+  ChevronRight,
+  CircleHelp,
+  CirclePause,
+  CirclePlay,
+  CircleStop,
+  Clock3,
+  LoaderCircle,
+  Target,
+  XCircle,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
-import { canCancelTaskInstance, isTaskInstanceActive } from "@/service/data-sync/execution";
+import { isTaskInstanceActive } from "@/service/data-sync/execution";
 import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
+
+import { getExecutionProgress } from "./execution-progress";
+import "./execution-detail.css";
 
 export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord): boolean =>
   record ? isTaskInstanceActive(record.status) : false;
@@ -38,6 +46,39 @@ export const dataSyncInstanceStatusMeta = (
   }
 };
 
+const STATUS_ICONS = {
+  SUBMITTED: Clock3,
+  LAUNCHING: LoaderCircle,
+  RUNNING: CirclePlay,
+  CANCELLING: CirclePause,
+  RECONCILING: CircleHelp,
+  FINISHED: CheckCircle2,
+  FAILED: XCircle,
+  CANCELED: CircleStop,
+};
+
+export function ExecutionStatusIcon({
+  status,
+  realtime,
+}: {
+  status: DataSyncInstanceStatus;
+  realtime: boolean;
+}) {
+  const Icon = STATUS_ICONS[status];
+  const { label } = dataSyncInstanceStatusMeta(status, realtime);
+  return (
+    <span
+      className="sync-execution-status"
+      data-status={status}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <Icon size={14} aria-hidden="true" />
+    </span>
+  );
+}
+
 export const dataSyncTriggerText = (triggerType?: string) => {
   if (triggerType === "MANUAL") return "手动";
   if (triggerType === "SCHEDULE") return "调度";
@@ -47,6 +88,7 @@ export const dataSyncTriggerText = (triggerType?: string) => {
 
 export const dataSyncDurationText = (record: DataSyncInstanceRecord) => {
   if (!record.startTime) return "-";
+  if (!record.finishTime && !isActiveDataSyncInstance(record)) return "-";
   const start = Date.parse(record.startTime);
   const end = record.finishTime ? Date.parse(record.finishTime) : Date.now();
   if (Number.isNaN(start) || Number.isNaN(end)) return "-";
@@ -56,66 +98,68 @@ export const dataSyncDurationText = (record: DataSyncInstanceRecord) => {
   return minutes + "m " + (seconds % 60) + "s";
 };
 
-function Value({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-xs text-[#98a2b3]">{label}</div>
-      <div className="mt-1 break-words text-sm text-[#344054]">{children}</div>
-    </div>
-  );
-}
-
 const tablePath = (database?: string, schema?: string, table?: string) =>
   [database, schema, table].filter(Boolean).join(".") || "-";
-
-export const dataSyncWriteModeText = (value?: string) => {
-  if (value === "APPEND") return "追加写入";
-  if (value === "OVERWRITE") return "覆盖写入";
-  if (value === "UPSERT") return "更新插入";
-  return value || "-";
-};
 
 const rowCountText = (value?: number) =>
   value === undefined ? "-" : value.toLocaleString("zh-CN");
 
-interface ConfigProps {
-  record: DataSyncInstanceRecord;
-  realtime: boolean;
-  sectionCard?: boolean;
-}
+const FLOW_MARKERS = Array.from({ length: 24 }, (_value, index) => index);
 
-export function DataSyncExecutionConfigContent({ record, sectionCard = true }: ConfigProps) {
-  const snapshot = record.definitionSnapshot;
-  if (!snapshot) return null;
+function ExecutionProgressCard({ record, realtime }: DetailProps) {
+  const progress = getExecutionProgress(record.status);
+  const label = realtime ? "实时同步" : "离线同步";
+  const status = dataSyncInstanceStatusMeta(record.status, realtime);
+  let progressText = status.label;
+  if (progress.mode === "failure") progressText = "未取得进度数据，按 0% 展示";
+  if (progress.mode === "success") progressText = "100%";
 
-  const content = (
-    <div className="grid grid-cols-2 gap-5 max-md:grid-cols-1">
-      <div className="space-y-4">
-        <Value label="来源数据源">{snapshot.source.dataSourceName || "-"}</Value>
-        <Value label="来源表">
-          {tablePath(snapshot.source.database, snapshot.source.schema, snapshot.source.table)}
-        </Value>
-        <Value label="实例 ID">{record.id}</Value>
+  return (
+    <div className="border border-[#eef0f3] bg-white px-3 py-3 text-center">
+      <div
+        className="sync-execution-progress"
+        data-mode={progress.mode}
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress.value ?? undefined}
+        aria-valuetext={progressText}
+        title={progressText}
+      >
+        {progress.mode === "running" ? (
+          <>
+            <Target size={18} className="sync-execution-flow-end" aria-hidden="true" />
+            <span className="sync-execution-flow-track" aria-hidden="true">
+              {FLOW_MARKERS.map((marker) => (
+                <ChevronRight
+                  key={marker}
+                  size={18}
+                  className="sync-execution-flow-arrow"
+                  style={{ animationDelay: marker * 0.08 + "s" }}
+                />
+              ))}
+            </span>
+            <Target size={18} className="sync-execution-flow-end" aria-hidden="true" />
+          </>
+        ) : (
+          <span aria-hidden="true">
+            {progress.value === null ? "—" : progress.value + "%"}
+          </span>
+        )}
       </div>
-      <div className="space-y-4">
-        <Value label="去向数据源">{snapshot.target.dataSourceName || "-"}</Value>
-        <Value label="去向表">
-          {tablePath(snapshot.target.database, snapshot.target.schema, snapshot.target.table)}
-        </Value>
-        <Value label="写入方式">{dataSyncWriteModeText(snapshot.writeMode)}</Value>
-        {record.runtimeId ? <Value label="Job ID">{record.runtimeId}</Value> : null}
+      <h3 className="mt-2 text-sm font-semibold text-[#344054]">{label}</h3>
+      <div className="mt-1 text-xs text-[#98a2b3]">
+        v{record.taskVersion} · {dataSyncTriggerText(record.triggerType)}
       </div>
     </div>
   );
-
-  if (!sectionCard) return content;
-  return <SectionCard title="配置快照">{content}</SectionCard>;
 }
 
 interface DetailProps {
   record: DataSyncInstanceRecord;
   realtime: boolean;
-  onViewLog?: () => void;
+  controls?: ReactNode;
 }
 
 interface TableExecutionRow {
@@ -125,10 +169,12 @@ interface TableExecutionRow {
   status: DataSyncInstanceStatus;
   readRows?: number;
   writeRows?: number;
+  startTime?: string;
+  finishTime?: string;
   duration: string;
 }
 
-export function DataSyncExecutionDetailContent({ record, realtime, onViewLog }: DetailProps) {
+export function DataSyncExecutionDetailContent({ record, realtime, controls }: DetailProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
   const snapshot = record.definitionSnapshot;
   const rows: TableExecutionRow[] = snapshot
@@ -148,6 +194,8 @@ export function DataSyncExecutionDetailContent({ record, realtime, onViewLog }: 
           status: record.status,
           readRows: record.readRows,
           writeRows: record.writeRows,
+          startTime: record.startTime,
+          finishTime: record.finishTime,
           duration: dataSyncDurationText(record),
         },
       ]
@@ -156,23 +204,21 @@ export function DataSyncExecutionDetailContent({ record, realtime, onViewLog }: 
     {
       key: "sourceTable",
       title: "来源表",
-      minWidth: 180,
+      minWidth: 220,
       render: (_value, row) => <span className="break-all">{row.sourceTable}</span>,
     },
     {
       key: "targetTable",
       title: "去向表",
-      minWidth: 180,
+      minWidth: 220,
       render: (_value, row) => <span className="break-all">{row.targetTable}</span>,
     },
     {
       key: "status",
       title: "执行状态",
-      width: 110,
-      render: (_value, row) => {
-        const status = dataSyncInstanceStatusMeta(row.status, realtime);
-        return <Badge tone={status.tone}>{status.label}</Badge>;
-      },
+      width: 90,
+      align: "center",
+      render: (_value, row) => <ExecutionStatusIcon status={row.status} realtime={realtime} />,
     },
     {
       key: "readRows",
@@ -189,6 +235,18 @@ export function DataSyncExecutionDetailContent({ record, realtime, onViewLog }: 
       render: (_value, row) => rowCountText(row.writeRows),
     },
     {
+      key: "startTime",
+      title: "开始时间",
+      width: 170,
+      render: (_value, row) => row.startTime || "-",
+    },
+    {
+      key: "finishTime",
+      title: "完成时间",
+      width: 170,
+      render: (_value, row) => row.finishTime || "-",
+    },
+    {
       key: "duration",
       title: "耗时",
       width: 90,
@@ -198,60 +256,28 @@ export function DataSyncExecutionDetailContent({ record, realtime, onViewLog }: 
 
   return (
     <div className="space-y-4">
-      <SectionCard title="执行状态">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge tone={meta.tone}>{meta.label}</Badge>
-          <span className="text-sm text-[#667085]">
-            v{record.taskVersion} · {dataSyncTriggerText(record.triggerType)}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 text-xs text-[#667085]" role="status">
+          <span>执行状态：</span>
+          <span aria-hidden="true">
+            <ExecutionStatusIcon status={record.status} realtime={realtime} />
           </span>
+          <span>{meta.label}</span>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-5 max-md:grid-cols-1">
-          <Value label="开始时间">{record.startTime || record.createTime || "-"}</Value>
-          <Value label="完成时间">{record.finishTime || "-"}</Value>
-          <Value label="耗时">{dataSyncDurationText(record)}</Value>
-        </div>
-        {record.status === "FAILED" ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className="text-sm text-[#b42318]">
-              {record.errorMessage ? "失败代码：" + record.errorMessage : "执行失败"}
-            </span>
-            {onViewLog ? (
-              <Button size="small" variant="ghost" onClick={onViewLog}>
-                查看运行日志
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {record.status === "RECONCILING" ? (
-          <div className="mt-4 text-sm text-[#b54708]">执行所有权尚未确认，目标资源仍受保护</div>
-        ) : null}
-        {canCancelTaskInstance(record.status) && realtime ? (
-          <div className="mt-4 text-xs text-[#667085]">停止不会自动恢复；重新运行会创建新实例</div>
-        ) : null}
-      </SectionCard>
-
-      {record.readRows !== undefined || record.writeRows !== undefined ? (
-        <SectionCard title="同步指标">
-          <div className="grid grid-cols-2 gap-5 max-md:grid-cols-1">
-            <Value label="读取条数">{rowCountText(record.readRows)}</Value>
-            <Value label="写入条数">{rowCountText(record.writeRows)}</Value>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {snapshot ? (
-        <SectionCard title="表级执行明细">
-          <Table<TableExecutionRow>
-            columns={columns}
-            dataSource={rows}
-            rowKey="id"
-            bordered
-            size="small"
-            scroll={{ x: 820 }}
-            pagination={false}
-          />
-        </SectionCard>
-      ) : null}
+        {controls ? <div className="flex items-center gap-3">{controls}</div> : null}
+      </div>
+      <ExecutionProgressCard record={record} realtime={realtime} />
+      <div className="min-w-0 pt-4">
+        <Table<TableExecutionRow>
+          columns={columns}
+          dataSource={rows}
+          rowKey="id"
+          size="small"
+          scroll={{ x: 1180 }}
+          pagination={false}
+          emptyText="暂无表级执行数据"
+        />
+      </div>
     </div>
   );
 }
