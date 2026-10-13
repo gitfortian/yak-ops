@@ -6,6 +6,7 @@ import {
   FieldLabel,
   Input,
   PageHeader,
+  Switch,
   Textarea,
   toast,
 } from "@yak-ops/yak-ui";
@@ -38,6 +39,7 @@ import {
 interface EditorForm {
   name: string;
   remark: string;
+  debug: boolean;
   writeMode: DataSyncWriteMode;
   sourceDataSourceId: string;
   sourceDatabase: string;
@@ -59,6 +61,7 @@ interface CatalogOptions {
 const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
+  debug: false,
   writeMode: "APPEND",
   sourceDataSourceId: "",
   sourceDatabase: "",
@@ -410,6 +413,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         setForm({
           name: task.name,
           remark: task.remark || "",
+          debug: task.debug ?? false,
           writeMode: task.writeMode === "UPSERT" ? "UPSERT" : "APPEND",
           sourceDataSourceId: task.sourceDataSourceId,
           sourceDatabase: task.sourceDatabase || "",
@@ -430,13 +434,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   }, [basePath, id, navigate, realtime, syncType]);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
-    if (key !== "name" && key !== "remark") setParametersDirty(true);
+    if (key !== "name" && key !== "remark" && key !== "debug") setParametersDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
   };
 
   const payload = (): DataSyncTaskSavePayload => {
     const common = {
       name: form.name.trim(),
+      debug: form.debug,
       sourceDataSourceId: form.sourceDataSourceId,
       sourceDatabase: form.sourceDatabase || undefined,
       sourceSchema: form.sourceSchema || undefined,
@@ -483,12 +488,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     setSaving(true);
     try {
       const request = payload();
+      const metadataRequest = {
+        name: request.name,
+        remark: request.remark,
+        debug: request.debug,
+      };
       const saved =
         editing && id
-          ? await updateDataSyncTask(
-              id,
-              parametersDirty ? request : { name: request.name, remark: request.remark },
-            )
+          ? await updateDataSyncTask(id, parametersDirty ? request : metadataRequest)
           : await createDataSyncTask(request);
 
       if (publishAfterSave) {
@@ -633,6 +640,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   className="min-h-[56px] resize-none"
                   placeholder="可选"
                   onValueChange={(value) => patch("remark", value)}
+                />
+              </Field>
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                <FieldLabel>Debug</FieldLabel>
+                <Switch
+                  size="small"
+                  checked={form.debug}
+                  onCheckedChange={(checked) => patch("debug", checked)}
                 />
               </Field>
             </div>
