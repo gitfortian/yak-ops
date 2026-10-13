@@ -1,5 +1,6 @@
 package io.yak.ops.flow.runtime.checkpoint;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,20 +126,52 @@ public record CheckpointSnapshot(
         return Map.copyOf(copy);
     }
 
-    /** Versioned state bytes copied on construction and on access to prevent mutation. */
-    public record SerializedState(int version, byte[] bytes) {
+    /** Versioned state bytes with immutable ownership and content-based value equality. */
+    public static final class SerializedState {
 
-        public SerializedState {
+        private final int version;
+        private final byte[] bytes;
+
+        /**
+         * Captures serializer version and a detached copy of its encoded state.
+         *
+         * @param version nonnegative state serializer version
+         * @param bytes serialized checkpoint data
+         */
+        public SerializedState(int version, byte[] bytes) {
             if (version < 0) {
                 throw new IllegalArgumentException("State serializer version must not be negative");
             }
-            bytes = Objects.requireNonNull(bytes, "Serialized state bytes must not be null")
+            this.version = version;
+            this.bytes = Objects.requireNonNull(bytes, "Serialized state bytes must not be null")
                     .clone();
         }
 
-        @Override
+        public int version() {
+            return version;
+        }
+
         public byte[] bytes() {
             return bytes.clone();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return this == other
+                    || other instanceof SerializedState state
+                            && version == state.version
+                            && Arrays.equals(bytes, state.bytes);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Integer.hashCode(version) + Arrays.hashCode(bytes);
+        }
+
+        /** Exposes metadata without rendering checkpoint state bytes. */
+        @Override
+        public String toString() {
+            return "SerializedState{version=" + version + ", bytes=redacted}";
         }
     }
 }
