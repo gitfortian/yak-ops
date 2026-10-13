@@ -50,8 +50,8 @@ class JdbcSshConnectionTest {
         keys.setAlgorithm("RSA");
         keys.setKeySize(2048);
         server.setKeyPairProvider(keys);
-        server.setPasswordAuthenticator((username, password, session) ->
-                "test-user".equals(username) && "test-password".equals(password));
+        server.setPasswordAuthenticator(
+                (username, password, session) -> "test-user".equals(username) && "test-password".equals(password));
         server.setForwardingFilter(AcceptAllForwardingFilter.INSTANCE);
         FailingDriver driver = new FailingDriver();
         int previousLoginTimeout = DriverManager.getLoginTimeout();
@@ -70,7 +70,9 @@ class JdbcSshConnectionTest {
                     return null;
                 });
                 Configuration options = new Configuration()
-                        .set(JdbcConnectionOptions.URL, FailingDriver.PREFIX + "127.0.0.1:" + target.getLocalPort() + "/app")
+                        .set(
+                                JdbcConnectionOptions.URL,
+                                FailingDriver.PREFIX + "127.0.0.1:" + target.getLocalPort() + "/app")
                         .set(JdbcConnectionOptions.HOST, "127.0.0.1")
                         .set(JdbcConnectionOptions.PORT, target.getLocalPort())
                         .set(JdbcConnectionOptions.TIMEOUT, 5)

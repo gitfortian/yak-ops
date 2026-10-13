@@ -86,7 +86,7 @@ public final class JdbcConnectionOptions implements java.io.Serializable {
                             .required(HOST, Conditions.notBlank(HOST))
                             .required(PORT, Conditions.greaterOrEqual(PORT, 1).and(Conditions.lessOrEqual(PORT, 65535)))
                             .required(SSH_HOST, Conditions.notBlank(SSH_HOST))
-                            .required(
+                            .optional(
                                     SSH_PORT,
                                     Conditions.greaterOrEqual(SSH_PORT, 1).and(Conditions.lessOrEqual(SSH_PORT, 65535)))
                             .required(SSH_USERNAME, Conditions.notBlank(SSH_USERNAME))

@@ -85,7 +85,8 @@ public class TaskPluginConfiguration {
                 factories,
                 runtimeOptions,
                 configurationFactory,
-                Map.of("MYSQL_CDC", connectorConfiguration.toReadonlyConfig()));
+                Map.of("MYSQL_CDC", connectorConfiguration.toReadonlyConfig()),
+                Map.of());
     }
 
     @Bean

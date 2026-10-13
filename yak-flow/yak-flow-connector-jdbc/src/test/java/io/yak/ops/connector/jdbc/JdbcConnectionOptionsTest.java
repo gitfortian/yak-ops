@@ -27,10 +27,9 @@ class JdbcConnectionOptionsTest {
         JdbcConnectionOptions connection = new JdbcConnectionOptions(config);
         assertEquals(22, connection.configuration().get(JdbcConnectionOptions.SSH_PORT));
         assertFalse(config.contains(JdbcConnectionOptions.SSH_PORT));
-        TableSchema schema = new TableSchema(
-                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
-        TableSourceFactoryContext context = new TableSourceFactoryContext(
-                config, new TableId("app", null, "items"), schema);
+        TableSchema schema = new TableSchema(List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        TableSourceFactoryContext context =
+                new TableSourceFactoryContext(config, new TableId("app", null, "items"), schema);
         assertInstanceOf(JdbcSource.class, new JdbcSourceFactory().createSource(context));
     }
 
@@ -46,7 +45,8 @@ class JdbcConnectionOptionsTest {
     @Test
     void rejectsOutOfRangeSshPorts() {
         for (int port : List.of(-1, 0, 65536)) {
-            ReadonlyConfig options = sshOptions().set(JdbcConnectionOptions.SSH_PORT, port).toReadonlyConfig();
+            ReadonlyConfig options =
+                    sshOptions().set(JdbcConnectionOptions.SSH_PORT, port).toReadonlyConfig();
             assertThrows(IllegalArgumentException.class, () -> new JdbcConnectionOptions(options));
         }
     }
@@ -61,11 +61,16 @@ class JdbcConnectionOptionsTest {
     @Test
     void appliesTheSameDefaultToNestedConfiguration() {
         ReadonlyConfig options = ReadonlyConfig.fromMap(Map.of(
-                "connection", Map.of(
-                        "url", "jdbc:mysql://database.internal:3306/app",
-                        "host", "database.internal",
-                        "port", 3306,
-                        "ssh", Map.of(
+                "connection",
+                Map.of(
+                        "url",
+                        "jdbc:mysql://database.internal:3306/app",
+                        "host",
+                        "database.internal",
+                        "port",
+                        3306,
+                        "ssh",
+                        Map.of(
                                 "enabled", true,
                                 "host", "bastion",
                                 "username", "test-user",
