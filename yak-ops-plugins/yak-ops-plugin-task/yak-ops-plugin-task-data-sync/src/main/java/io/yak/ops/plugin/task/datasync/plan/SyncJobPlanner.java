@@ -1,7 +1,9 @@
-package io.yak.ops.plugin.task.datasync.execution;
+package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.common.enums.datasync.DataSyncWriteMode;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
@@ -20,62 +22,81 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
-/** Resolves Workspace-scoped DATA_SYNC tables and plans the exclusive target claim. */
-public final class SyncExecutionPlanner {
+/** Resolves authorized DATA_SYNC metadata and constructs the logical Job and admission plans. */
+public final class SyncJobPlanner {
 
     private final SyncRuntimeResources resources;
 
-    public SyncExecutionPlanner(SyncRuntimeResources resources) {
+    public SyncJobPlanner(SyncRuntimeResources resources) {
         this.resources = Objects.requireNonNull(resources, "resources");
     }
 
     /**
-     * Declares a stable resource binding without physical execution effects.
+     * Declares the exclusive destination and its non-secret binding fingerprint.
      *
-     * @param parameters pinned DATA_SYNC parameters
-     * @param context trusted Task identity
-     * @return canonical exclusive claim and binding fingerprint
+     * @param parameters pinned DATA_SYNC definition
+     * @param context trusted Task execution identity
+     * @return admission claim validated against the effective schema
      */
     public TaskAdmissionPlan plan(SyncParameters parameters, TaskExecutionIdentity context) {
         return prepare(parameters, context).admissionPlan();
     }
 
     /**
-     * Resolves source and target table metadata once for one planning pass.
+     * Resolves source and target metadata and validates the executable JDBC Sink projection.
      *
-     * @param pipeline pinned DATA_SYNC parameters
-     * @param context trusted Task identity
-     * @return physical table metadata and non-secret resource binding
+     * <p>Planning does not resolve connection credentials, open connections or submit jobs.
+     *
+     * @param parameters pinned DATA_SYNC definition
+     * @param context trusted Task execution identity
+     * @return immutable, non-secret logical DATA_SYNC plan
      */
-    public SyncPipelinePlan prepare(SyncParameters pipeline, TaskExecutionIdentity context) {
-        SyncValidator.checkParameters(pipeline);
-        SourceParameters source = pipeline.source();
-        JdbcSinkParameters sink = (JdbcSinkParameters) pipeline.sink();
+    public SyncJobPlan prepare(SyncParameters parameters, TaskExecutionIdentity context) {
+        SyncValidator.checkParameters(parameters);
+        SourceParameters source = parameters.source();
+        JdbcSinkParameters sink = (JdbcSinkParameters) parameters.sink();
         SyncRuntimeTable from = resources.table(
                 context.workspaceId(), source.datasourceId(), source.database(), source.schema(), source.table());
         SyncRuntimeTable to = resources.table(
                 context.workspaceId(), sink.datasourceId(), sink.database(), sink.schema(), sink.table());
+
         if (source instanceof MySqlCdcSourceParameters && !"MYSQL".equals(from.datasourceType())) {
             throw new TaskPluginException("MySQL CDC requires a MySQL datasource");
         }
-        SyncValidator.checkSchemaCompatibility(
-                from.schema(),
-                to.schema(),
-                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT);
-        String target = encodePart(sink.datasourceId())
-                + encodePart(to.table().catalog())
-                + encodePart(to.table().schema())
-                + encodePart(to.table().table());
-        String binding = context.workspaceId()
-                + "|" + source.datasourceId() + "|" + from.revision() + "|" + encodeTable(from.table())
-                + "|" + sink.datasourceId() + "|" + to.revision() + "|" + encodeTable(to.table());
-        TaskAdmissionPlan plan =
+        boolean requireKeys =
+                source instanceof MySqlCdcSourceParameters || sink.writeMode() == DataSyncWriteMode.UPSERT;
+        SyncSchemaValidator.validate(from.schema(), to.schema(), requireKeys);
+
+        String target = encodePart(sink.datasourceId()) + encodeTable(to.table());
+        String binding = encodePart(context.workspaceId())
+                + encodePart(source.datasourceId())
+                + encodePart(Long.toString(from.revision()))
+                + encodeTable(from.table())
+                + encodeSchema(from.schema())
+                + encodePart(sink.datasourceId())
+                + encodePart(Long.toString(to.revision()))
+                + encodeTable(to.table())
+                + encodeSchema(to.schema());
+        TaskAdmissionPlan admission =
                 new TaskAdmissionPlan(List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
-        return new SyncPipelinePlan(from, to, plan);
+        return new SyncJobPlan(source, sink, from, to, admission);
     }
 
     private static String encodeTable(TableId table) {
         return encodePart(table.catalog()) + encodePart(table.schema()) + encodePart(table.table());
+    }
+
+    private static String encodeSchema(TableSchema schema) {
+        StringBuilder value = new StringBuilder().append(schema.columnCount()).append(':');
+        for (Column column : schema.columns()) {
+            value.append(encodePart(column.name()));
+            value.append(encodePart(column.dataType().asSerializableString()));
+        }
+        value.append(schema.primaryKeys().size()).append(':');
+        for (String key : schema.primaryKeys()) {
+            value.append(encodePart(key));
+        }
+        return value.toString();
     }
 
     private static String encodePart(String value) {

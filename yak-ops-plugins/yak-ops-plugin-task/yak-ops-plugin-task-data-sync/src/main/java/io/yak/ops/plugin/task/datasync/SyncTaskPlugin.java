@@ -8,7 +8,7 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.execution.SyncExecutionPlanner;
+import io.yak.ops.plugin.task.datasync.plan.SyncJobPlanner;
 import io.yak.ops.plugin.task.datasync.execution.SyncTaskExecutor;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
@@ -18,10 +18,10 @@ public final class SyncTaskPlugin implements ExecutableTaskPlugin {
 
     public static final String TYPE = "DATA_SYNC";
 
-    private final SyncExecutionPlanner planner;
+    private final SyncJobPlanner planner;
     private final SyncTaskExecutor executor;
 
-    public SyncTaskPlugin(SyncExecutionPlanner planner, SyncTaskExecutor executor) {
+    public SyncTaskPlugin(SyncJobPlanner planner, SyncTaskExecutor executor) {
         this.planner = Objects.requireNonNull(planner, "planner");
         this.executor = Objects.requireNonNull(executor, "executor");
     }
