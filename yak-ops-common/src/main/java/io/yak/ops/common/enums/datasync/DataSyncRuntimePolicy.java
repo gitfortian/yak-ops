@@ -1,16 +1,13 @@
 package io.yak.ops.common.enums.datasync;
 
 /**
- * 数据同步运行参数的规划策略。
- *
- * @author weifuwan
- * @since 2026-10-06
+ * Selects how effective runtime parameters are planned for synchronization.
  */
 public enum DataSyncRuntimePolicy {
 
-    /** Execution 创建时根据当前 Source / Schema 计算有效运行参数。 */
+    /** Computes effective runtime settings from the current source and schema at execution creation. */
     AUTO,
 
-    /** 直接使用 Task 已保存的具体运行参数。 */
+    /** Uses the concrete runtime settings saved in the task definition. */
     FIXED
 }

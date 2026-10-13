@@ -4,53 +4,50 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 数据源管理列表和详情的展示对象。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Exposes a datasource in management lists and detail views.
  */
 @Data
 public class DataSourceVO {
 
-    /** 数据源主键 ID。 */
+    /** Stable datasource identifier. */
     private String id;
 
-    /** 数据源名称。 */
+    /** Datasource display name. */
     private String name;
 
-    /** 数据库类型。 */
+    /** Registered database provider type. */
     private String dbType;
 
-    /** 数据源连接已绑定的默认数据库名称；未绑定时为空。 */
+    /** Default database bound to the connection; null when unbound. */
     private String database;
 
-    /** 数据源连接已绑定的默认 Schema；未绑定时为空。 */
+    /** Default schema bound to the connection; null when unbound. */
     private String schema;
 
-    /** 已遮罩敏感信息的基础连接地址。 */
+    /** Base JDBC URL with credential-bearing values masked. */
     private String jdbcUrl;
 
-    /** 已遮罩敏感信息并包含可展示高级参数的连接地址，仅用于产品 UI。 */
+    /** Display-only JDBC URL with permitted advanced properties and masked credentials. */
     private String displayJdbcUrl;
 
-    /** 运行环境编码。 */
+    /** Environment code. */
     private String environment;
 
-    /** 运行环境展示名称。 */
+    /** Human-readable environment label. */
     private String environmentName;
 
-    /** 最近一次连接状态。 */
+    /** Most recent connection status. */
     private String connStatus;
 
-    /** 数据源备注。 */
+    /** Optional user-maintained datasource description. */
     private String remark;
 
-    /** 详情编辑回显使用的已遮罩连接参数 JSON。 */
+    /** Masked JSON connection parameters used to populate the edit form. */
     private String originalJson;
 
-    /** 创建时间。 */
+    /** Creation timestamp. */
     private LocalDateTime createTime;
 
-    /** 最后更新时间。 */
+    /** Most recent update timestamp. */
     private LocalDateTime updateTime;
 }

@@ -5,10 +5,7 @@ import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 提供数据源表的 MyBatis 映射。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Maps datasource persistence operations to MyBatis statements.
  */
 @Mapper
 public interface DataSourceMapper extends BaseMapper<DataSourceEntity> {}

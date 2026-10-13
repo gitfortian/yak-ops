@@ -1,0 +1,297 @@
+package io.yak.ops.flow.runtime.executiongraph;
+
+import io.yak.ops.core.api.common.JobExecutionResult;
+import io.yak.ops.core.api.common.JobID;
+import io.yak.ops.core.api.common.JobStatus;
+import io.yak.ops.core.configuration.CheckpointingOptions;
+import io.yak.ops.core.configuration.ExecutionOptions;
+import io.yak.ops.core.configuration.PipelineOptions;
+import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
+import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
+import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
+import io.yak.ops.flow.runtime.jobgraph.JobGraph;
+import io.yak.ops.flow.runtime.jobgraph.JobVertex;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+/**
+ * Single-job execution ownership: physical subtask attempts, job status and cancellation.
+ * Task deployment and local channels are delegated to TaskDeployment; JobClient is only a handle.
+ */
+public final class ExecutionGraph {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ExecutionGraph.class);
+
+    private final JobGraph jobGraph;
+    private final List<ExecutionJobVertex> jobVertices;
+    private final Map<Integer, ExecutionJobVertex> byVertexId;
+    private final Object monitor = new Object();
+    private final CompletableFuture<JobExecutionResult> result = new CompletableFuture<>();
+    private final CompletableFuture<Void> cancellation = new CompletableFuture<>();
+    private volatile CompletableFuture<AlignedCheckpointCoordinator> checkpointController = new CompletableFuture<>();
+    private final boolean checkpointConfigured;
+
+    private volatile JobStatus status = JobStatus.CREATED;
+    private volatile boolean cancellationRequested;
+    private Thread worker;
+
+    public ExecutionGraph(JobGraph jobGraph) {
+        this.jobGraph = Objects.requireNonNull(jobGraph, "jobGraph");
+        this.checkpointConfigured = !jobGraph.configuration()
+                        .get(CheckpointingOptions.CHECKPOINTING_INTERVAL)
+                        .isZero()
+                || jobGraph.configuration().get(CheckpointingOptions.RESTORE_LATEST);
+        Map<Integer, ExecutionJobVertex> index = new LinkedHashMap<>();
+        for (JobVertex vertex : jobGraph.getVertices()) {
+            if (index.putIfAbsent(vertex.getId(), new ExecutionJobVertex(vertex)) != null) {
+                throw new IllegalArgumentException("Duplicate JobVertex id");
+            }
+        }
+        this.byVertexId = Map.copyOf(index);
+        this.jobVertices =
+                jobGraph.getVertices().stream().map(v -> index.get(v.getId())).toList();
+    }
+
+    public JobGraph getJobGraph() {
+        return jobGraph;
+    }
+
+    public List<ExecutionJobVertex> getJobVertices() {
+        return jobVertices;
+    }
+
+    public JobID getJobID() {
+        return jobGraph.jobID();
+    }
+
+    public JobStatus getState() {
+        return status;
+    }
+
+    Execution currentExecution(int jobVertexId, int subtask) {
+        ExecutionJobVertex vertex = byVertexId.get(jobVertexId);
+        if (vertex == null) {
+            throw new IllegalArgumentException("Unknown JobVertex: " + jobVertexId);
+        }
+        return vertex.getTaskVertex(subtask).getCurrentExecutionAttempt();
+    }
+
+    void registerCheckpoint(AlignedCheckpointCoordinator controller) {
+        if (!checkpointController.complete(Objects.requireNonNull(controller, "controller"))) {
+            throw new IllegalStateException("A job may register a single CheckpointCoordinator");
+        }
+    }
+
+    boolean isCancellationRequested() {
+        return cancellationRequested;
+    }
+
+    /** Submits this Job exactly once; the worker is owned by the ExecutionGraph, not the JobClient. */
+    public void start() {
+        String logId = jobGraph.configuration().get(ExecutionOptions.LOG_ID);
+        Thread thread = Thread.ofVirtual().name("yak-local-job-" + getJobID()).unstarted(() -> {
+            if (logId == null || logId.isBlank()) {
+                run();
+            } else {
+                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId)) {
+                    run();
+                }
+            }
+        });
+        synchronized (monitor) {
+            if (worker != null) {
+                throw new IllegalStateException("Job has already been started");
+            }
+            worker = thread;
+        }
+        thread.start();
+    }
+
+    private void run() {
+        synchronized (monitor) {
+            if (!cancellationRequested) {
+                status = JobStatus.RUNNING;
+            }
+        }
+        if (cancellationRequested) {
+            completeCanceled();
+            return;
+        }
+
+        LOG.info("YakFlow Job started, jobId={}", getJobID());
+        long startedNanos = System.nanoTime();
+        int maxRestarts = jobGraph.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS);
+        int attempt = 0;
+        while (true) {
+            try {
+                new TaskDeployment(this, attempt > 0).deployAndAwait();
+                if (!jobGraph.isBounded() && !cancellationRequested) {
+                    completeFailed(new IllegalStateException("Unbounded pipeline terminated without cancellation"));
+                    return;
+                }
+                completeNormally(TimeUnit.NANOSECONDS.toMillis(Math.max(0, System.nanoTime() - startedNanos)));
+                return;
+            } catch (Throwable failure) {
+                if (failure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                if (cancellationRequested
+                        && (failure instanceof InterruptedException || failure instanceof CancellationException)) {
+                    completeCanceled();
+                    return;
+                }
+                if (!cancellationRequested && attempt < maxRestarts && hasCompletedCheckpoint()) {
+                    try {
+                        for (ExecutionJobVertex vertex : jobVertices) {
+                            for (ExecutionVertex subtask : vertex.getTaskVertices()) {
+                                subtask.resetForNewAttempt();
+                            }
+                        }
+                        // A checkpoint request for the old attempt must never access its closed coordinator.
+                        checkpointController = new CompletableFuture<>();
+                        attempt++;
+                        LOG.warn("YakFlow Job restarting from checkpoint, jobId={}, restart={}", getJobID(), attempt);
+                        continue;
+                    } catch (Throwable resetFailure) {
+                        failure.addSuppressed(resetFailure);
+                    }
+                }
+                completeFailed(failure);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Only a verified durable checkpoint authorizes automatic restart. Without one, fail closed:
+     * restarting the Reader from offset zero could duplicate or lose already-emitted data.
+     */
+    private boolean hasCompletedCheckpoint() {
+        String directory = jobGraph.configuration().get(CheckpointingOptions.STATE_DIRECTORY);
+        if (directory == null || directory.isBlank()) {
+            return false;
+        }
+        Path file = Path.of(directory, "checkpoint.bin");
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try (FileCheckpointStore store = new FileCheckpointStore(Path.of(directory))) {
+            return store.loadLatest(FileCheckpointStore.graphSignature(
+                            jobGraph.graph(), jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM)))
+                    .isPresent();
+        } catch (IOException | RuntimeException notRestorable) {
+            return false;
+        }
+    }
+
+    private void completeNormally(long durationMillis) {
+        boolean canceled;
+        synchronized (monitor) {
+            canceled = cancellationRequested;
+            status = canceled ? JobStatus.CANCELED : JobStatus.FINISHED;
+        }
+        checkpointController.completeExceptionally(new IllegalStateException("Job has finished"));
+        if (canceled) {
+            notifyCanceled();
+        } else {
+            LOG.info("YakFlow Job finished, jobId={}, durationMs={}", getJobID(), durationMillis);
+            result.complete(new JobExecutionResult(getJobID(), durationMillis));
+        }
+    }
+
+    private void completeCanceled() {
+        synchronized (monitor) {
+            status = JobStatus.CANCELED;
+        }
+        checkpointController.completeExceptionally(new CancellationException("Job was cancelled"));
+        notifyCanceled();
+    }
+
+    private void notifyCanceled() {
+        LOG.info("YakFlow Job canceled, jobId={}", getJobID());
+        result.completeExceptionally(new CancellationException("Job was cancelled: " + getJobID()));
+        cancellation.complete(null);
+    }
+
+    private void completeFailed(Throwable failure) {
+        checkpointController.completeExceptionally(failure);
+        boolean wasCancellationRequested;
+        synchronized (monitor) {
+            status = JobStatus.FAILED;
+            wasCancellationRequested = cancellationRequested;
+        }
+        LOG.error("YakFlow Job failed, jobId={}", getJobID(), failure);
+        result.completeExceptionally(failure);
+        if (wasCancellationRequested) {
+            cancellation.completeExceptionally(failure);
+        }
+    }
+
+    /**
+     * Requests cancellation of all currently running task attempts.
+     *
+     * <p>The returned future completes after cancellation and resource cleanup.
+     * Finished or failed jobs reject new cancellation requests.
+     *
+     * @return a future for the final cancellation outcome
+     */
+    public CompletableFuture<Void> cancel() {
+        Thread running;
+        synchronized (monitor) {
+            if (status == JobStatus.CANCELED) {
+                return CompletableFuture.completedFuture(null);
+            }
+            if (status == JobStatus.FAILED || status == JobStatus.FINISHED) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Job has already finished: " + status));
+            }
+            if (cancellationRequested) {
+                return cancellation.copy();
+            }
+            cancellationRequested = true;
+            status = JobStatus.CANCELLING;
+            running = worker;
+        }
+        if (running != null) {
+            running.interrupt();
+        }
+        return cancellation.copy();
+    }
+
+    /**
+     * Triggers an aligned checkpoint of the running job.
+     *
+     * <p>Checkpointing must be configured and the job must not be terminal or canceling.
+     * Successful completion means the checkpoint was published durably, not that a
+     * transaction has been committed.
+     *
+     * @return the completed snapshot or an exceptionally completed future on failure
+     */
+    public CompletableFuture<CheckpointSnapshot> checkpoint() {
+        if (!checkpointConfigured) {
+            return CompletableFuture.failedFuture(
+                    new UnsupportedOperationException("Persistent checkpoints are not enabled for this job"));
+        }
+        if (status.isTerminalState() || cancellationRequested) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Cannot trigger a checkpoint for a terminal or cancelling job"));
+        }
+        return checkpointController
+                .thenCompose(AlignedCheckpointCoordinator::trigger)
+                .copy();
+    }
+
+    public CompletableFuture<JobExecutionResult> getJobExecutionResult() {
+        return result.copy();
+    }
+}

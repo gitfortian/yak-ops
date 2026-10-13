@@ -3,23 +3,23 @@ package io.yak.ops.business.datasource.exception;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.common.util.SensitiveUtils;
+import io.yak.ops.configuration.validation.ConfigValidationError;
+import io.yak.ops.configuration.validation.OptionValidationException;
+import java.util.List;
 
 /**
- * Datasource Service 与 Plugin 边界统一使用的领域业务异常。
+ * Represents Datasource business failures across service and plugin boundaries.
  *
- * <p>保留结构化 ErrorCode，并在生成用户可见错误消息时统一执行敏感信息遮罩。</p>
- *
- * @author weifuwan
- * @since 2026-09-25
+ * <p>Preserves a structured error code and masks credentials before exposing error messages.
  */
 public class DataSourceException extends BusinessException {
 
     private static final long serialVersionUID = 1L;
 
-    /** 对外保留的结构化 Datasource 错误码。 */
+    /** Structured Datasource error code exposed to callers. */
     private final ErrorCode actualErrorCode;
 
-    /** 已完成敏感信息遮罩、可安全返回给用户的错误消息。 */
+    /** User-visible message after masking sensitive connection information. */
     private final String userMessage;
 
     public DataSourceException(ErrorCode errorCode) {
@@ -43,9 +43,25 @@ public class DataSourceException extends BusinessException {
         return actualErrorCode;
     }
 
-    /** @return 已完成敏感信息遮罩的用户可见错误消息 */
+    /** @return safe user-visible message with sensitive values masked */
     public String getUserMessage() {
         return userMessage;
+    }
+
+    /**
+     * Returns non-sensitive option errors extracted from the registered provider's validator.
+     *
+     * @return immutable field-path errors, or an empty list for other failures
+     */
+    public List<ConfigValidationError> getValidationErrors() {
+        Throwable current = getCause();
+        while (current != null) {
+            if (current instanceof OptionValidationException validation) {
+                return validation.errors();
+            }
+            current = current.getCause();
+        }
+        return List.of();
     }
 
     private static String buildMessage(ErrorCode errorCode, String detail) {

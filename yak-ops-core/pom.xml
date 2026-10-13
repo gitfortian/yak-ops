@@ -11,4 +11,16 @@
     <artifactId>yak-ops-core</artifactId>
     <name>Yak Ops Core</name>
     <description>Reserved core module</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-configuration</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

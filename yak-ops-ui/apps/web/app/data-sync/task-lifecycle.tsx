@@ -40,33 +40,14 @@ export function useActiveTaskInstances(syncType: DataSyncType, enabled: boolean)
       return;
     }
 
-    const [pending, running, retryWaiting] = await Promise.all([
-      listDataSyncInstances({
-        pageNo: 1,
-        pageSize: 200,
-        syncType,
-        status: "PENDING",
-      }),
-      listDataSyncInstances({
-        pageNo: 1,
-        pageSize: 200,
-        syncType,
-        status: "RUNNING",
-      }),
-      listDataSyncInstances({
-        pageNo: 1,
-        pageSize: 200,
-        syncType,
-        status: "RETRY_WAITING",
-      }),
-    ]);
-
+    const result = await listDataSyncInstances({
+      pageNo: 1,
+      pageSize: 200,
+      syncType,
+      activeOnly: true,
+    });
     const next = new Map<string, DataSyncInstanceRecord>();
-    [
-      ...(pending?.bizData || []),
-      ...(running?.bizData || []),
-      ...(retryWaiting?.bizData || []),
-    ].forEach((record) => {
+    result.bizData.forEach((record) => {
       if (!next.has(record.taskId)) next.set(record.taskId, record);
     });
     setActiveByTask(next);
@@ -134,7 +115,7 @@ export function DataSyncTaskLifecycleActions({
       key: "lifecycle",
       label: published ? "下线" : "上线",
       className: "text-[var(--yak-color-primary)]",
-      disabled: published && Boolean(activeInstance),
+
       loading: actionKey === `${record.id}:${lifecycleAction}`,
       onClick: () => (published ? onUnpublish(record) : onPublish(record)),
     },

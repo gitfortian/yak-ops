@@ -22,6 +22,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import { getUsersByIds, type UserRecord } from "@/service/user";
+import { canCancelTaskInstance } from "@/service/data-sync/execution";
+
 import {
   cancelDataSyncInstance,
   deleteDataSyncTask,
@@ -215,11 +217,10 @@ export function RealtimeSyncPage() {
 
   const startTask = async (record: DataSyncTaskRecord) => {
     if (actionKey) return;
-    const restarting = record.desiredState === "RUNNING";
     setActionKey(`${record.id}:start`);
     try {
       await runDataSyncTask(record.id);
-      toast.success(restarting ? "实时同步任务已重新启动" : "实时同步任务已启动");
+      toast.success("运行请求已提交");
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -227,11 +228,11 @@ export function RealtimeSyncPage() {
   };
 
   const stopTask = async (record: DataSyncTaskRecord, activeInstance: DataSyncInstanceRecord) => {
-    if (actionKey) return;
+    if (actionKey || !canCancelTaskInstance(activeInstance.status)) return;
     setActionKey(`${record.id}:stop`);
     try {
       await cancelDataSyncInstance(activeInstance.id);
-      toast.success("实时同步任务已停止");
+      toast.success("已发送停止请求");
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -349,17 +350,12 @@ export function RealtimeSyncPage() {
         const stopping = Boolean(activeInstance);
         const runtimeActionKey = `${record.id}:${stopping ? "stop" : "start"}`;
         const runtimeLoading = actionKey === runtimeActionKey;
-        let runtimeLabel = "启动";
-        let runtimeClassName = "text-[#667085]";
-        if (stopping) {
-          runtimeLabel = "停止";
-          runtimeClassName = "text-[#d92d20]";
-        } else if (record.desiredState === "RUNNING") {
-          runtimeLabel = "重新启动";
-          runtimeClassName = published ? "text-[var(--yak-color-primary)]" : "text-[#667085]";
-        } else if (published) {
-          runtimeClassName = "text-[var(--yak-color-primary)]";
-        }
+        const runtimeLabel = stopping ? "停止" : "启动";
+        const runtimeClassName = stopping
+          ? "text-[#d92d20]"
+          : published
+            ? "text-[var(--yak-color-primary)]"
+            : "text-[#667085]";
 
         return (
           <DataSyncTaskLifecycleActions
@@ -369,7 +365,7 @@ export function RealtimeSyncPage() {
             runtimeAction={{
               label: runtimeLabel,
               loading: runtimeLoading,
-              disabled: !stopping && !published,
+              disabled: activeInstance ? !canCancelTaskInstance(activeInstance.status) : !published,
               className: runtimeClassName,
               onClick: () => {
                 if (activeInstance) void stopTask(record, activeInstance);

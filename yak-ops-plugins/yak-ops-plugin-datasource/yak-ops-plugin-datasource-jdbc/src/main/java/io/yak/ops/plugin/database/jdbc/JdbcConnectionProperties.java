@@ -1,60 +1,58 @@
 package io.yak.ops.plugin.database.jdbc;
 
+import io.yak.ops.connector.jdbc.database.connection.SshTunnelConfig;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * JDBC Provider 解析并规范化后的不可变连接参数。
+ * Holds immutable, provider-normalized JDBC connection parameters.
  *
- * <p>该对象会在连接测试、Catalog 和 SSH 隧道建立过程中复用；密码和规范化 JSON 可能包含敏感信息，不得直接写入日志。</p>
- *
- * @author weifuwan
- * @since 2026-09-24
+ * <p>Shared by connection tests, Catalog access and SSH tunneling. Passwords and normalized JSON may contain secrets and must not be logged.
  */
 public final class JdbcConnectionProperties implements DataSourceConnection {
 
     /** Provider canonical type。 */
     private final String type;
 
-    /** 数据库主机；使用自定义 JDBC URL 时可以为空。 */
+    /** Database host; may be absent when using a custom JDBC URL. */
     private final String host;
 
-    /** 数据库端口。 */
+    /** Database port. */
     private final int port;
 
-    /** 规范化后的 JDBC URL。 */
+    /** Normalized JDBC URL. */
     private final String jdbcUrl;
 
-    /** JDBC Driver 类名。 */
+    /** JDBC driver class name. */
     private final String driverClassName;
 
-    /** Provider 规范化后的 JDBC Driver 选择标识。 */
+    /** Provider-normalized JDBC driver selection identifier. */
     private final String driverId;
 
-    /** 数据库登录用户名。 */
+    /** Database authentication username. */
     private final String username;
 
-    /** 数据库登录密码，不得写入日志或异常文本。 */
+    /** Database password; must not be logged or included in exception messages. */
     private final String password;
 
-    /** 默认数据库或服务名。 */
+    /** Default database or service name. */
     private final String database;
 
-    /** 默认 Schema。 */
+    /** Default schema. */
     private final String schema;
 
-    /** 传递给 JDBC Driver 的附加连接属性。 */
+    /** Additional properties passed to the JDBC driver. */
     private final Map<String, String> properties;
 
-    /** 可选 SSH 隧道配置。 */
+    /** Optional SSH tunnel configuration. */
     private final SshTunnelConfig sshTunnel;
 
-    /** 可持久化的规范化连接 JSON，可能包含敏感字段。 */
+    /** Persistable normalized connection JSON; may contain credentials. */
     private final String normalizedJson;
 
-    /** 保留原构造器，兼容现有插件或测试代码的直接构造。 */
+    /** Creates immutable connection properties from the JDBC URL and supplied credentials. */
     public JdbcConnectionProperties(
             String type,
             String jdbcUrl,

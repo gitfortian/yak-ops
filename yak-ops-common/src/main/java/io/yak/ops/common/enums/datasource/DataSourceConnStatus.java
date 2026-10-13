@@ -6,10 +6,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 数据源连通状态。
- *
- * @author weifuwan
- * @since 2026-09-25
+ * Tracks the outcome of the most recent datasource connectivity check.
  */
 @Getter
 @RequiredArgsConstructor

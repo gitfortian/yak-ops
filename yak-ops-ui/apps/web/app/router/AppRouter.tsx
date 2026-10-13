@@ -32,6 +32,7 @@ import {
   OPERATIONS_NAVIGATION,
   OPERATIONS_PRODUCT_LABEL,
 } from "../layout/navigation";
+import AppLoading from "./AppLoading";
 
 const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
@@ -75,11 +76,7 @@ function ProtectedRoute() {
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#f7f8f9] text-sm text-black/45">
-        Loading...
-      </div>
-    );
+    return <AppLoading />;
   }
 
   if (!currentUser) {
@@ -96,11 +93,7 @@ function LoginRoute() {
   const navigate = useNavigate();
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#fbfbfa] text-sm text-black/45">
-        Loading...
-      </div>
-    );
+    return <AppLoading />;
   }
 
   if (currentUser) {

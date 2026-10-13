@@ -6,27 +6,24 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 数据源 Catalog 表查询请求。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Requests filtered datasource Catalog table metadata.
  */
 @Data
 public class DataSourceCatalogQueryDTO {
 
-    /** 数据库名称，无数据库层级时为空。 */
+    /** Database name; absent when the provider has no database level. */
     @Size(max = 128, message = "数据库名称不能超过 128 个字符")
     private String database;
 
-    /** Schema 名称，无 Schema 层级时为空。 */
+    /** Schema name; absent when the provider has no schema level. */
     @Size(max = 128, message = "Schema 名称不能超过 128 个字符")
     private String schema;
 
-    /** 表名搜索关键字。 */
+    /** Keyword used to filter table names. */
     @Size(max = 128, message = "表名搜索关键字不能超过 128 个字符")
     private String keyword;
 
-    /** 最大返回数量。 */
+    /** Maximum number of metadata results to return. */
     @Min(value = 1, message = "Catalog 返回数量必须大于 0")
     @Max(value = 500, message = "Catalog 返回数量不能超过 500")
     private Integer limit = 200;

@@ -1,101 +1,86 @@
 package io.yak.ops.common.bean.vo.datasync;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import lombok.Data;
 
 /**
- * 数据同步任务定义响应。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Exposes the current data synchronization task definition to clients.
  */
 @Data
 public class DataSyncTaskVO {
 
-    /** 数据同步任务 ID。 */
+    /** Stable data synchronization task identifier. */
     private String id;
 
-    /** 同一 Workspace 内的任务名称。 */
+    /** Task name unique within its Workspace. */
     private String name;
 
-    /** 数据同步类型：OFFLINE 或 REALTIME。 */
+    /** Synchronization type: OFFLINE or REALTIME. */
     private String syncType;
 
-    /** 任务发布状态：UNPUBLISHED 或 PUBLISHED。 */
+    /** Publication status: UNPUBLISHED or PUBLISHED. */
     private String status;
 
-    /** REALTIME 期望运行状态：STOPPED / RUNNING；OFFLINE 固定为 STOPPED。 */
+    /** Desired runtime state for REALTIME: STOPPED or RUNNING; always STOPPED for OFFLINE. */
     private String desiredState;
 
-    /** 离线同步写入方式：APPEND / OVERWRITE / UPSERT；REALTIME 当前固定为 APPEND。 */
+    /** Offline write mode: APPEND, OVERWRITE or UPSERT; REALTIME currently reports APPEND. */
     private String writeMode;
 
-    /** 来源数据源 ID。 */
+    /** Source datasource identifier. */
     private String sourceDataSourceId;
 
-    /** 来源数据源绑定或任务解析后的数据库名称；没有该层级时为空。 */
+    /** Source database resolved from the connection or definition; null if unsupported. */
     private String sourceDatabase;
 
-    /** 来源实际使用的 Schema；没有该层级时为空。 */
+    /** Effective source schema, or null if the provider has no schema level. */
     private String sourceSchema;
 
-    /** 来源物理表名称。 */
+    /** Physical source table name. */
     private String sourceTable;
 
-    /** 目标数据源 ID。 */
+    /** Target datasource identifier. */
     private String targetDataSourceId;
 
-    /** 目标数据源绑定或任务解析后的数据库名称；没有该层级时为空。 */
+    /** Target database resolved from the connection or definition; null if unsupported. */
     private String targetDatabase;
 
-    /** 目标实际使用的 Schema；没有该层级时为空。 */
+    /** Effective target schema, or null if the provider has no schema level. */
     private String targetSchema;
 
-    /** 目标物理表名称。 */
+    /** Physical target table name. */
     private String targetTable;
 
-    /** 目标表不存在时是否允许按 LogicalTable 自动建表。 */
-    private Boolean autoCreateTable;
-
-    /** 任务详情 / 写入响应返回的显式字段映射；分页列表为空，配置为空时表示继续使用系统默认同名映射。 */
-    private DataSyncMappingVO mapping;
-
-    /**
-     * 任务详情 / 写入响应返回的稳定表级 Route；v1.3 PR1 仍只有一个兼容 Route，分页列表不返回。
-     */
-    private List<DataSyncTableRouteVO> tableRoutes;
-
-    /** OFFLINE 任务的 YakFlow 读取、写入和超时参数；REALTIME 任务为空。 */
+    /** YakFlow read, write and timeout settings for OFFLINE; null for REALTIME. */
     private DataSyncRuntimeConfigVO runtimeConfig;
 
-    /** REALTIME 任务的 CDC、Checkpoint 和写入参数；OFFLINE 任务为空。 */
+    /** CDC, checkpoint and writer settings for REALTIME; null for OFFLINE. */
     private DataSyncRealtimeConfigVO realtimeConfig;
 
-    /** Execution 失败后的固定重试策略。 */
+    /** Fixed retry policy applied after execution failures. */
     private DataSyncRetryPolicyVO retryPolicy;
 
-    /** 当前任务定义版本，从 1 开始，任务定义每次成功修改后递增。 */
+    /** Current definition version, starting at 1 and incrementing after each successful edit. */
     private Integer definitionVersion;
 
-    /** 用户维护的任务说明。 */
+    /** User-maintained task description. */
     private String remark;
 
-    /** 任务最近一次更新操作人标识。 */
+    /** Identifier of the operator who last updated the definition. */
     private String updateBy;
 
-    /** OFFLINE 任务配置的 Quartz Cron；未配置 Schedule 时为空。 */
+    /** Quartz Cron expression configured for OFFLINE; null when no schedule exists. */
     private String scheduleCronExpression;
 
-    /** OFFLINE 任务 Schedule 的显式 IANA Time Zone；未配置 Schedule 时为空。 */
+    /** Explicit IANA timezone for an OFFLINE schedule; null when no schedule exists. */
     private String scheduleTimeZone;
 
-    /** OFFLINE 任务 Schedule 是否已启用；未配置 Schedule 时为空。 */
+    /** Whether an OFFLINE schedule is enabled; null when not configured. */
     private Boolean scheduleEnabled;
 
-    /** 任务创建时间。 */
+    /** Task creation timestamp. */
     private LocalDateTime createTime;
 
-    /** 任务定义最近一次更新时间。 */
+    /** Timestamp of the most recent definition update. */
     private LocalDateTime updateTime;
 }

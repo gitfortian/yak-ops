@@ -2,15 +2,29 @@ package io.yak.ops.plugin.database.jdbc.mysql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
+import java.util.HashSet;
+import java.util.ServiceLoader;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class MySqlDataSourcePluginTest {
 
     @Test
+    void discoversAllJdbcDatasourcePluginsThroughServiceLoader() {
+        Set<String> types = new HashSet<>();
+        for (DataSourcePlugin plugin : ServiceLoader.load(DataSourcePlugin.class)) {
+            types.add(plugin.type());
+        }
+        assertEquals(Set.of("MYSQL", "ORACLE", "POSTGRE_SQL"), types);
+    }
+
+    @Test
     void shouldIncludeAdvancedPropertiesInDisplayJdbcUrl() {
         MySqlDataSourcePlugin plugin = new MySqlDataSourcePlugin();
-        DataSourceConnection connection = plugin.parseConnection(
+        DataSourceConnection connection = plugin.parseConnection(ConfigParser.parseJson(
                 """
                 {
                   "host": "127.0.0.1",
@@ -22,7 +36,7 @@ class MySqlDataSourcePluginTest {
                     "useSSL": "false"
                   }
                 }
-                """);
+                """));
 
         assertEquals(
                 "jdbc:mysql://127.0.0.1:3306/yak_e2e_realtime_source?serverTimezone=Asia%2FShanghai&useSSL=false",

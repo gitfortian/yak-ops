@@ -33,11 +33,23 @@
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-data-sync</artifactId>
+            <artifactId>yak-ops-business-task</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-task-execution</artifactId>
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-plugin-datasource-all</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-plugin-task-all</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-plugin-datasource-jdbc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -50,10 +62,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-quartz</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>
@@ -71,6 +79,24 @@
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit</artifactId>
+            <version>1.4.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-flow-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-flow-connector-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-flow-connector-cdc-mysql</artifactId>
         </dependency>
     </dependencies>
 

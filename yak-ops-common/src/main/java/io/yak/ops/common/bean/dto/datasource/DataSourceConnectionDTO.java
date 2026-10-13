@@ -5,38 +5,35 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * 数据源结构化连接参数。
+ * Carries structured connection parameters from Datasource HTTP requests.
  *
- * <p>HTTP 层只传递结构化连接信息；JDBC URL 生成、Provider 参数解释与规范化由数据源插件负责。</p>
- *
- * @author weifuwan
- * @since 2026-09-26
+ * <p>Plugins own JDBC URL generation, vendor-specific parsing and normalization; the HTTP layer only passes the submitted structure.
  */
 @Data
 public class DataSourceConnectionDTO {
 
-    /** Provider 原生 JDBC URL；Oracle 直接使用该字段，结构化数据源可为空。 */
+    /** Provider-native JDBC URL; required for Oracle raw URL mode and optional for structured connections. */
     private String jdbcUrl;
 
-    /** 数据库主机名或 IP；结构化连接模式使用。 */
+    /** Database host or IP address used by structured connection mode. */
     private String host;
 
-    /** 数据库端口；结构化连接模式使用。 */
+    /** Database port used by structured connection mode. */
     private Integer port;
 
-    /** 默认数据库或服务名；结构化连接模式使用。 */
+    /** Default database or service name used by structured connection mode. */
     private String database;
 
-    /** 数据库登录用户名。 */
+    /** Database authentication username. */
     @NotBlank(message = "数据库用户名不能为空")
     private String username;
 
-    /** 数据库登录密码；编辑时允许提交遮罩值，由后端保留已保存密钥。 */
+    /** Database password; a masked value on edit means the saved secret should be retained. */
     private String password;
 
-    /** Provider 自己解释的 JDBC Driver 选择标识；当前仅 MySQL 使用。 */
+    /** Provider-specific JDBC driver identifier, currently used only for MySQL. */
     private String driverId;
 
-    /** 透传给对应 Provider 的高级连接属性。 */
+    /** Additional connection properties passed through to the selected provider. */
     private Map<String, String> properties;
 }

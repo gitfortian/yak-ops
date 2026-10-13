@@ -1,65 +1,109 @@
-# Yak Ops Agent Context Router
+# Yak Ops AI Agent Instructions
 
-Scope: Whole repository
+Guidance for contributors and AI coding agents working in this repository. Follow the [Apache Flink contribution process](https://flink.apache.org/how-to-contribute/contribute-code/) and [Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) where applicable. Yak Ops build tools and product boundaries remain repository-specific.
 
-本文件只路由任务，不复制业务契约、组件参数或开发进度。文档归属与更新规则由 [Engineering Context Model](docs/engineering-context-model.md) 定义。
+## Prerequisites and Commands
 
-## Context Loading
+- Java 21, the checked-in Maven wrapper, and Git. Use Bash or WSL for the repository's `mvnw` wrapper on Windows.
+- Backend verification: `bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify`.
+- Java formatting: `bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply`.
+- Java format check: use the same command with `:check` instead of `:apply`.
+- Frontend verification and tooling: `yak-ops-ui/docs/tooling.md`.
 
-1. 确认目标分支和修改范围，文档、代码与验证使用同一基线。
-2. 行为变更先定位对应 Capability / 组件 Contract；目录或依赖变更读取所属 Architecture；实现读取适用的全局及就近规则。
-3. 再读取目标代码、直接依赖和相关验证入口。已知路径直接读取，不先遍历整个文档树。
+For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only report checks that actually ran; a skipped integration test is not a pass.
 
-导航链接不是必读清单。`Depends On` 用于定位适用约束，不要求递归加载所有链接；全局安全、兼容性和验证约束仍须遵守。
+## Repository Structure
 
-## Capability Context
+- `yak-ops-core`: public, database-neutral flow contracts; must not depend on Runtime.
+- `yak-flow`: local execution runtime and JDBC/CDC connectors.
+- `yak-ops-business`: datasource and task business operations, including persisted execution lifecycle.
+- `yak-ops-task-execution`: process-owned Task dispatch, observation, cancellation and embedded execution ownership.
+- `yak-ops-plugins`: plugin APIs and implementations.
+- `yak-ops-dao`: persistence, repositories and Flyway migrations.
+- `yak-ops-platform`: security, workspace and user preferences.
+- `yak-ops-common`: cross-module shared types and utilities.
+- `yak-ops-boot`: HTTP boundary and application assembly.
+- `yak-ops-ui`: frontend application and shared UI components.
 
-业务能力从 [Docs Index](docs/README.md) 定位；只读当前任务涉及的专题。共享 UI 组件从 `yak-ops-ui/packages/yak-ui/docs/` 定位已有契约。
+Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Derive current functionality from code, tests, and supported public interfaces.
 
-没有现成 Contract 时，先检查实现，再在合适的现有文档补充最小行为约束；没有独立职责就不新增文档。历史 PR、Release 材料和手工 E2E 只在任务涉及追溯、发布或验收时加载，不作为普通开发的默认前置上下文。
+## Architecture Boundaries
 
-## Backend Context
+- Do not introduce reverse dependencies from Core to Runtime or from business modules to Boot.
+- Keep credentials out of task definitions and user-facing plugin parameters.
+- Keep Workspace isolation, immutable task versions, migration history and existing safety checks intact.
+- Do not claim exactly-once processing, distributed execution or product runtime integration without executable evidence.
+- Do not add interfaces, factories, managers or compatibility layers without a real owner and caller.
 
-Java 变更先读 `ARCHITECTURE.md` 和 `JAVA_RULES.md`，再按目标读取下列规则及其适用约束：
+## Common Change Patterns
 
-| 修改范围 | 规则入口 |
-| --- | --- |
-| 日志 | `LOGGING_RULES.md` |
-| HTTP Controller | `CONTROLLER_RULES.md` |
-| Platform | `yak-ops-platform/PLATFORM_RULES.md`；按 Security / Workspace / Preference 读取同目录的 `SECURITY_RULES.md` / `WORKSPACE_RULES.md` / `USER_PREFERENCE_RULES.md` |
-| Business | `yak-ops-business/BUSINESS_RULES.md`；数据源读 `yak-ops-business/yak-ops-business-datasource/DATASOURCE_RULES.md`，数据同步读 `yak-ops-business/yak-ops-business-data-sync/DATA_SYNC_RULES.md` |
-| Common / DTO / VO | `yak-ops-common/COMMON_RULES.md`；共享 DTO / VO 另读同目录 `DTO_VO_RULES.md` |
-| DAO / Entity / Migration | `yak-ops-dao/DAO_RULES.md`；按修改内容读取同目录 `ENTITY_RULES.md` / `FLYWAY_RULES.md` |
-| Core / SPI | `yak-ops-core/CORE_RULES.md` / `yak-ops-spi/SPI_RULES.md` |
-| Datasource Plugin | `yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN_RULES.md` |
-| YakFlow | `yak-flow/YAK_FLOW_RULES.md` |
+- **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
+- **New major subsystem or public contract change:** discuss and accept a YOIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [YOIP template](.github/YOIP_TEMPLATE.md).
+- **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
+- **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
+- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md`, TypeScript contracts and affected tests; apply the repository-wide YOIP process to significant public changes, and use focused PRs for routine UI work.
 
-## Frontend Context
+## Repository-Specific Invariants
 
-前端变更先读 `yak-ops-ui/ARCHITECTURE.md` 和 `yak-ops-ui/FRONTEND_RULES.md`。
+- Keep task-definition identity, Workspace authorization and immutable definition versions in the business/persistence boundary. Plugin validation must not access credentials or silently rewrite requested parameters; accepted task configuration is JSON.
+- Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
+- Keep published Flyway migrations frozen; draft migrations must be reconciled before the release migration gate. The release scripts verify names and sequence, not the semantic safety of SQL.
+- Internal SLF4J log templates and Core / YakFlow technical diagnostics use English. Preserve exception types, causes and contextual fields; execution decisions must not parse exception message text.
+- Product-facing ErrorCode descriptions, Bean Validation messages and other user messages remain localized at their owning boundary. Never expose raw internal diagnostics or credentials to users.
+- Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English.
+- Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Current code, tests, and accepted public contracts determine supported behavior.
 
-当前 Web Root 是 `yak-ops-ui/apps/web`：业务在 `app/<domain>`，后端通信在 `service/<domain>`，共享 UI 在 `yak-ops-ui/packages/yak-ui`。不按旧迁移描述重建 `src / pages / shared`。
+## Java Type Design and Package Ownership
 
-以下路径相对于 `yak-ops-ui/`，只读命中项：
+- Organize packages by functional ownership, such as `source`, `reader`, `writer`, `state`, `execution`, and `repository`, not by whether a type is a record, class, or interface. Keep a public contract and its directly related value types together when they share ownership.
+- Reserve `domain` for business domain concepts and behavior. Introduce `model` only for a cohesive, independently owned set of models; do not create generic buckets or one-type packages without a meaningful boundary.
+- Context types carry inputs or capabilities for one stage; do not use them as cross-layer service containers. Connector creation must not require Task platform identity or admission claims.
+- Resource types express a real capability or ownership lifecycle. Avoid marker wrappers whose consumers immediately recover a concrete type with casts.
+- Cross-layer models require a distinct semantic contract. Reuse existing values when a mapping only copies fields; do not create synonym DTO chains. Runtime names require actual execution ownership.
+- Introduce interfaces for distinct implementation or caller contracts and abstract classes only for shared behavior or state. Keep resource-owning and lifecycle-managed implementations in concrete classes.
+- Prefer records for shallowly immutable value carriers with intentional component-wise equality. Prefer classes for mutable runtime state, connection and resource ownership, identity-driven lifecycles, and sensitive credentials or execution tokens. Do not change a type solely to match its upstream spelling.
+- Defensively copy mutable arrays and collections at ownership boundaries. Review record equality and hashing explicitly: arrays compare by reference in generated `equals` and `hashCode`, even when their contents are copied.
+- Treat `toString()` as diagnostic output. Never expose credentials, dispatch tokens, database row values, checkpoint state bytes, or other sensitive payloads through generated or custom representations, including nested record and collection wrappers.
+- Keep mutable Reader and Writer state distinct from immutable checkpoint snapshots. Preserve public accessors and persisted serializer formats during type refactoring, with focused tests for equality, ownership, and safe diagnostics.
 
-| 修改范围 | 规则入口 |
-| --- | --- |
-| 产品页面、路由、Shell | `apps/web/APP_RULES.md` 和就近领域规则；表单另读 `apps/web/FORM_RULES.md` |
-| API 调用与后端类型 | `SERVICE_RULES.md` |
-| 共享 UI 组件 | `packages/yak-ui/UI_RULES.md` 和目标组件已有文档，不加载其他组件细节 |
-| 依赖、Vite、TypeScript、格式、构建脚本 | `docs/tooling.md` |
+## Java Naming and Vocabulary
 
-## Documentation Context
+- Name project-owned Java types and methods for their actual responsibilities. Prefer established Apache Flink and SeaTunnel vocabulary when the corresponding contract and behavior match, rather than inventing a new abstraction name. Use `Parser` for parsing, `Serializer` for serialization, `Mapper` or `Converter` for well-defined mappings, and `Factory`, `Builder`, or `Generator` only when construction is the actual responsibility.
+- **Do not introduce `Codec` in names of new or renamed Yak Ops classes, interfaces, records, enums, methods, or packages.** A JSON reader with a `parse` method is a parser, not a generic codec. Existing externally owned APIs and third-party identifiers are not renamed by this rule.
+- Avoid redundant domain prefixes within an already scoped package, such as `Sync*` in `io.yak.ops.plugin.task.datasync`. Keep a domain qualifier on a public or cross-module type only when it prevents real ambiguity. Name technology-specific implementations with recognizable identifiers such as `Jdbc` or `MySqlCdc`.
+- Do not use broad labels such as `Compiler`, `Policy`, `Manager`, or `Handler` as substitutes for identifying a concrete operation. Such names require matching responsibilities; choose the narrower established term when applicable. Before introducing or renaming a type, check neighboring APIs, upstream precedents, package ownership and direct callers.
+- Naming-only refactors must preserve externally visible type identifiers, persisted JSON fields, configuration keys and checkpoint formats. Update source and tests consistently; do not add wrappers or compatibility aliases solely to retain old internal names.
 
-文档变更先读 Engineering Context Model，再读目标权威正文及直接引用。发布任务从 `docs/release/README.md` 进入对应版本材料；手工数据同步验收从 `docs/e2e/data-sync/README.md` 进入对应场景。
+## Code Quality and Review
 
-遇到旧 Phase / PR 叙述或文档与实现冲突，按 Engineering Context Model 核对，不把历史阶段当成当前约束，也不擅自改代码迁就旧文档。
+- Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
+- Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
+- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
+- Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
+- For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
+- Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
 
-## Execution Rules
+## Persistence and Public Contract Documentation
 
-- 一个 PR 解决一个明确问题；优先修改已有实现、复用已有工具，不为对称性添加 Manager / Coordinator / Handler / Assembler / Adapter 或新层级。
-- 不重新引入已删除领域、外部 yak-framework 依赖或未经任务要求的新框架。
-- 代码变更维护相关现有测试和门禁，不用删除检查、跳过测试或降低约束让结果变绿。
-- 验证命令使用所属规则和现有脚本；Java 遵循 `JAVA_RULES.md` 的 Spotless 要求，前端遵循 `FRONTEND_RULES.md` 的独立质量门禁。
-- 文档变更校验引用、路由及机器读取字段；一次执行的结果放在 PR / CI 或对应版本证据，不追加进当前规则正文。
-- 明确报告实际执行、未执行、失败和环境限制；不把计划、局部检查或条件跳过写成完整验收通过。
+- Document every newly introduced or changed persisted Entity field with concise English JavaDoc explaining its meaning, ownership, and lifecycle or safety semantics where relevant. Inherited audit fields retain their BaseEntity documentation.
+- For new Flyway CREATE TABLE statements, include meaningful SQL COMMENT descriptions on every table and column. Explain identity, ownership, state, and null semantics where they matter. Do not modify an applied migration merely to add descriptions.
+- Each declared Repository interface method needs JavaDoc for its contract, `@param` for every formal parameter, and `@return` for every non-void return type. Apply the same parameter and result documentation to newly exposed business Service methods and public Task plugin SPI methods. Document atomic updates, Workspace scoping and conflict behavior when relevant. Implementations inherit those method contracts and document only additional non-obvious behavior, rather than duplicating JavaDoc.
+- Business service boundaries with independent callers use an interface and a corresponding Impl class, with transactional annotations on the managed implementation. Do not introduce interfaces for private helpers without independent contracts.
+- Review these comments when adding Entities, Repository APIs, Service boundaries or Flyway migrations. Follow the existing formatting checks and do not create parallel comment-rules files.
+
+## Current-State Comments and Documentation
+
+- Describe current responsibilities, behavior, ownership, lifecycle, and invariants in the present tense. Comments and active rules must be understandable without implementation history or an upstream reference.
+- Remove development-phase labels, previous-implementation narratives, and comparisons such as `PR1`, `legacy implementation`, `Flink-style`, or `unlike Flink` from ordinary JavaDoc, code comments, and active guidance. Keep design provenance in relevant PR or YOIP discussions.
+- Preserve meaningful version numbers, persisted-format compatibility, safety constraints, recovery guarantees, and supported limitations. Express these as current behavioral contracts, not as reasons a compatibility layer was introduced.
+- Keep FLIP references, migration analysis, and rejected alternatives in design proposals where they inform decisions. Published Flyway migrations and third-party notices are immutable or externally owned and are excluded from prose cleanup.
+- Check rewritten descriptions against code and tests. Do not change public APIs, execution behavior, compatibility policies, or CI gates merely to improve wording.
+
+## References
+
+- [Development](DEVELOPMENT.md) — local setup and verification.
+- [Contribution process](.github/CONTRIBUTING.md) — discuss, implement, review.
+- [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
+- [YOIP template](.github/YOIP_TEMPLATE.md) — major design proposals.
+- [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
+- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — frontend ownership, behavior and UI conventions.

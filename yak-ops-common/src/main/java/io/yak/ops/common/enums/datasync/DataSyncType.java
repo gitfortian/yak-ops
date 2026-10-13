@@ -5,19 +5,16 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 数据同步任务类型。
- *
- * @author weifuwan
- * @since 2026-09-27
+ * Distinguishes bounded offline synchronization from continuous realtime synchronization.
  */
 @Getter
 @RequiredArgsConstructor
 public enum DataSyncType {
 
-    /** 有界离线同步任务。 */
+    /** Bounded offline data synchronization. */
     OFFLINE(1, "离线同步"),
 
-    /** MySQL CDC 持续实时同步任务。 */
+    /** Continuous realtime synchronization based on MySQL CDC. */
     REALTIME(2, "实时同步");
 
     @EnumValue

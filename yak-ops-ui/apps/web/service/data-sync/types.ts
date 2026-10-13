@@ -1,4 +1,6 @@
-export type DataSyncWriteMode = "APPEND" | "OVERWRITE" | "UPSERT";
+import type { TaskInstanceStatus } from "../task-execution/types";
+
+export type DataSyncWriteMode = "APPEND" | "UPSERT";
 
 export interface PaginationInfo {
   pageNo: number;
@@ -10,8 +12,6 @@ export interface PaginationInfo {
 export type DataSyncType = "OFFLINE" | "REALTIME";
 
 export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
-
-export type DataSyncDesiredState = "STOPPED" | "RUNNING";
 
 export type DataSyncRuntimePolicy = "AUTO" | "FIXED";
 
@@ -55,7 +55,6 @@ export interface DataSyncTaskRecord {
   name: string;
   syncType: DataSyncType | string;
   status: DataSyncTaskStatus | string;
-  desiredState?: DataSyncDesiredState | string;
   writeMode: DataSyncWriteMode | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
@@ -65,8 +64,6 @@ export interface DataSyncTaskRecord {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  autoCreateTable?: boolean;
-  mapping?: DataSyncMappingConfig;
   runtimeConfig?: DataSyncRuntimeConfig;
   offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
   realtimeConfig?: DataSyncRealtimeConfig;
@@ -74,9 +71,6 @@ export interface DataSyncTaskRecord {
   definitionVersion: number;
   remark?: string;
   updateBy?: string;
-  scheduleCronExpression?: string;
-  scheduleTimeZone?: string;
-  scheduleEnabled?: boolean;
   createTime?: string;
   updateTime?: string;
 }
@@ -96,47 +90,27 @@ export interface DataSyncTaskPageResult {
   pagination: PaginationInfo;
 }
 
-export interface DataSyncScheduleRecord {
-  id: string;
-  taskId: string;
-  cronExpression: string;
-  timeZone: string;
-  enabled: boolean;
-  nextFireTime?: string;
-  createTime?: string;
-  updateTime?: string;
-}
-
-export interface DataSyncScheduleSavePayload {
-  cronExpression: string;
-  timeZone: string;
-}
-
-export interface DataSyncSchedulePreview {
-  cronExpression: string;
-  timeZone: string;
-  nextFireTimes: string[];
-}
-
-export interface DataSyncTaskOperationRecord {
+export interface TaskDefinitionRecord {
   id: string;
   name: string;
-  syncType: DataSyncType | string;
-  desiredState?: DataSyncDesiredState | string;
+  taskType: string;
+  status: DataSyncTaskStatus | string;
   definitionVersion: number;
-  retryPolicy?: DataSyncRetryPolicy;
-  latestInstance?: DataSyncInstanceRecord;
-  schedule?: DataSyncScheduleRecord;
+  parameterSchemaVersion: number;
+  parameters: string;
+  remark?: string;
+  createTime?: string;
+  updateTime?: string;
+  updateBy?: string;
 }
 
-export interface DataSyncTaskOperationPageResult {
-  bizData: DataSyncTaskOperationRecord[];
+export interface TaskDefinitionPageResult {
+  bizData: TaskDefinitionRecord[];
   pagination: PaginationInfo;
 }
 
 interface DataSyncTaskSaveBase {
   name: string;
-  writeMode?: DataSyncWriteMode;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -145,68 +119,46 @@ interface DataSyncTaskSaveBase {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  autoCreateTable?: boolean;
-  mapping?: DataSyncMappingConfig;
-  retryPolicy?: DataSyncRetryPolicy;
   remark?: string;
 }
 
 export interface OfflineDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "OFFLINE";
-  runtimeConfig?: DataSyncRuntimeConfig;
+  writeMode?: DataSyncWriteMode;
 }
 
 export interface RealtimeDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   syncType: "REALTIME";
-  realtimeConfig?: DataSyncRealtimeConfig;
 }
 
 export type DataSyncTaskSavePayload =
   | OfflineDataSyncTaskSavePayload
   | RealtimeDataSyncTaskSavePayload;
 
-export interface DataSyncMappingPreviewPayload {
-  sourceDataSourceId: string;
-  sourceDatabase?: string;
-  sourceSchema?: string;
-  sourceTable: string;
-  targetDataSourceId: string;
-  targetDatabase?: string;
-  targetSchema?: string;
-  targetTable: string;
-  autoCreateTable?: boolean;
-  mapping?: DataSyncMappingConfig;
+export type DataSyncTaskUpdatePayload =
+  | DataSyncTaskSavePayload
+  | Pick<DataSyncTaskSaveBase, "name" | "remark">;
+
+export interface SyncPipelineParameters {
+  source: {
+    type: "JDBC" | "MYSQL_CDC";
+    datasourceId: string;
+    database?: string;
+    schema?: string;
+    table: string;
+  };
+  transform: [];
+  sink: {
+    type: "JDBC";
+    datasourceId: string;
+    database?: string;
+    schema?: string;
+    table: string;
+    writeMode: DataSyncWriteMode;
+  };
 }
 
-export interface DataSyncFieldMapping {
-  sourceName: string;
-  sourceType?: string;
-  targetName?: string;
-  targetType?: string;
-  compatible: boolean;
-  message?: string;
-}
-
-export interface DataSyncMappingPreview {
-  compatible: boolean;
-  targetTableExists: boolean;
-  autoCreateTable: boolean;
-  createTableSql?: string;
-  ddlStatements?: string[];
-  warnings: string[];
-  unsupportedReasons: string[];
-  mappings: DataSyncFieldMapping[];
-}
-
-export type DataSyncInstanceStatus =
-  | "PENDING"
-  | "RUNNING"
-  | "RETRY_WAITING"
-  | "SUCCEEDED"
-  | "FAILED"
-  | "CANCELED"
-  | "LOST"
-  | string;
+export type DataSyncInstanceStatus = TaskInstanceStatus;
 
 export interface DataSyncEndpointSnapshot {
   dataSourceId: string;
@@ -248,14 +200,12 @@ export interface DataSyncInstanceRecord {
   taskName: string;
   taskVersion: number;
   syncType: DataSyncType | string;
-  triggerType: "MANUAL" | "SCHEDULE" | "RETRY" | "AUTO_RECOVERY" | string;
+  triggerType?: "MANUAL" | "SCHEDULE" | "WORKFLOW";
   status: DataSyncInstanceStatus;
-  maxAttempts?: number;
-  backoffSeconds?: number;
-  currentAttempt?: number;
-  nextRetryTime?: string;
-  readRows: number;
-  writeRows: number;
+  runtimeEngine?: string;
+  runtimeId?: string;
+  readRows?: number;
+  writeRows?: number;
   startTime?: string;
   finishTime?: string;
   errorCode?: number;
@@ -272,6 +222,7 @@ export interface DataSyncInstancePageParams {
   syncType?: DataSyncType;
   keyword?: string;
   status?: DataSyncInstanceStatus;
+  activeOnly?: boolean;
   triggerType?: string;
   startTimeStart?: string;
   startTimeEnd?: string;
@@ -280,169 +231,4 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
-}
-
-export interface DataSyncAttemptRecord {
-  id: string;
-  executionId: string;
-  attemptNo: number;
-  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "LOST" | string;
-  readRows: number;
-  writeRows: number;
-  startTime?: string;
-  finishTime?: string;
-  errorCode?: number;
-  errorMessage?: string;
-  createTime?: string;
-  updateTime?: string;
-}
-
-export type DataSyncExecutionEventLevel = "INFO" | "WARN" | "ERROR" | string;
-
-export type DataSyncExecutionEventType =
-  | "EXECUTION_STARTED"
-  | "ATTEMPT_STARTED"
-  | "SOURCE_READY"
-  | "TARGET_READY"
-  | "ATTEMPT_SUCCEEDED"
-  | "ATTEMPT_FAILED"
-  | "RETRY_WAITING"
-  | "EXECUTION_SUCCEEDED"
-  | "EXECUTION_FAILED"
-  | "EXECUTION_CANCELED"
-  | "EXECUTION_LOST"
-  | "AUTO_RECOVERY_STARTED"
-  | string;
-
-export interface DataSyncExecutionEventRecord {
-  id: string;
-  executionId: string;
-  attemptId?: string;
-  level: DataSyncExecutionEventLevel;
-  eventType: DataSyncExecutionEventType;
-  message: string;
-  createTime?: string;
-}
-
-export type DataSyncTraceStatus = "SUCCESS" | "FAILED";
-
-export interface DataSyncTraceSummary {
-  attemptNo: number;
-  available: boolean;
-  complete: boolean;
-  sourceSplitCount: number;
-  sourceFinishedSplitCount: number;
-  sourceFailedSplitCount: number;
-  sourceRows: number;
-  sourceSplitDurationMillis: number;
-  sinkSql?: string;
-  sinkBatchSize?: number;
-  sinkSaveMode?: string;
-  sinkWriteMode?: string;
-  sinkCommittedBatchCount: number;
-  sinkFailedBatchCount: number;
-  sinkRows: number;
-  sinkExecuteDurationMillis: number;
-  sinkCommitDurationMillis: number;
-  errorCount: number;
-  droppedEventCount: number;
-}
-
-export interface DataSyncSourceTraceRecord {
-  timestamp: string;
-  splitId: string;
-  workerName?: string;
-  sql?: string;
-  parameters?: number[];
-  splitColumn?: string;
-  lowerBoundInclusive?: number;
-  upperBoundInclusive?: number;
-  rows?: number;
-  durationMillis?: number;
-  status: DataSyncTraceStatus | string;
-  failureStage?: string;
-  errorType?: string;
-  errorMessage?: string;
-}
-
-export interface DataSyncSinkTraceRecord {
-  timestamp: string;
-  batchNo: number;
-  rows?: number;
-  executeDurationMillis?: number;
-  commitDurationMillis?: number;
-  status: DataSyncTraceStatus | string;
-  failureStage?: string;
-  errorType?: string;
-  errorMessage?: string;
-}
-
-export interface DataSyncTracePage<T> {
-  records: T[];
-  nextCursor?: string;
-  hasMore: boolean;
-}
-
-export interface DataSyncTraceQuery {
-  attemptNo?: number;
-  pageSize?: number;
-  cursor?: string;
-  status?: DataSyncTraceStatus;
-}
-
-export type DataSyncOperationsRange = "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
-
-export interface DataSyncOperationsDashboardPayload {
-  syncType: DataSyncType;
-  range: DataSyncOperationsRange;
-}
-
-export interface DataSyncOperationsSummary {
-  executionCount: number;
-  succeededCount: number;
-  failedCount: number;
-  lostCount: number;
-  abnormalTaskCount: number;
-  currentActiveTaskCount: number;
-  autoRecoveryCount: number;
-  readRows: number;
-  writeRows: number;
-  averageDurationMillis: number;
-}
-
-export interface DataSyncOperationsTrendPoint {
-  bucketStart: string;
-  executionCount: number;
-  succeededCount: number;
-  failedCount: number;
-  lostCount: number;
-  autoRecoveryCount: number;
-  readRows: number;
-  writeRows: number;
-  averageDurationMillis: number;
-}
-
-export interface DataSyncOperationsStatusMetric {
-  status: DataSyncInstanceStatus;
-  count: number;
-}
-
-export interface DataSyncOperationsFailureRank {
-  taskId: string;
-  taskName: string;
-  failedCount: number;
-  lostCount: number;
-  abnormalCount: number;
-  latestFailureTime?: string;
-}
-
-export interface DataSyncOperationsDashboard {
-  syncType: DataSyncType | string;
-  range: DataSyncOperationsRange | string;
-  rangeStart: string;
-  rangeEnd: string;
-  summary: DataSyncOperationsSummary;
-  trend: DataSyncOperationsTrendPoint[];
-  statusDistribution: DataSyncOperationsStatusMetric[];
-  failureRanking: DataSyncOperationsFailureRank[];
 }

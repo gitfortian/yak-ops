@@ -1,27 +1,80 @@
 package io.yak.ops.plugin.database.jdbc.mysql;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+import io.yak.ops.configuration.rule.Conditions;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.jdbc.database.connection.JdbcDriverLoader;
+import io.yak.ops.connector.jdbc.database.connection.MySqlDriverId;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
-import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
-import io.yak.ops.plugin.database.jdbc.mysql.enums.MySqlDriverId;
-import io.yak.ops.plugin.database.jdbc.runtime.IsolatedJdbcDriverRuntime;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
-import java.sql.Connection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
 import java.sql.DriverPropertyInfo;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
 /**
- * MySQL JDBC Provider，拥有 MySQL 默认端口、Driver、JDBC URL 和连接属性规则。
- *
- * @author weifuwan
- * @since 2026-09-24
+ * Defines MySQL provider defaults for ports, driver selection, JDBC URLs and connection properties.
  */
+@AutoService(DataSourcePlugin.class)
 public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
-    private static final IsolatedJdbcDriverRuntime DRIVER_RUNTIME = IsolatedJdbcDriverRuntime.getInstance();
+    private static final Option<String> DRIVER_ID = Options.key("driverId")
+            .singleChoice(String.class, java.util.List.of("AUTO", "MYSQL_8", "MYSQL_5"))
+            .defaultValue("AUTO");
+    private static final Option<String> SSL_MODE = Options.key("properties.sslMode")
+            .singleChoice(
+                    String.class,
+                    java.util.List.of("DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"))
+            .noDefaultValue();
+    private static final Option<Integer> CONNECT_TIMEOUT =
+            Options.key("properties.connectTimeout").intType().noDefaultValue();
+    private static final Option<Integer> SOCKET_TIMEOUT =
+            Options.key("properties.socketTimeout").intType().noDefaultValue();
+    private static final Option<String> CHARACTER_ENCODING =
+            Options.key("properties.characterEncoding").stringType().noDefaultValue();
+    private static final Option<String> SERVER_TIMEZONE =
+            Options.key("properties.serverTimezone").stringType().noDefaultValue();
+    private static final Option<String> ENABLED_TLS =
+            Options.key("properties.enabledTLSProtocols").stringType().noDefaultValue();
+    private static final Option<Boolean> USE_UNICODE =
+            Options.key("properties.useUnicode").booleanType().noDefaultValue();
+    private static final Option<Boolean> USE_SSL =
+            Options.key("properties.useSSL").booleanType().noDefaultValue();
+    private static final Option<Boolean> REQUIRE_SSL =
+            Options.key("properties.requireSSL").booleanType().noDefaultValue();
+    private static final Option<Boolean> PUBLIC_KEY =
+            Options.key("properties.allowPublicKeyRetrieval").booleanType().noDefaultValue();
+    private static final Option<Boolean> AFFECTED_ROWS =
+            Options.key("properties.useAffectedRows").booleanType().noDefaultValue();
+    private static final Option<Boolean> LOCAL_TRANSACTIONS =
+            Options.key("properties.useLocalTransactionState").booleanType().noDefaultValue();
+
+    @Override
+    protected OptionRule providerOptionRule() {
+        return OptionRule.builder()
+                .optional(
+                        DRIVER_ID,
+                        SSL_MODE,
+                        USE_UNICODE,
+                        USE_SSL,
+                        REQUIRE_SSL,
+                        PUBLIC_KEY,
+                        AFFECTED_ROWS,
+                        LOCAL_TRANSACTIONS)
+                .optional(CONNECT_TIMEOUT, Conditions.greaterOrEqual(CONNECT_TIMEOUT, 0))
+                .optional(SOCKET_TIMEOUT, Conditions.greaterOrEqual(SOCKET_TIMEOUT, 0))
+                .optional(CHARACTER_ENCODING, Conditions.notBlank(CHARACTER_ENCODING))
+                .optional(SERVER_TIMEZONE, Conditions.notBlank(SERVER_TIMEZONE))
+                .optional(ENABLED_TLS, Conditions.notBlank(ENABLED_TLS))
+                .build();
+    }
+
+    private static final JdbcDriverLoader DRIVER_RUNTIME = JdbcDriverLoader.getInstance();
 
     private static final Map<String, String> PROPERTY_KEYS = Map.ofEntries(
             Map.entry("useunicode", "useUnicode"),
@@ -36,9 +89,6 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
             Map.entry("useaffectedrows", "useAffectedRows"),
             Map.entry("uselocaltransactionstate", "useLocalTransactionState"),
             Map.entry("enabledtlsprotocols", "enabledTLSProtocols"));
-
-    private static final Set<String> SSL_MODES =
-            Set.of("DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY");
 
     @Override
     public String type() {
@@ -93,35 +143,25 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     }
 
     @Override
-    protected Connection connectJdbc(JdbcConnectionProperties connection, String jdbcUrl, int timeoutSeconds)
-            throws Exception {
-        MySqlDriverId driverId = MySqlDriverId.parse(connection.driverId());
-        Properties properties = connectionProperties(connection);
-        properties.putIfAbsent("connectTimeout", String.valueOf(Math.max(1, timeoutSeconds) * 1000));
-        return DRIVER_RUNTIME.connect(
-                driverId.runtimeId(), driverId.driverDirectory(), driverId.driverClassName(), jdbcUrl, properties);
-    }
-
-    @Override
     protected Map<String, String> normalizeProperties(Map<String, String> properties) {
         Map<String, String> normalized = canonicalizeProperties(properties, PROPERTY_KEYS);
-        normalizeBooleanProperty(normalized, "useUnicode");
-        normalizeBooleanProperty(normalized, "useSSL");
-        normalizeBooleanProperty(normalized, "requireSSL");
-        normalizeBooleanProperty(normalized, "allowPublicKeyRetrieval");
-        normalizeBooleanProperty(normalized, "useAffectedRows");
-        normalizeBooleanProperty(normalized, "useLocalTransactionState");
-        normalizeUpperCaseEnumProperty(normalized, "sslMode", SSL_MODES);
+        for (String key : java.util.List.of(
+                "useUnicode",
+                "useSSL",
+                "requireSSL",
+                "allowPublicKeyRetrieval",
+                "useAffectedRows",
+                "useLocalTransactionState")) {
+            String value = normalized.get(key);
+            if (value != null) {
+                normalized.put(key, value.trim().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        String sslMode = normalized.get("sslMode");
+        if (sslMode != null) {
+            normalized.put("sslMode", sslMode.trim().toUpperCase(java.util.Locale.ROOT));
+        }
         return normalized;
-    }
-
-    @Override
-    protected void validateProperties(Map<String, String> properties) {
-        validateNonNegativeIntegerProperty(properties, "connectTimeout");
-        validateNonNegativeIntegerProperty(properties, "socketTimeout");
-        validateNonBlankProperty(properties, "characterEncoding");
-        validateNonBlankProperty(properties, "serverTimezone");
-        validateNonBlankProperty(properties, "enabledTLSProtocols");
     }
 
     @Override

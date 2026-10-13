@@ -3,18 +3,14 @@ package io.yak.ops.business.datasource.impl;
 import io.yak.ops.business.datasource.DataSourceService;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.util.DataSourceCredentialUtils;
 import io.yak.ops.common.bean.dto.datasource.DataSourceBatchIdsDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceConnectionDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
-import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceBatchConnectTestResultVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceConnectionPropertyKeysVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceOptionRulesVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
@@ -23,32 +19,29 @@ import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.common.util.StringUtils;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.rule.OptionRuleMetadata;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.dao.repository.datasource.DataSourcePageQuery;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceCatalogQuery;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceColumn;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceTable;
-import io.yak.ops.plugin.datasource.api.catalog.DataSourceTablePath;
+import io.yak.ops.plugin.datasource.api.enums.DataSourceCapability;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
+import io.yak.ops.plugin.datasource.api.plugin.DataSourcePluginRegistry;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.NoSuchElementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 /**
- * 实现 Workspace-scoped 数据源配置生命周期、查询、连接测试和 Entity → VO 转换。
+ * Manages Workspace-owned datasource definitions, search and connection status.
  *
- * <p>负责业务校验与持久化编排；数据库类型差异、连接参数解析和敏感信息处理统一委托给内部 DataSourcePluginRegistry。</p>
- *
- * @author weifuwan
- * @since 2026-09-25
+ * <p>Datasource plugins resolve physical connections; credentials are masked before exposing configuration.
  */
 @Service
 public class DataSourceServiceImpl implements DataSourceService {
@@ -59,20 +52,18 @@ public class DataSourceServiceImpl implements DataSourceService {
     private DataSourceEntityRepository repository;
 
     @Resource
-    private DataSourcePluginRegistry pluginRegistry;
-
-    @Resource
     private DataSourceProperties properties;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean addDataSource(DataSourceDTO dto) {
-        requireDataSourceDto(dto);
-        String workspaceId = requireWorkspaceId();
-        String name = normalizeName(dto.getName());
-        String dbType = pluginRegistry.resolvePluginType(dto.getDbType());
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        String name = dto.getName().trim();
+        DataSourcePlugin provider = plugin(dto.getDbType());
+        String dbType = provider.descriptor().type();
         ensureNameAvailable(workspaceId, name, null);
-        var connection = pluginRegistry.parseConnection(dbType, serializeConnectionParams(dto.getConnectionParams()));
+        String connectionJson = JSONUtils.toJson(dto.getConnectionParams());
+        DataSourceConnection connection = parseConnection(provider, connectionJson);
 
         DataSourceEntity entity = new DataSourceEntity();
         entity.setWorkspaceId(workspaceId);
@@ -81,39 +72,43 @@ public class DataSourceServiceImpl implements DataSourceService {
         entity.setJdbcUrl(connection.jdbcUrl());
         entity.setEnvironment(parseEnvironment(dto.getEnvironment()));
         entity.setConnStatus(DataSourceConnStatus.UNKNOWN);
-        entity.setRemark(normalizeNullable(dto.getRemark()));
+        entity.setRemark(StringUtils.trimToNull(dto.getRemark()));
         entity.setConnectionParams(connection.normalizedJson());
         entity.setOriginalJson(connection.normalizedJson());
         entity.initCreate();
         if (repository.add(entity) == null) {
             throw new DataSourceException(DataSourceErrorCode.CREATE_FAILED);
         }
-        LOG.info("数据源创建完成，workspaceId={}, dataSourceId={}, type={}", workspaceId, entity.getId(), entity.getDbType());
+        LOG.info(
+                "Datasource created, workspaceId={}, dataSourceId={}, type={}",
+                workspaceId,
+                entity.getId(),
+                entity.getDbType());
         return true;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean updateDataSource(String id, DataSourceDTO dto) {
-        requireDataSourceDto(dto);
-        String workspaceId = requireWorkspaceId();
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSourceEntity existing = requireEntity(workspaceId, id);
-        String name = normalizeName(dto.getName());
-        String dbType = pluginRegistry.resolvePluginType(dto.getDbType());
+        String name = dto.getName().trim();
+        DataSourcePlugin provider = plugin(dto.getDbType());
+        String dbType = provider.descriptor().type();
         ensureNameAvailable(workspaceId, name, id);
         if (!existing.getDbType().equals(dbType)) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "编辑数据源时不允许修改数据源类型");
         }
 
-        var connection = pluginRegistry.mergeStoredSecrets(
-                existing.getDbType(),
-                serializeConnectionParams(dto.getConnectionParams()),
-                existing.getConnectionParams());
+        String submitted = JSONUtils.toJson(dto.getConnectionParams());
+        String json = DataSourceCredentialUtils.retainOnUpdate(
+                provider.descriptor(), submitted, existing.getConnectionParams());
+        DataSourceConnection connection = parseConnection(provider, json);
         existing.setName(name);
         existing.setJdbcUrl(connection.jdbcUrl());
         existing.setEnvironment(parseEnvironment(dto.getEnvironment()));
         existing.setConnStatus(DataSourceConnStatus.UNKNOWN);
-        existing.setRemark(normalizeNullable(dto.getRemark()));
+        existing.setRemark(StringUtils.trimToNull(dto.getRemark()));
         existing.setConnectionParams(connection.normalizedJson());
         existing.setOriginalJson(connection.normalizedJson());
         existing.initUpdate();
@@ -122,7 +117,7 @@ public class DataSourceServiceImpl implements DataSourceService {
             throw new DataSourceException(DataSourceErrorCode.UPDATE_FAILED);
         }
         LOG.info(
-                "数据源更新完成，workspaceId={}, dataSourceId={}, type={}",
+                "Datasource updated, workspaceId={}, dataSourceId={}, type={}",
                 workspaceId,
                 existing.getId(),
                 existing.getDbType());
@@ -131,111 +126,41 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Override
     public DataSourceVO queryDataSource(String id) {
-        String workspaceId = requireWorkspaceId();
-        return toDataSourceVO(requireEntity(workspaceId, id), true);
+        return toDataSourceVO(requireEntity(WorkspaceContext.requireWorkspaceId(), id), true);
     }
 
     @Override
     public DataSourceConnectionPropertyKeysVO queryConnectionPropertyKeys(String dbType) {
-        String canonicalType = pluginRegistry.resolvePluginType(dbType);
         DataSourceConnectionPropertyKeysVO result = new DataSourceConnectionPropertyKeysVO();
-        result.setAcceptedPropertyKeys(pluginRegistry.connectionPropertyKeys(canonicalType));
+        result.setAcceptedPropertyKeys(plugin(dbType).connectionPropertyKeys());
         return result;
     }
 
     @Override
-    public List<String> queryCatalogDatabases(String id) {
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        return pluginRegistry.catalogDatabases(
-                entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds());
-    }
-
-    @Override
-    public List<String> queryCatalogSchemas(String id, String database) {
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        return pluginRegistry.catalogSchemas(
-                entity.getDbType(),
-                entity.getConnectionParams(),
-                connectionTestTimeoutSeconds(),
-                normalizeNullable(database));
-    }
-
-    @Override
-    public List<DataSourceCatalogTableVO> queryCatalogTables(String id, DataSourceCatalogQueryDTO dto) {
-        if (dto == null) {
-            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表查询参数不能为空");
-        }
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        DataSourceCatalogQuery query = new DataSourceCatalogQuery(
-                normalizeNullable(dto.getDatabase()),
-                normalizeNullable(dto.getSchema()),
-                normalizeNullable(dto.getKeyword()),
-                dto.getLimit());
-        return pluginRegistry
-                .catalogTables(entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), query)
-                .stream()
-                .map(this::toCatalogTableVO)
+    public DataSourceOptionRulesVO queryOptionRules(String dbType) {
+        DataSourcePlugin provider = plugin(dbType);
+        var options = OptionRuleMetadata.describe(provider.optionRule()).stream()
+                .map(option -> new DataSourceOptionRulesVO.OptionDefinitionVO(
+                        option.key(),
+                        option.type(),
+                        option.required(),
+                        option.defaultValue(),
+                        option.allowedValues(),
+                        option.description()))
                 .toList();
-    }
-
-    @Override
-    public Optional<DataSourceCatalogTableVO> findCatalogTable(String id, DataSourceTablePathDTO dto) {
-        if (dto == null || !StringUtils.hasText(dto.getTable())) {
-            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
-        }
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        DataSourceTablePath tablePath = new DataSourceTablePath(
-                normalizeNullable(dto.getDatabase()),
-                normalizeNullable(dto.getSchema()),
-                dto.getTable().trim());
-        return pluginRegistry
-                .catalogTable(
-                        entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
-                .map(this::toCatalogTableVO);
-    }
-
-    @Override
-    public DataSourceCatalogTableVO queryCatalogTable(String id, DataSourceTablePathDTO dto) {
-        return findCatalogTable(id, dto)
-                .orElseThrow(() -> new DataSourceException(
-                        DataSourceErrorCode.CATALOG_QUERY_FAILED,
-                        "表不存在：" + dto.getTable().trim()));
-    }
-
-    @Override
-    public List<DataSourceCatalogColumnVO> queryCatalogColumns(String id, DataSourceTablePathDTO dto) {
-        if (dto == null || !StringUtils.hasText(dto.getTable())) {
-            throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, "表定位信息不能为空");
-        }
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        DataSourceTablePath tablePath = new DataSourceTablePath(
-                normalizeNullable(dto.getDatabase()),
-                normalizeNullable(dto.getSchema()),
-                dto.getTable().trim());
-        return pluginRegistry
-                .catalogColumns(
-                        entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds(), tablePath)
-                .stream()
-                .map(this::toCatalogColumnVO)
-                .toList();
-    }
-
-    @Override
-    public DataSourceConnection resolveRuntimeConnection(String id) {
-        DataSourceEntity entity = requireEntity(requireWorkspaceId(), id);
-        return pluginRegistry.parseConnection(entity.getDbType(), entity.getConnectionParams());
+        return new DataSourceOptionRulesVO(provider.descriptor().type(), options);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deleteDataSource(String id) {
-        String workspaceId = requireWorkspaceId();
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSourceEntity existing = requireEntity(workspaceId, id);
         if (repository.deleteById(workspaceId, existing.getId()) <= 0) {
             throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
         }
         LOG.info(
-                "数据源删除完成，workspaceId={}, dataSourceId={}, type={}",
+                "Datasource deleted, workspaceId={}, dataSourceId={}, type={}",
                 workspaceId,
                 existing.getId(),
                 existing.getDbType());
@@ -245,46 +170,55 @@ public class DataSourceServiceImpl implements DataSourceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean batchDeleteDataSources(DataSourceBatchIdsDTO dto) {
-        String workspaceId = requireWorkspaceId();
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
         List<DataSourceEntity> entities = requireBatchEntities(workspaceId, dto);
         for (DataSourceEntity entity : entities) {
             if (repository.deleteById(workspaceId, entity.getId()) <= 0) {
                 throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
             }
         }
-        LOG.info("数据源批量删除完成，workspaceId={}, count={}", workspaceId, entities.size());
+        LOG.info("Datasource batch deletion completed, workspaceId={}, count={}", workspaceId, entities.size());
         return true;
     }
 
     @Override
     public PagingData<DataSourceVO> queryDataSourcePage(DataSourceQueryDTO dto) {
-        if (dto == null) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "分页查询参数不能为空");
-        }
-        String workspaceId = requireWorkspaceId();
-        if (dto.getSorts() != null && !dto.getSorts().isEmpty()) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        if (!dto.getSorts().isEmpty()) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "数据源分页暂不支持自定义排序");
+        }
+        String dbType = null;
+        if (StringUtils.isNotBlank(dto.getDbType())) {
+            dbType = plugin(dto.getDbType()).descriptor().type();
+        }
+        DataSourceEnvironment environment = null;
+        if (StringUtils.isNotBlank(dto.getEnvironment())) {
+            environment = parseEnvironment(dto.getEnvironment());
+        }
+        DataSourceConnStatus status = null;
+        if (StringUtils.isNotBlank(dto.getConnStatus())) {
+            status = parseConnectionStatus(dto.getConnStatus());
         }
         DataSourcePageQuery query = new DataSourcePageQuery(
                 dto.getPageNo(),
                 dto.getPageSize(),
-                normalizeNullable(dto.getName()),
-                normalizeNullable(dto.getKeyword()),
-                StringUtils.hasText(dto.getDbType()) ? pluginRegistry.resolvePluginType(dto.getDbType()) : null,
-                StringUtils.hasText(dto.getEnvironment()) ? parseEnvironment(dto.getEnvironment()) : null,
-                StringUtils.hasText(dto.getConnStatus()) ? parseConnectionStatus(dto.getConnStatus()) : null);
+                StringUtils.trimToNull(dto.getName()),
+                StringUtils.trimToNull(dto.getKeyword()),
+                dbType,
+                environment,
+                status);
         return PagingData.from(repository.queryPage(workspaceId, query).map(value -> toDataSourceVO(value, false)));
     }
 
     @Override
     public boolean testConnection(String id) {
-        String workspaceId = requireWorkspaceId();
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
         return testSavedConnection(workspaceId, requireEntity(workspaceId, id));
     }
 
     @Override
     public List<DataSourceBatchConnectTestResultVO> batchTestConnections(DataSourceBatchIdsDTO dto) {
-        String workspaceId = requireWorkspaceId();
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
         List<DataSourceEntity> entities = requireBatchEntities(workspaceId, dto);
         List<DataSourceBatchConnectTestResultVO> results = new ArrayList<>(entities.size());
         int successCount = 0;
@@ -296,10 +230,13 @@ public class DataSourceServiceImpl implements DataSourceService {
             } catch (DataSourceException exception) {
                 connected = false;
             }
-            results.add(toBatchConnectTestResult(entity.getId(), connected));
+            DataSourceBatchConnectTestResultVO result = new DataSourceBatchConnectTestResultVO();
+            result.setDataSourceId(entity.getId());
+            result.setConnected(connected);
+            results.add(result);
         }
         LOG.info(
-                "数据源批量连接测试完成，workspaceId={}, total={}, success={}, failed={}",
+                "Datasource batch connection tests completed, workspaceId={}, total={}, success={}, failed={}",
                 workspaceId,
                 entities.size(),
                 successCount,
@@ -309,28 +246,25 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Override
     public boolean testConnection(DataSourceConnectTestDTO dto) {
-        if (dto == null) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "连接测试参数不能为空");
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        DataSourceEntity existing = null;
+        if (dto.getDataSourceId() != null) {
+            existing = requireEntity(workspaceId, dto.getDataSourceId());
         }
-
-        String workspaceId = requireWorkspaceId();
-        DataSourceEntity existing =
-                dto.getDataSourceId() == null ? null : requireEntity(workspaceId, dto.getDataSourceId());
-        String requestedDbType = pluginRegistry.resolvePluginType(dto.getDbType());
-        String dbType = existing == null ? requestedDbType : existing.getDbType();
-        String connectionJson = serializeConnectionParams(dto.getConnectionParams());
+        DataSourcePlugin provider = plugin(dto.getDbType());
+        String dbType = provider.descriptor().type();
+        String connectionJson = JSONUtils.toJson(dto.getConnectionParams());
 
         if (existing != null) {
-            if (!requestedDbType.equals(dbType)) {
+            if (!dbType.equals(existing.getDbType())) {
                 throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, "连接测试的数据源类型与已保存数据源不一致");
             }
-            connectionJson = pluginRegistry
-                    .mergeStoredSecrets(dbType, connectionJson, existing.getConnectionParams())
-                    .normalizedJson();
+            connectionJson = DataSourceCredentialUtils.retainOnUpdate(
+                    provider.descriptor(), connectionJson, existing.getConnectionParams());
         }
 
         try {
-            pluginRegistry.testConnection(dbType, connectionJson, connectionTestTimeoutSeconds());
+            testPluginConnection(provider, connectionJson, Math.max(1, properties.getConnectionTestTimeoutSeconds()));
             return true;
         } catch (RuntimeException exception) {
             throw connectException(exception);
@@ -338,44 +272,25 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     private DataSourceEntity requireEntity(String workspaceId, String id) {
-        if (!StringUtils.hasText(id)) {
-            throw new DataSourceException(DataSourceErrorCode.NOT_FOUND);
-        }
         return repository
                 .queryById(workspaceId, id)
                 .orElseThrow(() -> new DataSourceException(DataSourceErrorCode.NOT_FOUND));
     }
 
     private List<DataSourceEntity> requireBatchEntities(String workspaceId, DataSourceBatchIdsDTO dto) {
-        List<String> ids = normalizeBatchIds(dto);
-        List<DataSourceEntity> entities = new ArrayList<>(ids.size());
-        for (String id : ids) {
-            entities.add(requireEntity(workspaceId, id));
-        }
-        return entities;
-    }
-
-    private List<String> normalizeBatchIds(DataSourceBatchIdsDTO dto) {
-        if (dto == null
-                || dto.getIds() == null
-                || dto.getIds().isEmpty()
-                || dto.getIds().size() > DataSourceBatchIdsDTO.MAX_IDS) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_BATCH_OPERATION);
-        }
-        LinkedHashSet<String> ids = new LinkedHashSet<>();
-        for (String id : dto.getIds()) {
-            if (!StringUtils.hasText(id)) {
-                throw new DataSourceException(DataSourceErrorCode.INVALID_BATCH_OPERATION);
-            }
-            ids.add(id.trim());
-        }
-        return new ArrayList<>(ids);
+        return dto.getIds().stream()
+                .map(String::trim)
+                .distinct()
+                .map(id -> requireEntity(workspaceId, id))
+                .toList();
     }
 
     private boolean testSavedConnection(String workspaceId, DataSourceEntity entity) {
         try {
-            pluginRegistry.testConnection(
-                    entity.getDbType(), entity.getConnectionParams(), connectionTestTimeoutSeconds());
+            testPluginConnection(
+                    plugin(entity.getDbType()),
+                    entity.getConnectionParams(),
+                    Math.max(1, properties.getConnectionTestTimeoutSeconds()));
             entity.setConnStatus(DataSourceConnStatus.CONNECTED);
             entity.initUpdate();
             repository.update(workspaceId, entity);
@@ -397,34 +312,6 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
     }
 
-    private String requireWorkspaceId() {
-        return WorkspaceContext.requireWorkspaceId();
-    }
-
-    private void requireDataSourceDto(DataSourceDTO dto) {
-        if (dto == null) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "数据源参数不能为空");
-        }
-    }
-
-    private String serializeConnectionParams(DataSourceConnectionDTO connectionParams) {
-        if (connectionParams == null) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "数据源连接参数不能为空");
-        }
-        return JSONUtils.toJson(connectionParams);
-    }
-
-    private String normalizeName(String value) {
-        if (!StringUtils.hasText(value)) {
-            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, "数据源名称不能为空");
-        }
-        return value.trim();
-    }
-
-    private String normalizeNullable(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
     private DataSourceEnvironment parseEnvironment(String value) {
         try {
             return DataSourceEnvironment.parse(value);
@@ -442,70 +329,66 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
     }
 
+    private DataSourcePlugin plugin(String type) {
+        try {
+            return DataSourcePluginRegistry.get(type);
+        } catch (IllegalArgumentException exception) {
+            throw new DataSourceException(DataSourceErrorCode.INVALID_DB_TYPE, exception.getMessage(), exception);
+        } catch (NoSuchElementException exception) {
+            throw new DataSourceException(DataSourceErrorCode.PLUGIN_NOT_FOUND, "未找到插件：" + type, exception);
+        }
+    }
+
+    private DataSourceConnection parseConnection(DataSourcePlugin provider, String json) {
+        try {
+            return provider.parseConnection(ConfigParser.parseJson(json));
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
+        }
+    }
+
+    private void testPluginConnection(DataSourcePlugin provider, String json, int timeoutSeconds) {
+        if (!provider.supports(DataSourceCapability.CONNECTION_TEST)) {
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, "数据源插件未声明连接测试能力");
+        }
+        DataSourceConnection connection = parseConnection(provider, json);
+        try {
+            provider.testConnection(connection, timeoutSeconds);
+        } catch (RuntimeException exception) {
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
+        }
+    }
+
     private DataSourceException connectException(RuntimeException exception) {
         if (exception instanceof DataSourceException dataSourceException) {
             return dataSourceException;
         }
-        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, exception.getMessage(), exception);
-    }
-
-    private int connectionTestTimeoutSeconds() {
-        return Math.max(1, properties.getConnectionTestTimeoutSeconds());
-    }
-
-    private DataSourceCatalogTableVO toCatalogTableVO(DataSourceTable source) {
-        DataSourceCatalogTableVO target = new DataSourceCatalogTableVO();
-        target.setDatabase(source.database());
-        target.setSchema(source.schema());
-        target.setName(source.name());
-        target.setType(source.type());
-        target.setRemarks(source.remarks());
-        return target;
-    }
-
-    private DataSourceCatalogColumnVO toCatalogColumnVO(DataSourceColumn source) {
-        DataSourceCatalogColumnVO target = new DataSourceCatalogColumnVO();
-        target.setName(source.name());
-        target.setTypeName(source.typeName());
-        target.setJdbcType(source.jdbcType());
-        target.setSize(source.size());
-        target.setScale(source.scale());
-        target.setNullable(source.nullable());
-        target.setOrdinalPosition(source.ordinalPosition());
-        target.setPrimaryKey(source.primaryKey());
-        target.setPrimaryKeyPosition(source.primaryKeyPosition());
-        target.setRemarks(source.remarks());
-        return target;
-    }
-
-    private DataSourceBatchConnectTestResultVO toBatchConnectTestResult(String dataSourceId, boolean connected) {
-        DataSourceBatchConnectTestResultVO result = new DataSourceBatchConnectTestResultVO();
-        result.setDataSourceId(dataSourceId);
-        result.setConnected(connected);
-        return result;
+        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {
         DataSourceVO target =
                 BeanCopyUtils.copy(source, DataSourceVO.class, "jdbcUrl", "environment", "connStatus", "originalJson");
-        if (target == null) return null;
-        target.setJdbcUrl(pluginRegistry.maskSensitiveText(source.getJdbcUrl()));
+        DataSourcePlugin provider = plugin(source.getDbType());
+        target.setJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), source.getJdbcUrl()));
         target.setDisplayJdbcUrl(target.getJdbcUrl());
-        if (source.getDbType() != null && StringUtils.hasText(source.getConnectionParams())) {
-            DataSourceConnection connection =
-                    pluginRegistry.parseConnection(source.getDbType(), source.getConnectionParams());
+        if (StringUtils.isNotBlank(source.getConnectionParams())) {
+            DataSourceConnection connection = parseConnection(provider, source.getConnectionParams());
             target.setDatabase(connection.database());
             target.setSchema(connection.schema());
-            target.setDisplayJdbcUrl(pluginRegistry.displayJdbcUrl(source.getDbType(), source.getConnectionParams()));
+            String displayUrl = provider.displayJdbcUrl(connection);
+            target.setDisplayJdbcUrl(DataSourceCredentialUtils.maskText(provider.descriptor(), displayUrl));
         }
-        target.setEnvironment(
-                source.getEnvironment() == null ? null : source.getEnvironment().name());
-        target.setEnvironmentName(
-                source.getEnvironment() == null ? null : source.getEnvironment().getDisplayName());
-        target.setConnStatus(
-                source.getConnStatus() == null ? null : source.getConnStatus().name());
-        if (includeOriginalJson && source.getDbType() != null) {
-            target.setOriginalJson(pluginRegistry.maskConnectionJson(source.getDbType(), source.getOriginalJson()));
+        if (source.getEnvironment() != null) {
+            target.setEnvironment(source.getEnvironment().name());
+            target.setEnvironmentName(source.getEnvironment().getDisplayName());
+        }
+        if (source.getConnStatus() != null) {
+            target.setConnStatus(source.getConnStatus().name());
+        }
+        if (includeOriginalJson) {
+            target.setOriginalJson(
+                    DataSourceCredentialUtils.maskForDisplay(provider.descriptor(), source.getOriginalJson()));
         }
         return target;
     }
