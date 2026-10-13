@@ -57,18 +57,22 @@ public final class StreamEdge {
         return new StreamEdge(sourceId, targetId, StreamPartitioning.KEYED, selector);
     }
 
+    /** Returns the graph-local upstream node ID. */
     public int sourceId() {
         return sourceId;
     }
 
+    /** Returns the graph-local downstream node ID. */
     public int targetId() {
         return targetId;
     }
 
+    /** Returns the routing strategy associated with this edge. */
     public StreamPartitioning partitioning() {
         return partitioning;
     }
 
+    /** Returns the keyed-routing extractor, or null for unkeyed edges. */
     public KeySelector<?> keySelector() {
         return keySelector;
     }

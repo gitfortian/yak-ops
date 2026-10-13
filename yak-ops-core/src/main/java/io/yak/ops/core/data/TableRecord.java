@@ -34,14 +34,17 @@ public final class TableRecord {
         this.row = Objects.requireNonNull(row, "row");
     }
 
+    /** Returns the physical identity of the emitted table. */
     public TableId tableId() {
         return tableId;
     }
 
+    /** Returns the insert, update, or delete kind of the row. */
     public RowKind rowKind() {
         return rowKind;
     }
 
+    /** Returns the transferred row payload without copying it. */
     public RowData row() {
         return row;
     }

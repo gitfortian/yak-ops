@@ -25,7 +25,7 @@ class StreamEdgeTest {
         StreamEdge keyed = StreamEdge.keyed(1, 2, selector);
         assertEquals(StreamPartitioning.KEYED, keyed.partitioning());
         assertSame(selector, keyed.keySelector());
-        assertEquals("a", ((KeySelector<String>) keyed.keySelector()).getKey("alpha"));
+        assertEquals("a", selector.getKey("alpha"));
     }
 
     @Test
