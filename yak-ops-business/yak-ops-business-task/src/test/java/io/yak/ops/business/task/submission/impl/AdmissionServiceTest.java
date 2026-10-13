@@ -10,16 +10,13 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.common.enums.task.DefinitionStatus;
-import io.yak.ops.common.enums.task.TaskAttemptStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
-import io.yak.ops.dao.entity.task.AttemptEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.entity.task.ExecutionClaimEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
-import io.yak.ops.dao.repository.task.AttemptRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
@@ -41,12 +38,11 @@ class AdmissionServiceTest {
     private final DefinitionRepository definitions = mock(DefinitionRepository.class);
     private final DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
     private final InstanceRepository instances = mock(InstanceRepository.class);
-    private final AttemptRepository attempts = mock(AttemptRepository.class);
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
     private final ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
     private final ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
     private final TaskExecutionIdentity context =
-            new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1", "attempt-1");
+            new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1");
     private final ExecutionResource target = new ExecutionResource("DATA_SYNC_TARGET", "source/table");
     private final TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(target), "resource-v1");
 
@@ -54,7 +50,6 @@ class AdmissionServiceTest {
         inject("definitions", definitions);
         inject("versions", versions);
         inject("instances", instances);
-        inject("attempts", attempts);
         inject("claims", claims);
 
         DefinitionEntity definition = new DefinitionEntity();
@@ -71,23 +66,19 @@ class AdmissionServiceTest {
     }
 
     @Test
-    void insertsOneInstanceAttemptAndExclusiveResource() {
+    void insertsOneInstanceAndExclusiveResource() {
         var result = service.admit(request());
         assertEquals("instance-1", result.instanceId());
-        assertEquals("attempt-1", result.attemptId());
         assertEquals(TaskInstanceStatus.SUBMITTED, result.status());
 
         ArgumentCaptor<InstanceEntity> instance = ArgumentCaptor.forClass(InstanceEntity.class);
-        ArgumentCaptor<AttemptEntity> attempt = ArgumentCaptor.forClass(AttemptEntity.class);
         ArgumentCaptor<ExecutionClaimEntity> claim = ArgumentCaptor.forClass(ExecutionClaimEntity.class);
         verify(instances).add(instance.capture());
-        verify(attempts).add(attempt.capture());
         verify(claims).add(claim.capture());
 
         assertEquals(TaskTriggerType.MANUAL, instance.getValue().getTriggerType());
         assertEquals(2, instance.getValue().getDefinitionVersion());
         assertEquals("resource-v1", instance.getValue().getResourceRevision());
-        assertEquals(TaskAttemptStatus.PENDING, attempt.getValue().getStatus());
         assertEquals("instance-1", claim.getValue().getInstanceId());
         assertEquals("source/table", claim.getValue().getResourceKey());
         verify(plugin, never()).start(any(), any(), any());
@@ -98,7 +89,6 @@ class AdmissionServiceTest {
         when(plugin.plan(parameters, context)).thenReturn(new TaskAdmissionPlan(List.of(target), "resource-v2"));
         assertThrows(BusinessException.class, () -> service.admit(request()));
         verify(instances, never()).add(any());
-        verify(attempts, never()).add(any());
         verify(claims, never()).add(any());
     }
 
@@ -110,15 +100,11 @@ class AdmissionServiceTest {
         existing.setDefinitionVersion(1);
         existing.setRequestFingerprint("MANUAL:definition-1");
         existing.setStatus(TaskInstanceStatus.FINISHED);
-        AttemptEntity prior = new AttemptEntity();
-        prior.setId("prior-attempt");
         when(instances.findByRequest("ws", TaskTriggerType.MANUAL, "request-123"))
                 .thenReturn(Optional.of(existing));
-        when(attempts.findByInstance("ws", "existing")).thenReturn(List.of(prior));
 
         var result = service.admit(request());
         assertEquals("existing", result.instanceId());
-        assertEquals("prior-attempt", result.attemptId());
         assertEquals(true, result.replayed());
         verify(definitions, never()).queryByIdForUpdate("ws", "definition-1");
         verify(claims, never()).add(any());

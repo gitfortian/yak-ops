@@ -10,6 +10,25 @@ import org.junit.jupiter.api.Test;
 class TaskExecutionMigrationTest {
 
     @Test
+    void movesPhysicalDispatchIntoTheSingleInstanceRecord() throws IOException {
+        String sql;
+        try (var resource =
+                getClass().getResourceAsStream("/db/migration/yak-ops/V7__task_instance_execution_simplification.sql")) {
+            assertTrue(resource != null);
+            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertTrue(sql.contains("ALTER TABLE yak_ops_task_instance"));
+        assertTrue(sql.contains("owner_incarnation VARCHAR(128)"));
+        assertTrue(sql.contains("dispatch_token VARCHAR(128)"));
+        assertTrue(sql.contains("runtime_engine VARCHAR(32)"));
+        assertTrue(sql.contains("runtime_id VARCHAR(128)"));
+        assertTrue(sql.contains("JOIN yak_ops_task_attempt"));
+        assertTrue(sql.contains("a.attempt_number = 1"));
+        assertTrue(sql.contains("DROP TABLE yak_ops_task_attempt"));
+        assertTrue(sql.indexOf("UPDATE yak_ops_task_instance") < sql.indexOf("DROP TABLE"));
+    }
+
+    @Test
     void persistsAdmissionAndDispatchGuards() throws IOException {
         String sql;
         try (var resource =
