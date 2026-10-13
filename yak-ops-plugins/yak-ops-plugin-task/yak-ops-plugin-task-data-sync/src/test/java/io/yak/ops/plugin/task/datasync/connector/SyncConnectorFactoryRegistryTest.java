@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.common.util.JSONUtils;
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.api.TaskPluginException;
@@ -90,6 +91,11 @@ class SyncConnectorFactoryRegistryTest {
         @Override
         public Class<? extends SourceParameters> parametersType() {
             return ExternalSourceParameters.class;
+        }
+
+        @Override
+        public Boundedness boundedness() {
+            return Boundedness.BOUNDED;
         }
 
         @Override
