@@ -52,7 +52,7 @@ public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
         try {
             ReadonlyConfig parsed = ConfigParser.parseJson(content);
             return JobConfigValidator.validateConfig(parsed, factories).parameters();
-        } catch (IllegalArgumentException failure) {
+        } catch (RuntimeException failure) {
             throw new TaskPluginException("Invalid DATA_SYNC pipeline JSON", failure);
         }
     }
