@@ -61,41 +61,78 @@ public interface InstanceRepository {
             TaskInstanceStatus status,
             String taskType);
 
-    /**
-     * Transitions only an admitted SUBMITTED Instance to RUNNING.
-     *
-     * @param workspaceId owning Workspace
-     * @param instanceId stable Instance ID
-     * @return true when the transition was applied
-     */
-    boolean markRunning(String workspaceId, String instanceId);
+    /** @return committed Task Instances awaiting their first physical submission */
+    List<InstanceEntity> pending();
 
     /**
-     * Persists cancellation intent for a SUBMITTED or RUNNING Instance.
+     * @param ownerIncarnation current embedded execution owner
+     * @return active Instances owned by a previous JVM
+     */
+    List<InstanceEntity> activeByOtherOwner(String ownerIncarnation);
+
+    /**
+     * Claims a SUBMITTED Instance before starting a physical Job.
      *
      * @param workspaceId owning Workspace
-     * @param instanceId stable Instance ID
-     * @return true when the transition was applied
+     * @param instanceId pending Instance
+     * @param ownerIncarnation verified embedded owner
+     * @param dispatchToken unique one-time launch token
+     * @return true when this claimant won
+     */
+    boolean claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken);
+
+    /**
+     * Persists the Job identity while retaining a concurrent cancellation request.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId launched Instance
+     * @param dispatchToken winning launcher token
+     * @param engine physical execution engine
+     * @param runtimeId physical Job identifier
+     * @return true when the launch is still owned by the caller
+     */
+    boolean markRunning(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
+
+    /**
+     * Atomically cancels a SUBMITTED Instance before dispatch.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId pending Instance
+     * @return true if cancellation won
+     */
+    boolean cancelSubmitted(String workspaceId, String instanceId);
+
+    /**
+     * Records cancellation intent for claimed work.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId launched Instance
+     * @return true when cancellation was recorded
      */
     boolean markCancelling(String workspaceId, String instanceId);
 
     /**
-     * Completes an active Instance with an authoritative outcome.
+     * Persists an authoritative terminal outcome under the owning dispatch token.
      *
      * @param workspaceId owning Workspace
-     * @param instanceId stable Instance ID
-     * @param status terminal business status
-     * @param reason safe failure category, or null
-     * @return true when the transition was applied
+     * @param instanceId launched Instance
+     * @param dispatchToken winning launch token
+     * @param status terminal Instance status
+     * @param reason safe failure category or null
+     * @return true when terminal outcome was recorded
      */
-    boolean markTerminal(String workspaceId, String instanceId, TaskInstanceStatus status, String reason);
+    boolean markTerminal(
+            String workspaceId, String instanceId, String dispatchToken, TaskInstanceStatus status, String reason);
 
     /**
-     * Marks an uncertain, nonterminal Instance requiring ownership reconciliation.
+     * Preserves resource claims for a physically uncertain submission.
      *
      * @param workspaceId owning Workspace
-     * @param instanceId stable Instance ID
-     * @return true when the transition was applied
+     * @param instanceId launched Instance
+     * @param dispatchToken original launch token
+     * @return true if reconciliation was recorded
      */
-    boolean markReconciling(String workspaceId, String instanceId);
+    boolean markReconciling(String workspaceId, String instanceId, String dispatchToken);
+
 }
