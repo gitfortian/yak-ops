@@ -8,7 +8,7 @@ import java.util.Objects;
  *
  * <p>Each JDBC reader or writer obtains a fresh connection through the provider.
  */
-public final class SyncRuntimeConnection {
+public final class RuntimeConnection {
 
     private final JdbcConnectionProvider provider;
     private final String jdbcUrl;
@@ -20,7 +20,7 @@ public final class SyncRuntimeConnection {
     private final long revision;
     private final boolean tunneled;
 
-    public SyncRuntimeConnection(
+    public RuntimeConnection(
             JdbcConnectionProvider provider,
             String jdbcUrl,
             String datasourceType,
@@ -79,6 +79,6 @@ public final class SyncRuntimeConnection {
 
     @Override
     public String toString() {
-        return "SyncRuntimeConnection{credentials=redacted}";
+        return "RuntimeConnection{credentials=redacted}";
     }
 }

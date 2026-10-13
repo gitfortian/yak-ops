@@ -5,9 +5,9 @@ import io.yak.ops.core.types.TableSchema;
 import java.util.Objects;
 
 /** Non-secret physical metadata and revision for one authorized table. */
-public record SyncRuntimeTable(String datasourceType, TableId table, TableSchema schema, long revision) {
+public record RuntimeTable(String datasourceType, TableId table, TableSchema schema, long revision) {
 
-    public SyncRuntimeTable {
+    public RuntimeTable {
         Objects.requireNonNull(datasourceType, "datasourceType");
         Objects.requireNonNull(table, "table");
         Objects.requireNonNull(schema, "schema");

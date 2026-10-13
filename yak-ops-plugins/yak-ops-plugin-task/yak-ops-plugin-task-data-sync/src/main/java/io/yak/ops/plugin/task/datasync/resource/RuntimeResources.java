@@ -1,7 +1,7 @@
 package io.yak.ops.plugin.task.datasync.resource;
 
 /** Trusted Workspace-scoped datasource and metadata access for DATA_SYNC execution. */
-public interface SyncRuntimeResources {
+public interface RuntimeResources {
 
     /**
      * Resolves the exact authorized table without exposing connection credentials.
@@ -13,7 +13,7 @@ public interface SyncRuntimeResources {
      * @param table selected table name
      * @return canonical table identity, schema and binding revision
      */
-    SyncRuntimeTable table(String workspaceId, String datasourceId, String database, String schema, String table);
+    RuntimeTable table(String workspaceId, String datasourceId, String database, String schema, String table);
 
     /**
      * Resolves runtime connection capability under the persisted Workspace scope.
@@ -22,5 +22,5 @@ public interface SyncRuntimeResources {
      * @param datasourceId saved datasource identifier
      * @return trusted connection and its binding revision; never persist this object
      */
-    SyncRuntimeConnection connection(String workspaceId, String datasourceId);
+    RuntimeConnection connection(String workspaceId, String datasourceId);
 }
