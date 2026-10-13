@@ -12,16 +12,21 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class DataSyncOperationsRepositoryImpl implements DataSyncOperationsRepository {
 
-    private static final String INSTANCE_SCOPE = """
+    private static final String INSTANCE_JOIN = """
             FROM yak_ops_task_instance i
             JOIN yak_ops_task_definition_version v
               ON v.workspace_id = i.workspace_id
              AND v.definition_id = i.definition_id
              AND v.version = i.definition_version
+            """;
+
+    private static final String INSTANCE_FILTER = """
             WHERE i.workspace_id = ?
               AND i.task_type = 'DATA_SYNC'
               AND JSON_UNQUOTE(JSON_EXTRACT(v.parameters, '$.source.type')) = ?
             """;
+
+    private static final String INSTANCE_SCOPE = INSTANCE_JOIN + INSTANCE_FILTER;
 
     private static final String OUTCOMES = """
             COUNT(*) AS execution_count,
@@ -92,10 +97,13 @@ public class DataSyncOperationsRepositoryImpl implements DataSyncOperationsRepos
                 SELECT i.id AS instance_id, i.definition_id, d.name AS task_name,
                        i.failure_code, i.create_time
                 """
-                + INSTANCE_SCOPE
+                + INSTANCE_JOIN
                 + """
-                   LEFT JOIN yak_ops_task_definition d
-                     ON d.workspace_id = i.workspace_id AND d.id = i.definition_id
+                  LEFT JOIN yak_ops_task_definition d
+                    ON d.workspace_id = i.workspace_id AND d.id = i.definition_id
+                """
+                + INSTANCE_FILTER
+                + """
                   AND i.status = 'FAILED'
                   AND i.create_time >= ? AND i.create_time < ?
                   ORDER BY i.create_time DESC, i.id DESC LIMIT 5
