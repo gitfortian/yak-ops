@@ -10,7 +10,7 @@ import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
