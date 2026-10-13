@@ -5,6 +5,7 @@ import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import io.yak.ops.spi.SpiRegistry;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -25,16 +26,16 @@ public final class ConnectorFactoryRegistry {
     /** Discovers all classpath providers through Java SPI. */
     public ConnectorFactoryRegistry() {
         this(
-                SpiRegistry.load(TableSourceFactory.class, factory -> java.util.List.of(factory.identifier())),
-                SpiRegistry.load(TableSinkFactory.class, factory -> java.util.List.of(factory.identifier())));
+                SpiRegistry.load(TableSourceFactory.class, factory -> List.of(factory.identifier())),
+                SpiRegistry.load(TableSinkFactory.class, factory -> List.of(factory.identifier())));
     }
 
     /** Registers explicit factories for embedding and tests. */
     public ConnectorFactoryRegistry(
             Iterable<? extends TableSourceFactory> sourceFactories, Iterable<? extends TableSinkFactory> sinkFactories) {
         this(
-                SpiRegistry.of(sourceFactories, factory -> java.util.List.of(factory.identifier())),
-                SpiRegistry.of(sinkFactories, factory -> java.util.List.of(factory.identifier())));
+                SpiRegistry.of(sourceFactories, factory -> List.of(factory.identifier())),
+                SpiRegistry.of(sinkFactories, factory -> List.of(factory.identifier())));
     }
 
     private ConnectorFactoryRegistry(SpiRegistry<TableSourceFactory> sources, SpiRegistry<TableSinkFactory> sinks) {

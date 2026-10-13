@@ -13,8 +13,7 @@ import java.util.Objects;
  * @param checkpointInterval interval between streaming checkpoints
  * @param maxRestarts maximum same-Job restart attempts after a completed checkpoint
  */
-public record RuntimeOptions(
-        int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
+public record RuntimeOptions(int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
 
     public RuntimeOptions {
         Objects.requireNonNull(checkpointInterval, "checkpointInterval");

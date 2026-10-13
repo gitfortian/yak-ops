@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
-import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
@@ -25,7 +24,8 @@ final class YakFlowTaskHandle implements TaskHandle {
 
     @Override
     public CompletionStage<TaskOutcome> completion() {
-        return client.getJobExecutionResult().handle((result, failure) -> failure)
+        return client.getJobExecutionResult()
+                .handle((result, failure) -> failure)
                 .thenCompose(resultFailure -> client.getJobStatus().handle((status, statusFailure) -> {
                     if (statusFailure != null) {
                         if (resultFailure != null && statusFailure != resultFailure) {
@@ -37,7 +37,8 @@ final class YakFlowTaskHandle implements TaskHandle {
                         case FINISHED -> TaskOutcome.FINISHED;
                         case CANCELED -> TaskOutcome.CANCELED;
                         case FAILED -> TaskOutcome.FAILED;
-                        default -> throw new IllegalStateException("YakFlow returned a result before terminal Job state");
+                        default ->
+                                throw new IllegalStateException("YakFlow returned a result before terminal Job state");
                     };
                 }));
     }

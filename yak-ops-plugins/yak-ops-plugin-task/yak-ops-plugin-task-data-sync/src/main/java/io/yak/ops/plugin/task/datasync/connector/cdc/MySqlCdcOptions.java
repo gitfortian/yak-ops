@@ -36,6 +36,8 @@ public record MySqlCdcOptions(int snapshotChunkSize, int queueCapacity) {
 
     /** Creates a typed configuration for Connector construction. */
     public Configuration configuration() {
-        return new Configuration().set(SNAPSHOT_CHUNK_SIZE, snapshotChunkSize).set(QUEUE_CAPACITY, queueCapacity);
+        return new Configuration()
+                .set(SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
+                .set(QUEUE_CAPACITY, queueCapacity);
     }
 }

@@ -29,10 +29,10 @@ public final class ExecutionConfigurationFactory {
     }
 
     /** Creates a factory with application-owned Connector options. */
-    public ExecutionConfigurationFactory(
-            RuntimeOptions options, Path stateRoot, Configuration connectorConfiguration) {
+    public ExecutionConfigurationFactory(RuntimeOptions options, Path stateRoot, Configuration connectorConfiguration) {
         this.options = Objects.requireNonNull(options, "options");
-        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
+        this.stateRoot =
+                Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
         this.connectorConfiguration =
                 new Configuration(Objects.requireNonNull(connectorConfiguration, "connectorConfiguration"));
     }
