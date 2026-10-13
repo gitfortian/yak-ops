@@ -41,8 +41,7 @@ public class DataSyncOperationsRepositoryImpl implements DataSyncOperationsRepos
     @Override
     public DataSyncOperationsVO.Summary summary(
             String workspaceId, String sourceType, LocalDateTime start, LocalDateTime end) {
-        String sql = "SELECT " + OUTCOMES + INSTANCE_SCOPE
-                + " AND i.create_time >= ? AND i.create_time < ?";
+        String sql = "SELECT " + OUTCOMES + INSTANCE_SCOPE + " AND i.create_time >= ? AND i.create_time < ?";
         return jdbc.queryForObject(
                 sql,
                 (rs, row) -> new DataSyncOperationsVO.Summary(
@@ -96,14 +95,10 @@ public class DataSyncOperationsRepositoryImpl implements DataSyncOperationsRepos
         String sql = """
                 SELECT i.id AS instance_id, i.definition_id, d.name AS task_name,
                        i.failure_code, i.create_time
-                """
-                + INSTANCE_JOIN
-                + """
+                """ + INSTANCE_JOIN + """
                   LEFT JOIN yak_ops_task_definition d
                     ON d.workspace_id = i.workspace_id AND d.id = i.definition_id
-                """
-                + INSTANCE_FILTER
-                + """
+                """ + INSTANCE_FILTER + """
                   AND i.status = 'FAILED'
                   AND i.create_time >= ? AND i.create_time < ?
                   ORDER BY i.create_time DESC, i.id DESC LIMIT 5

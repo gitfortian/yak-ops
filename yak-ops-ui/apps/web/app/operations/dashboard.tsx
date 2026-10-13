@@ -52,9 +52,7 @@ interface Props {
 
 export function DataSyncOperationsDashboard({ syncType }: Props) {
   const realtime = syncType === "REALTIME";
-  const [range, setRange] = useState<DataSyncOperationsRange>(
-    realtime ? "TODAY" : "LAST_7_DAYS",
-  );
+  const [range, setRange] = useState<DataSyncOperationsRange>(realtime ? "TODAY" : "LAST_7_DAYS");
   const [dashboard, setDashboard] = useState<DataSyncOperationsResult>();
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -118,7 +116,9 @@ export function DataSyncOperationsDashboard({ syncType }: Props) {
     grid: { top: 20, left: 12, right: 14, bottom: 48, containLabel: true },
     xAxis: {
       type: "category",
-      data: trend.map((item) => (range === "TODAY" ? item.bucket.slice(11, 16) : item.bucket.slice(5))),
+      data: trend.map((item) =>
+        range === "TODAY" ? item.bucket.slice(11, 16) : item.bucket.slice(5),
+      ),
       axisTick: { show: false },
       axisLabel: { color: "#98a2b3" },
     },
@@ -287,7 +287,8 @@ export function DataSyncOperationsDashboard({ syncType }: Props) {
                             {failure.taskName || "历史任务"}
                           </div>
                           <div className="mt-1 truncate text-xs text-[#98a2b3]">
-                            {failure.createTime.replace("T", " ")} · {failure.failureCode || "FAILED"}
+                            {failure.createTime.replace("T", " ")} ·{" "}
+                            {failure.failureCode || "FAILED"}
                           </div>
                         </div>
                         <ArrowUpRight size={16} className="shrink-0 text-[#98a2b3]" />

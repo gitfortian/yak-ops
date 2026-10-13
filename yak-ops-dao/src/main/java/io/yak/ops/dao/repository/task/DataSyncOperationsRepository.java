@@ -16,8 +16,7 @@ public interface DataSyncOperationsRepository {
      * @param end period end, exclusive
      * @return outcome counts
      */
-    DataSyncOperationsVO.Summary summary(
-            String workspaceId, String sourceType, LocalDateTime start, LocalDateTime end);
+    DataSyncOperationsVO.Summary summary(String workspaceId, String sourceType, LocalDateTime start, LocalDateTime end);
 
     /**
      * Counts currently running Instances independently of their creation date.
