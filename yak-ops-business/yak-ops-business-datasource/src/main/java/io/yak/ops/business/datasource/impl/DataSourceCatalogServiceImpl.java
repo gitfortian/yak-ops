@@ -2,8 +2,9 @@ package io.yak.ops.business.datasource.impl;
 
 import io.yak.ops.business.datasource.DataSourceCatalogService;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.runtime.DataSourceRuntimeConnection;
-import io.yak.ops.business.datasource.runtime.DataSourceRuntimeService;
+import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
@@ -23,14 +24,14 @@ import org.springframework.stereotype.Service;
 /**
  * Resolves authorized datasource connections and executes metadata queries through JDBC Catalog.
  *
- * <p>Each query owns one Catalog lifecycle. Datasource plugins create and close their physical
- * connections, including the SSH resources associated with those connections.
+ * <p>Each query owns one Catalog lifecycle. The shared JDBC provider creates physical
+ * connections and releases associated SSH resources when the caller closes them.
  */
 @Service
 public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
     @Resource
-    private DataSourceRuntimeService resources;
+    private DataSourceLookupService resources;
 
     @Override
     public List<String> listDatabases(String datasourceId) {
@@ -95,8 +96,8 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     }
 
     private <T> T query(String datasourceId, CatalogAction<T> action) {
-        DataSourceRuntimeConnection binding = resources.connection(WorkspaceContext.requireWorkspaceId(), datasourceId);
-        try (JdbcCatalog catalog = JdbcCatalogFactory.create(binding.jdbcUrl(), binding.provider())) {
+        JdbcConnectionOptions binding = new JdbcConnectionOptions(resources.connectionOptions(WorkspaceContext.requireWorkspaceId(), datasourceId));
+        try (JdbcCatalog catalog = JdbcCatalogFactory.create(binding.url(), new DefaultJdbcConnectionProvider(binding))) {
             return action.execute(catalog);
         } catch (SQLException | RuntimeException exception) {
             throw new DataSourceException(DataSourceErrorCode.CATALOG_QUERY_FAILED, null, exception);

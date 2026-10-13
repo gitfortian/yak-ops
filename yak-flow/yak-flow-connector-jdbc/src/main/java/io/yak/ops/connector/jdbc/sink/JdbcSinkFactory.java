@@ -5,7 +5,9 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.TableSinkFactory;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
-import io.yak.ops.connector.jdbc.JdbcConnectorResource;
+import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
+import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.data.TableRecord;
@@ -25,6 +27,11 @@ public final class JdbcSinkFactory implements TableSinkFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder().required(JdbcSinkOptions.WRITE_MODE).build();
+    }
+
+    @Override
+    public OptionRule creationOptionRule() {
+        return OptionRule.builder().include(optionRule()).include(JdbcConnectionOptions.RULE).build();
     }
 
     @Override
@@ -50,9 +57,8 @@ public final class JdbcSinkFactory implements TableSinkFactory {
 
     @Override
     public Sink<TableRecord> createSink(TableSinkFactoryContext context) {
-        if (!(context.resource() instanceof JdbcConnectorResource connection)) {
-            throw new IllegalArgumentException("JDBC Sink requires a JDBC connection resource");
-        }
+        FactoryUtil.validateCreation(context.options(), this);
+        JdbcConnectionOptions connection = new JdbcConnectionOptions(context.options());
         JdbcWriteMode mode = context.options().get(JdbcSinkOptions.WRITE_MODE);
         validate(context.options(), false);
         JdbcTableWritePlan plan = new JdbcTableWritePlan(
@@ -63,8 +69,8 @@ public final class JdbcSinkFactory implements TableSinkFactory {
                 context.sourceSchema(),
                 Map.of());
         return JdbcSink.builder()
-                .withConnectionProvider(connection.provider())
-                .withDialect(JdbcFactoryLoader.loadDialect(connection.jdbcUrl()))
+                .withConnectionProvider(new DefaultJdbcConnectionProvider(connection))
+                .withDialect(JdbcFactoryLoader.loadDialect(connection.url()))
                 .withTablePlans(List.of(plan))
                 .build();
     }

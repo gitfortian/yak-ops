@@ -1,6 +1,6 @@
-package io.yak.ops.plugin.database.jdbc;
+package io.yak.ops.connector.jdbc.database.connection;
 
-import io.yak.ops.plugin.database.jdbc.enums.SshAuthType;
+import io.yak.ops.connector.jdbc.database.connection.SshAuthType;
 import java.util.Objects;
 
 /**

@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.task.api.validation;
 
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 
