@@ -62,7 +62,7 @@ public final class SyncExecutionPlanner {
                 from.schema(),
                 to.schema(),
                 source instanceof MySqlCdcSourceParameters
-                        || sink.writeMode() == io.yak.ops.common.enums.datasync.DataSyncWriteMode.UPSERT);
+                        || sink.writeMode() == DataSyncWriteMode.UPSERT);
         String target = encodePart(sink.datasourceId())
                 + encodePart(to.table().catalog())
                 + encodePart(to.table().schema())
@@ -74,7 +74,6 @@ public final class SyncExecutionPlanner {
                 List.of(new ExecutionResource("DATA_SYNC_TARGET", target)), sha256(binding));
         return new SyncPipelinePlan(from, to, plan);
     }
-
 
     private static String encodeTable(TableId table) {
         return encodePart(table.catalog()) + encodePart(table.schema()) + encodePart(table.table());

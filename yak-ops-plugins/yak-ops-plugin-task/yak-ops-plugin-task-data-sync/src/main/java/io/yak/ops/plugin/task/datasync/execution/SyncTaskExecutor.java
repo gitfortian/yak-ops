@@ -134,6 +134,4 @@ public final class SyncTaskExecutor {
             return CompletableFuture.failedFuture(error);
         }
     }
-
-
 }

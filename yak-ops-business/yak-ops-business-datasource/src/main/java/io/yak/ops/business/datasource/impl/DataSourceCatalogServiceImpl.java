@@ -1,9 +1,9 @@
 package io.yak.ops.business.datasource.impl;
 
 import io.yak.ops.business.datasource.DataSourceCatalogService;
+import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeConnection;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeService;
-import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;

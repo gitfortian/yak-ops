@@ -13,8 +13,7 @@ public interface DataSourceRuntimeService {
      * @param table selected table name
      * @return canonical table metadata and binding revision
      */
-    DataSourceRuntimeTable table(
-            String workspaceId, String datasourceId, String database, String schema, String table);
+    DataSourceRuntimeTable table(String workspaceId, String datasourceId, String database, String schema, String table);
 
     /**
      * Resolves a Datasource connection under the explicit Workspace identity.
