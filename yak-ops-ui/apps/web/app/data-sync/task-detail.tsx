@@ -548,7 +548,9 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 <BasicInfoField label="同步方案">{realtime ? "实时同步" : "离线同步"}</BasicInfoField>
                 <BasicInfoField label="创建时间">{task.createTime || "-"}</BasicInfoField>
                 <BasicInfoField label="更新时间">{task.updateTime || "-"}</BasicInfoField>
-                <BasicInfoField label="写入方式">{dataSyncWriteModeText(task.writeMode)}</BasicInfoField>
+                <BasicInfoField label="写入方式">
+                  {dataSyncWriteModeText(task.writeMode)}
+                </BasicInfoField>
                 <BasicInfoField label="当前版本">v{task.definitionVersion}</BasicInfoField>
                 <BasicInfoField label="调试模式">{task.debug ? "开启" : "关闭"}</BasicInfoField>
                 {task.remark ? <BasicInfoField label="备注">{task.remark}</BasicInfoField> : null}
