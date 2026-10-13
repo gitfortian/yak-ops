@@ -1,7 +1,7 @@
 package io.yak.ops.flow.runtime.configuration;
 
-import io.yak.ops.core.configuration.ConfigOption;
-import io.yak.ops.core.configuration.ConfigOptions;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
 
 /** Configuration options for the single-JVM runtime implementation. */
 public final class RuntimeOptions {
@@ -11,8 +11,8 @@ public final class RuntimeOptions {
      *
      * <p>Retains its established configuration key so persisted configuration behaves consistently.
      */
-    public static final ConfigOption<Integer> CHANNEL_CAPACITY =
-            ConfigOptions.key("execution.local-channel.capacity").intType().defaultValue(64);
+    public static final Option<Integer> CHANNEL_CAPACITY =
+            Options.key("execution.local-channel.capacity").intType().defaultValue(64);
 
     private RuntimeOptions() {}
 }

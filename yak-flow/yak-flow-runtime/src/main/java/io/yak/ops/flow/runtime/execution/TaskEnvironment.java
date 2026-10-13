@@ -3,7 +3,7 @@ package io.yak.ops.flow.runtime.execution;
 import io.yak.ops.core.api.common.TaskInfo;
 import io.yak.ops.core.api.connector.sink.ProcessingTimeService;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
-import io.yak.ops.core.configuration.Configuration;
+import io.yak.ops.configuration.Configuration;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 
