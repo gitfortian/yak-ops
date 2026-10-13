@@ -54,10 +54,7 @@ public class DataSyncOperationsServiceImpl implements DataSyncOperationsService 
     }
 
     private List<DataSyncOperationsVO.TrendPoint> completeTrend(
-            LocalDateTime start,
-            LocalDateTime end,
-            boolean hourly,
-            List<DataSyncOperationsVO.TrendPoint> persisted) {
+            LocalDateTime start, LocalDateTime end, boolean hourly, List<DataSyncOperationsVO.TrendPoint> persisted) {
         Map<String, DataSyncOperationsVO.TrendPoint> counts = new HashMap<>();
         for (DataSyncOperationsVO.TrendPoint point : persisted) {
             counts.put(point.bucket(), point);
