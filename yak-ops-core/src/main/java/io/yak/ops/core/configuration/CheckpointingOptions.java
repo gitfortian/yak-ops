@@ -1,5 +1,8 @@
 package io.yak.ops.core.configuration;
 
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+
 import java.time.Duration;
 
 /**
@@ -17,25 +20,25 @@ public final class CheckpointingOptions {
      *
      * <p>An absent or zero interval disables periodic triggering; negative intervals are invalid.
      */
-    public static final ConfigOption<Duration> CHECKPOINTING_INTERVAL =
-            ConfigOptions.key("execution.checkpointing.interval").durationType().defaultValue(Duration.ZERO);
+    public static final Option<Duration> CHECKPOINTING_INTERVAL =
+            Options.key("execution.checkpointing.interval").durationType().defaultValue(Duration.ZERO);
 
     /** Maximum duration of one checkpoint attempt before it must be declined. */
-    public static final ConfigOption<Duration> CHECKPOINTING_TIMEOUT =
-            ConfigOptions.key("execution.checkpointing.timeout").durationType().defaultValue(Duration.ofMinutes(10));
+    public static final Option<Duration> CHECKPOINTING_TIMEOUT =
+            Options.key("execution.checkpointing.timeout").durationType().defaultValue(Duration.ofMinutes(10));
 
     /**
      * Minimum idle time between successive checkpoint attempts.
      *
      * <p>Only one checkpoint may be in flight in the current local runtime.
      */
-    public static final ConfigOption<Duration> MIN_PAUSE_BETWEEN_CHECKPOINTS = ConfigOptions.key(
+    public static final Option<Duration> MIN_PAUSE_BETWEEN_CHECKPOINTS = Options.key(
                     "execution.checkpointing.min-pause")
             .durationType()
             .defaultValue(Duration.ZERO);
 
     /** Maximum concurrent checkpoints; the current runtime requires exactly one. */
-    public static final ConfigOption<Integer> MAX_CONCURRENT_CHECKPOINTS = ConfigOptions.key(
+    public static final Option<Integer> MAX_CONCURRENT_CHECKPOINTS = Options.key(
                     "execution.checkpointing.max-concurrent-checkpoints")
             .intType()
             .defaultValue(1);
@@ -46,7 +49,7 @@ public final class CheckpointingOptions {
      * <p>Periodic checkpointing requires an explicit directory. Separate jobs must not write
      * concurrently to the same directory; the runtime uses an exclusive lock and atomic replacement.
      */
-    public static final ConfigOption<String> STATE_DIRECTORY = ConfigOptions.key(
+    public static final Option<String> STATE_DIRECTORY = Options.key(
                     "execution.checkpointing.state-directory")
             .stringType()
             .noDefaultValue();
@@ -56,7 +59,7 @@ public final class CheckpointingOptions {
      *
      * <p>Restoration requires stable operator UIDs and a compatible topology and parallelism.
      */
-    public static final ConfigOption<Boolean> RESTORE_LATEST = ConfigOptions.key(
+    public static final Option<Boolean> RESTORE_LATEST = Options.key(
                     "execution.checkpointing.restore-latest")
             .booleanType()
             .defaultValue(false);

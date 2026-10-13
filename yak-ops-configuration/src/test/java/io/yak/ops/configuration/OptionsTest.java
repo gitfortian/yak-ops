@@ -1,4 +1,4 @@
-package io.yak.ops.core.configuration;
+package io.yak.ops.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,11 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-class ConfigOptionsTest {
+class OptionsTest {
 
     @Test
     void typedOptionReadsItsDefaultWithoutAddingAnExplicitConfigurationEntry() {
-        ConfigOption<Integer> option = ConfigOptions.key("workers").intType().defaultValue(2);
+        Option<Integer> option = Options.key("workers").intType().defaultValue(2);
         Configuration configuration = new Configuration();
 
         assertEquals("workers", option.key());
@@ -28,7 +28,7 @@ class ConfigOptionsTest {
 
     @Test
     void noDefaultOptionStaysAbsentUntilExplicitlySet() {
-        ConfigOption<String> option = ConfigOptions.key("name").stringType().noDefaultValue();
+        Option<String> option = Options.key("name").stringType().noDefaultValue();
         Configuration configuration = new Configuration();
 
         assertFalse(option.hasDefaultValue());
@@ -44,14 +44,14 @@ class ConfigOptionsTest {
 
     @Test
     void invalidOptionDeclarationsFailBeforeConfigurationIsUsed() {
-        assertThrows(IllegalArgumentException.class, () -> ConfigOptions.key(""));
-        assertThrows(IllegalArgumentException.class, () -> ConfigOptions.key(" "));
-        assertThrows(IllegalArgumentException.class, () -> ConfigOptions.key(null));
+        assertThrows(IllegalArgumentException.class, () -> Options.key(""));
+        assertThrows(IllegalArgumentException.class, () -> Options.key(" "));
+        assertThrows(IllegalArgumentException.class, () -> Options.key(null));
         assertThrows(NullPointerException.class,
-                () -> ConfigOptions.key("workers").intType().defaultValue(null));
+                () -> Options.key("workers").intType().defaultValue(null));
         assertThrows(NullPointerException.class,
-                () -> ConfigOptions.key("mode").enumType(null));
-        assertThrows(IllegalArgumentException.class,
-                () -> new ConfigOption<>("workers", Integer.class, null, true));
+                () -> Options.key("mode").enumType(null));
+        assertThrows(NullPointerException.class,
+                () -> new Option<>("workers", com.fasterxml.jackson.databind.type.TypeFactory.defaultInstance().constructType(Integer.class), null, true));
     }
 }

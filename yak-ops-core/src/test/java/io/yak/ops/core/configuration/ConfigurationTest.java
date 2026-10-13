@@ -1,5 +1,9 @@
 package io.yak.ops.core.configuration;
 
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -51,21 +55,21 @@ class ConfigurationTest {
                 "mode", " streaming ",
                 "label", "keep spaces"));
 
-        assertEquals(42, (int) configuration.get(ConfigOptions.key("workers").intType().noDefaultValue()));
-        assertEquals(9_000_000_000L, (long) configuration.get(ConfigOptions.key("offset").longType().noDefaultValue()));
-        assertEquals(1.25d, (double) configuration.get(ConfigOptions.key("factor").doubleType().noDefaultValue()));
-        assertEquals(0.5f, (float) configuration.get(ConfigOptions.key("ratio").floatType().noDefaultValue()));
-        assertTrue(configuration.get(ConfigOptions.key("enabled").booleanType().noDefaultValue()));
+        assertEquals(42, (int) configuration.get(Options.key("workers").intType().noDefaultValue()));
+        assertEquals(9_000_000_000L, (long) configuration.get(Options.key("offset").longType().noDefaultValue()));
+        assertEquals(1.25d, (double) configuration.get(Options.key("factor").doubleType().noDefaultValue()));
+        assertEquals(0.5f, (float) configuration.get(Options.key("ratio").floatType().noDefaultValue()));
+        assertTrue(configuration.get(Options.key("enabled").booleanType().noDefaultValue()));
         assertEquals(RuntimeExecutionMode.STREAMING,
-                configuration.get(ConfigOptions.key("mode").enumType(RuntimeExecutionMode.class).noDefaultValue()));
-        assertEquals("keep spaces", configuration.get(ConfigOptions.key("label").stringType().noDefaultValue()));
+                configuration.get(Options.key("mode").enumType(RuntimeExecutionMode.class).noDefaultValue()));
+        assertEquals("keep spaces", configuration.get(Options.key("label").stringType().noDefaultValue()));
         assertEquals(" 42 ", configuration.getString("workers", "missing"));
         assertEquals(" 42 ", configuration.toMap().get("workers"));
     }
 
     @Test
     void durationSupportsIsoAndReadableUnits() {
-        ConfigOption<Duration> duration = ConfigOptions.key("checkpoint.timeout").durationType().noDefaultValue();
+        Option<Duration> duration = Options.key("checkpoint.timeout").durationType().noDefaultValue();
         Configuration configuration = new Configuration();
 
         Map<String, Duration> samples = Map.of(
@@ -85,20 +89,20 @@ class ConfigurationTest {
 
     @Test
     void malformedTypedValuesFailWithTheConfigurationKeyAndPreserveTheRawValue() {
-        assertInvalidValue("workers", "not-a-number", ConfigOptions.key("workers").intType().noDefaultValue());
-        assertInvalidValue("workers", "2147483648", ConfigOptions.key("workers").intType().noDefaultValue());
-        assertInvalidValue("enabled", "sometimes", ConfigOptions.key("enabled").booleanType().noDefaultValue());
+        assertInvalidValue("workers", "not-a-number", Options.key("workers").intType().noDefaultValue());
+        assertInvalidValue("workers", "2147483648", Options.key("workers").intType().noDefaultValue());
+        assertInvalidValue("enabled", "sometimes", Options.key("enabled").booleanType().noDefaultValue());
         assertInvalidValue("mode", "unsupported",
-                ConfigOptions.key("mode").enumType(RuntimeExecutionMode.class).noDefaultValue());
+                Options.key("mode").enumType(RuntimeExecutionMode.class).noDefaultValue());
         assertInvalidValue("timeout", "10fortnights",
-                ConfigOptions.key("timeout").durationType().noDefaultValue());
+                Options.key("timeout").durationType().noDefaultValue());
         assertInvalidValue("timeout", "9223372036854775807d",
-                ConfigOptions.key("timeout").durationType().noDefaultValue());
+                Options.key("timeout").durationType().noDefaultValue());
     }
 
     @Test
     void copyConstructorAndCloneIsolateSubsequentChanges() {
-        ConfigOption<Integer> workers = ConfigOptions.key("workers").intType().noDefaultValue();
+        Option<Integer> workers = Options.key("workers").intType().noDefaultValue();
         Configuration original = new Configuration().set(workers, 2);
         Configuration copy = new Configuration(original);
         Configuration clone = original.clone();
@@ -122,8 +126,8 @@ class ConfigurationTest {
 
     @Test
     void addAllOverwritesOnlyExplicitKeysAndDoesNotShareTheSourceMap() {
-        ConfigOption<Integer> workers = ConfigOptions.key("workers").intType().defaultValue(1);
-        ConfigOption<String> mode = ConfigOptions.key("mode").stringType().defaultValue("BATCH");
+        Option<Integer> workers = Options.key("workers").intType().defaultValue(1);
+        Option<String> mode = Options.key("mode").stringType().defaultValue("BATCH");
         Configuration target = new Configuration().set(workers, 2);
         Configuration source = new Configuration().set(workers, 3);
         source.setString("label", "source");
@@ -143,7 +147,7 @@ class ConfigurationTest {
 
     @Test
     void removingOptionsChangesOnlyExplicitState() {
-        ConfigOption<Integer> workers = ConfigOptions.key("workers").intType().defaultValue(2);
+        Option<Integer> workers = Options.key("workers").intType().defaultValue(2);
         Configuration configuration = new Configuration();
 
         assertFalse(configuration.contains(workers));
@@ -225,7 +229,7 @@ class ConfigurationTest {
     @Test
     void invalidRawKeysAndNullWritesDoNotCreateEntries() {
         Configuration configuration = new Configuration();
-        ConfigOption<Integer> workers = ConfigOptions.key("workers").intType().noDefaultValue();
+        Option<Integer> workers = Options.key("workers").intType().noDefaultValue();
 
         assertThrows(IllegalArgumentException.class, () -> configuration.setString(" ", "1"));
         assertThrows(IllegalArgumentException.class, () -> configuration.getString(null, "unused"));
@@ -236,7 +240,7 @@ class ConfigurationTest {
         assertTrue(configuration.keySet().isEmpty());
     }
 
-    private static <T> void assertInvalidValue(String key, String raw, ConfigOption<T> option) {
+    private static <T> void assertInvalidValue(String key, String raw, Option<T> option) {
         Configuration configuration = new Configuration();
         configuration.setString(key, raw);
 
