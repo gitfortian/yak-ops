@@ -18,6 +18,10 @@
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-configuration</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-common</artifactId>
         </dependency>
         <dependency>

@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasource.runtime.impl;
 
 import io.yak.ops.business.datasource.config.DataSourceProperties;
+import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeConnection;
 import io.yak.ops.business.datasource.runtime.DataSourceRuntimeService;
@@ -62,7 +63,7 @@ public class DataSourceRuntimeServiceImpl implements DataSourceRuntimeService {
 
         DataSourceConnection connection;
         try {
-            connection = plugin.parseConnection(entity.getConnectionParams());
+            connection = plugin.parseConnection(ConfigParser.parseJson(entity.getConnectionParams()));
         } catch (RuntimeException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }

@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasource.impl;
 
 import io.yak.ops.business.datasource.DataSourceService;
+import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.util.DataSourceCredentialUtils;
@@ -323,7 +324,7 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     private DataSourceConnection parseConnection(DataSourcePlugin provider, String json) {
         try {
-            return provider.parseConnection(json);
+            return provider.parseConnection(ConfigParser.parseJson(json));
         } catch (RuntimeException exception) {
             throw new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS, null, exception);
         }
