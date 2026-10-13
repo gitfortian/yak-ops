@@ -9,4 +9,10 @@ public record JdbcRecordAndPosition(TableRecord record, Long lastKey) {
     public JdbcRecordAndPosition {
         Objects.requireNonNull(record, "record");
     }
+
+    /** Hides source row contents and business-key positions from diagnostics. */
+    @Override
+    public String toString() {
+        return "JdbcRecordAndPosition{record=redacted, lastKey=redacted}";
+    }
 }

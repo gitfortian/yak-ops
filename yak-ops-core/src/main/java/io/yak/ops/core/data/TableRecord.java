@@ -15,4 +15,10 @@ public record TableRecord(TableId tableId, RowKind rowKind, RowData row) {
         Objects.requireNonNull(rowKind, "rowKind");
         Objects.requireNonNull(row, "row");
     }
+
+    /** Excludes arbitrary RowData contents from diagnostics. */
+    @Override
+    public String toString() {
+        return "TableRecord{tableId=" + tableId + ", rowKind=" + rowKind + ", row=redacted}";
+    }
 }

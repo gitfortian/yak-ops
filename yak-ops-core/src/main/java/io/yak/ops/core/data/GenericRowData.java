@@ -88,8 +88,9 @@ public final class GenericRowData implements RowData {
         return Arrays.deepHashCode(fields);
     }
 
+    /** Returns row shape without exposing individual field values to diagnostics. */
     @Override
     public String toString() {
-        return Arrays.deepToString(fields);
+        return "GenericRowData{arity=" + fields.length + ", fields=redacted}";
     }
 }

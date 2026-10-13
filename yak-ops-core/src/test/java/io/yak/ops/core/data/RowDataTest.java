@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.core.types.LogicalTypes;
 import java.math.BigDecimal;
@@ -88,6 +89,46 @@ class RowDataTest {
         extracted.setTime(0);
         assertEquals("2026-10-09 12:01:02.0", row.getField(1).toString());
         assertEquals(row.copy(), row);
+    }
+
+    @Test
+    void rowDiagnosticsNeverContainFieldValues() {
+        String sensitiveValue = "sensitive-customer-row-value";
+        GenericRowData row = GenericRowData.of(42L, sensitiveValue);
+        String rowDiagnostic = row.toString();
+        assertTrue(rowDiagnostic.contains("arity=2"));
+        assertFalse(rowDiagnostic.contains(sensitiveValue));
+
+        TableRecord record = new TableRecord(new TableId(null, "public", "orders"), RowKind.INSERT, row);
+        assertTrue(record.toString().contains("row=redacted"));
+        assertFalse(record.toString().contains(sensitiveValue));
+    }
+
+    @Test
+    void tableRecordDoesNotInvokeArbitraryRowStringifier() {
+        RowData row = new RowData() {
+            @Override
+            public int getArity() {
+                return 1;
+            }
+
+            @Override
+            public boolean isNullAt(int position) {
+                return false;
+            }
+
+            @Override
+            public Object getField(int position) {
+                return "private-row-value";
+            }
+
+            @Override
+            public String toString() {
+                throw new AssertionError("A row's toString must not be called");
+            }
+        };
+        TableRecord record = new TableRecord(new TableId(null, null, "orders"), RowKind.INSERT, row);
+        assertTrue(record.toString().contains("row=redacted"));
     }
 
     @Test
