@@ -1,6 +1,7 @@
 package io.yak.ops.boot.config;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.core.execution.PipelineExecutor;
@@ -57,15 +58,11 @@ public class TaskPluginConfiguration {
     io.yak.ops.configuration.Configuration mySqlCdcConnectorConfiguration(
             @Value("${yak.task.data-sync.cdc.snapshot-chunk-size:1024}") int snapshotChunkSize,
             @Value("${yak.task.data-sync.cdc.queue-capacity:256}") int queueCapacity) {
-        if (snapshotChunkSize < 1 || snapshotChunkSize > 100_000) {
-            throw new IllegalArgumentException("Invalid MySQL CDC snapshot chunk size");
-        }
-        if (queueCapacity < 1 || queueCapacity > 10_000) {
-            throw new IllegalArgumentException("Invalid MySQL CDC queue capacity");
-        }
-        return new io.yak.ops.configuration.Configuration()
+        io.yak.ops.configuration.Configuration options = new io.yak.ops.configuration.Configuration()
                 .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
                 .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, queueCapacity);
+        ConfigValidator.of(options.toReadonlyConfig()).validate(MySqlCdcSourceOptions.PHYSICAL_RULE);
+        return options;
     }
 
     @Bean

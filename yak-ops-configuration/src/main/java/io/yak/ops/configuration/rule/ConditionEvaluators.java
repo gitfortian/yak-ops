@@ -55,9 +55,14 @@ public final class ConditionEvaluators {
     }
 
     private static int compare(Object value, Object expected) {
-        if (!(value instanceof Number left) || !(expected instanceof Number right)) {
-            throw new IllegalArgumentException("Numeric constraint requires numeric values");
+        if (value instanceof Number left && expected instanceof Number right) {
+            return new BigDecimal(left.toString()).compareTo(new BigDecimal(right.toString()));
         }
-        return new BigDecimal(left.toString()).compareTo(new BigDecimal(right.toString()));
+        if (value instanceof Comparable<?> comparable && value.getClass().isInstance(expected)) {
+            @SuppressWarnings("unchecked")
+            Comparable<Object> typed = (Comparable<Object>) comparable;
+            return typed.compareTo(expected);
+        }
+        throw new IllegalArgumentException("Constraint values must have comparable types");
     }
 }

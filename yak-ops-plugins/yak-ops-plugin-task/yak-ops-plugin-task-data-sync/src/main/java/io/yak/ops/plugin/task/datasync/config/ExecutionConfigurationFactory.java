@@ -34,10 +34,6 @@ public final class ExecutionConfigurationFactory {
     public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot, Configuration connectorConfiguration) {
         this.options = Objects.requireNonNull(options, "options");
         ConfigValidator.of(options).validate(JobOptions.RUNTIME_RULE);
-        if (options.get(JobOptions.CHECKPOINT_INTERVAL).isNegative()
-                || options.get(JobOptions.CHECKPOINT_INTERVAL).isZero()) {
-            throw new IllegalArgumentException("DATA_SYNC checkpoint interval must be positive");
-        }
         this.stateRoot =
                 Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
         this.connectorConfiguration =

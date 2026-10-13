@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import com.google.auto.service.AutoService;
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.ConnectorExecutionIdentity;
 import io.yak.ops.connector.base.factory.ConnectorResourceClaim;
@@ -61,9 +62,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         int chunkSize = context.configuration().get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE);
         int queueCapacity = context.configuration().get(MySqlCdcSourceOptions.QUEUE_CAPACITY);
-        if (chunkSize < 1 || chunkSize > 100_000 || queueCapacity < 1 || queueCapacity > 10_000) {
-            throw new IllegalArgumentException("Invalid MySQL CDC snapshot or queue capacity");
-        }
+        ConfigValidator.of(context.configuration().toReadonlyConfig()).validate(MySqlCdcSourceOptions.PHYSICAL_RULE);
         return MySqlCdcSource.builder()
                 .hostname(connection.host())
                 .port(connection.port())
