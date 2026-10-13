@@ -143,9 +143,7 @@ function ExecutionProgressCard({ record, realtime }: DetailProps) {
             <Target size={18} className="sync-execution-flow-end" aria-hidden="true" />
           </>
         ) : (
-          <span aria-hidden="true">
-            {progress.value === null ? "—" : progress.value + "%"}
-          </span>
+          <span aria-hidden="true">{progress.value === null ? "—" : progress.value + "%"}</span>
         )}
       </div>
       <h3 className="mt-2 text-sm font-semibold text-[#344054]">{label}</h3>
