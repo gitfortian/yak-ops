@@ -410,10 +410,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         setForm({
           name: task.name,
           remark: task.remark || "",
-          writeMode:
-            task.writeMode === "OVERWRITE" || task.writeMode === "UPSERT"
-              ? task.writeMode
-              : "APPEND",
+          writeMode: task.writeMode === "UPSERT" ? "UPSERT" : "APPEND",
           sourceDataSourceId: task.sourceDataSourceId,
           sourceDatabase: task.sourceDatabase || "",
           sourceSchema: task.sourceSchema || "",
