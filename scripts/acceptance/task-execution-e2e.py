@@ -315,7 +315,12 @@ def acceptance():
         continuous, _ = submit(client, cdc)
         running = continuous["instanceId"]
         wait_status(client, running, {"RUNNING"})
-        assert claim_count(running) == 1
+        assert claim_count(running) == 2
+        claim_types = query_mysql(
+            "SELECT GROUP_CONCAT(resource_type ORDER BY resource_type) "
+            + "FROM yak_security.yak_ops_task_execution_claim "
+            + f"WHERE instance_id = '{running}'")
+        assert claim_types == "DATA_SYNC_TARGET,MYSQL_CDC_SERVER_ID"
         conflict, _ = submit(client, cdc, expected=409)
         assert conflict is None
         query_mysql("INSERT INTO app.orders VALUES (3,'three')")
@@ -339,14 +344,14 @@ def acceptance():
         interrupted, _ = submit(client, cdc)
         interrupted_id = interrupted["instanceId"]
         wait_status(client, interrupted_id, {"RUNNING"})
-        assert claim_count(interrupted_id) == 1
+        assert claim_count(interrupted_id) == 2
         shutdown(app, force=True)
         app = boot()
         client = Client()
         client.login()
         client.workspace = workspace
         wait_status(client, interrupted_id, {"RECONCILING"}, timeout=70)
-        assert claim_count(interrupted_id) == 1
+        assert claim_count(interrupted_id) == 2
         conflict, _ = submit(client, cdc, expected=409)
         assert conflict is None
         old_attempt = client.call(
