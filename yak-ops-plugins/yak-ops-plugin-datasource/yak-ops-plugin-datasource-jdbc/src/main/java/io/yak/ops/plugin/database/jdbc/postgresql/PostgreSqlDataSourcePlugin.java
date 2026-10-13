@@ -1,12 +1,12 @@
 package io.yak.ops.plugin.database.jdbc.postgresql;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.auto.service.AutoService;
+import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
-import com.google.auto.service.AutoService;
-import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourceConnection;
 import io.yak.ops.plugin.datasource.api.plugin.DataSourcePlugin;
@@ -30,10 +30,10 @@ public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlug
             Map.entry("tcpkeepalive", "tcpKeepAlive"),
             Map.entry("rewritebatchedinserts", "reWriteBatchedInserts"));
 
-
     private static final Option<String> SSL_MODE = Options.key("properties.sslmode")
-            .singleChoice(String.class, java.util.List.of(
-                    "disable", "allow", "prefer", "require", "verify-ca", "verify-full"))
+            .singleChoice(
+                    String.class,
+                    java.util.List.of("disable", "allow", "prefer", "require", "verify-ca", "verify-full"))
             .noDefaultValue();
     private static final Option<Integer> CONNECT_TIMEOUT =
             Options.key("properties.connectTimeout").intType().noDefaultValue();

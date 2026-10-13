@@ -867,7 +867,9 @@ const DataSourceForm = ({ open, record, onOpenChange, onSaved }: DataSourceFormP
     MYSQL_5: intl.formatMessage({ id: "pages.datasource.form.versionMysql5" }),
   };
 
-  const serverDriverIds = optionRules?.options.find((option) => option.key === "driverId")?.allowedValues;
+  const serverDriverIds = optionRules?.options.find(
+    (option) => option.key === "driverId",
+  )?.allowedValues;
   const availableDriverIds = (serverDriverIds ?? ["AUTO", "MYSQL_8", "MYSQL_5"]).filter(
     (driverId): driverId is MySqlDriverId =>
       driverId === "AUTO" || driverId === "MYSQL_8" || driverId === "MYSQL_5",
