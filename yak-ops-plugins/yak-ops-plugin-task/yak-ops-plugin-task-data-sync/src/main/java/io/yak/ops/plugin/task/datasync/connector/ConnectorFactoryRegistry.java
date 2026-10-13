@@ -15,42 +15,42 @@ import java.util.Objects;
  * <p>Identifiers resolve saved JSON. Exact parameters types resolve compiled definitions;
  * ambiguous identifiers or parameter classes are rejected at registry construction.
  */
-public final class SyncConnectorFactoryRegistry {
+public final class ConnectorFactoryRegistry {
 
-    private final SpiRegistry<SyncSourceFactory> sources;
-    private final SpiRegistry<SyncSinkFactory> sinks;
-    private final Map<Class<?>, SyncSourceFactory> sourcesByClass;
-    private final Map<Class<?>, SyncSinkFactory> sinksByClass;
+    private final SpiRegistry<TableSourceFactory> sources;
+    private final SpiRegistry<TableSinkFactory> sinks;
+    private final Map<Class<?>, TableSourceFactory> sourcesByClass;
+    private final Map<Class<?>, TableSinkFactory> sinksByClass;
 
     /** Discovers all classpath providers through Java SPI. */
-    public SyncConnectorFactoryRegistry() {
+    public ConnectorFactoryRegistry() {
         this(
-                SpiRegistry.load(SyncSourceFactory.class, factory -> java.util.List.of(factory.identifier())),
-                SpiRegistry.load(SyncSinkFactory.class, factory -> java.util.List.of(factory.identifier())));
+                SpiRegistry.load(TableSourceFactory.class, factory -> java.util.List.of(factory.identifier())),
+                SpiRegistry.load(TableSinkFactory.class, factory -> java.util.List.of(factory.identifier())));
     }
 
     /** Registers explicit factories for embedding and tests. */
-    public SyncConnectorFactoryRegistry(
-            Iterable<? extends SyncSourceFactory> sourceFactories, Iterable<? extends SyncSinkFactory> sinkFactories) {
+    public ConnectorFactoryRegistry(
+            Iterable<? extends TableSourceFactory> sourceFactories, Iterable<? extends TableSinkFactory> sinkFactories) {
         this(
                 SpiRegistry.of(sourceFactories, factory -> java.util.List.of(factory.identifier())),
                 SpiRegistry.of(sinkFactories, factory -> java.util.List.of(factory.identifier())));
     }
 
-    private SyncConnectorFactoryRegistry(SpiRegistry<SyncSourceFactory> sources, SpiRegistry<SyncSinkFactory> sinks) {
+    private ConnectorFactoryRegistry(SpiRegistry<TableSourceFactory> sources, SpiRegistry<TableSinkFactory> sinks) {
         this.sources = Objects.requireNonNull(sources, "sources");
         this.sinks = Objects.requireNonNull(sinks, "sinks");
-        Map<Class<?>, SyncSourceFactory> registeredSources = new LinkedHashMap<>();
+        Map<Class<?>, TableSourceFactory> registeredSources = new LinkedHashMap<>();
         for (String identifier : sources.types()) {
-            SyncSourceFactory factory = sources.get(identifier);
+            TableSourceFactory factory = sources.get(identifier);
             Class<? extends SourceParameters> type = Objects.requireNonNull(factory.parametersType(), "source type");
             if (registeredSources.putIfAbsent(type, factory) != null) {
                 throw new IllegalStateException("Duplicate DATA_SYNC Source parameters class");
             }
         }
-        Map<Class<?>, SyncSinkFactory> registeredSinks = new LinkedHashMap<>();
+        Map<Class<?>, TableSinkFactory> registeredSinks = new LinkedHashMap<>();
         for (String identifier : sinks.types()) {
-            SyncSinkFactory factory = sinks.get(identifier);
+            TableSinkFactory factory = sinks.get(identifier);
             Class<? extends SinkParameters> type = Objects.requireNonNull(factory.parametersType(), "sink type");
             if (registeredSinks.putIfAbsent(type, factory) != null) {
                 throw new IllegalStateException("Duplicate DATA_SYNC Sink parameters class");
@@ -61,7 +61,7 @@ public final class SyncConnectorFactoryRegistry {
     }
 
     /** Resolves a saved Source type identifier. */
-    public SyncSourceFactory source(String identifier) {
+    public TableSourceFactory source(String identifier) {
         try {
             return sources.get(identifier);
         } catch (NoSuchElementException exception) {
@@ -70,8 +70,8 @@ public final class SyncConnectorFactoryRegistry {
     }
 
     /** Resolves an already-decoded Source by its exact parameters class. */
-    public SyncSourceFactory source(SourceParameters parameters) {
-        SyncSourceFactory factory = sourcesByClass.get(
+    public TableSourceFactory source(SourceParameters parameters) {
+        TableSourceFactory factory = sourcesByClass.get(
                 Objects.requireNonNull(parameters, "parameters").getClass());
         if (factory == null || !factory.identifier().equals(parameters.type())) {
             throw new TaskPluginException("Unsupported DATA_SYNC Source parameters");
@@ -80,7 +80,7 @@ public final class SyncConnectorFactoryRegistry {
     }
 
     /** Resolves a saved Sink type identifier. */
-    public SyncSinkFactory sink(String identifier) {
+    public TableSinkFactory sink(String identifier) {
         try {
             return sinks.get(identifier);
         } catch (NoSuchElementException exception) {
@@ -89,8 +89,8 @@ public final class SyncConnectorFactoryRegistry {
     }
 
     /** Resolves an already-decoded Sink by its exact parameters class. */
-    public SyncSinkFactory sink(SinkParameters parameters) {
-        SyncSinkFactory factory = sinksByClass.get(
+    public TableSinkFactory sink(SinkParameters parameters) {
+        TableSinkFactory factory = sinksByClass.get(
                 Objects.requireNonNull(parameters, "parameters").getClass());
         if (factory == null || !factory.identifier().equals(parameters.type())) {
             throw new TaskPluginException("Unsupported DATA_SYNC Sink parameters");

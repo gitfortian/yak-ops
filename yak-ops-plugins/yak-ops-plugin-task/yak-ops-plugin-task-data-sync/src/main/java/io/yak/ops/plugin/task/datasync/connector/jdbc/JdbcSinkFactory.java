@@ -10,17 +10,16 @@ import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.api.TaskPluginException;
-import io.yak.ops.plugin.task.datasync.connector.SyncSinkContext;
-import io.yak.ops.plugin.task.datasync.connector.SyncSinkFactory;
-import io.yak.ops.plugin.task.datasync.plan.SyncSchemaValidator;
+import io.yak.ops.plugin.task.datasync.connector.SinkFactoryContext;
+import io.yak.ops.plugin.task.datasync.connector.TableSinkFactory;
 import io.yak.ops.plugin.task.datasync.sink.JdbcSinkParameters;
 import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
 import java.util.List;
 import java.util.Map;
 
 /** Resolves JDBC write semantics and constructs a target-aware YakFlow JDBC Sink. */
-@AutoService(SyncSinkFactory.class)
-public final class JdbcSyncSinkFactory implements SyncSinkFactory {
+@AutoService(TableSinkFactory.class)
+public final class JdbcSinkFactory implements TableSinkFactory {
 
     @Override
     public String identifier() {
@@ -48,12 +47,12 @@ public final class JdbcSyncSinkFactory implements SyncSinkFactory {
             SinkParameters parameters, TableSchema source, TableSchema target, boolean sourceProducesChangelog) {
         JdbcSinkParameters sink = (JdbcSinkParameters) parameters;
         validate(parameters, sourceProducesChangelog);
-        SyncSchemaValidator.validate(
+        JdbcSinkSchemaValidator.validate(
                 source, target, sourceProducesChangelog || sink.writeMode() == DataSyncWriteMode.UPSERT);
     }
 
     @Override
-    public Sink<TableRecord> create(SinkParameters parameters, SyncSinkContext context) {
+    public Sink<TableRecord> createSink(SinkParameters parameters, SinkFactoryContext context) {
         JdbcSinkParameters sink = (JdbcSinkParameters) parameters;
         JdbcWriteMode writeMode =
                 switch (sink.writeMode()) {

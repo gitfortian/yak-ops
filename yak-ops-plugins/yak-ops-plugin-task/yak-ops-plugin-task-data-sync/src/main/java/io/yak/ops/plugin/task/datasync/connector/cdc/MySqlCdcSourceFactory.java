@@ -8,15 +8,15 @@ import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.plugin.task.api.TaskPluginException;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.plugin.task.datasync.connector.SyncSourceContext;
-import io.yak.ops.plugin.task.datasync.connector.SyncSourceFactory;
+import io.yak.ops.plugin.task.datasync.connector.SourceFactoryContext;
+import io.yak.ops.plugin.task.datasync.connector.TableSourceFactory;
 import io.yak.ops.plugin.task.datasync.source.MySqlCdcSourceParameters;
 import io.yak.ops.plugin.task.datasync.source.SourceParameters;
 import java.util.List;
 
 /** Creates the initial Snapshot and continuous Binlog Source for an authorized MySQL table. */
-@AutoService(SyncSourceFactory.class)
-public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
+@AutoService(TableSourceFactory.class)
+public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public String identifier() {
@@ -51,7 +51,7 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
     }
 
     @Override
-    public Source<TableRecord, ?, ?> create(SourceParameters parameters, SyncSourceContext context) {
+    public Source<TableRecord, ?, ?> createSource(SourceParameters parameters, SourceFactoryContext context) {
         var connection = context.connection();
         validateDatasource(connection.datasourceType());
         if (connection.tunneled() || connection.host() == null) {
@@ -66,7 +66,7 @@ public final class MySqlCdcSyncSourceFactory implements SyncSourceFactory {
                 .serverId(MySqlCdcReplicationIdentity.serverId(context.identity()))
                 .topicPrefix(MySqlCdcReplicationIdentity.topicPrefix(context.identity()))
                 .table(context.table().table(), context.table().schema())
-                .queueCapacity(context.runtimeOptions().cdcQueueCapacity())
-                .buildHybrid(context.runtimeOptions().snapshotChunkSize());
+                .queueCapacity(context.configuration().get(MySqlCdcOptions.QUEUE_CAPACITY))
+                .buildHybrid(context.configuration().get(MySqlCdcOptions.SNAPSHOT_CHUNK_SIZE));
     }
 }

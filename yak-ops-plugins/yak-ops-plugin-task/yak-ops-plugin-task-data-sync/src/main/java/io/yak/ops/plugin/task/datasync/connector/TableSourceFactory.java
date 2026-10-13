@@ -14,7 +14,7 @@ import java.util.List;
  * <p>Factories are stateless SPI providers. Connector readers and external resources belong to
  * YakFlow execution attempts, not to factory registration or planning.
  */
-public interface SyncSourceFactory {
+public interface TableSourceFactory {
 
     /** Returns the persistent JSON Source type identifier. */
     String identifier();
@@ -53,5 +53,5 @@ public interface SyncSourceFactory {
      * @param context authorized runtime binding for the current Instance
      * @return reusable Source definition
      */
-    Source<TableRecord, ?, ?> create(SourceParameters parameters, SyncSourceContext context);
+    Source<TableRecord, ?, ?> createSource(SourceParameters parameters, SourceFactoryContext context);
 }

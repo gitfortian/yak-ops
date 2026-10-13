@@ -6,7 +6,7 @@ import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.task.datasync.sink.SinkParameters;
 
 /** Resolves a DATA_SYNC Sink's write contract and creates its reusable YakFlow definition. */
-public interface SyncSinkFactory {
+public interface TableSinkFactory {
 
     /** Returns the persistent JSON Sink type identifier. */
     String identifier();
@@ -40,5 +40,5 @@ public interface SyncSinkFactory {
      * @param context authorized runtime table and connection bindings
      * @return reusable Sink definition
      */
-    Sink<TableRecord> create(SinkParameters parameters, SyncSinkContext context);
+    Sink<TableRecord> createSink(SinkParameters parameters, SinkFactoryContext context);
 }
