@@ -59,6 +59,22 @@ public final class JdbcSinkFactory implements TableSinkFactory {
     }
 
     @Override
+    public JdbcMetadataApplier createMetadataApplier(ReadonlyConfig options) {
+        FactoryUtil.validateCreation(options, this);
+        JdbcConnectionOptions connection = new JdbcConnectionOptions(options);
+        String url = connection.url();
+        if (!url.startsWith("jdbc:mysql:") && !url.startsWith("jdbc:postgresql:")) {
+            throw new UnsupportedOperationException("JDBC schema preparation supports MySQL and PostgreSQL targets");
+        }
+        var connections = new DefaultJdbcConnectionProvider(connection);
+        return new JdbcMetadataApplier(
+                connections,
+                JdbcFactoryLoader.loadDialect(url),
+                JdbcFactoryLoader.loadCatalog(url, connections),
+                JdbcMetadataApplier.DEFAULT_STATEMENT_TIMEOUT_SECONDS);
+    }
+
+    @Override
     public Sink<TableRecord> createSink(TableSinkFactoryContext context) {
         return createSink(List.of(context));
     }

@@ -16,6 +16,9 @@ public final class TableExecutionProgress {
     private final List<TablePlan> plans;
     private final TableMetrics metrics;
     private final boolean continuous;
+    private final List<StageResult> schemaStages;
+    private boolean dataSubmitted;
+    private boolean preparationStopped;
 
     public TableExecutionProgress(List<TablePlan> plans, TableMetrics metrics) {
         this(plans, metrics, false);
@@ -26,10 +29,70 @@ public final class TableExecutionProgress {
         this.continuous = continuous;
         this.plans = List.copyOf(plans);
         this.metrics = java.util.Objects.requireNonNull(metrics, "metrics");
+        this.schemaStages = new ArrayList<>();
+        if (plans.stream().anyMatch(plan -> plan.schemaChange() != null)) {
+            if (plans.stream().anyMatch(plan -> plan.schemaChange() == null)) {
+                throw new IllegalArgumentException("Schema preparation must cover every table mapping");
+            }
+            for (int index = 0; index < plans.size(); index++) {
+                schemaStages.add(schemaStage("WAITING", 1, 0, null, null));
+            }
+        }
+    }
+
+    /** Returns the shared measurements used by the compiled row pipeline. */
+    public TableMetrics metrics() {
+        return metrics;
+    }
+
+    /** Marks a table's preparation as active without claiming that DDL has completed. */
+    public synchronized void schemaStarted(int index) {
+        schemaStages.set(index, schemaStage("RUNNING", 1, 0, null, null));
+    }
+
+    /** Records complete target readback, preserving this fact across row-engine generations. */
+    public synchronized void schemaFinished(int index, String action) {
+        schemaStages.set(index, schemaStage("FINISHED", 1, 1, action, null));
+    }
+
+    /** Records a safe failure identifier for a table whose preparation did not verify. */
+    public synchronized void schemaFailed(int index, String failureCode) {
+        schemaStages.set(index, schemaStage("FAILED", 1, 0, null, failureCode));
+    }
+
+    /** Records an unconfirmed external DDL outcome without claiming a terminal table result. */
+    public synchronized void schemaUnknown(int index) {
+        preparationStopped = true;
+        schemaStages.set(index, schemaStage("UNKNOWN", 1, 0, null, null));
+    }
+
+    /** Records cancellation after the current preparation operation has returned. */
+    public synchronized void schemaCanceled(int index) {
+        schemaStages.set(index, schemaStage("CANCELED", 1, 0, null, null));
+    }
+
+    /** Stops unexecuted preparations without erasing previously verified tables. */
+    public synchronized void preparationEnded() {
+        preparationStopped = true;
+        for (int index = 0; index < schemaStages.size(); index++) {
+            StageResult stage = schemaStages.get(index);
+            if ("WAITING".equals(stage.status()) || "RUNNING".equals(stage.status())) {
+                schemaStages.set(index, schemaStage("CANCELED", 1, 0, null, null));
+            }
+        }
+    }
+
+    /** Marks the single engine-submission boundary after all target structures have verified. */
+    public synchronized void dataSubmissionStarted() {
+        if (schemaStages.stream().anyMatch(stage -> !"FINISHED".equals(stage.status()))) {
+            throw new IllegalStateException("Every target must verify before row-engine submission");
+        }
+        dataSubmitted = true;
     }
 
     /** Calculates a split-weighted percent only once every table's denominator is known. */
-    public OptionalInt percent() {
+    public synchronized OptionalInt percent() {
+        if (!schemaStages.isEmpty() && !dataSubmitted) return OptionalInt.empty();
         if (continuous) return OptionalInt.empty();
         Map<TableId, TableMetrics.Snapshot> snapshot = metrics.snapshot();
         long total = 0;
@@ -45,8 +108,13 @@ public final class TableExecutionProgress {
     }
 
     /** Serializes one immutable report; terminal failure does not erase already committed table work. */
-    public String report(JobStatus jobStatus) {
+    public synchronized String report(JobStatus jobStatus) {
+        if (!schemaStages.isEmpty()) return JSONUtils.toJson(preparedReport(jobStatus));
         if (continuous) return JSONUtils.toJson(realtimeReport(jobStatus));
+        return JSONUtils.toJson(batchReport(jobStatus));
+    }
+
+    private Report batchReport(JobStatus jobStatus) {
         Map<TableId, TableMetrics.Snapshot> snapshot = metrics.snapshot();
         List<TableResult> tables = new ArrayList<>();
         for (int index = 0; index < plans.size(); index++) {
@@ -77,13 +145,151 @@ public final class TableExecutionProgress {
                     value.completedSplits(),
                     value.failureCode()));
         }
-        return JSONUtils.toJson(new Report(1, Instant.now().toString(), tables));
+        return new Report(1, Instant.now().toString(), tables);
     }
 
     /** Returns a compact stage summary without per-table results, or null for bounded reports. */
-    public String summary(JobStatus jobStatus) {
+    public synchronized String summary(JobStatus jobStatus) {
+        if (!schemaStages.isEmpty())
+            return JSONUtils.toJson(preparedReport(jobStatus).summary());
         if (!continuous) return null;
         return JSONUtils.toJson(realtimeSummary(jobStatus, metrics.continuousSnapshot()));
+    }
+
+    private RealtimeReport preparedReport(JobStatus status) {
+        var observation = metrics.continuousSnapshot();
+        RealtimeReport data = continuous ? realtimeReport(status) : null;
+        Report batch = continuous ? null : batchReport(status);
+        List<TableStages> tables = new ArrayList<>();
+        for (int index = 0; index < plans.size(); index++) {
+            List<StageResult> stages = new ArrayList<>();
+            stages.add(schemaStages.get(index));
+            if (!dataSubmitted) {
+                stages.add(waitingDataStage("FULL"));
+                if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
+            } else if (continuous) {
+                stages.addAll(data.tables().get(index).stages());
+            } else {
+                TableResult table = batch.tables().get(index);
+                stages.add(new StageResult(
+                        "FULL",
+                        table.status(),
+                        table.progressPercent(),
+                        "SPLITS",
+                        table.readRows(),
+                        table.committedRows(),
+                        table.plannedSplits(),
+                        table.completedSplits(),
+                        table.failureCode()));
+            }
+            tables.add(new TableStages(index, stages));
+        }
+        List<StageResult> stages = new ArrayList<>();
+        stages.add(schemaSummary());
+        if (!dataSubmitted) {
+            stages.add(waitingDataStage("FULL"));
+            if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
+        } else if (continuous) {
+            stages.addAll(data.stages());
+        } else {
+            var totals = aggregate(metrics.snapshot());
+            boolean complete = batch.tables().stream().allMatch(table -> "FINISHED".equals(table.status()));
+            String state = complete
+                    ? "FINISHED"
+                    : status == JobStatus.FAILED ? "FAILED" : status == JobStatus.CANCELED ? "CANCELED" : "RUNNING";
+            Integer percentage = null;
+            if (complete) percentage = 100;
+            else if (percent().isPresent()) percentage = percent().getAsInt();
+            stages.add(new StageResult(
+                    "FULL",
+                    state,
+                    percentage,
+                    "SPLITS",
+                    totals.readRows(),
+                    totals.committedRows(),
+                    totals.plannedSplits(),
+                    totals.completedSplits(),
+                    totals.failureCode()));
+        }
+        String observedAt =
+                dataSubmitted && continuous ? data.observedAt() : Instant.now().toString();
+        String phase = !dataSubmitted ? "SCHEMA" : continuous ? data.phase() : "FULL";
+        var summary = new RealtimeSummary(
+                3,
+                observedAt,
+                continuous ? observation.generation() : 0,
+                continuous && observation.restored(),
+                continuous ? "GENERATION" : "INSTANCE",
+                phase,
+                new Checkpoints(
+                        continuous ? observation.handoffCheckpointId() : null,
+                        continuous ? observation.completedCheckpointId() : null),
+                stages);
+        return new RealtimeReport(
+                3,
+                observedAt,
+                summary.generation(),
+                summary.restored(),
+                summary.counterScope(),
+                phase,
+                summary.checkpoints(),
+                stages,
+                tables,
+                summary);
+    }
+
+    private StageResult waitingDataStage(String step) {
+        return new StageResult(
+                step,
+                preparationStopped ? "CANCELED" : "WAITING",
+                null,
+                "FULL".equals(step) ? "SPLITS" : "RECORDS",
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private StageResult schemaSummary() {
+        int completed = (int) schemaStages.stream()
+                .filter(stage -> "FINISHED".equals(stage.status()))
+                .count();
+        String failure = schemaStages.stream()
+                .map(StageResult::failureCode)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        boolean unknown = schemaStages.stream().anyMatch(stage -> "UNKNOWN".equals(stage.status()));
+        String status = unknown
+                ? "UNKNOWN"
+                : completed == schemaStages.size()
+                        ? "FINISHED"
+                        : failure != null
+                                ? "FAILED"
+                                : preparationStopped
+                                        ? "CANCELED"
+                                        : schemaStages.stream().anyMatch(stage -> "RUNNING".equals(stage.status()))
+                                                        || completed > 0
+                                                ? "RUNNING"
+                                                : "WAITING";
+        return schemaStage(status, schemaStages.size(), completed, null, failure);
+    }
+
+    private static StageResult schemaStage(String status, int planned, int completed, String action, String failure) {
+        return new StageResult(
+                "SCHEMA",
+                status,
+                (int) (100L * completed / planned),
+                "TABLES",
+                null,
+                null,
+                null,
+                null,
+                failure,
+                planned,
+                completed,
+                action);
     }
 
     private RealtimeReport realtimeReport(JobStatus status) {
@@ -214,7 +420,36 @@ public final class TableExecutionProgress {
             Long committedRows,
             Integer plannedSplits,
             Long completedSplits,
-            String failureCode) {}
+            String failureCode,
+            Integer plannedTables,
+            Integer completedTables,
+            String action) {
+        /** Creates a row-stage observation without schema-preparation counters. */
+        public StageResult(
+                String step,
+                String status,
+                Integer progressPercent,
+                String progressUnit,
+                Long readRows,
+                Long committedRows,
+                Integer plannedSplits,
+                Long completedSplits,
+                String failureCode) {
+            this(
+                    step,
+                    status,
+                    progressPercent,
+                    progressUnit,
+                    readRows,
+                    committedRows,
+                    plannedSplits,
+                    completedSplits,
+                    failureCode,
+                    null,
+                    null,
+                    null);
+        }
+    }
 
     /** Table identity is resolved only from the Instance's immutable mapping version. */
     public record TableStages(int mappingIndex, List<StageResult> stages) {

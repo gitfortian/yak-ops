@@ -125,8 +125,8 @@ class DataSyncTaskPluginContractTest {
             @Override
             public DataSourceInfo dataSource(String id) {
                 return "source".equals(id)
-                        ? new DataSourceInfo("MYSQL", "app", null)
-                        : new DataSourceInfo("POSTGRE_SQL", null, "ods");
+                        ? new DataSourceInfo("MYSQL", "app", null, 1)
+                        : new DataSourceInfo("POSTGRE_SQL", null, "ods", 1);
             }
 
             @Override
@@ -285,9 +285,9 @@ class DataSyncTaskPluginContractTest {
         @Override
         public DataSourceInfo dataSource(String id) {
             if ("source".equals(id)) {
-                return new DataSourceInfo("MYSQL", "app", null);
+                return new DataSourceInfo("MYSQL", "app", null, 1);
             }
-            return new DataSourceInfo("POSTGRE_SQL", null, "ods");
+            return new DataSourceInfo("POSTGRE_SQL", null, "ods", 1);
         }
 
         @Override

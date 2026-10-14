@@ -2,6 +2,7 @@ package io.yak.ops.plugin.task.api.execution;
 
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -11,6 +12,23 @@ import java.util.concurrent.CompletionStage;
  * observe completion before persisting CANCELED or releasing execution resources.
  */
 public interface TaskHandle {
+
+    /**
+     * Starts deferred physical work after the platform registers this handle and persists RUNNING.
+     *
+     * <p>Already-started implementations need no action. Deferred implementations must be
+     * idempotent and honor cancellation received before this method is invoked.
+     */
+    default void start() {}
+
+    /**
+     * Observes an engine identity that can become available after initial Task preparation.
+     *
+     * @return the engine identity once known, or empty when execution ends before engine submission
+     */
+    default CompletionStage<Optional<TaskRuntimeReference>> runtimeReferenceReady() {
+        return CompletableFuture.completedFuture(runtimeReference());
+    }
 
     /**
      * Returns a plugin-owned public JSON observation of the current physical attempt.

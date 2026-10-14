@@ -47,7 +47,9 @@ public final class JobConfig {
         validate(parameters, SolutionOptions.RULE, "DATA_SYNC");
         SolutionType type = parameters.get(SolutionOptions.SOLUTION_TYPE);
         List<String> steps = parameters.get(SolutionOptions.STEPS);
-        List<String> expected = type.steps().stream().map(Step::name).toList();
+        List<String> expected = new java.util.ArrayList<>();
+        if (steps.contains(Step.SCHEMA.name())) expected.add(Step.SCHEMA.name());
+        expected.addAll(type.steps().stream().map(Step::name).toList());
         if (steps.size() != new HashSet<>(steps).size() || !new HashSet<>(steps).equals(new HashSet<>(expected))) {
             throw new IllegalArgumentException("Unsupported synchronization step combination");
         }
@@ -170,6 +172,12 @@ public final class JobConfig {
     public ReadonlyConfig sink() {
         if (tables.size() != 1) throw new IllegalStateException("Use explicit table mappings for a multi-table task");
         return tables.getFirst().sink();
+    }
+
+    /** Returns canonical requested steps, including optional target structure preparation. */
+    public List<Step> steps() {
+        if (!parameters.getSourceMap().containsKey("solutionType")) return solutionType.steps();
+        return parameters.get(SolutionOptions.STEPS).stream().map(Step::valueOf).toList();
     }
 
     public SolutionType solutionType() {

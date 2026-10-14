@@ -19,6 +19,8 @@ const catalogPath = (table: DataSourceCatalogTable): DataSyncTablePath => ({
 });
 
 interface Props {
+  prepareSchema?: boolean;
+  targetNamespace?: Omit<DataSyncTablePath, "table">;
   writeMode?: DataSyncWriteMode;
   sourceTables: DataSourceCatalogTable[];
   targetTables: DataSourceCatalogTable[];
@@ -30,6 +32,8 @@ interface Props {
 }
 
 export function ExplicitTableSelection({
+  prepareSchema = false,
+  targetNamespace,
   writeMode,
   sourceTables,
   targetTables,
@@ -57,7 +61,9 @@ export function ExplicitTableSelection({
       ...mappings,
       ...missing.map((source) => {
         const matches = targetTables.filter((target) => target.name === source.table);
-        let target: DataSyncTablePath = { table: "" };
+        let target: DataSyncTablePath = prepareSchema
+          ? { ...targetNamespace, table: source.table }
+          : { table: "" };
         if (matches.length === 1) target = catalogPath(matches[0]);
         return {
           source: { database: source.database, schema: source.schema, table: source.table },
@@ -134,6 +140,7 @@ export function ExplicitTableSelection({
 }
 
 interface MappingProps {
+  prepareSchema?: boolean;
   writeModes: DataSyncWriteMode[];
   mappings: DataSyncTableMapping[];
   targetTables: DataSourceCatalogTable[];
@@ -144,6 +151,7 @@ interface MappingProps {
 }
 
 export function TableMappingEditor({
+  prepareSchema = false,
   writeModes,
   mappings,
   targetTables,
@@ -186,17 +194,34 @@ export function TableMappingEditor({
           );
         return (
           <div className="space-y-1">
-            <DataSyncSearchableSelect
-              ariaLabel={`去向表 ${pathText(row.source)}`}
-              value={row.target.table ? tableKey(row.target) : null}
-              options={targetOptions}
-              disabled={loading}
-              placeholder="请选择已有目标表"
-              onValueChange={(value) => {
-                const table = targetTables.find((entry) => tableKey(catalogPath(entry)) === value);
-                if (table) patch(row.index, { target: catalogPath(table) });
-              }}
-            />
+            {prepareSchema ? (
+              <Input
+                size="small"
+                variant="outlined"
+                aria-label={`去向表 ${pathText(row.source)}`}
+                value={row.target.table}
+                maxLength={128}
+                disabled={loading}
+                placeholder="去向表名称"
+                onChange={(event) =>
+                  patch(row.index, { target: { ...row.target, table: event.target.value } })
+                }
+              />
+            ) : (
+              <DataSyncSearchableSelect
+                ariaLabel={`去向表 ${pathText(row.source)}`}
+                value={row.target.table ? tableKey(row.target) : null}
+                options={targetOptions}
+                disabled={loading}
+                placeholder="请选择已有目标表"
+                onValueChange={(value) => {
+                  const table = targetTables.find(
+                    (entry) => tableKey(catalogPath(entry)) === value,
+                  );
+                  if (table) patch(row.index, { target: catalogPath(table) });
+                }}
+              />
+            )}
             {duplicate ? (
               <span role="alert" className="text-xs text-[#d92d20]">
                 去向表不能重复
@@ -273,6 +298,7 @@ export function validTableMappings(
   mappings: DataSyncTableMapping[],
   targetTables: DataSourceCatalogTable[],
   writeModes: DataSyncWriteMode[],
+  prepareSchema = false,
 ) {
   if (!mappings.length || mappings.length > 100) return false;
   const sources = new Set(mappings.map((mapping) => tableKey(mapping.source)));
@@ -284,9 +310,10 @@ export function validTableMappings(
     mappings.every(
       (mapping) =>
         writeModes.includes(mapping.writeMode) &&
-        Boolean(mapping.source.table) &&
-        Boolean(mapping.target.table) &&
-        available.has(tableKey(mapping.target)),
+        Boolean(mapping.source.table.trim()) &&
+        Boolean(mapping.target.table.trim()) &&
+        mapping.target.table.length <= 128 &&
+        (prepareSchema || available.has(tableKey(mapping.target))),
     )
   );
 }

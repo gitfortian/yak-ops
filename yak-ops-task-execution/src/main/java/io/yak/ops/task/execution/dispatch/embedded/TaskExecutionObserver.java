@@ -142,10 +142,28 @@ public class TaskExecutionObserver implements AutoCloseable {
         String instanceId = ticket.instanceId();
         active.put(instanceId, handle);
         try {
-            TaskRuntimeReference reference =
-                    handle.runtimeReference().orElse(new TaskRuntimeReference(ticket.taskType(), ticket.instanceId()));
+            TaskRuntimeReference reference = handle.runtimeReference().orElse(null);
             lifecycle.started(ticket, reference);
-            LOG.info("Task Instance Job started, instanceId={}, jobId={}", instanceId, reference.id());
+            LOG.info("Task Instance started, instanceId={}", instanceId);
+            handle.runtimeReferenceReady()
+                    .whenCompleteAsync(
+                            (known, referenceFailure) -> {
+                                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", instanceId)) {
+                                    if (referenceFailure == null && known != null && known.isPresent()) {
+                                        try {
+                                            lifecycle.runtimeReference(ticket, known.orElseThrow());
+                                        } catch (RuntimeException persistenceFailure) {
+                                            LOG.warn(
+                                                    "Task runtime identity is awaiting persistence, instanceId={}, exceptionType={}",
+                                                    instanceId,
+                                                    persistenceFailure
+                                                            .getClass()
+                                                            .getSimpleName());
+                                        }
+                                    }
+                                }
+                            },
+                            callbacks);
             if (instances.instance(ticket.workspaceId(), instanceId).getStatus() == TaskInstanceStatus.CANCELLING) {
                 handle.cancel();
             }
@@ -157,7 +175,13 @@ public class TaskExecutionObserver implements AutoCloseable {
                                 }
                             },
                             callbacks);
+            handle.start();
         } catch (RuntimeException observationFailure) {
+            try {
+                handle.cancel();
+            } catch (RuntimeException cancellationFailure) {
+                observationFailure.addSuppressed(cancellationFailure);
+            }
             lifecycle.uncertain(ticket);
             active.remove(instanceId, handle);
             LOG.error(
@@ -170,6 +194,7 @@ public class TaskExecutionObserver implements AutoCloseable {
     private void observeTerminal(DispatchTicket ticket, TaskHandle handle, TaskOutcome outcome, Throwable failure) {
         try {
             if (failure == null && outcome != null) {
+                handle.runtimeReference().ifPresent(reference -> lifecycle.runtimeReference(ticket, reference));
                 try {
                     OptionalInt percent = handle.progressPercent();
                     if (percent.isPresent()) {
@@ -186,7 +211,9 @@ public class TaskExecutionObserver implements AutoCloseable {
                 else lifecycle.complete(ticket, outcome);
                 LOG.info("Task Instance completed, instanceId={}, outcome={}", ticket.instanceId(), outcome);
             } else {
-                lifecycle.uncertain(ticket);
+                var report = publicObservation(ticket.instanceId(), handle, false);
+                if (report.isPresent()) lifecycle.uncertain(ticket, report.get());
+                else lifecycle.uncertain(ticket);
             }
         } catch (RuntimeException persistenceFailure) {
             LOG.error(

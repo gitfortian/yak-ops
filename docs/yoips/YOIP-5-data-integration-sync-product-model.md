@@ -6,7 +6,7 @@ Discussion: https://github.com/weifuwan/yak-ops/pull/1636
 
 Decision: [VOTE] Accepted — https://github.com/weifuwan/yak-ops/pull/1636#issuecomment-6160395888
 
-Implementation: [Unified product entry and versioned solutions — PR #1637](https://github.com/weifuwan/yak-ops/pull/1637); [Explicit multi-table batch — PR #1639](https://github.com/weifuwan/yak-ops/pull/1639); database realtime and stage observation implementation under acceptance
+Implementation: [Unified product entry and versioned solutions — PR #1637](https://github.com/weifuwan/yak-ops/pull/1637); [Explicit multi-table batch — PR #1639](https://github.com/weifuwan/yak-ops/pull/1639); [Database realtime and stage observation — PR #1641](https://github.com/weifuwan/yak-ops/pull/1641); [Initial schema preparation — PR #1643](https://github.com/weifuwan/yak-ops/pull/1643)
 
 Release: N/A until released
 

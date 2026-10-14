@@ -25,6 +25,7 @@ import {
 import { solutionSyncType, supportsMultipleTables } from "@/service/data-sync/parameters";
 import { findStepCombination, solutionSummary } from "./solution-presentation";
 import { useSolutions } from "./use-solutions";
+import { SchemaPreview } from "./schema-preview";
 import {
   ExplicitTableSelection,
   TableMappingEditor,
@@ -249,6 +250,8 @@ function DataSourceEndpointCard({
 }
 
 interface TableSectionProps {
+  prepareSchema?: boolean;
+  onTableNameChange?: (name: string) => void;
   children?: ReactNode;
   dataSourceId: string;
   boundSchema?: string;
@@ -261,6 +264,8 @@ interface TableSectionProps {
 }
 
 function TableSection({
+  prepareSchema = false,
+  onTableNameChange,
   children,
   dataSourceId,
   boundSchema,
@@ -311,20 +316,33 @@ function TableSection({
         <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel required>表</FieldLabel>
           <div className="w-1/2 min-w-0 max-lg:w-auto max-lg:flex-1">
-            <DataSyncSearchableSelect
-              value={tableValue}
-              options={tableOptions}
-              disabled={tableDisabled}
-              placeholder={!dataSourceId ? "请先选择数据源" : "请选择表"}
-              searchPlaceholder="搜索表"
-              emptyText="暂无表"
-              refreshing={catalog.loading}
-              onRefresh={catalog.refresh}
-              onValueChange={(value) => {
-                const selected = catalog.tables.find((item) => tableKey(item) === value);
-                if (selected) onTableChange(selected);
-              }}
-            />
+            {prepareSchema ? (
+              <Input
+                size="small"
+                variant="outlined"
+                value={table}
+                maxLength={128}
+                disabled={tableDisabled}
+                placeholder="去向表名称"
+                aria-label="去向表名称"
+                onChange={(event) => onTableNameChange?.(event.target.value)}
+              />
+            ) : (
+              <DataSyncSearchableSelect
+                value={tableValue}
+                options={tableOptions}
+                disabled={tableDisabled}
+                placeholder={!dataSourceId ? "请先选择数据源" : "请选择表"}
+                searchPlaceholder="搜索表"
+                emptyText="暂无表"
+                refreshing={catalog.loading}
+                onRefresh={catalog.refresh}
+                onValueChange={(value) => {
+                  const selected = catalog.tables.find((item) => tableKey(item) === value);
+                  if (selected) onTableChange(selected);
+                }}
+              />
+            )}
           </div>
         </Field>
         {catalog.error ? (
@@ -438,6 +456,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
   const solution = choices.find((value) => value.solutionType === draft.solutionType);
   const combination = findStepCombination(solution, draft.steps);
   const supportsScheduling = Boolean(combination?.supportsScheduling);
+  const prepareSchema = draft.steps.includes("SCHEMA");
   const usesChangelog =
     draft.steps.includes("INCREMENTAL") && solutionSyncType(draft.solutionType) === "REALTIME";
 
@@ -689,16 +708,25 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
         (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
     form.name.trim() &&
     Boolean(form.sourceDataSourceId && form.targetDataSourceId) &&
+    (!prepareSchema ||
+      Boolean(form.targetDatabase && (draft.targetType !== "POSTGRE_SQL" || form.targetSchema))) &&
     (batch
-      ? validTableMappings(mappings, targetCatalog.tables, combination?.writeModes || [])
+      ? validTableMappings(
+          mappings,
+          targetCatalog.tables,
+          combination?.writeModes || [],
+          prepareSchema,
+        )
       : Boolean(
           form.sourceTable &&
-          selectedTableKey(
-            targetCatalog.tables,
-            form.targetDatabase,
-            form.targetSchema,
-            form.targetTable,
-          ),
+          (prepareSchema
+            ? Boolean(form.targetTable.trim())
+            : selectedTableKey(
+                targetCatalog.tables,
+                form.targetDatabase,
+                form.targetSchema,
+                form.targetTable,
+              )),
         )) &&
     !sourceCatalog.loading &&
     !targetCatalog.loading &&
@@ -948,6 +976,11 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
           <CollapseSection id="source" title="数据来源">
             {batch ? (
               <ExplicitTableSelection
+                prepareSchema={prepareSchema}
+                targetNamespace={{
+                  database: form.targetDatabase || undefined,
+                  schema: form.targetSchema || undefined,
+                }}
                 writeMode={combination?.writeModes[0]}
                 sourceTables={sourceCatalog.tables}
                 targetTables={targetCatalog.tables}
@@ -993,8 +1026,31 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
           </CollapseSection>
 
           <CollapseSection id="target" title="目标表映射">
+            {prepareSchema ? (
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <SchemaPreview value={payload()} disabled={!canSave} />
+                {batch && !selectedTargetDataSource?.schema && targetCatalog.schemas.length ? (
+                  <DataSyncSearchableSelect
+                    ariaLabel="去向 Schema"
+                    value={form.targetSchema || null}
+                    options={targetCatalog.schemas.map((value) => ({ value, label: value }))}
+                    placeholder="去向 Schema"
+                    onValueChange={(value) => {
+                      patch("targetSchema", value);
+                      updateMappings(
+                        mappings.map((mapping) => ({
+                          ...mapping,
+                          target: { ...mapping.target, schema: value },
+                        })),
+                      );
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
             {batch ? (
               <TableMappingEditor
+                prepareSchema={prepareSchema}
                 writeModes={combination?.writeModes || []}
                 mappings={mappings}
                 targetTables={targetCatalog.tables}
@@ -1005,6 +1061,8 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
               />
             ) : (
               <TableSection
+                prepareSchema={prepareSchema}
+                onTableNameChange={(value) => patch("targetTable", value)}
                 dataSourceId={form.targetDataSourceId}
                 boundSchema={selectedTargetDataSource?.schema}
                 database={form.targetDatabase}

@@ -111,10 +111,15 @@ function ExecutionProgressCard({ record, realtime }: DetailProps) {
 
   return (
     <div className="border border-[#eef0f3] bg-white px-3 py-3 text-center">
-      {realtime ? (
+      {realtime || record.steps.includes("SCHEMA") ? (
         <ExecutionStages
           status={record.status}
-          summary={record.executionReport?.version === 2 ? record.executionReport : undefined}
+          steps={record.steps}
+          summary={
+            record.executionReport && record.executionReport.version !== 1
+              ? record.executionReport
+              : undefined
+          }
         />
       ) : (
         <ExecutionProgressBar

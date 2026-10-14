@@ -43,7 +43,11 @@ export function toDataSyncInstanceRecord(
 
   return {
     id: instance.id,
-    executionReport: readExecutionReport(instance.executionReport, parameters.tableMappings.length),
+    executionReport: readExecutionReport(
+      instance.executionReport,
+      parameters.tableMappings.length,
+      parameters.steps,
+    ),
     solutionType: parameters.solutionType,
     steps: parameters.steps,
     taskId: instance.definitionId,

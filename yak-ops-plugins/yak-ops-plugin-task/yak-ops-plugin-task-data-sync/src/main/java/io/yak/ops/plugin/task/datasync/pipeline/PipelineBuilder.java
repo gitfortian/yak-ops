@@ -6,6 +6,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
@@ -19,6 +20,7 @@ import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
+import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -91,8 +93,34 @@ public final class PipelineBuilder {
      * @return compiled topology and execution configuration
      */
     public CompiledPipeline build(JobPlan plan, TaskExecutionIdentity identity, boolean debug) {
+        var sourceFactory =
+                factories.source(plan.tables().getFirst().sourceParameters().get(JobOptions.TYPE));
+        return build(
+                plan,
+                identity,
+                debug,
+                new TableExecutionProgress(
+                        plan.tables(),
+                        new TableMetrics(),
+                        sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED));
+    }
+
+    /**
+     * Compiles an already prepared plan while retaining Task-owned schema and data observations.
+     *
+     * @param plan authorized plan with physical target schemas
+     * @param identity trusted Task Instance identity
+     * @param debug Instance diagnostics flag
+     * @param progress observations spanning preparation and data execution
+     * @return one physical pipeline
+     */
+    public CompiledPipeline build(
+            JobPlan plan, TaskExecutionIdentity identity, boolean debug, TableExecutionProgress progress) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
+        if (plan.tables().stream().anyMatch(table -> table.targetSchema() == null)) {
+            throw new IllegalStateException("Every target must be prepared and read back before pipeline compilation");
+        }
         var first = plan.tables().getFirst();
         var sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
         var sinkFactory = factories.sink(first.sinkParameters().get(JobOptions.TYPE));
@@ -108,8 +136,8 @@ public final class PipelineBuilder {
         ReadonlyConfig sourceConnection = resources.connectionOptions(
                 identity.workspaceId(), sourceId, first.source().revision());
         ReadonlyConfig targetConnection = resources.connectionOptions(
-                identity.workspaceId(), sinkId, first.target().revision());
-        TableMetrics metrics = new TableMetrics();
+                identity.workspaceId(), sinkId, first.targetDatasource().revision());
+        TableMetrics metrics = progress.metrics();
         List<TableSourceFactoryContext> sourceContexts = new ArrayList<>();
         List<TableSinkFactoryContext> sinkContexts = new ArrayList<>();
         for (var table : plan.tables()) {
@@ -127,8 +155,8 @@ public final class PipelineBuilder {
                     sinkOptions,
                     table.source().table(),
                     table.source().schema(),
-                    table.target().table(),
-                    table.target().schema(),
+                    table.targetTable(),
+                    table.targetSchema(),
                     metrics));
         }
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(sourceContexts);
@@ -143,11 +171,28 @@ public final class PipelineBuilder {
         input.setUid("data-sync-source-" + identity.definitionId());
         output.setUid("data-sync-sink-" + identity.definitionId());
         StreamGraph graph = new StreamGraphGenerator(output, configuration).generate();
-        TableExecutionProgress progress = new TableExecutionProgress(
-                plan.tables(),
-                metrics,
-                source.getBoundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED);
         return new CompiledPipeline(graph, configuration, progress);
+    }
+
+    /**
+     * Constructs an independently owned metadata applier using the same authorized Sink options.
+     *
+     * @param table admitted target binding
+     * @param identity trusted Task identity
+     * @return unstarted metadata applier; its execution owner must close it
+     */
+    public MetadataApplier createMetadataApplier(TablePlan table, TaskExecutionIdentity identity) {
+        var factory = factories.sink(table.sinkParameters().get(JobOptions.TYPE));
+        ReadonlyConfig connection = resources.connectionOptions(
+                identity.workspaceId(),
+                table.sinkParameters().get(JobOptions.DATASOURCE_ID),
+                table.targetDatasource().revision());
+        ReadonlyConfig configured = creationOptions(
+                sinkConnectorOptions,
+                factory.factoryIdentifier(),
+                JobOptions.connectorOptions(table.sinkParameters()),
+                connection);
+        return factory.createMetadataApplier(configured);
     }
 
     private static ReadonlyConfig creationOptions(

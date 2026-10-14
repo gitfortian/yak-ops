@@ -111,7 +111,8 @@ for (const patch of [
   { solutionType: "UNSUPPORTED_SOLUTION" },
   { steps: ["FULL"] },
   { steps: ["FULL", "FULL"] },
-  { steps: ["SCHEMA", "FULL", "INCREMENTAL"] },
+  { steps: ["SCHEMA"] },
+  { steps: ["SCHEMA", "FULL", "INCREMENTAL", "SCHEMA"] },
   { tableSelection: { mode: "RULES" } },
   { tableMappings: [] },
   { tableMappings: [...json.tableMappings, ...json.tableMappings] },
@@ -252,4 +253,10 @@ const restored = {
 assert.equal(readExecutionReport(JSON.stringify(restored), 2).generation, 2);
 console.log(
   "Database realtime parameters, stage summaries, restored and invalid observation contracts passed",
+);
+
+assert.deepEqual(
+  readSyncParameters(3, JSON.stringify({ ...json, steps: ["SCHEMA", "FULL", "INCREMENTAL"] }))
+    .steps,
+  ["SCHEMA", "FULL", "INCREMENTAL"],
 );

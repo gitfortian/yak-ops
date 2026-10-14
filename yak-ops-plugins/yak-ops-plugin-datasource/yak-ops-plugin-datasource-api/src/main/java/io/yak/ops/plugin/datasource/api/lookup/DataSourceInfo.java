@@ -2,8 +2,12 @@ package io.yak.ops.plugin.datasource.api.lookup;
 
 import io.yak.ops.core.data.TableId;
 
-/** Non-secret identity and namespace of an authorized datasource. */
-public record DataSourceInfo(String type, String database, String schema) {
+/** Non-secret identity, namespace and revision of an authorized datasource. */
+public record DataSourceInfo(String type, String database, String schema, long revision) {
+    public DataSourceInfo {
+        if (revision < 1) throw new IllegalArgumentException("Datasource revision is required");
+    }
+
     /**
      * Resolves a selected table within this datasource's bound namespace.
      *
@@ -20,9 +24,6 @@ public record DataSourceInfo(String type, String database, String schema) {
         if (bound != null && !bound.isBlank() && selected != null && !selected.isBlank() && !bound.equals(selected)) {
             throw new IllegalArgumentException("Selected namespace differs from datasource binding");
         }
-        if (selected == null || selected.isBlank()) {
-            return bound;
-        }
-        return selected;
+        return selected == null || selected.isBlank() ? bound : selected;
     }
 }

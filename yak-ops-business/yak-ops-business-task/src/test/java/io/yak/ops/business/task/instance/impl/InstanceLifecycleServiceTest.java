@@ -57,6 +57,27 @@ class InstanceLifecycleServiceTest {
     }
 
     @Test
+    void deferredStartHasNoFabricatedJobIdAndLateBindingDoesNotChangeState() {
+        when(instances.markRunning("ws", "i", "token-1", null, null)).thenReturn(true);
+        when(instances.bindRuntimeReference("ws", "i", "token-1", "YAKFLOW", "job-1")).thenReturn(true);
+        service.started(ticket(), null);
+        service.runtimeReference(ticket(), new TaskRuntimeReference("YAKFLOW", "job-1"));
+        verify(instances).bindRuntimeReference("ws", "i", "token-1", "YAKFLOW", "job-1");
+        verify(instances, never()).markRunning("ws", "i", "token-1", "YAKFLOW", "job-1");
+    }
+
+    @Test
+    void uncertainPreparationStoresItsPartialReportAndRetainsClaims() {
+        String report = "{\"version\":3}";
+        when(instances.findByIdForUpdate("ws", "i")).thenReturn(Optional.of(instance(TaskInstanceStatus.RUNNING)));
+        when(instances.updateExecutionReport("ws", "i", "token-1", report)).thenReturn(true);
+        service.uncertain(ticket(), report);
+        verify(instances).updateExecutionReport("ws", "i", "token-1", report);
+        verify(instances).markReconciling("ws", "i", "token-1");
+        verify(claims, never()).releaseOwned("ws", "i");
+    }
+
+    @Test
     void cancellationBeforeLaunchReleasesTheResourceClaim() {
         when(instances.findByIdForUpdate("ws", "i"))
                 .thenReturn(Optional.of(instance(TaskInstanceStatus.SUBMITTED)));

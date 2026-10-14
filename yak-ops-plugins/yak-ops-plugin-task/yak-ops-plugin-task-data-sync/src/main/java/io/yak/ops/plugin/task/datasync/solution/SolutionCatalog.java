@@ -9,6 +9,7 @@ import java.util.Set;
 /** Enumerates implemented product solutions without opening datasource connections. */
 public final class SolutionCatalog {
     private static final Set<String> JDBC_TYPES = Set.of("MYSQL", "POSTGRE_SQL", "ORACLE");
+    private static final Set<String> SCHEMA_TYPES = Set.of("MYSQL", "POSTGRE_SQL");
     private final FactoryUtil factories;
 
     public SolutionCatalog(FactoryUtil factories) {
@@ -26,13 +27,13 @@ public final class SolutionCatalog {
         validateTypes(sourceType, targetType);
         factories.sink("JDBC");
         List<Solution> choices = new ArrayList<>();
-        choices.add(solution(SolutionType.SINGLE_TABLE_OFFLINE));
+        choices.add(solution(sourceType, targetType, SolutionType.SINGLE_TABLE_OFFLINE));
         if ("MYSQL".equals(sourceType)) {
-            choices.add(solution(SolutionType.SINGLE_TABLE_REALTIME));
+            choices.add(solution(sourceType, targetType, SolutionType.SINGLE_TABLE_REALTIME));
         }
-        choices.add(solution(SolutionType.DATABASE_OFFLINE));
+        choices.add(solution(sourceType, targetType, SolutionType.DATABASE_OFFLINE));
         if ("MYSQL".equals(sourceType) && !"ORACLE".equals(targetType)) {
-            choices.add(solution(SolutionType.DATABASE_REALTIME));
+            choices.add(solution(sourceType, targetType, SolutionType.DATABASE_REALTIME));
         }
         return List.copyOf(choices);
     }
@@ -64,17 +65,32 @@ public final class SolutionCatalog {
         }
     }
 
-    private Solution solution(SolutionType type) {
+    /**
+     * Checks whether both endpoints support initial schema preparation.
+     *
+     * @param sourceType resolved source datasource type
+     * @param targetType resolved target datasource type
+     * @param steps validated requested steps
+     */
+    public static void validateSteps(String sourceType, String targetType, List<Step> steps) {
+        if (steps.contains(Step.SCHEMA) && (!SCHEMA_TYPES.contains(sourceType) || !SCHEMA_TYPES.contains(targetType))) {
+            throw new IllegalArgumentException("Schema preparation requires MySQL or PostgreSQL endpoints");
+        }
+    }
+
+    private Solution solution(String sourceType, String targetType, SolutionType type) {
         factories.source(type.sourceIdentifier());
         List<String> writes = List.of("UPSERT");
         if (type.supportsScheduling()) {
             writes = List.of("APPEND", "UPSERT");
         }
-        return new Solution(
-                type,
-                type.displayName(),
-                type.steps(),
-                List.of(new Solution.Combination(type.steps(), type.supportsScheduling(), writes)),
-                type.steps());
+        List<Step> applicable = new ArrayList<>(type.steps());
+        List<Solution.Combination> combinations = new ArrayList<>();
+        combinations.add(new Solution.Combination(type.steps(), type.supportsScheduling(), writes));
+        if (SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType)) {
+            applicable.addFirst(Step.SCHEMA);
+            combinations.add(new Solution.Combination(applicable, type.supportsScheduling(), writes));
+        }
+        return new Solution(type, type.displayName(), applicable, combinations, type.steps());
     }
 }

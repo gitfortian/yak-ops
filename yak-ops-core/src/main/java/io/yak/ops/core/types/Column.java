@@ -1,11 +1,12 @@
 package io.yak.ops.core.types;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Named table column. Nullability, character capacity and binary capacity belong to LogicalType.
  */
-public record Column(String name, LogicalType dataType) {
+public record Column(String name, LogicalType dataType) implements Serializable {
 
     public Column {
         Objects.requireNonNull(name, "name");

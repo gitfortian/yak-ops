@@ -62,6 +62,9 @@ export interface DataSyncTableResult {
   plannedSplits: number | null;
   completedSplits: number;
   failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
 }
 
 export interface DataSyncBatchReport {
@@ -79,33 +82,36 @@ export type DataSyncStageStatus =
   | "UNKNOWN";
 
 export interface DataSyncStageResult {
-  step: "FULL" | "INCREMENTAL";
+  step: DataSyncStep;
   status: DataSyncStageStatus;
   progressPercent: number | null;
-  progressUnit: "SPLITS" | "RECORDS";
+  progressUnit: "SPLITS" | "RECORDS" | "TABLES";
   readRows: number | null;
   committedRows: number | null;
   plannedSplits: number | null;
   completedSplits: number | null;
   failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
 }
 
-export interface DataSyncRealtimeSummary {
-  version: 2;
+export interface DataSyncExecutionSummary {
+  version: 2 | 3;
   observedAt: string;
   generation: number;
   restored: boolean;
-  counterScope: "GENERATION";
-  phase: "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
+  counterScope: "GENERATION" | "INSTANCE";
+  phase: "SCHEMA" | "FULL" | "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
   checkpoints: { handoffId: number | null; completedId: number | null };
   stages: DataSyncStageResult[];
 }
 
-export interface DataSyncRealtimeReport extends DataSyncRealtimeSummary {
+export interface DataSyncStageReport extends DataSyncExecutionSummary {
   tables: Array<{ mappingIndex: number; stages: DataSyncStageResult[] }>;
 }
 
-export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncRealtimeReport;
+export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
 
 export interface DataSyncParameters {
   solutionType: DataSyncSolutionType;
@@ -347,4 +353,11 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
+}
+
+export interface DataSyncSchemaPreview {
+  mappingIndex: number;
+  target: { catalog: string; schema: string | null; table: string };
+  action: "CREATE" | "VERIFY";
+  statements: string[];
 }

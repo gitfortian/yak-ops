@@ -4,8 +4,10 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
@@ -13,7 +15,10 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
+import io.yak.ops.plugin.task.datasync.solution.SolutionCatalog;
+import io.yak.ops.plugin.task.datasync.solution.Step;
 import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
+import io.yak.ops.plugin.task.datasync.validation.SchemaValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,9 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Resolves authorized DATA_SYNC metadata and constructs the logical Job and admission plans. */
+/** Resolves authorized DATA_SYNC metadata and constructs logical Job and admission plans. */
 public final class JobPlanner {
-
     private final DataSourceLookupService resources;
     private final FactoryUtil factories;
 
@@ -36,27 +40,74 @@ public final class JobPlanner {
     }
 
     /**
-     * Declares the exclusive destination and its non-secret binding fingerprint.
+     * Declares every exclusive destination and its non-secret binding fingerprint.
      *
      * @param parameters pinned DATA_SYNC definition
      * @param context trusted Task execution identity
-     * @return admission claim validated against the effective schema
+     * @return complete admission claims validated against the expected schema
      */
     public TaskAdmissionPlan admissionPlan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
         return plan(parameters, context).admissionPlan();
     }
 
     /**
-     * Resolves source and target metadata and validates the executable JDBC Sink projection.
-     *
-     * <p>Planning reads authorized metadata; it does not export connection settings or submit jobs.
+     * Resolves source and target metadata without DDL, connection credentials or Job submission.
      *
      * @param parameters pinned DATA_SYNC definition
      * @param context trusted Task execution identity
-     * @return immutable, non-secret logical DATA_SYNC plan
+     * @return immutable logical plan; missing targets require explicit SCHEMA preparation
      */
     public JobPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
+        return resolve(parameters, context.workspaceId(), context.instanceId());
+    }
+
+    /**
+     * Previews the same validated schema operations used by execution without reserving resources.
+     *
+     * @param parameters validated product configuration
+     * @param workspaceId authorized Workspace
+     * @return ordered table DDL previews without connection settings
+     */
+    public List<SchemaPreview> preview(ReadonlyConfig parameters, String workspaceId) {
+        if (!JobConfig.from(parameters).steps().contains(Step.SCHEMA)) {
+            throw new IllegalArgumentException("DDL preview requires the SCHEMA step");
+        }
+        JobPlan plan = resolve(parameters, workspaceId, null);
+        List<SchemaPreview> results = new ArrayList<>();
+        for (int index = 0; index < plan.tables().size(); index++) {
+            TablePlan table = plan.tables().get(index);
+            results.add(new SchemaPreview(
+                    index,
+                    table.targetTable(),
+                    table.targetSchema() == null ? "CREATE" : "VERIFY",
+                    SchemaValidator.ddl(table.targetDatasource().type(), table.schemaChange())
+                            .statements()));
+        }
+        return List.copyOf(results);
+    }
+
+    /**
+     * Reads and verifies a prepared target using its originally admitted binding.
+     *
+     * @param plan admitted table route
+     * @param context trusted Task execution identity
+     * @return the same route with actual physical target metadata
+     */
+    public TablePlan preparedTarget(TablePlan plan, TaskExecutionIdentity context) {
+        TableId table = plan.targetTable();
+        DataSourceTable actual = resources.table(
+                context.workspaceId(),
+                plan.sinkParameters().get(JobOptions.DATASOURCE_ID),
+                table.catalog(),
+                table.schema(),
+                table.table());
+        SchemaValidator.validateTarget(plan.schemaChange(), actual);
+        return plan.withTarget(actual);
+    }
+
+    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId) {
         JobConfig job = JobConfigValidator.validateConfig(parameters, factories);
+        boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
         List<ExecutionResource> claims = new ArrayList<>();
         java.util.Set<TableId> sources = new java.util.HashSet<>();
@@ -70,61 +121,98 @@ public final class JobPlanner {
             var sourceFactory = factories.source(source.get(JobOptions.TYPE));
             var sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
             DataSourceTable from = resources.table(
-                    context.workspaceId(),
+                    workspaceId,
                     sourceId,
                     source.get(JobOptions.DATABASE),
                     source.get(JobOptions.SCHEMA),
                     source.get(JobOptions.TABLE));
-            DataSourceTable to = resources.table(
-                    context.workspaceId(),
-                    sinkId,
-                    sink.get(JobOptions.DATABASE),
-                    sink.get(JobOptions.SCHEMA),
-                    sink.get(JobOptions.TABLE));
-
+            DataSourceInfo targetInfo;
+            TableId targetTable;
+            DataSourceTable actual;
+            if (prepareSchema) {
+                targetInfo = resources.dataSource(workspaceId, sinkId);
+                targetTable = targetInfo.resolveTable(
+                        sink.get(JobOptions.DATABASE), sink.get(JobOptions.SCHEMA), sink.get(JobOptions.TABLE));
+                SchemaValidator.validateNamespace(targetInfo, targetTable);
+                actual = resources
+                        .findTable(
+                                workspaceId, sinkId, targetTable.catalog(), targetTable.schema(), targetTable.table())
+                        .orElse(null);
+                if (actual != null
+                        && (actual.revision() != targetInfo.revision()
+                                || !actual.table().equals(targetTable))) {
+                    throw new IllegalStateException("Target datasource binding changed during planning");
+                }
+            } else {
+                actual = resources.table(
+                        workspaceId,
+                        sinkId,
+                        sink.get(JobOptions.DATABASE),
+                        sink.get(JobOptions.SCHEMA),
+                        sink.get(JobOptions.TABLE));
+                targetTable = actual.table();
+                targetInfo = new DataSourceInfo(
+                        actual.datasourceType(), targetTable.catalog(), targetTable.schema(), actual.revision());
+            }
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(from.schema());
-            io.yak.ops.plugin.task.datasync.solution.SolutionCatalog.validate(
-                    job.solutionType(), from.datasourceType(), to.datasourceType());
-            if (!sources.add(from.table()) || !targets.add(to.table())) {
+            SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
+            SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
+            if (!sources.add(from.table()) || !targets.add(targetTable)) {
                 throw new IllegalArgumentException("Duplicate resolved source or destination table");
             }
             if (!tables.isEmpty()
                     && (from.revision() != tables.getFirst().source().revision()
-                            || to.revision() != tables.getFirst().target().revision())) {
+                            || targetInfo.revision()
+                                    != tables.getFirst().targetDatasource().revision())) {
                 throw new IllegalStateException("Datasource revision changed while planning the table collection");
             }
-            sinkFactory.validateSchema(sink, from.schema(), to.schema(), sourceFactory.producesChangelog());
-
-            String target = encodePart(sinkId) + encodeTable(to.table());
-            String binding = encodePart(context.workspaceId())
+            CreateTableEvent event = prepareSchema ? SchemaValidator.createEvent(from, targetInfo, targetTable) : null;
+            TableSchema expected = event == null ? actual.schema() : event.getSchema();
+            sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
+            if (actual != null) {
+                if (event != null) SchemaValidator.validateTarget(event, actual);
+                sinkFactory.validateSchema(sink, from.schema(), actual.schema(), sourceFactory.producesChangelog());
+            }
+            String target = encodePart(sinkId) + encodeTable(targetTable);
+            String binding = encodePart(workspaceId)
                     + encodePart(sourceId)
                     + encodePart(Long.toString(from.revision()))
                     + encodeTable(from.table())
                     + encodeSchema(from.schema())
                     + encodePart(sinkId)
-                    + encodePart(Long.toString(to.revision()))
-                    + encodeTable(to.table())
-                    + encodeSchema(to.schema());
+                    + encodePart(Long.toString(targetInfo.revision()))
+                    + encodeTable(targetTable)
+                    + encodeSchema(expected);
+            if (event != null) {
+                binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
+                for (var comment : new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
+                    binding += encodePart(comment.getKey()) + encodePart(comment.getValue());
+                }
+            }
             claims.add(new ExecutionResource("DATA_SYNC_TARGET", target));
             Map<String, Object> prepared =
                     new LinkedHashMap<>(JobOptions.connectorOptions(source).getSourceMap());
-            if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
-                String instanceId = context.instanceId();
+            if (instanceId != null && "MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
                 prepared.put(MySqlCdcSourceOptions.SERVER_ID.key(), MySqlCdcReplicationIdentity.serverId(instanceId));
                 prepared.put(
                         MySqlCdcSourceOptions.TOPIC_PREFIX.key(), MySqlCdcReplicationIdentity.topicPrefix(instanceId));
-                if (tables.isEmpty()) {
-                    claims.add(MySqlCdcReplicationIdentity.exclusiveResource(instanceId));
-                }
+                if (tables.isEmpty()) claims.add(MySqlCdcReplicationIdentity.exclusiveResource(instanceId));
             }
             bindings.append(binding);
-            tables.add(new TablePlan(source, sink, from, to, ReadonlyConfig.fromMap(prepared)));
+            tables.add(new TablePlan(
+                    source,
+                    sink,
+                    from,
+                    targetInfo,
+                    targetTable,
+                    actual == null ? null : actual.schema(),
+                    event,
+                    ReadonlyConfig.fromMap(prepared)));
         }
-        if (tables.size() > 1
-                && job.sourceDataSourceId().equals(job.targetDataSourceId())
+        if (job.sourceDataSourceId().equals(job.targetDataSourceId())
                 && sources.stream().anyMatch(targets::contains)) {
-            throw new IllegalArgumentException("Batch destinations overlap their source tables");
+            throw new IllegalArgumentException("Destinations overlap their source tables");
         }
         return new JobPlan(tables, new TaskAdmissionPlan(claims, sha256(bindings.toString())));
     }
@@ -136,13 +224,11 @@ public final class JobPlanner {
     private static String encodeSchema(TableSchema schema) {
         StringBuilder value = new StringBuilder().append(schema.columnCount()).append(':');
         for (Column column : schema.columns()) {
-            value.append(encodePart(column.name()));
-            value.append(encodePart(column.dataType().asSerializableString()));
+            value.append(encodePart(column.name()))
+                    .append(encodePart(column.dataType().asSerializableString()));
         }
         value.append(schema.primaryKeys().size()).append(':');
-        for (String key : schema.primaryKeys()) {
-            value.append(encodePart(key));
-        }
+        for (String key : schema.primaryKeys()) value.append(encodePart(key));
         return value.toString();
     }
 
@@ -152,8 +238,8 @@ public final class JobPlanner {
 
     private static String sha256(String value) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException("SHA-256 is required", error);
         }

@@ -1,5 +1,6 @@
 package io.yak.ops.core.types;
 
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -10,7 +11,7 @@ import java.util.Set;
  *
  * <p>The immutable value model provides table shape for planning and schema validation.
  */
-public record TableSchema(List<Column> columns, List<String> primaryKeys) {
+public record TableSchema(List<Column> columns, List<String> primaryKeys) implements Serializable {
 
     public TableSchema {
         columns = List.copyOf(Objects.requireNonNull(columns, "columns"));

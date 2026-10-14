@@ -68,6 +68,7 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
   }
   const expected: DataSyncStep[] =
     solutionSyncType(value?.solutionType) === "REALTIME" ? ["FULL", "INCREMENTAL"] : ["FULL"];
+  if (value?.steps?.includes("SCHEMA")) expected.unshift("SCHEMA");
   if (
     !value ||
     !SOLUTIONS.has(value.solutionType) ||
