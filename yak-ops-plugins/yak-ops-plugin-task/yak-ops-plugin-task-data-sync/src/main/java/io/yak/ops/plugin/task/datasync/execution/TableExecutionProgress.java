@@ -60,13 +60,19 @@ public final class TableExecutionProgress {
         schemaStages.set(index, schemaStage("FAILED", 1, 0, null, failureCode));
     }
 
+    /** Records an unconfirmed external DDL outcome without claiming a terminal table result. */
+    public synchronized void schemaUnknown(int index) {
+        preparationStopped = true;
+        schemaStages.set(index, schemaStage("UNKNOWN", 1, 0, null, null));
+    }
+
     /** Records cancellation after the current preparation operation has returned. */
     public synchronized void schemaCanceled(int index) {
         schemaStages.set(index, schemaStage("CANCELED", 1, 0, null, null));
     }
 
     /** Stops unexecuted preparations without erasing previously verified tables. */
-    public synchronized void preparationEnded(boolean canceled) {
+    public synchronized void preparationEnded() {
         preparationStopped = true;
         for (int index = 0; index < schemaStages.size(); index++) {
             StageResult stage = schemaStages.get(index);
@@ -191,8 +197,9 @@ public final class TableExecutionProgress {
             String state = complete
                     ? "FINISHED"
                     : status == JobStatus.FAILED ? "FAILED" : status == JobStatus.CANCELED ? "CANCELED" : "RUNNING";
-            Integer percentage =
-                    complete ? 100 : percent().isPresent() ? percent().getAsInt() : null;
+            Integer percentage = null;
+            if (complete) percentage = 100;
+            else if (percent().isPresent()) percentage = percent().getAsInt();
             stages.add(new StageResult(
                     "FULL",
                     state,
@@ -253,16 +260,19 @@ public final class TableExecutionProgress {
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);
-        String status = completed == schemaStages.size()
-                ? "FINISHED"
-                : failure != null
-                        ? "FAILED"
-                        : preparationStopped
-                                ? "CANCELED"
-                                : schemaStages.stream().anyMatch(stage -> "RUNNING".equals(stage.status()))
-                                                || completed > 0
-                                        ? "RUNNING"
-                                        : "WAITING";
+        boolean unknown = schemaStages.stream().anyMatch(stage -> "UNKNOWN".equals(stage.status()));
+        String status = unknown
+                ? "UNKNOWN"
+                : completed == schemaStages.size()
+                        ? "FINISHED"
+                        : failure != null
+                                ? "FAILED"
+                                : preparationStopped
+                                        ? "CANCELED"
+                                        : schemaStages.stream().anyMatch(stage -> "RUNNING".equals(stage.status()))
+                                                        || completed > 0
+                                                ? "RUNNING"
+                                                : "WAITING";
         return schemaStage(status, schemaStages.size(), completed, null, failure);
     }
 

@@ -96,17 +96,7 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
         if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
             return;
         }
-        if (executionReport != null) {
-            if (executionReport.length() > 262144
-                    || !io.yak.ops.common.util.JSONUtils.readTree(executionReport)
-                            .isObject()) {
-                throw new IllegalArgumentException("Invalid public Task execution report");
-            }
-            if (!instances.updateExecutionReport(
-                    ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), executionReport)) {
-                throw new IllegalStateException("Task execution report ownership changed");
-            }
-        }
+        persistReport(ticket, executionReport);
         TaskInstanceStatus status =
                 switch (outcome) {
                     case FINISHED -> TaskInstanceStatus.FINISHED;
@@ -124,11 +114,32 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void uncertain(DispatchTicket ticket) {
+        uncertain(ticket, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void uncertain(DispatchTicket ticket, String executionReport) {
         instances.findByIdForUpdate(ticket.workspaceId(), ticket.instanceId()).ifPresent(instance -> {
             if (!instance.getStatus().isTerminal()) {
+                persistReport(ticket, executionReport);
                 instances.markReconciling(ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken());
             }
         });
+    }
+
+    private void persistReport(DispatchTicket ticket, String executionReport) {
+        if (executionReport != null) {
+            if (executionReport.length() > 262144
+                    || !io.yak.ops.common.util.JSONUtils.readTree(executionReport)
+                            .isObject()) {
+                throw new IllegalArgumentException("Invalid public Task execution report");
+            }
+            if (!instances.updateExecutionReport(
+                    ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), executionReport)) {
+                throw new IllegalStateException("Task execution report ownership changed");
+            }
+        }
     }
 
     @Override

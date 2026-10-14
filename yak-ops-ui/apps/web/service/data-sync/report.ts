@@ -1,17 +1,31 @@
 import type {
   DataSyncExecutionReport,
-  DataSyncRealtimeSummary,
+  DataSyncExecutionSummary,
   DataSyncStageResult,
+  DataSyncStep,
 } from "./types";
 
 /** Invalid or absent observations never become a successful table or an invented zero. */
 export function readExecutionReport(
   content: string | null | undefined,
   tableCount: number,
+  expectedSteps?: DataSyncStep[],
 ): DataSyncExecutionReport | undefined {
   if (!content) return undefined;
   try {
     const report = JSON.parse(content);
+    if (expectedSteps) {
+      const observed =
+        report?.version === 1
+          ? ["FULL"]
+          : report?.stages?.map((stage: DataSyncStageResult) => stage.step);
+      if (
+        !Array.isArray(observed) ||
+        observed.length !== expectedSteps.length ||
+        observed.some((step: string, index: number) => step !== expectedSteps[index])
+      )
+        return undefined;
+    }
     if (report?.version === 2 || report?.version === 3) {
       const tables: unknown = report.tables;
       if (!validSummary(report) || !Array.isArray(tables) || tables.length !== tableCount)
@@ -158,9 +172,9 @@ function validPreparedStages(stages: unknown): stages is DataSyncStageResult[] {
   );
 }
 
-function validSummary(report: unknown): report is DataSyncRealtimeSummary {
+function validSummary(report: unknown): report is DataSyncExecutionSummary {
   if (!report || typeof report !== "object") return false;
-  const value = report as DataSyncRealtimeSummary;
+  const value = report as DataSyncExecutionSummary;
   return (
     (value.version === 2 || value.version === 3) &&
     Number.isFinite(Date.parse(value.observedAt)) &&
@@ -173,6 +187,13 @@ function validSummary(report: unknown): report is DataSyncRealtimeSummary {
       ? ["SCHEMA", "FULL", "INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
       : ["INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
     ).includes(value.phase) &&
+    (value.version !== 3 ||
+      (value.stages?.length === 2
+        ? value.counterScope === "INSTANCE" &&
+          value.generation === 0 &&
+          !value.restored &&
+          ["SCHEMA", "FULL"].includes(value.phase)
+        : value.counterScope === "GENERATION" && value.phase !== "FULL")) &&
     Boolean(value.checkpoints) &&
     nullableCount(value.checkpoints.handoffId) &&
     nullableCount(value.checkpoints.completedId) &&
@@ -183,7 +204,7 @@ function validSummary(report: unknown): report is DataSyncRealtimeSummary {
 /** Reads the compact observation returned by the existing batch Instance endpoint. */
 export function readExecutionSummary(
   content: string | null | undefined,
-): DataSyncRealtimeSummary | undefined {
+): DataSyncExecutionSummary | undefined {
   if (!content) return undefined;
   try {
     const report = JSON.parse(content);

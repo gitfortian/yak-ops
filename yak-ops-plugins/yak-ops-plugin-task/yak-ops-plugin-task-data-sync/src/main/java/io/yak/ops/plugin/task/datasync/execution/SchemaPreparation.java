@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.exceptions.SchemaEvolveException;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
@@ -57,12 +58,19 @@ public final class SchemaPreparation {
                 prepared.add(physical);
                 progress.schemaFinished(index, table.targetSchema() == null ? "PREPARED" : "VERIFIED");
             } catch (Exception failure) {
-                if (isCanceled()) progress.schemaCanceled(index);
+                if (failure instanceof SchemaEvolveException schema && schema.isOutcomeUnknown()) {
+                    progress.schemaUnknown(index);
+                } else if (isCanceled()) progress.schemaCanceled(index);
                 else progress.schemaFailed(index, "SCHEMA_PREPARATION_FAILED");
                 throw failure;
             }
         }
         return new JobPlan(prepared, plan.admissionPlan());
+    }
+
+    /** Records cancellation synchronously before an asynchronous driver request is dispatched. */
+    public synchronized void requestCancellation() {
+        canceled = true;
     }
 
     /**

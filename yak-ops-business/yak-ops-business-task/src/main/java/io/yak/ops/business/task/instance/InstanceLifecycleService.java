@@ -59,6 +59,14 @@ public interface InstanceLifecycleService {
     void uncertain(DispatchTicket ticket);
 
     /**
+     * Persists the last safe observation and protects an unconfirmed physical execution.
+     *
+     * @param ticket winning dispatcher
+     * @param executionReport public plugin observation, or null when unavailable
+     */
+    void uncertain(DispatchTicket ticket, String executionReport);
+
+    /**
      * Atomically closes a pending run, or persists cancellation intent for launched work.
      *
      * @param workspaceId authorized Workspace

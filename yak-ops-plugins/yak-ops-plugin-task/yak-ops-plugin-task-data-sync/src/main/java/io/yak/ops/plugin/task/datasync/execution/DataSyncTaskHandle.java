@@ -3,6 +3,7 @@ package io.yak.ops.plugin.task.datasync.execution;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.core.api.common.JobStatus;
+import io.yak.ops.core.exceptions.SchemaEvolveException;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
@@ -42,7 +43,6 @@ final class DataSyncTaskHandle implements TaskHandle {
     private boolean started;
     private volatile boolean canceled;
     private boolean submissionInvoked;
-    private Thread worker;
     private CompletableFuture<Void> cancellation;
 
     DataSyncTaskHandle(
@@ -67,7 +67,8 @@ final class DataSyncTaskHandle implements TaskHandle {
     public synchronized void start() {
         if (started || result.isDone()) return;
         started = true;
-        worker = Thread.ofVirtual().name("data-sync-" + identity.instanceId()).unstarted(this::execute);
+        Thread worker =
+                Thread.ofVirtual().name("data-sync-" + identity.instanceId()).unstarted(this::execute);
         worker.start();
     }
 
@@ -109,13 +110,14 @@ final class DataSyncTaskHandle implements TaskHandle {
                 };
                 result.complete(outcome);
             } catch (Throwable failure) {
-                if (submissionInvoked) {
+                if (submissionInvoked
+                        || (failure instanceof SchemaEvolveException schema && schema.isOutcomeUnknown())) {
                     // A failed submission future cannot prove that the engine never accepted the Job.
                     status = JobStatus.FAILING;
                     result.completeExceptionally(failure);
                 } else {
                     status = canceled ? JobStatus.CANCELED : JobStatus.FAILED;
-                    if (progress != null) progress.preparationEnded(canceled);
+                    if (progress != null) progress.preparationEnded();
                     LOG.warn(
                             "Data Sync preparation ended before Job submission, instanceId={}, exceptionType={}",
                             identity.instanceId(),
@@ -190,7 +192,9 @@ final class DataSyncTaskHandle implements TaskHandle {
             cancellation.complete(null);
             return cancellation;
         }
-        if (!submissionInvoked && worker != null) worker.interrupt();
+        // JDBC cancellation must use the driver: interrupting a virtual thread can close its
+        // socket before a server response confirms that DDL has stopped.
+        preparation.requestCancellation();
         Thread.ofVirtual().name("data-sync-cancel-" + identity.instanceId()).start(() -> {
             try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", identity.instanceId())) {
                 try {

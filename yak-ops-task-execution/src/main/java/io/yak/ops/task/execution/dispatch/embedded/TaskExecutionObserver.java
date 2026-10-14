@@ -211,7 +211,9 @@ public class TaskExecutionObserver implements AutoCloseable {
                 else lifecycle.complete(ticket, outcome);
                 LOG.info("Task Instance completed, instanceId={}, outcome={}", ticket.instanceId(), outcome);
             } else {
-                lifecycle.uncertain(ticket);
+                var report = publicObservation(ticket.instanceId(), handle, false);
+                if (report.isPresent()) lifecycle.uncertain(ticket, report.get());
+                else lifecycle.uncertain(ticket);
             }
         } catch (RuntimeException persistenceFailure) {
             LOG.error(

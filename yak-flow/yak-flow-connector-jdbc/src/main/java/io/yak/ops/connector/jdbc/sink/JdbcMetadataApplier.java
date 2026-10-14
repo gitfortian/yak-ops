@@ -160,7 +160,13 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                                 // Another creator owns the existing object; do not write its comments.
                                 return;
                             }
+                            if (isOutcomeUnknown(failure)) {
+                                throw new SchemaEvolveException(
+                                        event, "DDL completion cannot be confirmed", failure, true);
+                            }
                             throw failure;
+                        } catch (RuntimeException failure) {
+                            throw new SchemaEvolveException(event, "DDL completion cannot be confirmed", failure, true);
                         }
                     }
                 } finally {
@@ -234,6 +240,18 @@ public final class JdbcMetadataApplier implements MetadataApplier {
 
     private static boolean hasComment(String comment) {
         return comment != null && !comment.isBlank();
+    }
+
+    /** Distinguishes server-confirmed statement errors from a broken or timed-out response channel. */
+    static boolean isOutcomeUnknown(SQLException failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.io.IOException
+                    || cause instanceof java.sql.SQLTimeoutException
+                    || cause instanceof java.sql.SQLRecoverableException) return true;
+            if (cause instanceof SQLException sql
+                    && (sql.getSQLState() == null || sql.getSQLState().startsWith("08"))) return true;
+        }
+        return false;
     }
 
     static boolean isTableAlreadyExists(SQLException failure) {

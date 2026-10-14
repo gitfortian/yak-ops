@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type {
   DataSyncInstanceStatus,
-  DataSyncRealtimeSummary,
+  DataSyncExecutionSummary,
   DataSyncStageResult,
   DataSyncStep,
 } from "@/service/data-sync/types";
@@ -81,7 +81,7 @@ export function ExecutionStages({
   compact = false,
   steps = ["FULL", "INCREMENTAL"],
 }: {
-  summary?: DataSyncRealtimeSummary;
+  summary?: DataSyncExecutionSummary;
   status: DataSyncInstanceStatus;
   compact?: boolean;
   steps?: DataSyncStep[];

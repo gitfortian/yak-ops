@@ -74,7 +74,7 @@ class JdbcMetadataApplierTest {
         };
         String url = "jdbc:h2:mem:plan_only";
         try (JdbcMetadataApplier applier = new JdbcMetadataApplier(
-                connections, JdbcFactoryLoader.loadDialect(url), JdbcFactoryLoader.loadCatalog(url, connections), 30)) {
+                connections, JdbcFactoryLoader.loadDialect("jdbc:postgresql:"), JdbcFactoryLoader.loadCatalog(url, connections), 30)) {
             var plan = applier.plan(new CreateTableEvent(TABLE, SCHEMA, "Orders", Map.of("name", "Name")));
             assertTrue(plan.createTableSql().startsWith("CREATE TABLE"));
             assertEquals(plan.createTableSql(), plan.statements().getFirst());
@@ -161,7 +161,7 @@ class JdbcMetadataApplierTest {
                     throw denied;
                 });
         try (JdbcMetadataApplier applier = new JdbcMetadataApplier(
-                connections, JdbcFactoryLoader.loadDialect("jdbc:h2:mem:metadata_denied"), catalog, 30)) {
+                connections, JdbcFactoryLoader.loadDialect("jdbc:postgresql:"), catalog, 30)) {
             SchemaEvolveException failure = assertThrows(
                     SchemaEvolveException.class, () -> applier.applySchemaChange(new CreateTableEvent(TABLE, SCHEMA)));
             assertSame(denied, failure.getCause());
@@ -178,7 +178,7 @@ class JdbcMetadataApplierTest {
         };
         String url = "jdbc:h2:mem:canceled_metadata";
         try (JdbcMetadataApplier applier = new JdbcMetadataApplier(
-                connections, JdbcFactoryLoader.loadDialect(url), JdbcFactoryLoader.loadCatalog(url, connections), 30)) {
+                connections, JdbcFactoryLoader.loadDialect("jdbc:postgresql:"), JdbcFactoryLoader.loadCatalog(url, connections), 30)) {
             applier.cancel();
             SchemaEvolveException failure = assertThrows(
                     SchemaEvolveException.class, () -> applier.applySchemaChange(new CreateTableEvent(TABLE, SCHEMA)));
@@ -225,6 +225,26 @@ class JdbcMetadataApplierTest {
         assertFalse(JdbcMetadataApplier.isTableAlreadyExists(new SQLException("already exists", "42S01", 999)));
     }
 
+    @Test
+    void brokenDdlResponseAndDriverTimeoutAreNotConfirmedTerminalOperations() throws Exception {
+        for (SQLException injected : List.of(new SQLException("connection lost", "08006"),
+                new java.sql.SQLTimeoutException("response timeout"), new SQLException("unknown response"))) {
+            try (Database database = new Database()) {
+                JdbcConnectionProvider ddlConnections = () -> wrapConnection(database.connections.getConnection(),
+                        new AtomicInteger(), new AtomicInteger(), injected);
+                try (JdbcMetadataApplier applier = new JdbcMetadataApplier(ddlConnections, database.dialect, database.catalog, 1)) {
+                    SchemaEvolveException failure = assertThrows(SchemaEvolveException.class,
+                            () -> applier.applySchemaChange(new CreateTableEvent(TABLE, SCHEMA, "Required comment", Map.of())));
+                    assertSame(injected, failure.getCause());
+                    assertTrue(failure.isOutcomeUnknown());
+                    assertTrue(database.catalog.tableExists(TABLE));
+                }
+            }
+        }
+        assertFalse(JdbcMetadataApplier.isOutcomeUnknown(new SQLException("permission denied", "42501")));
+        assertFalse(JdbcMetadataApplier.isOutcomeUnknown(new SQLException("canceled by server", "57014")));
+    }
+
     private static Connection wrapConnection(
             Connection connection, AtomicInteger executed, AtomicInteger timeout, SQLException injected) {
         return (Connection) Proxy.newProxyInstance(
@@ -252,7 +272,7 @@ class JdbcMetadataApplierTest {
     private static final class Database implements AutoCloseable {
         private final String url = "jdbc:h2:mem:metadata_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
         private final JdbcConnectionProvider connections = () -> DriverManager.getConnection(url, "sa", "");
-        private final JdbcDialect dialect = JdbcFactoryLoader.loadDialect(url);
+        private final JdbcDialect dialect = JdbcFactoryLoader.loadDialect("jdbc:postgresql:");
         private final JdbcCatalog catalog = JdbcFactoryLoader.loadCatalog(url, connections);
 
         private JdbcMetadataApplier applier() {

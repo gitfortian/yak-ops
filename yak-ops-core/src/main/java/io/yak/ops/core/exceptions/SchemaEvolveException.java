@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * Modified for Yak Ops: RuntimeException base, standard message/cause
- * ownership, and no event or cause expansion in toString().
+ * ownership, external-operation certainty, and safe diagnostics.
  */
 package io.yak.ops.core.exceptions;
 
@@ -28,6 +28,7 @@ public class SchemaEvolveException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     private final SchemaChangeEvent applyingEvent;
+    private final boolean outcomeUnknown;
 
     /**
      * Creates a schema failure without an underlying exception.
@@ -47,8 +48,27 @@ public class SchemaEvolveException extends RuntimeException {
      * @param cause original failure, or null
      */
     public SchemaEvolveException(SchemaChangeEvent applyingEvent, String exceptionMessage, Throwable cause) {
+        this(applyingEvent, exceptionMessage, cause, false);
+    }
+
+    /**
+     * Creates a failure with explicit external-operation certainty.
+     *
+     * @param applyingEvent schema operation whose execution failed
+     * @param exceptionMessage safe diagnostic description
+     * @param cause original failure
+     * @param outcomeUnknown whether external completion cannot be established and ownership must be retained
+     */
+    public SchemaEvolveException(
+            SchemaChangeEvent applyingEvent, String exceptionMessage, Throwable cause, boolean outcomeUnknown) {
         super(exceptionMessage, cause);
         this.applyingEvent = Objects.requireNonNull(applyingEvent, "applyingEvent");
+        this.outcomeUnknown = outcomeUnknown;
+    }
+
+    /** Returns whether releasing the target could overlap an unconfirmed external operation. */
+    public boolean isOutcomeUnknown() {
+        return outcomeUnknown;
     }
 
     /** Returns the schema operation associated with the failure. */

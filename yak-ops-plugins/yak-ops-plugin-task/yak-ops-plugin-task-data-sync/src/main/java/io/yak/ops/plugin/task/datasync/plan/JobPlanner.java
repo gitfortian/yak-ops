@@ -157,7 +157,7 @@ public final class JobPlanner {
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(from.schema());
             SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
-            SolutionCatalog.validateSteps(targetInfo.type(), job.steps());
+            SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
             if (!sources.add(from.table()) || !targets.add(targetTable)) {
                 throw new IllegalArgumentException("Duplicate resolved source or destination table");
             }

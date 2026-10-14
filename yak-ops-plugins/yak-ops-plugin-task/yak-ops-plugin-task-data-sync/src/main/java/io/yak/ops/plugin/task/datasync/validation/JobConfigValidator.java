@@ -56,7 +56,7 @@ public final class JobConfigValidator {
             DataSourceInfo from = context.dataSource(sourceId);
             DataSourceInfo to = context.dataSource(sinkId);
             SolutionCatalog.validate(job.solutionType(), from.type(), to.type());
-            SolutionCatalog.validateSteps(to.type(), job.steps());
+            SolutionCatalog.validateSteps(from.type(), to.type(), job.steps());
             boolean prepareSchema = job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA);
             Set<TableId> sources = new HashSet<>();
             Set<TableId> targets = new HashSet<>();
@@ -93,9 +93,7 @@ public final class JobConfigValidator {
                             sourceFactory.producesChangelog());
                 }
             }
-            if (job.tables().size() > 1
-                    && sourceId.equals(sinkId)
-                    && sources.stream().anyMatch(targets::contains)) {
+            if (sourceId.equals(sinkId) && sources.stream().anyMatch(targets::contains)) {
                 throw new IllegalArgumentException("Batch destinations overlap their source tables");
             }
         } catch (RuntimeException failure) {

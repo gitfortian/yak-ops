@@ -708,6 +708,8 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
         (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
     form.name.trim() &&
     Boolean(form.sourceDataSourceId && form.targetDataSourceId) &&
+    (!prepareSchema ||
+      Boolean(form.targetDatabase && (draft.targetType !== "POSTGRE_SQL" || form.targetSchema))) &&
     (batch
       ? validTableMappings(
           mappings,

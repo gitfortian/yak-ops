@@ -96,7 +96,7 @@ export interface DataSyncStageResult {
   action?: "PREPARED" | "VERIFIED" | null;
 }
 
-export interface DataSyncRealtimeSummary {
+export interface DataSyncExecutionSummary {
   version: 2 | 3;
   observedAt: string;
   generation: number;
@@ -107,11 +107,11 @@ export interface DataSyncRealtimeSummary {
   stages: DataSyncStageResult[];
 }
 
-export interface DataSyncRealtimeReport extends DataSyncRealtimeSummary {
+export interface DataSyncStageReport extends DataSyncExecutionSummary {
   tables: Array<{ mappingIndex: number; stages: DataSyncStageResult[] }>;
 }
 
-export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncRealtimeReport;
+export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
 
 export interface DataSyncParameters {
   solutionType: DataSyncSolutionType;
