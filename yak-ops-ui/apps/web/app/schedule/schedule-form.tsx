@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@yak-ops/yak-ui";
+import { useId } from "react";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import { formatScheduleTime } from "./schedule-presentation";
 import { useSchedulePreview } from "./use-schedule-preview";
@@ -77,11 +78,21 @@ export function ScheduleForm({
   disabled?: boolean;
   allowClear?: boolean;
 }) {
+  const cronLabelId = useId();
   const zones = [...new Set([...TIME_ZONES, value.timeZone])].filter(Boolean);
   return (
     <div className="space-y-3">
-      <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-center !gap-3">
-        <FieldLabel>Cron 表达式</FieldLabel>
+      <div
+        role="group"
+        aria-labelledby={cronLabelId}
+        className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-3"
+      >
+        <span
+          id={cronLabelId}
+          className="text-[13px] font-medium leading-5 text-[var(--yak-components-field-label)]"
+        >
+          Cron 表达式
+        </span>
         <CronSchedulerPicker
           value={value.cronExpression}
           disabled={disabled}
@@ -94,7 +105,7 @@ export function ScheduleForm({
             <SchedulePreview rule={{ ...value, cronExpression }} />
           )}
         />
-      </Field>
+      </div>
       <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-center !gap-3">
         <FieldLabel>时区</FieldLabel>
         <Select
