@@ -6,16 +6,14 @@ spring:
   application:
     name: yak-ops
   datasource:
-    url: ${YAK_DATABASE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}
+    url: ${YAK_DATABASE_URL:jdbc:mysql://127.0.0.1:3306/yak_ops?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}
     username: ${YAK_DATABASE_USERNAME:root}
-    password: ${YAK_DATABASE_PASSWORD:123456}
-    driver-class-name: ${YAK_DATABASE_DRIVER:com.mysql.cj.jdbc.Driver}
+    password: ${YAK_DATABASE_PASSWORD:}
     hikari:
       pool-name: YakOpsDatabasePool
       minimum-idle: ${YAK_DATABASE_MINIMUM_IDLE:1}
       maximum-pool-size: ${YAK_DATABASE_MAXIMUM_POOL_SIZE:8}
-      auto-commit: true
-  # Flyway migration ownership remains in yak-ops-dao; disable Spring Boot's default Flyway runner.
+  # yak-ops-dao owns Flyway migration initialization.
   flyway:
     enabled: false
   lifecycle:
@@ -25,35 +23,20 @@ spring:
     time-zone: Asia/Shanghai
 
 springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
   swagger-ui:
-    enabled: true
-    path: /swagger-ui.html
     display-request-duration: true
     operations-sorter: alpha
     tags-sorter: alpha
 
 yak:
   security:
-    enabled: true
-    database-enabled: true
-    web-enabled: true
-    authentication-enabled: true
     application-name: ${YAK_SECURITY_APPLICATION_NAME:${spring.application.name}}
     authentication:
-      # HttpSession 无操作超时。
       idle-timeout: ${YAK_SECURITY_AUTHENTICATION_IDLE_TIMEOUT:30m}
-    public-paths:
-      - /yak-security/api/v1/account/login
-      - /v3/api-docs/**
-      - /swagger-ui/**
-      - /swagger-ui.html
     bootstrap:
-      enabled: true
+      enabled: ${YAK_SECURITY_BOOTSTRAP_ENABLED:false}
       username: ${YAK_SECURITY_BOOTSTRAP_USERNAME:root}
-      password: ${YAK_SECURITY_BOOTSTRAP_PASSWORD:Root@123456}
+      password: ${YAK_SECURITY_BOOTSTRAP_PASSWORD:}
       real-name: ${YAK_SECURITY_BOOTSTRAP_REAL_NAME:系统管理员}
 
   task:
@@ -70,11 +53,9 @@ logging:
   level:
     root: INFO
     io.yak.ops: ${YAK_LOG_LEVEL:INFO}
-    org.flywaydb: INFO
   logback:
     rollingpolicy:
       file-name-pattern: ${YAK_LOG_FILE_PATTERN:logs/yak-ops.%d{yyyy-MM-dd}.%i.log.gz}
-      clean-history-on-start: true
       max-file-size: ${YAK_LOG_MAX_FILE_SIZE:100MB}
       max-history: ${YAK_LOG_MAX_HISTORY:7}
       total-size-cap: ${YAK_LOG_TOTAL_SIZE_CAP:5GB}
