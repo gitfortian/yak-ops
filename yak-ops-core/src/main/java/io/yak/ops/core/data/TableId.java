@@ -1,5 +1,6 @@
 package io.yak.ops.core.data;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -8,7 +9,7 @@ import java.util.Objects;
  * <p>Catalog and schema are optional. Names retain their original case and are never parsed
  * from a concatenated string, so quoted identifiers containing dots remain unambiguous.
  */
-public record TableId(String catalog, String schema, String table) {
+public record TableId(String catalog, String schema, String table) implements Serializable {
 
     public TableId {
         catalog = normalize(catalog);
