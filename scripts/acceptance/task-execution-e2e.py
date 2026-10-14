@@ -63,7 +63,7 @@ class Client:
 
     def login(self):
         self.call(
-            "POST", "/yak-security/api/v1/account/login",
+            "POST", "/api/v1/account/login",
             {"userName": "taske2e", "pw": USER_PASSWORD})
 
 
@@ -119,10 +119,11 @@ def boot_environment(port):
     environment.update({
         "SERVER_PORT": str(port),
         "YAK_DATABASE_URL": (
-            "jdbc:mysql://127.0.0.1:3306/yak_security"
+            "jdbc:mysql://127.0.0.1:3306/yak_ops"
             "?useSSL=false&allowPublicKeyRetrieval=true"),
         "YAK_DATABASE_USERNAME": "root",
         "YAK_DATABASE_PASSWORD": DB_PASSWORD,
+        "YAK_SECURITY_BOOTSTRAP_ENABLED": "true",
         "YAK_SECURITY_BOOTSTRAP_USERNAME": "taske2e",
         "YAK_SECURITY_BOOTSTRAP_PASSWORD": USER_PASSWORD,
         "YAK_SECURITY_BOOTSTRAP_REAL_NAME": "Task acceptance",
