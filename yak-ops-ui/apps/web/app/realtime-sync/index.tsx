@@ -130,8 +130,11 @@ export function RealtimeSyncPage() {
     [targetDataSources],
   );
   const taskIds = useMemo(() => records.map((record) => record.id), [records]);
-  const { activeByTask, latestByTask, refresh: refreshActiveInstances } =
-    useActiveTaskInstances(true, taskIds);
+  const {
+    activeByTask,
+    latestByTask,
+    refresh: refreshActiveInstances,
+  } = useActiveTaskInstances(true, taskIds);
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
@@ -224,7 +227,10 @@ export function RealtimeSyncPage() {
     }
   };
 
-  const stopTask = async (record: DataSyncTaskRecord, activeInstance: Pick<DataSyncInstanceRecord, "id" | "status">) => {
+  const stopTask = async (
+    record: DataSyncTaskRecord,
+    activeInstance: Pick<DataSyncInstanceRecord, "id" | "status">,
+  ) => {
     if (actionKey || !canCancelTaskInstance(activeInstance.status)) return;
     setActionKey(`${record.id}:stop`);
     try {
@@ -296,10 +302,14 @@ export function RealtimeSyncPage() {
         return (
           <div className="flex min-w-0 items-center gap-2 text-[13px] text-[#344054]">
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={sourceName}>{sourceName}</span>
+            <span className="min-w-0 flex-1 truncate" title={sourceName}>
+              {sourceName}
+            </span>
             <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" strokeWidth={1.8} />
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={targetName}>{targetName}</span>
+            <span className="min-w-0 flex-1 truncate" title={targetName}>
+              {targetName}
+            </span>
           </div>
         );
       },
@@ -324,7 +334,9 @@ export function RealtimeSyncPage() {
             type="button"
             className="block w-full cursor-pointer text-left"
             title="查看本次执行"
-            onClick={() => navigate(`/realtime-sync/${record.id}/detail?executionId=${instance.id}`)}
+            onClick={() =>
+              navigate(`/realtime-sync/${record.id}/detail?executionId=${instance.id}`)
+            }
           >
             <ExecutionProgressBar
               status={instance.status}

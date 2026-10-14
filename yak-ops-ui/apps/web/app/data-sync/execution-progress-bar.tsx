@@ -20,7 +20,8 @@ export function ExecutionProgressBar({
   const progress = status
     ? getExecutionProgress(status, percent, realtime)
     : { mode: "idle", value: null };
-  const progressText = progress.value === null ? (status ? "运行中" : "暂无执行") : `${progress.value}%`;
+  const progressText =
+    progress.value === null ? (status ? "运行中" : "暂无执行") : `${progress.value}%`;
   const label = realtime ? "实时同步" : "离线同步";
 
   return (

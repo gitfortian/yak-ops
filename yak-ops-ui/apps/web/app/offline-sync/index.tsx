@@ -83,8 +83,11 @@ export function OfflineSyncPage() {
   const [deleting, setDeleting] = useState(false);
 
   const taskIds = useMemo(() => records.map((record) => record.id), [records]);
-  const { activeByTask, latestByTask, refresh: refreshActiveInstances } =
-    useActiveTaskInstances(true, taskIds);
+  const {
+    activeByTask,
+    latestByTask,
+    refresh: refreshActiveInstances,
+  } = useActiveTaskInstances(true, taskIds);
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
@@ -238,10 +241,14 @@ export function OfflineSyncPage() {
         return (
           <div className="flex min-w-0 items-center gap-2 text-[13px] text-[#344054]">
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={sourceName}>{sourceName}</span>
+            <span className="min-w-0 flex-1 truncate" title={sourceName}>
+              {sourceName}
+            </span>
             <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" strokeWidth={1.8} />
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={targetName}>{targetName}</span>
+            <span className="min-w-0 flex-1 truncate" title={targetName}>
+              {targetName}
+            </span>
           </div>
         );
       },

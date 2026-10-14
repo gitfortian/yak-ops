@@ -62,10 +62,7 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
 
   useEffect(() => {
     if (!enabled || taskIds.length === 0) return;
-    const timer = window.setInterval(
-      () => void refresh(),
-      activeByTask.size > 0 ? 2000 : 15000,
-    );
+    const timer = window.setInterval(() => void refresh(), activeByTask.size > 0 ? 2000 : 15000);
     return () => window.clearInterval(timer);
   }, [activeByTask.size, enabled, refresh, taskIds.length]);
 
