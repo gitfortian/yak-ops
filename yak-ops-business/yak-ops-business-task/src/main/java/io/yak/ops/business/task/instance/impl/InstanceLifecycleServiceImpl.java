@@ -55,9 +55,22 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
                 ticket.workspaceId(),
                 ticket.instanceId(),
                 ticket.dispatchToken(),
+                reference == null ? null : reference.engine(),
+                reference == null ? null : reference.id())) {
+            throw new IllegalStateException("Task Instance launch ownership changed");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void runtimeReference(DispatchTicket ticket, TaskRuntimeReference reference) {
+        if (!instances.bindRuntimeReference(
+                ticket.workspaceId(),
+                ticket.instanceId(),
+                ticket.dispatchToken(),
                 reference.engine(),
                 reference.id())) {
-            throw new IllegalStateException("Task Instance launch ownership changed");
+            throw new IllegalStateException("Task runtime identity ownership changed");
         }
     }
 

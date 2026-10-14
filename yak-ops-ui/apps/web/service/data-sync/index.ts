@@ -15,6 +15,7 @@ import {
 import { toDataSyncInstanceRecord } from "./execution";
 
 import {
+  buildSyncParameters,
   createDefinitionRequest,
   definitionPageRequest,
   toSyncTaskRecord,
@@ -23,6 +24,7 @@ import {
 
 import type {
   DataSyncSolution,
+  DataSyncSchemaPreview,
   DataSyncInstancePageParams,
   DataSyncInstancePageResult,
   DataSyncInstanceRecord,
@@ -47,6 +49,16 @@ export const listDataSyncSolutions = (
   const query = new URLSearchParams({ sourceType, targetType });
   return HttpUtils.getData<DataSyncSolution[]>(`/api/v1/data-sync/solutions?${query}`, { signal });
 };
+
+export const previewDataSyncSchema = (
+  payload: DataSyncTaskSavePayload,
+  signal?: AbortSignal,
+): Promise<DataSyncSchemaPreview[]> =>
+  HttpUtils.postData<DataSyncSchemaPreview[]>(
+    "/api/v1/data-sync/schema/preview",
+    { parameters: JSON.stringify(buildSyncParameters(payload)) },
+    { signal },
+  );
 
 export const listDataSyncTasks = async (
   params: DataSyncTaskPageParams,

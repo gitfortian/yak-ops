@@ -83,7 +83,19 @@ public final class JdbcMetadataApplier implements MetadataApplier {
      * @return ordered creation and comment statements
      */
     public JdbcDdlPlan plan(CreateTableEvent event) {
+        return plan(event, dialect);
+    }
+
+    /**
+     * Renders the same validated statements used by execution without opening a connection.
+     *
+     * @param event complete expected structure and comments
+     * @param dialect target dialect
+     * @return ordered DDL statements
+     */
+    public static JdbcDdlPlan plan(CreateTableEvent event, JdbcDialect dialect) {
         Objects.requireNonNull(event, "event");
+        Objects.requireNonNull(dialect, "dialect");
         TableSchema schema = event.getSchema();
         JdbcSinkSchemaValidator.validate(schema, schema, !schema.primaryKeys().isEmpty());
         for (Column column : schema.columns()) {
@@ -96,8 +108,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 throw new IllegalArgumentException("Target primary key is not safely representable: " + column.name());
             }
         }
-        return dialect.createTablePlan(
-                event.tableId(), schema, event.getTableComment(), event.getColumnComments());
+        return dialect.createTablePlan(event.tableId(), schema, event.getTableComment(), event.getColumnComments());
     }
 
     @Override
@@ -167,9 +178,30 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         if (!"TABLE".equalsIgnoreCase(table.type()) && !"BASE TABLE".equalsIgnoreCase(table.type())) {
             throw new IllegalArgumentException("Schema preparation requires a physical target table");
         }
-        TableSchema expected = event.getSchema();
         TableSchema actual = catalog.getTable(event.tableId());
-        Set<String> expectedNames = expected.columns().stream().map(Column::name).collect(Collectors.toSet());
+        validateSchema(event, actual);
+        Map<String, String> comments = new HashMap<>();
+        for (JdbcColumnInfo column : catalog.getColumns(event.tableId())) {
+            if (column.hasDefaultValue()
+                    || !Boolean.FALSE.equals(column.autoIncrement())
+                    || !Boolean.FALSE.equals(column.generated())) {
+                throw new IllegalArgumentException("Target columns must be explicitly writable plain columns");
+            }
+            comments.put(column.name(), column.remarks());
+        }
+        validateComments(event, table.remarks(), comments);
+    }
+
+    /**
+     * Validates the complete expected field set, key order and write compatibility.
+     *
+     * @param event expected complete target schema
+     * @param actual physical schema obtained from the target Catalog
+     */
+    public static void validateSchema(CreateTableEvent event, TableSchema actual) {
+        TableSchema expected = event.getSchema();
+        Set<String> expectedNames =
+                expected.columns().stream().map(Column::name).collect(Collectors.toSet());
         Set<String> actualNames = actual.columns().stream().map(Column::name).collect(Collectors.toSet());
         if (!expectedNames.equals(actualNames)) {
             throw new IllegalArgumentException("Target columns do not match the complete expected schema");
@@ -177,19 +209,25 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         if (!expected.primaryKeys().equals(actual.primaryKeys())) {
             throw new IllegalArgumentException("Target primary keys do not match the expected key order");
         }
-        JdbcSinkSchemaValidator.validate(expected, actual, !expected.primaryKeys().isEmpty());
-        if (hasComment(event.getTableComment()) && !event.getTableComment().equals(table.remarks())) {
+        JdbcSinkSchemaValidator.validate(
+                expected, actual, !expected.primaryKeys().isEmpty());
+    }
+
+    /**
+     * Verifies explicitly requested comments without writing to an existing object.
+     *
+     * @param event expected table and column comments
+     * @param tableComment physical table comment
+     * @param columnComments physical comments keyed by exact column name
+     */
+    public static void validateComments(
+            CreateTableEvent event, String tableComment, Map<String, String> columnComments) {
+        if (hasComment(event.getTableComment()) && !event.getTableComment().equals(tableComment)) {
             throw new IllegalArgumentException("Target table comment does not match the requested metadata");
         }
-        if (event.getColumnComments().values().stream().anyMatch(JdbcMetadataApplier::hasComment)) {
-            Map<String, String> comments = new HashMap<>();
-            for (JdbcColumnInfo column : catalog.getColumns(event.tableId())) {
-                comments.put(column.name(), column.remarks());
-            }
-            for (var entry : event.getColumnComments().entrySet()) {
-                if (hasComment(entry.getValue()) && !entry.getValue().equals(comments.get(entry.getKey()))) {
-                    throw new IllegalArgumentException("Target column comment does not match: " + entry.getKey());
-                }
+        for (var entry : event.getColumnComments().entrySet()) {
+            if (hasComment(entry.getValue()) && !entry.getValue().equals(columnComments.get(entry.getKey()))) {
+                throw new IllegalArgumentException("Target column comment does not match: " + entry.getKey());
             }
         }
     }
@@ -230,6 +268,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
      *
      * @throws SQLException if the driver rejects the cancellation request
      */
+    @Override
     public void cancel() throws SQLException {
         Statement statement;
         synchronized (this) {

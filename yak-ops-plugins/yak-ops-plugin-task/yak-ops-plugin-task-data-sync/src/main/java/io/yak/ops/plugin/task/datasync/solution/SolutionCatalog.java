@@ -26,13 +26,13 @@ public final class SolutionCatalog {
         validateTypes(sourceType, targetType);
         factories.sink("JDBC");
         List<Solution> choices = new ArrayList<>();
-        choices.add(solution(SolutionType.SINGLE_TABLE_OFFLINE));
+        choices.add(solution(targetType, SolutionType.SINGLE_TABLE_OFFLINE));
         if ("MYSQL".equals(sourceType)) {
-            choices.add(solution(SolutionType.SINGLE_TABLE_REALTIME));
+            choices.add(solution(targetType, SolutionType.SINGLE_TABLE_REALTIME));
         }
-        choices.add(solution(SolutionType.DATABASE_OFFLINE));
+        choices.add(solution(targetType, SolutionType.DATABASE_OFFLINE));
         if ("MYSQL".equals(sourceType) && !"ORACLE".equals(targetType)) {
-            choices.add(solution(SolutionType.DATABASE_REALTIME));
+            choices.add(solution(targetType, SolutionType.DATABASE_REALTIME));
         }
         return List.copyOf(choices);
     }
@@ -64,17 +64,31 @@ public final class SolutionCatalog {
         }
     }
 
-    private Solution solution(SolutionType type) {
+    /**
+     * Checks whether the selected target supports initial schema preparation.
+     *
+     * @param targetType resolved product datasource type
+     * @param steps validated requested steps
+     */
+    public static void validateSteps(String targetType, List<Step> steps) {
+        if (steps.contains(Step.SCHEMA) && !Set.of("MYSQL", "POSTGRE_SQL").contains(targetType)) {
+            throw new IllegalArgumentException("Schema preparation requires a MySQL or PostgreSQL target");
+        }
+    }
+
+    private Solution solution(String targetType, SolutionType type) {
         factories.source(type.sourceIdentifier());
         List<String> writes = List.of("UPSERT");
         if (type.supportsScheduling()) {
             writes = List.of("APPEND", "UPSERT");
         }
-        return new Solution(
-                type,
-                type.displayName(),
-                type.steps(),
-                List.of(new Solution.Combination(type.steps(), type.supportsScheduling(), writes)),
-                type.steps());
+        List<Step> applicable = new ArrayList<>(type.steps());
+        List<Solution.Combination> combinations = new ArrayList<>();
+        combinations.add(new Solution.Combination(type.steps(), type.supportsScheduling(), writes));
+        if (Set.of("MYSQL", "POSTGRE_SQL").contains(targetType)) {
+            applicable.addFirst(Step.SCHEMA);
+            combinations.add(new Solution.Combination(applicable, type.supportsScheduling(), writes));
+        }
+        return new Solution(type, type.displayName(), applicable, combinations, type.steps());
     }
 }

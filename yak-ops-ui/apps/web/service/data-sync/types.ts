@@ -62,6 +62,9 @@ export interface DataSyncTableResult {
   plannedSplits: number | null;
   completedSplits: number;
   failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
 }
 
 export interface DataSyncBatchReport {
@@ -79,24 +82,27 @@ export type DataSyncStageStatus =
   | "UNKNOWN";
 
 export interface DataSyncStageResult {
-  step: "FULL" | "INCREMENTAL";
+  step: DataSyncStep;
   status: DataSyncStageStatus;
   progressPercent: number | null;
-  progressUnit: "SPLITS" | "RECORDS";
+  progressUnit: "SPLITS" | "RECORDS" | "TABLES";
   readRows: number | null;
   committedRows: number | null;
   plannedSplits: number | null;
   completedSplits: number | null;
   failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
 }
 
 export interface DataSyncRealtimeSummary {
-  version: 2;
+  version: 2 | 3;
   observedAt: string;
   generation: number;
   restored: boolean;
-  counterScope: "GENERATION";
-  phase: "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
+  counterScope: "GENERATION" | "INSTANCE";
+  phase: "SCHEMA" | "FULL" | "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
   checkpoints: { handoffId: number | null; completedId: number | null };
   stages: DataSyncStageResult[];
 }
@@ -347,4 +353,11 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
+}
+
+export interface DataSyncSchemaPreview {
+  mappingIndex: number;
+  target: { catalog: string; schema: string | null; table: string };
+  action: "CREATE" | "VERIFY";
+  statements: string[];
 }

@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.datasource.api.lookup;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import java.util.Optional;
 
 /** Resolves saved datasource settings and metadata under an explicit Workspace identity. */
 public interface DataSourceLookupService {
@@ -22,6 +23,21 @@ public interface DataSourceLookupService {
      * @return metadata and the revision used for the lookup
      */
     DataSourceTable table(String workspaceId, String datasourceId, String database, String schema, String table);
+
+    /**
+     * Looks up a physical table, distinguishing absence from authorization or metadata failures.
+     *
+     * @param workspaceId authorized Workspace
+     * @param datasourceId saved datasource identifier
+     * @param database selected database or null for the bound namespace
+     * @param schema selected schema or null for the bound namespace
+     * @param table unqualified table name
+     * @return visible physical metadata, or empty only when no matching object was found
+     */
+    default Optional<DataSourceTable> findTable(
+            String workspaceId, String datasourceId, String database, String schema, String table) {
+        return Optional.of(table(workspaceId, datasourceId, database, schema, table));
+    }
 
     /**
      * Resolves current connection settings for interactive Catalog access.

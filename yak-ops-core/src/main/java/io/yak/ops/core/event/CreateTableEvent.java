@@ -65,7 +65,8 @@ public class CreateTableEvent implements SchemaChangeEvent {
         this.schema = Objects.requireNonNull(schema, "schema");
         this.tableComment = tableComment;
         this.columnComments = Map.copyOf(Objects.requireNonNull(columnComments, "columnComments"));
-        Set<String> columns = schema.columns().stream().map(column -> column.name()).collect(Collectors.toSet());
+        Set<String> columns =
+                schema.columns().stream().map(column -> column.name()).collect(Collectors.toSet());
         if (!columns.containsAll(this.columnComments.keySet())) {
             throw new IllegalArgumentException("Column comments must reference declared columns");
         }

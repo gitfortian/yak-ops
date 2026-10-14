@@ -333,7 +333,8 @@ export function DataSyncPage() {
             title="查看本次执行"
             onClick={() => navigate(`/data-sync/${record.id}/detail?executionId=${instance.id}`)}
           >
-            {record.syncType === "REALTIME" ? (
+            {record.syncType === "REALTIME" ||
+            readExecutionSummary(instance.executionReport)?.version === 3 ? (
               <ExecutionStages
                 compact
                 status={instance.status}

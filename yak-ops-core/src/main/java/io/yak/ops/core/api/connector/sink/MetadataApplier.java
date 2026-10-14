@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * Modified for Yak Ops: package, fail-closed default capabilities, and
- * omission of the experimental existing-table expansion SPI.
+ * omission of the experimental existing-table expansion SPI, and best-effort cancellation.
  */
 package io.yak.ops.core.api.connector.sink;
 
@@ -57,13 +57,24 @@ public interface MetadataApplier extends Serializable, AutoCloseable {
      * @return true only for explicitly supported operations
      */
     default boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
-        return schemaChangeEventType != null && getSupportedSchemaEvolutionTypes().contains(schemaChangeEventType);
+        return schemaChangeEventType != null
+                && getSupportedSchemaEvolutionTypes().contains(schemaChangeEventType);
     }
 
     /** Returns explicitly supported operations; implementations declare their capabilities. */
     default Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
         return Set.of();
     }
+
+    /**
+     * Requests cancellation of active metadata work when the implementation supports it.
+     *
+     * <p>This method does not prove that the external operation stopped. The owner must await
+     * applySchemaChange returning before closing resources or releasing target ownership.
+     *
+     * @throws Exception if the underlying system rejects the cancellation request
+     */
+    default void cancel() throws Exception {}
 
     /** Releases resources owned by this applier. */
     @Override

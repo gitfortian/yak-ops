@@ -229,6 +229,27 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
+    public boolean bindRuntimeReference(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId) {
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                                .and(value -> value.nested(empty -> empty.isNull(InstanceEntity::getRuntimeEngine)
+                                                .isNull(InstanceEntity::getRuntimeId))
+                                        .or()
+                                        .nested(same -> same.eq(InstanceEntity::getRuntimeEngine, engine)
+                                                .eq(InstanceEntity::getRuntimeId, runtimeId)))
+                                .set(InstanceEntity::getRuntimeEngine, engine)
+                                .set(InstanceEntity::getRuntimeId, runtimeId)
+                                .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
+                                .setSql("state_version = state_version + 1"))
+                == 1;
+    }
+
+    @Override
     public boolean cancelSubmitted(String workspaceId, String instanceId) {
         return mapper.update(
                         null,

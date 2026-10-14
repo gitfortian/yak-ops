@@ -12,7 +12,7 @@ export function readExecutionReport(
   if (!content) return undefined;
   try {
     const report = JSON.parse(content);
-    if (report?.version === 2) {
+    if (report?.version === 2 || report?.version === 3) {
       const tables: unknown = report.tables;
       if (!validSummary(report) || !Array.isArray(tables) || tables.length !== tableCount)
         return undefined;
@@ -24,11 +24,31 @@ export function readExecutionReport(
           table.mappingIndex < 0 ||
           table.mappingIndex >= tableCount ||
           indexes.has(table.mappingIndex) ||
-          !validStages(table.stages)
+          !(report.version === 3 ? validPreparedStages(table.stages) : validStages(table.stages))
+        )
+          return undefined;
+        if (
+          report.version === 3 &&
+          (table.stages.length !== report.stages.length ||
+            table.stages[0].plannedTables !== 1 ||
+            (report.stages[0].status !== "FINISHED" &&
+              table.stages
+                .slice(1)
+                .some(
+                  (stage: DataSyncStageResult) =>
+                    !["WAITING", "CANCELED", "UNKNOWN"].includes(stage.status),
+                )))
         )
           return undefined;
         indexes.add(table.mappingIndex);
       }
+      if (
+        report.version === 3 &&
+        (report.stages[0].plannedTables !== tableCount ||
+          report.stages[0].completedTables !==
+            tables.filter((table) => table.stages[0].status === "FINISHED").length)
+      )
+        return undefined;
       return { ...report, tables };
     }
     if (
@@ -95,21 +115,68 @@ function validStages(stages: unknown): stages is DataSyncStageResult[] {
   );
 }
 
+function validPreparedStages(stages: unknown): stages is DataSyncStageResult[] {
+  if (!Array.isArray(stages) || ![2, 3].includes(stages.length)) return false;
+  const schema = stages[0];
+  if (
+    !schema ||
+    schema.step !== "SCHEMA" ||
+    schema.progressUnit !== "TABLES" ||
+    !["WAITING", "RUNNING", "FINISHED", "FAILED", "CANCELED", "UNKNOWN"].includes(schema.status) ||
+    !Number.isSafeInteger(schema.plannedTables) ||
+    schema.plannedTables < 1 ||
+    !Number.isSafeInteger(schema.completedTables) ||
+    schema.completedTables < 0 ||
+    schema.completedTables > schema.plannedTables ||
+    schema.progressPercent !== Math.floor((100 * schema.completedTables) / schema.plannedTables) ||
+    (schema.status === "FINISHED") !== (schema.completedTables === schema.plannedTables) ||
+    ![null, "PREPARED", "VERIFIED"].includes(schema.action) ||
+    (schema.action !== null && schema.status !== "FINISHED") ||
+    ![null, "SCHEMA_PREPARATION_FAILED"].includes(schema.failureCode) ||
+    [schema.readRows, schema.committedRows, schema.plannedSplits, schema.completedSplits].some(
+      (value) => value !== null,
+    )
+  )
+    return false;
+  const data = stages.slice(1);
+  if (data.length === 2) return validStages(data);
+  const full = data[0];
+  return (
+    full &&
+    full.step === "FULL" &&
+    full.progressUnit === "SPLITS" &&
+    ["WAITING", "RUNNING", "FINISHED", "FAILED", "CANCELED", "UNKNOWN"].includes(full.status) &&
+    [full.readRows, full.committedRows, full.plannedSplits, full.completedSplits].every(
+      nullableCount,
+    ) &&
+    (full.progressPercent === null ||
+      (Number.isInteger(full.progressPercent) &&
+        full.progressPercent >= 0 &&
+        full.progressPercent <= 100)) &&
+    (full.status !== "FINISHED" || full.progressPercent === 100) &&
+    (full.failureCode === null || ["READ_FAILED", "WRITE_FAILED"].includes(full.failureCode))
+  );
+}
+
 function validSummary(report: unknown): report is DataSyncRealtimeSummary {
   if (!report || typeof report !== "object") return false;
   const value = report as DataSyncRealtimeSummary;
   return (
-    value.version === 2 &&
+    (value.version === 2 || value.version === 3) &&
     Number.isFinite(Date.parse(value.observedAt)) &&
     Number.isSafeInteger(value.generation) &&
     value.generation >= 0 &&
     typeof value.restored === "boolean" &&
-    value.counterScope === "GENERATION" &&
-    ["INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"].includes(value.phase) &&
+    (value.counterScope === "GENERATION" ||
+      (value.version === 3 && value.counterScope === "INSTANCE")) &&
+    (value.version === 3
+      ? ["SCHEMA", "FULL", "INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
+      : ["INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
+    ).includes(value.phase) &&
     Boolean(value.checkpoints) &&
     nullableCount(value.checkpoints.handoffId) &&
     nullableCount(value.checkpoints.completedId) &&
-    validStages(value.stages)
+    (value.version === 3 ? validPreparedStages(value.stages) : validStages(value.stages))
   );
 }
 

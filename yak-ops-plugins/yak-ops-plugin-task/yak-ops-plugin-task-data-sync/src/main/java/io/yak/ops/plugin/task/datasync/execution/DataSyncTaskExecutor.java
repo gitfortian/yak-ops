@@ -38,6 +38,12 @@ public final class DataSyncTaskExecutor {
      */
     public CompletionStage<TaskHandle> start(
             ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity, boolean debug) {
+        if (io.yak.ops.plugin.task.datasync.config.JobConfig.from(parameters)
+                .steps()
+                .contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA)) {
+            return CompletableFuture.completedFuture(
+                    new DataSyncTaskHandle(parameters, plan, identity, debug, planner, builder, executor));
+        }
         CompiledPipeline pipeline;
         try {
             JobPlan prepared = planner.plan(parameters, identity);

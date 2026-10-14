@@ -92,7 +92,7 @@ class DataSyncExecutionTest {
         assertEquals(JobConfig.from(parameters).source(), prepared.sourceParameters());
         assertEquals(JobConfig.from(parameters).sink(), prepared.sinkParameters());
         assertEquals("orders", prepared.source().table().table());
-        assertEquals("ods_orders", prepared.target().table().table());
+        assertEquals("ods_orders", prepared.tables().getFirst().targetTable().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
         assertEquals(0, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());

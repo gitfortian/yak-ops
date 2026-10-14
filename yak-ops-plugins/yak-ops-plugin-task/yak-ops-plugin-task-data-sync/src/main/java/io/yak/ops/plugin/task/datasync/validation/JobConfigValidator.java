@@ -56,6 +56,8 @@ public final class JobConfigValidator {
             DataSourceInfo from = context.dataSource(sourceId);
             DataSourceInfo to = context.dataSource(sinkId);
             SolutionCatalog.validate(job.solutionType(), from.type(), to.type());
+            SolutionCatalog.validateSteps(to.type(), job.steps());
+            boolean prepareSchema = job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA);
             Set<TableId> sources = new HashSet<>();
             Set<TableId> targets = new HashSet<>();
             for (var table : job.tables()) {
@@ -67,7 +69,21 @@ public final class JobConfigValidator {
                 if (!sources.add(source) || !targets.add(target)) {
                     throw new IllegalArgumentException("Duplicate resolved source or destination table");
                 }
-                if (schemas) {
+                if (prepareSchema) SchemaValidator.validateNamespace(to, target);
+                if (schemas && prepareSchema) {
+                    var sourceTable = context.tableMetadata(sourceId, source);
+                    sourceFactory.validateSchema(sourceTable.schema());
+                    var event = SchemaValidator.createEvent(sourceTable, to, target);
+                    sinkFactory.validateSchema(
+                            table.sink(), sourceTable.schema(), event.getSchema(), sourceFactory.producesChangelog());
+                    context.findTable(sinkId, target).ifPresent(actual -> {
+                        if (actual.revision() != to.revision())
+                            throw new IllegalStateException("Target datasource revision changed during validation");
+                        SchemaValidator.validateTarget(event, actual);
+                        sinkFactory.validateSchema(
+                                table.sink(), sourceTable.schema(), actual.schema(), sourceFactory.producesChangelog());
+                    });
+                } else if (schemas) {
                     var sourceSchema = context.tableSchema(sourceId, source);
                     sourceFactory.validateSchema(sourceSchema);
                     sinkFactory.validateSchema(

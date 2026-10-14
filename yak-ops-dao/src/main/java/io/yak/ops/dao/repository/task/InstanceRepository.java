@@ -125,11 +125,25 @@ public interface InstanceRepository {
      * @param workspaceId owning Workspace
      * @param instanceId launched Instance
      * @param dispatchToken winning launcher token
-     * @param engine physical execution engine
-     * @param runtimeId physical Job identifier
+     * @param engine physical execution engine, or null before engine submission
+     * @param runtimeId physical Job identifier, or null before engine submission
      * @return true when the launch is still owned by the caller
      */
     boolean markRunning(String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
+
+    /**
+     * Binds one late Job reference under the original dispatch token, including after a fast terminal result.
+     * This operation is idempotent and never changes status or replaces a different runtime identity.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId launched Instance
+     * @param dispatchToken winning launch token
+     * @param engine physical execution engine
+     * @param runtimeId physical Job identifier
+     * @return true when the owner matches and the reference is unset or already equal
+     */
+    boolean bindRuntimeReference(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
 
     /**
      * Atomically cancels a SUBMITTED Instance before dispatch.

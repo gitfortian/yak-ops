@@ -73,7 +73,7 @@ class DataSyncProductParametersTest {
                 realtime.replace("[\"FULL\",\"INCREMENTAL\"]", "[]"),
                 realtime.replace("[\"FULL\",\"INCREMENTAL\"]", "[\"INCREMENTAL\"]"),
                 realtime.replace("[\"FULL\",\"INCREMENTAL\"]", "[\"FULL\",\"FULL\"]"),
-                realtime.replace("[\"FULL\",\"INCREMENTAL\"]", "[\"SCHEMA\",\"FULL\",\"INCREMENTAL\"]"),
+                realtime.replace("[\"FULL\",\"INCREMENTAL\"]", "[\"SCHEMA\"]"),
                 realtime.replace("EXPLICIT", "PATTERN"),
                 realtime.replace("SINGLE_TABLE_REALTIME", "UNSUPPORTED_SOLUTION"),
                 realtime.replace("UPSERT", "APPEND"),
@@ -109,7 +109,7 @@ class DataSyncProductParametersTest {
         TaskValidationContext context = new DataSyncTaskPluginContractTest.Metadata() {
             @Override
             public DataSourceInfo dataSource(String id) {
-                if ("oracle".equals(id)) return new DataSourceInfo("ORACLE", null, "SCHEMA");
+                if ("oracle".equals(id)) return new DataSourceInfo("ORACLE", null, "SCHEMA", 1);
                 return super.dataSource(id);
             }
 

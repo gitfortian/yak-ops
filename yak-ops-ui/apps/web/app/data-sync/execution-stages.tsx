@@ -3,10 +3,11 @@ import type {
   DataSyncInstanceStatus,
   DataSyncRealtimeSummary,
   DataSyncStageResult,
+  DataSyncStep,
 } from "@/service/data-sync/types";
 import { ExecutionProgressBar } from "./execution-progress-bar";
 
-const LABELS = { FULL: "全量同步", INCREMENTAL: "增量同步" };
+const LABELS = { SCHEMA: "结构迁移", FULL: "全量同步", INCREMENTAL: "增量同步" };
 const STATES: Record<string, DataSyncInstanceStatus> = {
   WAITING: "SUBMITTED",
   RUNNING: "RUNNING",
@@ -78,18 +79,21 @@ export function ExecutionStages({
   summary,
   status,
   compact = false,
+  steps = ["FULL", "INCREMENTAL"],
 }: {
   summary?: DataSyncRealtimeSummary;
   status: DataSyncInstanceStatus;
   compact?: boolean;
+  steps?: DataSyncStep[];
 }) {
   const stale = useObservationStale(status, summary?.observedAt);
-  let stages: Array<"FULL" | "INCREMENTAL"> = ["FULL", "INCREMENTAL"];
-  if (compact && summary) {
-    stages = [summary.stages[0].status === "FINISHED" ? "INCREMENTAL" : "FULL"];
+  let stages: DataSyncStep[] = summary ? summary.stages.map((stage) => stage.step) : steps;
+  if (compact) {
+    const active = summary?.stages.find((stage) => stage.status !== "FINISHED");
+    stages = [active?.step || stages[stages.length - 1]];
   }
   return (
-    <div className={compact ? "space-y-1" : "grid gap-4 sm:grid-cols-2"}>
+    <div className={compact ? "space-y-1" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"}>
       {stages.map((step) => (
         <div key={step} className="min-w-0">
           <StageProgress

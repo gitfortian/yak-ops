@@ -12,10 +12,12 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
   const realtime = record.steps.includes("INCREMENTAL");
   const mappings = record.definitionSnapshot?.tableMappings || [];
   const rows = mappings.map((mapping, index) => {
+    let schema: DataSyncStageResult | undefined;
     let full: DataSyncStageResult | undefined;
     let incremental: DataSyncStageResult | undefined;
-    if (report?.version === 2) {
+    if (report && report.version !== 1) {
       const result = report.tables.find((table) => table.mappingIndex === index);
+      schema = result?.stages.find((stage) => stage.step === "SCHEMA");
       full = result?.stages.find((stage) => stage.step === "FULL");
       incremental = result?.stages.find((stage) => stage.step === "INCREMENTAL");
     } else {
@@ -25,6 +27,7 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       id: String(index),
       source: pathText(mapping.source),
       target: pathText(mapping.target),
+      schema,
       full,
       incremental,
     };
@@ -56,6 +59,30 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       ),
     },
   ];
+  if (record.steps.includes("SCHEMA"))
+    columns.splice(2, 0, {
+      key: "schema",
+      title: "结构迁移",
+      width: 160,
+      render: (_value, row) => (
+        <div
+          title={
+            row.schema?.action === "VERIFIED"
+              ? "已有结构校验通过"
+              : row.schema?.action === "PREPARED"
+                ? "目标结构已准备并校验"
+                : undefined
+          }
+        >
+          <StageProgress
+            stage={row.schema}
+            status={record.status}
+            stale={stale}
+            label={`${row.source} 结构迁移`}
+          />
+        </div>
+      ),
+    });
   if (realtime)
     columns.push({
       key: "incremental",
@@ -88,7 +115,7 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
   );
   if (realtime) {
     const scope =
-      report?.version === 2
+      report && report.version !== 1
         ? `执行代次 ${report.generation} 的变更记录数，非 SQL 影响行数`
         : "变更记录数";
     columns.push(
@@ -115,7 +142,9 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
     title: "失败原因",
     minWidth: 120,
     render: (_value, row) => {
-      const failure = row.incremental?.failureCode || row.full?.failureCode;
+      const failure =
+        row.schema?.failureCode || row.incremental?.failureCode || row.full?.failureCode;
+      if (failure === "SCHEMA_PREPARATION_FAILED") return "目标结构准备失败";
       if (failure === "READ_FAILED") return "来源读取失败";
       if (failure === "WRITE_FAILED") return "目标写入失败";
       return "—";

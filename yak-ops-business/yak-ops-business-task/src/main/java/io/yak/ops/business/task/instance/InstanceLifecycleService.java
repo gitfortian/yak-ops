@@ -20,12 +20,20 @@ public interface InstanceLifecycleService {
     DispatchTicket claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken);
 
     /**
-     * Records Job identity without reviving terminal or cancelling Instances.
+     * Records Task start without reviving terminal or cancelling Instances.
      *
      * @param ticket winning dispatcher
-     * @param reference engine-provided Job identity
+     * @param reference engine-provided Job identity, or null while preparing a deferred Task
      */
     void started(DispatchTicket ticket, TaskRuntimeReference reference);
+
+    /**
+     * Binds a late engine identity without changing Task state or replacing another Job identity.
+     *
+     * @param ticket winning dispatcher
+     * @param reference engine-provided physical Job identity
+     */
+    void runtimeReference(DispatchTicket ticket, TaskRuntimeReference reference);
 
     /**
      * Persists the executing Job's last measured progress under its dispatch ownership.

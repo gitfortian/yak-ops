@@ -42,10 +42,6 @@ public record JobPlan(List<TablePlan> tables, TaskAdmissionPlan admissionPlan) {
         return single().source();
     }
 
-    public DataSourceTable target() {
-        return single().target();
-    }
-
     public ReadonlyConfig sourceOptions() {
         return single().sourceOptions();
     }
