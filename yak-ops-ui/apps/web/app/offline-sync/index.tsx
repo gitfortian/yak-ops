@@ -17,9 +17,13 @@ import {
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { ChevronDown, Database, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
+import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";
+import { useTaskSchedules } from "@/app/schedule/use-task-schedules";
+import { scheduleErrorMessage, setScheduleEnabled } from "@/service/schedule";
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import { getUsersByIds, type UserRecord } from "@/service/user";
 import {
@@ -83,6 +87,32 @@ export function OfflineSyncPage() {
   const [draft, setDraft] = useState<CreateDraft>(emptyDraft());
   const [pendingDelete, setPendingDelete] = useState<DataSyncTaskRecord>();
   const [deleting, setDeleting] = useState(false);
+  const [scheduleTask, setScheduleTask] = useState<DataSyncTaskRecord>();
+  const schedules = useTaskSchedules(records.map((record) => record.id));
+  const scheduleSession = useRef<AbortController>();
+  useEffect(() => {
+    const controller = new AbortController();
+    scheduleSession.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  const toggleSchedule = async (task: DataSyncTaskRecord, enabled: boolean) => {
+    const schedule = schedules.records.get(task.id);
+    const signal = scheduleSession.current?.signal;
+    if (!schedule || !signal || signal.aborted || actionKey) return;
+    setActionKey(`${task.id}:schedule`);
+    try {
+      await setScheduleEnabled(schedule.id, schedule.revision, enabled, signal);
+      if (!signal.aborted) toast.success(enabled ? "调度已启用" : "调度已停止");
+    } catch (failure) {
+      if (!signal.aborted) toast.error(scheduleErrorMessage(failure));
+    } finally {
+      if (!signal.aborted) {
+        setActionKey(undefined);
+        schedules.refresh();
+      }
+    }
+  };
 
   const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances("OFFLINE", true);
 
@@ -185,6 +215,7 @@ export function OfflineSyncPage() {
     try {
       await runDataSyncTask(record.id);
       toast.success("运行请求已提交");
+      schedules.refresh();
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -197,6 +228,7 @@ export function OfflineSyncPage() {
     try {
       await publishDataSyncTask(record.id);
       toast.success("同步任务已上线");
+      schedules.refresh();
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -209,6 +241,7 @@ export function OfflineSyncPage() {
     try {
       await unpublishDataSyncTask(record.id);
       toast.success("同步任务已下线");
+      schedules.refresh();
       await Promise.all([loadTasks(), refreshActiveInstances()]);
     } finally {
       setActionKey(undefined);
@@ -259,6 +292,23 @@ export function OfflineSyncPage() {
       },
     },
     {
+      key: "schedule",
+      title: "调度",
+      width: 230,
+      render: (_value, record) => (
+        <TaskScheduleCell
+          schedule={schedules.records.get(record.id)}
+          name={record.name}
+          published={record.status === "PUBLISHED"}
+          loading={schedules.loading}
+          error={schedules.error}
+          pending={Boolean(actionKey)}
+          onConfigure={() => setScheduleTask(record)}
+          onToggle={(enabled) => void toggleSchedule(record, enabled)}
+        />
+      ),
+    },
+    {
       key: "status",
       title: "状态",
       width: 100,
@@ -306,6 +356,7 @@ export function OfflineSyncPage() {
       await deleteDataSyncTask(pendingDelete.id);
       toast.success("同步任务已删除");
       setPendingDelete(undefined);
+      schedules.refresh();
       await loadTasks();
     } finally {
       setDeleting(false);
@@ -402,6 +453,23 @@ export function OfflineSyncPage() {
         </div>
       </div>
 
+      {scheduleTask ? (
+        <ScheduleDialog
+          targetId={scheduleTask.id}
+          published={
+            (records.find((record) => record.id === scheduleTask.id) || scheduleTask).status ===
+            "PUBLISHED"
+          }
+          open
+          onClose={() => setScheduleTask(undefined)}
+          onChanged={schedules.refresh}
+          onViewInstance={(id) =>
+            navigate(
+              `/offline-sync/${scheduleTask.id}/detail?executionId=${encodeURIComponent(id)}`,
+            )
+          }
+        />
+      ) : null}
       <Modal
         open={createOpen}
         centered

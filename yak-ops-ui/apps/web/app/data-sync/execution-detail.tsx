@@ -1,4 +1,4 @@
-import { Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
+import { Button, Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
 import {
   CheckCircle2,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { formatScheduleTime } from "@/app/schedule/schedule-presentation";
 import { isTaskInstanceActive } from "@/service/data-sync/execution";
 import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
@@ -158,6 +159,7 @@ interface DetailProps {
   record: DataSyncInstanceRecord;
   realtime: boolean;
   controls?: ReactNode;
+  onViewScheduleHistory?: () => void;
 }
 
 interface TableExecutionRow {
@@ -172,7 +174,12 @@ interface TableExecutionRow {
   duration: string;
 }
 
-export function DataSyncExecutionDetailContent({ record, realtime, controls }: DetailProps) {
+export function DataSyncExecutionDetailContent({
+  record,
+  realtime,
+  controls,
+  onViewScheduleHistory,
+}: DetailProps) {
   const meta = dataSyncInstanceStatusMeta(record.status, realtime);
   const snapshot = record.definitionSnapshot;
   const rows: TableExecutionRow[] = snapshot
@@ -264,6 +271,21 @@ export function DataSyncExecutionDetailContent({ record, realtime, controls }: D
         </div>
         {controls ? <div className="flex items-center gap-3">{controls}</div> : null}
       </div>
+      {record.triggerType === "SCHEDULE" ? (
+        <div className="flex flex-wrap items-center gap-3 text-xs text-[#667085]">
+          {record.scheduledTime ? (
+            <span>计划时间：{formatScheduleTime(record.scheduledTime)}</span>
+          ) : null}
+          {record.scheduleRevision != null ? (
+            <span>调度版本：{record.scheduleRevision}</span>
+          ) : null}
+          {record.scheduleId && onViewScheduleHistory ? (
+            <Button size="small" variant="ghost" onClick={onViewScheduleHistory}>
+              触发记录
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <ExecutionProgressCard record={record} realtime={realtime} />
       <div className="min-w-0 pt-4">
         <Table<TableExecutionRow>

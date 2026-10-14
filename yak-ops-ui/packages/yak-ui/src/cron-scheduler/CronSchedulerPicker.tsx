@@ -657,6 +657,7 @@ export function CronSchedulerPicker({
   const [mode, setMode] = useState<PickerMode>("visual");
   const [config, setConfig] = useState<CronScheduleConfig>(createDefaultCronScheduleConfig());
   const [draftCron, setDraftCron] = useState("");
+  const [modeError, setModeError] = useState(false);
 
   const beginDraft = () => {
     const normalized = value.trim();
@@ -665,7 +666,8 @@ export function CronSchedulerPicker({
     const nextConfig = visual || createDefaultCronScheduleConfig();
 
     setConfig(nextConfig);
-    setDraftCron(normalized || generateCron(nextConfig).cron);
+    setModeError(false);
+    setDraftCron(normalized ? value : generateCron(nextConfig).cron);
     setMode(normalized && !visual ? "advanced" : "visual");
   };
 
@@ -683,17 +685,20 @@ export function CronSchedulerPicker({
     const next = nextMode === "advanced" ? "advanced" : "visual";
     if (next === "visual") {
       const parsed = parseCron(draftCron);
-      const nextConfig =
-        parsed && isVisualConfigSupported(parsed) ? parsed : createDefaultCronScheduleConfig();
-      setConfig(nextConfig);
-      setDraftCron(generateCron(nextConfig).cron);
+      if (!parsed || !isVisualConfigSupported(parsed)) {
+        setModeError(true);
+        return;
+      }
+      setConfig(parsed);
+      // Switching tabs is not an edit. Only visual control changes generate a replacement.
+      if (!draftCron.trim()) setDraftCron(generateCron(parsed).cron);
     }
+    setModeError(false);
     setMode(next);
   };
 
   const commit = () => {
-    const next = draftCron.trim();
-    onValueChange?.(next);
+    onValueChange?.(draftCron);
     setOpen(false);
   };
 
@@ -763,9 +768,6 @@ export function CronSchedulerPicker({
           <div className="text-sm font-semibold text-[var(--yak-components-panel-text)]">
             Cron 调度配置
           </div>
-          <div className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
-            选择常用周期，或切换到高级 Cron 保留自定义 Quartz 表达式。
-          </div>
         </div>
 
         <div className="px-5 pt-4">
@@ -789,11 +791,21 @@ export function CronSchedulerPicker({
                     disabled={disabled}
                     placeholder="0 0 2 * * ?"
                     className="font-mono"
-                    onChange={(event) => setDraftCron(event.target.value)}
+                    maxLength={256}
+                    aria-label="Cron 表达式"
+                    onChange={(event) => {
+                      setModeError(false);
+                      setDraftCron(event.target.value);
+                    }}
                   />
-                  <div className="mt-1.5 text-xs leading-5 text-[var(--yak-components-muted-text)]">
-                    高级表达式不会被自动改写；确认后按原值交给调用方保存和校验。
-                  </div>
+                  {modeError ? (
+                    <div
+                      role="status"
+                      className="mt-1.5 text-xs text-[var(--yak-components-field-error)]"
+                    >
+                      该表达式无法转换为常用配置
+                    </div>
+                  ) : null}
                 </div>
               </FieldRow>
             </TabsPanel>

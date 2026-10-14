@@ -56,10 +56,12 @@ export const getDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> =
 
 export const createDataSyncTask = async (
   payload: DataSyncTaskSavePayload,
+  signal?: AbortSignal,
 ): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.postData<TaskDefinitionRecord>(
     TASK_DEFINITION_API_PREFIX,
     createDefinitionRequest(payload),
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
@@ -67,10 +69,12 @@ export const createDataSyncTask = async (
 export const updateDataSyncTask = async (
   id: string,
   payload: DataSyncTaskUpdatePayload,
+  signal?: AbortSignal,
 ): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.putData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}`,
     updateDefinitionRequest(payload),
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
@@ -79,9 +83,14 @@ export const deleteDataSyncTask = async (id: string): Promise<void> => {
   await HttpUtils.deleteData<boolean>(`${TASK_DEFINITION_API_PREFIX}/${id}`);
 };
 
-export const publishDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+export const publishDataSyncTask = async (
+  id: string,
+  signal?: AbortSignal,
+): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.postData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}/publish`,
+    undefined,
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };

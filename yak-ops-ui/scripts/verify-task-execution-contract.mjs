@@ -92,3 +92,19 @@ assert.throws(() => toDataSyncInstanceRecord(instance, { ...version, version: 3 
 assert.throws(() => toDataSyncInstanceRecord({ ...instance, taskType: "UNKNOWN" }, version));
 
 console.log("Task Execution frontend contract checks passed");
+
+const scheduled = toDataSyncInstanceRecord(
+  {
+    ...instance,
+    triggerType: "SCHEDULE",
+    scheduleId: "deleted-schedule",
+    scheduleRevision: 7,
+    scheduledTime: "2026-10-13T01:00:00Z",
+  },
+  version,
+);
+assert.equal(scheduled.scheduleId, "deleted-schedule");
+assert.equal(scheduled.scheduleRevision, 7);
+assert.equal(scheduled.scheduledTime, "2026-10-13T01:00:00Z");
+assert.equal(mapped.scheduleId, undefined);
+assert.equal(mapped.scheduledTime, undefined);
