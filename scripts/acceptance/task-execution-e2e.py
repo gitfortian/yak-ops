@@ -269,7 +269,9 @@ def verify_parameter_versions(client, source, target, existing_v3):
     # New-write and step constraints are enforced by the backend, not only by disabled checkboxes.
     client.call("POST", "/api/v1/task-definitions", {
         "name": "reject-v2-" + uuid.uuid4().hex[:8], "taskType": "DATA_SYNC", "parameters": json.dumps(old)}, status=400)
-    for changes in ({"steps": []}, {"steps": ["SCHEMA", "FULL"]}, {"tableMappings": []},
+    # SCHEMA + FULL is supported; standalone, incomplete and duplicate steps remain invalid.
+    for changes in ({"steps": []}, {"steps": ["SCHEMA"]}, {"steps": ["SCHEMA", "INCREMENTAL"]},
+                    {"steps": ["SCHEMA", "FULL", "FULL"]}, {"tableMappings": []},
                     {"source": {"datasourceId": source, "type": "JDBC"}}):
         client.call("POST", "/api/v1/task-definitions", {
             "name": "reject-solution-" + uuid.uuid4().hex[:8], "taskType": "DATA_SYNC",
