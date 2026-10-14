@@ -1,5 +1,4 @@
 import request, {
-  type ApiProtocol,
   type ApiResponse,
   type BusinessErrorMode,
   type WorkspaceHeaderMode,
@@ -7,7 +6,6 @@ import request, {
 
 export type HttpRequestOptions = RequestInit & {
   businessErrorMode?: BusinessErrorMode;
-  protocol?: ApiProtocol;
   skipErrorHandler?: boolean;
   workspaceHeader?: WorkspaceHeaderMode;
 };
