@@ -3,6 +3,7 @@ package io.yak.ops.core.execution;
 import io.yak.ops.core.api.common.JobExecutionResult;
 import io.yak.ops.core.api.common.JobID;
 import io.yak.ops.core.api.common.JobStatus;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 /** Control and result handle for one submitted batch or streaming job. */
@@ -13,6 +14,11 @@ public interface JobClient {
 
     /** Returns the job's current runtime lifecycle status. */
     CompletableFuture<JobStatus> getJobStatus();
+
+    /** Returns measured bounded-source progress, or empty when the work cannot be measured. */
+    default OptionalInt getProgressPercent() {
+        return OptionalInt.empty();
+    }
 
     /**
      * Requests cancellation of this job.

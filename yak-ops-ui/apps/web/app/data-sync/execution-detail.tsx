@@ -1,14 +1,12 @@
 import { Button, Table, type BadgeProps, type TableColumns } from "@yak-ops/yak-ui";
 import {
   CheckCircle2,
-  ChevronRight,
   CircleHelp,
   CirclePause,
   CirclePlay,
   CircleStop,
   Clock3,
   LoaderCircle,
-  Target,
   XCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -17,7 +15,7 @@ import { formatScheduleTime } from "@/app/schedule/schedule-presentation";
 import { isTaskInstanceActive } from "@/service/data-sync/execution";
 import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
-import { getExecutionProgress } from "./execution-progress";
+import { ExecutionProgressBar } from "./execution-progress-bar";
 import "./execution-detail.css";
 
 export const isActiveDataSyncInstance = (record?: DataSyncInstanceRecord): boolean =>
@@ -105,48 +103,16 @@ const tablePath = (database?: string, schema?: string, table?: string) =>
 const rowCountText = (value?: number) =>
   value === undefined ? "-" : value.toLocaleString("zh-CN");
 
-const FLOW_MARKERS = Array.from({ length: 24 }, (_value, index) => index);
-
 function ExecutionProgressCard({ record, realtime }: DetailProps) {
-  const progress = getExecutionProgress(record.status);
   const label = realtime ? "实时同步" : "离线同步";
-  const status = dataSyncInstanceStatusMeta(record.status, realtime);
-  let progressText = status.label;
-  if (progress.mode === "failure") progressText = "未取得进度数据，按 0% 展示";
-  if (progress.mode === "success") progressText = "100%";
 
   return (
     <div className="border border-[#eef0f3] bg-white px-3 py-3 text-center">
-      <div
-        className="sync-execution-progress"
-        data-mode={progress.mode}
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress.value ?? undefined}
-        aria-valuetext={progressText}
-        title={progressText}
-      >
-        {progress.mode === "running" ? (
-          <>
-            <Target size={18} className="sync-execution-flow-end" aria-hidden="true" />
-            <span className="sync-execution-flow-track" aria-hidden="true">
-              {FLOW_MARKERS.map((marker) => (
-                <ChevronRight
-                  key={marker}
-                  size={18}
-                  className="sync-execution-flow-arrow"
-                  style={{ animationDelay: marker * 0.08 + "s" }}
-                />
-              ))}
-            </span>
-            <Target size={18} className="sync-execution-flow-end" aria-hidden="true" />
-          </>
-        ) : (
-          <span aria-hidden="true">{progress.value === null ? "—" : progress.value + "%"}</span>
-        )}
-      </div>
+      <ExecutionProgressBar
+        status={record.status}
+        percent={record.progressPercent}
+        realtime={realtime}
+      />
       <h3 className="mt-2 text-sm font-semibold text-[#344054]">{label}</h3>
       <div className="mt-1 text-xs text-[#98a2b3]">
         v{record.taskVersion} · {dataSyncTriggerText(record.triggerType)}

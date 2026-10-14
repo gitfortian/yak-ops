@@ -27,6 +27,7 @@ export interface TaskInstanceRecord {
   scheduleRevision?: number | null;
   scheduledTime?: string | null;
   status: TaskInstanceStatus;
+  progressPercent?: number | null;
   runtimeEngine?: string | null;
   runtimeId?: string | null;
   startTime?: string | null;

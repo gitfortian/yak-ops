@@ -37,6 +37,23 @@ task = {
     "createTime": "2026-10-14T00:00:00",
     "updateTime": "2026-10-14T00:00:00",
 }
+instance = {
+    "id": "i1",
+    "definitionId": "task1",
+    "definitionVersion": 1,
+    "taskType": "DATA_SYNC",
+    "triggerType": "SCHEDULE",
+    "scheduleId": "s1",
+    "scheduleRevision": 2,
+    "scheduledTime": "2026-10-14T00:01:00Z",
+    "status": "FINISHED",
+    "executionProgress": 100,
+    "debug": False,
+    "createTime": "2026-10-14T00:01:00",
+    "startTime": "2026-10-14T00:01:00",
+    "endTime": "2026-10-14T00:01:02",
+}
+
 sources = [
     {"id": "src", "name": "MySQL source", "dbType": "MYSQL", "database": "app"},
     {
@@ -123,6 +140,14 @@ async def mock(route):
             state["updated_tasks"] += 1
             state["task"] = {**state["task"], **b}
         data = state["task"]
+    elif p == "/api/v1/task-instances/latest":
+        data = (
+            [instance]
+            if not b["activeOnly"]
+            and instance["definitionId"] in b["definitionIds"]
+            and r.headers.get("x-workspace-id") == "ws1"
+            else []
+        )
     elif p == "/api/v1/task-instances/page":
         data = paging([])
     elif p.startswith("/api/v1/task-instances/"):
@@ -144,21 +169,7 @@ async def mock(route):
         elif p.endswith("/metrics"):
             data = {}
         else:
-            data = {
-                "id": "i1",
-                "definitionId": "task1",
-                "definitionVersion": 1,
-                "taskType": "DATA_SYNC",
-                "triggerType": "SCHEDULE",
-                "scheduleId": "s1",
-                "scheduleRevision": 2,
-                "scheduledTime": "2026-10-14T00:01:00Z",
-                "status": "FINISHED",
-                "debug": False,
-                "createTime": "2026-10-14T00:01:00",
-                "startTime": "2026-10-14T00:01:00",
-                "endTime": "2026-10-14T00:01:02",
-            }
+            data = instance
     elif p == "/api/v1/schedules/preview":
         if b["cronExpression"] == "invalid":
             status = 400
@@ -300,6 +311,14 @@ async def main():
             await expect(
                 page.get_by_role("button", name="手动", exact=True)
             ).to_be_visible()
+            await expect(
+                page.get_by_role("progressbar", name="离线同步", exact=True)
+            ).to_have_attribute("aria-valuenow", "100")
+            latest_reads = [
+                x for x in state["requests"] if x[1] == "/api/v1/task-instances/latest"
+            ]
+            assert {x[2]["activeOnly"] for x in latest_reads} == {False, True}
+            assert all(x[2]["definitionIds"] == ["task1"] for x in latest_reads)
             reads = [
                 x for x in state["requests"] if x[1].startswith("/api/v1/schedules/")
             ]
@@ -398,7 +417,7 @@ async def main():
             assert [x for x in state["requests"] if x[1] == "/api/v1/schedules/page"][-1][3] == "ws2"
             assert not errors, errors
             print(
-                "PASS browser: batched list; advanced Cron preservation; save-without-enable; enable/disable; four terminal outcomes; historical link; instance/log tabs; narrow viewport; Escape; reduced motion; revision conflict; partial save retry; failed batch; Workspace isolation",
+                "PASS browser: batched schedule and execution lists; execution progress; advanced Cron preservation; save-without-enable; enable/disable; four terminal outcomes; historical link; instance/log tabs; narrow viewport; Escape; reduced motion; revision conflict; partial save retry; failed batch; Workspace isolation",
                 flush=True,
             )
         except:

@@ -10,6 +10,7 @@ import io.yak.ops.flow.runtime.source.event.SourceEventWrapper;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
  * Runtime context passed to one SourceReader.
@@ -23,9 +24,20 @@ public final class SourceReaderRuntimeContext implements SourceReaderContext {
     private final TaskEnvironment environment;
     private final OperatorEventGateway eventGateway;
     private final Consumer<Throwable> asyncFailureHandler;
+    private final IntConsumer completedSplits;
 
     public SourceReaderRuntimeContext(
             TaskEnvironment environment, OperatorEventGateway eventGateway, Consumer<Throwable> asyncFailureHandler) {
+        this(environment, eventGateway, asyncFailureHandler, ignored -> {});
+    }
+
+    /** Attaches the bounded split progress collector owned by the physical Job. */
+    public SourceReaderRuntimeContext(
+            TaskEnvironment environment,
+            OperatorEventGateway eventGateway,
+            Consumer<Throwable> asyncFailureHandler,
+            IntConsumer completedSplits) {
+        this.completedSplits = Objects.requireNonNull(completedSplits, "completedSplits");
         this.environment = Objects.requireNonNull(environment, "environment must not be null");
         this.eventGateway = Objects.requireNonNull(eventGateway, "eventGateway must not be null");
         this.asyncFailureHandler = Objects.requireNonNull(asyncFailureHandler, "asyncFailureHandler must not be null");
@@ -44,6 +56,11 @@ public final class SourceReaderRuntimeContext implements SourceReaderContext {
     @Override
     public int currentParallelism() {
         return environment.taskInfo().parallelism();
+    }
+
+    @Override
+    public void reportCompletedSplits(int count) {
+        completedSplits.accept(count);
     }
 
     @Override

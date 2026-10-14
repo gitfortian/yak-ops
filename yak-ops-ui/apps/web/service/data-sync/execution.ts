@@ -49,6 +49,7 @@ export function toDataSyncInstanceRecord(
     scheduleRevision: instance.scheduleRevision,
     scheduledTime: instance.scheduledTime,
     status: instance.status,
+    progressPercent: instance.progressPercent ?? undefined,
     runtimeEngine: instance.runtimeEngine ?? undefined,
     runtimeId: instance.runtimeId ?? undefined,
     startTime: instance.startTime ?? undefined,

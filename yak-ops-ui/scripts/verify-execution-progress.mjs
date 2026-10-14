@@ -6,12 +6,20 @@ import { getExecutionProgress } from "../apps/web/app/data-sync/execution-progre
 assert.deepEqual(getExecutionProgress("FINISHED"), { mode: "success", value: 100 });
 assert.deepEqual(getExecutionProgress("FAILED"), { mode: "failure", value: 0 });
 assert.deepEqual(getExecutionProgress("RUNNING"), { mode: "running", value: null });
-for (const status of ["SUBMITTED", "LAUNCHING", "CANCELLING", "RECONCILING", "CANCELED"]) {
+assert.deepEqual(getExecutionProgress("RUNNING", 37), { mode: "progress", value: 37 });
+assert.deepEqual(getExecutionProgress("RUNNING", 37, true), { mode: "running", value: null });
+assert.deepEqual(getExecutionProgress("FAILED", 37), { mode: "failure", value: 37 });
+assert.deepEqual(getExecutionProgress("LAUNCHING"), { mode: "idle", value: 0 });
+assert.deepEqual(getExecutionProgress("SUBMITTED"), { mode: "idle", value: 0 });
+for (const status of ["CANCELLING", "RECONCILING", "CANCELED"]) {
   assert.deepEqual(getExecutionProgress(status), { mode: "idle", value: null });
 }
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const detail = read("../apps/web/app/data-sync/execution-detail.tsx");
+const progressBar = read("../apps/web/app/data-sync/execution-progress-bar.tsx");
+const offlineList = read("../apps/web/app/offline-sync/index.tsx");
+const realtimeList = read("../apps/web/app/realtime-sync/index.tsx");
 const page = read("../apps/web/app/data-sync/task-detail.tsx");
 const css = read("../apps/web/app/data-sync/execution-detail.css");
 const instancePage = read("../apps/web/app/data-sync/instance-runtime.tsx");
@@ -22,9 +30,15 @@ for (const source of [detail, page, instancePage]) {
 assert.doesNotMatch(page, /DataSyncTaskStatusBadge|写入方式|调试模式/);
 assert.doesNotMatch(detail, /SectionCard|<Badge|失败代码|查看运行日志/);
 assert.doesNotMatch(detail, /结构迁移|全量同步|增量同步/);
-assert.match(detail, /role="progressbar"/);
-assert.match(detail, /aria-valuenow=\{progress.value \?\? undefined\}/);
-assert.match(detail, /未取得进度数据/);
+assert.match(progressBar, /role="progressbar"/);
+assert.match(progressBar, /aria-valuenow=\{progress.value \?\? undefined\}/);
+assert.match(detail, /<ExecutionProgressBar/);
+assert.match(progressBar, /sync-execution-progress-fill/);
+for (const list of [offlineList, realtimeList]) {
+  assert.match(list, /title: "执行概况"/);
+  assert.match(list, /latestByTask\.get\(record\.id\)/);
+  assert.doesNotMatch(list, /syncEndpointText/);
+}
 assert.match(detail, /sourceTable: tablePath\(\s*snapshot.source.database/);
 assert.match(detail, /targetTable: tablePath\(\s*snapshot.target.database/);
 assert.match(detail, /record.readRows/);

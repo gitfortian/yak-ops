@@ -208,6 +208,7 @@ export interface DataSyncInstanceRecord {
   scheduleRevision?: number | null;
   scheduledTime?: string | null;
   status: DataSyncInstanceStatus;
+  progressPercent?: number;
   runtimeEngine?: string;
   runtimeId?: string;
   readRows?: number;
