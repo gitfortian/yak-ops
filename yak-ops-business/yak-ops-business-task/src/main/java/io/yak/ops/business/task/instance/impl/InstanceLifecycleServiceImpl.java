@@ -9,6 +9,7 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
+import io.yak.ops.dao.repository.task.TaskCursorRepository;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import jakarta.annotation.Resource;
@@ -25,6 +26,9 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
 
     @Resource
     private ExecutionClaimRepository claims;
+
+    @Resource
+    private TaskCursorRepository cursors;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -95,6 +99,11 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
                 .orElseThrow(() -> new IllegalStateException("Task Instance is missing"));
         if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
             return;
+        }
+        if (outcome == TaskOutcome.FINISHED) {
+            for (var batch : cursors.frozen(ticket.workspaceId(), ticket.instanceId())) {
+                cursors.commit(ticket.workspaceId(), ticket.definitionId(), batch);
+            }
         }
         persistReport(ticket, executionReport);
         TaskInstanceStatus status =

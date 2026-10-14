@@ -14,6 +14,7 @@ import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
+import io.yak.ops.dao.repository.task.TaskCursorRepository;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import java.lang.reflect.Field;
@@ -27,10 +28,13 @@ class InstanceLifecycleServiceTest {
     private final InstanceLifecycleServiceImpl service = new InstanceLifecycleServiceImpl();
     private final InstanceRepository instances = mock(InstanceRepository.class);
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
+    private final TaskCursorRepository cursors = mock(TaskCursorRepository.class);
 
     InstanceLifecycleServiceTest() {
         inject("instances", instances);
         inject("claims", claims);
+        inject("cursors", cursors);
+        when(cursors.frozen("ws", "i")).thenReturn(List.of());
     }
 
     @Test

@@ -350,12 +350,16 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         if (range != null) {
             String quoted = dialect.quoteIdentifier(range.column());
             if (range.lower() != null) {
-                predicates.add(quoted + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
-                        ? " >= ?" : " > ?"));
+                predicates.add(quoted
+                        + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                                ? " >= ?"
+                                : " > ?"));
                 bounds.add(range.lowerParameter());
             }
-            predicates.add(quoted + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
-                    ? " < ?" : " <= ?"));
+            predicates.add(quoted
+                    + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                            ? " < ?"
+                            : " <= ?"));
             bounds.add(range.upperParameter());
         }
         if (!predicates.isEmpty()) sql += " WHERE " + String.join(" AND ", predicates);

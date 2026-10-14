@@ -90,8 +90,18 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
-    DataSyncTaskExecutor dataSyncTaskExecutor(JobPlanner planner, PipelineBuilder builder, PipelineExecutor executor) {
-        return new DataSyncTaskExecutor(planner, builder, executor);
+    io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalBatchPlanner(
+            DataSourceLookupService resources, io.yak.ops.plugin.task.api.execution.TaskCursorStore cursors) {
+        return new io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner(resources, cursors);
+    }
+
+    @Bean
+    DataSyncTaskExecutor dataSyncTaskExecutor(
+            JobPlanner planner,
+            PipelineBuilder builder,
+            PipelineExecutor executor,
+            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+        return new DataSyncTaskExecutor(planner, builder, executor, incrementalPlanner);
     }
 
     @Bean

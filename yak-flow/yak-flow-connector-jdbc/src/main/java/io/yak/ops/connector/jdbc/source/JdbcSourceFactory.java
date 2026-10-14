@@ -76,7 +76,8 @@ public final class JdbcSourceFactory implements TableSourceFactory {
                 ranges);
     }
 
-    private static io.yak.ops.configuration.ReadonlyConfig withoutRange(io.yak.ops.configuration.ReadonlyConfig options) {
+    private static io.yak.ops.configuration.ReadonlyConfig withoutRange(
+            io.yak.ops.configuration.ReadonlyConfig options) {
         var values = new java.util.LinkedHashMap<>(options.getSourceMap());
         values.remove(JdbcSourceOptions.RANGE_MODE.key());
         values.remove(JdbcSourceOptions.RANGE_COLUMN.key());

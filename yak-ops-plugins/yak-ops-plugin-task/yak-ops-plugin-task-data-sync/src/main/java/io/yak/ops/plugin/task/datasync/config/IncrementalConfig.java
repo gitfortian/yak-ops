@@ -5,8 +5,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /** Non-secret, per-table JDBC incremental selection. Cursor progress is never stored in task parameters. */
-public record IncrementalConfig(Mode mode, String column, String initialValue, long delaySeconds, long lookbackSeconds) {
-    public enum Mode { TIMESTAMP, INCREASING }
+public record IncrementalConfig(
+        Mode mode, String column, String initialValue, long delaySeconds, long lookbackSeconds) {
+    public enum Mode {
+        TIMESTAMP,
+        INCREASING
+    }
 
     public IncrementalConfig {
         Objects.requireNonNull(mode, "mode");
@@ -34,7 +38,8 @@ public record IncrementalConfig(Mode mode, String column, String initialValue, l
 
     /** Strictly parses a mapping's explicit incremental settings without arbitrary SQL. */
     public static IncrementalConfig from(Map<?, ?> values) {
-        if (!Set.of("mode", "column", "initialValue", "delaySeconds", "lookbackSeconds").containsAll(values.keySet())) {
+        if (!Set.of("mode", "column", "initialValue", "delaySeconds", "lookbackSeconds")
+                .containsAll(values.keySet())) {
             throw new IllegalArgumentException("Unknown incremental setting");
         }
         Object mode = values.get("mode");
@@ -46,15 +51,21 @@ public record IncrementalConfig(Mode mode, String column, String initialValue, l
         if (initial != null && !(initial instanceof String)) {
             throw new IllegalArgumentException("Incremental initial value must be text");
         }
-        return new IncrementalConfig(Mode.valueOf(kind), name, (String) initial,
-                seconds(values.get("delaySeconds")), seconds(values.get("lookbackSeconds")));
+        return new IncrementalConfig(
+                Mode.valueOf(kind),
+                name,
+                (String) initial,
+                seconds(values.get("delaySeconds")),
+                seconds(values.get("lookbackSeconds")));
     }
 
     private static long seconds(Object value) {
         if (value == null) return 0;
-        if (!(value instanceof Number number)) throw new IllegalArgumentException("Incremental seconds must be numeric");
+        if (!(value instanceof Number number))
+            throw new IllegalArgumentException("Incremental seconds must be numeric");
         long result = number.longValue();
-        if (number.doubleValue() != (double) result) throw new IllegalArgumentException("Incremental seconds must be integral");
+        if (number.doubleValue() != (double) result)
+            throw new IllegalArgumentException("Incremental seconds must be integral");
         return result;
     }
 }

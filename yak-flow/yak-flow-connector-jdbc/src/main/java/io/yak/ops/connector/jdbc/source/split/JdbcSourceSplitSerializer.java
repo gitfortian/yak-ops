@@ -88,8 +88,11 @@ public final class JdbcSourceSplitSerializer implements SimpleVersionedSerialize
             String schemaFingerprint = in.readUTF();
             JdbcIncrementalRange range = null;
             if (version >= 3 && in.readBoolean()) {
-                range = new JdbcIncrementalRange(JdbcIncrementalRange.Mode.valueOf(in.readUTF()),
-                        in.readUTF(), readNullableString(in), in.readUTF());
+                range = new JdbcIncrementalRange(
+                        JdbcIncrementalRange.Mode.valueOf(in.readUTF()),
+                        in.readUTF(),
+                        readNullableString(in),
+                        in.readUTF());
             }
             if (in.available() != 0) {
                 throw new IOException("Unexpected bytes after JDBC split state");

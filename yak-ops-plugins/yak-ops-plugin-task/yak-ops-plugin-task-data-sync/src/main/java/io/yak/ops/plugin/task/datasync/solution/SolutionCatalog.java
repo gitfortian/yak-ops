@@ -87,8 +87,8 @@ public final class SolutionCatalog {
         List<Step> applicable = new ArrayList<>(type.steps());
         List<Solution.Combination> combinations = new ArrayList<>();
         combinations.add(new Solution.Combination(type.steps(), type.supportsScheduling(), writes));
-        boolean supportedIncremental = type.supportsScheduling()
-                && SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType);
+        boolean supportedIncremental =
+                type.supportsScheduling() && SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType);
         if (supportedIncremental) {
             applicable.add(Step.INCREMENTAL);
             combinations.add(new Solution.Combination(List.of(Step.INCREMENTAL), true, List.of("UPSERT")));
@@ -96,7 +96,8 @@ public final class SolutionCatalog {
         }
         if (SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType)) {
             applicable.addFirst(Step.SCHEMA);
-            combinations.add(new Solution.Combination(List.of(Step.SCHEMA, Step.FULL), type.supportsScheduling(), writes));
+            combinations.add(
+                    new Solution.Combination(List.of(Step.SCHEMA, Step.FULL), type.supportsScheduling(), writes));
             if (supportedIncremental) {
                 combinations.add(new Solution.Combination(
                         List.of(Step.SCHEMA, Step.FULL, Step.INCREMENTAL), true, List.of("UPSERT")));

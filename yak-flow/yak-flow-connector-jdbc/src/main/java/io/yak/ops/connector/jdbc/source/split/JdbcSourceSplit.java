@@ -28,8 +28,15 @@ public record JdbcSourceSplit(
         implements SourceSplit {
 
     /** Constructs a normal full-table split without an incremental cursor filter. */
-    public JdbcSourceSplit(String splitId, TableId tableId, List<String> columns, String splitColumn,
-                           Long lowerBound, Long upperBound, Long lastEmittedKey, String schemaFingerprint) {
+    public JdbcSourceSplit(
+            String splitId,
+            TableId tableId,
+            List<String> columns,
+            String splitColumn,
+            Long lowerBound,
+            Long upperBound,
+            Long lastEmittedKey,
+            String schemaFingerprint) {
         this(splitId, tableId, columns, splitColumn, lowerBound, upperBound, lastEmittedKey, schemaFingerprint, null);
     }
 
@@ -91,6 +98,14 @@ public record JdbcSourceSplit(
     /** Returns a detached position snapshot without changing the original assigned split. */
     public JdbcSourceSplit withLastEmittedKey(Long key) {
         return new JdbcSourceSplit(
-                splitId, tableId, columns, splitColumn, lowerBound, upperBound, key, schemaFingerprint, incrementalRange);
+                splitId,
+                tableId,
+                columns,
+                splitColumn,
+                lowerBound,
+                upperBound,
+                key,
+                schemaFingerprint,
+                incrementalRange);
     }
 }

@@ -102,13 +102,14 @@ public final class JdbcSplitPlanner {
             TableSchema schema = JdbcTableMetadata.readTable(connection, dialect, table);
             JdbcIncrementalRange range = ranges.get(table);
             if (range != null) {
-                Column chosen = schema.columns().stream().filter(column -> column.name().equals(range.column()))
-                        .findFirst().orElseThrow(() -> new SQLException("Incremental column is missing"));
+                Column chosen = schema.columns().stream()
+                        .filter(column -> column.name().equals(range.column()))
+                        .findFirst()
+                        .orElseThrow(() -> new SQLException("Incremental column is missing"));
                 var root = chosen.dataType().getTypeRoot();
                 if (chosen.dataType().isNullable()) throw new SQLException("Incremental column must be NOT NULL");
                 boolean valid = range.mode() == JdbcIncrementalRange.Mode.TIMESTAMP
                         ? root == io.yak.ops.core.types.LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE
-                                || root == io.yak.ops.core.types.LogicalTypeRoot.TIMESTAMP_WITH_TIME_ZONE
                         : root == io.yak.ops.core.types.LogicalTypeRoot.BIGINT
                                 || root == io.yak.ops.core.types.LogicalTypeRoot.INTEGER
                                 || root == io.yak.ops.core.types.LogicalTypeRoot.SMALLINT
@@ -220,7 +221,8 @@ public final class JdbcSplitPlanner {
 
     private JdbcSourceSplit fullScan(
             int index, TableId table, List<String> columns, String key, String schemaFingerprint) {
-        return new JdbcSourceSplit(splitId(index, 0), table, columns, key, null, null, null, schemaFingerprint, ranges.get(table));
+        return new JdbcSourceSplit(
+                splitId(index, 0), table, columns, key, null, null, null, schemaFingerprint, ranges.get(table));
     }
 
     /**

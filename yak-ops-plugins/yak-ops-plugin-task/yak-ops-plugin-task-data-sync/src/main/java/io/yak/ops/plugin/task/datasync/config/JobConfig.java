@@ -55,7 +55,8 @@ public final class JobConfig {
         if (type.supportsScheduling()) {
             if (steps.contains(Step.FULL.name())) expected.add(Step.FULL.name());
             if (steps.contains(Step.INCREMENTAL.name())) expected.add(Step.INCREMENTAL.name());
-            if (expected.isEmpty() || expected.equals(List.of(Step.SCHEMA.name()))
+            if (expected.isEmpty()
+                    || expected.equals(List.of(Step.SCHEMA.name()))
                     || (expected.contains(Step.SCHEMA.name()) && !expected.contains(Step.FULL.name()))) {
                 throw new IllegalArgumentException("Schema preparation requires initial full load");
             }

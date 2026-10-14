@@ -60,6 +60,19 @@ public record TablePlan(
                 sourceOptions);
     }
 
+    /** Changes only physical Source settings; routing and target admission remain unchanged. */
+    public TablePlan withSourceOptions(ReadonlyConfig physical) {
+        return new TablePlan(
+                sourceParameters,
+                sinkParameters,
+                source,
+                targetDatasource,
+                targetTable,
+                targetSchema,
+                schemaChange,
+                physical);
+    }
+
     /** Returns the admitted desired schema; creating the target does not change this value. */
     public TableSchema expectedTargetSchema() {
         return schemaChange == null ? targetSchema : schemaChange.getSchema();

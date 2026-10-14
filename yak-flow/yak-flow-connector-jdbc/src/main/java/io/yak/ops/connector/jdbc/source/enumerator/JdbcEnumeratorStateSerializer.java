@@ -69,7 +69,8 @@ public final class JdbcEnumeratorStateSerializer implements SimpleVersionedSeria
                 if (length < 0 || length > MAX_SPLIT_SIZE || length > in.available()) {
                     throw new IOException("Invalid JDBC split block size");
                 }
-                pending.add(splitSerializer.deserialize(version == 2 ? 2 : splitSerializer.getVersion(), in.readNBytes(length)));
+                pending.add(splitSerializer.deserialize(
+                        version == 2 ? 2 : splitSerializer.getVersion(), in.readNBytes(length)));
             }
             if (in.available() != 0) {
                 throw new IOException("Unexpected bytes after JDBC enumerator state");

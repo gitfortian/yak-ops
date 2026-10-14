@@ -16,6 +16,7 @@ public final class TableExecutionProgress {
     private final List<TablePlan> plans;
     private final TableMetrics metrics;
     private final boolean continuous;
+    private final String dataStep;
     private final List<StageResult> schemaStages;
     private boolean dataSubmitted;
     private boolean preparationStopped;
@@ -26,6 +27,12 @@ public final class TableExecutionProgress {
 
     /** Creates observations for a bounded batch or a snapshot-plus-continuous source. */
     public TableExecutionProgress(List<TablePlan> plans, TableMetrics metrics, boolean continuous) {
+        this(plans, metrics, continuous, "FULL");
+    }
+
+    /** Selects the physically executed data step rather than inferring it from the Definition. */
+    public TableExecutionProgress(List<TablePlan> plans, TableMetrics metrics, boolean continuous, String dataStep) {
+        this.dataStep = java.util.Objects.requireNonNull(dataStep, "dataStep");
         this.continuous = continuous;
         this.plans = List.copyOf(plans);
         this.metrics = java.util.Objects.requireNonNull(metrics, "metrics");
@@ -135,7 +142,7 @@ public final class TableExecutionProgress {
             }
             tables.add(new TableResult(
                     index,
-                    "FULL",
+                    dataStep,
                     state,
                     percent,
                     "SPLITS",
@@ -165,14 +172,14 @@ public final class TableExecutionProgress {
             List<StageResult> stages = new ArrayList<>();
             stages.add(schemaStages.get(index));
             if (!dataSubmitted) {
-                stages.add(waitingDataStage("FULL"));
+                stages.add(waitingDataStage(dataStep));
                 if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
             } else if (continuous) {
                 stages.addAll(data.tables().get(index).stages());
             } else {
                 TableResult table = batch.tables().get(index);
                 stages.add(new StageResult(
-                        "FULL",
+                        dataStep,
                         table.status(),
                         table.progressPercent(),
                         "SPLITS",
@@ -187,7 +194,7 @@ public final class TableExecutionProgress {
         List<StageResult> stages = new ArrayList<>();
         stages.add(schemaSummary());
         if (!dataSubmitted) {
-            stages.add(waitingDataStage("FULL"));
+            stages.add(waitingDataStage(dataStep));
             if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
         } else if (continuous) {
             stages.addAll(data.stages());
@@ -201,7 +208,7 @@ public final class TableExecutionProgress {
             if (complete) percentage = 100;
             else if (percent().isPresent()) percentage = percent().getAsInt();
             stages.add(new StageResult(
-                    "FULL",
+                    dataStep,
                     state,
                     percentage,
                     "SPLITS",
@@ -213,7 +220,7 @@ public final class TableExecutionProgress {
         }
         String observedAt =
                 dataSubmitted && continuous ? data.observedAt() : Instant.now().toString();
-        String phase = !dataSubmitted ? "SCHEMA" : continuous ? data.phase() : "FULL";
+        String phase = !dataSubmitted ? "SCHEMA" : continuous ? data.phase() : dataStep;
         var summary = new RealtimeSummary(
                 3,
                 observedAt,
@@ -240,15 +247,7 @@ public final class TableExecutionProgress {
 
     private StageResult waitingDataStage(String step) {
         return new StageResult(
-                step,
-                preparationStopped ? "CANCELED" : "WAITING",
-                null,
-                "FULL".equals(step) ? "SPLITS" : "RECORDS",
-                null,
-                null,
-                null,
-                null,
-                null);
+                step, preparationStopped ? "CANCELED" : "WAITING", null, "SPLITS", null, null, null, null, null);
     }
 
     private StageResult schemaSummary() {

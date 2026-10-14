@@ -242,9 +242,14 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
                     .append(identifierPart(table.table()));
             JdbcIncrementalRange range = ranges.get(table);
             if (range != null) {
-                definition.append("|range:").append(range.mode()).append('|')
-                        .append(identifierPart(range.column())).append('|')
-                        .append(identifierPart(range.lower())).append('|')
+                definition
+                        .append("|range:")
+                        .append(range.mode())
+                        .append('|')
+                        .append(identifierPart(range.column()))
+                        .append('|')
+                        .append(identifierPart(range.lower()))
+                        .append('|')
                         .append(identifierPart(range.upper()));
             }
             List<String> projected = projections.get(table);
