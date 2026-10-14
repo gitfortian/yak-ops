@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.task.api.execution;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -24,6 +25,11 @@ public interface TaskHandle {
      * @return eventual terminal result, or exceptional completion on execution error
      */
     CompletionStage<TaskOutcome> completion();
+
+    /** Returns the active physical job's measured progress, when available. */
+    default OptionalInt progressPercent() {
+        return OptionalInt.empty();
+    }
 
     /**
      * Requests physical cancellation without declaring the business Instance canceled.
