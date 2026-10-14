@@ -1,0 +1,105 @@
+.sync-execution-tabs {
+  --yak-components-tab-active: #335dff;
+  --yak-components-tab-text-active: #335dff;
+  --yak-components-switch-bg-checked: #335dff;
+  --yak-components-switch-bg-checked-hover: #2548d6;
+}
+
+.sync-execution-status {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+  color: #667085;
+}
+
+.sync-execution-status[data-status="FINISHED"] {
+  color: #32b52c;
+}
+
+.sync-execution-status[data-status="FAILED"] {
+  color: #d92d20;
+}
+
+.sync-execution-status[data-status="RUNNING"] {
+  color: #335dff;
+}
+
+.sync-execution-status[data-status="CANCELLING"],
+.sync-execution-status[data-status="RECONCILING"] {
+  color: #b54708;
+}
+
+.sync-execution-progress {
+  position: relative;
+  display: flex;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #f2f4f7;
+  color: #667085;
+  font-size: 12px;
+  line-height: 22px;
+}
+
+.sync-execution-progress[data-mode="success"] {
+  background: #32b52c;
+  color: white;
+}
+
+.sync-execution-progress[data-mode="failure"] {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.sync-execution-progress[data-mode="running"] {
+  gap: 12px;
+  background: transparent;
+}
+
+.sync-execution-flow-end {
+  flex-shrink: 0;
+  color: #8798ff;
+}
+
+.sync-execution-flow-track {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.sync-execution-flow-arrow {
+  min-width: 0;
+  flex-shrink: 1;
+  color: #38bde0;
+  opacity: 0.2;
+  animation: sync-execution-flow 1.6s linear infinite;
+}
+
+@keyframes sync-execution-flow {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-execution-flow-arrow {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.sync-execution-icon-button {
+  padding: 0;
+}
+
+.sync-execution-icon-button svg {
+  flex-shrink: 0;
+}

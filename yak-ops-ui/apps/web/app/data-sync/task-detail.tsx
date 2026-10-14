@@ -1,8 +1,6 @@
 import {
-  Badge,
   Button,
   PageHeader,
-  SectionCard,
   Select,
   SelectContent,
   SelectItem,
@@ -11,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
+  Switch,
   Tabs,
   TabsList,
   TabsPanel,
@@ -39,16 +38,13 @@ import {
 import { canCancelTaskInstance } from "@/service/data-sync/execution";
 
 import {
-  DataSyncExecutionConfigContent,
   DataSyncExecutionDetailContent,
+  ExecutionStatusIcon,
   dataSyncDurationText,
-  dataSyncInstanceStatusMeta,
-  dataSyncWriteModeText,
   dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
 import { TaskInstanceLogPanel } from "./task-instance-log-panel";
-import { DataSyncTaskStatusBadge } from "./task-lifecycle";
 
 const PAGE_SIZE = 20;
 const POLL_MILLIS = 2000;
@@ -109,8 +105,17 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const listRequest = useRef(0);
+  const detailRequest = useRef(0);
   const searchParamsSetter = useRef(setSearchParams);
+  const selectedInstance =
+    selected?.id === executionId && selected?.taskId === taskId && selected?.syncType === syncType
+      ? selected
+      : undefined;
+  const hasActiveInstance =
+    instances.some(isActiveDataSyncInstance) || isActiveDataSyncInstance(selectedInstance);
 
   useEffect(() => {
     searchParamsSetter.current = setSearchParams;
@@ -219,6 +224,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   }, [executionId, instances, instancesLoading]);
 
   useEffect(() => {
+    const request = ++detailRequest.current;
     if (!executionId) {
       setSelected(undefined);
       setSelectedLoading(false);
@@ -230,7 +236,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     setSelectedLoading(true);
     void getDataSyncInstance(executionId)
       .then((value) => {
-        if (disposed) return;
+        if (disposed || request !== detailRequest.current) return;
         if (value.taskId !== taskId || value.syncType !== syncType) {
           searchParamsSetter.current(
             (previous) => {
@@ -246,7 +252,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
         setSelected(value);
       })
       .catch(() => {
-        if (disposed) return;
+        if (disposed || request !== detailRequest.current) return;
         searchParamsSetter.current(
           (previous) => {
             if (previous.get("executionId") !== executionId) return previous;
@@ -263,25 +269,58 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
     return () => {
       disposed = true;
+      detailRequest.current += 1;
     };
   }, [executionId, syncType, taskId]);
 
   useEffect(() => {
-    if (!instances.some(isActiveDataSyncInstance) && !isActiveDataSyncInstance(selected)) return;
+    if (!autoRefresh || !hasActiveInstance || selectedLoading) return;
     let disposed = false;
-    const timer = window.setInterval(() => {
-      void loadInstances();
-      if (!executionId) return;
-      void getDataSyncInstance(executionId).then((value) => {
-        if (disposed || value.taskId !== taskId || value.syncType !== syncType) return;
-        setSelected(value);
-      });
+    let pending = false;
+    const timer = window.setInterval(async () => {
+      if (pending) return;
+      pending = true;
+      const request = ++detailRequest.current;
+      try {
+        await loadInstances();
+        if (!executionId || disposed) return;
+        const value = await getDataSyncInstance(executionId);
+        if (disposed || request !== detailRequest.current) return;
+        if (value.taskId === taskId && value.syncType === syncType) setSelected(value);
+      } catch {
+        // Keep the last observation; the HTTP boundary reports request failures.
+      } finally {
+        pending = false;
+      }
     }, POLL_MILLIS);
     return () => {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [executionId, instances, loadInstances, selected, syncType, taskId]);
+  }, [
+    autoRefresh,
+    executionId,
+    hasActiveInstance,
+    loadInstances,
+    selectedLoading,
+    syncType,
+    taskId,
+  ]);
+
+  const refreshExecution = async () => {
+    if (refreshing) return;
+    const request = ++detailRequest.current;
+    setRefreshing(true);
+    try {
+      await loadInstances();
+      if (!executionId || request !== detailRequest.current) return;
+      const value = await getDataSyncInstance(executionId);
+      if (request !== detailRequest.current) return;
+      if (value.taskId === taskId && value.syncType === syncType) setSelected(value);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const selectInstance = (id: string) => {
     setSearchParams((previous) => {
@@ -343,12 +382,14 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   };
 
   const cancel = async () => {
-    if (!selected || !canCancelTaskInstance(selected.status) || canceling) return;
+    if (!selectedInstance || !canCancelTaskInstance(selectedInstance.status) || canceling) return;
+    const request = ++detailRequest.current;
     setCanceling(true);
     try {
-      await cancelDataSyncInstance(selected.id);
+      await cancelDataSyncInstance(selectedInstance.id);
       toast.success("已发送停止请求");
-      setSelected(await getDataSyncInstance(selected.id));
+      const value = await getDataSyncInstance(selectedInstance.id);
+      if (request === detailRequest.current) setSelected(value);
       await loadInstances();
     } finally {
       setCanceling(false);
@@ -367,7 +408,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
   if (taskLoading || !task) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#f6f6f6]">
+      <div className="flex h-full items-center justify-center bg-white">
         <Spinner size="large" label="加载任务详情" />
       </div>
     );
@@ -379,8 +420,8 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     <div
       className={
         localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#f6f6f6] text-[#242731] md:flex-row"
-          : "flex min-h-full flex-col bg-[#f6f6f6] text-[#242731] md:flex-row"
+          ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#242731] md:flex-row"
+          : "flex min-h-full flex-col bg-white text-[#242731] md:flex-row"
       }
     >
       <aside className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0">
@@ -390,7 +431,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
             <Button
               size="small"
               variant="ghost"
-              className="h-7 w-7 px-0"
+              className="sync-execution-icon-button h-7 w-7"
               aria-label="刷新执行记录"
               title="刷新"
               disabled={instancesLoading}
@@ -433,7 +474,6 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           ) : (
             <div className="space-y-1">
               {instances.map((instance) => {
-                const meta = dataSyncInstanceStatusMeta(instance.status, realtime);
                 const isSelected = executionId === instance.id;
                 return (
                   <button
@@ -448,7 +488,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     onClick={() => selectInstance(instance.id)}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <ExecutionStatusIcon status={instance.status} realtime={realtime} />
                       <span className="truncate text-xs text-[#98a2b3]">
                         {instance.startTime || instance.createTime || "-"}
                       </span>
@@ -491,12 +531,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader
-          title={
-            <div className="flex items-center gap-3">
-              <span>{task.name}</span>
-              <DataSyncTaskStatusBadge status={task.status} />
-            </div>
-          }
+          title={task.name}
           bordered
           className="shrink-0 bg-white px-6 max-md:px-4"
           extra={
@@ -518,8 +553,11 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 max-md:px-4">
-          <div className="space-y-4">
-            <SectionCard title="基本信息">
+          <div className="space-y-8">
+            <section aria-labelledby="task-basic-info">
+              <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[#344054]">
+                基本信息
+              </h2>
               <div className="grid grid-cols-2 gap-x-10 gap-y-5 max-lg:grid-cols-1">
                 <BasicInfoField label="任务 ID">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -529,7 +567,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                     <Button
                       size="small"
                       variant="ghost"
-                      className="h-6 w-6 shrink-0 px-0"
+                      className="sync-execution-icon-button h-6 w-6 shrink-0"
                       aria-label="复制任务 ID"
                       onClick={() => void copyTaskId()}
                     >
@@ -552,56 +590,55 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 </BasicInfoField>
                 <BasicInfoField label="创建时间">{task.createTime || "-"}</BasicInfoField>
                 <BasicInfoField label="更新时间">{task.updateTime || "-"}</BasicInfoField>
-                <BasicInfoField label="写入方式">
-                  {dataSyncWriteModeText(task.writeMode)}
-                </BasicInfoField>
                 <BasicInfoField label="当前版本">v{task.definitionVersion}</BasicInfoField>
-                <BasicInfoField label="调试模式">{task.debug ? "开启" : "关闭"}</BasicInfoField>
                 {task.remark ? <BasicInfoField label="备注">{task.remark}</BasicInfoField> : null}
               </div>
-            </SectionCard>
+            </section>
 
-            <Tabs value={activeTab} onValueChange={changeTab}>
+            <Tabs value={activeTab} onValueChange={changeTab} className="sync-execution-tabs">
               <TabsList>
                 <TabsTab value="status">执行状态</TabsTab>
                 <TabsTab value="log">运行日志</TabsTab>
               </TabsList>
 
               <TabsPanel value="status" className="pt-4">
-                {selected ? (
-                  <div className="space-y-4">
-                    {canCancelTaskInstance(selected.status) ? (
-                      <div className="flex justify-end">
+                {selectedInstance ? (
+                  <DataSyncExecutionDetailContent
+                    record={selectedInstance}
+                    realtime={realtime}
+                    controls={
+                      <>
+                        <label className="flex items-center gap-2 text-xs text-[#667085]">
+                          自动刷新
+                          <Switch
+                            size="small"
+                            checked={autoRefresh}
+                            onCheckedChange={setAutoRefresh}
+                          />
+                        </label>
                         <Button
                           size="small"
-                          variant="danger"
-                          loading={canceling}
-                          onClick={() => void cancel()}
+                          className="sync-execution-icon-button h-7 w-7"
+                          aria-label="刷新执行状态"
+                          title="刷新"
+                          loading={refreshing}
+                          onClick={() => void refreshExecution()}
                         >
-                          停止
+                          <RefreshCw size={14} />
                         </Button>
-                      </div>
-                    ) : null}
-                    <DataSyncExecutionDetailContent
-                      record={selected}
-                      realtime={realtime}
-                      onViewLog={() => changeTab("log")}
-                    />
-                    {selected.definitionSnapshot ? (
-                      <details className="rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
-                        <summary className="cursor-pointer text-sm font-medium text-[#344054]">
-                          本次运行配置
-                        </summary>
-                        <div className="pt-4">
-                          <DataSyncExecutionConfigContent
-                            record={selected}
-                            realtime={realtime}
-                            sectionCard={false}
-                          />
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
+                        {canCancelTaskInstance(selectedInstance.status) ? (
+                          <Button
+                            size="small"
+                            variant="danger"
+                            loading={canceling}
+                            onClick={() => void cancel()}
+                          >
+                            停止
+                          </Button>
+                        ) : null}
+                      </>
+                    }
+                  />
                 ) : selectedLoading ? (
                   <div className="flex min-h-40 items-center justify-center">
                     <Spinner size="medium" label="加载实例详情" />
@@ -614,17 +651,18 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
               </TabsPanel>
 
               <TabsPanel value="log" className="pt-4">
-                {selected && activeTab === "log" ? (
+                {selectedInstance && activeTab === "log" ? (
                   <TaskInstanceLogPanel
-                    instanceId={selected.id}
-                    active={isActiveDataSyncInstance(selected)}
+                    key={selectedInstance.id}
+                    instanceId={selectedInstance.id}
+                    active={isActiveDataSyncInstance(selectedInstance)}
                     embedded
                   />
                 ) : selectedLoading ? (
                   <div className="flex min-h-40 items-center justify-center">
                     <Spinner size="medium" label="加载实例详情" />
                   </div>
-                ) : !selected ? (
+                ) : !selectedInstance ? (
                   <div className="py-12 text-center text-sm text-[#98a2b3]">选择左侧执行记录</div>
                 ) : null}
               </TabsPanel>
