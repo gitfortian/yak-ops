@@ -151,7 +151,8 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
             if (index != nextTableIndex) {
                 throw new IllegalStateException("Concurrent JDBC table planning is unsupported");
             }
-            context.reportPlannedSplits(Objects.requireNonNull(planned, "planned splits").size());
+            context.reportPlannedSplits(
+                    Objects.requireNonNull(planned, "planned splits").size());
             pending.addAll(planned);
             nextTableIndex++;
             drainRequests();
