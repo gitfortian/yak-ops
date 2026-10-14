@@ -444,6 +444,13 @@ def acceptance():
         assert instance["runtimeEngine"] == "YAKFLOW"
         assert instance["debug"] is True
         assert instance["runtimeId"]
+        assert instance["progressPercent"] == 100
+        latest = client.call("POST", "/api/v1/task-instances/latest", {
+            "definitionIds": [jdbc]})
+        assert len(latest) == 1 and latest[0]["id"] == first
+        assert latest[0]["progressPercent"] == 100
+        assert client.call("POST", "/api/v1/task-instances/latest", {
+            "definitionIds": [jdbc], "activeOnly": True}) == []
         log_page = until(
             "JDBC task log",
             lambda: client.call("GET", f"/api/v1/task-instances/{first}/logs?limit=200"),
