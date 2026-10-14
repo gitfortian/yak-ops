@@ -398,7 +398,9 @@ public abstract class StreamTask implements AutoCloseable {
                 completion.completeExceptionally(failure);
             }
             if (cancelRequested) {
-                if (failure instanceof CancellationException) {
+                // A late cancellation may race with an already successful task termination.
+                // Never completeExceptionally(null): it would strand the Job's cancellation path.
+                if (failure == null || failure instanceof CancellationException) {
                     cancellation.complete(null);
                 } else {
                     cancellation.completeExceptionally(failure);
