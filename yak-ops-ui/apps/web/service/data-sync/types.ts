@@ -205,6 +205,7 @@ export interface DataSyncInstanceRecord {
   syncType: DataSyncType | string;
   triggerType?: "MANUAL" | "SCHEDULE" | "WORKFLOW";
   status: DataSyncInstanceStatus;
+  progressPercent?: number;
   runtimeEngine?: string;
   runtimeId?: string;
   readRows?: number;
