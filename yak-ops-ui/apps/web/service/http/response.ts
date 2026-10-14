@@ -1,5 +1,3 @@
-export type ApiProtocol = "yak-ops" | "security";
-
 export const API_SUCCESS_CODE = 200;
 
 export interface ApiResponse<T = unknown> {
@@ -8,23 +6,6 @@ export interface ApiResponse<T = unknown> {
   msg?: string;
   message?: string;
 }
-
-const protocolRules: Record<
-  ApiProtocol,
-  { success: readonly number[]; unauthenticated: readonly number[] }
-> = {
-  "yak-ops": {
-    success: [API_SUCCESS_CODE],
-    // Yak Security protects application endpoints too, so /api/v1/** may return
-    // the framework USER_NOT_LOGIN business code even though the URL is not under
-    // /yak-security/**.
-    unauthenticated: [401, 2001],
-  },
-  security: {
-    success: [API_SUCCESS_CODE],
-    unauthenticated: [401, 2001],
-  },
-};
 
 const unauthenticatedMessages = new Set([
   "NOT_LOGIN",
@@ -55,19 +36,14 @@ const normalizeUnauthenticatedMessage = (message: string) =>
     .toUpperCase()
     .replace(/[\s-]+/g, "_");
 
-export const protocolForUrl = (url?: string): ApiProtocol =>
-  url?.includes("/yak-security/") ? "security" : "yak-ops";
-
 export const isApiResponse = (value: unknown): value is ApiResponse => {
   if (!value || typeof value !== "object") return false;
   return typeof (value as Partial<ApiResponse>).code === "number";
 };
 
-export const isSuccessfulResponse = (
-  response: Partial<ApiResponse> | null | undefined,
-  protocol: ApiProtocol,
-): boolean =>
-  typeof response?.code === "number" && protocolRules[protocol].success.includes(response.code);
+export function isSuccessfulResponse(response: Partial<ApiResponse> | null | undefined): boolean {
+  return response?.code === API_SUCCESS_CODE;
+}
 
 export const extractErrorMessage = (
   response: Partial<ApiResponse> | null | undefined,
@@ -101,15 +77,15 @@ export const extractUnknownErrorMessage = (payload: unknown, fallback = "请求�
   return fallback;
 };
 
-export const isUnauthenticatedResponse = (
+export function isUnauthenticatedResponse(
   response: Partial<ApiResponse> | null | undefined,
-  protocol: ApiProtocol,
-): boolean => {
+): boolean {
+  if (response?.code === 401 || response?.code === 2001) {
+    return true;
+  }
   const message = response?.msg || response?.message;
   return (
-    (typeof response?.code === "number" &&
-      protocolRules[protocol].unauthenticated.includes(response.code)) ||
-    (typeof message === "string" &&
-      unauthenticatedMessages.has(normalizeUnauthenticatedMessage(message)))
+    typeof message === "string" &&
+    unauthenticatedMessages.has(normalizeUnauthenticatedMessage(message))
   );
-};
+}

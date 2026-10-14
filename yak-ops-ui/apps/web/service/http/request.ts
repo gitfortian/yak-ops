@@ -4,21 +4,18 @@ import {
   isApiResponse,
   isSuccessfulResponse,
   isUnauthenticatedResponse,
-  protocolForUrl,
-  type ApiProtocol,
   type ApiResponse,
 } from "@/service/http/response";
 import { WORKSPACE_HEADER_NAME, WORKSPACE_STORAGE_KEY } from "@/constants/workspace";
 import { notifyOnce } from "@/utils/notification";
 
-export type { ApiProtocol, ApiResponse } from "@/service/http/response";
+export type { ApiResponse } from "@/service/http/response";
 
 export type BusinessErrorMode = "reject" | "resolve";
 export type WorkspaceHeaderMode = "auto" | "omit";
 
 export type RequestOptions = RequestInit & {
   data?: unknown;
-  protocol?: ApiProtocol;
   businessErrorMode?: BusinessErrorMode;
   skipErrorHandler?: boolean;
   responseType?: "blob";
@@ -31,7 +28,6 @@ export class BizError extends Error {
     message: string,
     readonly code?: number,
     readonly response?: ApiResponse,
-    readonly protocol: ApiProtocol = "yak-ops",
   ) {
     super(message);
     this.name = "BizError";
@@ -84,12 +80,12 @@ export const handleAuthenticationFailure = (
 const handleBusinessError = (error: BizError, skipErrorHandler: boolean) => {
   if (skipErrorHandler) return;
 
-  if (isUnauthenticatedResponse(error.response, error.protocol)) {
+  if (isUnauthenticatedResponse(error.response)) {
     handleAuthenticationFailure(error.message);
     return;
   }
 
-  notifyOnce(`business:${error.protocol}:${error.code}:${error.message}`, {
+  notifyOnce(`business:${error.code}:${error.message}`, {
     type: "error",
     title: "操作失败",
     description: error.message || "未知错误",
@@ -106,7 +102,6 @@ const parseResponse = async (response: Response) => {
 export default async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const {
     data,
-    protocol: explicitProtocol,
     businessErrorMode = "reject",
     skipErrorHandler = false,
     responseType,
@@ -163,7 +158,6 @@ export default async function request<T>(url: string, options: RequestOptions = 
   }
 
   const payload = await parseResponse(response);
-  const protocol = explicitProtocol ?? protocolForUrl(response.url || url);
 
   if (!response.ok) {
     const message = extractUnknownErrorMessage(
@@ -183,25 +177,24 @@ export default async function request<T>(url: string, options: RequestOptions = 
     }
 
     if (isApiResponse(payload)) {
-      throw new BizError(message, payload.code, payload, protocol);
+      throw new BizError(message, payload.code, payload);
     }
     throw new Error(message);
   }
 
   if (isApiResponse(payload)) {
-    if (isUnauthenticatedResponse(payload, protocol)) {
+    if (isUnauthenticatedResponse(payload)) {
       const error = new BizError(
         extractErrorMessage(payload, "登录状态失效"),
         payload.code,
         payload,
-        protocol,
       );
       handleBusinessError(error, skipErrorHandler);
       throw error;
     }
 
-    if (!isSuccessfulResponse(payload, protocol)) {
-      const error = new BizError(extractErrorMessage(payload), payload.code, payload, protocol);
+    if (!isSuccessfulResponse(payload)) {
+      const error = new BizError(extractErrorMessage(payload), payload.code, payload);
       handleBusinessError(error, skipErrorHandler);
       if (businessErrorMode === "reject") throw error;
     }

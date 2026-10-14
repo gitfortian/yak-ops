@@ -1,4 +1,4 @@
-import { SECURITY_API_PREFIX } from "@/config/api";
+import { API_PREFIX } from "@/config/api";
 import HttpUtils from "@/service/http/HttpUtils";
 
 import type {
@@ -10,10 +10,9 @@ import type {
   UserSavePayload,
 } from "./types";
 
-const USER_API_PREFIX = `${SECURITY_API_PREFIX}/user`;
+const USER_API_PREFIX = `${API_PREFIX}/user`;
 
 const MANAGEMENT_REQUEST = {
-  protocol: "security" as const,
   workspaceHeader: "omit" as const,
 };
 

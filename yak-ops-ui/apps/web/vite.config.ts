@@ -25,7 +25,6 @@ export default defineConfig({
     },
     proxy: {
       "/api": backendUrl,
-      "/yak-security": backendUrl,
     },
   },
   build: {

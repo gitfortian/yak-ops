@@ -37,6 +37,7 @@ export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-release_gate_mysql_root}"
 export MYSQL_DATABASE="${MYSQL_DATABASE:-yak_ops}"
 export MYSQL_USER="${MYSQL_USER:-yak_ops}"
 export MYSQL_PASSWORD="${MYSQL_PASSWORD:-release_gate_mysql}"
+export YAK_SECURITY_BOOTSTRAP_ENABLED=true
 export YAK_SECURITY_BOOTSTRAP_USERNAME="${YAK_SECURITY_BOOTSTRAP_USERNAME:-release_root}"
 export YAK_SECURITY_BOOTSTRAP_PASSWORD="${YAK_SECURITY_BOOTSTRAP_PASSWORD:-ReleaseGate@123456}"
 export YAK_OPS_DATASOURCE_MASTER_KEY="${YAK_OPS_DATASOURCE_MASTER_KEY:-release_gate_only_master_key_change_me}"
@@ -101,7 +102,7 @@ curl --fail --silent --show-error \
     --cookie-jar "$COOKIE_FILE" \
     --header 'Content-Type: application/json' \
     --data "{\"userName\":\"${YAK_SECURITY_BOOTSTRAP_USERNAME}\",\"pw\":\"${YAK_SECURITY_BOOTSTRAP_PASSWORD}\"}" \
-    "http://127.0.0.1:${YAK_OPS_PORT}/yak-security/api/v1/account/login" \
+    "http://127.0.0.1:${YAK_OPS_PORT}/api/v1/account/login" \
     > "$LOGIN_RESPONSE"
 
 python3 - "$LOGIN_RESPONSE" "$YAK_SECURITY_BOOTSTRAP_USERNAME" <<'PY'
@@ -123,7 +124,7 @@ PY
 printf 'Verifying authenticated current-user request...\n'
 curl --fail --silent --show-error \
     --cookie "$COOKIE_FILE" \
-    "http://127.0.0.1:${YAK_OPS_PORT}/yak-security/api/v1/account/current" \
+    "http://127.0.0.1:${YAK_OPS_PORT}/api/v1/account/current" \
     > "$CURRENT_RESPONSE"
 
 python3 - "$CURRENT_RESPONSE" "$YAK_SECURITY_BOOTSTRAP_USERNAME" <<'PY'
