@@ -10,7 +10,6 @@ on:
       - 'scripts/acceptance/task_schedule_*.py'
       - 'scripts/acceptance/multitable_*.py'
       - 'scripts/acceptance/database_realtime*.py'
-      - 'scripts/acceptance/schema_migration*.py'
       - 'yak-ops-ui/apps/web/**'
       - 'yak-ops-ui/packages/yak-ui/src/cron-scheduler/**'
       - 'yak-ops-ui/package*.json'
