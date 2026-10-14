@@ -10,6 +10,7 @@ import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +62,12 @@ public class TaskExecutionObserver implements AutoCloseable {
         if (handle != null) {
             handle.cancel();
         }
+    }
+
+    /** Returns process-local progress for the physical Job currently owned by this Instance. */
+    public OptionalInt progressPercent(String instanceId) {
+        TaskHandle handle = active.get(instanceId);
+        return handle == null ? OptionalInt.empty() : handle.progressPercent();
     }
 
     /** Requests cancellation for all active physical executions during process shutdown. */
@@ -128,6 +135,17 @@ public class TaskExecutionObserver implements AutoCloseable {
     private void observeTerminal(DispatchTicket ticket, TaskHandle handle, TaskOutcome outcome, Throwable failure) {
         try {
             if (failure == null && outcome != null) {
+                try {
+                    OptionalInt percent = handle.progressPercent();
+                    if (percent.isPresent()) {
+                        lifecycle.progress(ticket, percent.getAsInt());
+                    }
+                } catch (RuntimeException metricsFailure) {
+                    LOG.warn(
+                            "Unable to persist Task progress, instanceId={}, exceptionType={}",
+                            ticket.instanceId(),
+                            metricsFailure.getClass().getSimpleName());
+                }
                 lifecycle.complete(ticket, outcome);
                 LOG.info("Task Instance completed, instanceId={}, outcome={}", ticket.instanceId(), outcome);
             } else {

@@ -21,6 +21,9 @@ public interface SourceReaderContext {
     /** Returns the resolved parallelism of the owning source operator. */
     int currentParallelism();
 
+    /** Reports fully consumed bounded source splits after their completion markers. */
+    default void reportCompletedSplits(int count) {}
+
     /** Requests splits through the runtime's attempt-aware coordinator gateway. */
     void sendSplitRequest();
 

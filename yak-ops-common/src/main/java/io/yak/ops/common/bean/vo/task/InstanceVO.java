@@ -20,4 +20,5 @@ public record InstanceVO(
         LocalDateTime createTime,
         String scheduleId,
         Long scheduleRevision,
-        Instant scheduledTime) {}
+        Instant scheduledTime,
+        Integer progressPercent) {}

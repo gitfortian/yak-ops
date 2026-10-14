@@ -5,6 +5,7 @@ import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
@@ -20,6 +21,11 @@ final class YakFlowTaskHandle implements TaskHandle {
     @Override
     public Optional<TaskRuntimeReference> runtimeReference() {
         return Optional.of(new TaskRuntimeReference("YAKFLOW", client.getJobID().toString()));
+    }
+
+    @Override
+    public OptionalInt progressPercent() {
+        return client.getProgressPercent();
     }
 
     @Override

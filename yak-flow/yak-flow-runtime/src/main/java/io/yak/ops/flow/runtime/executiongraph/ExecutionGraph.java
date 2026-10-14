@@ -18,9 +18,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -37,6 +39,8 @@ public final class ExecutionGraph {
     private final List<ExecutionJobVertex> jobVertices;
     private final Map<Integer, ExecutionJobVertex> byVertexId;
     private final Object monitor = new Object();
+    private final AtomicLong plannedSplits = new AtomicLong();
+    private final AtomicLong completedSplits = new AtomicLong();
     private final CompletableFuture<JobExecutionResult> result = new CompletableFuture<>();
     private final CompletableFuture<Void> cancellation = new CompletableFuture<>();
     private volatile CompletableFuture<AlignedCheckpointCoordinator> checkpointController = new CompletableFuture<>();
@@ -77,6 +81,32 @@ public final class ExecutionGraph {
 
     public JobStatus getState() {
         return status;
+    }
+
+    /** Measured completed/planned bounded splits; 100% is reserved for successful completion. */
+    public OptionalInt getProgressPercent() {
+        long total = plannedSplits.get();
+        if (total == 0) {
+            return OptionalInt.empty();
+        }
+        long completed = completedSplits.get();
+        return OptionalInt.of((int) Math.min(99, Math.floor(100.0 * Math.min(completed, total) / total)));
+    }
+
+    /** Records a bounded Source's planned work units for this physical attempt. */
+    public void reportPlannedSplits(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Planned split count cannot be negative");
+        }
+        plannedSplits.addAndGet(count);
+    }
+
+    /** Records split completion after all preceding source records have been emitted. */
+    public void reportCompletedSplits(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Completed split count cannot be negative");
+        }
+        completedSplits.addAndGet(count);
     }
 
     Execution currentExecution(int jobVertexId, int subtask) {
@@ -136,6 +166,8 @@ public final class ExecutionGraph {
         int maxRestarts = jobGraph.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS);
         int attempt = 0;
         while (true) {
+            plannedSplits.set(0);
+            completedSplits.set(0);
             try {
                 new TaskDeployment(this, attempt > 0).deployAndAwait();
                 if (!jobGraph.isBounded() && !cancellationRequested) {

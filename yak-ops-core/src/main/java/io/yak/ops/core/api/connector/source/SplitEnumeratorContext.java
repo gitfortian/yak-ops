@@ -59,6 +59,9 @@ public interface SplitEnumeratorContext<SplitT extends SourceSplit> {
      */
     <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler);
 
+    /** Reports the number of planned bounded source splits for execution progress. */
+    default void reportPlannedSplits(int count) {}
+
     /** Schedules an external action on the coordinator thread without long blocking work. */
     void runInCoordinatorThread(Runnable action);
 }

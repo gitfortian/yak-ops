@@ -16,7 +16,7 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ChevronDown, Database, Plus } from "lucide-react";
+import { ArrowRight, Database, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -32,6 +32,7 @@ import {
   type DataSyncTaskStatus,
 } from "@/service/data-sync";
 
+import { ExecutionProgressBar } from "@/app/data-sync/execution-progress-bar";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
 import {
   DATA_SYNC_TASK_STATUS_ITEMS,
@@ -53,9 +54,6 @@ const emptyDraft = (): CreateDraft => ({
   sourceDataSourceId: "",
   targetDataSourceId: "",
 });
-
-const syncEndpointText = (dataSourceName?: string, table?: string) =>
-  [dataSourceName || "未知数据源", table].filter(Boolean).join(".") || "-";
 
 export function OfflineSyncPage() {
   const navigate = useNavigate();
@@ -84,7 +82,12 @@ export function OfflineSyncPage() {
   const [pendingDelete, setPendingDelete] = useState<DataSyncTaskRecord>();
   const [deleting, setDeleting] = useState(false);
 
-  const { activeByTask, refresh: refreshActiveInstances } = useActiveTaskInstances("OFFLINE", true);
+  const taskIds = useMemo(() => records.map((record) => record.id), [records]);
+  const {
+    activeByTask,
+    latestByTask,
+    refresh: refreshActiveInstances,
+  } = useActiveTaskInstances(true, taskIds);
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.flatMap((item) => (item.id ? [[item.id, item] as const] : []))),
@@ -230,29 +233,21 @@ export function OfflineSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 360,
+      minWidth: 300,
       render: (_value, record) => {
-        const source = dataSourceMap.get(record.sourceDataSourceId);
-        const target = dataSourceMap.get(record.targetDataSourceId);
-        const sourceText = syncEndpointText(source?.name, record.sourceTable);
-        const targetText = syncEndpointText(target?.name, record.targetTable);
+        const sourceName = dataSourceMap.get(record.sourceDataSourceId)?.name || "未知数据源";
+        const targetName = dataSourceMap.get(record.targetDataSourceId)?.name || "未知数据源";
 
         return (
-          <div className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-x-2 text-[13px] text-[#344054]">
+          <div className="flex min-w-0 items-center gap-2 text-[13px] text-[#344054]">
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 truncate" title={sourceText}>
-              {sourceText}
+            <span className="min-w-0 flex-1 truncate" title={sourceName}>
+              {sourceName}
             </span>
-
-            <div className="flex h-4 flex-col items-center justify-center text-[#98a2b3]">
-              <span className="h-2 w-px bg-[#d0d5dd]" />
-              <ChevronDown size={11} className="-mt-0.5 shrink-0" strokeWidth={1.8} />
-            </div>
-            <span />
-
+            <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" strokeWidth={1.8} />
             <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 truncate" title={targetText}>
-              {targetText}
+            <span className="min-w-0 flex-1 truncate" title={targetName}>
+              {targetName}
             </span>
           </div>
         );
@@ -263,6 +258,31 @@ export function OfflineSyncPage() {
       title: "状态",
       width: 100,
       render: (_value, record) => <DataSyncTaskStatusBadge status={record.status} />,
+    },
+    {
+      key: "execution",
+      title: "执行概况",
+      width: 190,
+      render: (_value, record) => {
+        const instance = latestByTask.get(record.id);
+        if (!instance) {
+          return <ExecutionProgressBar realtime={false} />;
+        }
+        return (
+          <button
+            type="button"
+            className="block w-full cursor-pointer text-left"
+            title="查看本次执行"
+            onClick={() => navigate(`/offline-sync/${record.id}/detail?executionId=${instance.id}`)}
+          >
+            <ExecutionProgressBar
+              status={instance.status}
+              percent={instance.progressPercent}
+              realtime={false}
+            />
+          </button>
+        );
+      },
     },
     {
       key: "updated",
@@ -383,7 +403,7 @@ export function OfflineSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1400 }}
+                scroll={{ x: 1480 }}
                 emptyText="还没有离线同步任务"
                 pagination={
                   total > 0

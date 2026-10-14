@@ -60,6 +60,7 @@ public final class JdbcSourceReader
 
     @Override
     protected void onSplitFinished(Map<String, JdbcSourceSplitState> finished) {
+        context.reportCompletedSplits(finished.size());
         context.sendSplitRequest();
     }
 }

@@ -53,6 +53,30 @@
   color: #b42318;
 }
 
+.sync-execution-progress[data-mode="progress"] {
+  color: #344054;
+}
+
+.sync-execution-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #335dff;
+}
+
+.sync-execution-progress[data-mode="failure"] .sync-execution-progress-fill {
+  background: #fda29b;
+}
+
+.sync-execution-progress-value {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+}
+
+.sync-execution-progress-value[data-light="true"] {
+  color: #fff;
+}
+
 .sync-execution-progress[data-mode="running"] {
   gap: 12px;
   background: transparent;

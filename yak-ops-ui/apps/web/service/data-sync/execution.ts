@@ -46,6 +46,7 @@ export function toDataSyncInstanceRecord(
     syncType,
     triggerType: instance.triggerType,
     status: instance.status,
+    progressPercent: instance.progressPercent ?? undefined,
     runtimeEngine: instance.runtimeEngine ?? undefined,
     runtimeId: instance.runtimeId ?? undefined,
     startTime: instance.startTime ?? undefined,

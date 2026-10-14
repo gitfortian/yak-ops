@@ -37,6 +37,16 @@ public interface InstanceService {
     List<InstanceEntity> recent(String workspaceId, int limit);
 
     /**
+     * Retrieves the newest Instance of each visible Definition without reading its history.
+     *
+     * @param workspaceId authorized Workspace
+     * @param definitionIds Definition identities on the visible page
+     * @param activeOnly limit the result to active business executions
+     * @return newest matching Instance for every Definition with matching executions
+     */
+    List<InstanceEntity> latest(String workspaceId, List<String> definitionIds, boolean activeOnly);
+
+    /**
      * Pages Workspace-owned Instances.
      *
      * @param workspaceId authorized Workspace

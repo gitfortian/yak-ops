@@ -1,15 +1,13 @@
 import { Badge, Button, type BadgeProps } from "@yak-ops/yak-ui";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+
+import { listLatestTaskInstances, type TaskInstanceRecord } from "@/service/task-execution";
 
 import {
-  listDataSyncInstances,
   type DataSyncInstanceRecord,
   type DataSyncTaskRecord,
   type DataSyncTaskStatus,
-  type DataSyncType,
 } from "@/service/data-sync";
-
-const POLL_INTERVAL_MILLIS = 2000;
 
 export const DATA_SYNC_TASK_STATUS_ITEMS: Record<DataSyncTaskStatus | "ALL", string> = {
   ALL: "全部状态",
@@ -31,39 +29,42 @@ export function DataSyncTaskStatusBadge({ status }: { status: DataSyncTaskStatus
   return <Badge tone={meta.tone}>{meta.label}</Badge>;
 }
 
-export function useActiveTaskInstances(syncType: DataSyncType, enabled: boolean) {
-  const [activeByTask, setActiveByTask] = useState<Map<string, DataSyncInstanceRecord>>(new Map());
+/** Shared page-level execution summaries, queried in batches without Definition lookups. */
+export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
+  const [latestByTask, setLatestByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
+  const [activeByTask, setActiveByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
+  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
-      setActiveByTask(new Map<string, DataSyncInstanceRecord>());
+    const request = ++requestId.current;
+    if (!enabled || taskIds.length === 0) {
+      setLatestByTask(new Map());
+      setActiveByTask(new Map());
       return;
     }
-
-    const result = await listDataSyncInstances({
-      pageNo: 1,
-      pageSize: 200,
-      syncType,
-      activeOnly: true,
-    });
-    const next = new Map<string, DataSyncInstanceRecord>();
-    result.bizData.forEach((record) => {
-      if (!next.has(record.taskId)) next.set(record.taskId, record);
-    });
-    setActiveByTask(next);
-  }, [enabled, syncType]);
+    const [latest, active] = await Promise.all([
+      listLatestTaskInstances(taskIds),
+      listLatestTaskInstances(taskIds, true),
+    ]);
+    if (request !== requestId.current) return;
+    setLatestByTask(new Map(latest.map((record) => [record.definitionId, record])));
+    setActiveByTask(new Map(active.map((record) => [record.definitionId, record])));
+  }, [enabled, taskIds]);
 
   useEffect(() => {
     void refresh();
+    return () => {
+      requestId.current += 1;
+    };
   }, [refresh]);
 
   useEffect(() => {
-    if (!enabled || activeByTask.size === 0) return;
-    const timer = window.setInterval(() => void refresh(), POLL_INTERVAL_MILLIS);
+    if (!enabled || taskIds.length === 0) return;
+    const timer = window.setInterval(() => void refresh(), activeByTask.size > 0 ? 2000 : 15000);
     return () => window.clearInterval(timer);
-  }, [activeByTask.size, enabled, refresh]);
+  }, [activeByTask.size, enabled, refresh, taskIds.length]);
 
-  return { activeByTask, refresh };
+  return { latestByTask, activeByTask, refresh };
 }
 
 interface LifecycleAction {
@@ -85,7 +86,7 @@ export interface DataSyncTaskRuntimeAction {
 
 interface DataSyncTaskLifecycleActionsProps {
   record: DataSyncTaskRecord;
-  activeInstance?: DataSyncInstanceRecord;
+  activeInstance?: Pick<DataSyncInstanceRecord, "id" | "status">;
   actionKey?: string;
   runtimeAction?: DataSyncTaskRuntimeAction;
   onRun?: (record: DataSyncTaskRecord) => void;

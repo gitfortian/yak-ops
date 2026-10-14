@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.IntConsumer;
 
 /**
  * StreamTask that runs one SourceOperator on its mailbox thread.
@@ -70,6 +71,18 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
             ReaderOutput<T> output,
             OperatorChain operatorChain,
             List<SplitT> restoredSplits) {
+        this(source, coordinator, environment, output, operatorChain, restoredSplits, ignored -> {});
+    }
+
+    /** Registers completed source splits with the Job's progress collector. */
+    public SourceOperatorStreamTask(
+            Source<T, SplitT, ?> source,
+            SourceCoordinator<SplitT, ?> coordinator,
+            TaskEnvironment environment,
+            ReaderOutput<T> output,
+            OperatorChain operatorChain,
+            List<SplitT> restoredSplits,
+            IntConsumer completedSplits) {
         super(environment);
         this.restoredSplits = List.copyOf(Objects.requireNonNull(restoredSplits, "restoredSplits must not be null"));
         this.operatorChain = operatorChain;
@@ -78,7 +91,10 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator must not be null");
         this.coordinator.coordinatorContext().validateTask(taskInfo());
         SourceReaderRuntimeContext readerContext = new SourceReaderRuntimeContext(
-                taskEnvironment(), event -> coordinator.handleEventFromOperator(taskInfo(), event), this::failAsync);
+                taskEnvironment(),
+                event -> coordinator.handleEventFromOperator(taskInfo(), event),
+                this::failAsync,
+                completedSplits);
         this.operator = new SourceOperator<>(source, readerContext);
         this.input = new StreamTaskSourceInput<>(operator);
     }

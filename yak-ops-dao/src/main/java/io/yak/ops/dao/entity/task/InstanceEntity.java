@@ -58,6 +58,8 @@ public class InstanceEntity extends BaseEntity {
     private LocalDateTime startTime;
     /** Confirmed terminal time, absent while execution is active. */
     private LocalDateTime endTime;
+    /** Last sampled bounded-source progress (0-99), persisted before terminal outcome. */
+    private Integer progressPercent;
     /** Safe failure category without credentials, absent while healthy. */
     private String failureCode;
 }

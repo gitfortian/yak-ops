@@ -27,8 +27,10 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.flow.runtime.configuration.RuntimeOptions;
+import io.yak.ops.flow.runtime.executiongraph.ExecutionGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
+import io.yak.ops.flow.runtime.graph.StreamingJobGraphGenerator;
 import io.yak.ops.flow.runtime.graph.StreamPartitioning;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
 import io.yak.ops.flow.runtime.operators.OneInputOperatorFactory;
@@ -51,6 +53,23 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 class ExecutionGraphParallelTest {
+
+    @Test
+    void shouldMeasureBoundedSplitProgressWithoutClaimingJobCompletion() {
+        ParallelSource source = new ParallelSource(true, List.of(List.of("row")));
+        ParallelSink sink = new ParallelSink(null);
+        Configuration configuration = config(1, 2);
+        StreamGraph graph = graph(source, 1, sink, 1, configuration);
+        ExecutionGraph execution = new ExecutionGraph(new StreamingJobGraphGenerator(graph, configuration).generate());
+
+        assertTrue(execution.getProgressPercent().isEmpty());
+        execution.reportPlannedSplits(8);
+        assertEquals(0, execution.getProgressPercent().orElseThrow());
+        execution.reportCompletedSplits(3);
+        assertEquals(37, execution.getProgressPercent().orElseThrow());
+        execution.reportCompletedSplits(5);
+        assertEquals(99, execution.getProgressPercent().orElseThrow());
+    }
 
     @Test
     void shouldFanInFourSourceReadersToOneSinkWithoutLosingRecords() throws Exception {
