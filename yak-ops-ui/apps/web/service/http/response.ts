@@ -41,9 +41,11 @@ export const isApiResponse = (value: unknown): value is ApiResponse => {
   return typeof (value as Partial<ApiResponse>).code === "number";
 };
 
-export const isSuccessfulResponse = (
+export function isSuccessfulResponse(
   response: Partial<ApiResponse> | null | undefined,
-): boolean => response?.code === API_SUCCESS_CODE;
+): boolean {
+  return response?.code === API_SUCCESS_CODE;
+}
 
 export const extractErrorMessage = (
   response: Partial<ApiResponse> | null | undefined,
@@ -77,14 +79,15 @@ export const extractUnknownErrorMessage = (payload: unknown, fallback = "请求�
   return fallback;
 };
 
-export const isUnauthenticatedResponse = (
+export function isUnauthenticatedResponse(
   response: Partial<ApiResponse> | null | undefined,
-): boolean => {
+): boolean {
+  if (response?.code === 401 || response?.code === 2001) {
+    return true;
+  }
   const message = response?.msg || response?.message;
   return (
-    response?.code === 401 ||
-    response?.code === 2001 ||
-    (typeof message === "string" &&
-      unauthenticatedMessages.has(normalizeUnauthenticatedMessage(message)))
+    typeof message === "string" &&
+    unauthenticatedMessages.has(normalizeUnauthenticatedMessage(message))
   );
-};
+}
