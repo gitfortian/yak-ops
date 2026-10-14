@@ -58,7 +58,9 @@ public class InstanceServiceImpl implements InstanceService {
 
     @Override
     public List<InstanceEntity> latest(String workspaceId, List<String> definitionIds, boolean activeOnly) {
-        if (definitionIds == null || definitionIds.isEmpty() || definitionIds.size() > 200
+        if (definitionIds == null
+                || definitionIds.isEmpty()
+                || definitionIds.size() > 200
                 || definitionIds.stream().anyMatch(id -> id == null || id.isBlank())) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
