@@ -109,9 +109,8 @@ public class InstanceRepositoryImpl implements InstanceRepository {
             return List.of();
         }
         String placeholders = String.join(", ", Collections.nCopies(definitionIds.size(), "?"));
-        String filter = activeOnly
-                ? " AND status IN ('SUBMITTED', 'LAUNCHING', 'RUNNING', 'CANCELLING', 'RECONCILING')"
-                : "";
+        String filter =
+                activeOnly ? " AND status IN ('SUBMITTED', 'LAUNCHING', 'RUNNING', 'CANCELLING', 'RECONCILING')" : "";
         String sql = """
                 SELECT id FROM (
                     SELECT id, ROW_NUMBER() OVER (
