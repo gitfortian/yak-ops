@@ -51,7 +51,7 @@ public final class SolutionCatalog {
             throw new IllegalArgumentException(
                     "Database realtime requires a target with a compatible BIGINT snapshot key");
         }
-        if (type.steps().contains(Step.INCREMENTAL) && !"MYSQL".equals(sourceType)) {
+        if (!type.supportsScheduling() && !"MYSQL".equals(sourceType)) {
             throw new IllegalArgumentException("Realtime synchronization requires a MySQL source");
         }
     }
@@ -87,9 +87,22 @@ public final class SolutionCatalog {
         List<Step> applicable = new ArrayList<>(type.steps());
         List<Solution.Combination> combinations = new ArrayList<>();
         combinations.add(new Solution.Combination(type.steps(), type.supportsScheduling(), writes));
+        boolean supportedIncremental = type.supportsScheduling()
+                && SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType);
+        if (supportedIncremental) {
+            applicable.add(Step.INCREMENTAL);
+            combinations.add(new Solution.Combination(List.of(Step.INCREMENTAL), true, List.of("UPSERT")));
+            combinations.add(new Solution.Combination(List.of(Step.FULL, Step.INCREMENTAL), true, List.of("UPSERT")));
+        }
         if (SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType)) {
             applicable.addFirst(Step.SCHEMA);
-            combinations.add(new Solution.Combination(applicable, type.supportsScheduling(), writes));
+            combinations.add(new Solution.Combination(List.of(Step.SCHEMA, Step.FULL), type.supportsScheduling(), writes));
+            if (supportedIncremental) {
+                combinations.add(new Solution.Combination(
+                        List.of(Step.SCHEMA, Step.FULL, Step.INCREMENTAL), true, List.of("UPSERT")));
+            } else if (!type.supportsScheduling()) {
+                combinations.add(new Solution.Combination(applicable, false, writes));
+            }
         }
         return new Solution(type, type.displayName(), applicable, combinations, type.steps());
     }

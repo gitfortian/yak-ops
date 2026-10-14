@@ -36,8 +36,11 @@ public final class SolutionOptions {
             OptionRule.builder().required(SELECTION_MODE).build();
     public static final Option<Map<String, Object>> TARGET =
             Options.key("target").mapObjectType().noDefaultValue();
+    public static final Option<Map<String, Object>> INCREMENTAL =
+            Options.key("incremental").mapObjectType().noDefaultValue();
     public static final OptionRule TABLE_MAPPING_RULE = OptionRule.builder()
             .required(JobOptions.SOURCE, TARGET, JdbcSinkOptions.WRITE_MODE)
+            .optional(INCREMENTAL)
             .build();
     public static final OptionRule TABLE_RULE = OptionRule.builder()
             .required(

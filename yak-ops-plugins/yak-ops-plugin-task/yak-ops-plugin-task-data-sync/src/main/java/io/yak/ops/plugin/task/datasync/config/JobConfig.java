@@ -47,10 +47,22 @@ public final class JobConfig {
         validate(parameters, SolutionOptions.RULE, "DATA_SYNC");
         SolutionType type = parameters.get(SolutionOptions.SOLUTION_TYPE);
         List<String> steps = parameters.get(SolutionOptions.STEPS);
+        if (steps.size() != new HashSet<>(steps).size()) {
+            throw new IllegalArgumentException("Duplicate synchronization step");
+        }
         List<String> expected = new java.util.ArrayList<>();
         if (steps.contains(Step.SCHEMA.name())) expected.add(Step.SCHEMA.name());
-        expected.addAll(type.steps().stream().map(Step::name).toList());
-        if (steps.size() != new HashSet<>(steps).size() || !new HashSet<>(steps).equals(new HashSet<>(expected))) {
+        if (type.supportsScheduling()) {
+            if (steps.contains(Step.FULL.name())) expected.add(Step.FULL.name());
+            if (steps.contains(Step.INCREMENTAL.name())) expected.add(Step.INCREMENTAL.name());
+            if (expected.isEmpty() || expected.equals(List.of(Step.SCHEMA.name()))
+                    || (expected.contains(Step.SCHEMA.name()) && !expected.contains(Step.FULL.name()))) {
+                throw new IllegalArgumentException("Schema preparation requires initial full load");
+            }
+        } else {
+            expected.addAll(type.steps().stream().map(Step::name).toList());
+        }
+        if (steps.size() != expected.size() || !new HashSet<>(steps).equals(new HashSet<>(expected))) {
             throw new IllegalArgumentException("Unsupported synchronization step combination");
         }
         ReadonlyConfig from = ReadonlyConfig.fromMap(parameters.get(JobOptions.SOURCE));
@@ -99,7 +111,19 @@ public final class JobConfig {
             if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
                 throw new IllegalArgumentException("Source and target tables must be unique");
             }
-            tables.add(new TableConfig(ReadonlyConfig.fromMap(input), ReadonlyConfig.fromMap(output)));
+            IncrementalConfig incremental = null;
+            boolean selectedIncremental = expected.contains(Step.INCREMENTAL.name()) && type.supportsScheduling();
+            if (selectedIncremental) {
+                Map<String, Object> options = table.get(SolutionOptions.INCREMENTAL);
+                if (options == null) throw new IllegalArgumentException("Incremental table settings are required");
+                incremental = IncrementalConfig.from(options);
+                if (table.get(JdbcSinkOptions.WRITE_MODE) != io.yak.ops.connector.jdbc.sink.JdbcWriteMode.UPSERT) {
+                    throw new IllegalArgumentException("Offline incremental requires UPSERT");
+                }
+            } else if (table.getSourceMap().containsKey(SolutionOptions.INCREMENTAL.key())) {
+                throw new IllegalArgumentException("Incremental settings require an offline incremental step");
+            }
+            tables.add(new TableConfig(ReadonlyConfig.fromMap(input), ReadonlyConfig.fromMap(output), incremental));
         }
         Map<String, Object> canonical = new LinkedHashMap<>(parameters.getSourceMap());
         canonical.put("steps", expected);
