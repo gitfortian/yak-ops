@@ -274,6 +274,13 @@ def verify_schedule_configuration(client, definition):
         "cronExpression": "0 * * * * ?", "timeZone": "Asia/Invalid"}, status=400)
     page = client.call("POST", base + "/page", {"targetId": definition, "pageNo": 1, "pageSize": 20})
     assert page["pagination"]["total"] == 1 and page["bizData"][0]["id"] == identity
+    batch = {"targetType": "TASK", "targetIds": [definition, "missing"], "pageNo": 1, "pageSize": 200}
+    result = client.call("POST", base + "/page", batch)
+    assert result["pagination"]["total"] == 1 and result["bizData"][0]["id"] == identity
+    assert client.call("POST", base + "/page", dict(batch, targetIds=["missing"]))["pagination"]["total"] == 0
+    for ids in ([], [" "], ["x" * 65], [definition] * 201):
+        client.call("POST", base + "/page", dict(batch, targetIds=ids), status=400)
+    client.call("POST", base + "/page", dict(batch, targetId=definition), status=400)
     same = client.call("PUT", base + "/" + identity, {
         "revision": 1, "cronExpression": payload["cronExpression"], "timeZone": "UTC"})
     assert same["revision"] == 1
@@ -285,6 +292,7 @@ def verify_schedule_configuration(client, definition):
     workspace = client.workspace
     client.workspace = client.call("POST", "/api/v1/workspaces", {"name": "schedule-" + uuid.uuid4().hex[:8]})["id"]
     try:
+        assert client.call("POST", base + "/page", batch)["pagination"]["total"] == 0
         client.call("GET", base + "/" + identity, status=404)
         client.call("DELETE", base + "/" + identity + "?revision=2", status=404)
         client.call("POST", base, payload, status=404)
@@ -481,6 +489,14 @@ def acceptance():
         assert excluded["pagination"]["total"] == 0
 
         verify_periodic_jdbc(client, source, target)
+        if os.environ.get("E2E_BROWSER") == "true":
+            from task_schedule_browser import verify_schedule_browser
+            query_postgres("CREATE TABLE public.browser_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
+            browser_task = create_task(client, "browser-" + uuid.uuid4().hex[:8], source, target, False,
+                                       debug=True, sink_table="browser_orders")
+            verify_schedule_browser(client, browser_task)
+            assert query_postgres("SELECT COUNT(*) FROM public.browser_orders") == "2"
+
 
         # A soft-deleted Definition cannot remove a historical Instance's pinned version.
         # Use a future yearly expression, then activate via the real authenticated API.

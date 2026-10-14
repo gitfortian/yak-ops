@@ -20,6 +20,8 @@ import { ArrowRight, Copy, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
+import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
+import { useTaskSchedules } from "@/app/schedule/use-task-schedules";
 import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
 import { getDataSource, type DataSourceRecord } from "@/service/datasource";
 import { getUsersByIds } from "@/service/user";
@@ -107,6 +109,10 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   const [canceling, setCanceling] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [historyScheduleId, setHistoryScheduleId] = useState<string>();
+  const schedules = useTaskSchedules(!realtime && taskId ? [taskId] : []);
+  const hasEnabledSchedule = Boolean(taskId && schedules.records.get(taskId)?.enabled);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
   const searchParamsSetter = useRef(setSearchParams);
@@ -274,7 +280,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
   }, [executionId, syncType, taskId]);
 
   useEffect(() => {
-    if (!autoRefresh || !hasActiveInstance || selectedLoading) return;
+    if (!autoRefresh || (!hasActiveInstance && !hasEnabledSchedule) || selectedLoading) return;
     let disposed = false;
     let pending = false;
     const timer = window.setInterval(async () => {
@@ -301,6 +307,7 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
     autoRefresh,
     executionId,
     hasActiveInstance,
+    hasEnabledSchedule,
     loadInstances,
     selectedLoading,
     syncType,
@@ -536,6 +543,17 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           className="shrink-0 bg-white px-6 max-md:px-4"
           extra={
             <>
+              {!realtime ? (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setHistoryScheduleId(undefined);
+                    setScheduleOpen(true);
+                  }}
+                >
+                  调度
+                </Button>
+              ) : null}
               {task.status === "PUBLISHED" ? (
                 <Button size="small" loading={running} onClick={() => void run()}>
                   运行
@@ -605,6 +623,10 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
                 {selectedInstance ? (
                   <DataSyncExecutionDetailContent
                     record={selectedInstance}
+                    onViewScheduleHistory={() => {
+                      setHistoryScheduleId(selectedInstance.scheduleId || undefined);
+                      setScheduleOpen(true);
+                    }}
                     realtime={realtime}
                     controls={
                       <>
@@ -670,6 +692,27 @@ export function DataSyncTaskDetailPage({ syncType, basePath, localScroll = false
           </div>
         </div>
       </div>
+      {!realtime ? (
+        <ScheduleDialog
+          targetId={task.id}
+          published={task.status === "PUBLISHED"}
+          open={scheduleOpen}
+          historyScheduleId={historyScheduleId}
+          onClose={() => setScheduleOpen(false)}
+          onChanged={schedules.refresh}
+          onViewInstance={(id) => {
+            setStatus("ALL");
+            setPageNo(1);
+            setSearchParams((previous) => {
+              const next = new URLSearchParams(previous);
+              next.set("executionId", id);
+              next.delete("tab");
+              return next;
+            });
+            void loadInstances();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

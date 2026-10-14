@@ -104,6 +104,7 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                         .isNull(ScheduleEntity::getDeletedAt)
                         .eq(query.targetType() != null, ScheduleEntity::getTargetType, query.targetType())
                         .eq(query.targetId() != null, ScheduleEntity::getTargetId, query.targetId())
+                        .in(query.targetIds() != null, ScheduleEntity::getTargetId, query.targetIds())
                         .eq(query.enabled() != null, ScheduleEntity::isEnabled, query.enabled())
                         .orderByDesc(ScheduleEntity::getUpdateTime, ScheduleEntity::getId));
         return new PageData<>(page.getRecords(), page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());

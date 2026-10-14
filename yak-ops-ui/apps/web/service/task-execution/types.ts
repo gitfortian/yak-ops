@@ -23,6 +23,9 @@ export interface TaskInstanceRecord {
   debug: boolean;
   taskType: string;
   triggerType: "MANUAL" | "SCHEDULE" | "WORKFLOW";
+  scheduleId?: string | null;
+  scheduleRevision?: number | null;
+  scheduledTime?: string | null;
   status: TaskInstanceStatus;
   progressPercent?: number | null;
   runtimeEngine?: string | null;

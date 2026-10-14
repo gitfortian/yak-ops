@@ -32,6 +32,7 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.schedule.ScheduleEntity;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
+import io.yak.ops.dao.repository.schedule.SchedulePageQuery;
 import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
@@ -246,6 +247,39 @@ class ScheduleServiceTest {
         assertEquals(1, page.total());
         assertEquals("PENDING", page.records().getFirst().getRegistrationStatus());
         verify(versions, never()).queryCurrent(any(), any(), anyInt());
+    }
+
+    @Test
+    void targetBatchUsesOneWorkspaceQueryAndOneRegistrationObservation() {
+        when(schedules.queryPage(any())).thenReturn(PageData.of(List.of(schedule), 1, 1, 20));
+        ScheduleQueryDTO query = new ScheduleQueryDTO();
+        query.setTargetType(ScheduleTargetType.TASK);
+        query.setTargetIds(List.of("task", "another-task"));
+        service.queryPage("ws", query);
+        ArgumentCaptor<SchedulePageQuery> selected = ArgumentCaptor.forClass(SchedulePageQuery.class);
+        verify(schedules).queryPage(selected.capture());
+        assertEquals("ws", selected.getValue().workspaceId());
+        assertEquals(query.getTargetIds(), selected.getValue().targetIds());
+        verify(registrations).describe(List.of(schedule));
+        verify(versions, never()).queryCurrent(any(), any(), anyInt());
+    }
+
+    @Test
+    void emptyOversizedOrAmbiguousBatchesCannotWidenTheQuery() {
+        ScheduleQueryDTO query = new ScheduleQueryDTO();
+        for (List<String> ids : List.of(
+                List.<String>of(),
+                List.of(" "),
+                List.of("x".repeat(65)),
+                java.util.Collections.nCopies(201, "task"),
+                java.util.Arrays.asList("task", null))) {
+            query.setTargetIds(ids);
+            assertThrows(BusinessException.class, () -> service.queryPage("ws", query));
+        }
+        query.setTargetIds(List.of("task"));
+        query.setTargetId("task");
+        assertThrows(BusinessException.class, () -> service.queryPage("ws", query));
+        verify(schedules, never()).queryPage(any());
     }
 
     @Test

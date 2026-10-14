@@ -16,6 +16,17 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { EditorAnchorStepper, type EditorAnchorItem } from "@/app/data-sync/editor-anchor-stepper";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
+import { ScheduleForm } from "@/app/schedule/schedule-form";
+import { EMPTY_SCHEDULE, sameScheduleRule } from "@/app/schedule/schedule-presentation";
+import {
+  createSchedule,
+  getTaskSchedule,
+  previewSchedule,
+  scheduleErrorMessage,
+  updateSchedule,
+  type ScheduleRecord,
+  type ScheduleTimeRule,
+} from "@/service/schedule";
 import { getDataSourceTypeLabel } from "@/app/datasource/constants";
 import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
 import {
@@ -30,6 +41,7 @@ import {
   getDataSyncTask,
   publishDataSyncTask,
   updateDataSyncTask,
+  type DataSyncTaskRecord,
   type DataSyncTaskSavePayload,
   type DataSyncTaskStatus,
   type DataSyncType,
@@ -333,6 +345,56 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [parametersDirty, setParametersDirty] = useState(false);
+  const [taskDirty, setTaskDirty] = useState(!editing);
+  const savedTask = useRef<DataSyncTaskRecord>();
+  const saveSession = useRef<AbortController>();
+  const pendingSchedule = location.state as {
+    scheduleDraft?: ScheduleTimeRule;
+    scheduleSaveError?: string;
+  } | null;
+  const [schedule, setSchedule] = useState<ScheduleRecord | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleTimeRule>(
+    pendingSchedule?.scheduleDraft || { ...EMPTY_SCHEDULE },
+  );
+  const [scheduleLoading, setScheduleLoading] = useState(!realtime && editing);
+  const [scheduleError, setScheduleError] = useState(pendingSchedule?.scheduleSaveError || "");
+  const [scheduleNeedsReload, setScheduleNeedsReload] = useState(
+    Boolean(pendingSchedule?.scheduleSaveError),
+  );
+  const [scheduleReload, setScheduleReload] = useState(0);
+  const scheduleDraft = useRef(pendingSchedule?.scheduleDraft);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    saveSession.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (realtime || !id) return;
+    const controller = new AbortController();
+    setScheduleLoading(true);
+    void getTaskSchedule(id, controller.signal)
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        setSchedule(value);
+        if (!scheduleDraft.current) setScheduleForm(value || { ...EMPTY_SCHEDULE });
+        if (scheduleReload > 0) {
+          setScheduleError("");
+          setScheduleNeedsReload(false);
+        }
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) {
+          setScheduleError(scheduleErrorMessage(failure));
+          setScheduleNeedsReload(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setScheduleLoading(false);
+      });
+    return () => controller.abort();
+  }, [id, realtime, scheduleReload]);
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
@@ -340,8 +402,9 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
       { id: "target", label: "数据去向" },
+      ...(!realtime ? [{ id: "schedule", label: "调度配置" }] : []),
     ],
-    [],
+    [realtime],
   );
 
   const sourceCatalog = useCatalogOptions(
@@ -410,6 +473,8 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
         }
         setTaskStatus(task.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED");
         setParametersDirty(false);
+        setTaskDirty(false);
+        savedTask.current = task;
         setForm({
           name: task.name,
           remark: task.remark || "",
@@ -434,6 +499,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   }, [basePath, id, navigate, realtime, syncType]);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
+    setTaskDirty(true);
     if (key !== "name" && key !== "remark" && key !== "debug") setParametersDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -468,6 +534,10 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
   const published = editing && taskStatus === "PUBLISHED";
   const canSave =
     !published &&
+    (realtime ||
+      (!scheduleLoading &&
+        !scheduleNeedsReload &&
+        (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
     form.name.trim() &&
     Boolean(
       form.sourceDataSourceId &&
@@ -484,36 +554,80 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     !targetCatalog.loading;
 
   const save = async (publishAfterSave = false) => {
-    if (!canSave || saving) return;
+    const signal = saveSession.current?.signal;
+    if (!canSave || saving || !signal || signal.aborted) return;
     setSaving(true);
     try {
-      const request = payload();
-      const metadataRequest = {
-        name: request.name,
-        remark: request.remark,
-        debug: request.debug,
-      };
-      const saved =
-        editing && id
-          ? await updateDataSyncTask(id, parametersDirty ? request : metadataRequest)
-          : await createDataSyncTask(request);
-
-      if (publishAfterSave) {
+      const ruleChanged = !realtime && !sameScheduleRule(scheduleForm, schedule || EMPTY_SCHEDULE);
+      if (ruleChanged && scheduleForm.cronExpression.trim()) {
         try {
-          await publishDataSyncTask(saved.id);
-        } catch {
-          toast.warning("任务已保存，但上线失败，当前保持已下线");
-          navigate(`${basePath}/${saved.id}`, { replace: true });
+          await previewSchedule(scheduleForm, signal);
+        } catch (failure) {
+          if (!signal.aborted) setScheduleError(scheduleErrorMessage(failure));
           return;
         }
+      }
+      if (signal.aborted) return;
+      const request = payload();
+      const metadataRequest = { name: request.name, remark: request.remark, debug: request.debug };
+      let saved = savedTask.current;
+      // A completed Task write is retained across a later Schedule failure.
+      if (!saved || taskDirty) {
+        const savedId = id || saved?.id;
+        saved = savedId
+          ? await updateDataSyncTask(savedId, parametersDirty ? request : metadataRequest, signal)
+          : await createDataSyncTask(request, signal);
+        if (signal.aborted) return;
+        savedTask.current = saved;
+        setTaskDirty(false);
+        setParametersDirty(false);
+      }
+      if (ruleChanged && scheduleForm.cronExpression.trim()) {
+        try {
+          const value = schedule
+            ? await updateSchedule(schedule.id, schedule.revision, scheduleForm, signal)
+            : await createSchedule(saved.id, scheduleForm, signal);
+          if (signal.aborted) return;
+          setSchedule(value);
+          setScheduleForm(value);
+          scheduleDraft.current = undefined;
+          setScheduleError("");
+        } catch (failure) {
+          if (signal.aborted) return;
+          const message = "任务已保存，调度未确认保存。" + scheduleErrorMessage(failure);
+          setScheduleError(message);
+          setScheduleNeedsReload(true);
+          scheduleDraft.current = scheduleForm;
+          if (!id)
+            navigate(`${basePath}/${saved.id}`, {
+              replace: true,
+              state: { scheduleDraft: scheduleForm, scheduleSaveError: message },
+            });
+          return;
+        }
+      }
+      if (signal.aborted) return;
+      if (publishAfterSave) {
+        try {
+          await publishDataSyncTask(saved.id, signal);
+        } catch {
+          if (!signal.aborted) {
+            toast.warning("任务已保存，但上线失败，当前保持已下线");
+            navigate(`${basePath}/${saved.id}`, { replace: true });
+          }
+          return;
+        }
+        if (signal.aborted) return;
         toast.success(realtime ? "实时同步任务已保存并上线" : "同步任务已保存并上线");
         navigate(basePath, { replace: true });
         return;
       }
       toast.success(editing ? "同步任务已保存，当前仍为已下线" : "同步任务已创建，当前为已下线");
-      navigate(`${basePath}/${saved.id}`, { replace: true });
+      navigate(`${basePath}/${saved.id}`, { replace: true, state: null });
+    } catch {
+      // Task request errors are reported by the existing transport; drafts remain editable.
     } finally {
-      setSaving(false);
+      if (!signal.aborted) setSaving(false);
     }
   };
 
@@ -664,6 +778,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
+                  setTaskDirty(true);
                   setParametersDirty(true);
                   setForm((current) => ({
                     ...current,
@@ -683,6 +798,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 onCreateDataSource={() => navigate("/data-source?create=1")}
                 onDataSourceChange={(value) => {
                   const selected = dataSources.find((item) => item.id === value);
+                  setTaskDirty(true);
                   setParametersDirty(true);
                   setForm((current) => ({
                     ...current,
@@ -705,6 +821,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               table={form.sourceTable}
               catalog={sourceCatalog}
               onSchemaChange={(value) => {
+                setTaskDirty(true);
                 setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
@@ -713,6 +830,7 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                 }));
               }}
               onTableChange={(table) => {
+                setTaskDirty(true);
                 setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
@@ -737,10 +855,12 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               table={form.targetTable}
               catalog={targetCatalog}
               onSchemaChange={(value) => {
+                setTaskDirty(true);
                 setParametersDirty(true);
                 setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }));
               }}
               onTableChange={(table) => {
+                setTaskDirty(true);
                 setParametersDirty(true);
                 setForm((current) => ({
                   ...current,
@@ -751,6 +871,48 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               }}
             />
           </CollapseSection>
+          {!realtime ? (
+            <CollapseSection id="schedule" title="调度配置">
+              <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+                {scheduleError ? (
+                  <Alert>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{scheduleError}</span>
+                      {scheduleNeedsReload ? (
+                        <Button
+                          size="small"
+                          disabled={saving || scheduleLoading}
+                          onClick={() => {
+                            scheduleDraft.current = scheduleForm;
+                            setScheduleReload((value) => value + 1);
+                          }}
+                        >
+                          重新加载状态
+                        </Button>
+                      ) : null}
+                    </div>
+                  </Alert>
+                ) : null}
+                {scheduleLoading ? (
+                  <div className="text-xs text-[#667085]">加载调度…</div>
+                ) : (
+                  <ScheduleForm
+                    value={scheduleForm}
+                    onChange={(value) => {
+                      setScheduleForm(value);
+                      scheduleDraft.current = value;
+                      setScheduleError("");
+                    }}
+                    disabled={saving || scheduleNeedsReload || Boolean(schedule?.enabled)}
+                    allowClear={!schedule}
+                  />
+                )}
+                {schedule?.enabled ? (
+                  <div className="text-xs text-[#667085]">请先在任务列表停止调度再修改配置</div>
+                ) : null}
+              </div>
+            </CollapseSection>
+          ) : null}
         </main>
 
         <aside

@@ -162,12 +162,21 @@ public class ScheduleServiceImpl implements ScheduleService {
                 || !dto.getSorts().isEmpty()) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
+        if (dto.getTargetIds() != null
+                && (dto.getTargetId() != null
+                        || dto.getTargetIds().isEmpty()
+                        || dto.getTargetIds().size() > 200
+                        || dto.getTargetIds().stream()
+                                .anyMatch(id -> id == null || id.isBlank() || id.length() > 64))) {
+            throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        }
         var page = schedules.queryPage(new SchedulePageQuery(
                 workspaceId,
                 dto.getPageNo(),
                 dto.getPageSize(),
                 dto.getTargetType(),
                 dto.getTargetId(),
+                dto.getTargetIds(),
                 dto.getEnabled()));
         Map<String, ScheduleRegistrationVO> observations = registrations.describe(page.records());
         return page.map(row -> summary(row, observations.get(row.getId())));

@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 const webRoot = fileURLToPath(new URL(".", import.meta.url));
+const backendUrl = process.env.YAK_BACKEND_URL || "http://127.0.0.1:8080";
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 
 export default defineConfig({
@@ -11,6 +12,7 @@ export default defineConfig({
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),
   plugins: [tailwindcss()],
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: {
       "@": webRoot,
       "@yak-ops/yak-ui": fileURLToPath(
@@ -18,12 +20,16 @@ export default defineConfig({
       ),
     },
   },
+  optimizeDeps: {
+    // Pre-bundle both JSX entry points with the shared React runtime on cold starts.
+    include: ["react", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+  },
   server: {
     fs: {
       allow: [workspaceRoot],
     },
     proxy: {
-      "/api": "http://127.0.0.1:8080",
+      "/api": backendUrl,
     },
   },
   build: {

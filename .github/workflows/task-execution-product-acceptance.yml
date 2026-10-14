@@ -7,6 +7,10 @@ on:
       - '.github/workflows/backend-acceptance.yml'
       - '.github/workflows/v1-release-gate.yml'
       - 'scripts/acceptance/task-execution-e2e.py'
+      - 'scripts/acceptance/task_schedule_*.py'
+      - 'yak-ops-ui/apps/web/**'
+      - 'yak-ops-ui/packages/yak-ui/src/cron-scheduler/**'
+      - 'yak-ops-ui/package*.json'
       - 'yak-flow/**'
       - 'yak-ops-core/**'
       - 'yak-ops-platform/**'
@@ -37,6 +41,27 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Prepare browser acceptance
+        run: |
+          npm ci --prefix yak-ops-ui
+          python3 -m pip install playwright==1.57.0
+          python3 -m playwright install --with-deps chromium
+      - name: Start frontend for browser acceptance
+        env:
+          YAK_BACKEND_URL: http://127.0.0.1:18080
+        run: |
+          (cd yak-ops-ui && npm run dev -- --port 5173 --strictPort) > /tmp/yak-schedule-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/yak-schedule-vite.log
+          exit 1
+      - name: Verify browser interaction contracts with controlled responses
+        run: python3 scripts/acceptance/task_schedule_ui_test.py
       - name: Start disposable MySQL
         shell: bash
         run: |
@@ -75,11 +100,21 @@ jobs:
         env:
           E2E_DB_PASSWORD: localtestpass
           E2E_USER_PASSWORD: test-only-account-password
+          E2E_BROWSER: 'true'
         run: python3 scripts/acceptance/task-execution-e2e.py
       - name: Diagnostics on failure
         if: failure()
         run: |
+          tail -n 140 /tmp/yak-schedule-vite.log || true
           tail -n 140 /tmp/yak-task-e2e-output.log || true
           tail -n 140 /tmp/yak-task-e2e-application.log || true
           docker logs --tail 65 yak-task-mysql || true
           docker logs --tail 65 yak-task-postgres || true
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-schedule-browser-screenshots
+          path: /tmp/yak-schedule-browser/*.png
+          if-no-files-found: ignore
+          retention-days: 7
