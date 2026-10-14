@@ -47,7 +47,7 @@ instance = {
     "scheduleRevision": 2,
     "scheduledTime": "2026-10-14T00:01:00Z",
     "status": "FINISHED",
-    "executionProgress": 100,
+    "progressPercent": 100,
     "debug": False,
     "createTime": "2026-10-14T00:01:00",
     "startTime": "2026-10-14T00:01:00",
