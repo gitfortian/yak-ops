@@ -76,11 +76,12 @@ public class TaskInstanceController {
     /** Reads the newest Instance of each visible Definition in a single Workspace-scoped operation. */
     @PostMapping("/latest")
     public Result<List<InstanceVO>> latest(@Valid @RequestBody InstanceLatestDTO query) {
-        return Result.success(instances
-                .latest(WorkspaceContext.requireWorkspaceId(), query.getDefinitionIds(), query.isActiveOnly())
-                .stream()
-                .map(this::toInstance)
-                .toList());
+        return Result.success(
+                instances
+                        .latest(WorkspaceContext.requireWorkspaceId(), query.getDefinitionIds(), query.isActiveOnly())
+                        .stream()
+                        .map(this::toInstance)
+                        .toList());
     }
 
     /** Reads a bounded log page for a Workspace-owned Instance. */
