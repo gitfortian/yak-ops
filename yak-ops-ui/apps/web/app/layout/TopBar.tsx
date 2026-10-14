@@ -2,7 +2,6 @@ import {
   Button,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
@@ -216,17 +215,13 @@ export default function TopBar({
       >
         <DialogContent className="w-[420px]">
           <DialogTitle className="text-base font-semibold">新建工作空间</DialogTitle>
-          <DialogDescription className="mt-2 text-sm leading-6 text-[#667085]">
-            工作空间用于隔离数据源及后续的数据任务、质量规则等业务资源。
-          </DialogDescription>
-
           <div className="mt-5">
-            <div className="mb-1.5 text-sm font-medium text-[#344054]">工作空间名称</div>
             <Input
               autoFocus
+              aria-label="工作空间名称"
               maxLength={128}
               value={workspaceName}
-              placeholder="例如：Yak Ops"
+              placeholder="工作空间名称"
               onChange={(event) => setWorkspaceName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void handleCreateWorkspace();
