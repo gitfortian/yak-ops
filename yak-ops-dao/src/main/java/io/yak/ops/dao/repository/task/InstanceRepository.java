@@ -46,6 +46,15 @@ public interface InstanceRepository {
     Optional<InstanceEntity> findByRequest(String workspaceId, TaskTriggerType trigger, String requestId);
 
     /**
+     * Reads current idempotency evidence inside serialized scheduled admission.
+     * @param workspaceId owning Workspace
+     * @param trigger trigger namespace
+     * @param requestId stable request identity
+     * @return locked existing Instance or empty
+     */
+    Optional<InstanceEntity> findByRequestForUpdate(String workspaceId, TaskTriggerType trigger, String requestId);
+
+    /**
      * @param workspaceId authorized Workspace
      * @param limit maximum recent Instances
      * @return recent Instances ordered by creation time

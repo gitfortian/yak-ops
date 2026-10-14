@@ -41,6 +41,14 @@ public final class QuartzCronService implements CronService {
         return List.copyOf(times);
     }
 
+    @Override
+    public boolean matches(String cronExpression, String timeZone, Instant time) {
+        if (time == null || time.getNano() != 0) {
+            return false;
+        }
+        return expression(cronExpression, timeZone).isSatisfiedBy(Date.from(time));
+    }
+
     private CronExpression expression(String cron, String zone) {
         if (cron == null
                 || cron.isBlank()

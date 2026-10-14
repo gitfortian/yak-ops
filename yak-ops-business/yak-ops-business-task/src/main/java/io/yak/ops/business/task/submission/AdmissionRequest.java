@@ -5,6 +5,7 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import java.time.Instant;
 
 /**
  * Prepared inputs for one Task admission transaction.
@@ -23,6 +24,9 @@ public final class AdmissionRequest {
     private final ReadonlyConfig parameters;
     private final TaskAdmissionPlan plan;
     private final ExecutableTaskPlugin plugin;
+    private final String scheduleId;
+    private final Long scheduleRevision;
+    private final Instant scheduledTime;
 
     /**
      * Creates the inputs of a validated Task submission.
@@ -35,6 +39,9 @@ public final class AdmissionRequest {
      * @param parameters validated immutable Task parameters
      * @param plan resolved execution resources and binding revision
      * @param plugin executable Task type used to prepare and revalidate the plan
+     * @param scheduleId originating schedule or null
+     * @param scheduleRevision originating revision or null
+     * @param scheduledTime logical UTC time or null
      */
     public AdmissionRequest(
             TaskExecutionIdentity identity,
@@ -44,7 +51,10 @@ public final class AdmissionRequest {
             String operatorId,
             ReadonlyConfig parameters,
             TaskAdmissionPlan plan,
-            ExecutableTaskPlugin plugin) {
+            ExecutableTaskPlugin plugin,
+            String scheduleId,
+            Long scheduleRevision,
+            Instant scheduledTime) {
         this.identity = identity;
         this.triggerType = triggerType;
         this.requestId = requestId;
@@ -53,6 +63,9 @@ public final class AdmissionRequest {
         this.parameters = parameters;
         this.plan = plan;
         this.plugin = plugin;
+        this.scheduleId = scheduleId;
+        this.scheduleRevision = scheduleRevision;
+        this.scheduledTime = scheduledTime;
     }
 
     /** Returns the pinned execution identity. */
@@ -93,6 +106,21 @@ public final class AdmissionRequest {
     /** Returns the executable plugin used for plan revalidation. */
     public ExecutableTaskPlugin plugin() {
         return plugin;
+    }
+
+    /** @return originating schedule ID or null */
+    public String scheduleId() {
+        return scheduleId;
+    }
+
+    /** @return registered schedule revision or null */
+    public Long scheduleRevision() {
+        return scheduleRevision;
+    }
+
+    /** @return logical UTC occurrence or null */
+    public Instant scheduledTime() {
+        return scheduledTime;
     }
 
     /** Omits plugin, parameters, and submission identifiers from diagnostics. */

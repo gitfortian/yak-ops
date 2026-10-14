@@ -1,9 +1,11 @@
 package io.yak.ops.business.schedule;
 
 import io.yak.ops.common.bean.dto.schedule.CreateScheduleDTO;
+import io.yak.ops.common.bean.dto.schedule.ScheduleFireQueryDTO;
 import io.yak.ops.common.bean.dto.schedule.SchedulePreviewDTO;
 import io.yak.ops.common.bean.dto.schedule.ScheduleQueryDTO;
 import io.yak.ops.common.bean.dto.schedule.UpdateScheduleDTO;
+import io.yak.ops.common.bean.vo.schedule.ScheduleFireVO;
 import io.yak.ops.common.bean.vo.schedule.SchedulePreviewVO;
 import io.yak.ops.common.bean.vo.schedule.ScheduleSummaryVO;
 import io.yak.ops.common.bean.vo.schedule.ScheduleVO;
@@ -61,4 +63,33 @@ public interface ScheduleService {
      * @return effective lower bound and up to five UTC times
      */
     SchedulePreviewVO preview(SchedulePreviewDTO dto);
+
+    /**
+     * Explicitly enables a published eligible target after checking live actor authority.
+     * @param workspaceId authorized Workspace
+     * @param id schedule identity
+     * @param revision expected revision
+     * @param operatorId authorizing actor
+     * @return persisted enabled intent and registration observation
+     */
+    ScheduleVO enable(String workspaceId, String id, long revision, String operatorId);
+
+    /**
+     * Stops future admissions without cancelling already admitted Instances.
+     * @param workspaceId authorized Workspace
+     * @param id schedule identity
+     * @param revision expected revision
+     * @param operatorId actor stopping scheduling
+     * @return persisted stopped intent and registration observation
+     */
+    ScheduleVO disable(String workspaceId, String id, long revision, String operatorId);
+
+    /**
+     * Lists authorized final outcomes, including those retained after schedule deletion.
+     * @param workspaceId authorized Workspace
+     * @param id retained schedule identity
+     * @param query bounded outcome/time filters
+     * @return final fire results with authorized Instance references
+     */
+    PageData<ScheduleFireVO> fires(String workspaceId, String id, ScheduleFireQueryDTO query);
 }

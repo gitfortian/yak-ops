@@ -19,6 +19,14 @@ class QuartzCronServiceTest {
     private final QuartzCronService cron = new QuartzCronService();
 
     @Test
+    void matchingUsesExactInstantsAndTheRegisteredZone() {
+        Instant due = Instant.parse("2026-10-13T00:00:00Z");
+        assertTrue(cron.matches("0 0 8 * * ?", "Asia/Shanghai", due));
+        assertEquals(false, cron.matches("0 0 8 * * ?", "UTC", due));
+        assertEquals(false, cron.matches("0 * * * * ?", "UTC", due.plusMillis(1)));
+    }
+
+    @Test
     void namedZoneControlsUtcTimesAndTheLowerBoundIsExclusive() {
         Instant after = Instant.parse("2026-10-13T00:00:00Z");
         assertEquals(

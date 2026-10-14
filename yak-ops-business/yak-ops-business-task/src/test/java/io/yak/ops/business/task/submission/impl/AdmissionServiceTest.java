@@ -14,6 +14,7 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.entity.task.ExecutionClaimEntity;
@@ -22,7 +23,6 @@ import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
-import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
@@ -42,8 +42,7 @@ class AdmissionServiceTest {
     private final ExecutionClaimRepository claims = mock(ExecutionClaimRepository.class);
     private final ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
     private final ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
-    private final TaskExecutionIdentity context =
-            new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1");
+    private final TaskExecutionIdentity context = new TaskExecutionIdentity("ws", "definition-1", 2, "instance-1");
     private final ExecutionResource target = new ExecutionResource("DATA_SYNC_TARGET", "source/table");
     private final TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(target), "resource-v1");
 
@@ -61,8 +60,7 @@ class AdmissionServiceTest {
         definition.setTaskType("DATA_SYNC");
         definition.setDebug(true);
         when(definitions.queryByIdForUpdate("ws", "definition-1")).thenReturn(Optional.of(definition));
-        when(versions.queryCurrent("ws", "definition-1", 2))
-                .thenReturn(Optional.of(new DefinitionVersionEntity()));
+        when(versions.queryCurrent("ws", "definition-1", 2)).thenReturn(Optional.of(new DefinitionVersionEntity()));
         when(plugin.type()).thenReturn("DATA_SYNC");
         when(plugin.plan(parameters, context)).thenReturn(plan);
     }
@@ -123,7 +121,10 @@ class AdmissionServiceTest {
                 "system",
                 parameters,
                 plan,
-                plugin);
+                plugin,
+                null,
+                null,
+                null);
 
         service.admit(workflow);
 
@@ -134,7 +135,18 @@ class AdmissionServiceTest {
     }
 
     private AdmissionRequest request() {
-        return new AdmissionRequest(context, TaskTriggerType.MANUAL, "request-123", "MANUAL:definition-1", "actor", parameters, plan, plugin);
+        return new AdmissionRequest(
+                context,
+                TaskTriggerType.MANUAL,
+                "request-123",
+                "MANUAL:definition-1",
+                "actor",
+                parameters,
+                plan,
+                plugin,
+                null,
+                null,
+                null);
     }
 
     private void inject(String name, Object dependency) {

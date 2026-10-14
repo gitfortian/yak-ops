@@ -14,6 +14,15 @@ public interface CronService {
     void validate(String cronExpression, String timeZone);
 
     /**
+     * Checks an exact UTC occurrence with the same parser used by registration and preview.
+     * @param cronExpression scheduler-native Cron rule
+     * @param timeZone explicit named time zone
+     * @param time UTC time with second precision
+     * @return whether the instant is a valid occurrence
+     */
+    boolean matches(String cronExpression, String timeZone, Instant time);
+
+    /**
      * Calculates a bounded, strictly increasing sequence after the supplied instant.
      * @param cronExpression scheduler-native Cron expression
      * @param timeZone named time zone used for evaluation

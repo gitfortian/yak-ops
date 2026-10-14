@@ -6,6 +6,9 @@
     <artifactId>yak-ops-business-schedule</artifactId>
     <name>Yak Ops Schedule Business</name>
     <dependencies>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-task</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-platform</artifactId></dependency>
+
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-common</artifactId></dependency>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-dao</artifactId></dependency>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-task-api</artifactId></dependency>

@@ -31,4 +31,12 @@ public interface WorkspaceService {
     boolean removeWorkspaceMember(String workspaceId, String targetUserId, String operatorUserId);
 
     boolean isMember(String workspaceId, String userId);
+
+    /**
+     * Checks live membership and the application-scoped active account for internal submissions.
+     * @param workspaceId target Workspace
+     * @param userId recorded authorizing actor
+     * @return true only while both membership and account remain active
+     */
+    boolean isActiveMember(String workspaceId, String userId);
 }

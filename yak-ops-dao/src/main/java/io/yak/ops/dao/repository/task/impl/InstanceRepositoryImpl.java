@@ -55,6 +55,16 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
+    public Optional<InstanceEntity> findByRequestForUpdate(
+            String workspaceId, TaskTriggerType trigger, String requestId) {
+        return Optional.ofNullable(mapper.selectOne(Wrappers.<InstanceEntity>lambdaQuery()
+                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                .eq(InstanceEntity::getTriggerType, trigger)
+                .eq(InstanceEntity::getRequestId, requestId)
+                .last("FOR UPDATE")));
+    }
+
+    @Override
     public List<InstanceEntity> recent(String workspaceId, int limit) {
         return mapper.selectList(Wrappers.<InstanceEntity>lambdaQuery()
                 .eq(InstanceEntity::getWorkspaceId, workspaceId)

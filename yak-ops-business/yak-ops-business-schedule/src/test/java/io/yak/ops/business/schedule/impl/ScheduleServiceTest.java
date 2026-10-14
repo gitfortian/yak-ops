@@ -16,10 +16,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.schedule.ScheduleRegistrationService;
 import io.yak.ops.common.bean.dto.schedule.CreateScheduleDTO;
 import io.yak.ops.common.bean.dto.schedule.SchedulePreviewDTO;
 import io.yak.ops.common.bean.dto.schedule.ScheduleQueryDTO;
 import io.yak.ops.common.bean.dto.schedule.UpdateScheduleDTO;
+import io.yak.ops.common.bean.vo.schedule.ScheduleRegistrationVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleTargetType;
@@ -36,7 +38,10 @@ import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.plugin.scheduler.api.CronService;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
+import io.yak.ops.workspace.WorkspaceService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +52,9 @@ import org.mockito.ArgumentCaptor;
 /** Tests configuration ownership and lock order without claiming database concurrency acceptance. */
 class ScheduleServiceTest {
     private final ScheduleServiceImpl service = new ScheduleServiceImpl();
+    private final ScheduleRegistrationService registrations = mock(ScheduleRegistrationService.class);
+    private final WorkspaceService workspaces = mock(WorkspaceService.class);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-10-13T00:00:00Z"), ZoneOffset.UTC);
     private final ScheduleRepository schedules = mock(ScheduleRepository.class);
     private final DefinitionRepository definitions = mock(DefinitionRepository.class);
     private final DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
@@ -68,12 +76,27 @@ class ScheduleServiceTest {
                         "plugins",
                         plugins,
                         "cron",
-                        cron)
+                        cron,
+                        "registrations",
+                        registrations,
+                        "workspaces",
+                        workspaces,
+                        "scheduleClock",
+                        clock)
                 .entrySet()) {
             var field = ScheduleServiceImpl.class.getDeclaredField(entry.getKey());
             field.setAccessible(true);
             field.set(service, entry.getValue());
         }
+        when(workspaces.isActiveMember("ws", "actor")).thenReturn(true);
+        when(registrations.describe(any())).thenAnswer(invocation -> {
+            Map<String, ScheduleRegistrationVO> observations = new java.util.HashMap<>();
+            for (ScheduleEntity row : (List<ScheduleEntity>) invocation.getArgument(0)) {
+                observations.put(
+                        row.getId(), new ScheduleRegistrationVO("PENDING", null, clock.instant(), null, false));
+            }
+            return observations;
+        });
         definition.setId("task");
         definition.setWorkspaceId("ws");
         definition.setTaskType("TEST");
@@ -223,6 +246,44 @@ class ScheduleServiceTest {
         assertEquals(1, page.total());
         assertEquals("PENDING", page.records().getFirst().getRegistrationStatus());
         verify(versions, never()).queryCurrent(any(), any(), anyInt());
+    }
+
+    @Test
+    void enableRequiresPublishedEligibleAuthorizedTargetAndFutureTime() {
+        when(cron.nextFireTimes(any(), any(), any(), eq(1)))
+                .thenReturn(List.of(clock.instant().plusSeconds(60)));
+        when(schedules.setEnabled(eq("ws"), eq("schedule"), eq(1L), eq(true), any(), eq("actor")))
+                .thenReturn(true);
+        var enabled = service.enable("ws", "schedule", 1, "actor");
+        assertTrue(enabled.isEnabled());
+        assertEquals(2, enabled.getRevision());
+        assertEquals("actor", schedule.getEnabledBy());
+        assertEquals(2, service.enable("ws", "schedule", 1, "actor").getRevision());
+        assertEquals(
+                ScheduleErrorCode.REVISION_CONFLICT,
+                assertThrows(BusinessException.class, () -> service.disable("ws", "schedule", 1, "actor"))
+                        .getErrorCode());
+    }
+
+    @Test
+    void expiredOrIneligibleTargetsCannotBeEnabled() {
+        when(plugin.supportsScheduling(any())).thenReturn(false);
+        assertEquals(
+                ScheduleErrorCode.NOT_SCHEDULABLE,
+                assertThrows(BusinessException.class, () -> service.enable("ws", "schedule", 1, "actor"))
+                        .getErrorCode());
+        when(plugin.supportsScheduling(any())).thenReturn(true);
+        when(cron.nextFireTimes(any(), any(), any(), eq(1))).thenReturn(List.of());
+        assertEquals(
+                ScheduleErrorCode.NO_FUTURE_FIRE,
+                assertThrows(BusinessException.class, () -> service.enable("ws", "schedule", 1, "actor"))
+                        .getErrorCode());
+        when(workspaces.isActiveMember("ws", "actor")).thenReturn(false);
+        assertEquals(
+                ScheduleErrorCode.ACCESS_DENIED,
+                assertThrows(BusinessException.class, () -> service.enable("ws", "schedule", 1, "actor"))
+                        .getErrorCode());
+        verify(schedules, never()).setEnabled(any(), any(), anyLong(), eq(true), any(), any());
     }
 
     private CreateScheduleDTO create() {

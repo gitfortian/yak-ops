@@ -35,7 +35,10 @@ public class TaskExecutionController {
                 id,
                 TaskTriggerType.MANUAL,
                 requestId,
-                authenticationManager.getLoginUserId());
+                authenticationManager.getLoginUserId(),
+                null,
+                null,
+                null);
         SubmissionResult result = service.submit(command);
         return ResponseEntity.accepted().body(Result.success(result));
     }

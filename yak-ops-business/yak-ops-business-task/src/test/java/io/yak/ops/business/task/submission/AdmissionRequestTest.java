@@ -20,16 +20,35 @@ class AdmissionRequestTest {
 
     @Test
     void preservesAdmittedInputsAndExecutablePluginIdentity() {
-        TaskExecutionIdentity identity =
-                new TaskExecutionIdentity("workspace", "definition", 2, "instance");
+        TaskExecutionIdentity identity = new TaskExecutionIdentity("workspace", "definition", 2, "instance");
         ReadonlyConfig parameters = ReadonlyConfig.fromMap(java.util.Map.of());
         ExecutableTaskPlugin plugin = mock(ExecutableTaskPlugin.class);
         TaskAdmissionPlan plan = new TaskAdmissionPlan(List.of(), "resource-revision");
 
         AdmissionRequest request = new AdmissionRequest(
-                identity, TaskTriggerType.MANUAL, "private-request-key", "intent", "actor", parameters, plan, plugin);
+                identity,
+                TaskTriggerType.MANUAL,
+                "private-request-key",
+                "intent",
+                "actor",
+                parameters,
+                plan,
+                plugin,
+                null,
+                null,
+                null);
         AdmissionRequest another = new AdmissionRequest(
-                identity, TaskTriggerType.MANUAL, "private-request-key", "intent", "actor", parameters, plan, plugin);
+                identity,
+                TaskTriggerType.MANUAL,
+                "private-request-key",
+                "intent",
+                "actor",
+                parameters,
+                plan,
+                plugin,
+                null,
+                null,
+                null);
 
         assertSame(identity, request.identity());
         assertEquals(TaskTriggerType.MANUAL, request.triggerType());
@@ -56,7 +75,10 @@ class AdmissionRequestTest {
                 "sensitive-actor",
                 parameters,
                 new TaskAdmissionPlan(List.of(), "private-resource-revision"),
-                plugin);
+                plugin,
+                null,
+                null,
+                null);
 
         String diagnostic = request.toString();
         assertEquals(TaskTriggerType.WORKFLOW, request.triggerType());

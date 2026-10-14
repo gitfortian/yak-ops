@@ -27,6 +27,12 @@ public class InstanceEntity extends BaseEntity {
     private boolean debug;
     /** Submission namespace for the idempotency key. */
     private TaskTriggerType triggerType;
+    /** Originating schedule ID, absent for non-scheduled submissions. */
+    private String scheduleId;
+    /** Revision captured from the fired trigger, absent for non-scheduled submissions. */
+    private Long scheduleRevision;
+    /** Logical scheduled UTC time, independent of physical start time. */
+    private LocalDateTime scheduledTime;
     /** Caller-stable identity of this execution request. */
     private String requestId;
     /** Non-secret intent fingerprint used to identify conflicting retries. */

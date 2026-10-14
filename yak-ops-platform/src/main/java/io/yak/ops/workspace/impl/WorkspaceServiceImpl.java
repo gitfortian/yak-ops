@@ -3,11 +3,13 @@ package io.yak.ops.workspace.impl;
 import io.yak.ops.common.bean.dto.workspace.WorkspaceDTO;
 import io.yak.ops.common.bean.vo.workspace.WorkspaceMemberVO;
 import io.yak.ops.common.bean.vo.workspace.WorkspaceVO;
+import io.yak.ops.common.enums.security.user.UserStatus;
 import io.yak.ops.common.enums.workspace.WorkspaceRole;
 import io.yak.ops.common.util.BeanCopyUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.workspace.WorkspaceEntity;
 import io.yak.ops.dao.entity.workspace.WorkspaceMemberEntity;
+import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.dao.repository.workspace.WorkspaceEntityRepository;
 import io.yak.ops.dao.repository.workspace.WorkspaceMemberEntityRepository;
 import io.yak.ops.workspace.WorkspaceService;
@@ -35,6 +37,9 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     @Resource
     private WorkspaceEntityRepository workspaceRepository;
+
+    @Resource
+    private UserRepository users;
 
     @Resource
     private WorkspaceMemberEntityRepository workspaceMemberRepository;
@@ -179,6 +184,16 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         if (StringUtils.isBlank(workspaceId) || StringUtils.isBlank(userId)) return false;
         return workspaceMemberRepository.queryMembership(workspaceId, userId).isPresent()
                 && workspaceRepository.queryById(workspaceId).isPresent();
+    }
+
+    @Override
+    public boolean isActiveMember(String workspaceId, String userId) {
+        if (!isMember(workspaceId, userId)) {
+            return false;
+        }
+        return users.queryById(userId)
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .isPresent();
     }
 
     private WorkspaceEntity requireWorkspace(String workspaceId) {
