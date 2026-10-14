@@ -16,7 +16,16 @@ See .github/CONTRIBUTING.md.
 ## Verifying this change
 
 <!-- List commands/tests actually executed and their results. Distinguish skipped,
-blocked or manual checks from passing automated tests. -->
+blocked or manual checks from passing automated tests. See DEVELOPMENT.md#product-acceptance-scopes. -->
+
+- Selected verification scope and risk-based reason:
+- Reviewed head / base / tested merge or tree SHA:
+- Commands or CI run URLs and actual results:
+- Not executed or blocked checks, including known unresolved failures:
+
+<!-- For follow-up fixes, record the previously reviewed SHA and the delta reviewed.
+Reuse evidence only for matching head, tested base/tree, suite and configuration.
+A focused run is not full product or release acceptance. -->
 
 ## Does this pull request potentially affect any of the following?
 
