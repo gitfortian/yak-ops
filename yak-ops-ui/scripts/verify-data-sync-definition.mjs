@@ -152,7 +152,41 @@ assert.throws(() => readSyncParameters(3, batchJson.replace("users_copy", "order
 assert.throws(() =>
   readSyncParameters(3, batchJson.replace("DATABASE_OFFLINE", "SINGLE_TABLE_OFFLINE")),
 );
-console.log("Explicit multi-table parameter and complete projection contracts passed");
+const offlineIncremental = {
+  ...offline,
+  writeMode: "UPSERT",
+  steps: ["INCREMENTAL"],
+  incremental: {
+    mode: "TIMESTAMP",
+    column: "updated_at",
+    initialValue: "2026-10-01T00:00:00",
+    delaySeconds: 120,
+    lookbackSeconds: 600,
+  },
+};
+const incrementalJson = createDefinitionRequest(offlineIncremental).parameters;
+const projectedIncremental = toSyncTaskRecord({ ...definition, parameters: incrementalJson });
+assert.deepEqual(projectedIncremental.incremental, offlineIncremental.incremental);
+assert.equal(readSyncParameters(3, incrementalJson).steps[0], "INCREMENTAL");
+assert.throws(() => readSyncParameters(3, incrementalJson.replace('"UPSERT"', '"APPEND"')));
+assert.throws(() => readSyncParameters(3, incrementalJson.replace('"updated_at"', '""')));
+assert.throws(() => readSyncParameters(3, incrementalJson.replace('"2026-10-01T00:00:00"', '""')));
+const initialLoadIncremental = createDefinitionRequest({
+  ...offlineIncremental,
+  steps: ["SCHEMA", "FULL", "INCREMENTAL"],
+  incremental: { mode: "TIMESTAMP", column: "updated_at", delaySeconds: 120, lookbackSeconds: 600 },
+}).parameters;
+assert.deepEqual(readSyncParameters(3, initialLoadIncremental).steps, [
+  "SCHEMA",
+  "FULL",
+  "INCREMENTAL",
+]);
+assert.equal(
+  readSyncParameters(3, initialLoadIncremental).tableMappings[0].incremental.column,
+  "updated_at",
+);
+assert.throws(() => readSyncParameters(3, incrementalJson.replace('"INCREMENTAL"', '"SCHEMA"')));
+console.log("Explicit multi-table and bounded incremental parameter contracts passed");
 
 const databaseRealtime = {
   ...batch,

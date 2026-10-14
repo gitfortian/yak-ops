@@ -57,6 +57,12 @@ public final class JobConfigValidator {
             DataSourceInfo to = context.dataSource(sinkId);
             SolutionCatalog.validate(job.solutionType(), from.type(), to.type());
             SolutionCatalog.validateSteps(from.type(), to.type(), job.steps());
+            if (job.solutionType().supportsScheduling()
+                    && job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.INCREMENTAL)
+                    && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.type())
+                            || !java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(to.type()))) {
+                throw new IllegalArgumentException("Offline incremental supports MySQL and PostgreSQL only");
+            }
             boolean prepareSchema = job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA);
             Set<TableId> sources = new HashSet<>();
             Set<TableId> targets = new HashSet<>();

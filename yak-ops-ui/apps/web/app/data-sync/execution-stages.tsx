@@ -68,7 +68,7 @@ export function StageProgress({
     <ExecutionProgressBar
       status={state}
       percent={stage.progressPercent}
-      realtime={stage.step === "INCREMENTAL"}
+      realtime={stage.step === "INCREMENTAL" && stage.progressUnit === "RECORDS"}
       ariaLabel={label}
     />
   );

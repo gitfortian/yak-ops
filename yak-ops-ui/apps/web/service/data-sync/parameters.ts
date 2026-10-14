@@ -1,5 +1,6 @@
 import type {
   DataSyncParameters,
+  DataSyncIncrementalConfig,
   DataSyncSolutionType,
   DataSyncStep,
   SyncPipelineParameters,
@@ -18,6 +19,38 @@ export const solutionSyncType = (type: DataSyncSolutionType) =>
 
 export const supportsMultipleTables = (type: DataSyncSolutionType) =>
   type === "DATABASE_OFFLINE" || type === "DATABASE_REALTIME";
+
+export const offlineIncremental = (solution: DataSyncSolutionType, steps: DataSyncStep[]) =>
+  solutionSyncType(solution) === "OFFLINE" && steps.includes("INCREMENTAL");
+
+export const validIncrementalConfig = (
+  value: DataSyncIncrementalConfig | undefined,
+  requireStart: boolean,
+) => {
+  if (
+    !value ||
+    !["TIMESTAMP", "INCREASING"].includes(value.mode) ||
+    !value.column.trim() ||
+    value.column.length > 128
+  )
+    return false;
+  if (requireStart && !value.initialValue?.trim()) return false;
+  if (
+    value.initialValue &&
+    (value.mode === "INCREASING"
+      ? !/^-?\d+$/.test(value.initialValue)
+      : !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value.initialValue))
+  )
+    return false;
+  if (
+    [value.delaySeconds, value.lookbackSeconds].some(
+      (v) => v !== undefined && (!Number.isSafeInteger(v) || v < 0),
+    )
+  )
+    return false;
+  if (value.mode === "INCREASING" && (value.delaySeconds || value.lookbackSeconds)) return false;
+  return true;
+};
 
 /** Interprets the pinned parameter version; unrecognized formats are never guessed as offline. */
 export function readSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
@@ -66,13 +99,22 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
   } else {
     throw new Error("不支持的同步任务参数版本");
   }
-  const expected: DataSyncStep[] =
-    solutionSyncType(value?.solutionType) === "REALTIME" ? ["FULL", "INCREMENTAL"] : ["FULL"];
-  if (value?.steps?.includes("SCHEMA")) expected.unshift("SCHEMA");
+  const realtime = value && solutionSyncType(value.solutionType) === "REALTIME";
+  const steps = value?.steps || [];
+  const expected: DataSyncStep[] = realtime
+    ? ["FULL", "INCREMENTAL"]
+    : (["FULL", "INCREMENTAL"].filter((step) =>
+        steps.includes(step as DataSyncStep),
+      ) as DataSyncStep[]);
+  if (steps.includes("SCHEMA")) expected.unshift("SCHEMA");
+  if (expected.includes("SCHEMA") && !expected.includes("FULL")) {
+    throw new Error("结构迁移必须包含全量初始化");
+  }
   if (
     !value ||
     !SOLUTIONS.has(value.solutionType) ||
     !Array.isArray(value.steps) ||
+    !expected.some((step) => step === "FULL" || step === "INCREMENTAL") ||
     value.steps.length !== expected.length ||
     new Set(value.steps).size !== expected.length ||
     expected.some((step) => !value.steps.includes(step)) ||
@@ -93,7 +135,12 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
       !mapping?.source?.table ||
       !mapping.target?.table ||
       !WRITES.has(mapping.writeMode) ||
-      (solutionSyncType(value.solutionType) === "REALTIME" && mapping.writeMode !== "UPSERT")
+      ((solutionSyncType(value.solutionType) === "REALTIME" ||
+        offlineIncremental(value.solutionType, value.steps)) &&
+        mapping.writeMode !== "UPSERT") ||
+      (offlineIncremental(value.solutionType, value.steps)
+        ? !validIncrementalConfig(mapping.incremental, !value.steps.includes("FULL"))
+        : mapping.incremental !== undefined)
     ) {
       throw new Error("不支持的同步目标写入配置");
     }

@@ -22,7 +22,13 @@ import {
   taskDraftKey,
   writeTaskDraft,
 } from "@/service/data-sync/draft";
-import { solutionSyncType, supportsMultipleTables } from "@/service/data-sync/parameters";
+import {
+  offlineIncremental,
+  solutionSyncType,
+  supportsMultipleTables,
+  validIncrementalConfig,
+} from "@/service/data-sync/parameters";
+import { EMPTY_INCREMENTAL, IncrementalFields } from "./incremental-fields";
 import { findStepCombination, solutionSummary } from "./solution-presentation";
 import { useSolutions } from "./use-solutions";
 import { SchemaPreview } from "./schema-preview";
@@ -66,6 +72,7 @@ import {
   type DataSyncTaskStatus,
   type DataSyncDraft,
   type DataSyncTableMapping,
+  type DataSyncIncrementalConfig,
   type DataSyncWriteMode,
 } from "@/service/data-sync";
 
@@ -74,6 +81,7 @@ interface EditorForm {
   remark: string;
   debug: boolean;
   writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
   sourceDataSourceId: string;
   sourceDatabase: string;
   sourceSchema: string;
@@ -97,6 +105,7 @@ const EMPTY_FORM: EditorForm = {
   remark: "",
   debug: false,
   writeMode: "APPEND",
+  incremental: undefined,
   sourceDataSourceId: "",
   sourceDatabase: "",
   sourceSchema: "",
@@ -457,6 +466,8 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
   const combination = findStepCombination(solution, draft.steps);
   const supportsScheduling = Boolean(combination?.supportsScheduling);
   const prepareSchema = draft.steps.includes("SCHEMA");
+  const useIncremental = offlineIncremental(draft.solutionType, draft.steps);
+  const initialLoad = draft.steps.includes("FULL");
   const usesChangelog =
     draft.steps.includes("INCREMENTAL") && solutionSyncType(draft.solutionType) === "REALTIME";
 
@@ -467,7 +478,9 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       name: draft.name,
       remark: value?.remark || "",
       debug: value?.debug ?? false,
-      writeMode: value?.writeMode === "UPSERT" || usesChangelog ? "UPSERT" : "APPEND",
+      writeMode:
+        value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
+      incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
       sourceDataSourceId: value?.sourceDataSourceId || "",
       sourceDatabase: value?.sourceDatabase || "",
       sourceSchema: value?.sourceSchema || "",
@@ -614,6 +627,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
         solutionType: draft.solutionType,
         steps: draft.steps,
         tableMappings: batch ? mappings : undefined,
+        incremental: !batch && useIncremental ? form.incremental : undefined,
       },
     });
   }, [
@@ -700,6 +714,10 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
     !solutionsLoading &&
     !solutionsError &&
     combination!.writeModes.includes(form.writeMode) &&
+    (!useIncremental ||
+      (batch
+        ? mappings.every((mapping) => validIncrementalConfig(mapping.incremental, !initialLoad))
+        : validIncrementalConfig(form.incremental, !initialLoad))) &&
     selectedSourceDataSource?.dbType === draft.sourceType &&
     selectedTargetDataSource?.dbType === draft.targetType &&
     (!supportsScheduling ||
@@ -1021,6 +1039,18 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
                 {usesChangelog ? (
                   <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
                 ) : null}
+                {useIncremental ? (
+                  <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+                    <FieldLabel required>增量设置</FieldLabel>
+                    <div className="w-1/2 min-w-0 max-lg:w-full">
+                      <IncrementalFields
+                        value={form.incremental}
+                        initialLoad={initialLoad}
+                        onChange={(value) => patch("incremental", value)}
+                      />
+                    </div>
+                  </Field>
+                ) : null}
               </TableSection>
             )}
           </CollapseSection>
@@ -1051,6 +1081,8 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
             {batch ? (
               <TableMappingEditor
                 prepareSchema={prepareSchema}
+                incremental={useIncremental}
+                initialLoad={initialLoad}
                 writeModes={combination?.writeModes || []}
                 mappings={mappings}
                 targetTables={targetCatalog.tables}

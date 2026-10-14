@@ -93,8 +93,11 @@ final class DataSyncTaskHandle implements TaskHandle {
                 JobPlan plan = planner.plan(parameters, identity);
                 verifyAdmission(plan);
                 JobConfig config = JobConfig.from(parameters);
-                var incremental =
-                        incrementalPlanner == null ? null : incrementalPlanner.prepare(plan, config, identity);
+                var incremental = incrementalPlanner != null
+                                && config.solutionType().supportsScheduling()
+                                && config.steps().contains(Step.INCREMENTAL)
+                        ? incrementalPlanner.prepare(plan, config, identity)
+                        : null;
                 boolean continuous = !config.solutionType().supportsScheduling()
                         && config.steps().contains(Step.INCREMENTAL);
                 String dataStep = incremental == null || incremental.initialLoad() ? "FULL" : "INCREMENTAL";

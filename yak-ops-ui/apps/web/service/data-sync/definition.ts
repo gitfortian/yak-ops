@@ -16,6 +16,7 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
       source: { database: task.sourceDatabase, schema: task.sourceSchema, table: task.sourceTable },
       target: { database: task.targetDatabase, schema: task.targetSchema, table: task.targetTable },
       writeMode: task.writeMode,
+      ...(task.incremental ? { incremental: { ...task.incremental } } : {}),
     },
   ];
   if (supportsMultipleTables(task.solutionType)) {
@@ -24,6 +25,7 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
       source: { ...mapping.source },
       target: { ...mapping.target },
       writeMode: mapping.writeMode,
+      ...(mapping.incremental ? { incremental: { ...mapping.incremental } } : {}),
     }));
   }
   return {
@@ -93,6 +95,7 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
         table: table.target.table,
       },
       writeMode: table.writeMode,
+      ...(table.incremental ? { incremental: { ...table.incremental } } : {}),
     })),
     name: definition.name,
     solutionType: parameters.solutionType,
@@ -101,6 +104,7 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     status: definition.status,
     debug: definition.debug ?? false,
     writeMode: mapping.writeMode,
+    incremental: mapping.incremental ? { ...mapping.incremental } : undefined,
     sourceDataSourceId: parameters.source.datasourceId,
     sourceDatabase: mapping.source.database ?? undefined,
     sourceSchema: mapping.source.schema ?? undefined,

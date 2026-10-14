@@ -45,15 +45,24 @@ export interface DataSyncTablePath {
   table: string;
 }
 
+export interface DataSyncIncrementalConfig {
+  mode: "TIMESTAMP" | "INCREASING";
+  column: string;
+  initialValue?: string;
+  delaySeconds?: number;
+  lookbackSeconds?: number;
+}
+
 export interface DataSyncTableMapping {
   source: DataSyncTablePath;
   target: DataSyncTablePath;
   writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
 }
 
 export interface DataSyncTableResult {
   mappingIndex: number;
-  step: "FULL";
+  step: "FULL" | "INCREMENTAL";
   status: "WAITING" | "RUNNING" | "FINISHED" | "FAILED" | "CANCELED";
   progressPercent: number | null;
   progressUnit: "SPLITS";
@@ -102,7 +111,7 @@ export interface DataSyncExecutionSummary {
   generation: number;
   restored: boolean;
   counterScope: "GENERATION" | "INSTANCE";
-  phase: "SCHEMA" | "FULL" | "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
+  phase: "SCHEMA" | "FULL" | "INCREMENTAL" | "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
   checkpoints: { handoffId: number | null; completedId: number | null };
   stages: DataSyncStageResult[];
 }
@@ -164,6 +173,7 @@ export interface DataSyncMappingConfig {
 export interface DataSyncTaskRecord {
   id: string;
   tableMappings: DataSyncTableMapping[];
+  incremental?: DataSyncIncrementalConfig;
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
   name: string;
@@ -245,6 +255,7 @@ export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
   writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
 }
 
 export type DataSyncTaskUpdatePayload =

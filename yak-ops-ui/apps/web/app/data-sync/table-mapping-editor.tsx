@@ -7,6 +7,7 @@ import type {
   DataSyncWriteMode,
 } from "@/service/data-sync";
 import { DataSyncSearchableSelect } from "./searchable-select";
+import { IncrementalFields } from "./incremental-fields";
 
 export const tableKey = (table: DataSyncTablePath) =>
   JSON.stringify([table.database || "", table.schema || "", table.table]);
@@ -141,6 +142,8 @@ export function ExplicitTableSelection({
 
 interface MappingProps {
   prepareSchema?: boolean;
+  incremental?: boolean;
+  initialLoad?: boolean;
   writeModes: DataSyncWriteMode[];
   mappings: DataSyncTableMapping[];
   targetTables: DataSourceCatalogTable[];
@@ -152,6 +155,8 @@ interface MappingProps {
 
 export function TableMappingEditor({
   prepareSchema = false,
+  incremental = false,
+  initialLoad = false,
   writeModes,
   mappings,
   targetTables,
@@ -231,6 +236,23 @@ export function TableMappingEditor({
         );
       },
     },
+    ...(incremental
+      ? [
+          {
+            key: "incremental",
+            title: "增量设置",
+            minWidth: 260,
+            render: (_value: unknown, row: (typeof rows)[number]) => (
+              <IncrementalFields
+                value={row.incremental}
+                initialLoad={initialLoad}
+                disabled={loading}
+                onChange={(value) => patch(row.index, { incremental: value })}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       key: "writeMode",
       title: "写入方式",
@@ -286,7 +308,7 @@ export function TableMappingEditor({
         dataSource={rows}
         rowKey="id"
         size="small"
-        scroll={{ x: 750 }}
+        scroll={{ x: incremental ? 1050 : 750 }}
         pagination={false}
         emptyText="请选择来源表"
       />
