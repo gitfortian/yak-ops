@@ -63,7 +63,7 @@ class Client:
 
     def login(self):
         self.call(
-            "POST", "/yak-security/api/v1/account/login",
+            "POST", "/api/v1/account/login",
             {"userName": "taske2e", "pw": USER_PASSWORD})
 
 
@@ -119,10 +119,11 @@ def boot_environment(port):
     environment.update({
         "SERVER_PORT": str(port),
         "YAK_DATABASE_URL": (
-            "jdbc:mysql://127.0.0.1:3306/yak_security"
+            "jdbc:mysql://127.0.0.1:3306/yak_ops"
             "?useSSL=false&allowPublicKeyRetrieval=true"),
         "YAK_DATABASE_USERNAME": "root",
         "YAK_DATABASE_PASSWORD": DB_PASSWORD,
+        "YAK_SECURITY_BOOTSTRAP_ENABLED": "true",
         "YAK_SECURITY_BOOTSTRAP_USERNAME": "taske2e",
         "YAK_SECURITY_BOOTSTRAP_PASSWORD": USER_PASSWORD,
         "YAK_SECURITY_BOOTSTRAP_REAL_NAME": "Task acceptance",
@@ -247,7 +248,7 @@ def claim_count(identity):
     if not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", identity):
         raise AssertionError("Unexpected Instance identifier")
     return int(query_mysql(
-        "SELECT COUNT(*) FROM yak_security.yak_ops_task_execution_claim "
+        "SELECT COUNT(*) FROM yak_ops.yak_ops_task_execution_claim "
         + f"WHERE instance_id = '{identity}'"))
 
 
@@ -292,11 +293,11 @@ def verify_schedule_configuration(client, definition):
     client.call("DELETE", base + "/" + identity + "?revision=2")
     restored = client.call("POST", base, payload)
     assert restored["id"] != identity and restored["enabled"] is False
-    assert query_mysql("SELECT COUNT(*) FROM yak_security.yak_ops_schedule WHERE id='" + identity + "' AND deleted_at IS NOT NULL") == "1"
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_schedule WHERE id='" + identity + "' AND deleted_at IS NOT NULL") == "1"
     # The database, not just a pre-insert service query, owns target uniqueness.
-    duplicate_sql = ("INSERT INTO yak_security.yak_ops_schedule (id,workspace_id,target_type,target_id,cron_expression,time_zone,"
+    duplicate_sql = ("INSERT INTO yak_ops.yak_ops_schedule (id,workspace_id,target_type,target_id,cron_expression,time_zone,"
                      "create_time,update_time,create_by,update_by) SELECT 'duplicate-schedule',workspace_id,target_type,target_id,"
-                     "cron_expression,time_zone,create_time,update_time,create_by,update_by FROM yak_security.yak_ops_schedule WHERE id='" + restored["id"] + "'")
+                     "cron_expression,time_zone,create_time,update_time,create_by,update_by FROM yak_ops.yak_ops_schedule WHERE id='" + restored["id"] + "'")
     try:
         query_mysql(duplicate_sql)
     except subprocess.CalledProcessError:
@@ -341,12 +342,12 @@ def verify_periodic_jdbc(client, source, target):
     assert claim_count(instance_id) == 0
     logs = client.download(f"/api/v1/task-instances/{instance_id}/logs/download").decode("utf-8")
     assert "JDBC query executed" in logs and "JDBC sink summary" in logs and DB_PASSWORD not in logs
-    assert query_mysql("SELECT COUNT(*) FROM yak_security.YAK_QRTZ_JOB_DETAILS WHERE JOB_NAME='"
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.YAK_QRTZ_JOB_DETAILS WHERE JOB_NAME='"
                        + client.workspace + "/" + identity + "'") == "0"
     # A second actual Cron boundary after stop must not produce another admitted instance.
     deadline = time.monotonic() + 11
     while time.monotonic() < deadline:
-        assert query_mysql("SELECT COUNT(*) FROM yak_security.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "1"
+        assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "1"
         time.sleep(0.5)
     print("PASS scheduled JDBC: Quartz -> fire admission -> Instance -> dispatcher -> JDBC", flush=True)
 
@@ -363,7 +364,7 @@ def verify_busy_schedule(client, source, target):
     client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})
     assert all(row["outcome"] == "SKIPPED" and row["reason"] == "RESOURCE_BUSY"
                and row.get("instanceId") is None for row in page["bizData"])
-    assert query_mysql("SELECT COUNT(*) FROM yak_security.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "0"
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "0"
     print("PASS scheduled resource conflict: durable skip without an Instance", flush=True)
 
 
@@ -510,7 +511,7 @@ def acceptance():
             lambda page: "YakFlow Job started" in page["content"], timeout=35)
         claim_types = query_mysql(
             "SELECT GROUP_CONCAT(resource_type ORDER BY resource_type) "
-            + "FROM yak_security.yak_ops_task_execution_claim "
+            + "FROM yak_ops.yak_ops_task_execution_claim "
             + f"WHERE instance_id = '{running}'")
         assert claim_types == "DATA_SYNC_TARGET,MYSQL_CDC_SERVER_ID"
         conflict, _ = submit(client, cdc, expected=409)

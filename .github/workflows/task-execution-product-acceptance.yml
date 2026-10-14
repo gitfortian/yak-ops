@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           docker run -d --name yak-task-mysql \
-            -e MYSQL_ROOT_PASSWORD=localtestpass -e MYSQL_DATABASE=yak_security \
+            -e MYSQL_ROOT_PASSWORD=localtestpass -e MYSQL_DATABASE=yak_ops \
             -p 3306:3306 mysql:8.0 \
             --server-id=5577 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL
           for attempt in $(seq 1 90); do
