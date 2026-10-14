@@ -41,9 +41,7 @@ export const isApiResponse = (value: unknown): value is ApiResponse => {
   return typeof (value as Partial<ApiResponse>).code === "number";
 };
 
-export function isSuccessfulResponse(
-  response: Partial<ApiResponse> | null | undefined,
-): boolean {
+export function isSuccessfulResponse(response: Partial<ApiResponse> | null | undefined): boolean {
   return response?.code === API_SUCCESS_CODE;
 }
 
