@@ -12,12 +12,17 @@ export default defineConfig({
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),
   plugins: [tailwindcss()],
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: {
       "@": webRoot,
       "@yak-ops/yak-ui": fileURLToPath(
         new URL("../../packages/yak-ui/src/index.ts", import.meta.url),
       ),
     },
+  },
+  optimizeDeps: {
+    // Pre-bundle both JSX entry points with the shared React runtime on cold starts.
+    include: ["react", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
   server: {
     fs: {
