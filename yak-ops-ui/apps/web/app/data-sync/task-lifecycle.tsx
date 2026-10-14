@@ -9,8 +9,6 @@ import {
   type DataSyncTaskStatus,
 } from "@/service/data-sync";
 
-const POLL_INTERVAL_MILLIS = 2000;
-
 export const DATA_SYNC_TASK_STATUS_ITEMS: Record<DataSyncTaskStatus | "ALL", string> = {
   ALL: "全部状态",
   PUBLISHED: "已上线",

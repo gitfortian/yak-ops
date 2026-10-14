@@ -79,7 +79,12 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     public static <SplitT extends SourceSplit, EnumStateT> SourceCoordinator<SplitT, EnumStateT> restore(
             Source<?, SplitT, EnumStateT> source, OperatorCoordinatorContext coordinatorContext, EnumStateT state) {
         return new SourceCoordinator<>(
-                source, coordinatorContext, Objects.requireNonNull(state, "Restored state must not be null"), true, "", ignored -> {});
+                source,
+                coordinatorContext,
+                Objects.requireNonNull(state, "Restored state must not be null"),
+                true,
+                "",
+                ignored -> {});
     }
 
     /** Restores a Source coordinator while retaining the owning Job's log identity. */

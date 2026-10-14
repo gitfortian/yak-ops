@@ -324,18 +324,20 @@ final class TaskDeployment {
         OperatorCoordinatorContext context =
                 new OperatorCoordinatorContext(jobGraph.jobID(), vertex.getId(), vertex.getParallelism());
         coordinator = new SourceCoordinator<>(
-                source, context, jobGraph.configuration().get(ExecutionOptions.LOG_ID), executionGraph::reportPlannedSplits);
+                source,
+                context,
+                jobGraph.configuration().get(ExecutionOptions.LOG_ID),
+                executionGraph::reportPlannedSplits);
         OperatorChain chain = new OperatorChain(operators.subList(1, operators.size() - 1), sinkNode);
         Execution execution = executionGraph.currentExecution(vertex.getId(), 0);
-        SourceOperatorStreamTask<Object, SourceSplit> task =
-                new SourceOperatorStreamTask<>(
-                        source,
-                        coordinator,
-                        environment(execution),
-                        chain,
-                        chain,
-                        List.of(),
-                        executionGraph::reportCompletedSplits);
+        SourceOperatorStreamTask<Object, SourceSplit> task = new SourceOperatorStreamTask<>(
+                source,
+                coordinator,
+                environment(execution),
+                chain,
+                chain,
+                List.of(),
+                executionGraph::reportCompletedSplits);
         sourceTasks.add(task);
         bind(execution, task);
         // For a chained Source/Operator/Sink, preserve the StreamTask's originating failure.
