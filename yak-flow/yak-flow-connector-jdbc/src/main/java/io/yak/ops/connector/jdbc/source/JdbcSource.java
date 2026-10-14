@@ -51,6 +51,7 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
     private final String jdbcUrl;
     private final List<TableId> tables;
     private final Map<TableId, List<String>> projections;
+    private final Map<TableId, JdbcIncrementalRange> ranges;
     private final Configuration configuration;
     private final JdbcDialect dialect;
     private final String fingerprint;
@@ -115,6 +116,22 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
             Configuration configuration,
             Map<TableId, List<String>> projections,
             TableMetrics metrics) {
+        this(connectionProvider, jdbcUrl, tables, configuration, projections, metrics, Map.of());
+    }
+
+    /** Adds independently frozen per-table incremental windows without changing shared source options. */
+    public JdbcSource(
+            JdbcConnectionProvider connectionProvider,
+            String jdbcUrl,
+            List<TableId> tables,
+            Configuration configuration,
+            Map<TableId, List<String>> projections,
+            TableMetrics metrics,
+            Map<TableId, JdbcIncrementalRange> ranges) {
+        this.ranges = Map.copyOf(Objects.requireNonNull(ranges, "ranges"));
+        if (!tables.containsAll(this.ranges.keySet())) {
+            throw new IllegalArgumentException("Incremental ranges must belong to selected source tables");
+        }
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.connectionProvider = Objects.requireNonNull(connectionProvider, "connectionProvider");
         this.jdbcUrl = Objects.requireNonNull(jdbcUrl, "jdbcUrl");
@@ -187,7 +204,7 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
             SplitEnumeratorContext<JdbcSourceSplit> context, JdbcEnumeratorState restored) {
         return new JdbcSourceEnumerator(
                 context,
-                new JdbcSplitPlanner(connectionProvider, dialect, configuration, projections),
+                new JdbcSplitPlanner(connectionProvider, dialect, configuration, projections, ranges),
                 tables,
                 fingerprint,
                 restored,
@@ -223,6 +240,13 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
                     .append(identifierPart(table.schema()))
                     .append('|')
                     .append(identifierPart(table.table()));
+            JdbcIncrementalRange range = ranges.get(table);
+            if (range != null) {
+                definition.append("|range:").append(range.mode()).append('|')
+                        .append(identifierPart(range.column())).append('|')
+                        .append(identifierPart(range.lower())).append('|')
+                        .append(identifierPart(range.upper()));
+            }
             List<String> projected = projections.get(table);
             if (projected != null) {
                 definition.append("|projection:").append(projected.size());

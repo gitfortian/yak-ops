@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.source.split;
 
+import io.yak.ops.connector.jdbc.source.JdbcIncrementalRange;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.data.TableId;
 import java.io.ByteArrayInputStream;
@@ -19,7 +20,7 @@ import java.util.Objects;
  */
 public final class JdbcSourceSplitSerializer implements SimpleVersionedSerializer<JdbcSourceSplit> {
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int MAX_SPLIT_BYTES = 1_048_576;
     private static final int MAX_COLUMNS = 8_192;
 
@@ -46,6 +47,14 @@ public final class JdbcSourceSplitSerializer implements SimpleVersionedSerialize
             writeNullableLong(out, split.upperBound());
             writeNullableLong(out, split.lastEmittedKey());
             out.writeUTF(split.schemaFingerprint());
+            var range = split.incrementalRange();
+            out.writeBoolean(range != null);
+            if (range != null) {
+                out.writeUTF(range.mode().name());
+                out.writeUTF(range.column());
+                writeNullableString(out, range.lower());
+                out.writeUTF(range.upper());
+            }
             out.flush();
             if (buffer.size() > MAX_SPLIT_BYTES) {
                 throw new IOException("JDBC split state exceeds the maximum size");
@@ -56,7 +65,7 @@ public final class JdbcSourceSplitSerializer implements SimpleVersionedSerialize
 
     @Override
     public JdbcSourceSplit deserialize(int version, byte[] serialized) throws IOException {
-        if (version != VERSION || serialized == null || serialized.length > MAX_SPLIT_BYTES) {
+        if ((version != 2 && version != VERSION) || serialized == null || serialized.length > MAX_SPLIT_BYTES) {
             throw new IOException("Unsupported JDBC split state version or length");
         }
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(serialized))) {
@@ -77,6 +86,11 @@ public final class JdbcSourceSplitSerializer implements SimpleVersionedSerialize
             Long upper = readNullableLong(in);
             Long position = readNullableLong(in);
             String schemaFingerprint = in.readUTF();
+            JdbcIncrementalRange range = null;
+            if (version >= 3 && in.readBoolean()) {
+                range = new JdbcIncrementalRange(JdbcIncrementalRange.Mode.valueOf(in.readUTF()),
+                        in.readUTF(), readNullableString(in), in.readUTF());
+            }
             if (in.available() != 0) {
                 throw new IOException("Unexpected bytes after JDBC split state");
             }
@@ -88,7 +102,8 @@ public final class JdbcSourceSplitSerializer implements SimpleVersionedSerialize
                     lower,
                     upper,
                     position,
-                    schemaFingerprint);
+                    schemaFingerprint,
+                    range);
         } catch (RuntimeException exception) {
             throw new IOException("Invalid JDBC split state", exception);
         }
