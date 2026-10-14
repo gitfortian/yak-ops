@@ -629,11 +629,13 @@ def acceptance():
         from database_realtime import verify_database_realtime
         realtime_evidence = verify_database_realtime(globals(), client, source, target)
 
-        from schema_migration_e2e import verify_schema_migration
-        schema_evidence = verify_schema_migration(globals(), client, source, target)
-
+        # Exercise this PR's new JDBC cursor path before the existing SCHEMA matrix.
+        # Preserve and execute the full SCHEMA acceptance immediately afterward.
         from offline_incremental_e2e import verify_offline_incremental
         incremental_evidence = verify_offline_incremental(globals(), client, source, target)
+
+        from schema_migration_e2e import verify_schema_migration
+        schema_evidence = verify_schema_migration(globals(), client, source, target)
 
         interrupted, _ = submit(client, cdc)
         interrupted_id = interrupted["instanceId"]
