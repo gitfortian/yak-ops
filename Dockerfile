@@ -31,8 +31,7 @@ LABEL org.opencontainers.image.title="Yak Ops Backend" \
 ENV YAK_OPS_HOME=/opt/yak-ops \
     JAVA_OPTS="" \
     APP_OPTS="" \
-    SERVER_PORT=9527 \
-    SPRING_PROFILES_ACTIVE=mysql
+    SERVER_PORT=9527
 
 WORKDIR ${YAK_OPS_HOME}
 
