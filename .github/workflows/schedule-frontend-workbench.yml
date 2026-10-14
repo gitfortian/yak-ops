@@ -1,0 +1,30 @@
+name: Schedule Frontend Workbench
+on:
+  push:
+    branches: [feat/task-schedule-frontend-integration]
+    paths: [.github/workflows/schedule-frontend-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        working-directory: yak-ops-ui
+        run: npm ci
+      - name: Export source and frontend dependencies
+        run: |
+          git archive --format=tar HEAD > /tmp/schedule-workspace.tar
+          tar -rf /tmp/schedule-workspace.tar yak-ops-ui/node_modules
+          gzip /tmp/schedule-workspace.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: schedule-frontend-workspace
+          path: /tmp/schedule-workspace.tar.gz
+          retention-days: 1
+          compression-level: 0
