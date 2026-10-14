@@ -1,6 +1,8 @@
 """Browser interaction contracts with controlled API responses; not real database evidence."""
 
-import asyncio, json, re, os
+import asyncio
+import json
+import re
 from urllib.parse import urlparse
 from pathlib import Path
 from playwright.async_api import async_playwright, expect
@@ -51,6 +53,8 @@ state = {
     "created_tasks": 0,
     "updated_tasks": 0,
     "fail_schedule": False,
+    "fail_batch": False,
+    "conflict": False,
     "fires": [],
     "task": task,
 }
@@ -86,7 +90,7 @@ async def mock(route):
         ]
     elif "/user-preferences" in p:
         data = []
-    elif "/users/" in p or p.endswith("/user/batch"):
+    elif "/users/" in p or p.endswith("/user/batch") or p == "/api/v1/user":
         data = []
     elif p == "/api/v1/data-source/page":
         data = paging(sources)
@@ -165,6 +169,9 @@ async def mock(route):
                 "nextFireTimes": [f"2026-10-{d:02d}T18:00:00Z" for d in range(14, 19)],
             }
     elif p == "/api/v1/schedules/page":
+        if state["fail_batch"]:
+            status = 503
+            code = 500
         data = paging(
             [state["schedule"]]
             if state["schedule"] and r.headers.get("x-workspace-id") == "ws1"
@@ -197,6 +204,10 @@ async def mock(route):
                 "revision": state["schedule"]["revision"] + 1,
             }
             data = state["schedule"]
+        elif method == "PUT" and state["conflict"]:
+            status = 409
+            code = 18002
+            state["schedule"] = {**state["schedule"], "revision": state["schedule"]["revision"] + 1}
         elif method == "PUT":
             state["schedule"] = {
                 **state["schedule"],
@@ -217,6 +228,59 @@ async def mock(route):
         content_type="application/json",
         body=json.dumps({"code": code, "data": data, "msg": "test"}),
     )
+
+
+async def configure_cron(page, expression):
+    await page.get_by_role("button", name="打开 Cron 调度配置", exact=True).click()
+    await page.get_by_role("tab", name="高级 Cron", exact=True).click()
+    await page.get_by_role("textbox", name="Cron 表达式", exact=True).fill(expression)
+    await page.get_by_role("button", name="确认", exact=True).click()
+
+
+async def verify_revision_conflict(page):
+    await page.get_by_role("button", name="调度", exact=True).click()
+    dialog = page.get_by_role("dialog", name="调度", exact=True)
+    await configure_cron(page, "0 0 5 * * ?")
+    state["conflict"] = True
+    await dialog.get_by_role("button", name="保存", exact=True).click()
+    await expect(dialog.get_by_text("调度已变更，请重新加载", exact=True)).to_be_visible()
+    await expect(dialog.get_by_role("button", name="保存", exact=True)).to_be_disabled()
+    await expect(dialog.get_by_role("button", name="打开 Cron 调度配置")).to_contain_text("0 0 5 * * ?")
+    writes = [x for x in state["requests"] if x[0] == "PUT" and x[1] == "/api/v1/schedules/s1"]
+    assert len(writes) == 1, writes
+    state["conflict"] = False
+    await dialog.get_by_role("button", name="关闭", exact=True).click()
+    await page.get_by_role("dialog", name="放弃修改", exact=True).get_by_role("button", name="确认", exact=True).click()
+    await expect(page.get_by_role("dialog")).to_have_count(0)
+
+
+async def verify_partial_task_save(page):
+    state["schedule"] = None
+    state["fail_schedule"] = True
+    await page.goto("http://127.0.0.1:5173/offline-sync/new")
+    await page.get_by_role("textbox", name="任务名称", exact=True).fill("Partial save")
+    for index, name in enumerate(["MySQL source", "PostgreSQL target"]):
+        await page.locator("#datasource").get_by_role("combobox").nth(index).click()
+        await page.get_by_role("option", name=name, exact=True).click()
+    await page.locator("#source").get_by_role("combobox").click()
+    await page.get_by_role("option", name="orders", exact=True).click()
+    await page.locator("#target").get_by_role("combobox").click()
+    await page.get_by_role("option", name="public.ods_orders", exact=True).click()
+    await configure_cron(page, "0 0 6 * * ?")
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page).to_have_url(re.compile("/offline-sync/new-task$"))
+    await expect(page.get_by_text(re.compile("任务已保存，调度未确认保存"))).to_be_visible()
+    await expect(page.get_by_role("button", name="保存", exact=True)).to_be_disabled()
+    assert state["created_tasks"] == 1
+    state["fail_schedule"] = False
+    await page.get_by_role("button", name="重新加载状态", exact=True).click()
+    await expect(page.get_by_role("button", name="保存", exact=True)).to_be_enabled()
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page.get_by_text("同步任务已保存，当前仍为已下线", exact=True)).to_be_visible()
+    assert state["created_tasks"] == 1 and state["updated_tasks"] == 0
+    assert state["schedule"]["targetId"] == "new-task"
+    assert state["schedule"]["cronExpression"] == "0 0 6 * * ?"
+    assert state["schedule"]["enabled"] is False
 
 
 async def main():
@@ -261,14 +325,14 @@ async def main():
             assert state["schedule"]["enabled"] is False
             assert state["schedule"]["cronExpression"] == expression
             assert not any(x[1].endswith("/enable") for x in state["requests"])
-            await dialog.get_by_role("switch", name="启用调度", exact=True).check()
+            await dialog.get_by_role("switch", name="启用调度", exact=True).click()
             await expect(
                 dialog.get_by_role("switch", name="启用调度", exact=True)
             ).to_be_checked()
             await expect(
                 dialog.get_by_role("button", name="打开 Cron 调度配置")
             ).to_be_disabled()
-            await dialog.get_by_role("switch", name="启用调度", exact=True).uncheck()
+            await dialog.get_by_role("switch", name="启用调度", exact=True).click()
             await expect(
                 dialog.get_by_role("switch", name="启用调度", exact=True)
             ).not_to_be_checked()
@@ -320,9 +384,21 @@ async def main():
             )
             await page.keyboard.press("Escape")
             await expect(page.get_by_role("dialog")).to_have_count(0)
+            await page.set_viewport_size({"width": 1440, "height": 1000})
+            await verify_revision_conflict(page)
+            await verify_partial_task_save(page)
+            state["fail_batch"] = True
+            await page.goto("http://127.0.0.1:5173/offline-sync")
+            await expect(page.get_by_role("button", name="调度加载失败", exact=True)).to_be_visible()
+            await expect(page.get_by_role("button", name="手动", exact=True)).to_have_count(0)
+            state["fail_batch"] = False
+            await page.get_by_role("button", name="Workspace A", exact=True).click()
+            await page.get_by_role("menuitem", name="Workspace B", exact=True).click()
+            await expect(page.get_by_role("button", name="手动", exact=True)).to_be_visible()
+            assert [x for x in state["requests"] if x[1] == "/api/v1/schedules/page"][-1][3] == "ws2"
             assert not errors, errors
             print(
-                "PASS browser: batched list; advanced Cron preservation; save-without-enable; enable/disable; four terminal outcomes; historical link; instance/log tabs; narrow viewport; Escape; reduced motion",
+                "PASS browser: batched list; advanced Cron preservation; save-without-enable; enable/disable; four terminal outcomes; historical link; instance/log tabs; narrow viewport; Escape; reduced motion; revision conflict; partial save retry; failed batch; Workspace isolation",
                 flush=True,
             )
         except:

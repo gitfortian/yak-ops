@@ -1,6 +1,5 @@
 """Exercise task scheduling in Chromium against the real authenticated product API."""
 
-import http.cookiejar
 import json
 from pathlib import Path
 import re
@@ -82,7 +81,7 @@ def verify_schedule_browser(client, definition):
             identity = schedule["id"]
             assert not schedule["enabled"]
             assert not any(url.endswith("/enable") for _, url in writes)
-            toggle.check()
+            toggle.click()
             expect(toggle).to_be_checked()
             expect(
                 dialog.get_by_role("button", name="打开 Cron 调度配置")
@@ -91,7 +90,7 @@ def verify_schedule_browser(client, definition):
             view = dialog.get_by_role("button", name="查看实例", exact=True)
             expect(view.first).to_be_visible(timeout=65000)
             dialog.get_by_role("tab", name="配置", exact=True).click()
-            toggle.uncheck()
+            toggle.click()
             expect(toggle).not_to_be_checked()
             assert not client.call("GET", f"/api/v1/schedules/{identity}")["enabled"]
             assert (
