@@ -632,6 +632,9 @@ def acceptance():
         from schema_migration_e2e import verify_schema_migration
         schema_evidence = verify_schema_migration(globals(), client, source, target)
 
+        from offline_incremental_e2e import verify_offline_incremental
+        incremental_evidence = verify_offline_incremental(globals(), client, source, target)
+
         interrupted, _ = submit(client, cdc)
         interrupted_id = interrupted["instanceId"]
         wait_status(client, interrupted_id, {"RUNNING"})
@@ -651,7 +654,7 @@ def acceptance():
         assert "YakFlow Job started" in client.call(
             "GET", f"/api/v1/task-instances/{interrupted_id}/logs?limit=200")["content"]
         assert client.call("GET", f"/api/v1/task-instances/{batch_evidence[0]}")["executionReport"] == batch_evidence[1]
-        for identity, report in realtime_evidence + schema_evidence:
+        for identity, report in realtime_evidence + schema_evidence + incremental_evidence:
             assert client.call("GET", f"/api/v1/task-instances/{identity}")["executionReport"] == report
         print(
             "PRODUCT E2E PASS: JDBC, CDC, idempotency, resource exclusion, "
