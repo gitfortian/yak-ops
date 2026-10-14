@@ -16,7 +16,7 @@ import {
   toast,
   type TableColumns,
 } from "@yak-ops/yak-ui";
-import { ArrowRight, Database, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -38,6 +38,7 @@ import {
 
 import { ExecutionProgressBar } from "@/app/data-sync/execution-progress-bar";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
+import { TaskRoute } from "@/app/data-sync/task-route";
 import {
   DATA_SYNC_TASK_STATUS_ITEMS,
   DataSyncTaskLifecycleActions,
@@ -295,24 +296,12 @@ export function RealtimeSyncPage() {
       key: "route",
       title: "同步链路",
       minWidth: 300,
-      render: (_value, record) => {
-        const sourceName = dataSourceMap.get(record.sourceDataSourceId)?.name || "未知数据源";
-        const targetName = dataSourceMap.get(record.targetDataSourceId)?.name || "未知数据源";
-
-        return (
-          <div className="flex min-w-0 items-center gap-2 text-[13px] text-[#344054]">
-            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={sourceName}>
-              {sourceName}
-            </span>
-            <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" strokeWidth={1.8} />
-            <Database size={14} className="shrink-0 text-[#667085]" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate" title={targetName}>
-              {targetName}
-            </span>
-          </div>
-        );
-      },
+      render: (_value, record) => (
+        <TaskRoute
+          source={dataSourceMap.get(record.sourceDataSourceId)}
+          target={dataSourceMap.get(record.targetDataSourceId)}
+        />
+      ),
     },
     {
       key: "status",
