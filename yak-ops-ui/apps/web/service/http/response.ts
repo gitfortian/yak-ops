@@ -43,8 +43,7 @@ export const isApiResponse = (value: unknown): value is ApiResponse => {
 
 export const isSuccessfulResponse = (
   response: Partial<ApiResponse> | null | undefined,
-): boolean =>
-  response?.code === API_SUCCESS_CODE;
+): boolean => response?.code === API_SUCCESS_CODE;
 
 export const extractErrorMessage = (
   response: Partial<ApiResponse> | null | undefined,
