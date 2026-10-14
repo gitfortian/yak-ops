@@ -264,7 +264,8 @@ export function InternalTable<RecordType extends object>({
           <table
             aria-busy={loading || undefined}
             className={cn(
-              "w-full border-collapse text-[var(--yak-components-table-text)]",
+              "w-full text-[var(--yak-components-table-text)]",
+              bordered ? "border-separate border-spacing-0" : "border-collapse",
               tableLayoutFixed ? "table-fixed" : "table-auto",
             )}
             style={tableStyle}
