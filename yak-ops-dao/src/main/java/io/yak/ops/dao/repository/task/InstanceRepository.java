@@ -78,6 +78,27 @@ public interface InstanceRepository {
             TaskInstanceStatus status,
             String taskType);
 
+    /**
+     * Selects the most recent Instance per requested Definition with a bounded database-side query.
+     *
+     * @param workspaceId authorized Workspace
+     * @param definitionIds current page's Definition identities
+     * @param activeOnly only nonterminal executions when true
+     * @return one Instance per matching Definition
+     */
+    List<InstanceEntity> latest(String workspaceId, List<String> definitionIds, boolean activeOnly);
+
+    /**
+     * Saves nonterminal source progress without changing dispatch ownership or lifecycle state.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId executing Instance
+     * @param dispatchToken owning launch token
+     * @param progressPercent bounded measured progress from 0 to 99
+     * @return true if the original owner and active lifecycle remain valid
+     */
+    boolean updateProgress(String workspaceId, String instanceId, String dispatchToken, int progressPercent);
+
     /** @return committed Task Instances awaiting their first physical submission */
     List<InstanceEntity> pending();
 

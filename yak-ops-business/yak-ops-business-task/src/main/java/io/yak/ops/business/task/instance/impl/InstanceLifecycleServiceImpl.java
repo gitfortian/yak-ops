@@ -62,6 +62,13 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     }
 
     @Override
+    public void progress(DispatchTicket ticket, int percentage) {
+        if (!instances.updateProgress(ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), percentage)) {
+            throw new IllegalStateException("Task Instance progress ownership changed");
+        }
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void complete(DispatchTicket ticket, TaskOutcome outcome) {
         InstanceEntity instance = instances

@@ -1,6 +1,7 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.task.instance.InstanceService;
+import io.yak.ops.common.bean.dto.task.InstanceLatestDTO;
 import io.yak.ops.common.bean.dto.task.InstancePageDTO;
 import io.yak.ops.common.bean.vo.task.InstanceDefinitionVO;
 import io.yak.ops.common.bean.vo.task.InstanceVO;
@@ -11,10 +12,12 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.task.execution.TaskExecutionService;
+import io.yak.ops.task.execution.dispatch.embedded.TaskExecutionObserver;
 import io.yak.ops.task.execution.log.TaskLogService;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +40,9 @@ public class TaskInstanceController {
 
     @Resource
     private TaskExecutionService execution;
+
+    @Resource
+    private TaskExecutionObserver observer;
 
     @Resource
     private TaskLogService logs;
@@ -65,6 +71,16 @@ public class TaskInstanceController {
                         query.getStatus(),
                         query.getTaskType())
                 .map(this::toInstance)));
+    }
+
+    /** Reads the newest Instance of each visible Definition in a single Workspace-scoped operation. */
+    @PostMapping("/latest")
+    public Result<List<InstanceVO>> latest(@Valid @RequestBody InstanceLatestDTO query) {
+        return Result.success(instances
+                .latest(WorkspaceContext.requireWorkspaceId(), query.getDefinitionIds(), query.isActiveOnly())
+                .stream()
+                .map(this::toInstance)
+                .toList());
     }
 
     /** Reads a bounded log page for a Workspace-owned Instance. */
@@ -100,6 +116,15 @@ public class TaskInstanceController {
         if (value.getScheduledTime() != null) {
             scheduledTime = value.getScheduledTime().toInstant(java.time.ZoneOffset.UTC);
         }
+        Integer progress = value.getProgressPercent();
+        if (value.getStatus() == io.yak.ops.common.enums.task.TaskInstanceStatus.FINISHED) {
+            progress = 100;
+        } else if (!value.getStatus().isTerminal()) {
+            var live = observer.progressPercent(value.getId());
+            if (live.isPresent()) {
+                progress = live.getAsInt();
+            }
+        }
         return new InstanceVO(
                 value.getId(),
                 value.getDefinitionId(),
@@ -116,6 +141,7 @@ public class TaskInstanceController {
                 value.getCreateTime(),
                 value.getScheduleId(),
                 value.getScheduleRevision(),
-                scheduledTime);
+                scheduledTime,
+                progress);
     }
 }

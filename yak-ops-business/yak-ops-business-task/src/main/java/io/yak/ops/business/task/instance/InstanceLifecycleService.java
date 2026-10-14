@@ -28,6 +28,14 @@ public interface InstanceLifecycleService {
     void started(DispatchTicket ticket, TaskRuntimeReference reference);
 
     /**
+     * Persists the executing Job's last measured progress under its dispatch ownership.
+     *
+     * @param ticket winning dispatcher
+     * @param percentage bounded measured percentage (0-99)
+     */
+    void progress(DispatchTicket ticket, int percentage);
+
+    /**
      * Persists an authoritative completed physical execution and releases its claims.
      *
      * @param ticket winning dispatcher
