@@ -119,7 +119,7 @@ public final class MySqlCdcSourceConfig {
      * the MySQL JDBC driver provided by the Connector module.
      */
     public java.sql.Connection openSnapshotConnection() throws java.sql.SQLException {
-        String url = "jdbc:mysql://" + hostname + ":" + port + "/";
+        String url = "jdbc:mysql://" + hostname + ":" + port + "/?useCursorFetch=true&useServerPrepStmts=true";
         return java.sql.DriverManager.getConnection(url, username, password);
     }
 

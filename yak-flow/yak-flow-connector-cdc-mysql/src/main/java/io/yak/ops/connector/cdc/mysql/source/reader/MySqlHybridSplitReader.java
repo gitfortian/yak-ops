@@ -180,6 +180,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     @Override
     public void cancel() {
         cancelled = true;
+        snapshots.cancel();
         binlog.requestStop();
     }
 
