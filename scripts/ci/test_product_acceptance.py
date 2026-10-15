@@ -130,7 +130,7 @@ class GateTest(unittest.TestCase):
                   "SCOPE_RESULT": "success", "BACKEND_RESULT": "skipped",
                   "GITHUB_STEP_SUMMARY": ""}), patch("sys.argv", ["scope", "--check-results"]), redirect_stdout(output):
             scope.main()
-        self.assertIn("NOT EXECUTED", output.getvalue())
+        self.assertIn("NOT RUN", output.getvalue())
 
     def test_bad_plan_rejected(self):
         for selected in ({}, scope.plan(["full", "schema"])):
