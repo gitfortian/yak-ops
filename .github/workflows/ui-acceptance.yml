@@ -32,7 +32,7 @@ jobs:
       - name: Serve production frontend
         working-directory: yak-ops-ui
         run: |
-          npm run preview -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/yak-ui-preview.log 2>&1 &
+          npm exec -- vite preview --config apps/web/vite.config.ts --host 127.0.0.1 --port 5173 --strictPort > /tmp/yak-ui-preview.log 2>&1 &
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:5173/ >/dev/null; then exit 0; fi
             sleep 1
