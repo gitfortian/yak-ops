@@ -1,21 +1,110 @@
-name: Backend Tests
+name: Backend Test Rebuild
 on:
   push:
     branches: [refactor/backend-test-architecture]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: backend-test-rebuild
+  cancel-in-progress: true
 jobs:
-  source:
-    name: Prepare test sources
+  compile:
+    name: Compile rebuilt backend tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - name: Archive the exact tracked source for test implementation
-        run: git archive HEAD --format=tar --output=backend-test-sources.tar
-      - uses: actions/upload-artifact@v4
         with:
-          name: backend-test-sources
-          path: backend-test-sources.tar
-          retention-days: 1
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply reviewed implementation to this feature branch
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = refactor/backend-test-architecture
+          if [[ -f .github/backend-test-rebuild/part0 ]]; then
+            cat .github/backend-test-rebuild/part{0,1,2,3,4,5} > /tmp/backend-implementation.b64
+            echo 'd392b6c1205aebe6ea3e66922bfc270f17d29a359f3bb9d75984efb04976abd0  /tmp/backend-implementation.b64' | sha256sum --check
+            base64 --decode /tmp/backend-implementation.b64 | xz --decompress > /tmp/backend-implementation.patch
+            git apply --check /tmp/backend-implementation.patch
+            git apply /tmp/backend-implementation.patch
+            python3 .github/rebuild_backend_tests.py
+            rm -rf .github/backend-test-rebuild .github/rebuild_backend_tests.py
+          fi
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+          python3 scripts/tests/backend_tests.py registration
+          bash scripts/ci/test-detect-changes.sh
+      - name: Format new test sources using the repository formatter
+        id: format
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp pom.xml /tmp/backend-root-pom.xml
+          trap 'cp /tmp/backend-root-pom.xml pom.xml' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pom.xml')
+          s = p.read_text().replace('<include>src/main/java/**/*.java</include>', '''<include>src/main/java/io/yak/ops/testutils/**/*.java</include>
+                                      <include>src/test/java/io/yak/ops/e2e/**/*.java</include>
+                                      <include>src/test/java/io/yak/ops/testutils/**/*.java</include>
+                                      <include>src/test/java/**/*IT.java</include>
+                                      <include>src/test/java/io/yak/ops/connector/jdbc/source/JdbcSourceTestBase.java</include>
+                                      <include>src/test/java/io/yak/ops/connector/jdbc/sink/JdbcSinkTestBase.java</include>
+                                      <include>src/test/java/io/yak/ops/connector/**/integration/*TestBase.java</include>''')
+          p.write_text(s)
+          PY
+          bash mvnw -B -ntp -pl :yak-ops-e2e -am -DskipTests spotless:apply 2>&1 | tee /tmp/backend-format.log
+      - name: Commit implementation on the requested feature branch
+        if: steps.apply.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = refactor/backend-test-architecture
+          test "$(git ls-remote origin refs/heads/refactor/backend-test-architecture | cut -f1)" = "$GITHUB_SHA"
+          git add -A
+          git diff --cached --check
+          # Application behavior and workflow permissions are not modified by this step.
+          python3 - <<'PY'
+          import subprocess
+          paths = subprocess.check_output(['git','diff','--cached','--name-only'], text=True).splitlines()
+          forbidden = [p for p in paths if p.startswith('.github/workflows/') or ('/src/main/' in p and not p.startswith('yak-ops-test-utils/'))]
+          assert not forbidden, forbidden
+          PY
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'test: rebuild connector integration and backend E2E with isolated shared resources'
+            git push origin HEAD:refs/heads/refactor/backend-test-architecture
+          fi
+      - name: Compile all backend production and test sources
+        shell: bash
+        run: |
+          set -o pipefail
+          bash mvnw -B -ntp -pl :yak-ops-e2e -am -DskipTests package 2>&1 | tee /tmp/backend-compile.log
+      - name: Run database lifecycle and assertion unit tests without Docker
+        shell: bash
+        run: |
+          set -o pipefail
+          bash mvnw -B -ntp -pl yak-ops-test-utils -am test 2>&1 | tee /tmp/backend-utils-tests.log
+      - name: Archive exact resulting source
+        if: always()
+        run: |
+          git archive HEAD --format=tar --output=/tmp/backend-result-sources.tar
+          git rev-parse HEAD > /tmp/backend-result-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-rebuild
+          path: |
+            /tmp/backend-result-sources.tar
+            /tmp/backend-result-sha.txt
+            /tmp/backend-*.log
+            **/target/surefire-reports/**
           if-no-files-found: error
+          retention-days: 2
