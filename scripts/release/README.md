@@ -15,7 +15,7 @@ Published Flyway migrations are frozen. Audit upgrade behavior; never use Flyway
 
 ## Release Gate
 
-Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, backend acceptance, JDBC source/sink real-database acceptance, distribution checks, Docker identity and Compose smoke. A skipped or conditional check does not count as a pass. Product runtime acceptance must succeed for a formal release.
+Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, backend acceptance, JDBC source/sink real-database acceptance, versioned Playwright UI acceptance, distribution checks, Docker identity and Compose smoke. A skipped or conditional check does not count as a pass. Product runtime and UI browser acceptance must both succeed for a formal release; UI evidence must match the candidate version and commit SHA.
 
 Release Decision requires explicit confirmations and evidence:
 
