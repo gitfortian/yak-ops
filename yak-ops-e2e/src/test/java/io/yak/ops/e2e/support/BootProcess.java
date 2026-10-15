@@ -57,6 +57,11 @@ public final class BootProcess implements ExtensionContext.Store.CloseableResour
                 .toAbsolutePath();
         if (!Files.isRegularFile(jar))
             throw new IllegalStateException("Build the Boot JAR with Maven before running Backend E2E: " + jar);
+        Path driverRoot = Path.of(System.getProperty(
+                        "yak.e2e.jdbc-driver-dir", build.getProperty("yak.e2e.jdbc-driver-dir")))
+                .toAbsolutePath();
+        if (!Files.isDirectory(driverRoot.resolve("mysql/8")))
+            throw new IllegalStateException("Missing tracked JDBC driver directory: " + driverRoot);
         Files.writeString(
                 directory.resolve("build.json"),
                 ApiClient.json(
@@ -64,6 +69,7 @@ public final class BootProcess implements ExtensionContext.Store.CloseableResour
         Path output = directory.resolve("application-" + (++generation) + ".log");
         ProcessBuilder command = new ProcessBuilder(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-Dyak.ops.jdbc-driver-dir=" + driverRoot,
                 "-jar",
                 jar.toString(),
                 "--server.port=0",

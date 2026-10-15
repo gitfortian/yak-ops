@@ -91,9 +91,26 @@ class TaskExecutionIT extends BackendTestBase {
         fixture.awaitState(instance, "FINISHED");
         var old = fixture.api.call("GET", "/api/v1/task-instances/" + instance + "/definition");
         fixture.api.call("POST", "/api/v1/task-definitions/" + definition + "/unpublish");
-        fixture.api.call(
-                "PUT", "/api/v1/task-definitions/" + definition, Map.of("name", "renamed-task", "debug", false));
+        fixture.createTarget("changed_orders");
+        var replacement = fixture.parameters(
+                "SINGLE_TABLE_OFFLINE", List.of("FULL"), List.of(fixture.route("orders", "changed_orders")));
+        var updated = fixture.api.call(
+                "PUT",
+                "/api/v1/task-definitions/" + definition,
+                Map.of(
+                        "name", "renamed-task",
+                        "debug", false,
+                        "parameters", io.yak.ops.e2e.support.ApiClient.json(replacement)));
+        assertTrue(updated.path("definitionVersion").asInt() > old.path("version").asInt());
+        fixture.api.call("POST", "/api/v1/task-definitions/" + definition + "/publish");
+        String next = fixture.submit(definition);
+        fixture.awaitState(next, "FINISHED");
         var retained = fixture.api.call("GET", "/api/v1/task-instances/" + instance + "/definition");
         assertEquals(old, retained);
+        assertEquals(
+                updated.path("definitionVersion").asInt(),
+                fixture.api.call("GET", "/api/v1/task-instances/" + next + "/definition")
+                        .path("version").asInt());
+        fixture.assertTarget("changed_orders", List.of(List.of(1L, "one"), List.of(2L, "two")));
     }
 }

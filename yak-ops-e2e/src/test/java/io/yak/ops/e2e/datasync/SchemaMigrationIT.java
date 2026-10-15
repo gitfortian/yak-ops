@@ -38,5 +38,11 @@ class SchemaMigrationIT extends BackendTestBase {
         String instance = fixture.submit(definition);
         fixture.awaitState(instance, "FAILED");
         assertEquals(0, fixture.claimCount(instance));
+        try (var connection = fixture.target.connect();
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT COUNT(*) FROM " + fixture.table("bad_orders"))) {
+            assertTrue(rows.next());
+            assertEquals(0, rows.getLong(1));
+        }
     }
 }

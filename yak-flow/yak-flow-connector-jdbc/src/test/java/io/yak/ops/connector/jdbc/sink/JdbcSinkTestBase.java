@@ -100,7 +100,10 @@ abstract class JdbcSinkTestBase {
             assertTrue(rows.next());
             assertEquals(new BigDecimal("1"), rows.getBigDecimal(1));
             assertEquals("中文|line\n", rows.getString(2));
-            assertEquals(new BigDecimal("12.30"), rows.getBigDecimal(3));
+            // Drivers may omit trailing zeroes; verify numeric value and declared SQL scale separately.
+            assertEquals(0, new BigDecimal("12.30").compareTo(rows.getBigDecimal(3)));
+            assertEquals(18, rows.getMetaData().getPrecision(3));
+            assertEquals(2, rows.getMetaData().getScale(3));
             assertArrayEquals(new byte[] {0, 1, -1}, rows.getBytes(4));
             assertTrue(rows.next());
             assertEquals(new BigDecimal("2"), rows.getBigDecimal(1));
