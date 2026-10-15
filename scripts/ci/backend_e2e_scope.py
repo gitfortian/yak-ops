@@ -11,6 +11,7 @@ import subprocess
 
 SUITES = ("batch", "schedule", "realtime", "schema")
 MODES = ("auto", "full", *SUITES)
+JAVA = "yak-ops-boot/src/test/java/io/yak/ops/boot/e2e/"
 
 def plan(suites=(), reasons=()):
     selected = ["full"] if "full" in suites else [item for item in SUITES if item in suites]
@@ -21,46 +22,50 @@ def full(reason):
 
 def classify(paths):
     selected, reasons = set(), set()
+    classes = {
+        "TaskExecutionIT.java": "batch",
+        "MultiTableBatchIT.java": "batch",
+        "OfflineIncrementalIT.java": "batch",
+        "ScheduleIT.java": "schedule",
+        "DatabaseRealtimeIT.java": "realtime",
+        "ProcessRecoveryIT.java": "realtime",
+        "SchemaMigrationIT.java": "schema",
+    }
     for path in paths:
-        if path == ".github/workflows/ui-acceptance.yml":
-            reasons.add("Playwright UI tests run separately from backend E2E")
+        if path == ".github/workflows/ui-acceptance.yml" or path.startswith("yak-ops-ui/"):
+            reasons.add("frontend or Playwright has independent test scope")
             continue
-        if path.startswith((".github/workflows/", ".github/actions/", "scripts/ci/")) or path in {
-            "scripts/acceptance/run_product_acceptance.py", "scripts/acceptance/task-execution-e2e.py"
-        }:
-            return full("backend E2E infrastructure changed")
-        if Path(path).suffix.lower() in {".md", ".mdx", ".rst"} or path in {"LICENSE", "NOTICE"}:
+        if path.endswith((".md", ".mdx", ".rst")) or path in ("LICENSE", "NOTICE"):
             reasons.add("documentation only")
             continue
-        if path.startswith("yak-ops-ui/"):
-            reasons.add("frontend checked by Quality Check; Playwright runs for release/manual")
-            continue
-        script_suite = next((suite for pattern, suite in (
-            ("scripts/acceptance/multitable_*.py", "batch"),
-            ("scripts/acceptance/offline_incremental_e2e.py", "batch"),
-            ("scripts/acceptance/database_realtime*.py", "realtime"),
-            ("scripts/acceptance/schema_migration*.py", "schema"),
-        ) if fnmatchcase(path, pattern)), None)
-        if script_suite:
-            selected.add(script_suite)
-            reasons.add(script_suite + " backend E2E changed")
-            continue
+        if path.startswith(JAVA):
+            suite = classes.get(Path(path).name)
+            if suite:
+                selected.add(suite)
+                reasons.add(suite + " JUnit integration test changed")
+                continue
+            return full("shared JUnit fixture changed")
+        if path in ("scripts/backend-e2e/run.sh", "scripts/ci/backend_e2e_scope.py",
+                    "scripts/ci/test_backend_e2e_scope.py", ".github/workflows/backend-e2e.yml",
+                    ".github/workflows/backend-acceptance.yml",
+                    ".github/workflows/v1-release-gate.yml"):
+            return full("backend E2E infrastructure changed")
+        if path.startswith((".github/workflows/", ".github/actions/", "scripts/ci/")):
+            return full("shared CI contract changed")
         if path.startswith(("yak-ops-business/yak-ops-business-schedule/",
                             "yak-ops-plugins/yak-ops-plugin-scheduler/")):
             selected.update(("schedule", "batch"))
             reasons.add("scheduler integration")
             continue
-        if path.startswith("yak-flow/yak-flow-connector-jdbc/") and Path(path).name in {
-            "JdbcMetadataApplier.java", "JdbcMetadataApplierTest.java"
-        }:
+        if path.startswith("yak-flow/yak-flow-connector-jdbc/") and Path(path).name in (
+                "JdbcMetadataApplier.java", "JdbcMetadataApplierTest.java"):
             selected.add("schema")
-            reasons.add("initial schema application")
+            reasons.add("target DDL contract")
             continue
-        if path.startswith("yak-ops-boot/") and Path(path).name in {
-            "DataSyncSchemaController.java", "DataSyncSchemaControllerTest.java"
-        }:
+        if path.startswith("yak-ops-boot/") and Path(path).name in (
+                "DataSyncSchemaController.java", "DataSyncSchemaControllerTest.java"):
             selected.add("schema")
-            reasons.add("schema preview authorization")
+            reasons.add("schema preview controller")
             continue
         return full("shared backend or unclassified change")
     return plan(selected, reasons or ["empty diff"])

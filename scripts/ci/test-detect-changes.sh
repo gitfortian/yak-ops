@@ -25,6 +25,7 @@ all_true="$(printf 'backend=true\nfrontend=true\ndistribution=true')"
 
 expect_scope "${all_false}" DEVELOPMENT.md
 expect_scope "${all_false}" README.md
+expect_scope "${backend_only}" scripts/backend-e2e/run.sh
 expect_scope "${backend_only}" yak-flow/yak-flow-runtime/src/main/java/StreamTask.java
 expect_scope "${backend_only}" yak-ops-business/yak-ops-business-task/src/main/java/DefinitionService.java
 expect_scope "${backend_only}" yak-ops-task-execution/src/main/java/io/yak/ops/task/execution/TaskExecutionService.java

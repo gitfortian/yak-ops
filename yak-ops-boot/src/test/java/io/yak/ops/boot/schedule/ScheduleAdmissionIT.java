@@ -78,7 +78,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.DockerImageName;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -92,8 +93,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Real MySQL savepoint, race, commit-uncertainty, retention, and Quartz JDBC JobStore contracts. */
-@EnabledIfEnvironmentVariable(named = "SCHEDULE_TEST_DB_URL", matches = ".+")
-class ScheduleAdmissionIntegrationTest {
+class ScheduleAdmissionIT {
     private static final Instant BASE = Instant.parse("2026-10-13T00:00:00Z");
     private static final AtomicReference<Instant> NOW = new AtomicReference<>(BASE);
     private static final AtomicBoolean LOSE_COMMIT_RESPONSE = new AtomicBoolean();
@@ -104,12 +104,20 @@ class ScheduleAdmissionIntegrationTest {
     private static ScheduleAdmissionGate gate;
     private static SubmissionService submissions;
     private static DataSource dataSource;
+    private static final String TEST_PASSWORD = "schedule-admission-e2e-only";
+    private static final GenericContainer<?> MYSQL = new GenericContainer<>(
+            DockerImageName.parse("mysql:8.0.39"))
+            .withEnv("MYSQL_ROOT_PASSWORD", TEST_PASSWORD)
+            .withEnv("MYSQL_DATABASE", "yak_schedule_contract")
+            .withExposedPorts(3306);
 
     @BeforeAll
     static void startDatabaseBoundary() {
+        MYSQL.start();
+        String url = "jdbc:mysql://" + MYSQL.getHost() + ":" + MYSQL.getMappedPort(3306)
+                + "/yak_schedule_contract?useSSL=false&allowPublicKeyRetrieval=true";
         DriverManagerDataSource source =
-                new DriverManagerDataSource(
-                        System.getenv("SCHEDULE_TEST_DB_URL"), "root", System.getenv("E2E_DB_PASSWORD")) {
+                new DriverManagerDataSource(url, "root", TEST_PASSWORD) {
                     @Override
                     public Connection getConnection() throws SQLException {
                         Connection connection = super.getConnection();
@@ -178,6 +186,7 @@ class ScheduleAdmissionIntegrationTest {
         if (context != null) {
             context.close();
         }
+        MYSQL.stop();
     }
 
     @BeforeEach

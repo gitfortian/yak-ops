@@ -66,6 +66,9 @@ for file in "${changed[@]}"; do
         yak-ops-dist/*|Dockerfile|docker/*|compose.yaml|compose.without-mysql.yaml|.env.example|NOTICE)
             distribution=true
             ;;
+        scripts/backend-e2e/*)
+            backend=true
+            ;;
         release.env|scripts/release/*)
             backend=true
             distribution=true
