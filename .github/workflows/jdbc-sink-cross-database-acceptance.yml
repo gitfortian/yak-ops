@@ -1,4 +1,4 @@
-name: JDBC Sink Cross-Database Acceptance
+name: JDBC Sink Cross-Database IT
 
 on:
   # Run real database acceptance only for explicit acceptance-test changes or manual release gates.

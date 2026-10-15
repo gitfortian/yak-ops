@@ -217,8 +217,8 @@ async def verify_multitable_selection(page):
 
     source = page.locator("#source")
     search = source.get_by_placeholder("搜索来源表", exact=True)
-    checkbox_a = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\\.)?batch_a$"))
-    checkbox_b = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\\.)?batch_b$"))
+    checkbox_a = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_a$"))
+    checkbox_b = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_b$"))
 
     await search.fill("batch_b")
     await expect(checkbox_a).to_have_count(0)
@@ -236,19 +236,19 @@ async def verify_multitable_selection(page):
     await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
 
     await page.locator("#target").get_by_role("row").filter(
-        has_text=re.compile(r"(?:^|\\.)batch_b")
+        has_text=re.compile(r"(?:^|\.)batch_b")
     ).get_by_role("button", name="移除", exact=True).click()
     await expect(checkbox_b).not_to_be_checked()
     await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
 
     await pick_option(
         page,
-        page.get_by_role("combobox", name=re.compile(r"去向表 (.*\\.)?batch_a$")),
-        re.compile(r"(.*\\.)?batch_a_copy$"),
+        page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?batch_a$")),
+        re.compile(r"(.*\.)?batch_a_copy$"),
     )
     await page.reload()
     await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
-    await expect(source.get_by_role("checkbox", name=re.compile(r"选择 (.*\\.)?batch_b$"))).not_to_be_checked()
+    await expect(source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_b$"))).not_to_be_checked()
     await page.get_by_role("button", name="保存", exact=True).click()
     await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
 

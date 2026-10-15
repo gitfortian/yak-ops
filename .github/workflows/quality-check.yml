@@ -241,5 +241,5 @@ jobs:
           done
 
           echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "This gate covers code quality, not JDBC/CDC runtime E2E acceptance." >> "${GITHUB_STEP_SUMMARY}"
+          echo "This job checks code quality, not JDBC/CDC integration tests." >> "${GITHUB_STEP_SUMMARY}"
           exit "${failed}"

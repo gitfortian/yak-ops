@@ -1,4 +1,4 @@
-name: MySQL CDC Runtime Cross-Database Acceptance
+name: MySQL CDC Cross-Database IT
 
 on:
   # Scope real CDC Runtime E2E to the YOIP-1 acceptance test or explicit manual runs.
