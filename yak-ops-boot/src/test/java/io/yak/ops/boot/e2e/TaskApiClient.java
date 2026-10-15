@@ -66,11 +66,16 @@ final class TaskApiClient {
             request.method(method, payload == null ? HttpRequest.BodyPublishers.noBody()
                     : HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(payload)));
             HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != expectedStatus) {
-                throw new AssertionError(method + " " + path + " returned HTTP " + response.statusCode()
-                        + "; expected " + expectedStatus);
-            }
             JsonNode result = response.body().isBlank() ? JSON.nullNode() : JSON.readTree(response.body());
+            if (response.statusCode() != expectedStatus) {
+                // Return only a bounded, password-redacted error message; never dump the request or tokens.
+                String message = result.path("msg").asText(result.path("message").asText(""));
+                message = message.replace(BackendE2EEnvironment.PASSWORD, "[REDACTED]");
+                if (message.length() > 320) message = message.substring(0, 320);
+                throw new AssertionError(method + " " + path + " returned HTTP " + response.statusCode()
+                        + "; expected " + expectedStatus + "; code=" + result.path("code").asInt(-1)
+                        + "; reason=" + message);
+            }
             if (response.statusCode() < 300 && result.path("code").asInt(-1) != 200) {
                 throw new AssertionError(method + " " + path + " returned unexpected business error "
                         + result.path("code").asInt(-1));
