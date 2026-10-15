@@ -11,7 +11,7 @@ import sys
 import time
 import traceback
 
-SCENARIOS = ("solution-selection", "schedule-save-recovery", "multitable-mapping", "schema-preview", "schedule-history", "schedule-errors")
+SCENARIOS = ("solution-selection", "schedule-save-recovery", "multitable-mapping", "schema-preview", "realtime-stages", "schedule-history", "schedule-errors")
 PRODUCT = "product-login"
 ALL = (*SCENARIOS, PRODUCT)
 
@@ -19,7 +19,7 @@ async def check(name, directory):
     from playwright.async_api import async_playwright
     from mock_api import mock, state
     from data_sync import (verify_solution_creation, verify_partial_task_save,
-                           verify_multitable_mapping, verify_schema_preview)
+                           verify_multitable_mapping, verify_schema_preview, verify_realtime_stages)
     from scheduling import verify_schedule_history, verify_schedule_errors
     from product import verify_product_login
 
@@ -28,6 +28,7 @@ async def check(name, directory):
         "schedule-save-recovery": verify_partial_task_save,
         "multitable-mapping": verify_multitable_mapping,
         "schema-preview": verify_schema_preview,
+        "realtime-stages": verify_realtime_stages,
         "schedule-history": verify_schedule_history,
         "schedule-errors": verify_schedule_errors,
         PRODUCT: verify_product_login,

@@ -249,7 +249,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("workflow_dispatch:", ui)
         self.assertIn("yak-ops-ui/tests/e2e/run.py", ui)
         scenarios = (ROOT / "yak-ops-ui/tests/e2e/run.py").read_text()
-        for scenario in ("multitable-mapping", "schema-preview"):
+        for scenario in ("multitable-mapping", "schema-preview", "realtime-stages"):
             self.assertIn(scenario, scenarios)
 
     def test_browser_runner_has_no_backend_acceptance_dependency(self):

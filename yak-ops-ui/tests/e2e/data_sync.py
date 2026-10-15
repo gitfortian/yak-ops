@@ -244,3 +244,66 @@ async def verify_schema_preview(page):
     params = json.loads(created["parameters"])
     assert params["steps"] == ["SCHEMA", "FULL"], params
     assert params["tableMappings"][0]["target"]["table"] == "sm_browser_target"
+
+
+async def verify_realtime_stages(page):
+    """Database realtime setup and progress display, without a live CDC consumer."""
+    import json
+    from datetime import datetime, timezone
+    from mock_api import instance
+    state["catalog_mode"] = "multi"
+    dialog = await prepare_database_task(page, "整库实时")
+    for step in ("全量同步", "增量同步"):
+        field = dialog.get_by_role("checkbox", name=step, exact=True)
+        await expect(field).to_be_checked()
+        await expect(field).to_be_disabled()
+    await dialog.get_by_role("button", name="下一步", exact=True).click()
+    await pick_datasources(page)
+    for table in ("batch_a", "batch_b"):
+        await page.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?" + table + r"$")).check()
+        await pick_option(page,
+                          page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?" + table + r"$")),
+                          re.compile(r"(.*\.)?" + table + r"_copy$"))
+    await expect(page.locator("#target").get_by_role("combobox").first).to_be_disabled()
+    await expect(page.locator("#schedule")).to_have_count(0)
+    await page.reload()
+    await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
+    saved = [item[2] for item in state["requests"]
+             if item[0] == "POST" and item[1] == "/api/v1/task-definitions"][-1]
+    config = json.loads(saved["parameters"])
+    assert config["solutionType"] == "DATABASE_REALTIME", config
+    assert config["steps"] == ["FULL", "INCREMENTAL"]
+    assert len(config["tableMappings"]) == 2
+    assert all(row["writeMode"] == "UPSERT" for row in config["tableMappings"])
+
+    # Deliberately synthesize Instance telemetry; this must not start MySQL CDC or wait for a checkpoint.
+    full = {"step": "FULL", "status": "FINISHED", "progressPercent": 100,
+            "progressUnit": "SPLITS", "readRows": 4, "committedRows": 4,
+            "plannedSplits": 1, "completedSplits": 1, "failureCode": None}
+    incremental = {"step": "INCREMENTAL", "status": "RUNNING", "progressPercent": None,
+                   "progressUnit": "RECORDS", "readRows": 5, "committedRows": 5,
+                   "plannedSplits": None, "completedSplits": None, "failureCode": None}
+    report = {"version": 2, "observedAt": datetime.now(timezone.utc).isoformat(),
+              "generation": 0, "restored": False, "counterScope": "GENERATION",
+              "phase": "STREAMING", "checkpoints": {"handoffId": 1, "completedId": 1},
+              "stages": [full, incremental],
+              "tables": [{"mappingIndex": index, "stages": [full, incremental]}
+                         for index in range(2)]}
+    state["task"]["status"] = "PUBLISHED"
+    instance.update({"definitionId": "new-task", "status": "RUNNING",
+                     "executionReport": json.dumps(report), "progressPercent": None})
+    await page.goto(site("/data-sync/new-task/detail?executionId=i1"))
+    await expect(page.get_by_role("progressbar", name="全量同步", exact=True)).to_have_attribute(
+        "aria-valuenow", "100")
+    streaming = page.get_by_role("progressbar", name="增量同步", exact=True)
+    await expect(streaming).to_have_attribute("data-mode", "running")
+    assert await streaming.get_attribute("aria-valuenow") is None
+
+    # Stale sampled data cannot keep a false healthy streaming indicator.
+    report["observedAt"] = "2000-01-01T00:00:00Z"
+    instance["executionReport"] = json.dumps(report)
+    await page.reload()
+    await expect(page.get_by_role("progressbar", name="增量同步", exact=True)).to_have_attribute(
+        "aria-valuetext", "观测已过期")
