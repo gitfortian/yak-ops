@@ -1,6 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -28,6 +30,7 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
     private final MySqlBinlogSplit binlog;
     private final Phase phase;
     private final BinlogOffset highWatermark;
+    private final List<FinishedSnapshotSplitInfo> finishedSplits;
 
     /**
      * Creates one immutable Binlog handoff state.
@@ -37,12 +40,25 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
      * @param highWatermark completed snapshot boundary, when known
      */
     public MySqlHybridBinlogSplit(MySqlBinlogSplit binlog, Phase phase, BinlogOffset highWatermark) {
+        this(binlog, phase, highWatermark, List.of());
+    }
+
+    public MySqlHybridBinlogSplit(
+            MySqlBinlogSplit binlog,
+            Phase phase,
+            BinlogOffset highWatermark,
+            List<FinishedSnapshotSplitInfo> finishedSplits) {
+        this.finishedSplits = List.copyOf(Objects.requireNonNull(finishedSplits, "finishedSplits"));
         this.binlog = Objects.requireNonNull(binlog, "binlog");
         this.phase = Objects.requireNonNull(phase, "phase");
         if (phase != Phase.BOOTSTRAP && (binlog.offset() == null || binlog.schemaHistory().length == 0)) {
             throw new IllegalArgumentException("Snapshot handoff requires a Binlog anchor and schema history");
         }
         this.highWatermark = highWatermark;
+    }
+
+    public List<FinishedSnapshotSplitInfo> finishedSplits() {
+        return finishedSplits;
     }
 
     /** Returns the underlying Binlog split. */
@@ -75,11 +91,20 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
     }
 
     /** Resumes streaming after a completed snapshot checkpoint. */
-    public MySqlHybridBinlogSplit startStreaming(BinlogOffset high) {
+    public MySqlHybridBinlogSplit startStreaming(BinlogOffset high, List<FinishedSnapshotSplitInfo> completed) {
         if (phase != Phase.PAUSED) {
             throw new IllegalStateException("Hybrid Binlog is not waiting for snapshot handoff");
         }
-        return new MySqlHybridBinlogSplit(binlog, Phase.STREAMING, Objects.requireNonNull(high, "high"));
+        if (completed.isEmpty()) throw new IllegalArgumentException("Snapshot handoff requires per-chunk watermarks");
+        BinlogOffset start = completed.stream()
+                .map(FinishedSnapshotSplitInfo::highWatermark)
+                .min(BinlogOffsetOrder::compare)
+                .orElseThrow();
+        return new MySqlHybridBinlogSplit(
+                binlog.withProgress(start, binlog.schemaHistory()),
+                Phase.STREAMING,
+                Objects.requireNonNull(high, "high"),
+                completed);
     }
 
     /** Advances the checkpoint cursor after the emitted Binlog change is acknowledged. */
@@ -87,7 +112,7 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
         if (phase != Phase.STREAMING) {
             throw new IllegalStateException("A paused Binlog split must not advance its offset");
         }
-        return new MySqlHybridBinlogSplit(binlog.withProgress(offset, history), phase, highWatermark);
+        return new MySqlHybridBinlogSplit(binlog.withProgress(offset, history), phase, highWatermark, finishedSplits);
     }
 
     /** Excludes checkpoint offsets and Schema History from diagnostic output. */

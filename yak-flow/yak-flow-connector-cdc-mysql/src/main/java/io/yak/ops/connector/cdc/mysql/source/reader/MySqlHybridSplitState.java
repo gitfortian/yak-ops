@@ -17,10 +17,13 @@ public final class MySqlHybridSplitState {
     private MySqlSnapshotSplit snapshot;
     private MySqlHybridBinlogSplit binlog;
     private BinlogOffset emittedOffset;
+    private Long outputCheckpoint;
+    private boolean outputDurable;
 
     public MySqlHybridSplitState(MySqlHybridSplit initial) {
         if (initial instanceof MySqlSnapshotSplit range) {
             snapshot = range;
+            outputDurable = range.prepared();
         } else if (initial instanceof MySqlHybridBinlogSplit stream) {
             binlog = stream;
             emittedOffset = stream.binlog().offset();
@@ -45,14 +48,51 @@ public final class MySqlHybridSplitState {
         emittedOffset = low;
     }
 
-    public void resume(BinlogOffset high) {
+    public void prepareSnapshot(MySqlSnapshotSplit prepared) {
+        if (snapshot == null
+                || snapshot.prepared()
+                || !snapshot.splitId().equals(prepared.splitId())
+                || !snapshot.tableId().equals(prepared.tableId())
+                || !snapshot.fingerprint().equals(prepared.fingerprint())
+                || !Objects.equals(snapshot.lowerInclusive(), prepared.lowerInclusive())
+                || !Objects.equals(snapshot.upperExclusive(), prepared.upperExclusive())) {
+            throw new IllegalStateException("Prepared snapshot differs from its assigned range");
+        }
+        snapshot = prepared;
+        outputDurable = false;
+    }
+
+    public void snapshotCheckpoint(long checkpointId) {
+        if (snapshot != null && snapshot.output() != null && !outputDurable && outputCheckpoint == null) {
+            outputCheckpoint = checkpointId;
+        }
+    }
+
+    public String completeCheckpoint(long checkpointId) {
+        if (outputCheckpoint != null && checkpointId >= outputCheckpoint) {
+            outputDurable = true;
+            outputCheckpoint = null;
+            return snapshot.splitId();
+        }
+        return null;
+    }
+
+    public void emitSnapshotRows(int position) {
+        if (!outputDurable) throw new IllegalStateException("Snapshot output has no completed preparation checkpoint");
+        snapshot = snapshot.withOutputPosition(position);
+    }
+
+    public void resume(
+            BinlogOffset high,
+            java.util.List<io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo> finished) {
         if (binlog == null) {
             return;
         }
         if (binlog.phase() == MySqlHybridBinlogSplit.Phase.STREAMING) {
             return;
         }
-        binlog = binlog.startStreaming(high);
+        binlog = binlog.startStreaming(high, finished);
+        emittedOffset = binlog.binlog().offset();
     }
 
     public void emitBinlog(BinlogOffset position) {
@@ -71,7 +111,7 @@ public final class MySqlHybridSplitState {
             return snapshot;
         }
         if (binlog.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) {
-            throw new IllegalStateException("Cannot checkpoint MySQL hybrid source before its low watermark");
+            return binlog;
         }
         if (history == null || history.length == 0 || emittedOffset == null) {
             throw new IllegalStateException("Hybrid Binlog checkpoint requires offset and Schema History");
