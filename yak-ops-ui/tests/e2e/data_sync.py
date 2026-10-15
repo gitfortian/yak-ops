@@ -18,9 +18,14 @@ async def choose_solution(page, kind, name):
     await dialog.get_by_role("combobox").nth(2).click()
     await page.get_by_role("option", name=kind, exact=True).click()
     await dialog.get_by_role("textbox", name="名称", exact=True).fill(name)
-    for checkbox in await dialog.get_by_role("checkbox").all():
-        await expect(checkbox).to_be_checked()
-        await expect(checkbox).to_be_disabled()
+    if kind == "单表离线":
+        await expect(dialog.get_by_role("checkbox", name="结构迁移", exact=True)).not_to_be_checked()
+        await expect(dialog.get_by_role("checkbox", name="结构迁移", exact=True)).to_be_enabled()
+        await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_checked()
+    else:
+        for checkbox in await dialog.get_by_role("checkbox").all():
+            await expect(checkbox).to_be_checked()
+            await expect(checkbox).to_be_disabled()
     await dialog.get_by_role("button", name="下一步", exact=True).click()
 
 
