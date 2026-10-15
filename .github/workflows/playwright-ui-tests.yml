@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - 'yak-ops-ui/tests/e2e/**'
-      - '.github/workflows/ui-acceptance.yml'
+      - '.github/workflows/playwright-ui-tests.yml'
 
 permissions:
   contents: read

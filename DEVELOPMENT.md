@@ -35,7 +35,7 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 | Layer | Technology | Trigger | Ownership |
 | --- | --- | --- | --- |
 | Unit / frontend contracts | JUnit / TypeScript | Every PR (affected quality scope) | Java modules / `yak-ops-ui` |
-| JDBC/CDC connector integration | JUnit + Docker | Relevant connector PR and release | `yak-flow` connector modules |
+| JDBC/CDC connector integration | JUnit + Docker | JDBC: release or manual; CDC: manual | `yak-flow` connector modules |
 | UI automation | Playwright | Release; manual as needed | `yak-ops-ui/tests/e2e/` |
 | Deployment smoke | Docker Compose | Release | `scripts/release/smoke-compose.sh` |
 
@@ -46,14 +46,14 @@ suite and runner have been removed pending redesign. The module continues to run
 ordinary JUnit and architecture tests with Maven `verify`.
 
 Existing real-database connector tests remain available in the
-[JDBC Source IT](.github/workflows/jdbc-source-acceptance.yml),
-[JDBC Sink Cross-Database IT](.github/workflows/jdbc-sink-cross-database-acceptance.yml)
-and MySQL CDC integration workflows. They do not replace Boot API/Task E2E coverage.
+[JDBC Source IT](.github/workflows/jdbc-source-it.yml),
+[JDBC Sink Cross-Database IT](.github/workflows/jdbc-sink-cross-database-it.yml)
+and the manually selected [MySQL CDC IT](.github/workflows/mysql-cdc-it.yml). They do not replace Boot API/Task E2E coverage.
 Boot E2E is **NOT RUN** until a new suite is implemented.
 
 ### Playwright UI Tests
 
-Playwright is **not a default feature PR gate**. The standalone [Playwright UI Tests workflow](.github/workflows/ui-acceptance.yml) runs on manual dispatch and when its own tests/workflow change. Its mocked scenarios run against the **built** frontend, not the Vite development server. Ordinary UI feature PRs rely on frontend quality and contract checks; reviewers may explicitly request a browser run for high-risk interactions.
+Playwright is **not a default feature PR gate**. The standalone [Playwright UI Tests workflow](.github/workflows/playwright-ui-tests.yml) runs on manual dispatch and when its own tests/workflow change. Its mocked scenarios run against the **built** frontend, not the Vite development server. Ordinary UI feature PRs rely on frontend quality and contract checks; reviewers may explicitly request a browser run for high-risk interactions.
 
 The formal [Release Gate](.github/workflows/v1-release-gate.yml) always runs the **full** UI suite against a disposable Docker Compose stack containing the exact candidate images. The suite includes mocked interaction contracts and a real authenticated login/navigation smoke. UI tests must not wait for real JDBC/CDC, checkpoints, or Cron triggering; these belong to backend integration tests.
 
