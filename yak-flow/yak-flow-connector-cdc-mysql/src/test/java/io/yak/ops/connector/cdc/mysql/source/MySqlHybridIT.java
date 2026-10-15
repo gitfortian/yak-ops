@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
@@ -15,13 +16,13 @@ import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.testutils.MySqlDatabase;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -36,17 +37,24 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
- * Opt-in real MySQL Hybrid acceptance for bounded chunks, replay and checkpoint handoff.
+ * Real MySQL Hybrid integration for bounded chunks, replay and checkpoint handoff.
  *
  * <p>The fixture injects writes on both tables immediately after the Binlog low watermark
  * is captured, before the Snapshot readers poll their assigned splits. Real Debezium,
  * Binlog and JDBC Snapshot I/O run
  * on Connector Base fetchers under deterministic mailbox/coordinator scheduling.
  */
+@Tag("cdc")
+@Timeout(240)
 class MySqlHybridIT {
+    @RegisterExtension
+    static final MySqlDatabase DATABASE_RESOURCE = MySqlDatabase.cdc();
 
     private static final String DATABASE = "yak_cdc_it";
     private static final TableId ORDERS = new TableId(DATABASE, null, "hybrid_orders");
@@ -54,16 +62,15 @@ class MySqlHybridIT {
 
     @Test
     void capturesMultiTableConcurrentWritesAndDefersBinlogUntilCompletedSnapshotCheckpoint() throws Exception {
-        if (!Boolean.getBoolean("mysql.cdc.hybrid.it.enabled")) {
-            throw new IllegalStateException("Explicit -Dmysql.cdc.hybrid.it.enabled=true required");
-        }
-        String password = System.getProperty("mysql.cdc.it.password", "rootpass");
+        String password = DATABASE_RESOURCE.metadata().password();
         execute(password, "DROP TABLE IF EXISTS hybrid_orders");
         execute(password, "CREATE TABLE hybrid_orders(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
         execute(password, "INSERT INTO hybrid_orders VALUES (1,'old'),(100,'deleted')");
         execute(password, "DROP TABLE IF EXISTS hybrid_items");
-        execute(password, "CREATE TABLE hybrid_items "
-                + "(id BIGINT PRIMARY KEY, sku VARCHAR(100) NOT NULL, qty BIGINT NOT NULL)");
+        execute(
+                password,
+                "CREATE TABLE hybrid_items "
+                        + "(id BIGINT PRIMARY KEY, sku VARCHAR(100) NOT NULL, qty BIGINT NOT NULL)");
         execute(password, "INSERT INTO hybrid_items VALUES (10,'ten',2),(20,'removed',7)");
 
         TableSchema schema = new TableSchema(
@@ -78,18 +85,20 @@ class MySqlHybridIT {
                         new Column("qty", LogicalTypes.BIGINT.copy(false))),
                 List.of("id"));
         MySqlHybridCdcSource source = MySqlCdcSource.builder()
-                .hostname("127.0.0.1")
+                .hostname(DATABASE_RESOURCE.metadata().host())
+                .port(DATABASE_RESOURCE.metadata().port())
                 .username("root")
                 .password(password)
                 .serverId(5561)
-                .topicPrefix("yak_hybrid_acceptance")
+                .topicPrefix("yak_hybrid_integration")
                 .table(ORDERS, schema)
                 .table(ITEMS, itemSchema)
                 .buildHybrid(1);
 
         try (Harness harness = new Harness(source, 2, password)) {
             harness.start();
-            harness.until(() -> harness.coordinatorState().phase() == MySqlHybridEnumeratorState.Phase.HANDOFF,
+            harness.until(
+                    () -> harness.coordinatorState().phase() == MySqlHybridEnumeratorState.Phase.HANDOFF,
                     Duration.ofSeconds(80));
 
             // Before the completed checkpoint, nothing but the Snapshot INSERTs may reach the Sink.
@@ -109,20 +118,24 @@ class MySqlHybridIT {
             MySqlHybridEnumeratorState beforeComplete = harness.enumerator.snapshotState(30L);
             assertEquals(MySqlHybridEnumeratorState.Phase.HANDOFF, beforeComplete.phase());
             harness.enumerator.notifyCheckpointComplete(30L);
-            harness.until(() ->
-                    harness.output.stream().anyMatch(row ->
-                            ORDERS.equals(row.tableId()) && row.rowKind() == RowKind.DELETE)
-                            && harness.output.stream().anyMatch(row ->
-                                    ORDERS.equals(row.tableId()) && row.rowKind() == RowKind.UPDATE_AFTER)
-                            && harness.output.stream().anyMatch(row ->
-                                    ITEMS.equals(row.tableId()) && row.rowKind() == RowKind.DELETE)
-                            && harness.output.stream().anyMatch(row ->
-                                    ITEMS.equals(row.tableId()) && row.rowKind() == RowKind.UPDATE_AFTER)
-                            && harness.output.stream().anyMatch(row ->
-                                    ORDERS.equals(row.tableId()) && row.rowKind() == RowKind.INSERT
+            harness.until(
+                    () -> harness.output.stream()
+                                    .anyMatch(row -> ORDERS.equals(row.tableId()) && row.rowKind() == RowKind.DELETE)
+                            && harness.output.stream()
+                                    .anyMatch(row ->
+                                            ORDERS.equals(row.tableId()) && row.rowKind() == RowKind.UPDATE_AFTER)
+                            && harness.output.stream()
+                                    .anyMatch(row -> ITEMS.equals(row.tableId()) && row.rowKind() == RowKind.DELETE)
+                            && harness.output.stream()
+                                    .anyMatch(
+                                            row -> ITEMS.equals(row.tableId()) && row.rowKind() == RowKind.UPDATE_AFTER)
+                            && harness.output.stream()
+                                    .anyMatch(row -> ORDERS.equals(row.tableId())
+                                            && row.rowKind() == RowKind.INSERT
                                             && ((Number) row.row().getField(0)).longValue() == 5L)
-                            && harness.output.stream().anyMatch(row ->
-                                    ITEMS.equals(row.tableId()) && row.rowKind() == RowKind.INSERT
+                            && harness.output.stream()
+                                    .anyMatch(row -> ITEMS.equals(row.tableId())
+                                            && row.rowKind() == RowKind.INSERT
                                             && ((Number) row.row().getField(0)).longValue() == 30L)
                             && harness.coordinatorState().phase() == MySqlHybridEnumeratorState.Phase.STREAMING,
                     Duration.ofSeconds(80));
@@ -164,9 +177,10 @@ class MySqlHybridIT {
                 }
             }
             assertEquals(Map.of(1L, "changed", 5L, "inserted"), orders);
-            assertEquals(Map.of(10L, new ItemValue("changed-sku", 3L),
-                    30L, new ItemValue("added", 4L)), items);
-            assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, harness.coordinatorState().phase());
+            assertEquals(Map.of(10L, new ItemValue("changed-sku", 3L), 30L, new ItemValue("added", 4L)), items);
+            assertEquals(
+                    MySqlHybridEnumeratorState.Phase.STREAMING,
+                    harness.coordinatorState().phase());
         }
     }
 
@@ -177,10 +191,8 @@ class MySqlHybridIT {
     private record ItemValue(String sku, long quantity) {}
 
     private static void execute(String password, String query) throws Exception {
-        try (Connection connection = DriverManager.getConnection(
-                        "jdbc:mysql://127.0.0.1:3306/" + DATABASE + "?useSSL=false&allowPublicKeyRetrieval=true",
-                        "root",
-                        password);
+        try (Connection connection =
+                        DriverManager.getConnection(DATABASE_RESOURCE.metadata().url(), "root", password);
                 Statement statement = connection.createStatement()) {
             statement.execute(query);
         }
@@ -279,8 +291,7 @@ class MySqlHybridIT {
 
             @Override
             public Configuration getConfiguration() {
-                return new Configuration().set(
-                        CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(2));
+                return new Configuration().set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(2));
             }
 
             @Override

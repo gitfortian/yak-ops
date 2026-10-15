@@ -26,30 +26,48 @@ bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.
 bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
 ```
 
-Run relevant tests before the full reactor where possible. Connector real-database ITs run in their own workflows, outside ordinary Maven `verify`. The Boot backend E2E suite is not currently configured. Current CI scopes and required checks are defined by [Quality Check](.github/workflows/quality-check.yml). An unexecuted test is not a pass.
+Run relevant tests before the full reactor. Ordinary Maven `verify` runs unit and architecture tests without Docker. Database tests use the explicit `integration-tests` profile and Failsafe; Backend E2E also uses `backend-e2e` and runs the packaged Boot JAR. An unexecuted test is not a pass.
 
-Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
+Frontend commands and quality checks are documented in [frontend tooling](yak-ops-ui/docs/tooling.md).
 
 ## Test types and execution
 
-| Layer | Technology | Trigger | Ownership |
-| --- | --- | --- | --- |
-| Unit / frontend contracts | JUnit / TypeScript | Every PR (affected quality scope) | Java modules / `yak-ops-ui` |
-| JDBC/CDC connector integration | JUnit + Docker | JDBC: release or manual; CDC: manual | `yak-flow` connector modules |
-| UI automation | Playwright | Release; manual as needed | `yak-ops-ui/tests/e2e/` |
-| Deployment smoke | Docker Compose | Release | `scripts/release/smoke-compose.sh` |
+| Tests | Ownership | Execution |
+| --- | --- | --- |
+| Unit / frontend contracts | Java modules / `yak-ops-ui` | Affected PR quality checks |
+| JDBC / CDC IT | Connector test packages | Selected backend PRs; full release suite |
+| YakFlow integration | Runtime tests and Connector `integration` packages | Selected backend PRs; full release suite |
+| Business database IT | Business modules | Selected backend PRs; full release suite |
+| Backend E2E | `yak-ops-e2e` | Selected backend PRs; full release suite |
+| UI automation / deployment | Playwright / Docker Compose | Release; manual as needed |
 
 ### Backend integration tests
 
-`yak-ops-boot` currently has no database E2E suite. Its previous JUnit + Testcontainers
-suite and runner have been removed pending redesign. The module continues to run its
-ordinary JUnit and architecture tests with Maven `verify`.
+Use Java 21 and a working Docker daemon. Tests create their own disposable databases on dynamic ports; no external database URL or shared environment is needed. `yak-ops-test-utils` is a test-only dependency and must not enter application distributions.
 
-Existing real-database connector tests remain available in the
-[JDBC Source IT](.github/workflows/jdbc-source-it.yml),
-[JDBC Sink Cross-Database IT](.github/workflows/jdbc-sink-cross-database-it.yml)
-and the manually selected [MySQL CDC IT](.github/workflows/mysql-cdc-it.yml). They do not replace Boot API/Task E2E coverage.
-Boot E2E is **NOT RUN** until a new suite is implemented.
+```sh
+bash scripts/tests/run.sh jdbc mysql
+bash scripts/tests/run.sh jdbc postgres
+bash scripts/tests/run.sh jdbc oracle
+bash scripts/tests/run.sh cdc mysql
+bash scripts/tests/run.sh pipeline
+bash scripts/tests/run.sh cdc-pipeline
+bash scripts/tests/run.sh business
+bash scripts/tests/run.sh backend-e2e
+bash scripts/tests/run.sh recovery-e2e
+bash scripts/tests/run.sh full
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+```
+
+Each command is one Maven invocation. Failsafe discovers `*IT` classes by JUnit tags; ordinary tests use `*Test`. Register every concrete IT in `scripts/tests/backend_tests.py`. Selected classes must produce complete XML reports with no failed, skipped or missing cases. IDE execution of one IT class remains available; Backend E2E requires a freshly packaged Boot JAR.
+
+Common Source/Sink behavior belongs in reusable Connector test bases, database-specific types and DDL in their subclasses. Connector and Runtime tests do not depend on HTTP or Boot. Cross-database cases retain the supported MySQL/PostgreSQL/Oracle routes without multiplying every common scenario by every pair. Transaction and concurrency checks belong in business database tests; only API wiring and process lifecycle require Backend E2E.
+
+JUnit owns shared containers within one module's test execution. Data is isolated per scenario; normal E2E shares the application process, not Workspace or task state. Destructive and process-recovery cases own independent processes. Stop running tasks before deleting their data. Do not mix class-scoped container shutdown with root-store reuse, share resources across CI jobs, or enable parallel methods without proving isolation.
+
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
+
+Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
 
 ### Playwright UI Tests
 
