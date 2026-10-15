@@ -22,6 +22,9 @@ def full(reason):
 def classify(paths):
     selected, reasons = set(), set()
     for path in paths:
+        if path == ".github/workflows/ui-acceptance.yml":
+            reasons.add("UI acceptance independently validated, not backend E2E")
+            continue
         if path.startswith((".github/workflows/", ".github/actions/", "scripts/ci/")) or path in {
             "scripts/acceptance/run_product_acceptance.py", "scripts/acceptance/task-execution-e2e.py"
         }:

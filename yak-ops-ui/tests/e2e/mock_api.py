@@ -73,6 +73,7 @@ state = {
     "solution_requests": [],
     "task": task,
     "unexpected_requests": [],
+    "catalog_mode": "single",
 }
 
 
@@ -111,14 +112,27 @@ async def mock(route):
     elif p == "/api/v1/data-sync/solutions":
         query = parse_qs(urlparse(r.url).query)
         state["solution_requests"].append(query)
-        choices = [{"solutionType": "SINGLE_TABLE_OFFLINE", "displayName": "单表离线", "steps": ["FULL"],
-                    "defaultSteps": ["FULL"], "allowedCombinations": [{"steps": ["FULL"], "supportsScheduling": True,
-                                                                      "writeModes": ["APPEND", "UPSERT"]}]}]
+        choices = [{"solutionType": "SINGLE_TABLE_OFFLINE", "displayName": "单表离线",
+                    "steps": ["SCHEMA", "FULL"], "defaultSteps": ["FULL"],
+                    "allowedCombinations": [
+                        {"steps": ["FULL"], "supportsScheduling": True, "writeModes": ["APPEND", "UPSERT"]},
+                        {"steps": ["SCHEMA", "FULL"], "supportsScheduling": True, "writeModes": ["APPEND", "UPSERT"]}]}]
         if query.get("sourceType") == ["MYSQL"]:
-            choices.append({"solutionType": "SINGLE_TABLE_REALTIME", "displayName": "单表实时",
-                            "steps": ["FULL", "INCREMENTAL"], "defaultSteps": ["FULL", "INCREMENTAL"],
-                            "allowedCombinations": [{"steps": ["FULL", "INCREMENTAL"], "supportsScheduling": False,
-                                                     "writeModes": ["UPSERT"]}]})
+            choices.extend([
+                {"solutionType": "SINGLE_TABLE_REALTIME", "displayName": "单表实时",
+                 "steps": ["FULL", "INCREMENTAL"], "defaultSteps": ["FULL", "INCREMENTAL"],
+                 "allowedCombinations": [{"steps": ["FULL", "INCREMENTAL"],
+                                          "supportsScheduling": False, "writeModes": ["UPSERT"]}]},
+                {"solutionType": "DATABASE_OFFLINE", "displayName": "整库离线",
+                 "steps": ["SCHEMA", "FULL"], "defaultSteps": ["FULL"],
+                 "allowedCombinations": [
+                     {"steps": ["FULL"], "supportsScheduling": True, "writeModes": ["APPEND", "UPSERT"]},
+                     {"steps": ["SCHEMA", "FULL"], "supportsScheduling": True, "writeModes": ["APPEND", "UPSERT"]}]},
+                {"solutionType": "DATABASE_REALTIME", "displayName": "整库实时",
+                 "steps": ["FULL", "INCREMENTAL"], "defaultSteps": ["FULL", "INCREMENTAL"],
+                 "allowedCombinations": [{"steps": ["FULL", "INCREMENTAL"],
+                                          "supportsScheduling": False, "writeModes": ["UPSERT"]}]},
+            ])
         if state["fail_solutions"]:
             status, code = 503, 500
         else:
@@ -128,19 +142,26 @@ async def mock(route):
     elif "/catalog/schemas" in p:
         data = []
     elif "/catalog/tables" in p:
+        mode = state["catalog_mode"]
         if "/src/" in p:
-            data = [
-                {"database": "app", "schema": None, "name": "orders", "type": "TABLE"}
-            ]
+            names = ["orders"] if mode == "single" else (
+                ["sm_browser_source"] if mode == "schema" else ["batch_a", "batch_b"])
+            data = [{"database": "app", "schema": None, "name": name, "type": "TABLE"}
+                    for name in names]
         else:
-            data = [
-                {
-                    "database": "ods",
-                    "schema": "public",
-                    "name": "ods_orders",
-                    "type": "TABLE",
-                }
-            ]
+            names = ["ods_orders"] if mode == "single" else (
+                [] if mode == "schema" else ["batch_a_copy", "batch_b_copy"])
+            data = [{"database": "ods", "schema": "public", "name": name, "type": "TABLE"}
+                    for name in names]
+    elif p == "/api/v1/data-sync/schema/preview" and method == "POST":
+        details = json.loads(b["parameters"])
+        state["schema_previews"] = state.get("schema_previews", 0) + 1
+        data = [{
+            "mappingIndex": index, "target": {"catalog": "ods", "schema": "public",
+                                              "table": item["target"]["table"]},
+            "action": "CREATE",
+            "statements": ["CREATE TABLE public." + item["target"]["table"] + " (id BIGINT PRIMARY KEY)"],
+        } for index, item in enumerate(details["tableMappings"])]
     elif p.startswith("/api/v1/data-source/"):
         data = next((x for x in sources if x["id"] == p.rsplit("/", 1)[-1]), {})
     elif p == "/api/v1/task-definitions/page":
@@ -157,7 +178,7 @@ async def mock(route):
     elif p == "/api/v1/task-instances/latest":
         data = (
             [instance]
-            if not b["activeOnly"]
+            if (not b["activeOnly"] or instance["status"] in ("SUBMITTED", "LAUNCHING", "RUNNING"))
             and instance["definitionId"] in b["definitionIds"]
             and r.headers.get("x-workspace-id") == "ws1"
             else []
