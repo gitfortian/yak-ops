@@ -26,6 +26,6 @@ python3 -m playwright install chromium
 python3 yak-ops-ui/tests/e2e/run.py --suite mocked --base-url http://127.0.0.1:5173
 ```
 
-Evidence appears at `/tmp/yak-ui-acceptance/v<VERSION>/<SHA>/ui-acceptance.json`, with per-scenario traces and failure screenshots. Reports must record both release version and exact commit SHA. A skipped or failed UI suite is not release acceptance.
+Evidence appears at `/tmp/yak-ui-acceptance/v<VERSION>/<SHA>/ui-acceptance.json`, with traces for mocked scenarios and failure screenshots. Live login intentionally does not record a trace to avoid storing a typed test password. Reports must record both release version and exact commit SHA. A skipped or failed UI suite is not release acceptance.
 
 Tests must be isolated, use role/label locators, controlled fixtures, condition-based waits, and bounded timeouts. No arbitrary sleep, real CDC/Cron wait in the browser, implicit mutable shared state, or retry solely to hide flakes.

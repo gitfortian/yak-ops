@@ -36,7 +36,10 @@ async def check(name, directory):
         context.set_default_timeout(10000)
         context.set_default_navigation_timeout(20000)
         errors = []
-        await context.tracing.start(screenshots=True, snapshots=True, sources=False)
+        # Browser traces can record password field values. Do not trace live authentication.
+        trace_enabled = name != PRODUCT
+        if trace_enabled:
+            await context.tracing.start(screenshots=True, snapshots=True, sources=False)
         if name != PRODUCT:
             await context.add_init_script("localStorage.setItem('yak-ops.current-workspace-id','ws1');")
             await context.route("**/api/**", mock)
@@ -54,7 +57,8 @@ async def check(name, directory):
                 pass
             raise
         finally:
-            await context.tracing.stop(path=str(directory / "trace.zip"))
+            if trace_enabled:
+                await context.tracing.stop(path=str(directory / "trace.zip"))
             await context.close()
             await browser.close()
 
