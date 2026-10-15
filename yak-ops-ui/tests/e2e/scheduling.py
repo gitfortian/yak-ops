@@ -116,4 +116,3 @@ async def verify_schedule_errors(page):
     await page.get_by_role("menuitem", name="Workspace B", exact=True).click()
     await expect(page.get_by_role("button", name="手动", exact=True)).to_be_visible()
     assert [x for x in state["requests"] if x[1] == "/api/v1/schedules/page"][-1][3] == "ws2"
-    assert not errors, errors

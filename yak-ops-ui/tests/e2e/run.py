@@ -97,9 +97,9 @@ def main():
     print(json.dumps(report), flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-            summary.write(f"## UI Acceptance v{args.version.removeprefix('v')} ({args.sha[:12]})\\n\\n")
+            summary.write(f"## UI Acceptance v{args.version.removeprefix('v')} ({args.sha[:12]})\n\n")
             for entry in results:
-                summary.write(f"- {entry['scenario']}: {entry['status']} ({entry['durationSeconds']}s)\\n")
+                summary.write(f"- {entry['scenario']}: {entry['status']} ({entry['durationSeconds']}s)\n")
     return 0 if report["status"] == "PASS" else 1
 
 if __name__ == "__main__":

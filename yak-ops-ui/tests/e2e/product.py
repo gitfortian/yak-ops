@@ -14,7 +14,7 @@ async def verify_product_login(page):
     await form.get_by_role("textbox", name="用户名").fill(username)
     await form.locator('input[name="userPassword"]').fill(password)
     await form.get_by_role("button", name="登录", exact=True).click()
-    await expect(page).to_have_url(re.compile(r"/data-source(?:\\?.*)?$"), timeout=20000)
+    await expect(page).to_have_url(re.compile(r"/data-source(?:\?.*)?$"), timeout=20000)
     await expect(form).to_have_count(0)
     await page.goto(base_url + "/data-sync")
     await expect(page.get_by_role("button", name="新建同步任务")).to_be_visible()
