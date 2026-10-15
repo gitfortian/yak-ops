@@ -292,6 +292,7 @@ async def verify_realtime_stages(page):
               "tables": [{"mappingIndex": index, "stages": [full, incremental]}
                          for index in range(2)]}
     state["task"]["status"] = "PUBLISHED"
+    state["show_instances"] = True
     instance.update({"definitionId": "new-task", "status": "RUNNING",
                      "executionReport": json.dumps(report), "progressPercent": None})
     await page.goto(site("/data-sync/new-task/detail?executionId=i1"))

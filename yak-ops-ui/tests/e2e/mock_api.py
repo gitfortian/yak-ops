@@ -184,7 +184,7 @@ async def mock(route):
             else []
         )
     elif p == "/api/v1/task-instances/page":
-        data = paging([])
+        data = paging([instance] if state.get("show_instances") else [])
     elif p.startswith("/api/v1/task-instances/"):
         if "/logs" in p:
             data = {
@@ -193,13 +193,14 @@ async def mock(route):
                 "hasMore": False,
             }
         elif p.endswith("/definition"):
+            definition = state["task"]
             data = {
-                "definitionId": "task1",
-                "version": 1,
-                "name": task["name"],
+                "definitionId": instance["definitionId"],
+                "version": definition.get("definitionVersion", 1),
+                "name": definition["name"],
                 "taskType": "DATA_SYNC",
-                "parameterSchemaVersion": 2,
-                "parameters": task["parameters"],
+                "parameterSchemaVersion": definition["parameterSchemaVersion"],
+                "parameters": definition["parameters"],
             }
         elif p.endswith("/metrics"):
             data = {}
