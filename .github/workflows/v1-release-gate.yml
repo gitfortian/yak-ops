@@ -57,18 +57,18 @@ jobs:
     uses: ./.github/workflows/quality-check.yml
 
   backend-acceptance:
-    name: Full Backend Acceptance
+    name: Full Backend E2E
     uses: ./.github/workflows/backend-acceptance.yml
     with:
       full_sweep: true
 
   # Real JDBC driver/database checks run at release time, not for ordinary PRs.
   jdbc-source-acceptance:
-    name: JDBC Source Acceptance
+    name: JDBC Source IT
     uses: ./.github/workflows/jdbc-source-acceptance.yml
 
   jdbc-sink-acceptance:
-    name: JDBC Sink Cross-Database Acceptance
+    name: JDBC Sink Cross-Database IT
     uses: ./.github/workflows/jdbc-sink-cross-database-acceptance.yml
 
   package-smoke:
@@ -180,17 +180,17 @@ jobs:
           python3 -m pip install playwright==1.57.0
           python3 -m playwright install --with-deps chromium
 
-      - name: Compose login smoke and UI acceptance
+      - name: Compose smoke and Playwright UI tests
         env:
-          YAK_UI_ACCEPTANCE: 'true'
+          YAK_PLAYWRIGHT: 'true'
         run: bash scripts/release/smoke-compose.sh "v${RELEASE_VERSION}"
 
-      - name: Upload UI acceptance evidence
+      - name: Upload Playwright results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: yak-ops-${{ env.RELEASE_VERSION }}-ui-acceptance
-          path: /tmp/yak-ui-acceptance/
+          name: yak-ops-${{ env.RELEASE_VERSION }}-playwright
+          path: /tmp/yak-playwright/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -225,14 +225,14 @@ jobs:
             printf -- '- Frontend Image: `%s`\n' "${frontend_image}"
             printf -- '- Frontend Local Image ID: `%s`\n' "${frontend_id}"
             printf -- '- Quality Gate: PASS\n'
-            printf -- '- JDBC Source Acceptance: PASS\n'
-            printf -- '- JDBC Sink Cross-Database Acceptance: PASS\n'
-            printf -- '- Full Backend Acceptance: PASS\n'
-            printf -- '- Task Execution Product Acceptance: PASS\n'
+            printf -- '- JDBC Source IT: PASS\n'
+            printf -- '- JDBC Sink Cross-Database IT: PASS\n'
+            printf -- '- Full Backend E2E: PASS\n'
+            printf -- '- Backend E2E Tests: PASS\n'
             printf -- '- Distribution Verification: PASS\n'
             printf -- '- Docker Image Identity: PASS\n'
             printf -- '- Compose Login Smoke: PASS\n\n'
-            printf -- '- UI Playwright Acceptance: PASS\n\n'
+            printf -- '- Playwright UI Tests: PASS\n\n'
             printf '%s\n' 'Local image IDs are candidate-build evidence. Registry manifest digests are recorded only after immutable version tags are pushed during the publish step.'
           } > release-evidence/release-evidence.md
 

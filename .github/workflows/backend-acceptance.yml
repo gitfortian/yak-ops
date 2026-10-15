@@ -1,10 +1,10 @@
-name: Backend Acceptance
+name: Backend E2E (Release)
 
 on:
   workflow_call:
     inputs:
       full_sweep:
-        description: Require real Task execution product acceptance for a release.
+        description: Run all backend database E2E suites for a release.
         required: false
         type: boolean
         default: false
@@ -19,21 +19,21 @@ concurrency:
 
 jobs:
   acceptance-status:
-    name: Product E2E Status (not executed)
+    name: Backend E2E Not Run
     if: ${{ inputs.full_sweep != true && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Report product acceptance status
+      - name: Explain skipped backend E2E
         shell: bash
         run: |
-          echo "::notice::Product E2E was not requested; this informational result is not acceptance evidence."
+          echo "::notice::Backend E2E was not requested; no database suites ran."
           {
-            echo "## Task Execution Product E2E: NOT EXECUTED"
+            echo "## Backend E2E: NOT RUN"
             echo ""
-            echo "Pass full_sweep=true or run the Product Acceptance workflow to obtain real database evidence."
+            echo "Set full_sweep=true or run Backend E2E Tests to test with real databases."
           } >> "${GITHUB_STEP_SUMMARY}"
 
   full-acceptance:
-    name: Full Task Execution Product E2E
+    name: Full Backend E2E
     if: ${{ inputs.full_sweep == true || github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/task-execution-product-acceptance.yml

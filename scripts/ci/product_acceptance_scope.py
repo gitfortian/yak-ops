@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select product acceptance from the complete PR diff; uncertainty requires full coverage."""
+"""Select backend E2E suites from the full PR diff; uncertain changes run all suites."""
 
 import argparse
 from fnmatch import fnmatchcase
@@ -23,17 +23,17 @@ def classify(paths):
     selected, reasons = set(), set()
     for path in paths:
         if path == ".github/workflows/ui-acceptance.yml":
-            reasons.add("UI acceptance independently validated, not backend E2E")
+            reasons.add("Playwright UI tests run separately from backend E2E")
             continue
         if path.startswith((".github/workflows/", ".github/actions/", "scripts/ci/")) or path in {
             "scripts/acceptance/run_product_acceptance.py", "scripts/acceptance/task-execution-e2e.py"
         }:
-            return full("backend acceptance infrastructure changed")
+            return full("backend E2E infrastructure changed")
         if Path(path).suffix.lower() in {".md", ".mdx", ".rst"} or path in {"LICENSE", "NOTICE"}:
             reasons.add("documentation only")
             continue
         if path.startswith("yak-ops-ui/"):
-            reasons.add("frontend checked by Quality Check; UI acceptance is release/manual")
+            reasons.add("frontend checked by Quality Check; Playwright runs for release/manual")
             continue
         script_suite = next((suite for pattern, suite in (
             ("scripts/acceptance/multitable_*.py", "batch"),
@@ -43,7 +43,7 @@ def classify(paths):
         ) if fnmatchcase(path, pattern)), None)
         if script_suite:
             selected.add(script_suite)
-            reasons.add(script_suite + " backend acceptance changed")
+            reasons.add(script_suite + " backend E2E changed")
             continue
         if path.startswith(("yak-ops-business/yak-ops-business-schedule/",
                             "yak-ops-plugins/yak-ops-plugin-scheduler/")):
@@ -80,9 +80,9 @@ def select(mode, event, base, head):
     if mode not in MODES:
         raise ValueError("Unknown acceptance mode: " + mode)
     if mode == "full":
-        return full("explicit or reusable full backend acceptance")
+        return full("explicit full backend E2E")
     if mode in SUITES:
-        return plan([mode], ["explicit focused backend acceptance"])
+        return plan([mode], ["selected backend E2E suite"])
     if event != "pull_request":
         return full("automatic selection requires a PR comparison")
     try:
@@ -92,14 +92,14 @@ def select(mode, event, base, head):
 
 def verify_results(selection, scope, product):
     if scope != "success":
-        raise ValueError("Backend acceptance scope did not succeed")
+        raise ValueError("Backend test selection failed")
     suites = selection.get("suites")
     if (not isinstance(suites, list) or any(item not in (*SUITES, "full") for item in suites)
             or len(suites) != len(set(suites)) or ("full" in suites and len(suites) != 1)):
-        raise ValueError("Invalid backend acceptance selection")
+        raise ValueError("Invalid backend E2E selection")
     expected = "success" if suites else "skipped"
     if product != expected:
-        raise ValueError(f"Backend acceptance was {product}; expected {expected}")
+        raise ValueError(f"Backend E2E was {product}; expected {expected}")
 
 
 def main():
@@ -108,19 +108,19 @@ def main():
     parser.add_argument("--check-results", action="store_true")
     args = parser.parse_args()
     if args.check_results:
-        selection = json.loads(os.environ["ACCEPTANCE_PLAN"])
+        selection = json.loads(os.environ["BACKEND_TEST_PLAN"])
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-                summary.write("## Product acceptance gate\n\n")
+                summary.write("## Backend E2E Results\n\n")
                 summary.write("Selected scope: `" + json.dumps(selection) + "`\n\n")
-                for name in ("SCOPE_RESULT", "PRODUCT_RESULT"):
+                for name in ("SCOPE_RESULT", "BACKEND_RESULT"):
                     summary.write(f"- {name}: `{os.environ[name]}`\n")
-                summary.write("\nUnselected suites are NOT EXECUTED, not passing acceptance.\n")
-        verify_results(selection, os.environ["SCOPE_RESULT"], os.environ["PRODUCT_RESULT"])
+                summary.write("\nUnselected suites are NOT RUN; no test result exists.\n")
+        verify_results(selection, os.environ["SCOPE_RESULT"], os.environ["BACKEND_RESULT"])
         if selection["suites"]:
-            print("Selected acceptance jobs succeeded; unselected suites are NOT EXECUTED.")
+            print("Selected backend tests passed; unselected suites were NOT RUN.")
         else:
-            print("No product suites selected: NOT EXECUTED (scope checks passed).")
+            print("No backend suites selected: NOT RUN (selection completed).")
         return
     selection = select(args.suite, os.environ.get("CI_EVENT_NAME", ""),
                        os.environ.get("CI_PR_BASE_SHA", ""), os.environ.get("CI_PR_HEAD_SHA", ""))
@@ -133,11 +133,11 @@ def main():
             output.write("matrix=" + json.dumps({"suite": selection["suites"] or ["full"]}) + "\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-            summary.write("## Product acceptance scope\n\n```json\n" + encoded + "\n```\n\n")
+            summary.write("## Backend E2E Selection\n\n```json\n" + encoded + "\n```\n\n")
             for name in ("CI_PR_BASE_SHA", "CI_PR_HEAD_SHA", "GITHUB_SHA"):
                 summary.write(f"- {name}: `{os.environ.get(name, '')}`\n")
-            summary.write("\nScope uses the complete PR diff, including both sides of renames. "
-                          "Unselected suites are NOT EXECUTED, not passing acceptance.\n")
+            summary.write("\nSelection uses the full PR diff, including both sides of renames. "
+                          "Unselected suites are NOT RUN; no test result exists.\n")
 
 
 if __name__ == "__main__":

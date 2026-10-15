@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an existing acceptance suite in a fresh disposable product environment."""
+"""Run a backend E2E suite against disposable databases."""
 
 import argparse
 from contextlib import contextmanager

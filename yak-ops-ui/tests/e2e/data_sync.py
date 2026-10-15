@@ -160,7 +160,7 @@ async def prepare_database_task(page, kind):
     await expect(dialog).to_be_visible()
     for index, name in enumerate(("MySQL", "PostgreSQL", kind)):
         await pick_option(page, dialog.get_by_role("combobox").nth(index), name)
-    await dialog.get_by_role("textbox", name="名称", exact=True).fill("acceptance-" + kind)
+    await dialog.get_by_role("textbox", name="名称", exact=True).fill("playwright-" + kind)
     return dialog
 
 
@@ -203,6 +203,62 @@ async def verify_multitable_mapping(page):
     assert [row["source"]["table"] for row in parameters["tableMappings"]] == ["batch_a", "batch_b"]
     assert [row["target"]["table"] for row in parameters["tableMappings"]] == ["batch_a_copy", "batch_b_copy"]
     assert all(row["writeMode"] == "UPSERT" for row in parameters["tableMappings"])
+
+
+
+async def verify_multitable_selection(page):
+    """Filter source tables, choose several, remove a mapping, and save the remaining table."""
+    import json
+
+    state["catalog_mode"] = "multi"
+    dialog = await prepare_database_task(page, "整库离线")
+    await dialog.get_by_role("button", name="下一步", exact=True).click()
+    await pick_datasources(page)
+
+    source = page.locator("#source")
+    search = source.get_by_placeholder("搜索来源表", exact=True)
+    checkbox_a = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_a$"))
+    checkbox_b = source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_b$"))
+
+    await search.fill("batch_b")
+    await expect(checkbox_a).to_have_count(0)
+    await source.get_by_role("button", name="选择当前结果", exact=True).click()
+    await expect(checkbox_b).to_be_checked()
+    await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
+
+    await search.fill("")
+    await checkbox_a.check()
+    await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
+
+    await checkbox_b.uncheck()
+    await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
+    await checkbox_b.check()
+    await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
+
+    await page.locator("#target").get_by_role("row").filter(
+        has_text=re.compile(r"(?:^|\.)batch_b")
+    ).get_by_role("button", name="移除", exact=True).click()
+    await expect(checkbox_b).not_to_be_checked()
+    await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
+
+    await pick_option(
+        page,
+        page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?batch_a$")),
+        re.compile(r"(.*\.)?batch_a_copy$"),
+    )
+    await page.reload()
+    await expect(page.get_by_text("已选 1 / 100", exact=True)).to_be_visible()
+    await expect(source.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?batch_b$"))).not_to_be_checked()
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
+
+    writes = [item[2] for item in state["requests"]
+              if item[0] == "POST" and item[1] == "/api/v1/task-definitions"]
+    assert len(writes) == 1, writes
+    saved = json.loads(writes[0]["parameters"])
+    assert saved["tableSelection"] == {"mode": "EXPLICIT"}
+    assert [entry["source"]["table"] for entry in saved["tableMappings"]] == ["batch_a"]
+    assert [entry["target"]["table"] for entry in saved["tableMappings"]] == ["batch_a_copy"]
 
 
 async def verify_schema_preview(page):

@@ -1,4 +1,4 @@
-name: MySQL CDC Hybrid Acceptance
+name: MySQL CDC Snapshot + Binlog IT
 
 on:
   workflow_dispatch:

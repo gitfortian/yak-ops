@@ -1,4 +1,4 @@
-name: MySQL CDC Binlog Acceptance
+name: MySQL CDC Binlog IT
 
 on:
   workflow_dispatch:

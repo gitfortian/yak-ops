@@ -1,4 +1,4 @@
-name: JDBC Source Acceptance
+name: JDBC Source IT
 
 on:
   # Manual per-branch acceptance or reusable formal Release Gate; never run on ordinary PRs.

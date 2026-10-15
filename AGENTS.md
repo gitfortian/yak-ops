@@ -78,7 +78,7 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
 - Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
-- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
+- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database integration-test workflows. Never weaken or skip checks to make a PR green.
 - Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
 - Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
@@ -86,10 +86,11 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 ## Verification Scope and Incremental Review
 
 - Four explicit layers: JUnit / TypeScript unit and frontend contract checks on every PR; JUnit + disposable Docker integration and real E2E for affected backend PRs and release; Playwright UI automation for releases or deliberate manual runs; Docker Compose production-image smoke for releases.
+- Name test workflows and jobs after the tool or test type: `Playwright UI Tests`, `Backend E2E`, `JDBC Source IT`, `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` or `Acceptance Scope` for test jobs.
 - UI automation verifies browser-facing behavior only. Do not add per-feature or per-PR browser scripts, or depend on real JDBC, CDC, Cron, checkpoint, or process recovery waits inside Playwright. Extend stable business scenario files in `yak-ops-ui/tests/e2e/`. Keep Playwright setup out of normal product PR jobs.
 - Keep `scripts/ci/product_acceptance_scope.py` as the executable **backend-only** scope map. Classify the full PR diff, including deletions and rename sides. Normal frontend paths select no backend E2E; unknown or shared backend changes require full backend coverage. A skipped test is NOT EXECUTED, not a pass.
 - The Python `scripts/acceptance/` API/database suites are a temporary backend migration boundary. Do not delete or weaken business and recovery assertions until equivalent Java ITs cover them. Never reintroduce `E2E_BROWSER` or import Playwright in the backend suites.
-- The formal Release Gate must pass backend full acceptance, release-candidate Playwright, and Docker Compose smoke. Match the exact release version, commit SHA, and built images; prior or different-SHA green checks are not release evidence.
+- The formal Release Gate must pass backend full backend E2E, release-candidate Playwright, and Docker Compose smoke. Match the exact release version, commit SHA, and built images; prior or different-SHA green checks are not valid release test results.
 - Use fresh, isolated fixtures, condition-based bounded waits, and browser traces/screenshots on failure. Never shorten a timeout, add silent retries, modify production checkpoint intervals, or suppress original failures to make tests green. Parallel backend suites must not share database/state directories.
 - At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. After a fix, review the delta from the previously reviewed SHA; reopen wider scope if the base or shared contracts changed. Known unresolved failures remain blockers even when a later scope omits their suite.
 - Do not change branch protection or silently waive existing required checks to speed merging. A CI workflow migration must preserve an equivalent required check before any old check is removed.

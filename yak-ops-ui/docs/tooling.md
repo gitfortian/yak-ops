@@ -26,13 +26,13 @@ npm run build
 
 ## Runtime and Interaction Verification
 
-Frontend tests are split into static/TypeScript contracts (`npm run check`) and browser acceptance. The former run through Quality Check on normal PRs; the latter are release-scoped.
+Frontend tests are split into static/TypeScript contracts (`npm run check`) and Playwright. The former run through Quality Check on normal PRs; the latter are release-scoped.
 
-The standalone [UI Acceptance workflow](../../.github/workflows/ui-acceptance.yml) runs Playwright Python 1.57.0 against a **production build** served by Vite preview. It is manually runnable; only changes to the acceptance suite/framework itself trigger an additional PR run. Do not add a browser test for every feature PR.
+The standalone [Playwright UI Tests workflow](../../.github/workflows/ui-acceptance.yml) runs Playwright Python 1.57.0 against a **production build** served by Vite preview. It is manually runnable; only changes to the Playwright test suite/framework itself trigger an additional PR run. Do not add a browser test for every feature PR.
 
-The [Release Gate](../../.github/workflows/v1-release-gate.yml) runs the same UI interaction suite plus real login/navigation against candidate images started with Docker Compose. This is independent of the backend JDBC/CDC/checkpoint acceptance. Backend product acceptance under `scripts/acceptance/` no longer imports Playwright.
+The [Release Gate](../../.github/workflows/v1-release-gate.yml) runs the same UI interaction suite plus real login/navigation against candidate images started with Docker Compose. This is independent of backend JDBC/CDC/checkpoint tests. Backend E2E scripts under `scripts/acceptance/` no longer imports Playwright.
 
-Browser scenarios and conventions: [UI Acceptance](../tests/e2e/README.md).
+Browser scenarios and conventions: [Playwright UI Tests](../tests/e2e/README.md).
 
 Useful focused static scripts remain:
 
