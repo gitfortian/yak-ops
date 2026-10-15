@@ -28,15 +28,16 @@ final class TaskFixtures {
         target = datasource("POSTGRE_SQL", "ods", "yak", env.postgresHost(), env.postgresPort());
     }
 
-    private String datasource(String kind, String db, String username, String host, int port) {
+    String datasource(String kind, String db, String username, String host, int port) {
+        String name = kind + "-" + unique();
         api.call("POST", "/api/v1/data-source", Map.of(
-                "name", kind + "-" + unique(), "dbType", kind, "environment", "TEST",
+                "name", name, "dbType", kind, "environment", "TEST",
                 "connectionParams", Map.of("host", host, "port", port,
                         "database", db, "username", username, "password", BackendE2EEnvironment.PASSWORD)));
         JsonNode records = api.call("POST", "/api/v1/data-source/page",
                 Map.of("pageNo", 1, "pageSize", 100, "sorts", List.of())).path("bizData");
         for (JsonNode record : records) {
-            if (record.path("dbType").asText().equals(kind)) return record.path("id").asText();
+            if (record.path("name").asText().equals(name)) return record.path("id").asText();
         }
         throw new AssertionError("Expected test data source was not created for " + kind);
     }
@@ -65,6 +66,14 @@ final class TaskFixtures {
         parameters.put("tableSelection", Map.of("mode", "EXPLICIT"));
         parameters.put("tableMappings", mappings);
         return parameters;
+    }
+
+    Map<String, Object> parameters(String solution, List<String> steps, List<Map<String, Object>> mappings,
+            String sourceId, String targetId) {
+        Map<String, Object> values = parameters(solution, steps, mappings);
+        values.put("source", Map.of("datasourceId", sourceId));
+        values.put("sink", Map.of("datasourceId", targetId));
+        return values;
     }
 
     String create(String name, Map<String, Object> parameters, boolean publish, boolean debug) {
