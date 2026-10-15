@@ -15,7 +15,7 @@ Published Flyway migrations are frozen. Audit upgrade behavior; never use Flyway
 
 ## Release Gate
 
-Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, full JUnit + Testcontainers Backend E2E, JDBC source/sink real-database acceptance, versioned Playwright UI acceptance, distribution checks, Docker identity and Compose smoke. A skipped or conditional check does not count as a pass. Product runtime and UI browser acceptance must both succeed for a formal release; UI evidence must match the candidate version and commit SHA.
+Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, JDBC source/sink real-database integration, versioned Playwright UI tests, distribution checks, Docker identity and Compose smoke. The Boot backend E2E suite is not configured while it is being redesigned, and release evidence explicitly reports it as **NOT RUN**, not PASS. This leaves Boot API/Task E2E coverage missing; the existing JDBC/CDC tests do not replace it. Required checks must actually run and succeed; UI evidence must match the candidate version and commit SHA.
 
 Release Decision requires explicit confirmations and evidence:
 

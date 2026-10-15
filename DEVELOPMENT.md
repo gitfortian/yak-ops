@@ -26,7 +26,7 @@ bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.
 bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
 ```
 
-Run relevant tests before the full reactor where possible. Connector real-database ITs and backend database E2E tests are separate from Maven `verify`. Current CI scopes and required checks are defined by [Quality Check](.github/workflows/quality-check.yml). Skipped acceptance is not successful acceptance.
+Run relevant tests before the full reactor where possible. Connector real-database ITs run in their own workflows, outside ordinary Maven `verify`. The Boot backend E2E suite is not currently configured. Current CI scopes and required checks are defined by [Quality Check](.github/workflows/quality-check.yml). An unexecuted test is not a pass.
 
 Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
 
@@ -35,42 +35,27 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 | Layer | Technology | Trigger | Ownership |
 | --- | --- | --- | --- |
 | Unit / frontend contracts | JUnit / TypeScript | Every PR (affected quality scope) | Java modules / `yak-ops-ui` |
-| Backend integration and E2E | JUnit + disposable Docker databases | Affected backend PR, full release gate | Connector / task / runtime test modules |
+| JDBC/CDC connector integration | JUnit + Docker | Relevant connector PR and release | `yak-flow` connector modules |
 | UI automation | Playwright | Release; manual as needed | `yak-ops-ui/tests/e2e/` |
 | Deployment smoke | Docker Compose | Release | `scripts/release/smoke-compose.sh` |
 
-### Backend E2E
+### Backend integration tests
 
-[Backend E2E Tests](.github/workflows/backend-e2e.yml) uses the complete PR diff and
-[backend E2E scope map](scripts/ci/backend_e2e_scope.py). Relevant backend PRs run one or
-more of batch, schedule, realtime and schema; shared or unclassified backend changes run
-full. Frontend-only changes do not start Testcontainers. A non-selected suite is NOT RUN.
+`yak-ops-boot` currently has no database E2E suite. Its previous JUnit + Testcontainers
+suite and runner have been removed pending redesign. The module continues to run its
+ordinary JUnit and architecture tests with Maven `verify`.
 
-Backend E2E uses JUnit 5 with real MySQL and PostgreSQL containers started automatically
-by Testcontainers. The tests run a packaged Spring Boot JVM through its real authenticated
-HTTP APIs and verify physical database changes, CDC handoff, checkpoint, Quartz, persisted
-history, server-side failure and process restart. No Python backend E2E runner remains.
-
-```bash
-# Docker must be running. No fixed database host ports are required.
-bash scripts/backend-e2e/run.sh batch
-bash scripts/backend-e2e/run.sh schedule
-bash scripts/backend-e2e/run.sh realtime
-bash scripts/backend-e2e/run.sh schema
-bash scripts/backend-e2e/run.sh full
-```
-
-The script selects Maven Failsafe `*IT.java` tests in yak-ops-boot through the
-explicit backend-e2e profile. Ordinary Maven verify runs unit tests without the profile and
-does not start Docker. Each E2E class owns isolated databases and a state directory; tests
-use JUnit assertions, JDBC, bounded waits, deterministic SQL fixtures and test-only credentials.
-A Docker failure is a test failure, not a skip. Failsafe reports are uploaded as CI evidence.
+Existing real-database connector tests remain available in the
+[JDBC Source IT](.github/workflows/jdbc-source-acceptance.yml),
+[JDBC Sink Cross-Database IT](.github/workflows/jdbc-sink-cross-database-acceptance.yml)
+and MySQL CDC integration workflows. They do not replace Boot API/Task E2E coverage.
+Boot E2E is **NOT RUN** until a new suite is implemented.
 
 ### Playwright UI Tests
 
 Playwright is **not a default feature PR gate**. The standalone [Playwright UI Tests workflow](.github/workflows/ui-acceptance.yml) runs on manual dispatch and when its own tests/workflow change. Its mocked scenarios run against the **built** frontend, not the Vite development server. Ordinary UI feature PRs rely on frontend quality and contract checks; reviewers may explicitly request a browser run for high-risk interactions.
 
-The formal [Release Gate](.github/workflows/v1-release-gate.yml) always runs the **full** UI suite against a disposable Docker Compose stack containing the exact candidate images. The suite includes mocked interaction contracts and a real authenticated login/navigation smoke. UI tests must not wait for real JDBC/CDC, checkpoints, or Cron triggering; these belong to backend IT/E2E.
+The formal [Release Gate](.github/workflows/v1-release-gate.yml) always runs the **full** UI suite against a disposable Docker Compose stack containing the exact candidate images. The suite includes mocked interaction contracts and a real authenticated login/navigation smoke. UI tests must not wait for real JDBC/CDC, checkpoints, or Cron triggering; these belong to backend integration tests.
 
 ```sh
 python3 -m pip install playwright==1.57.0
@@ -83,7 +68,7 @@ The Playwright report is `/tmp/yak-playwright/v<VERSION>/<SHA>/playwright-result
 
 ### Test and review evidence
 
-The backend E2E workflow collects Maven Failsafe XML reports and per-suite Actions artifacts. Playwright has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
+Connector integration workflows collect their own test reports. Playwright has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
 
 
 ## Incremental Review Evidence
