@@ -55,7 +55,13 @@ final class TaskFixtures {
     }
 
     private void requireTable(String id, Map<String, String> query, String name) {
-        JsonNode result = api.call("POST", "/api/v1/data-source/" + id + "/catalog/tables", query);
+        JsonNode result;
+        try {
+            result = api.call("POST", "/api/v1/data-source/" + id + "/catalog/tables", query);
+        } catch (AssertionError error) {
+            throw new AssertionError("Datasource " + name + " metadata unavailable: "
+                    + env.latestCatalogFailureCause(), error);
+        }
         for (JsonNode row : result) {
             if (name.equals(row.path("name").asText())) return;
         }

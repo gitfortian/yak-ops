@@ -187,6 +187,29 @@ final class BackendE2EEnvironment implements AutoCloseable {
         return applicationLog;
     }
 
+    String latestCatalogFailureCause() {
+        try {
+            List<String> diagnostics = new ArrayList<>();
+            boolean inFailure = false;
+            for (String line : Files.readAllLines(applicationLog)) {
+                if (line.contains("Business request failed, errorCode=41014")) {
+                    diagnostics.clear();
+                    inFailure = true;
+                }
+                if (inFailure && (line.contains("Caused by:") || line.contains("SQLException:")
+                        || line.contains("ClassNotFoundException:"))) {
+                    String visible = line.trim().replace(PASSWORD, "[REDACTED]");
+                    if (visible.length() > 350) visible = visible.substring(0, 350);
+                    diagnostics.add(visible);
+                }
+                if (diagnostics.size() >= 6) break;
+            }
+            return diagnostics.isEmpty() ? "No JDBC cause found in application log" : String.join("; ", diagnostics);
+        } catch (IOException failure) {
+            return "Application diagnostics unavailable: " + failure.getClass().getSimpleName();
+        }
+    }
+
     Process startContender() {
         return startProcess(randomPort(), root.resolve("rejected-owner.log"));
     }
