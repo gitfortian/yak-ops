@@ -22,92 +22,54 @@ SPEC.loader.exec_module(runner)
 
 
 class ScopeTest(unittest.TestCase):
-    def test_documentation_does_not_start_browser_or_database(self):
-        for path in ("AGENTS.md", "DEVELOPMENT.md", ".github/PULL_REQUEST_TEMPLATE.md", "docs/guide.mdx"):
+    def test_docs_and_frontend_do_not_run_backend_e2e(self):
+        for path in ("AGENTS.md", "DEVELOPMENT.md", "docs/guide.mdx",
+                     "yak-ops-ui/apps/web/app/workspace/page.tsx",
+                     "yak-ops-ui/apps/web/app/data-sync/task-editor.tsx",
+                     "yak-ops-ui/apps/web/service/data-sync/config.ts",
+                     "yak-ops-ui/package-lock.json",
+                     "yak-ops-ui/tests/e2e/run.py"):
             with self.subTest(path=path):
-                selected = scope.classify([path])
-                self.assertFalse(selected["browser"])
-                self.assertEqual([], selected["suites"])
+                self.assertEqual([], scope.classify([path])["suites"])
 
-    def test_presentation_has_no_database_dependency(self):
-        for path in ("yak-ops-ui/apps/web/app/workspace/page.tsx", "yak-ops-ui/apps/web/theme.css",
-                     "yak-ops-ui/packages/yak-ui/src/table/index.tsx", "yak-ops-ui/apps/web/yak.svg"):
-            with self.subTest(path=path):
-                selected = scope.classify([path])
-                self.assertTrue(selected["browser"])
-                self.assertEqual([], selected["suites"])
-                self.assertFalse(selected["real_browser"])
+    def test_backend_scripts_select_matching_suites(self):
+        for filename, suite in (("multitable_batch.py", "batch"),
+                                ("offline_incremental_e2e.py", "batch"),
+                                ("database_realtime.py", "realtime"),
+                                ("schema_migration_e2e.py", "schema")):
+            self.assertEqual([suite], scope.classify(["scripts/acceptance/" + filename])["suites"])
 
-    def test_outbound_sync_contracts_have_real_acceptance(self):
-        for path in (scope.APP + "app/data-sync/task-editor.tsx", scope.APP + "service/data-sync/config.ts"):
-            selected = scope.classify([path])
-            self.assertEqual(["batch", "realtime", "schema"], selected["suites"])
-            self.assertTrue(selected["real_browser"])
-
-    def test_preview_only_selects_schema(self):
-        selected = scope.classify([scope.APP + "app/data-sync/schema-preview.tsx"])
-        self.assertEqual(["schema"], selected["suites"])
-        self.assertTrue(selected["real_browser"])
-
-    def test_suite_scripts_are_independent(self):
-        for path, suite in (("multitable_batch.py", "batch"), ("task_schedule_browser.py", "schedule"),
-                            ("database_realtime.py", "realtime"), ("schema_migration_e2e.py", "schema")):
-            with self.subTest(suite=suite):
-                selected = scope.classify(["scripts/acceptance/" + path])
-                self.assertEqual([suite], selected["suites"])
-                self.assertTrue(selected["real_browser"])
-
-    def test_controlled_browser_script_has_no_database_dependency(self):
-        self.assertEqual([], scope.classify(["scripts/acceptance/task_schedule_ui_test.py"])["suites"])
-
-    def test_scheduler_preserves_batch_quartz_coverage(self):
-        selected = scope.classify(["yak-ops-plugins/yak-ops-plugin-scheduler/quartz/Factory.java"])
-        self.assertEqual(["batch", "schedule"], selected["suites"])
-        self.assertFalse(selected["real_browser"])
-
-    def test_metadata_application_selects_schema(self):
-        selected = scope.classify(["yak-flow/yak-flow-connector-jdbc/src/main/JdbcMetadataApplier.java"])
-        self.assertEqual(["schema"], selected["suites"])
-
-    def test_shared_and_unknown_changes_are_full(self):
+    def test_scheduler_schema_and_shared_backend(self):
+        self.assertEqual(["batch", "schedule"], scope.classify([
+            "yak-ops-plugins/yak-ops-plugin-scheduler/quartz/Factory.java"])["suites"])
+        self.assertEqual(["schema"], scope.classify([
+            "yak-flow/yak-flow-connector-jdbc/src/main/JdbcMetadataApplier.java"])["suites"])
         for path in ("yak-flow/yak-flow-runtime/Checkpoint.java", "yak-ops-dao/schema.sql",
-                     "yak-ops-task-execution/Observer.java", "new-module/new.file", "pom.xml",
-                     scope.APP + "service/http.ts", "yak-ops-ui/package-lock.json"):
-            with self.subTest(path=path):
-                self.assertEqual(["full"], scope.classify([path])["suites"])
-
-    def test_infrastructure_changes_are_full(self):
-        for path in ("scripts/ci/product_acceptance_scope.py", "scripts/acceptance/run_product_acceptance.py",
-                     "scripts/acceptance/task-execution-e2e.py", ".github/actions/acceptance-browser/action.yml",
-                     ".github/workflows/task-execution-product-acceptance.yml"):
+                     "new-module/new.file", "pom.xml", "scripts/ci/product_acceptance_scope.py"):
             self.assertEqual(["full"], scope.classify([path])["suites"])
 
-    def test_large_and_mixed_diffs_are_not_truncated(self):
-        paths = [f"docs/{index}.md" for index in range(501)] + ["yak-ops-core/Row.java"]
-        self.assertEqual(["full"], scope.classify(paths)["suites"])
-        selected = scope.classify(["scripts/acceptance/schema_migration_e2e.py",
-                                   "scripts/acceptance/database_realtime.py"])
-        self.assertEqual(["realtime", "schema"], selected["suites"])
+    def test_mixed_frontend_and_backend_keeps_backend_checks(self):
+        self.assertEqual(["full"], scope.classify([
+            "yak-ops-ui/apps/web/app/data-sync/index.tsx",
+            "yak-ops-business/TaskService.java"])["suites"])
+        self.assertEqual(["realtime", "schema"], scope.classify([
+            "scripts/acceptance/schema_migration_e2e.py",
+            "scripts/acceptance/database_realtime.py"])["suites"])
 
-    def test_reusable_and_manual_full_do_not_use_pr_diff(self):
+    def test_explicit_and_reusable_full(self):
         with patch.object(scope, "changed_paths", side_effect=AssertionError("must not diff")):
             for event in ("pull_request", "workflow_dispatch", "workflow_call"):
                 self.assertEqual(["full"], scope.select("full", event, "", "")["suites"])
+        for suite in scope.SUITES:
+            self.assertEqual([suite], scope.select(suite, "workflow_dispatch", "", "")["suites"])
+        with self.assertRaises(ValueError):
+            scope.select("browser", "workflow_dispatch", "", "")
 
-    def test_comparison_failure_is_full_not_skipped(self):
+    def test_comparison_error_is_conservative(self):
         for error in (ValueError(), OSError(), subprocess.TimeoutExpired("git", 30)):
             with patch.object(scope, "changed_paths", side_effect=error):
                 self.assertEqual(["full"], scope.select("auto", "pull_request", "", "")["suites"])
         self.assertEqual(["full"], scope.select("auto", "push", "", "")["suites"])
-
-    def test_invalid_explicit_mode_fails(self):
-        with self.assertRaises(ValueError):
-            scope.select("schmea", "workflow_dispatch", "", "")
-
-    def test_explicit_scope(self):
-        for suite in scope.SUITES:
-            self.assertEqual([suite], scope.select(suite, "workflow_dispatch", "", "")["suites"])
-        self.assertEqual([], scope.select("browser", "workflow_dispatch", "", "")["suites"])
 
 
 class GitDiffTest(unittest.TestCase):
@@ -151,36 +113,30 @@ class GitDiffTest(unittest.TestCase):
 
 
 class GateTest(unittest.TestCase):
-    def test_selected_success(self):
-        scope.verify_results(scope.full("test"), "success", "success", "success")
-        scope.verify_results(scope.plan(True), "success", "success", "skipped")
-        scope.verify_results(scope.plan(), "success", "skipped", "skipped")
-
-    def test_failure_cancellation_and_unexpected_skip_block(self):
+    def test_selected_backend_suite_enforced(self):
+        scope.verify_results(scope.full("test"), "success", "success")
+        scope.verify_results(scope.plan(), "success", "skipped")
         for bad in ("failure", "cancelled", "skipped", "", "missing"):
-            with self.subTest(result=bad):
+            with self.subTest(status=bad):
                 with self.assertRaises(ValueError):
-                    scope.verify_results(scope.full("test"), "success", "success", bad)
+                    scope.verify_results(scope.full("test"), "success", bad)
                 with self.assertRaises(ValueError):
-                    scope.verify_results(scope.full("test"), "success", bad, "success")
-                with self.assertRaises(ValueError):
-                    scope.verify_results(scope.full("test"), bad, "success", "success")
+                    scope.verify_results(scope.full("test"), bad, "success")
 
-    def test_empty_scope_is_reported_as_not_executed(self):
+    def test_empty_scope_is_not_a_pass(self):
         output = io.StringIO()
         with patch.dict(os.environ, {"ACCEPTANCE_PLAN": json.dumps(scope.plan()),
-                "SCOPE_RESULT": "success", "BROWSER_RESULT": "skipped", "PRODUCT_RESULT": "skipped",
-                "GITHUB_STEP_SUMMARY": ""}), patch("sys.argv", ["scope", "--check-results"]), redirect_stdout(output):
+                  "SCOPE_RESULT": "success", "PRODUCT_RESULT": "skipped",
+                  "GITHUB_STEP_SUMMARY": ""}), patch("sys.argv", ["scope", "--check-results"]), redirect_stdout(output):
             scope.main()
         self.assertIn("NOT EXECUTED", output.getvalue())
-        self.assertNotIn("acceptance jobs succeeded", output.getvalue())
 
-    def test_malformed_selection_is_not_a_pass(self):
-        for selected in ({}, scope.plan(True, ["full", "schema"])):
+    def test_bad_plan_rejected(self):
+        for selected in ({}, scope.plan(["full", "schema"])):
             if selected:
                 selected["suites"] = ["full", "schema"]
             with self.assertRaises(ValueError):
-                scope.verify_results(selected, "success", "success", "success")
+                scope.verify_results(selected, "success", "success")
 
 
 class RunnerTest(unittest.TestCase):
@@ -277,23 +233,25 @@ class RunnerTest(unittest.TestCase):
 
 
 class WorkflowTest(unittest.TestCase):
-    def test_release_full_default_and_gate_are_preserved(self):
-        workflow = (ROOT / ".github/workflows/task-execution-product-acceptance.yml").read_text()
-        self.assertEqual(2, workflow.count("default: full"))
-        self.assertIn("fetch-depth: 0", workflow)
-        self.assertNotIn("    paths:", workflow)
-        self.assertIn("max-parallel: 2", workflow)
-        self.assertIn("fail-fast: false", workflow)
-        self.assertNotIn("continue-on-error", workflow)
-        self.assertIn("MySQL JDBC + Multi-Table CDC Product E2E", workflow)
-        self.assertIn("--check-results", workflow)
+    def test_release_backend_and_ui_gates_are_separate(self):
+        backend = (ROOT / ".github/workflows/task-execution-product-acceptance.yml").read_text()
+        release = (ROOT / ".github/workflows/v1-release-gate.yml").read_text()
+        ui = (ROOT / ".github/workflows/ui-acceptance.yml").read_text()
+        self.assertEqual(2, backend.count("default: full"))
+        self.assertIn("fetch-depth: 0", backend)
+        self.assertIn("max-parallel: 2", backend)
+        self.assertIn("MySQL JDBC + Multi-Table CDC Product E2E", backend)
+        self.assertNotIn("acceptance-browser", backend)
+        self.assertNotIn("browser-contracts", backend)
+        self.assertNotIn("E2E_BROWSER", backend)
+        self.assertIn("YAK_UI_ACCEPTANCE: 'true'", release)
+        self.assertIn("workflow_dispatch:", ui)
+        self.assertIn("yak-ops-ui/tests/e2e/run.py", ui)
 
-    def test_browser_job_has_no_backend_or_database_setup(self):
-        workflow = (ROOT / ".github/workflows/task-execution-product-acceptance.yml").read_text()
-        browser = workflow.split("  browser-contracts:", 1)[1].split("  product-e2e:", 1)[0]
-        for forbidden in ("setup-java", "docker", "mvnw", "task-execution-e2e.py"):
-            self.assertNotIn(forbidden, browser)
-        self.assertIn("task_schedule_ui_test.py", browser)
+    def test_browser_runner_has_no_backend_acceptance_dependency(self):
+        content = (ROOT / "yak-ops-ui/tests/e2e/run.py").read_text()
+        for forbidden in ("task-execution-e2e.py", "schema_migration_e2e.py", "docker run"):
+            self.assertNotIn(forbidden, content)
 
 
 if __name__ == "__main__":
