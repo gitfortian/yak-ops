@@ -16,7 +16,7 @@ See .github/CONTRIBUTING.md.
 ## Verifying this change
 
 <!-- List commands/tests actually executed and their results. Distinguish skipped,
-blocked or manual checks from passing automated tests. See DEVELOPMENT.md#backend-e2e. -->
+blocked or manual checks from passing automated tests. See DEVELOPMENT.md#backend-integration-tests. -->
 
 - Selected verification scope and risk-based reason:
 - Reviewed head / base / tested merge or tree SHA:

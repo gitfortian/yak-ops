@@ -356,7 +356,7 @@ jobs:
           - Migration Review: PASS
           - Release Blocker Review: PASS
           - Quality Gate: PASS
-          - Full Backend Acceptance: PASS
+          - Backend E2E: NOT RUN (pending redesign)
           - Distribution Verification: PASS
           - Registry Image Identity: PASS
           - Registry Image Compose Smoke: PASS

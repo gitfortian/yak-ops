@@ -85,15 +85,14 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 
 ## Verification Scope and Incremental Review
 
-- Four explicit layers: JUnit / TypeScript unit and frontend contract checks on every PR; JUnit + disposable Docker integration and real E2E for affected backend PRs and release; Playwright UI automation for releases or deliberate manual runs; Docker Compose production-image smoke for releases.
-- Name test workflows and jobs after the tool or test type: `Playwright UI Tests`, `Backend E2E`, `JDBC Source IT`, `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` or `Acceptance Scope` for test jobs.
+- JUnit / TypeScript unit and frontend contract checks run on affected PRs. JDBC/CDC connector integration tests run through their own workflows. Playwright verifies UI interactions; Docker Compose smoke verifies deployment at release time.
+- `yak-ops-boot` currently has no backend E2E suite. Do not claim Boot API/Task E2E coverage or report the removed tests as passed. Redesign this suite separately; existing connector integration checks remain required.
+- Name jobs after the test type or tool actually executed, such as `Playwright UI Tests`, `JDBC Source IT` or `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` for test jobs.
 - UI automation verifies browser-facing behavior only. Do not add per-feature or per-PR browser scripts, or depend on real JDBC, CDC, Cron, checkpoint, or process recovery waits inside Playwright. Extend stable business scenario files in `yak-ops-ui/tests/e2e/`. Keep Playwright setup out of normal product PR jobs.
-- Keep `scripts/ci/backend_e2e_scope.py` as the executable **backend-only** scope map. Classify the full PR diff, including deletions and rename sides. Normal frontend paths select no backend E2E; unknown or shared backend changes require full backend coverage. A skipped test is NOT EXECUTED, not a pass.
-- Backend E2E is JUnit 5 with Testcontainers, owned by yak-ops-boot test sources and executed via `scripts/backend-e2e/run.sh`. No Python API/database E2E scripts, bare `docker run`, or Playwright imports belong in the backend test runner. Keep real JDBC, CDC, Task lifecycle, Quartz, Checkpoint, schema failure, cancellation, and forced process restart assertions.
-- The formal Release Gate must pass full Backend E2E, release-candidate Playwright, and Docker Compose smoke. Match the exact release version, commit SHA, and built images; prior or different-SHA green checks are not valid release test results.
-- Use fresh, isolated fixtures, condition-based bounded waits, and browser traces/screenshots on failure. Never shorten a timeout, add silent retries, modify production checkpoint intervals, or suppress original failures to make tests green. Parallel backend suites must not share database/state directories.
+- The Release Gate requires connector integration tests, release-candidate Playwright and Docker Compose smoke. The absent Boot E2E suite must be recorded as NOT RUN, never as PASS. Match release version, commit SHA and built images for executed checks.
+- Use fresh isolated fixtures and condition-based bounded waits for integration tests. Never hide flakes with silent retries or change production checkpoint intervals for tests.
 - At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. After a fix, review the delta from the previously reviewed SHA; reopen wider scope if the base or shared contracts changed. Known unresolved failures remain blockers even when a later scope omits their suite.
-- Do not change branch protection or silently waive existing required checks to speed merging. A CI workflow migration must preserve an equivalent required check before any old check is removed.
+- Do not change branch protection to speed merging. If an obsolete required check remains after retiring a suite, report it explicitly and resolve it as a separate repository setting change.
 
 ## Persistence and Public Contract Documentation
 
