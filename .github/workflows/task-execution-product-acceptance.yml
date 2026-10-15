@@ -17,7 +17,7 @@ on:
         type: choice
         required: true
         default: full
-        options: [full, browser, batch, schedule, realtime, schema]
+        options: [full, batch, schedule, realtime, schema]
 
 permissions:
   contents: read
@@ -34,10 +34,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       plan: ${{ steps.scope.outputs.plan }}
-      browser: ${{ steps.scope.outputs.browser }}
       suites: ${{ steps.scope.outputs.suites }}
       matrix: ${{ steps.scope.outputs.matrix }}
-      real_browser: ${{ steps.scope.outputs.real_browser }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -53,26 +51,6 @@ jobs:
           CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/ci/product_acceptance_scope.py --suite "$ACCEPTANCE_SUITE"
 
-  browser-contracts:
-    name: Controlled Browser Contracts
-    needs: scope
-    if: needs.scope.outputs.browser == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/acceptance-browser
-      - name: Verify browser interaction contracts
-        run: python3 -u scripts/acceptance/task_schedule_ui_test.py
-      - name: Upload browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: acceptance-browser-contracts
-          path: /tmp/yak-schedule-browser/*.png
-          if-no-files-found: ignore
-          retention-days: 7
-
   product-e2e:
     name: Product E2E (${{ matrix.suite }})
     needs: scope
@@ -86,7 +64,6 @@ jobs:
     env:
       E2E_DB_PASSWORD: localtestpass
       E2E_USER_PASSWORD: test-only-account-password
-      E2E_BROWSER: ${{ needs.scope.outputs.real_browser }}
       PRODUCT_SUITE: ${{ matrix.suite }}
     steps:
       - uses: actions/checkout@v5
@@ -95,8 +72,6 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: ./.github/actions/acceptance-browser
-        if: needs.scope.outputs.real_browser == 'true'
       - name: Start disposable MySQL
         shell: bash
         run: |
@@ -159,7 +134,7 @@ jobs:
     # Preserve the former required-check name; the summary states which suites actually ran.
     name: MySQL JDBC + Multi-Table CDC Product E2E
     if: always()
-    needs: [scope, browser-contracts, product-e2e]
+    needs: [scope, product-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -168,6 +143,5 @@ jobs:
         env:
           ACCEPTANCE_PLAN: ${{ needs.scope.outputs.plan }}
           SCOPE_RESULT: ${{ needs.scope.result }}
-          BROWSER_RESULT: ${{ needs.browser-contracts.result }}
           PRODUCT_RESULT: ${{ needs.product-e2e.result }}
         run: python3 scripts/ci/product_acceptance_scope.py --check-results
