@@ -84,7 +84,9 @@ class MySqlSnapshotOutputTest {
                 LocalDateTime.of(2020,2,29,12,13,14,123456789), OffsetDateTime.parse("2020-02-29T12:13:14.123456789+08:00"));
         var original = range().withOutput(new MySqlSnapshotOutput(offset(100), offset(200),
                 List.of(new TableRecord(TABLE, RowKind.INSERT, values))));
-        assertEquals(original, roundTrip(original));
+        MySqlSnapshotSplit restored = roundTrip(original);
+        assertEquals(original, restored);
+        assertEquals(original.hashCode(), restored.hashCode());
     }
 
     @Test

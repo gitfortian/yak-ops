@@ -49,15 +49,26 @@ public final class MySqlSnapshotOutput {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof MySqlSnapshotOutput output
-                && low.equals(output.low)
-                && high.equals(output.high)
-                && rows.equals(output.rows);
+        if (this == other) return true;
+        if (!(other instanceof MySqlSnapshotOutput output)
+                || !low.equals(output.low)
+                || !high.equals(output.high)
+                || rows.size() != output.rows.size()) return false;
+        // TableRecord deliberately has execution identity, while this checkpoint is a value.
+        for (int i = 0; i < rows.size(); i++) {
+            TableRecord left = rows.get(i), right = output.rows.get(i);
+            if (!left.tableId().equals(right.tableId())
+                    || left.rowKind() != right.rowKind()
+                    || !left.row().equals(right.row())) return false;
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(low, high, rows);
+        int hash = Objects.hash(low, high);
+        for (TableRecord row : rows) hash = 31 * hash + Objects.hash(row.tableId(), row.rowKind(), row.row());
+        return hash;
     }
 
     @Override
