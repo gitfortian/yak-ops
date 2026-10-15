@@ -1,7 +1,7 @@
 name: Release Gate
 
 on:
-  # Formal release validation is manually triggered; ordinary PRs use Quality Check only.
+  # Formal release validation is manually triggered; PRs run quality and affected backend tests.
   workflow_dispatch:
     inputs:
       release_version:
@@ -56,21 +56,17 @@ jobs:
     name: Quality Gate
     uses: ./.github/workflows/quality-check.yml
 
-  # Real JDBC driver/database checks run at release time, not for ordinary PRs.
-  jdbc-source-it:
-    name: JDBC Source IT
-    uses: ./.github/workflows/jdbc-source-it.yml
-
-  jdbc-sink-it:
-    name: JDBC Sink Cross-Database IT
-    uses: ./.github/workflows/jdbc-sink-cross-database-it.yml
+  backend-tests:
+    name: Full Backend Tests
+    uses: ./.github/workflows/backend-tests.yml
+    with:
+      suite: full
 
   package-smoke:
     name: Distribution + Docker + Compose Smoke
     needs:
       - quality
-      - jdbc-source-it
-      - jdbc-sink-it
+      - backend-tests
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -220,7 +216,7 @@ jobs:
             printf -- '- Quality Gate: PASS\n'
             printf -- '- JDBC Source IT: PASS\n'
             printf -- '- JDBC Sink Cross-Database IT: PASS\n'
-            printf -- '- Backend E2E: NOT RUN (pending redesign)\n'
+            printf -- '- Backend Tests: PASS (full suite; see the exact Release Gate run)\n'
             printf -- '- Distribution Verification: PASS\n'
             printf -- '- Docker Image Identity: PASS\n'
             printf -- '- Compose Login Smoke: PASS\n\n'
@@ -243,8 +239,7 @@ jobs:
     if: always()
     needs:
       - quality
-      - jdbc-source-it
-      - jdbc-sink-it
+      - backend-tests
       - package-smoke
     runs-on: ubuntu-latest
 
@@ -253,13 +248,12 @@ jobs:
         shell: bash
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
-          JDBC_SOURCE_RESULT: ${{ needs.jdbc-source-it.result }}
-          JDBC_SINK_RESULT: ${{ needs.jdbc-sink-it.result }}
+          BACKEND_TESTS_RESULT: ${{ needs.backend-tests.result }}
           PACKAGE_SMOKE_RESULT: ${{ needs.package-smoke.result }}
         run: |
           set -euo pipefail
 
-          for result in "${QUALITY_RESULT}" "${JDBC_SOURCE_RESULT}" "${JDBC_SINK_RESULT}" "${PACKAGE_SMOKE_RESULT}"; do
+          for result in "${QUALITY_RESULT}" "${BACKEND_TESTS_RESULT}" "${PACKAGE_SMOKE_RESULT}"; do
             if [[ "${result}" != "success" ]]; then
               echo "Automated release gate failed: ${result}"
               exit 1

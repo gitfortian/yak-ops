@@ -24,6 +24,8 @@ For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only
 - `yak-ops-common`: cross-module shared types and utilities.
 - `yak-ops-boot`: HTTP boundary and application assembly.
 - `yak-ops-ui`: frontend application and shared UI components.
+- `yak-ops-test-utils`: JUnit-owned database resources and typed assertions; test-only dependencies.
+- `yak-ops-e2e`: real HTTP Task tests against the packaged Boot process.
 
 Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Derive current functionality from code, tests, and supported public interfaces.
 
@@ -85,11 +87,12 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 
 ## Verification Scope and Incremental Review
 
-- JUnit / TypeScript unit and frontend contract checks run on affected PRs. JDBC Source/Sink integration tests run at release or manually; the consolidated MySQL CDC integration tests run manually. Playwright verifies UI interactions; Docker Compose smoke verifies deployment at release time.
-- `yak-ops-boot` currently has no backend E2E suite. Do not claim Boot API/Task E2E coverage or report the removed tests as passed. Redesign this suite separately; existing connector integration checks remain required.
+- JUnit / TypeScript unit and frontend contract checks run on affected PRs. `Backend Tests` selects Connector, YakFlow, business database and Backend E2E tests from the complete diff. Manual and release calls run all suites by default. Playwright verifies UI interactions; Docker Compose verifies release deployment.
+- Ordinary Maven `verify` must not start Docker. Use `scripts/tests/run.sh` for database tests. Register every concrete `*IT` class in the suite manifest; missing, skipped, failed or incomplete selected reports fail the check. Backend E2E belongs in `yak-ops-e2e`, not Boot or Connector tests.
 - Name jobs after the test type or tool actually executed, such as `Playwright UI Tests`, `JDBC Source IT` or `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` for test jobs.
 - UI automation verifies browser-facing behavior only. Do not add per-feature or per-PR browser scripts, or depend on real JDBC, CDC, Cron, checkpoint, or process recovery waits inside Playwright. Extend stable business scenario files in `yak-ops-ui/tests/e2e/`. Keep Playwright setup out of normal product PR jobs.
-- The Release Gate requires JDBC Source/Sink integration tests, release-candidate Playwright and Docker Compose smoke. The absent Boot E2E suite must be recorded as NOT RUN, never as PASS. Match release version, commit SHA and built images for executed checks.
+- The Release Gate requires full Backend Tests, including Oracle, CDC and process recovery, plus candidate Playwright and Docker Compose. Match release version, commit SHA and built artifacts. Unselected tests are NOT SELECTED, not passed tests.
+- Reuse database processes inside a JUnit root execution; isolate tables, schemas, Workspace and state per test. Process recovery and destructive tests need private environments. Capture diagnostics before cleanup, and stop tasks before deleting their data. Do not ship test utilities or add reverse dependencies from Runtime to Connectors.
 - Use fresh isolated fixtures and condition-based bounded waits for integration tests. Never hide flakes with silent retries or change production checkpoint intervals for tests.
 - At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. After a fix, review the delta from the previously reviewed SHA; reopen wider scope if the base or shared contracts changed. Known unresolved failures remain blockers even when a later scope omits their suite.
 - Do not change branch protection to speed merging. If an obsolete required check remains after retiring a suite, report it explicitly and resolve it as a separate repository setting change.

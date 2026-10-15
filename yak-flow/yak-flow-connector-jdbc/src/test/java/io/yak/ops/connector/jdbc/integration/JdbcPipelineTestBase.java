@@ -1,16 +1,20 @@
-package io.yak.ops.connector.jdbc.sink;
+package io.yak.ops.connector.jdbc.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
-import io.yak.ops.connector.jdbc.sink.writer.JdbcWriter;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
+import io.yak.ops.connector.jdbc.sink.JdbcSink;
+import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
+import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
+import io.yak.ops.connector.jdbc.sink.writer.JdbcWriter;
 import io.yak.ops.connector.jdbc.source.JdbcSource;
 import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.api.common.TaskInfo;
@@ -18,7 +22,6 @@ import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.SinkWriter;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -34,6 +37,8 @@ import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
 import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
+import io.yak.ops.testutils.DatabaseMetadata;
+import io.yak.ops.testutils.TestNames;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -48,18 +53,18 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
-/**
- * Cross-vendor JDBC acceptance against disposable source and target databases.
- *
- * <p>Two tables with different schemas run through the real YakFlow StreamGraph and
- * ExecutionGraph using parallel JDBC readers and one ordered writer. Complete target
- * rows are checked after the snapshot, changelog mutations and idempotent replay.
- * The test is never silently skipped when explicitly configured.
- */
-class JdbcSinkCrossDatabaseIT {
+/** Real JDBC pipelines: multi-table routing, final checkpoint and restore without Boot. */
+@Tag("pipeline")
+@Timeout(240)
+abstract class JdbcPipelineTestBase {
+    protected abstract DatabaseMetadata sourceDatabase();
+
+    protected abstract DatabaseMetadata targetDatabase();
 
     private static final SinkWriter.Context RECORD_CONTEXT = new SinkWriter.Context() {
         @Override
@@ -77,10 +82,7 @@ class JdbcSinkCrossDatabaseIT {
     Path checkpointDirectory;
 
     @Test
-    void yoip1FinalCheckpointPersistsAndRestoresCompletedJdbcPipeline() throws Exception {
-        if (!Boolean.getBoolean("jdbc.it.allow-write")) {
-            throw new IllegalStateException("YOIP-1 database acceptance requires jdbc.it.allow-write=true");
-        }
+    void finalCheckpointPersistsAndRestoresCompletedJdbcPipeline() throws Exception {
 
         JdbcConnectionOptions sourceOptions = connectionOptions("source");
         JdbcConnectionOptions targetOptions = connectionOptions("target");
@@ -97,17 +99,43 @@ class JdbcSinkCrossDatabaseIT {
                         new Column("MESSAGE", LogicalTypes.varchar(48))),
                 List.of("ID"));
 
-        try (Connection sourceConnection = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions).getConnection();
-                Connection targetConnection = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(targetOptions).getConnection();
+        try (Connection sourceConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions)
+                                .getConnection();
+                Connection targetConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(targetOptions)
+                                .getConnection();
                 Statement sourceDdl = sourceConnection.createStatement();
                 Statement targetDdl = targetConnection.createStatement()) {
-            TableId sourceTable = tableId(sourceConnection, sourceOptions.url(), "YF_YOIP1_SRC");
-            TableId targetTable = tableId(targetConnection, targetOptions.url(), "YF_YOIP1_DST");
+            TableId sourceTable = tableId(
+                    sourceConnection,
+                    sourceOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
+            TableId targetTable = tableId(
+                    targetConnection,
+                    targetOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
             try {
                 sourceDdl.execute(sourceDialect.createTableSql(sourceTable, sourceSchema));
                 targetDdl.execute(targetDialect.createTableSql(targetTable, targetSchema));
-                insertRows(sourceConnection, sourceDialect, sourceSchema, sourceTable, null,
-                        1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L);
+                insertRows(
+                        sourceConnection,
+                        sourceDialect,
+                        sourceSchema,
+                        sourceTable,
+                        null,
+                        1L,
+                        2L,
+                        3L,
+                        4L,
+                        5L,
+                        6L,
+                        7L,
+                        8L,
+                        9L,
+                        10L,
+                        11L,
+                        12L);
 
                 AtomicBoolean restoring = new AtomicBoolean();
                 AtomicInteger openedSourceConnections = new AtomicInteger();
@@ -118,7 +146,9 @@ class JdbcSinkCrossDatabaseIT {
                         throw new AssertionError("Finished-on-Restore must not open JDBC Source connections");
                     }
                     openedSourceConnections.incrementAndGet();
-                    return new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions).getConnection();
+                    return new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(
+                                    sourceOptions)
+                            .getConnection();
                 };
                 Configuration configuration = new Configuration();
                 configuration.set(JdbcSourceOptions.TARGET_ROWS_PER_SPLIT, 3);
@@ -130,10 +160,13 @@ class JdbcSinkCrossDatabaseIT {
                         new JdbcSource(sourceConnections, sourceOptions.url(), List.of(sourceTable), configuration);
                 JdbcSink jdbcSink = JdbcSink.builder()
                         .withConnectionOptions(targetOptions)
-                        .withTablePlans(List.of(
-                                new JdbcTableWritePlan(
-                                        sourceTable, targetTable, targetSchema, JdbcWriteMode.UPSERT,
-                                        sourceSchema, Map.of("MESSAGE", "LABEL"))))
+                        .withTablePlans(List.of(new JdbcTableWritePlan(
+                                sourceTable,
+                                targetTable,
+                                targetSchema,
+                                JdbcWriteMode.UPSERT,
+                                sourceSchema,
+                                Map.of("MESSAGE", "LABEL"))))
                         .withBatchFlushPolicy(new BatchFlushPolicy(64, Duration.ZERO))
                         .build();
                 Sink<TableRecord> observedSink = context -> {
@@ -162,16 +195,17 @@ class JdbcSinkCrossDatabaseIT {
                         }
                     };
                 };
-                SourceTransformation<TableRecord> sourceNode = new SourceTransformation<>(
-                        "yoip1-jdbc-source", jdbcSource, TableRecord.class, 2);
-                SinkTransformation<TableRecord> sinkNode = new SinkTransformation<>(
-                        sourceNode, "yoip1-jdbc-sink", observedSink, 1);
-                sourceNode.setUid("yoip1-jdbc-source");
-                sinkNode.setUid("yoip1-jdbc-sink");
+                SourceTransformation<TableRecord> sourceNode =
+                        new SourceTransformation<>("jdbc-jdbc-source", jdbcSource, TableRecord.class, 2);
+                SinkTransformation<TableRecord> sinkNode =
+                        new SinkTransformation<>(sourceNode, "jdbc-jdbc-sink", observedSink, 1);
+                sourceNode.setUid("jdbc-jdbc-source");
+                sinkNode.setUid("jdbc-jdbc-sink");
                 StreamGraph graph = new StreamGraphGenerator(sinkNode, configuration).generate();
 
                 JobClient first = new EmbeddedPipelineExecutor()
-                        .execute(graph, configuration).get(30, TimeUnit.SECONDS);
+                        .execute(graph, configuration)
+                        .get(30, TimeUnit.SECONDS);
                 first.getJobExecutionResult().get(120, TimeUnit.SECONDS);
                 assertEquals(JobStatus.FINISHED, first.getJobStatus().get(10, TimeUnit.SECONDS));
                 assertEquals(1, createdWriters.get());
@@ -184,11 +218,10 @@ class JdbcSinkCrossDatabaseIT {
                 assertEquals(expected, rows(targetConnection, targetDialect, targetTable, false));
 
                 try (FileCheckpointStore store = new FileCheckpointStore(checkpointDirectory)) {
-                    CheckpointSnapshot published =
-                            store.loadLatest(FileCheckpointStore.graphSignature(graph)).orElseThrow();
+                    CheckpointSnapshot published = store.loadLatest(FileCheckpointStore.graphSignature(graph))
+                            .orElseThrow();
                     assertEquals(
-                            java.util.Set.of("yoip1-jdbc-source", "yoip1-jdbc-sink"),
-                            published.fullyFinishedOperators());
+                            java.util.Set.of("jdbc-jdbc-source", "jdbc-jdbc-sink"), published.fullyFinishedOperators());
                     assertTrue(published.finishedSubtasks().isEmpty());
                 }
 
@@ -198,8 +231,8 @@ class JdbcSinkCrossDatabaseIT {
                 int priorConnections = openedSourceConnections.get();
                 Configuration recovery = new Configuration(configuration);
                 recovery.set(CheckpointingOptions.RESTORE_LATEST, true);
-                JobClient second = new EmbeddedPipelineExecutor()
-                        .execute(graph, recovery).get(30, TimeUnit.SECONDS);
+                JobClient second =
+                        new EmbeddedPipelineExecutor().execute(graph, recovery).get(30, TimeUnit.SECONDS);
                 second.getJobExecutionResult().get(120, TimeUnit.SECONDS);
                 assertEquals(JobStatus.FINISHED, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 assertEquals(priorConnections, openedSourceConnections.get());
@@ -215,9 +248,6 @@ class JdbcSinkCrossDatabaseIT {
 
     @Test
     void transfersMultipleTablesAndAppliesChangelogAcrossDatabaseVendors() throws Exception {
-        if (!Boolean.getBoolean("jdbc.it.allow-write")) {
-            throw new IllegalStateException("Real JDBC Sink acceptance requires -Djdbc.it.allow-write=true");
-        }
         JdbcConnectionOptions sourceOptions = connectionOptions("source");
         JdbcConnectionOptions targetOptions = connectionOptions("target");
         JdbcDialect sourceDialect = JdbcDialects.forUrl(sourceOptions.url());
@@ -246,14 +276,30 @@ class JdbcSinkCrossDatabaseIT {
                         new Column("CATEGORY", LogicalTypes.varchar(24))),
                 List.of("ID"));
 
-        try (Connection sourceConnection = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions).getConnection();
-                Connection targetConnection = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(targetOptions).getConnection();
+        try (Connection sourceConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions)
+                                .getConnection();
+                Connection targetConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(targetOptions)
+                                .getConnection();
                 Statement sourceDdl = sourceConnection.createStatement();
                 Statement targetDdl = targetConnection.createStatement()) {
-            TableId sourceA = tableId(sourceConnection, sourceOptions.url(), "YF_SINK_SRC_A");
-            TableId sourceB = tableId(sourceConnection, sourceOptions.url(), "YF_SINK_SRC_B");
-            TableId targetA = tableId(targetConnection, targetOptions.url(), "YF_SINK_DST_A");
-            TableId targetB = tableId(targetConnection, targetOptions.url(), "YF_SINK_DST_B");
+            TableId sourceA = tableId(
+                    sourceConnection,
+                    sourceOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
+            TableId sourceB = tableId(
+                    sourceConnection,
+                    sourceOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
+            TableId targetA = tableId(
+                    targetConnection,
+                    targetOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
+            TableId targetB = tableId(
+                    targetConnection,
+                    targetOptions.url(),
+                    TestNames.unique("pipe").toUpperCase(java.util.Locale.ROOT));
             try {
                 sourceDdl.execute(sourceDialect.createTableSql(sourceA, sourceASchema));
                 sourceDdl.execute(sourceDialect.createTableSql(sourceB, sourceBSchema));
@@ -266,11 +312,19 @@ class JdbcSinkCrossDatabaseIT {
                         .withConnectionOptions(targetOptions)
                         .withTablePlans(List.of(
                                 new JdbcTableWritePlan(
-                                        sourceA, targetA, targetASchema, JdbcWriteMode.UPSERT,
-                                        sourceASchema, Map.of("MESSAGE", "LABEL")),
+                                        sourceA,
+                                        targetA,
+                                        targetASchema,
+                                        JdbcWriteMode.UPSERT,
+                                        sourceASchema,
+                                        Map.of("MESSAGE", "LABEL")),
                                 new JdbcTableWritePlan(
-                                        sourceB, targetB, targetBSchema, JdbcWriteMode.UPSERT,
-                                        sourceBSchema, Map.of("MESSAGE", "LABEL"))))
+                                        sourceB,
+                                        targetB,
+                                        targetBSchema,
+                                        JdbcWriteMode.UPSERT,
+                                        sourceBSchema,
+                                        Map.of("MESSAGE", "LABEL"))))
                         .withBatchFlushPolicy(new BatchFlushPolicy(3, Duration.ZERO))
                         .build();
 
@@ -287,24 +341,23 @@ class JdbcSinkCrossDatabaseIT {
                         .get(30, TimeUnit.SECONDS);
                 job.getJobExecutionResult().get(120, TimeUnit.SECONDS);
                 assertEquals(JobStatus.FINISHED, job.getJobStatus().get(10, TimeUnit.SECONDS));
-                assertEquals(Map.of(
+                assertEquals(
+                        Map.of(
                                 1L, List.of("row-1"),
                                 2L, List.of("row-2"),
                                 3L, List.of("row-3")),
                         rows(targetConnection, targetDialect, targetA, false));
-                assertEquals(Map.of(
+                assertEquals(
+                        Map.of(
                                 4L, List.of("row-4", "priority"),
                                 5L, List.of("row-5", "priority")),
                         rows(targetConnection, targetDialect, targetB, true));
 
                 // Only primary-key changes delete the old row; same-key updates use UPSERT.
                 try (JdbcWriter writer = sink.createWriter(context())) {
-                    writer.write(
-                            record(sourceA, RowKind.UPDATE_BEFORE, 1L, "row-1"), RECORD_CONTEXT);
-                    writer.write(
-                            record(sourceA, RowKind.UPDATE_AFTER, 101L, "renamed"), RECORD_CONTEXT);
-                    writer.write(
-                            record(sourceB, RowKind.DELETE, 4L, null, "priority"), RECORD_CONTEXT);
+                    writer.write(record(sourceA, RowKind.UPDATE_BEFORE, 1L, "row-1"), RECORD_CONTEXT);
+                    writer.write(record(sourceA, RowKind.UPDATE_AFTER, 101L, "renamed"), RECORD_CONTEXT);
+                    writer.write(record(sourceB, RowKind.DELETE, 4L, null, "priority"), RECORD_CONTEXT);
                     writer.flush(false);
                 }
                 Map<Long, List<String>> expectedOrders = Map.of(
@@ -332,27 +385,24 @@ class JdbcSinkCrossDatabaseIT {
         }
     }
 
-    private static JdbcConnectionOptions connectionOptions(String role) {
-        String prefix = "jdbc.it." + role + ".";
-        String url = System.getProperty(prefix + "url");
-        String user = System.getProperty(prefix + "user");
-        if (url == null || url.isBlank() || user == null || user.isBlank()) {
-            throw new IllegalStateException("Missing " + prefix + "url / user for real cross-database acceptance");
-        }
-        return new JdbcConnectionOptions(url, user, System.getProperty(prefix + "password", ""));
+    private JdbcConnectionOptions connectionOptions(String role) {
+        DatabaseMetadata database = role.equals("source") ? sourceDatabase() : targetDatabase();
+        return new JdbcConnectionOptions(database.url(), database.username(), database.password());
     }
 
     private static TableId tableId(Connection connection, String url, String table) throws SQLException {
         boolean mysql = url.startsWith("jdbc:mysql:");
-        return new TableId(
-                mysql ? connection.getCatalog() : null,
-                mysql ? null : connection.getSchema(),
-                table);
+        return new TableId(mysql ? connection.getCatalog() : null, mysql ? null : connection.getSchema(), table);
     }
 
     private static void insertRows(
-            Connection connection, JdbcDialect dialect, TableSchema schema, TableId table, String category,
-            long... keys) throws SQLException {
+            Connection connection,
+            JdbcDialect dialect,
+            TableSchema schema,
+            TableId table,
+            String category,
+            long... keys)
+            throws SQLException {
         JdbcDialectConverter converter = dialect.createRowConverter(schema);
         try (PreparedStatement statement = connection.prepareStatement(dialect.insertSql(table, schema))) {
             for (long key : keys) {
@@ -384,9 +434,8 @@ class JdbcSinkCrossDatabaseIT {
                 ResultSet data = statement.executeQuery(query)) {
             while (data.next()) {
                 long key = data.getBigDecimal(1).longValueExact();
-                List<String> fields = withCategory
-                        ? List.of(data.getString(2), data.getString(3))
-                        : List.of(data.getString(2));
+                List<String> fields =
+                        withCategory ? List.of(data.getString(2), data.getString(3)) : List.of(data.getString(2));
                 if (result.put(key, fields) != null) {
                     throw new AssertionError("Duplicate target primary key: " + key);
                 }
@@ -399,7 +448,7 @@ class JdbcSinkCrossDatabaseIT {
         try {
             statement.execute("DROP TABLE " + dialect.qualifiedTable(table));
         } catch (SQLException ignored) {
-            // Acceptance always uses disposable databases. Preserve the original test failure.
+            // The fixture owns these uniquely named tables; preserve the original failure.
         }
     }
 
