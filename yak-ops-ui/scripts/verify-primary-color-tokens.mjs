@@ -6,7 +6,7 @@ const appTokens = read("apps/web/themes/tokens.css");
 const sharedTokens = read("packages/yak-ui/src/styles.css");
 const appEntry = read("apps/web/main.tsx");
 
-assert.match(appTokens, /--yak-color-primary:\s*#[0-9a-fA-F]{6};/);
+assert.match(appTokens, /--yak-color-primary:\s*#0033ff;/);
 assert.equal(
   [...appTokens.matchAll(/--yak-color-primary\s*:/g)].length,
   1,
