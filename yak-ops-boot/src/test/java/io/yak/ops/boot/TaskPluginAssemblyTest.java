@@ -32,6 +32,11 @@ class TaskPluginAssemblyTest {
     @Configuration(proxyBeanMethods = false)
     static class TestDatasourceLookup {
         @Bean
+        io.yak.ops.plugin.task.api.execution.TaskCursorStore cursors() {
+            return (identity, batches) -> batches;
+        }
+
+        @Bean
         DataSourceLookupService datasourceLookup() {
             return new DataSourceLookupService() {
                 @Override

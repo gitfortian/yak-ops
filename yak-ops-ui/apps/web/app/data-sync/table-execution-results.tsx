@@ -9,7 +9,17 @@ const countText = (value?: number | null) => value?.toLocaleString("zh-CN") ?? "
 export function TableExecutionResults({ record }: { record: DataSyncInstanceRecord }) {
   const report = record.executionReport;
   const stale = useObservationStale(record.status, report?.observedAt);
-  const realtime = record.steps.includes("INCREMENTAL");
+  const realtime = record.syncType === "REALTIME";
+  const hasIncremental = report
+    ? report.version === 1
+      ? report.tables.some((table) => table.step === "INCREMENTAL")
+      : report.stages.some((stage) => stage.step === "INCREMENTAL")
+    : record.steps.includes("INCREMENTAL");
+  const hasFull = report
+    ? report.version === 1
+      ? report.tables.some((table) => table.step === "FULL")
+      : report.stages.some((stage) => stage.step === "FULL")
+    : record.steps.includes("FULL");
   const mappings = record.definitionSnapshot?.tableMappings || [];
   const rows = mappings.map((mapping, index) => {
     let schema: DataSyncStageResult | undefined;
@@ -21,7 +31,9 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       full = result?.stages.find((stage) => stage.step === "FULL");
       incremental = result?.stages.find((stage) => stage.step === "INCREMENTAL");
     } else {
-      full = report?.tables.find((table) => table.mappingIndex === index);
+      const table = report?.tables.find((table) => table.mappingIndex === index);
+      if (table?.step === "INCREMENTAL") incremental = table;
+      else full = table;
     }
     return {
       id: String(index),
@@ -45,19 +57,23 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       minWidth: 180,
       render: (_value, row) => <span className="break-all">{row.target}</span>,
     },
-    {
-      key: "full",
-      title: "全量进度",
-      width: 160,
-      render: (_value, row) => (
-        <StageProgress
-          stage={row.full}
-          status={record.status}
-          stale={stale}
-          label={`${row.source} 全量进度`}
-        />
-      ),
-    },
+    ...(hasFull
+      ? [
+          {
+            key: "full",
+            title: "全量进度",
+            width: 160,
+            render: (_value: unknown, row: (typeof rows)[number]) => (
+              <StageProgress
+                stage={row.full}
+                status={record.status}
+                stale={stale}
+                label={`${row.source} 全量进度`}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
   if (record.steps.includes("SCHEMA"))
     columns.splice(2, 0, {
@@ -83,7 +99,7 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
         </div>
       ),
     });
-  if (realtime)
+  if (hasIncremental)
     columns.push({
       key: "incremental",
       title: "增量状态",
@@ -103,14 +119,18 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       title: realtime ? "全量读取" : "读取条数",
       width: 105,
       align: "right",
-      render: (_value, row) => countText(row.full?.readRows),
+      render: (_value, row) =>
+        countText(realtime ? row.full?.readRows : (row.incremental || row.full)?.readRows),
     },
     {
       key: "written",
       title: realtime ? "全量提交" : "已提交条数",
       width: 105,
       align: "right",
-      render: (_value, row) => countText(row.full?.committedRows),
+      render: (_value, row) =>
+        countText(
+          realtime ? row.full?.committedRows : (row.incremental || row.full)?.committedRows,
+        ),
     },
   );
   if (realtime) {
@@ -156,7 +176,7 @@ export function TableExecutionResults({ record }: { record: DataSyncInstanceReco
       dataSource={rows}
       rowKey="id"
       size="small"
-      scroll={{ x: realtime ? 1400 : 950 }}
+      scroll={{ x: realtime ? 1400 : hasIncremental ? 1100 : 950 }}
       pagination={false}
       emptyText="暂无表映射"
     />

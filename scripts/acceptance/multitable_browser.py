@@ -64,7 +64,12 @@ def verify_multitable_browser(api, client, source, target):
             assert len(parameters["tableMappings"]) == 2
             assert [row["target"]["table"] for row in parameters["tableMappings"]] == ["batch_a_copy", "batch_b_copy"]
             assert all(row["writeMode"] == "UPSERT" for row in parameters["tableMappings"])
-            page.get_by_role("button", name="保存并上线", exact=True).click()
+            publish = page.get_by_role("button", name="保存并上线", exact=True)
+            expect(publish).to_be_enabled()
+            # Creation toast can overlap the sticky action bar; activate the real focused button
+            # through the keyboard, not a forced DOM click that bypasses enabled state.
+            publish.focus()
+            publish.press("Enter")
             expect(page).to_have_url(frontend + "/data-sync")
             submitted, _ = api["submit"](client, identity)
             api["wait_status"](client, submitted["instanceId"], {"FINISHED"})

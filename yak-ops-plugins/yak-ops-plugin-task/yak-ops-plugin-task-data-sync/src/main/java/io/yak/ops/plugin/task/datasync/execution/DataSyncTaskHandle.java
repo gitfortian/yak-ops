@@ -35,6 +35,7 @@ final class DataSyncTaskHandle implements TaskHandle {
     private final PipelineBuilder builder;
     private final PipelineExecutor executor;
     private final SchemaPreparation preparation;
+    private final io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner;
     private final CompletableFuture<TaskOutcome> result = new CompletableFuture<>();
     private final CompletableFuture<Optional<TaskRuntimeReference>> reference = new CompletableFuture<>();
     private volatile TableExecutionProgress progress;
@@ -53,6 +54,19 @@ final class DataSyncTaskHandle implements TaskHandle {
             JobPlanner planner,
             PipelineBuilder builder,
             PipelineExecutor executor) {
+        this(parameters, admission, identity, debug, planner, builder, executor, null);
+    }
+
+    DataSyncTaskHandle(
+            ReadonlyConfig parameters,
+            TaskAdmissionPlan admission,
+            TaskExecutionIdentity identity,
+            boolean debug,
+            JobPlanner planner,
+            PipelineBuilder builder,
+            PipelineExecutor executor,
+            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+        this.incrementalPlanner = incrementalPlanner;
         this.parameters = parameters;
         this.admission = admission;
         this.identity = identity;
@@ -78,10 +92,16 @@ final class DataSyncTaskHandle implements TaskHandle {
                 checkCanceled();
                 JobPlan plan = planner.plan(parameters, identity);
                 verifyAdmission(plan);
-                progress = new TableExecutionProgress(
-                        plan.tables(),
-                        new TableMetrics(),
-                        JobConfig.from(parameters).steps().contains(Step.INCREMENTAL));
+                JobConfig config = JobConfig.from(parameters);
+                var incremental = incrementalPlanner != null
+                                && config.solutionType().supportsScheduling()
+                                && config.steps().contains(Step.INCREMENTAL)
+                        ? incrementalPlanner.prepare(plan, config, identity)
+                        : null;
+                boolean continuous = !config.solutionType().supportsScheduling()
+                        && config.steps().contains(Step.INCREMENTAL);
+                String dataStep = incremental == null || incremental.initialLoad() ? "FULL" : "INCREMENTAL";
+                progress = new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous, dataStep);
                 status = JobStatus.RUNNING;
                 LOG.info(
                         "Schema preparation started, tableCount={}",
@@ -91,7 +111,8 @@ final class DataSyncTaskHandle implements TaskHandle {
                 // Re-read source and target metadata after DDL; creation itself leaves admission stable.
                 JobPlan current = planner.plan(parameters, identity);
                 verifyAdmission(current);
-                var pipeline = builder.build(current, identity, debug, progress);
+                var pipeline = builder.build(
+                        incremental == null ? current : incremental.apply(current), identity, debug, progress);
                 synchronized (this) {
                     checkCanceled();
                     submissionInvoked = true;

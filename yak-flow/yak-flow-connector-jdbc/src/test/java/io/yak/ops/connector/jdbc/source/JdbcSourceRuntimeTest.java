@@ -103,6 +103,38 @@ class JdbcSourceRuntimeTest {
     }
 
     @Test
+    void frozenTimestampRangeFiltersSingleTableWithoutChangingSplitKey() throws Exception {
+        JdbcConnectionOptions connection = new JdbcConnectionOptions(
+                "jdbc:h2:mem:jdbc_flow_incremental;DB_CLOSE_DELAY=-1", "sa", "");
+        try (Connection opened = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(connection)
+                        .getConnection(); Statement sql = opened.createStatement()) {
+            sql.execute("CREATE TABLE RECORDS (ID BIGINT PRIMARY KEY, UPDATED_AT TIMESTAMP(6) NOT NULL)");
+            sql.execute("INSERT INTO RECORDS VALUES (1,'2026-10-01 00:00:00'),"
+                    + "(2,'2026-10-01 01:00:00'),(3,'2026-10-02 00:00:00')");
+        }
+        var table = new TableId(null, "PUBLIC", "RECORDS");
+        var range = new JdbcIncrementalRange(JdbcIncrementalRange.Mode.TIMESTAMP, "UPDATED_AT",
+                "2026-10-01T00:00:00", "2026-10-02T00:00:00");
+        var provider = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(connection);
+        var planner = new JdbcSplitPlanner(provider, new AnsiJdbcDialect(), new Configuration(), Map.of(), Map.of(table, range));
+        List<JdbcSourceSplit> splits = planner.plan(table, 0);
+        List<TableRecord> collected = new ArrayList<>();
+        try (var reader = new JdbcSourceReader(provider, new AnsiJdbcDialect(), new Configuration(), new DemoContext())) {
+            reader.addSplits(splits);
+            reader.start();
+            reader.notifyNoMoreSplits();
+            for (int attempt = 0; attempt < 200; attempt++) {
+                InputStatus status = reader.pollNext(collected::add);
+                if (status == InputStatus.END_OF_INPUT) break;
+                if (status == InputStatus.NOTHING_AVAILABLE) reader.isAvailable().get(3, TimeUnit.SECONDS);
+            }
+        }
+        assertEquals(2, collected.size());
+        assertEquals(List.of(1L, 2L), collected.stream().map(row ->
+                ((Number) row.row().getField(0)).longValue()).sorted().toList());
+    }
+
+    @Test
     void readerSnapshotResumesFromLastSuccessfullyEmittedPrimaryKey() throws Exception {
         JdbcConnectionOptions connection = new JdbcConnectionOptions("jdbc:h2:mem:jdbc_flow_resume;DB_CLOSE_DELAY=-1", "sa", "");
         try (Connection opened = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(connection).getConnection();

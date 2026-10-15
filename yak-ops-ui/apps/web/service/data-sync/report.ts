@@ -17,12 +17,16 @@ export function readExecutionReport(
     if (expectedSteps) {
       const observed =
         report?.version === 1
-          ? ["FULL"]
+          ? [report.tables?.[0]?.step === "INCREMENTAL" ? "INCREMENTAL" : "FULL"]
           : report?.stages?.map((stage: DataSyncStageResult) => stage.step);
       if (
         !Array.isArray(observed) ||
-        observed.length !== expectedSteps.length ||
-        observed.some((step: string, index: number) => step !== expectedSteps[index])
+        observed.length === 0 ||
+        observed.some((step: string) => !expectedSteps.includes(step as DataSyncStep)) ||
+        expectedSteps.includes("SCHEMA") !== observed.includes("SCHEMA") ||
+        (expectedSteps.includes("FULL") &&
+          !expectedSteps.includes("INCREMENTAL") &&
+          observed.includes("INCREMENTAL"))
       )
         return undefined;
     }
@@ -79,7 +83,7 @@ export function readExecutionReport(
         table.mappingIndex < 0 ||
         table.mappingIndex >= tableCount ||
         indexes.has(table.mappingIndex) ||
-        table.step !== "FULL" ||
+        !["FULL", "INCREMENTAL"].includes(table.step) ||
         table.progressUnit !== "SPLITS" ||
         !["WAITING", "RUNNING", "FINISHED", "FAILED", "CANCELED"].includes(table.status) ||
         ![table.readRows, table.committedRows, table.completedSplits].every(
@@ -157,7 +161,7 @@ function validPreparedStages(stages: unknown): stages is DataSyncStageResult[] {
   const full = data[0];
   return (
     full &&
-    full.step === "FULL" &&
+    ["FULL", "INCREMENTAL"].includes(full.step) &&
     full.progressUnit === "SPLITS" &&
     ["WAITING", "RUNNING", "FINISHED", "FAILED", "CANCELED", "UNKNOWN"].includes(full.status) &&
     [full.readRows, full.committedRows, full.plannedSplits, full.completedSplits].every(
@@ -184,7 +188,7 @@ function validSummary(report: unknown): report is DataSyncExecutionSummary {
     (value.counterScope === "GENERATION" ||
       (value.version === 3 && value.counterScope === "INSTANCE")) &&
     (value.version === 3
-      ? ["SCHEMA", "FULL", "INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
+      ? ["SCHEMA", "FULL", "INCREMENTAL", "INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
       : ["INITIALIZING", "SNAPSHOT", "HANDOFF", "STREAMING"]
     ).includes(value.phase) &&
     (value.version !== 3 ||
@@ -192,7 +196,7 @@ function validSummary(report: unknown): report is DataSyncExecutionSummary {
         ? value.counterScope === "INSTANCE" &&
           value.generation === 0 &&
           !value.restored &&
-          ["SCHEMA", "FULL"].includes(value.phase)
+          ["SCHEMA", "FULL", "INCREMENTAL"].includes(value.phase)
         : value.counterScope === "GENERATION" && value.phase !== "FULL")) &&
     Boolean(value.checkpoints) &&
     nullableCount(value.checkpoints.handoffId) &&

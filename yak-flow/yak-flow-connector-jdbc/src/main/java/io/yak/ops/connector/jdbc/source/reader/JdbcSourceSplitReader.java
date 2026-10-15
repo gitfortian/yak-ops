@@ -330,11 +330,11 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         List<String> readColumns = split.readColumns();
         String columns = readColumns.stream().map(dialect::quoteIdentifier).collect(Collectors.joining(", "));
         String sql = "SELECT " + columns + " FROM " + dialect.qualifiedTable(split.tableId());
-        List<Long> bounds = new ArrayList<>(3);
+        List<Object> bounds = new ArrayList<>(5);
+        List<String> predicates = new ArrayList<>(5);
         String key = split.splitColumn();
         if (key != null) {
             String quoted = dialect.quoteIdentifier(key);
-            List<String> predicates = new ArrayList<>(3);
             if (split.lowerBound() != null) {
                 predicates.add(quoted + " >= ?");
                 bounds.add(split.lowerBound());
@@ -345,11 +345,25 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
                 predicates.add(quoted + " > ?");
                 bounds.add(split.lastEmittedKey());
             }
-            if (!predicates.isEmpty()) {
-                sql += " WHERE " + String.join(" AND ", predicates);
-            }
-            sql += " ORDER BY " + quoted;
         }
+        var range = split.incrementalRange();
+        if (range != null) {
+            String quoted = dialect.quoteIdentifier(range.column());
+            if (range.lower() != null) {
+                predicates.add(quoted
+                        + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                                ? " >= ?"
+                                : " > ?"));
+                bounds.add(range.lowerParameter());
+            }
+            predicates.add(quoted
+                    + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                            ? " < ?"
+                            : " <= ?"));
+            bounds.add(range.upperParameter());
+        }
+        if (!predicates.isEmpty()) sql += " WHERE " + String.join(" AND ", predicates);
+        if (key != null) sql += " ORDER BY " + dialect.quoteIdentifier(key);
         statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         cancellableStatement = statement;
         if (cancellationRequested) {
@@ -358,7 +372,9 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         statement.setFetchSize(resultSetFetchSize);
         statement.setQueryTimeout(queryTimeoutSeconds);
         for (int index = 0; index < bounds.size(); index++) {
-            statement.setLong(index + 1, bounds.get(index));
+            Object value = bounds.get(index);
+            if (value instanceof Long number) statement.setLong(index + 1, number);
+            else statement.setObject(index + 1, value);
         }
         long queryStartedNanos = System.nanoTime();
         resultSet = statement.executeQuery();
