@@ -1,0 +1,98 @@
+name: Backend E2E Tests
+
+on:
+  # Always publish the gate; classify the full diff rather than using path-filter limits.
+  pull_request:
+  workflow_call:
+    inputs:
+      suite:
+        description: Backend test suite; reusable/release callers run all suites by default.
+        type: string
+        required: false
+        default: full
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Run one backend suite or all suites.
+        type: choice
+        required: true
+        default: full
+        options: [full, batch, schedule, realtime, schema]
+
+permissions:
+  contents: read
+
+# Only superseded direct PR runs cancel each other. Reusable/release runs are isolated.
+concurrency:
+  group: task-product-${{ github.workflow }}-${{ github.event_name == 'pull_request' && inputs.suite == '' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && inputs.suite == '' }}
+
+jobs:
+  scope:
+    name: Select Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      plan: ${{ steps.scope.outputs.plan }}
+      suites: ${{ steps.scope.outputs.suites }}
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Test backend suite selection
+        run: python3 -m unittest discover -s scripts/ci -p 'test_backend_e2e_scope*.py' -v
+      - name: Select backend suites
+        id: scope
+        env:
+          BACKEND_TEST_SUITE: ${{ inputs.suite || 'auto' }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/backend_e2e_scope.py --suite "$BACKEND_TEST_SUITE"
+
+  backend-e2e:
+    name: Backend E2E (${{ matrix.suite }})
+    needs: scope
+    if: ${{ needs.scope.outputs.suites }} != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run JUnit + Testcontainers backend suite
+        run: bash scripts/backend-e2e/run.sh "${{ matrix.suite }}"
+      - name: Upload test reports and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-e2e-${{ matrix.suite }}
+          path: |
+            yak-ops-boot/target/failsafe-reports/**
+            yak-ops-boot/target/surefire-reports/**
+          if-no-files-found: warn
+          retention-days: 7
+
+  backend-e2e-check:
+    # The check passes only when every selected database suite succeeds.
+    name: Backend E2E Check
+    if: always()
+    needs: [scope, backend-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Require every selected suite to succeed
+        env:
+          BACKEND_TEST_PLAN: ${{ needs.scope.outputs.plan }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          BACKEND_RESULT: ${{ needs.backend-e2e.result }}
+        run: python3 scripts/ci/backend_e2e_scope.py --check-results
