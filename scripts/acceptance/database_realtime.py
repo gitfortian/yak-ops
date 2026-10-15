@@ -155,7 +155,4 @@ def verify_database_realtime(api, client, source, postgres):
     invalid = create(client, bad, publish=False)
     client.call("POST", f"/api/v1/task-definitions/{invalid}/publish", status=400)
     assert client.call("POST", "/api/v1/task-instances/page", {"definitionId": invalid, "pageNo": 1, "pageSize": 20})["pagination"]["total"] == 0
-    if os.environ.get("E2E_BROWSER") == "true":
-        from database_realtime_browser import verify_database_realtime_browser
-        verify_database_realtime_browser(api, client, source, postgres, browser_routes)
     return evidence

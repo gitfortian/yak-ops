@@ -30,39 +30,50 @@ Run relevant tests before the full reactor where possible. Connector real-databa
 
 Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
 
-## Product Acceptance Scopes
+## Acceptance boundaries and execution
 
-[Task Execution Product Acceptance](.github/workflows/task-execution-product-acceptance.yml) selects work from the complete PR diff. Its [scope map](scripts/ci/product_acceptance_scope.py) is executable and covered by tests. Documentation needs no product environment. Ordinary frontend presentation runs controlled browser contracts without Java or databases. Known outbound sync parameters, preview and schedule paths select their applicable real suites; shared backend, dependency, acceptance infrastructure and unclassified changes use full coverage. Paths cannot distinguish a styling edit from a behavioral edit inside the same file: review the behavior and broaden coverage when needed.
+| Layer | Technology | Trigger | Ownership |
+| --- | --- | --- | --- |
+| Unit / frontend contracts | JUnit / TypeScript | Every PR (affected quality scope) | Java modules / `yak-ops-ui` |
+| Backend integration and E2E | JUnit + disposable Docker databases | Affected backend PR, full release gate | Connector / task / runtime test modules |
+| UI acceptance | Playwright | Release; manual as needed | `yak-ops-ui/tests/e2e/` |
+| Deployment acceptance | Docker Compose | Release | `scripts/release/smoke-compose.sh` |
 
-The workflow supports `browser`, `batch`, `schedule`, `realtime`, `schema` and `full` through **Run workflow**. Direct PR runs select automatically. Reusable callers and manual runs default to `full`; the existing Backend Acceptance / Release Gate chain therefore retains complete acceptance. Focused dispatches are diagnostic evidence for their named scope, not full release acceptance.
+**During the backend migration**, existing Python backend product suites remain under `scripts/acceptance/`; they test real MySQL/PostgreSQL and task lifecycle without any Playwright dependency. Move them to JUnit with Docker in a follow-up PR, one suite at a time; do not discard unique assertions before they have Java replacements.
 
-The controlled browser job is independent of database suites. Selected real suites run on separate disposable runners, at most two in parallel; they never share containers or state directories. Full mode preserves the complete cross-scenario sequence, including restart reconciliation. Batch, realtime and schema focused runs also restart the product and compare their pinned reports. Schedule mode includes real admission, version checks, resource-busy checks and optional browser interaction.
+### Backend acceptance
 
-Run the fast routing, gate and runner contract tests without Docker, Java, Playwright or credentials:
+[Task Execution Product Acceptance](.github/workflows/task-execution-product-acceptance.yml) uses [the complete PR diff and scope map](scripts/ci/product_acceptance_scope.py). Ordinary frontend-only changes select **no backend suites**. Targeted backend changes select `batch`, `schedule`, `realtime`, or `schema`; shared backend or unknown changes conservatively select `full`. A non-selected suite is **NOT EXECUTED**, not evidence of success.
+
+Direct PR runs are risk scoped. Manual and reusable release calls default to `full`; selected suites use fresh disposable MySQL/PostgreSQL environments and isolated state. Product E2E remains separate from Maven's ordinary `verify` phase.
 
 ```sh
 python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
-```
-
-For local product acceptance, use **fresh disposable** `yak-task-mysql` and `yak-task-postgres` containers with the databases, ports and MySQL binlog options shown in the workflow. Export `E2E_DB_PASSWORD` and `E2E_USER_PASSWORD` with test-only values. Never point the harness at a production or shared database. The focused runner rejects pre-existing fixture tables rather than clearing them. Run one suite per fresh environment.
-
-```sh
 bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
 python3 -u scripts/acceptance/run_product_acceptance.py --suite schema
-# Other focused choices: batch, schedule, realtime.
 ```
 
-Focused local runs include their real browser tests when `E2E_BROWSER=true`. Prepare the pinned Playwright version, Chromium and the frontend on port 5173 as in [.github/actions/acceptance-browser](.github/actions/acceptance-browser/action.yml). Full mode always includes browser tests and requires that setup:
+For local backend product suites, start fresh `yak-task-mysql` and `yak-task-postgres` as configured in the workflow, set test-only `E2E_DB_PASSWORD` and `E2E_USER_PASSWORD`, and never reuse production or shared databases. A failed or dirty fixture must block the run rather than be silently cleared.
+
+### UI acceptance
+
+Playwright is **not a default product feature PR gate**. The standalone [UI Acceptance workflow](.github/workflows/ui-acceptance.yml) runs on manual dispatch and when its own tests/workflow change. Its mocked scenarios run against the **built** frontend, not the Vite development server. Ordinary UI feature PRs rely on frontend quality and contract checks; reviewers may explicitly request a browser run for high-risk interactions.
+
+The formal [Release Gate](.github/workflows/v1-release-gate.yml) always runs the **full** UI suite against a disposable Docker Compose stack containing the exact candidate images. The suite includes mocked interaction contracts and a real authenticated login/navigation smoke. UI tests must not wait for real JDBC/CDC, checkpoints, or Cron triggering; these belong to backend IT/E2E.
 
 ```sh
-python3 -u scripts/acceptance/run_product_acceptance.py --suite full
+python3 -m pip install playwright==1.57.0
+python3 -m playwright install chromium
+# Serve yak-ops-ui's production build on http://127.0.0.1:5173
+python3 yak-ops-ui/tests/e2e/run.py --suite mocked --base-url http://127.0.0.1:5173
 ```
 
-The workflow additionally executes `ScheduleAdmissionIntegrationTest` on its separate MySQL database for `schedule` and `full`, in the same Maven invocation that packages Boot. Ordinary unit, style, architecture and distribution checks remain owned by Quality Check; a product-scope selection does not replace them.
+The UI report is `/tmp/yak-ui-acceptance/v<VERSION>/<SHA>/ui-acceptance.json`, with per-scenario Playwright traces and failure screenshots. Only the **exact release version and SHA** can be cited as acceptance evidence. A skipped, failed, cancelled, or missing required run blocks release.
 
-Suite results and phase durations are written to `/tmp/yak-acceptance-results`, the Actions summary and per-suite artifacts. A failure remains nonzero and retains its traceback. Focused failure-state output allowlists identity, status and failure codes; it excludes credentials, task parameters, SQL and raw error messages. Timing reports are measurements, not guaranteed runtime budgets.
+### Test and review evidence
 
-The aggregate check retains the name **MySQL JDBC + Multi-Table CDC Product E2E** for existing check references. It verifies the scope job and every selected child job. Its summary, not the historical name, identifies what actually ran. Unselected suites are **NOT EXECUTED**. Failed, cancelled, missing or unexpectedly skipped selected checks block the gate. New direct PR commits cancel superseded product runs; separate manual and reusable runs do not cancel one another.
+The backend acceptance workflow records selected scopes and phase durations under `/tmp/yak-acceptance-results`, plus per-suite Actions artifacts. UI acceptance has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
+
 
 ## Incremental Review Evidence
 

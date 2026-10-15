@@ -242,8 +242,4 @@ def verify_schema_migration(api, client, mysql_source, postgres):
         assert client.call("GET", f"/api/v1/task-instances/{identity}")["executionReport"] == terminal["executionReport"]
         print("SCHEMA REALTIME PASS: MySQL -> " + kind + "; create two targets, one Job, handoff, ordered CDC, empty table, cancellation and pinned history", flush=True)
 
-    if os.environ.get("E2E_BROWSER") == "true":
-        from schema_migration_browser import verify_schema_migration_browser
-        mysql("CREATE TABLE app.sm_browser_source (id BIGINT PRIMARY KEY, name VARCHAR(32)); INSERT INTO app.sm_browser_source VALUES (1,'browser')")
-        verify_schema_migration_browser(api, client, mysql_source, postgres)
     return evidence

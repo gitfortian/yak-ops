@@ -10,62 +10,40 @@ import re
 import subprocess
 
 SUITES = ("batch", "schedule", "realtime", "schema")
-MODES = ("auto", "full", "browser", *SUITES)
-UI = "yak-ops-ui/"
-APP = UI + "apps/web/"
+MODES = ("auto", "full", *SUITES)
 
-
-def plan(browser=False, suites=(), real_browser=False, reasons=()):
+def plan(suites=(), reasons=()):
     selected = ["full"] if "full" in suites else [item for item in SUITES if item in suites]
-    return {"browser": browser, "suites": selected, "real_browser": real_browser,
-            "reasons": sorted(set(reasons))}
-
+    return {"suites": selected, "reasons": sorted(set(reasons))}
 
 def full(reason):
-    return plan(True, ["full"], True, [reason])
-
+    return plan(["full"], [reason])
 
 def classify(paths):
-    browser, real_browser, selected, reasons = False, False, set(), set()
+    selected, reasons = set(), set()
     for path in paths:
+        if path == ".github/workflows/ui-acceptance.yml":
+            reasons.add("UI acceptance independently validated, not backend E2E")
+            continue
         if path.startswith((".github/workflows/", ".github/actions/", "scripts/ci/")) or path in {
-                "scripts/acceptance/run_product_acceptance.py", "scripts/acceptance/task-execution-e2e.py"}:
-            return full("acceptance infrastructure changed")
+            "scripts/acceptance/run_product_acceptance.py", "scripts/acceptance/task-execution-e2e.py"
+        }:
+            return full("backend acceptance infrastructure changed")
         if Path(path).suffix.lower() in {".md", ".mdx", ".rst"} or path in {"LICENSE", "NOTICE"}:
             reasons.add("documentation only")
             continue
-        if path == "scripts/acceptance/task_schedule_ui_test.py":
-            browser = True
-            reasons.add("controlled browser contracts")
+        if path.startswith("yak-ops-ui/"):
+            reasons.add("frontend checked by Quality Check; UI acceptance is release/manual")
             continue
         script_suite = next((suite for pattern, suite in (
             ("scripts/acceptance/multitable_*.py", "batch"),
-            ("scripts/acceptance/task_schedule_browser.py", "schedule"),
+            ("scripts/acceptance/offline_incremental_e2e.py", "batch"),
             ("scripts/acceptance/database_realtime*.py", "realtime"),
             ("scripts/acceptance/schema_migration*.py", "schema"),
         ) if fnmatchcase(path, pattern)), None)
         if script_suite:
             selected.add(script_suite)
-            real_browser = True  # Test changes exercise their complete suite, including its UI.
-            reasons.add(script_suite + " acceptance changed")
-            continue
-        if path.startswith(UI):
-            browser = True
-            reasons.add("frontend browser contracts")
-            if Path(path).suffix.lower() in {".css", ".svg", ".png", ".jpg", ".webp", ".woff2"}:
-                continue
-            if path == APP + "app/data-sync/schema-preview.tsx":
-                selected.add("schema")
-            elif path.startswith(APP + "service/data-sync/") or path in {
-                    APP + "app/data-sync/task-editor.tsx", APP + "app/data-sync/table-mapping-editor.tsx"}:
-                selected.update(("batch", "realtime", "schema"))
-            elif "schedule" in path or "/cron-scheduler/" in path:
-                selected.add("schedule")
-            elif path.startswith(APP + "service/") or Path(path).name in {
-                    "package.json", "package-lock.json", "vite.config.ts"}:
-                return full("shared frontend transport or dependency changed")
-            if selected:
-                real_browser = True
+            reasons.add(script_suite + " backend acceptance changed")
             continue
         if path.startswith(("yak-ops-business/yak-ops-business-schedule/",
                             "yak-ops-plugins/yak-ops-plugin-scheduler/")):
@@ -73,18 +51,19 @@ def classify(paths):
             reasons.add("scheduler integration")
             continue
         if path.startswith("yak-flow/yak-flow-connector-jdbc/") and Path(path).name in {
-                "JdbcMetadataApplier.java", "JdbcMetadataApplierTest.java"}:
+            "JdbcMetadataApplier.java", "JdbcMetadataApplierTest.java"
+        }:
             selected.add("schema")
             reasons.add("initial schema application")
             continue
         if path.startswith("yak-ops-boot/") and Path(path).name in {
-                "DataSyncSchemaController.java", "DataSyncSchemaControllerTest.java"}:
+            "DataSyncSchemaController.java", "DataSyncSchemaControllerTest.java"
+        }:
             selected.add("schema")
             reasons.add("schema preview authorization")
             continue
-        # Core, Runtime, Task lifecycle, datasource, DAO and unclassified changes are shared risk.
         return full("shared backend or unclassified change")
-    return plan(browser, selected, real_browser, reasons or ["empty diff"])
+    return plan(selected, reasons or ["empty diff"])
 
 
 def changed_paths(base, head):
@@ -101,11 +80,9 @@ def select(mode, event, base, head):
     if mode not in MODES:
         raise ValueError("Unknown acceptance mode: " + mode)
     if mode == "full":
-        return full("explicit or reusable full acceptance")
-    if mode == "browser":
-        return plan(True, reasons=["explicit browser contracts"])
+        return full("explicit or reusable full backend acceptance")
     if mode in SUITES:
-        return plan(False, [mode], True, ["explicit focused acceptance"])
+        return plan([mode], ["explicit focused backend acceptance"])
     if event != "pull_request":
         return full("automatic selection requires a PR comparison")
     try:
@@ -113,20 +90,16 @@ def select(mode, event, base, head):
     except (ValueError, OSError, subprocess.SubprocessError):
         return full("comparison unavailable; conservative full fallback")
 
-
-def verify_results(selection, scope, browser, product):
+def verify_results(selection, scope, product):
     if scope != "success":
-        raise ValueError("Acceptance scope did not succeed")
+        raise ValueError("Backend acceptance scope did not succeed")
     suites = selection.get("suites")
-    if (type(selection.get("browser")) is not bool or type(selection.get("real_browser")) is not bool
-            or not isinstance(suites, list) or any(item not in (*SUITES, "full") for item in suites)
+    if (not isinstance(suites, list) or any(item not in (*SUITES, "full") for item in suites)
             or len(suites) != len(set(suites)) or ("full" in suites and len(suites) != 1)):
-        raise ValueError("Invalid acceptance selection")
-    for name, required, actual in (("browser", selection["browser"], browser),
-                                    ("product", bool(suites), product)):
-        expected = "success" if required else "skipped"
-        if actual != expected:
-            raise ValueError(f"{name} acceptance was {actual}; expected {expected}")
+        raise ValueError("Invalid backend acceptance selection")
+    expected = "success" if suites else "skipped"
+    if product != expected:
+        raise ValueError(f"Backend acceptance was {product}; expected {expected}")
 
 
 def main():
@@ -140,12 +113,11 @@ def main():
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
                 summary.write("## Product acceptance gate\n\n")
                 summary.write("Selected scope: `" + json.dumps(selection) + "`\n\n")
-                for name in ("SCOPE_RESULT", "BROWSER_RESULT", "PRODUCT_RESULT"):
+                for name in ("SCOPE_RESULT", "PRODUCT_RESULT"):
                     summary.write(f"- {name}: `{os.environ[name]}`\n")
                 summary.write("\nUnselected suites are NOT EXECUTED, not passing acceptance.\n")
-        verify_results(selection, os.environ["SCOPE_RESULT"],
-                       os.environ["BROWSER_RESULT"], os.environ["PRODUCT_RESULT"])
-        if selection["browser"] or selection["suites"]:
+        verify_results(selection, os.environ["SCOPE_RESULT"], os.environ["PRODUCT_RESULT"])
+        if selection["suites"]:
             print("Selected acceptance jobs succeeded; unselected suites are NOT EXECUTED.")
         else:
             print("No product suites selected: NOT EXECUTED (scope checks passed).")
@@ -157,8 +129,6 @@ def main():
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write(f"plan={encoded}\n")
-            for name in ("browser", "real_browser"):
-                output.write(f"{name}={str(selection[name]).lower()}\n")
             output.write("suites=" + json.dumps(selection["suites"], separators=(",", ":")) + "\n")
             output.write("matrix=" + json.dumps({"suite": selection["suites"] or ["full"]}) + "\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):

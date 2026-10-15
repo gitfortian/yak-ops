@@ -553,15 +553,6 @@ def acceptance():
         batch_evidence = verify_multitable_batch(globals(), client, source, target)
         verify_parameter_versions(client, source, target, jdbc)
         verify_periodic_jdbc(client, source, target)
-        if os.environ.get("E2E_BROWSER") == "true":
-            from task_schedule_browser import verify_schedule_browser
-            query_postgres("CREATE TABLE public.browser_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
-            browser_task = create_task(client, "browser-" + uuid.uuid4().hex[:8], source, target, False,
-                                       debug=True, sink_table="browser_orders")
-            verify_schedule_browser(client, browser_task)
-            assert query_postgres("SELECT COUNT(*) FROM public.browser_orders") == "2"
-
-
         # A soft-deleted Definition cannot remove a historical Instance's pinned version.
         # Use a future yearly expression, then activate via the real authenticated API.
         client.call("PUT", f"/api/v1/schedules/{schedule_id}", {
