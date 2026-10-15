@@ -5,7 +5,7 @@ Playwright checks browser interaction, rendering, validation, navigation, and fa
 | Layer | Technology | When |
 | --- | --- | --- |
 | Unit and frontend contracts | JUnit / TypeScript | Every PR |
-| JDBC/CDC connector integration | JUnit + Docker | Relevant PR and release |
+| Backend integration and E2E | JUnit + Docker | Related PR and release |
 | UI automation | Playwright | Release; manual as needed |
 | Deployment smoke | Docker Compose | Release |
 
