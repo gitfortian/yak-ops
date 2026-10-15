@@ -43,6 +43,10 @@ jobs:
         if: steps.scope.outputs.backend == 'true'
         run: bash scripts/ci/test-detect-changes.sh
 
+      - name: Test backend suite selection and reports
+        if: steps.scope.outputs.backend == 'true'
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
       - name: Setup Java
         if: steps.scope.outputs.backend == 'true'
         uses: actions/setup-java@v5

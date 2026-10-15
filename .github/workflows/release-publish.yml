@@ -113,6 +113,7 @@ jobs:
           grep -Fxq -- "# Yak Ops v${RELEASE_VERSION} Release Notes" "${notes}"
           grep -Fxq -- "## Summary" "${notes}"
           grep -Fxq -- "## Known Limitations" "${notes}"
+          grep -Fxq -- '- Backend Tests: PASS (full suite; see the exact Release Gate run)' release-candidate/release-evidence.md
 
       - name: Verify candidate distribution
         shell: bash
@@ -356,7 +357,7 @@ jobs:
           - Migration Review: PASS
           - Release Blocker Review: PASS
           - Quality Gate: PASS
-          - Backend E2E: NOT RUN (pending redesign)
+          - Backend Tests: PASS (full-suite evidence verified from the referenced Release Gate)
           - Distribution Verification: PASS
           - Registry Image Identity: PASS
           - Registry Image Compose Smoke: PASS
