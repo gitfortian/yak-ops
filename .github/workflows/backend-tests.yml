@@ -1,0 +1,21 @@
+name: Backend Tests
+on:
+  push:
+    branches: [refactor/backend-test-architecture]
+permissions:
+  contents: read
+jobs:
+  source:
+    name: Prepare test sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Archive the exact tracked source for test implementation
+        run: git archive HEAD --format=tar --output=backend-test-sources.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-sources
+          path: backend-test-sources.tar
+          retention-days: 1
+          if-no-files-found: error
