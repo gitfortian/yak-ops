@@ -135,3 +135,107 @@ async def verify_partial_task_save(page):
     assert state["schedule"]["enabled"] is False
 
 
+
+
+async def pick_option(page, trigger, option):
+    """Choose a visible option and wait until the prior dropdown closes."""
+    await trigger.click()
+    popup = page.locator('[data-base-ui-portal] [role="presentation"][data-side][data-open]').last
+    listbox = popup.get_by_role("listbox")
+    list_id = await listbox.get_attribute("id")
+    assert list_id, "Select listbox must have an ID"
+    await listbox.get_by_role("option", name=option).click()
+    await expect(page.locator(f'[id="{list_id}"]')).to_be_hidden()
+    await expect(page.locator('[data-base-ui-portal] [role="presentation"][data-side][data-open]')).to_have_count(0)
+
+
+async def prepare_database_task(page, kind):
+    await page.goto(site("/data-sync?create=1"))
+    dialog = page.get_by_role("dialog", name="新建同步任务", exact=True)
+    await expect(dialog).to_be_visible()
+    for index, name in enumerate(("MySQL", "PostgreSQL", kind)):
+        await pick_option(page, dialog.get_by_role("combobox").nth(index), name)
+    await dialog.get_by_role("textbox", name="名称", exact=True).fill("acceptance-" + kind)
+    return dialog
+
+
+async def pick_datasources(page):
+    for index, name in enumerate(("MySQL source", "PostgreSQL target")):
+        await pick_option(page, page.locator("#datasource").get_by_role("combobox").nth(index), name)
+
+
+async def verify_multitable_mapping(page):
+    """Database batch selection, duplicate guard, draft restoration and saved mapping."""
+    import json
+    state["catalog_mode"] = "multi"
+    dialog = await prepare_database_task(page, "整库离线")
+    await expect(dialog.get_by_role("checkbox", name="全量同步")).to_be_checked()
+    await dialog.get_by_role("button", name="下一步", exact=True).click()
+    await pick_datasources(page)
+    for table in ("batch_a", "batch_b"):
+        await page.get_by_role("checkbox", name=re.compile(r"选择 (.*\.)?" + table + r"$")).check()
+        await pick_option(
+            page,
+            page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?" + table + r"$")),
+            re.compile(r"(.*\.)?batch_a_copy$"))
+    await expect(page.get_by_role("button", name="保存", exact=True)).to_be_disabled()
+    await expect(page.get_by_text("去向表不能重复", exact=True).first).to_be_visible()
+    await pick_option(
+        page,
+        page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?batch_b$")),
+        re.compile(r"(.*\.)?batch_b_copy$"))
+    await pick_option(page, page.locator("#target").get_by_role("combobox").first, "按主键更新")
+    await page.reload()
+    await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
+    await expect(page.get_by_role("button", name="保存", exact=True)).to_be_enabled()
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
+    requests = [req[2] for req in state["requests"]
+                if req[0] == "POST" and req[1] == "/api/v1/task-definitions"]
+    assert len(requests) == 1, requests
+    parameters = json.loads(requests[0]["parameters"])
+    assert parameters["solutionType"] == "DATABASE_OFFLINE", parameters
+    assert [row["source"]["table"] for row in parameters["tableMappings"]] == ["batch_a", "batch_b"]
+    assert [row["target"]["table"] for row in parameters["tableMappings"]] == ["batch_a_copy", "batch_b_copy"]
+    assert all(row["writeMode"] == "UPSERT" for row in parameters["tableMappings"])
+
+
+async def verify_schema_preview(page):
+    """Optional structure stage, DDL preview without side effects, and stable draft."""
+    import json
+    state["catalog_mode"] = "schema"
+    dialog = await prepare_database_task(page, "单表离线")
+    schema = dialog.get_by_role("checkbox", name="结构迁移", exact=True)
+    await expect(schema).not_to_be_checked()
+    await expect(schema).to_be_enabled()
+    await schema.check()
+    await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_checked()
+    await dialog.get_by_role("button", name="下一步", exact=True).click()
+    await pick_datasources(page)
+    await pick_option(page, page.locator("#source").get_by_role("combobox").last,
+                      re.compile(r"(.*\.)?sm_browser_source$"))
+    target = page.locator("#target")
+    schema_select = target.get_by_role("combobox", name="Schema", exact=True)
+    if await schema_select.count():
+        await pick_option(page, schema_select, "public")
+    field = target.get_by_placeholder("去向表名称", exact=True)
+    await expect(field).to_be_enabled()
+    for table in ("sm_browser_unused", "sm_browser_target"):
+        await field.fill(table)
+        await page.get_by_role("button", name="DDL 预览", exact=True).click()
+        ddl = page.get_by_role("dialog", name="DDL 预览", exact=True)
+        await expect(ddl.locator("code")).to_contain_text("CREATE TABLE")
+        await expect(ddl.locator("code")).to_contain_text(table)
+        await expect(ddl.get_by_role("textbox")).to_have_count(0)
+        await ddl.get_by_role("button", name="关闭", exact=True).click()
+    assert state.get("schema_previews") == 2
+    assert state["created_tasks"] == 0, "DDL preview must not save a Task"
+    await page.reload()
+    await expect(page.get_by_placeholder("去向表名称", exact=True)).to_have_value("sm_browser_target")
+    await page.get_by_role("button", name="保存", exact=True).click()
+    await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
+    created = [req[2] for req in state["requests"]
+               if req[0] == "POST" and req[1] == "/api/v1/task-definitions"][-1]
+    params = json.loads(created["parameters"])
+    assert params["steps"] == ["SCHEMA", "FULL"], params
+    assert params["tableMappings"][0]["target"]["table"] == "sm_browser_target"

@@ -28,7 +28,8 @@ class ScopeTest(unittest.TestCase):
                      "yak-ops-ui/apps/web/app/data-sync/task-editor.tsx",
                      "yak-ops-ui/apps/web/service/data-sync/config.ts",
                      "yak-ops-ui/package-lock.json",
-                     "yak-ops-ui/tests/e2e/run.py"):
+                     "yak-ops-ui/tests/e2e/run.py",
+                     ".github/workflows/ui-acceptance.yml"):
             with self.subTest(path=path):
                 self.assertEqual([], scope.classify([path])["suites"])
 
@@ -247,6 +248,9 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("YAK_UI_ACCEPTANCE: 'true'", release)
         self.assertIn("workflow_dispatch:", ui)
         self.assertIn("yak-ops-ui/tests/e2e/run.py", ui)
+        scenarios = (ROOT / "yak-ops-ui/tests/e2e/run.py").read_text()
+        for scenario in ("multitable-mapping", "schema-preview"):
+            self.assertIn(scenario, scenarios)
 
     def test_browser_runner_has_no_backend_acceptance_dependency(self):
         content = (ROOT / "yak-ops-ui/tests/e2e/run.py").read_text()
