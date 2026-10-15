@@ -26,20 +26,40 @@ final class TaskFixtures {
         api.workspace(workspace);
         source = datasource("MYSQL", "app", "root", env.mysqlHost(), env.mysqlPort());
         target = datasource("POSTGRE_SQL", "ods", "yak", env.postgresHost(), env.postgresPort());
+        // Prove the actual Boot datasource plugin sees both physical tables, rather than
+        // assuming the JDBC connection used by the test harness proves publication access.
+        requireTable(source, Map.of("database", "app"), "orders");
+        requireTable(target, Map.of("database", "ods", "schema", "public"), "ods_orders");
     }
 
     String datasource(String kind, String db, String username, String host, int port) {
         String name = kind + "-" + unique();
+        Map<String, Object> connection = new LinkedHashMap<>();
+        connection.put("host", host);
+        connection.put("port", port);
+        connection.put("database", db);
+        connection.put("username", username);
+        connection.put("password", BackendE2EEnvironment.PASSWORD);
+        // The official MySQL 8 container uses caching_sha2_password without an SSL setup.
+        if ("MYSQL".equals(kind)) {
+            connection.put("properties", Map.of("allowPublicKeyRetrieval", "true", "useSSL", "false"));
+        }
         api.call("POST", "/api/v1/data-source", Map.of(
-                "name", name, "dbType", kind, "environment", "TEST",
-                "connectionParams", Map.of("host", host, "port", port,
-                        "database", db, "username", username, "password", BackendE2EEnvironment.PASSWORD)));
+                "name", name, "dbType", kind, "environment", "TEST", "connectionParams", connection));
         JsonNode records = api.call("POST", "/api/v1/data-source/page",
                 Map.of("pageNo", 1, "pageSize", 100, "sorts", List.of())).path("bizData");
         for (JsonNode record : records) {
             if (record.path("name").asText().equals(name)) return record.path("id").asText();
         }
         throw new AssertionError("Expected test data source was not created for " + kind);
+    }
+
+    private void requireTable(String id, Map<String, String> query, String name) {
+        JsonNode result = api.call("POST", "/api/v1/data-source/" + id + "/catalog/tables", query);
+        for (JsonNode row : result) {
+            if (name.equals(row.path("name").asText())) return;
+        }
+        throw new AssertionError("Configured datasource did not expose expected E2E table: " + name);
     }
 
     static String unique() {
