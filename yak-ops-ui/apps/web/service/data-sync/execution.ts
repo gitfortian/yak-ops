@@ -3,12 +3,10 @@ import type {
   TaskInstanceRecord,
   TaskInstanceStatus,
 } from "../task-execution/types";
-import type {
-  DataSyncInstancePageParams,
-  DataSyncInstanceRecord,
-  DataSyncType,
-  SyncPipelineParameters,
-} from "./types";
+import type { DataSyncInstancePageParams, DataSyncInstanceRecord } from "./types";
+
+import { readSyncParameters, solutionSyncType } from "./parameters.ts";
+import { readExecutionReport } from "./report.ts";
 
 export const isTaskInstanceActive = (status: TaskInstanceStatus): boolean =>
   status === "SUBMITTED" ||
@@ -33,19 +31,35 @@ export function toDataSyncInstanceRecord(
     throw new Error("Task Instance Definition version mismatch");
   }
 
-  const parameters = JSON.parse(version.parameters) as SyncPipelineParameters;
-  const { source, sink } = parameters;
-  const syncType: DataSyncType = source.type === "MYSQL_CDC" ? "REALTIME" : "OFFLINE";
+  const parameters = readSyncParameters(version.parameterSchemaVersion, version.parameters);
+  const source = { ...parameters.source, ...parameters.tableMappings[0].source };
+  const sink = {
+    ...parameters.sink,
+    ...parameters.tableMappings[0].target,
+    writeMode: parameters.tableMappings[0].writeMode,
+  };
+  const syncType = solutionSyncType(parameters.solutionType);
   const taskName = version.name;
 
   return {
     id: instance.id,
+    executionReport: readExecutionReport(
+      instance.executionReport,
+      parameters.tableMappings.length,
+      parameters.steps,
+    ),
+    solutionType: parameters.solutionType,
+    steps: parameters.steps,
     taskId: instance.definitionId,
     taskName,
     taskVersion: instance.definitionVersion,
     syncType,
     triggerType: instance.triggerType,
+    scheduleId: instance.scheduleId,
+    scheduleRevision: instance.scheduleRevision,
+    scheduledTime: instance.scheduledTime,
     status: instance.status,
+    progressPercent: instance.progressPercent ?? undefined,
     runtimeEngine: instance.runtimeEngine ?? undefined,
     runtimeId: instance.runtimeId ?? undefined,
     startTime: instance.startTime ?? undefined,
@@ -53,6 +67,9 @@ export function toDataSyncInstanceRecord(
     errorMessage: instance.failureCode ?? undefined,
     createTime: instance.createTime ?? undefined,
     definitionSnapshot: {
+      tableMappings: parameters.tableMappings,
+      solutionType: parameters.solutionType,
+      steps: parameters.steps,
       taskId: instance.definitionId,
       taskName,
       taskVersion: instance.definitionVersion,

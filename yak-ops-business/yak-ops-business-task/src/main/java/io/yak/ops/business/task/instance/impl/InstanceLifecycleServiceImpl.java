@@ -9,6 +9,7 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.dao.repository.task.ExecutionClaimRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
+import io.yak.ops.dao.repository.task.TaskCursorRepository;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import jakarta.annotation.Resource;
@@ -25,6 +26,9 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
 
     @Resource
     private ExecutionClaimRepository claims;
+
+    @Resource
+    private TaskCursorRepository cursors;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -44,7 +48,8 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
                 instance.getDefinitionVersion(),
                 instance.getTaskType(),
                 instance.getResourceRevision(),
-                dispatchToken);
+                dispatchToken,
+                instance.isDebug());
     }
 
     @Override
@@ -54,21 +59,53 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
                 ticket.workspaceId(),
                 ticket.instanceId(),
                 ticket.dispatchToken(),
-                reference.engine(),
-                reference.id())) {
+                reference == null ? null : reference.engine(),
+                reference == null ? null : reference.id())) {
             throw new IllegalStateException("Task Instance launch ownership changed");
         }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void runtimeReference(DispatchTicket ticket, TaskRuntimeReference reference) {
+        if (!instances.bindRuntimeReference(
+                ticket.workspaceId(),
+                ticket.instanceId(),
+                ticket.dispatchToken(),
+                reference.engine(),
+                reference.id())) {
+            throw new IllegalStateException("Task runtime identity ownership changed");
+        }
+    }
+
+    @Override
+    public void progress(DispatchTicket ticket, int percentage) {
+        if (!instances.updateProgress(ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), percentage)) {
+            throw new IllegalStateException("Task Instance progress ownership changed");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void complete(DispatchTicket ticket, TaskOutcome outcome) {
+        complete(ticket, outcome, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void complete(DispatchTicket ticket, TaskOutcome outcome, String executionReport) {
         InstanceEntity instance = instances
                 .findByIdForUpdate(ticket.workspaceId(), ticket.instanceId())
                 .orElseThrow(() -> new IllegalStateException("Task Instance is missing"));
         if (instance.getStatus().isTerminal() || instance.getStatus() == TaskInstanceStatus.RECONCILING) {
             return;
         }
+        if (outcome == TaskOutcome.FINISHED) {
+            for (var batch : cursors.frozen(ticket.workspaceId(), ticket.instanceId())) {
+                cursors.commit(ticket.workspaceId(), ticket.definitionId(), batch);
+            }
+        }
+        persistReport(ticket, executionReport);
         TaskInstanceStatus status =
                 switch (outcome) {
                     case FINISHED -> TaskInstanceStatus.FINISHED;
@@ -86,11 +123,32 @@ public class InstanceLifecycleServiceImpl implements InstanceLifecycleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void uncertain(DispatchTicket ticket) {
+        uncertain(ticket, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void uncertain(DispatchTicket ticket, String executionReport) {
         instances.findByIdForUpdate(ticket.workspaceId(), ticket.instanceId()).ifPresent(instance -> {
             if (!instance.getStatus().isTerminal()) {
+                persistReport(ticket, executionReport);
                 instances.markReconciling(ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken());
             }
         });
+    }
+
+    private void persistReport(DispatchTicket ticket, String executionReport) {
+        if (executionReport != null) {
+            if (executionReport.length() > 262144
+                    || !io.yak.ops.common.util.JSONUtils.readTree(executionReport)
+                            .isObject()) {
+                throw new IllegalArgumentException("Invalid public Task execution report");
+            }
+            if (!instances.updateExecutionReport(
+                    ticket.workspaceId(), ticket.instanceId(), ticket.dispatchToken(), executionReport)) {
+                throw new IllegalStateException("Task execution report ownership changed");
+            }
+        }
     }
 
     @Override

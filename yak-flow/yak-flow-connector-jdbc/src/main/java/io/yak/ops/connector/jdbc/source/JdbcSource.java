@@ -1,6 +1,7 @@
 package io.yak.ops.connector.jdbc.source;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
 import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
@@ -46,9 +47,11 @@ import java.util.Objects;
 public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, JdbcEnumeratorState> {
 
     private final JdbcConnectionProvider connectionProvider;
+    private final TableMetrics metrics;
     private final String jdbcUrl;
     private final List<TableId> tables;
     private final Map<TableId, List<String>> projections;
+    private final Map<TableId, JdbcIncrementalRange> ranges;
     private final Configuration configuration;
     private final JdbcDialect dialect;
     private final String fingerprint;
@@ -102,6 +105,34 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
             List<TableId> tables,
             Configuration configuration,
             Map<TableId, List<String>> projections) {
+        this(connectionProvider, jdbcUrl, tables, configuration, projections, new TableMetrics());
+    }
+
+    /** Creates a reusable bounded Source with attempt-local, non-checkpointed observations. */
+    public JdbcSource(
+            JdbcConnectionProvider connectionProvider,
+            String jdbcUrl,
+            List<TableId> tables,
+            Configuration configuration,
+            Map<TableId, List<String>> projections,
+            TableMetrics metrics) {
+        this(connectionProvider, jdbcUrl, tables, configuration, projections, metrics, Map.of());
+    }
+
+    /** Adds independently frozen per-table incremental windows without changing shared source options. */
+    public JdbcSource(
+            JdbcConnectionProvider connectionProvider,
+            String jdbcUrl,
+            List<TableId> tables,
+            Configuration configuration,
+            Map<TableId, List<String>> projections,
+            TableMetrics metrics,
+            Map<TableId, JdbcIncrementalRange> ranges) {
+        this.ranges = Map.copyOf(Objects.requireNonNull(ranges, "ranges"));
+        if (!tables.containsAll(this.ranges.keySet())) {
+            throw new IllegalArgumentException("Incremental ranges must belong to selected source tables");
+        }
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.connectionProvider = Objects.requireNonNull(connectionProvider, "connectionProvider");
         this.jdbcUrl = Objects.requireNonNull(jdbcUrl, "jdbcUrl");
         this.tables = List.copyOf(Objects.requireNonNull(tables, "tables"));
@@ -156,7 +187,7 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
 
     @Override
     public SourceReader<TableRecord, JdbcSourceSplit> createReader(SourceReaderContext context) {
-        return new JdbcSourceReader(connectionProvider, dialect, configuration, context);
+        return new JdbcSourceReader(connectionProvider, dialect, configuration, context, metrics);
     }
 
     @Override
@@ -173,10 +204,11 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
             SplitEnumeratorContext<JdbcSourceSplit> context, JdbcEnumeratorState restored) {
         return new JdbcSourceEnumerator(
                 context,
-                new JdbcSplitPlanner(connectionProvider, dialect, configuration, projections),
+                new JdbcSplitPlanner(connectionProvider, dialect, configuration, projections, ranges),
                 tables,
                 fingerprint,
-                restored);
+                restored,
+                metrics);
     }
 
     private void validateOptions() {
@@ -208,6 +240,18 @@ public final class JdbcSource implements Source<TableRecord, JdbcSourceSplit, Jd
                     .append(identifierPart(table.schema()))
                     .append('|')
                     .append(identifierPart(table.table()));
+            JdbcIncrementalRange range = ranges.get(table);
+            if (range != null) {
+                definition
+                        .append("|range:")
+                        .append(range.mode())
+                        .append('|')
+                        .append(identifierPart(range.column()))
+                        .append('|')
+                        .append(identifierPart(range.lower()))
+                        .append('|')
+                        .append(identifierPart(range.upper()));
+            }
             List<String> projected = projections.get(table);
             if (projected != null) {
                 definition.append("|projection:").append(projected.size());

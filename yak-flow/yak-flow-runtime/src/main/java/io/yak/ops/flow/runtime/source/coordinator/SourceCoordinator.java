@@ -23,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -56,20 +57,34 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     private final Set<Integer> deferredSplitRequests = new LinkedHashSet<>();
 
     public SourceCoordinator(Source<?, SplitT, EnumStateT> source, OperatorCoordinatorContext coordinatorContext) {
-        this(source, coordinatorContext, null, false, "");
+        this(source, coordinatorContext, null, false, "", ignored -> {});
     }
 
     /** Creates a Source coordinator with an optional Job execution log identity. */
     public SourceCoordinator(
             Source<?, SplitT, EnumStateT> source, OperatorCoordinatorContext coordinatorContext, String logId) {
-        this(source, coordinatorContext, null, false, logId);
+        this(source, coordinatorContext, null, false, logId, ignored -> {});
+    }
+
+    /** Creates a coordinator that reports planned splits to its owning physical Job. */
+    public SourceCoordinator(
+            Source<?, SplitT, EnumStateT> source,
+            OperatorCoordinatorContext coordinatorContext,
+            String logId,
+            IntConsumer plannedSplits) {
+        this(source, coordinatorContext, null, false, logId, plannedSplits);
     }
 
     /** Restores enumerator state from a completed checkpoint; reader splits are restored separately. */
     public static <SplitT extends SourceSplit, EnumStateT> SourceCoordinator<SplitT, EnumStateT> restore(
             Source<?, SplitT, EnumStateT> source, OperatorCoordinatorContext coordinatorContext, EnumStateT state) {
         return new SourceCoordinator<>(
-                source, coordinatorContext, Objects.requireNonNull(state, "Restored state must not be null"), true, "");
+                source,
+                coordinatorContext,
+                Objects.requireNonNull(state, "Restored state must not be null"),
+                true,
+                "",
+                ignored -> {});
     }
 
     /** Restores a Source coordinator while retaining the owning Job's log identity. */
@@ -83,7 +98,24 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
                 coordinatorContext,
                 Objects.requireNonNull(state, "Restored state must not be null"),
                 true,
-                logId);
+                logId,
+                ignored -> {});
+    }
+
+    /** Restores the bounded Source with a physical Job progress collector. */
+    public static <SplitT extends SourceSplit, EnumStateT> SourceCoordinator<SplitT, EnumStateT> restore(
+            Source<?, SplitT, EnumStateT> source,
+            OperatorCoordinatorContext coordinatorContext,
+            EnumStateT state,
+            String logId,
+            IntConsumer plannedSplits) {
+        return new SourceCoordinator<>(
+                source,
+                coordinatorContext,
+                Objects.requireNonNull(state, "Restored state must not be null"),
+                true,
+                logId,
+                plannedSplits);
     }
 
     private SourceCoordinator(
@@ -91,29 +123,38 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
             OperatorCoordinatorContext coordinatorContext,
             EnumStateT restoredEnumeratorState,
             boolean restoring,
-            String logId) {
+            String logId,
+            IntConsumer plannedSplits) {
         this.source = Objects.requireNonNull(source, "source must not be null");
         this.coordinatorContext = Objects.requireNonNull(coordinatorContext, "coordinatorContext must not be null");
         this.restoredEnumeratorState = restoredEnumeratorState;
         this.restoring = restoring;
+        String logDebug = Boolean.toString("true".equals(MDC.get("taskLogDebug")));
         ThreadFactory coordinatorThreads =
                 Thread.ofVirtual().name("yak-source-coordinator-", 0).factory();
         ThreadFactory discoveryThreads =
                 Thread.ofVirtual().name("yak-source-discovery-", 0).factory();
-        this.eventLoop =
-                Executors.newSingleThreadExecutor(action -> coordinatorThreads.newThread(withLogId(logId, action)));
-        this.discovery =
-                Executors.newSingleThreadExecutor(action -> discoveryThreads.newThread(withLogId(logId, action)));
+        this.eventLoop = Executors.newSingleThreadExecutor(
+                action -> coordinatorThreads.newThread(withLogId(logId, logDebug, action)));
+        this.discovery = Executors.newSingleThreadExecutor(
+                action -> discoveryThreads.newThread(withLogId(logId, logDebug, action)));
         this.context = new SourceCoordinatorContext<>(
-                coordinatorContext, source.getSplitSerializer(), eventLoop, discovery, () -> eventThread, this::fail);
+                coordinatorContext,
+                source.getSplitSerializer(),
+                eventLoop,
+                discovery,
+                () -> eventThread,
+                this::fail,
+                plannedSplits);
     }
 
-    private static Runnable withLogId(String logId, Runnable action) {
+    private static Runnable withLogId(String logId, String logDebug, Runnable action) {
         return () -> {
             if (logId == null || logId.isBlank()) {
                 action.run();
             } else {
-                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId)) {
+                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId);
+                        MDC.MDCCloseable details = MDC.putCloseable("taskLogDebug", logDebug)) {
                     action.run();
                 }
             }

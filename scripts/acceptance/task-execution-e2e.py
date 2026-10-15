@@ -63,7 +63,7 @@ class Client:
 
     def login(self):
         self.call(
-            "POST", "/yak-security/api/v1/account/login",
+            "POST", "/api/v1/account/login",
             {"userName": "taske2e", "pw": USER_PASSWORD})
 
 
@@ -119,10 +119,11 @@ def boot_environment(port):
     environment.update({
         "SERVER_PORT": str(port),
         "YAK_DATABASE_URL": (
-            "jdbc:mysql://127.0.0.1:3306/yak_security"
+            "jdbc:mysql://127.0.0.1:3306/yak_ops"
             "?useSSL=false&allowPublicKeyRetrieval=true"),
         "YAK_DATABASE_USERNAME": "root",
         "YAK_DATABASE_PASSWORD": DB_PASSWORD,
+        "YAK_SECURITY_BOOTSTRAP_ENABLED": "true",
         "YAK_SECURITY_BOOTSTRAP_USERNAME": "taske2e",
         "YAK_SECURITY_BOOTSTRAP_PASSWORD": USER_PASSWORD,
         "YAK_SECURITY_BOOTSTRAP_REAL_NAME": "Task acceptance",
@@ -201,25 +202,80 @@ def create_datasource(client, name, kind, database, username, port):
     return found[0]
 
 
-def create_task(client, name, source, target, streaming):
+def create_task(client, name, source, target, streaming, debug=False, sink_table="ods_orders"):
     params = {
-        "source": {
-            "type": "MYSQL_CDC" if streaming else "JDBC",
-            "datasourceId": source, "table": "orders",
-        },
-        "transform": [],
-        "sink": {
-            "type": "JDBC", "datasourceId": target,
-            "schema": "public", "table": "ods_orders",
-            "writeMode": "UPSERT" if streaming else "APPEND",
-        },
+        "solutionType": "SINGLE_TABLE_REALTIME" if streaming else "SINGLE_TABLE_OFFLINE",
+        "steps": ["FULL", "INCREMENTAL"] if streaming else ["FULL"],
+        "source": {"datasourceId": source},
+        "sink": {"datasourceId": target},
+        "tableSelection": {"mode": "EXPLICIT"},
+        "tableMappings": [{"source": {"table": "orders"},
+                           "target": {"schema": "public", "table": sink_table},
+                           "writeMode": "UPSERT" if streaming else "APPEND"}],
     }
     definition = client.call("POST", "/api/v1/task-definitions", {
-        "name": name, "taskType": "DATA_SYNC",
+        "name": name, "taskType": "DATA_SYNC", "debug": debug,
         "parameters": json.dumps(params, separators=(",", ":")),
     })["id"]
     client.call("POST", f"/api/v1/task-definitions/{definition}/publish")
     return definition
+
+
+def verify_parameter_versions(client, source, target, existing_v3):
+    """Seed a historical version-two fixture in disposable storage, then use real public operations."""
+    query_postgres("CREATE TABLE public.version_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
+    payload = {
+        "solutionType": "SINGLE_TABLE_OFFLINE", "steps": ["FULL"],
+        "source": {"datasourceId": source}, "sink": {"datasourceId": target},
+        "tableSelection": {"mode": "EXPLICIT"}, "tableMappings": [{
+            "source": {"table": "orders"}, "target": {"schema": "public", "table": "version_orders"},
+            "writeMode": "UPSERT"}],
+    }
+    old = {"source": {"type": "JDBC", "datasourceId": source, "table": "orders"}, "transform": [],
+           "sink": {"type": "JDBC", "datasourceId": target, "schema": "public", "table": "version_orders", "writeMode": "UPSERT"}}
+    definition = client.call("POST", "/api/v1/task-definitions", {
+        "name": "version-contract-" + uuid.uuid4().hex[:8], "taskType": "DATA_SYNC",
+        "parameters": json.dumps(payload)})
+    identity = definition["id"]
+    assert re.fullmatch(r"[A-Za-z0-9_-]{8,64}", identity)
+    # Only fixture setup writes historical storage; no production endpoint can mutate a Version.
+    encoded = json.dumps(old, separators=(",", ":")).encode().hex()
+    query_mysql("UPDATE yak_ops.yak_ops_task_definition_version SET parameter_schema_version=2, parameters=CONVERT(0x"
+                + encoded + " USING utf8mb4) WHERE definition_id='" + identity + "' AND version=1")
+    assert client.call("GET", "/api/v1/task-definitions/" + identity)["parameterSchemaVersion"] == 2
+    client.call("POST", f"/api/v1/task-definitions/{identity}/publish")
+    first, _ = submit(client, identity)
+    wait_status(client, first["instanceId"], {"FINISHED"})
+    snapshot = client.call("GET", f"/api/v1/task-instances/{first['instanceId']}/definition")
+    assert snapshot["name"] == definition["name"]
+    assert snapshot["parameterSchemaVersion"] == 2 and json.loads(snapshot["parameters"]) == old
+    filtered = client.call("POST", "/api/v1/task-definitions/page", {
+        "taskType": "DATA_SYNC", "pageNo": 1, "pageSize": 200,
+        "parameterFilters": {"solutionType": "SINGLE_TABLE_OFFLINE"}})
+    assert {identity, existing_v3}.issubset({row["id"] for row in filtered["bizData"]})
+    client.call("POST", f"/api/v1/task-definitions/{identity}/unpublish")
+    metadata = client.call("PUT", f"/api/v1/task-definitions/{identity}", {"name": definition["name"] + "-renamed", "debug": True})
+    assert metadata["definitionVersion"] == 1 and metadata["parameterSchemaVersion"] == 2
+    migrated = client.call("PUT", f"/api/v1/task-definitions/{identity}", {
+        "name": metadata["name"], "debug": True, "parameters": json.dumps(payload)})
+    assert migrated["definitionVersion"] == 2 and migrated["parameterSchemaVersion"] == 3
+    # The display name follows current metadata; every pinned execution field remains unchanged.
+    historical = client.call("GET", f"/api/v1/task-instances/{first['instanceId']}/definition")
+    assert historical == {**snapshot, "name": metadata["name"]}
+    client.call("POST", f"/api/v1/task-definitions/{identity}/publish")
+    second, _ = submit(client, identity)
+    wait_status(client, second["instanceId"], {"FINISHED"})
+    assert query_postgres("SELECT COUNT(*) FROM public.version_orders") == "2"
+    # New-write and step constraints are enforced by the backend, not only by disabled checkboxes.
+    client.call("POST", "/api/v1/task-definitions", {
+        "name": "reject-v2-" + uuid.uuid4().hex[:8], "taskType": "DATA_SYNC", "parameters": json.dumps(old)}, status=400)
+    # SCHEMA + FULL is supported; standalone, incomplete and duplicate steps remain invalid.
+    for changes in ({"steps": []}, {"steps": ["SCHEMA"]}, {"steps": ["SCHEMA", "INCREMENTAL"]},
+                    {"steps": ["SCHEMA", "FULL", "FULL"]}, {"tableMappings": []},
+                    {"source": {"datasourceId": source, "type": "JDBC"}}):
+        client.call("POST", "/api/v1/task-definitions", {
+            "name": "reject-solution-" + uuid.uuid4().hex[:8], "taskType": "DATA_SYNC",
+            "parameters": json.dumps({**payload, **changes})}, status=400)
 
 
 def submit(client, definition, key=None, expected=202):
@@ -247,8 +303,132 @@ def claim_count(identity):
     if not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", identity):
         raise AssertionError("Unexpected Instance identifier")
     return int(query_mysql(
-        "SELECT COUNT(*) FROM yak_security.yak_ops_task_execution_claim "
+        "SELECT COUNT(*) FROM yak_ops.yak_ops_task_execution_claim "
         + f"WHERE instance_id = '{identity}'"))
+
+
+def verify_schedule_configuration(client, definition):
+    """Exercise the real Schedule service and MySQL schema without activating a scheduler."""
+    base = "/api/v1/schedules"
+    payload = {"targetType": "TASK", "targetId": definition,
+               "cronExpression": "0 * * * * ?", "timeZone": "UTC"}
+    created = client.call("POST", base, payload)
+    identity = created["id"]
+    assert created["enabled"] is False and created["revision"] == 1
+    assert created["schedulable"] is True
+    assert created["registrationStatus"] == "APPLIED"
+    assert created.get("nextFireTime") is None
+    client.call("POST", base, payload, status=409)
+    client.call("POST", base, dict(payload, targetType="WORKFLOW"), status=400)
+    preview = client.call("POST", base + "/preview", {
+        "cronExpression": "0 0 8 * * ?", "timeZone": "Asia/Shanghai",
+        "after": "2026-10-13T00:00:00Z"})
+    assert preview["nextFireTimes"][0] == "2026-10-14T00:00:00Z"
+    assert len(preview["nextFireTimes"]) == 5
+    client.call("POST", base + "/preview", {
+        "cronExpression": "0 * * * * ?", "timeZone": "Asia/Invalid"}, status=400)
+    page = client.call("POST", base + "/page", {"targetId": definition, "pageNo": 1, "pageSize": 20})
+    assert page["pagination"]["total"] == 1 and page["bizData"][0]["id"] == identity
+    batch = {"targetType": "TASK", "targetIds": [definition, "missing"], "pageNo": 1, "pageSize": 200}
+    result = client.call("POST", base + "/page", batch)
+    assert result["pagination"]["total"] == 1 and result["bizData"][0]["id"] == identity
+    assert client.call("POST", base + "/page", dict(batch, targetIds=["missing"]))["pagination"]["total"] == 0
+    for ids in ([], [" "], ["x" * 65], [definition] * 201):
+        client.call("POST", base + "/page", dict(batch, targetIds=ids), status=400)
+    client.call("POST", base + "/page", dict(batch, targetId=definition), status=400)
+    same = client.call("PUT", base + "/" + identity, {
+        "revision": 1, "cronExpression": payload["cronExpression"], "timeZone": "UTC"})
+    assert same["revision"] == 1
+    changed = client.call("PUT", base + "/" + identity, {
+        "revision": 1, "cronExpression": "0 0 8 * * ?", "timeZone": "Asia/Shanghai"})
+    assert changed["revision"] == 2 and changed["enabled"] is False
+    client.call("PUT", base + "/" + identity, {
+        "revision": 1, "cronExpression": payload["cronExpression"], "timeZone": "UTC"}, status=409)
+    workspace = client.workspace
+    client.workspace = client.call("POST", "/api/v1/workspaces", {"name": "schedule-" + uuid.uuid4().hex[:8]})["id"]
+    try:
+        assert client.call("POST", base + "/page", batch)["pagination"]["total"] == 0
+        client.call("GET", base + "/" + identity, status=404)
+        client.call("DELETE", base + "/" + identity + "?revision=2", status=404)
+        client.call("POST", base, payload, status=404)
+    finally:
+        client.workspace = workspace
+    client.call("DELETE", base + "/" + identity + "?revision=2")
+    restored = client.call("POST", base, payload)
+    assert restored["id"] != identity and restored["enabled"] is False
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_schedule WHERE id='" + identity + "' AND deleted_at IS NOT NULL") == "1"
+    # The database, not just a pre-insert service query, owns target uniqueness.
+    duplicate_sql = ("INSERT INTO yak_ops.yak_ops_schedule (id,workspace_id,target_type,target_id,cron_expression,time_zone,"
+                     "create_time,update_time,create_by,update_by) SELECT 'duplicate-schedule',workspace_id,target_type,target_id,"
+                     "cron_expression,time_zone,create_time,update_time,create_by,update_by FROM yak_ops.yak_ops_schedule WHERE id='" + restored["id"] + "'")
+    try:
+        query_mysql(duplicate_sql)
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("MySQL allowed duplicate live schedule target")
+    return restored["id"]
+
+
+
+def fire_page(client, schedule):
+    return client.call("POST", f"/api/v1/schedules/{schedule}/fires/page", {
+        "pageNo": 1, "pageSize": 100})
+
+
+def verify_periodic_jdbc(client, source, target):
+    """Require an actual Quartz callback through admission, dispatch and a physical JDBC transfer."""
+    query_postgres("CREATE TABLE public.scheduled_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
+    definition = create_task(client, "scheduled-" + uuid.uuid4().hex[:8], source, target, False,
+                             debug=True, sink_table="scheduled_orders")
+    schedule = client.call("POST", "/api/v1/schedules", {
+        "targetType": "TASK", "targetId": definition, "cronExpression": "0/10 * * * * ?", "timeZone": "UTC"})
+    identity = schedule["id"]
+    enabled = client.call("POST", f"/api/v1/schedules/{identity}/enable", {"revision": 1})
+    assert enabled["enabled"] and enabled["revision"] == 2
+    until("Quartz registration", lambda: client.call("GET", f"/api/v1/schedules/{identity}"),
+          lambda value: value["registrationStatus"] == "APPLIED", timeout=45)
+    page = until("Scheduled JDBC admission", lambda: fire_page(client, identity),
+                 lambda value: any(row["outcome"] == "ADMITTED" for row in value["bizData"]), timeout=60)
+    stopped = client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})
+    assert not stopped["enabled"] and stopped["revision"] == 3
+    # Repeating a stopped intent is harmless, even when the supplied prior revision is stale.
+    assert client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})["revision"] == 3
+    fire = next(row for row in page["bizData"] if row["outcome"] == "ADMITTED")
+    instance_id = fire["instanceId"]
+    wait_status(client, instance_id, {"FINISHED"})
+    instance = client.call("GET", f"/api/v1/task-instances/{instance_id}")
+    assert instance["triggerType"] == "SCHEDULE" and instance["scheduleId"] == identity
+    assert instance["scheduleRevision"] == 2 and instance["scheduledTime"] == fire["scheduledTime"]
+    assert instance["definitionId"] == definition and instance["definitionVersion"] == 1
+    assert query_postgres("SELECT COUNT(*) FROM public.scheduled_orders") == "2"
+    assert claim_count(instance_id) == 0
+    logs = client.download(f"/api/v1/task-instances/{instance_id}/logs/download").decode("utf-8")
+    assert "JDBC query executed" in logs and "JDBC sink summary" in logs and DB_PASSWORD not in logs
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.YAK_QRTZ_JOB_DETAILS WHERE JOB_NAME='"
+                       + client.workspace + "/" + identity + "'") == "0"
+    # A second actual Cron boundary after stop must not produce another admitted instance.
+    deadline = time.monotonic() + 11
+    while time.monotonic() < deadline:
+        assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "1"
+        time.sleep(0.5)
+    print("PASS scheduled JDBC: Quartz -> fire admission -> Instance -> dispatcher -> JDBC", flush=True)
+
+
+def verify_busy_schedule(client, source, target):
+    """A continuous writer owns the same target; the new periodic fire must be a durable skip."""
+    definition = create_task(client, "busy-schedule-" + uuid.uuid4().hex[:8], source, target, False)
+    schedule = client.call("POST", "/api/v1/schedules", {
+        "targetType": "TASK", "targetId": definition, "cronExpression": "0/5 * * * * ?", "timeZone": "UTC"})
+    identity = schedule["id"]
+    client.call("POST", f"/api/v1/schedules/{identity}/enable", {"revision": 1})
+    page = until("Resource-busy schedule fire", lambda: fire_page(client, identity),
+                 lambda value: value["pagination"]["total"] > 0, timeout=45)
+    client.call("POST", f"/api/v1/schedules/{identity}/disable", {"revision": 2})
+    assert all(row["outcome"] == "SKIPPED" and row["reason"] == "RESOURCE_BUSY"
+               and row.get("instanceId") is None for row in page["bizData"])
+    assert query_mysql("SELECT COUNT(*) FROM yak_ops.yak_ops_task_instance WHERE schedule_id='" + identity + "'") == "0"
+    print("PASS scheduled resource conflict: durable skip without an Instance", flush=True)
 
 
 def acceptance():
@@ -277,8 +457,14 @@ def acceptance():
             client, "postgres-" + uuid.uuid4().hex[:8],
             "POSTGRE_SQL", "ods", "yak", 5432)
 
+        choices = client.call("GET", "/api/v1/data-sync/solutions?sourceType=MYSQL&targetType=POSTGRE_SQL")
+        assert [choice["solutionType"] for choice in choices] == ["SINGLE_TABLE_OFFLINE", "SINGLE_TABLE_REALTIME", "DATABASE_OFFLINE", "DATABASE_REALTIME"]
+        assert choices[1]["defaultSteps"] == ["FULL", "INCREMENTAL"]
+        assert len(client.call("GET", "/api/v1/data-sync/solutions?sourceType=POSTGRE_SQL&targetType=MYSQL")) == 2
+        client.call("GET", "/api/v1/data-sync/solutions?sourceType=JDBC&targetType=MYSQL", status=400)
         jdbc = create_task(client, "jdbc-" + uuid.uuid4().hex[:8],
-                           source, target, False)
+                           source, target, False, debug=True)
+        schedule_id = verify_schedule_configuration(client, jdbc)
         accepted, key = submit(client, jdbc)
         first = accepted["instanceId"]
         assert not accepted["replayed"]
@@ -289,26 +475,68 @@ def acceptance():
             "SELECT COUNT(*) FROM public.ods_orders") == "2"
         assert claim_count(first) == 0
 
+        # Dashboard metrics read the pinned version rather than scanning Instance pages.
+        dashboard_path = "/api/v1/data-sync/operations/dashboard"
+        offline_metrics = client.call("GET", dashboard_path + "?syncType=OFFLINE&range=LAST_7_DAYS")
+        assert offline_metrics["summary"]["executionCount"] == 1
+        assert offline_metrics["summary"]["succeededCount"] == 1
+        assert offline_metrics["summary"]["failedCount"] == 0
+        assert offline_metrics["summary"]["runningCount"] == 0
+        assert len(offline_metrics["trend"]) == 7
+        assert sum(point["executionCount"] for point in offline_metrics["trend"]) == 1
+        assert offline_metrics["recentFailures"] == []
+        assert client.call(
+            "GET", dashboard_path + "?syncType=REALTIME&range=LAST_7_DAYS"
+        )["summary"]["executionCount"] == 0
+        assert client.call("GET", dashboard_path + "?syncType=OTHER", status=400) is None
+        assert client.call(
+            "GET", dashboard_path + "?syncType=OFFLINE&range=FOREVER", status=400
+        ) is None
+
+        # Another Workspace cannot observe this Task's metrics.
+        second_workspace = client.call(
+            "POST", "/api/v1/workspaces",
+            {"name": "metrics-" + uuid.uuid4().hex[:10]})["id"]
+        client.workspace = second_workspace
+        empty_metrics = client.call(
+            "GET", dashboard_path + "?syncType=OFFLINE&range=LAST_7_DAYS")
+        assert empty_metrics["summary"]["executionCount"] == 0
+        assert empty_metrics["summary"]["runningCount"] == 0
+        client.workspace = workspace
+
         # Public operations must reflect the admitted Definition version and lifecycle.
         instance = client.call("GET", f"/api/v1/task-instances/{first}")
         assert instance["definitionId"] == jdbc
         assert instance["triggerType"] == "MANUAL"
         assert instance["status"] == "FINISHED"
         assert instance["runtimeEngine"] == "YAKFLOW"
+        assert instance["debug"] is True
         assert instance["runtimeId"]
+        assert instance["progressPercent"] == 100
+        latest = client.call("POST", "/api/v1/task-instances/latest", {
+            "definitionIds": [jdbc]})
+        assert len(latest) == 1 and latest[0]["id"] == first
+        assert latest[0]["progressPercent"] == 100
+        assert client.call("POST", "/api/v1/task-instances/latest", {
+            "definitionIds": [jdbc], "activeOnly": True}) == []
         log_page = until(
             "JDBC task log",
             lambda: client.call("GET", f"/api/v1/task-instances/{first}/logs?limit=200"),
             lambda page: "YakFlow Job started" in page["content"], timeout=35)
         assert log_page["nextCursor"]
-        assert "YakFlow Job started" in client.download(
-            f"/api/v1/task-instances/{first}/logs/download").decode("utf-8")
+        jdbc_log = client.download(f"/api/v1/task-instances/{first}/logs/download").decode("utf-8")
+        for event in ("YakFlow Job started", "JDBC query executed", "JDBC fetch completed",
+                      "JDBC statement batch executed", "JDBC flush completed",
+                      "Source summary", "JDBC sink summary"):
+            assert event in jdbc_log, f"Missing JDBC diagnostic event: {event}"
+        assert DB_PASSWORD not in jdbc_log
         assert client.call("GET", f"/api/v1/task-instances/{first}/logs?cursor=bad!!", status=400) is None
         snapshot = client.call("GET", f"/api/v1/task-instances/{first}/definition")
         assert snapshot["definitionId"] == jdbc
         assert snapshot["version"] == accepted["definitionVersion"]
         assert snapshot["taskType"] == "DATA_SYNC"
-        assert json.loads(snapshot["parameters"])["source"]["type"] == "JDBC"
+        assert snapshot["parameterSchemaVersion"] == 3
+        assert json.loads(snapshot["parameters"])["solutionType"] == "SINGLE_TABLE_OFFLINE"
 
         filtered = client.call("POST", "/api/v1/task-instances/page", {
             "pageNo": 1, "pageSize": 20, "definitionId": jdbc,
@@ -321,24 +549,57 @@ def acceptance():
             "status": "RUNNING"})
         assert excluded["pagination"]["total"] == 0
 
+        from multitable_batch import verify_multitable_batch, verify_multitable_conflict
+        batch_evidence = verify_multitable_batch(globals(), client, source, target)
+        verify_parameter_versions(client, source, target, jdbc)
+        verify_periodic_jdbc(client, source, target)
+        if os.environ.get("E2E_BROWSER") == "true":
+            from task_schedule_browser import verify_schedule_browser
+            query_postgres("CREATE TABLE public.browser_orders (id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
+            browser_task = create_task(client, "browser-" + uuid.uuid4().hex[:8], source, target, False,
+                                       debug=True, sink_table="browser_orders")
+            verify_schedule_browser(client, browser_task)
+            assert query_postgres("SELECT COUNT(*) FROM public.browser_orders") == "2"
+
+
         # A soft-deleted Definition cannot remove a historical Instance's pinned version.
+        # Use a future yearly expression, then activate via the real authenticated API.
+        client.call("PUT", f"/api/v1/schedules/{schedule_id}", {
+            "revision": 1, "cronExpression": "0 0 0 1 1 ?", "timeZone": "UTC"})
+        client.call("POST", f"/api/v1/schedules/{schedule_id}/enable", {"revision": 2})
         client.call("POST", f"/api/v1/task-definitions/{jdbc}/unpublish")
+        stopped = client.call("GET", f"/api/v1/schedules/{schedule_id}")
+        assert stopped["enabled"] is False and stopped["revision"] == 4
+        assert stopped["eligibilityReason"] == "TARGET_UNPUBLISHED"
         client.call("DELETE", f"/api/v1/task-definitions/{jdbc}")
         assert client.call("GET", f"/api/v1/task-instances/{first}/definition") == snapshot
+        assert client.call("GET", f"/api/v1/schedules/{schedule_id}")["eligibilityReason"] == "TARGET_DELETED"
+        client.call("DELETE", f"/api/v1/schedules/{schedule_id}?revision=4")
 
         cdc = create_task(client, "cdc-" + uuid.uuid4().hex[:8],
                           source, target, True)
+        cdc_schedule = client.call("POST", "/api/v1/schedules", {
+            "targetType": "TASK", "targetId": cdc, "cronExpression": "0 * * * * ?", "timeZone": "UTC"})
+        assert not cdc_schedule["schedulable"] and cdc_schedule["eligibilityReason"] == "NOT_SCHEDULABLE"
+        client.call("POST", f"/api/v1/schedules/{cdc_schedule['id']}/enable", {"revision": 1}, status=400)
         continuous, _ = submit(client, cdc)
         running = continuous["instanceId"]
         wait_status(client, running, {"RUNNING"})
         assert claim_count(running) == 2
+        verify_multitable_conflict(globals(), client, source, target)
+        verify_busy_schedule(client, source, target)
+        assert client.call("GET", f"/api/v1/task-instances/{running}")["debug"] is False
+        live_metrics = client.call(
+            "GET", dashboard_path + "?syncType=REALTIME&range=LAST_7_DAYS")
+        assert live_metrics["summary"]["executionCount"] == 1
+        assert live_metrics["summary"]["runningCount"] == 1
         until(
             "CDC task log",
             lambda: client.call("GET", f"/api/v1/task-instances/{running}/logs?limit=200"),
             lambda page: "YakFlow Job started" in page["content"], timeout=35)
         claim_types = query_mysql(
             "SELECT GROUP_CONCAT(resource_type ORDER BY resource_type) "
-            + "FROM yak_security.yak_ops_task_execution_claim "
+            + "FROM yak_ops.yak_ops_task_execution_claim "
             + f"WHERE instance_id = '{running}'")
         assert claim_types == "DATA_SYNC_TARGET,MYSQL_CDC_SERVER_ID"
         conflict, _ = submit(client, cdc, expected=409)
@@ -360,6 +621,21 @@ def acceptance():
             "POST", f"/api/v1/task-instances/{running}/cancel")
         wait_status(client, running, {"CANCELED"}, timeout=35)
         assert claim_count(running) == 0
+        stopped_metrics = client.call(
+            "GET", dashboard_path + "?syncType=REALTIME&range=LAST_7_DAYS")
+        assert stopped_metrics["summary"]["canceledCount"] == 1
+        assert stopped_metrics["summary"]["runningCount"] == 0
+
+        from database_realtime import verify_database_realtime
+        realtime_evidence = verify_database_realtime(globals(), client, source, target)
+
+        # Exercise this PR's new JDBC cursor path before the existing SCHEMA matrix.
+        # Preserve and execute the full SCHEMA acceptance immediately afterward.
+        from offline_incremental_e2e import verify_offline_incremental
+        incremental_evidence = verify_offline_incremental(globals(), client, source, target)
+
+        from schema_migration_e2e import verify_schema_migration
+        schema_evidence = verify_schema_migration(globals(), client, source, target)
 
         interrupted, _ = submit(client, cdc)
         interrupted_id = interrupted["instanceId"]
@@ -379,6 +655,9 @@ def acceptance():
         assert uncertain["failureCode"] == "EXECUTION_OWNER_UNCERTAIN"
         assert "YakFlow Job started" in client.call(
             "GET", f"/api/v1/task-instances/{interrupted_id}/logs?limit=200")["content"]
+        assert client.call("GET", f"/api/v1/task-instances/{batch_evidence[0]}")["executionReport"] == batch_evidence[1]
+        for identity, report in realtime_evidence + schema_evidence + incremental_evidence:
+            assert client.call("GET", f"/api/v1/task-instances/{identity}")["executionReport"] == report
         print(
             "PRODUCT E2E PASS: JDBC, CDC, idempotency, resource exclusion, "
             "cancellation and restart reconciliation")

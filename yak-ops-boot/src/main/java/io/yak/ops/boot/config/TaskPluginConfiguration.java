@@ -85,12 +85,23 @@ public class TaskPluginConfiguration {
                 factories,
                 runtimeOptions,
                 configurationFactory,
-                Map.of("MYSQL_CDC", connectorConfiguration.toReadonlyConfig()));
+                Map.of("MYSQL_CDC", connectorConfiguration.toReadonlyConfig()),
+                Map.of());
     }
 
     @Bean
-    DataSyncTaskExecutor dataSyncTaskExecutor(JobPlanner planner, PipelineBuilder builder, PipelineExecutor executor) {
-        return new DataSyncTaskExecutor(planner, builder, executor);
+    io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalBatchPlanner(
+            DataSourceLookupService resources, io.yak.ops.plugin.task.api.execution.TaskCursorStore cursors) {
+        return new io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner(resources, cursors);
+    }
+
+    @Bean
+    DataSyncTaskExecutor dataSyncTaskExecutor(
+            JobPlanner planner,
+            PipelineBuilder builder,
+            PipelineExecutor executor,
+            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+        return new DataSyncTaskExecutor(planner, builder, executor, incrementalPlanner);
     }
 
     @Bean

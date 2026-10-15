@@ -1,5 +1,6 @@
 package io.yak.ops.connector.jdbc.internal;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchOutput;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionRetry;
@@ -7,12 +8,19 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.internal.executor.TableBufferedStatementExecutor;
 import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecutor;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * Owns one task-local JDBC transaction and the single buffered-record output for Sink routes.
@@ -27,12 +35,22 @@ import java.util.concurrent.CancellationException;
  */
 public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JdbcOutputFormat.class);
+    private static final long REPORT_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30);
+
     private final Connection connection;
+    private final TableMetrics metrics;
+    private final long metricsGeneration;
+    private final Map<TableId, Long> pendingTableRows = new LinkedHashMap<>();
     private final TableBufferedStatementExecutor<TableRecord> executor;
     private final TableChangelogStatementExecutor statements;
     private volatile boolean cancelled;
     private volatile boolean closed;
     private boolean failed;
+    private long committedRecords;
+    private long reportedRecords;
+    private final long startedNanos = System.nanoTime();
+    private long lastReportNanos = startedNanos;
 
     public JdbcOutputFormat(JdbcConnectionProvider connections, JdbcDialect dialect, JdbcTableWritePlan plan)
             throws SQLException {
@@ -52,6 +70,18 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
      */
     public JdbcOutputFormat(JdbcConnectionProvider connections, JdbcDialect dialect, List<JdbcTableWritePlan> plans)
             throws SQLException {
+        this(connections, dialect, plans, new TableMetrics());
+    }
+
+    /** Opens the transaction shared by all routes and reports acknowledged commits by source table. */
+    public JdbcOutputFormat(
+            JdbcConnectionProvider connections,
+            JdbcDialect dialect,
+            List<JdbcTableWritePlan> plans,
+            TableMetrics metrics)
+            throws SQLException {
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
+        metricsGeneration = metrics.generation();
         Objects.requireNonNull(connections, "connections");
         TableChangelogStatementExecutor statement = new TableChangelogStatementExecutor(dialect, plans);
         TableBufferedStatementExecutor<TableRecord> buffer =
@@ -81,7 +111,13 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
     @Override
     public void add(TableRecord record) {
         ensureActive();
-        executor.addToBatch(record);
+        try {
+            executor.addToBatch(record);
+            pendingTableRows.merge(record.tableId(), 1L, Long::sum);
+        } catch (RuntimeException failure) {
+            metrics.writeFailed(metricsGeneration, record.tableId());
+            throw failure;
+        }
     }
 
     @Override
@@ -111,19 +147,38 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
     @Override
     public void flush() throws SQLException {
         ensureActive();
-        if (executor.bufferedRecords() == 0) {
+        int batchRows = executor.bufferedRecords();
+        if (batchRows == 0) {
             return;
         }
+        long flushStartedNanos = System.nanoTime();
         try {
             statements.requireCompleteUpdate();
+            long statementStartedNanos = System.nanoTime();
             executor.executeBatch();
+            long statementMs = (System.nanoTime() - statementStartedNanos) / 1_000_000;
             if (cancelled) {
                 throw new CancellationException("JDBC Sink was cancelled before commit");
             }
+            long commitStartedNanos = System.nanoTime();
             connection.commit();
+            long commitMs = (System.nanoTime() - commitStartedNanos) / 1_000_000;
             executor.acknowledgeCommit();
+            pendingTableRows.forEach((table, count) -> metrics.committed(metricsGeneration, table, count));
+            pendingTableRows.clear();
+            committedRecords += batchRows;
+            if ("true".equals(MDC.get("taskLogDebug"))) {
+                LOG.debug(
+                        "JDBC flush completed, batchRows={}, statementMs={}, commitMs={}, totalMs={}",
+                        batchRows,
+                        statementMs,
+                        commitMs,
+                        (System.nanoTime() - flushStartedNanos) / 1_000_000);
+            }
+            reportProgress(false);
         } catch (SQLException | RuntimeException failure) {
             failed = true;
+            if (!cancelled) pendingTableRows.keySet().forEach(table -> metrics.writeFailed(metricsGeneration, table));
             try {
                 connection.rollback();
             } catch (SQLException rollbackFailure) {
@@ -156,6 +211,7 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             return;
         }
         closed = true;
+        reportProgress(true);
         SQLException failure = null;
         try {
             connection.rollback();
@@ -183,6 +239,29 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
         if (failure != null) {
             throw failure;
         }
+    }
+
+    /** Publishes only successfully acknowledged transaction records; rate is scoped to this Writer. */
+    private void reportProgress(boolean terminal) {
+        long now = System.nanoTime();
+        long elapsed = now - lastReportNanos;
+        if (!terminal && elapsed < REPORT_INTERVAL_NANOS) {
+            return;
+        }
+        long committed = committedRecords - reportedRecords;
+        long rate = elapsed > 0 ? Math.round(committed * 1_000_000_000.0 / elapsed) : 0;
+        if (terminal) {
+            LOG.info(
+                    "JDBC sink summary, committedRecords={}, durationMs={}, failed={}, cancelled={}",
+                    committedRecords,
+                    (now - startedNanos) / 1_000_000,
+                    failed,
+                    cancelled);
+        } else {
+            LOG.info("JDBC sink progress, committedRecords={}, writeRate={}", committedRecords, rate);
+        }
+        reportedRecords = committedRecords;
+        lastReportNanos = now;
     }
 
     private void ensureActive() {

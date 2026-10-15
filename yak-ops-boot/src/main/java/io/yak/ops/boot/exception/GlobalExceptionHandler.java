@@ -3,6 +3,7 @@ package io.yak.ops.boot.exception;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
+import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.common.result.Result;
@@ -130,6 +131,15 @@ public class GlobalExceptionHandler {
                 case ACCESS_DENIED, ROLE_OPERATION_DENIED -> HttpStatus.FORBIDDEN;
                 case MEMBER_ALREADY_EXISTS, LAST_OWNER_REQUIRED -> HttpStatus.CONFLICT;
                 case INVALID_WORKSPACE -> HttpStatus.BAD_REQUEST;
+            };
+        }
+
+        if (errorCode instanceof ScheduleErrorCode code) {
+            return switch (code) {
+                case INVALID_TIME_RULE, NOT_SCHEDULABLE, NO_FUTURE_FIRE -> HttpStatus.BAD_REQUEST;
+                case TARGET_UNPUBLISHED -> HttpStatus.CONFLICT;
+                case ACCESS_DENIED -> HttpStatus.FORBIDDEN;
+                case REVISION_CONFLICT, MUST_BE_DISABLED, TARGET_ALREADY_SCHEDULED -> HttpStatus.CONFLICT;
             };
         }
 

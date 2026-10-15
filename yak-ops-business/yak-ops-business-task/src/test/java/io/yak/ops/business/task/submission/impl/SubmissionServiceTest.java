@@ -3,12 +3,12 @@ package io.yak.ops.business.task.submission.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.business.task.submission.AdmissionService;
 import io.yak.ops.business.task.submission.SubmissionResult;
 import io.yak.ops.business.task.submission.TaskSubmissionCommand;
@@ -16,13 +16,13 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.common.enums.task.TaskTriggerType;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
 import io.yak.ops.dao.repository.task.InstanceRepository;
-import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
@@ -32,7 +32,6 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 
 /** Validates request replay and admission without physical runtime submission. */
@@ -70,36 +69,24 @@ class SubmissionServiceTest {
         when(plugin.parameterSchemaVersion()).thenReturn(2);
         when(versions.queryCurrent("ws", "definition-1", 2)).thenReturn(Optional.of(version));
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
-        when(plugin.parse("{}")).thenReturn(params);
+        when(plugin.parse(2, "{}")).thenReturn(params);
         when(plugin.plan(any(), any())).thenReturn(new TaskAdmissionPlan(List.of(), "config-v1"));
     }
 
     @Test
     void admissionDoesNotStartThePlugin() {
-        SubmissionResult accepted =
-                new SubmissionResult("instance-1", 2, TaskInstanceStatus.SUBMITTED, false);
+        SubmissionResult accepted = new SubmissionResult("instance-1", 2, TaskInstanceStatus.SUBMITTED, false);
         when(admission.admit(any())).thenReturn(accepted);
         assertEquals(accepted, service.submit(manual("request-123")));
-        verify(plugin, never()).start(any(), any(), any());
+        verify(plugin, never()).start(any(), any(), any(), anyBoolean());
     }
 
     @Test
-    void scheduledSubmissionPreservesTriggerAndExplicitWorkspace() {
-        SubmissionResult accepted =
-                new SubmissionResult("instance-1", 2, TaskInstanceStatus.SUBMITTED, false);
-        when(admission.admit(any())).thenReturn(accepted);
-        TaskSubmissionCommand command =
-                new TaskSubmissionCommand("ws", "definition-1", TaskTriggerType.SCHEDULE, "scheduled-123", "scheduler");
-
-        assertEquals(accepted, service.submit(command));
-
-        ArgumentCaptor<AdmissionRequest> submitted = ArgumentCaptor.forClass(AdmissionRequest.class);
-        verify(admission).admit(submitted.capture());
-        assertEquals(TaskTriggerType.SCHEDULE, submitted.getValue().triggerType());
-        assertEquals("SCHEDULE:definition-1", submitted.getValue().requestFingerprint());
-        verify(instances).findByRequest("ws", TaskTriggerType.SCHEDULE, "scheduled-123");
-        verify(validationContexts).forWorkspace("ws");
-        verify(plugin).validate(params, validation);
+    void scheduledSubmissionCannotBypassTheOccurrenceGate() {
+        TaskSubmissionCommand command = new TaskSubmissionCommand(
+                "ws", "definition-1", TaskTriggerType.SCHEDULE, "scheduled-123", "scheduler", null, null, null);
+        assertThrows(BusinessException.class, () -> service.submit(command));
+        verify(admission, never()).admit(any());
     }
 
     @Test
@@ -141,7 +128,8 @@ class SubmissionServiceTest {
     }
 
     private TaskSubmissionCommand manual(String requestId) {
-        return new TaskSubmissionCommand("ws", "definition-1", TaskTriggerType.MANUAL, requestId, "actor");
+        return new TaskSubmissionCommand(
+                "ws", "definition-1", TaskTriggerType.MANUAL, requestId, "actor", null, null, null);
     }
 
     private InstanceEntity existing(String definitionId) {

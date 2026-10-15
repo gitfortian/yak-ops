@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
@@ -9,6 +10,7 @@ import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.core.data.TableId;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -16,6 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * Multiplexes JDBC Snapshot scans and a paused Debezium Binlog on one Connector Base fetcher.
@@ -27,8 +32,14 @@ import java.util.Set;
  */
 public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetchedRecord, MySqlHybridSplit> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlHybridSplitReader.class);
+
     private final MySqlSnapshotSplitReader snapshots;
     private final MySqlBinlogEngine binlog;
+    private final TableMetrics metrics;
+    private final long generation;
+    private final Set<TableId> tables;
+    private volatile boolean cancelled;
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
 
     private MySqlSnapshotSplit activeSnapshot;
@@ -40,6 +51,14 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     private boolean closed;
 
     public MySqlHybridSplitReader(MySqlCdcSourceConfig config) {
+        this(config, new TableMetrics());
+    }
+
+    /** Binds fetch failures and liveness to the Reader generation without retaining row values. */
+    public MySqlHybridSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics) {
+        this.metrics = metrics;
+        generation = metrics.generation();
+        tables = Set.copyOf(config.schemas().keySet());
         snapshots = new MySqlSnapshotSplitReader(Objects.requireNonNull(config, "config"));
         binlog = new MySqlBinlogEngine(config);
     }
@@ -65,6 +84,20 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
 
     @Override
     public RecordsWithSplitIds<MySqlHybridFetchedRecord> fetch() throws Exception {
+        try {
+            var result = fetchRecords();
+            metrics.observed(generation);
+            return result;
+        } catch (Exception failure) {
+            if (!cancelled && !(failure instanceof InterruptedException)) {
+                if (activeSnapshot != null) metrics.readFailed(generation, activeSnapshot.tableId(), false);
+                else tables.forEach(table -> metrics.readFailed(generation, table, streaming));
+            }
+            throw failure;
+        }
+    }
+
+    private RecordsWithSplitIds<MySqlHybridFetchedRecord> fetchRecords() throws Exception {
         if (closed) {
             throw new IllegalStateException("MySQL hybrid reader has closed");
         }
@@ -102,8 +135,15 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
             return batch;
         }
         if (binlogAssigned && streaming) {
+            long pollStartedNanos = System.nanoTime();
             BinlogEvent event = binlog.poll();
             if (event != null) {
+                if ("true".equals(MDC.get("taskLogDebug"))) {
+                    LOG.debug(
+                            "CDC binlog batch fetched, events={}, pollMs={}",
+                            event.records().size(),
+                            (System.nanoTime() - pollStartedNanos) / 1_000_000);
+                }
                 return new RecordsBySplits<>(
                         Map.of(
                                 MySqlHybridBinlogSplit.ID,
@@ -121,6 +161,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
         Objects.requireNonNull(high, "high");
         resumeRequested = true;
         streaming = true;
+        LOG.info("CDC binlog streaming resumed after snapshot checkpoint");
     }
 
     public byte[] snapshotHistory() {
@@ -138,6 +179,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
 
     @Override
     public void cancel() {
+        cancelled = true;
         binlog.requestStop();
     }
 

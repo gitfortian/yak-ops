@@ -30,6 +30,44 @@ Run relevant tests before the full reactor where possible. Connector real-databa
 
 Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
 
+## Product Acceptance Scopes
+
+[Task Execution Product Acceptance](.github/workflows/task-execution-product-acceptance.yml) selects work from the complete PR diff. Its [scope map](scripts/ci/product_acceptance_scope.py) is executable and covered by tests. Documentation needs no product environment. Ordinary frontend presentation runs controlled browser contracts without Java or databases. Known outbound sync parameters, preview and schedule paths select their applicable real suites; shared backend, dependency, acceptance infrastructure and unclassified changes use full coverage. Paths cannot distinguish a styling edit from a behavioral edit inside the same file: review the behavior and broaden coverage when needed.
+
+The workflow supports `browser`, `batch`, `schedule`, `realtime`, `schema` and `full` through **Run workflow**. Direct PR runs select automatically. Reusable callers and manual runs default to `full`; the existing Backend Acceptance / Release Gate chain therefore retains complete acceptance. Focused dispatches are diagnostic evidence for their named scope, not full release acceptance.
+
+The controlled browser job is independent of database suites. Selected real suites run on separate disposable runners, at most two in parallel; they never share containers or state directories. Full mode preserves the complete cross-scenario sequence, including restart reconciliation. Batch, realtime and schema focused runs also restart the product and compare their pinned reports. Schedule mode includes real admission, version checks, resource-busy checks and optional browser interaction.
+
+Run the fast routing, gate and runner contract tests without Docker, Java, Playwright or credentials:
+
+```sh
+python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
+```
+
+For local product acceptance, use **fresh disposable** `yak-task-mysql` and `yak-task-postgres` containers with the databases, ports and MySQL binlog options shown in the workflow. Export `E2E_DB_PASSWORD` and `E2E_USER_PASSWORD` with test-only values. Never point the harness at a production or shared database. The focused runner rejects pre-existing fixture tables rather than clearing them. Run one suite per fresh environment.
+
+```sh
+bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
+python3 -u scripts/acceptance/run_product_acceptance.py --suite schema
+# Other focused choices: batch, schedule, realtime.
+```
+
+Focused local runs include their real browser tests when `E2E_BROWSER=true`. Prepare the pinned Playwright version, Chromium and the frontend on port 5173 as in [.github/actions/acceptance-browser](.github/actions/acceptance-browser/action.yml). Full mode always includes browser tests and requires that setup:
+
+```sh
+python3 -u scripts/acceptance/run_product_acceptance.py --suite full
+```
+
+The workflow additionally executes `ScheduleAdmissionIntegrationTest` on its separate MySQL database for `schedule` and `full`, in the same Maven invocation that packages Boot. Ordinary unit, style, architecture and distribution checks remain owned by Quality Check; a product-scope selection does not replace them.
+
+Suite results and phase durations are written to `/tmp/yak-acceptance-results`, the Actions summary and per-suite artifacts. A failure remains nonzero and retains its traceback. Focused failure-state output allowlists identity, status and failure codes; it excludes credentials, task parameters, SQL and raw error messages. Timing reports are measurements, not guaranteed runtime budgets.
+
+The aggregate check retains the name **MySQL JDBC + Multi-Table CDC Product E2E** for existing check references. It verifies the scope job and every selected child job. Its summary, not the historical name, identifies what actually ran. Unselected suites are **NOT EXECUTED**. Failed, cancelled, missing or unexpectedly skipped selected checks block the gate. New direct PR commits cancel superseded product runs; separate manual and reusable runs do not cancel one another.
+
+## Incremental Review Evidence
+
+Follow [AGENTS.md](AGENTS.md#verification-scope-and-incremental-review) for review scope, polling and evidence reuse. Record the reviewed head, base and tested merge/tree, selected suite, command or run URL, and actual result in the PR. Follow-up fixes are reviewed against the previously reviewed SHA with affected callers and tests, not by repeatedly rereading the whole repository. Changed bases or shared contracts reopen the affected review scope. A new commit needs matching test evidence; known failures cannot disappear merely because a focused run omits their suite.
+
 ## Coding Standards
 
 Use the [Apache Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) for code review principles: small, focused changes; meaningful names; explicit ownership; readable tests; no redundant comments.

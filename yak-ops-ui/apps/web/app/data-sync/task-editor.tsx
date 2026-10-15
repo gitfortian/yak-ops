@@ -6,18 +6,56 @@ import {
   FieldLabel,
   Input,
   PageHeader,
+  Switch,
   Textarea,
   toast,
 } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+
+import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
+import {
+  clearTaskDraft,
+  readTaskDraft,
+  taskDraftKey,
+  writeTaskDraft,
+} from "@/service/data-sync/draft";
+import {
+  offlineIncremental,
+  solutionSyncType,
+  supportsMultipleTables,
+  validIncrementalConfig,
+} from "@/service/data-sync/parameters";
+import { EMPTY_INCREMENTAL, IncrementalFields } from "./incremental-fields";
+import { findStepCombination, solutionSummary } from "./solution-presentation";
+import { useSolutions } from "./use-solutions";
+import { SchemaPreview } from "./schema-preview";
+import {
+  ExplicitTableSelection,
+  TableMappingEditor,
+  validTableMappings,
+} from "./table-mapping-editor";
+import { Modal } from "@yak-ops/yak-ui";
 
 import { EditorAnchorStepper, type EditorAnchorItem } from "@/app/data-sync/editor-anchor-stepper";
 import { DataSyncSearchableSelect } from "@/app/data-sync/searchable-select";
+import { ScheduleForm } from "@/app/schedule/schedule-form";
+import { EMPTY_SCHEDULE, sameScheduleRule } from "@/app/schedule/schedule-presentation";
+import {
+  createSchedule,
+  getTaskSchedule,
+  previewSchedule,
+  scheduleErrorMessage,
+  updateSchedule,
+  type ScheduleRecord,
+  type ScheduleTimeRule,
+} from "@/service/schedule";
 import { getDataSourceTypeLabel } from "@/app/datasource/constants";
 import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
 import {
+  getDataSource,
   listDataSources,
   listDataSourceSchemas,
   listDataSourceTables,
@@ -29,16 +67,21 @@ import {
   getDataSyncTask,
   publishDataSyncTask,
   updateDataSyncTask,
+  type DataSyncTaskRecord,
   type DataSyncTaskSavePayload,
   type DataSyncTaskStatus,
-  type DataSyncType,
+  type DataSyncDraft,
+  type DataSyncTableMapping,
+  type DataSyncIncrementalConfig,
   type DataSyncWriteMode,
 } from "@/service/data-sync";
 
 interface EditorForm {
   name: string;
   remark: string;
+  debug: boolean;
   writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
   sourceDataSourceId: string;
   sourceDatabase: string;
   sourceSchema: string;
@@ -53,13 +96,16 @@ interface CatalogOptions {
   schemas: string[];
   tables: DataSourceCatalogTable[];
   loading: boolean;
+  error: string;
   refresh: () => void;
 }
 
 const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
+  debug: false,
   writeMode: "APPEND",
+  incremental: undefined,
   sourceDataSourceId: "",
   sourceDatabase: "",
   sourceSchema: "",
@@ -92,21 +138,20 @@ const selectedTableKey = (
     : null;
 
 function useCatalogOptions(dataSourceId: string, database: string, schema: string): CatalogOptions {
-  const [schemas, setSchemas] = useState<string[]>([]);
-  const [tables, setTables] = useState<DataSourceCatalogTable[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const refresh = useCallback(() => setRefreshVersion((value) => value + 1), []);
-
+  const key = JSON.stringify([dataSourceId, database, schema]);
+  const [result, setResult] = useState<{
+    key: string;
+    schemas: string[];
+    tables: DataSourceCatalogTable[];
+    loading: boolean;
+    error: string;
+  }>({ key: "", schemas: [], tables: [], loading: false, error: "" });
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
-    if (!dataSourceId) {
-      setSchemas([]);
-      setTables([]);
-      setLoading(false);
-      return;
-    }
+    if (!dataSourceId) return;
     let active = true;
-    setLoading(true);
+    setResult({ key, schemas: [], tables: [], loading: true, error: "" });
     void Promise.all([
       listDataSourceSchemas(dataSourceId, database || undefined),
       listDataSourceTables(dataSourceId, {
@@ -115,24 +160,30 @@ function useCatalogOptions(dataSourceId: string, database: string, schema: strin
         limit: 500,
       }),
     ])
-      .then(([schemaOptions, tableOptions]) => {
-        if (!active) return;
-        setSchemas(schemaOptions || []);
-        setTables(tableOptions || []);
+      .then(([schemas, tables]) => {
+        if (active) setResult({ key, schemas, tables, loading: false, error: "" });
       })
-      .finally(() => {
-        if (active) setLoading(false);
+      .catch(() => {
+        if (active)
+          setResult({ key, schemas: [], tables: [], loading: false, error: "表信息加载失败" });
       });
     return () => {
       active = false;
     };
-  }, [dataSourceId, database, schema, refreshVersion]);
-
-  return { schemas, tables, loading, refresh };
+  }, [key, dataSourceId, database, schema, revision]);
+  const current = Boolean(dataSourceId) && result.key === key;
+  return {
+    schemas: current ? result.schemas : [],
+    tables: current ? result.tables : [],
+    loading: Boolean(dataSourceId) && (!current || result.loading),
+    error: current ? result.error : "",
+    refresh,
+  };
 }
 
 interface DataSourceEndpointCardProps {
   title: string;
+  dataSourceType: string;
   dataSources: DataSourceRecord[];
   dataSourceId: string;
   refreshing: boolean;
@@ -143,6 +194,7 @@ interface DataSourceEndpointCardProps {
 
 function DataSourceEndpointCard({
   title,
+  dataSourceType,
   dataSources,
   dataSourceId,
   refreshing,
@@ -150,7 +202,6 @@ function DataSourceEndpointCard({
   onCreateDataSource,
   onDataSourceChange,
 }: DataSourceEndpointCardProps) {
-  const selectedDataSource = dataSources.find((item) => item.id === dataSourceId);
   const dataSourceOptions = useMemo(
     () =>
       dataSources.flatMap((item) =>
@@ -172,14 +223,10 @@ function DataSourceEndpointCard({
       <div className="mt-4 space-y-3">
         <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel>类型</FieldLabel>
-          {selectedDataSource ? (
-            <div className="flex items-center gap-2 text-[13px] text-[#344054]">
-              <DatabaseIcons dbType={selectedDataSource.dbType} width="16px" height="16px" />
-              <span>{getDataSourceTypeLabel(selectedDataSource.dbType)}</span>
-            </div>
-          ) : (
-            <div className="text-[13px] text-[#98a2b3]">-</div>
-          )}
+          <div className="flex items-center gap-2 text-[13px] text-[#344054]">
+            <DatabaseIcons dbType={dataSourceType} width="16px" height="16px" />
+            <span>{getDataSourceTypeLabel(dataSourceType)}</span>
+          </div>
         </Field>
 
         <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
@@ -212,6 +259,8 @@ function DataSourceEndpointCard({
 }
 
 interface TableSectionProps {
+  prepareSchema?: boolean;
+  onTableNameChange?: (name: string) => void;
   children?: ReactNode;
   dataSourceId: string;
   boundSchema?: string;
@@ -224,6 +273,8 @@ interface TableSectionProps {
 }
 
 function TableSection({
+  prepareSchema = false,
+  onTableNameChange,
   children,
   dataSourceId,
   boundSchema,
@@ -274,71 +325,241 @@ function TableSection({
         <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel required>表</FieldLabel>
           <div className="w-1/2 min-w-0 max-lg:w-auto max-lg:flex-1">
-            <DataSyncSearchableSelect
-              value={tableValue}
-              options={tableOptions}
-              disabled={tableDisabled}
-              placeholder={!dataSourceId ? "请先选择数据源" : "请选择表"}
-              searchPlaceholder="搜索表"
-              emptyText="暂无表"
-              refreshing={catalog.loading}
-              onRefresh={catalog.refresh}
-              onValueChange={(value) => {
-                const selected = catalog.tables.find((item) => tableKey(item) === value);
-                if (selected) onTableChange(selected);
-              }}
-            />
+            {prepareSchema ? (
+              <Input
+                size="small"
+                variant="outlined"
+                value={table}
+                maxLength={128}
+                disabled={tableDisabled}
+                placeholder="去向表名称"
+                aria-label="去向表名称"
+                onChange={(event) => onTableNameChange?.(event.target.value)}
+              />
+            ) : (
+              <DataSyncSearchableSelect
+                value={tableValue}
+                options={tableOptions}
+                disabled={tableDisabled}
+                placeholder={!dataSourceId ? "请先选择数据源" : "请选择表"}
+                searchPlaceholder="搜索表"
+                emptyText="暂无表"
+                refreshing={catalog.loading}
+                onRefresh={catalog.refresh}
+                onValueChange={(value) => {
+                  const selected = catalog.tables.find((item) => tableKey(item) === value);
+                  if (selected) onTableChange(selected);
+                }}
+              />
+            )}
           </div>
         </Field>
+        {catalog.error ? (
+          <Alert>
+            {catalog.error}
+            <Button size="small" onClick={catalog.refresh}>
+              重试
+            </Button>
+          </Alert>
+        ) : null}
         {children}
       </div>
     </div>
   );
 }
 
-interface DataSyncTaskEditorPageProps {
-  syncType: DataSyncType;
+interface TaskEditorInput {
+  draft: DataSyncDraft;
+  task?: DataSyncTaskRecord;
+  connections?: DataSourceRecord[];
 }
 
-export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps) {
-  const realtime = syncType === "REALTIME";
-  const localScroll = !realtime;
-  const basePath = realtime ? "/realtime-sync" : "/offline-sync";
+/** Resolve a saved solution from its definition, never from the route used to open it. */
+export function DataSyncTaskEditorPage() {
+  const location = useLocation();
+  const { id } = useParams<{ id: string }>();
+  const { currentUser } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const key = taskDraftKey(currentUser!.id, currentWorkspace!.id);
+  const [input, setInput] = useState<TaskEditorInput & { id: string }>();
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    if (!id) return;
+    const controller = new AbortController();
+    setInput(undefined);
+    setError(false);
+    void getDataSyncTask(id, controller.signal)
+      .then(async (task) => {
+        const connections = await Promise.all([
+          getDataSource(task.sourceDataSourceId, controller.signal),
+          getDataSource(task.targetDataSourceId, controller.signal),
+        ]);
+        if (controller.signal.aborted) return;
+        setInput({
+          id,
+          task,
+          connections,
+          draft: {
+            name: task.name,
+            solutionType: task.solutionType,
+            steps: task.steps,
+            sourceType: connections[0].dbType || "",
+            targetType: connections[1].dbType || "",
+          },
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      });
+    return () => controller.abort();
+  }, [id, reload]);
+
+  if (!id) {
+    const state = location.state as { draftKey?: string; draft?: DataSyncDraft } | null;
+    const draft = readTaskDraft(key) || (state?.draftKey === key ? state.draft : undefined);
+    if (!draft) return <Navigate replace to="/data-sync?create=1" />;
+    return <TaskEditor key="new" draft={draft} />;
+  }
+  if (error)
+    return (
+      <div className="p-6">
+        <Alert>
+          任务加载失败
+          <Button size="small" onClick={() => setReload((value) => value + 1)}>
+            重试
+          </Button>
+        </Alert>
+      </div>
+    );
+  if (!input || input.id !== id)
+    return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
+  return <TaskEditor key={id} {...input} />;
+}
+
+function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorInput) {
+  const batch = supportsMultipleTables(draft.solutionType);
+  const [mappings, setMappings] = useState<DataSyncTableMapping[]>(
+    initialTask?.tableMappings || draft.form?.tableMappings || [],
+  );
+  const [pendingConnection, setPendingConnection] = useState<{
+    side: "source" | "target";
+    value: string;
+  }>();
+  const localScroll = true;
+  const basePath = "/data-sync";
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
   const navigate = useNavigate();
   const location = useLocation();
-  const draft = (
-    location.state as {
-      draft?: {
-        name?: string;
-        sourceDataSourceId?: string;
-        targetDataSourceId?: string;
-      };
-    } | null
-  )?.draft;
+  const { currentUser } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const draftKey = taskDraftKey(currentUser!.id, currentWorkspace!.id);
+  const {
+    choices,
+    loading: solutionsLoading,
+    error: solutionsError,
+    refresh: reloadSolutions,
+  } = useSolutions(draft.sourceType, draft.targetType);
+  const solution = choices.find((value) => value.solutionType === draft.solutionType);
+  const combination = findStepCombination(solution, draft.steps);
+  const supportsScheduling = Boolean(combination?.supportsScheduling);
+  const prepareSchema = draft.steps.includes("SCHEMA");
+  const useIncremental = offlineIncremental(draft.solutionType, draft.steps);
+  const initialLoad = draft.steps.includes("FULL");
+  const usesChangelog =
+    draft.steps.includes("INCREMENTAL") && solutionSyncType(draft.solutionType) === "REALTIME";
 
-  const [form, setForm] = useState<EditorForm>(() => ({
-    ...EMPTY_FORM,
-    name: draft?.name || "",
-    sourceDataSourceId: draft?.sourceDataSourceId || "",
-    targetDataSourceId: draft?.targetDataSourceId || "",
-  }));
-  const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
+  const [form, setForm] = useState<EditorForm>(() => {
+    const value = initialTask || draft.form;
+    return {
+      ...EMPTY_FORM,
+      name: draft.name,
+      remark: value?.remark || "",
+      debug: value?.debug ?? false,
+      writeMode:
+        value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
+      incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
+      sourceDataSourceId: value?.sourceDataSourceId || "",
+      sourceDatabase: value?.sourceDatabase || "",
+      sourceSchema: value?.sourceSchema || "",
+      sourceTable: value?.sourceTable || "",
+      targetDataSourceId: value?.targetDataSourceId || "",
+      targetDatabase: value?.targetDatabase || "",
+      targetSchema: value?.targetSchema || "",
+      targetTable: value?.targetTable || "",
+    };
+  });
+  const [dataSources, setDataSources] = useState<DataSourceRecord[]>(connections);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
-  const [taskStatus, setTaskStatus] = useState<DataSyncTaskStatus>("UNPUBLISHED");
-  const [loading, setLoading] = useState(editing);
+  const [taskStatus] = useState<DataSyncTaskStatus>(
+    initialTask?.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED",
+  );
   const [saving, setSaving] = useState(false);
   const [parametersDirty, setParametersDirty] = useState(false);
+  const [taskDirty, setTaskDirty] = useState(!editing);
+  const savedTask = useRef(initialTask);
+  const saveSession = useRef<AbortController>();
+  const pendingSchedule = location.state as {
+    scheduleDraft?: ScheduleTimeRule;
+    scheduleSaveError?: string;
+  } | null;
+  const [schedule, setSchedule] = useState<ScheduleRecord | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleTimeRule>(
+    pendingSchedule?.scheduleDraft || { ...EMPTY_SCHEDULE },
+  );
+  const [scheduleLoading, setScheduleLoading] = useState(
+    Boolean(initialTask && initialTask.syncType === "OFFLINE"),
+  );
+  const [scheduleError, setScheduleError] = useState(pendingSchedule?.scheduleSaveError || "");
+  const [scheduleNeedsReload, setScheduleNeedsReload] = useState(
+    Boolean(pendingSchedule?.scheduleSaveError),
+  );
+  const [scheduleReload, setScheduleReload] = useState(0);
+  const scheduleDraft = useRef(pendingSchedule?.scheduleDraft);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    saveSession.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!supportsScheduling || !id) return;
+    const controller = new AbortController();
+    setScheduleLoading(true);
+    void getTaskSchedule(id, controller.signal)
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        setSchedule(value);
+        if (!scheduleDraft.current) setScheduleForm(value || { ...EMPTY_SCHEDULE });
+        if (scheduleReload > 0) {
+          setScheduleError("");
+          setScheduleNeedsReload(false);
+        }
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) {
+          setScheduleError(scheduleErrorMessage(failure));
+          setScheduleNeedsReload(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setScheduleLoading(false);
+      });
+    return () => controller.abort();
+  }, [id, supportsScheduling, scheduleReload]);
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
       { id: "basic", label: "基本信息" },
       { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
-      { id: "target", label: "数据去向" },
+      { id: "target", label: "目标表映射" },
+      ...(supportsScheduling ? [{ id: "schedule", label: "调度配置" }] : []),
     ],
-    [],
+    [supportsScheduling],
   );
 
   const sourceCatalog = useCatalogOptions(
@@ -352,91 +573,121 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     form.targetSchema,
   );
 
-  const sourceDataSources = useMemo(() => {
-    if (!realtime) return dataSources;
-    return dataSources.filter((item) => item.dbType === "MYSQL");
-  }, [dataSources, realtime]);
-  const targetDataSources = useMemo(() => {
-    if (!realtime) return dataSources;
-    return dataSources.filter((item) =>
-      ["MYSQL", "POSTGRE_SQL", "ORACLE"].includes(item.dbType || ""),
-    );
-  }, [dataSources, realtime]);
+  const sourceDataSources = useMemo(
+    () => dataSources.filter((item) => item.dbType === draft.sourceType),
+    [dataSources, draft.sourceType],
+  );
+  const targetDataSources = useMemo(
+    () => dataSources.filter((item) => item.dbType === draft.targetType),
+    [dataSources, draft.targetType],
+  );
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
+  const datasourceRequest = useRef<AbortController>();
   const loadDataSources = useCallback(async () => {
+    datasourceRequest.current?.abort();
+    const controller = new AbortController();
+    datasourceRequest.current = controller;
     setDataSourcesLoading(true);
     try {
-      const result = await listDataSources({ pageNo: 1, pageSize: 200 });
-      setDataSources(result?.bizData || []);
+      const result = await listDataSources({ pageNo: 1, pageSize: 200 }, controller.signal);
+      if (controller.signal.aborted) return;
+      setDataSources((current) => {
+        const selected = current.filter(
+          (value) =>
+            value.id === savedTask.current?.sourceDataSourceId ||
+            value.id === savedTask.current?.targetDataSourceId,
+        );
+        return [
+          ...new Map([...selected, ...result.bizData].map((value) => [value.id, value])).values(),
+        ];
+      });
+    } catch {
+      // HTTP failures are reported by the shared transport; existing selections are retained.
     } finally {
-      setDataSourcesLoading(false);
+      if (!controller.signal.aborted) setDataSourcesLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadDataSources();
+    return () => datasourceRequest.current?.abort();
   }, [loadDataSources]);
 
   useEffect(() => {
-    if (dataSources.length === 0) return;
-    setForm((current) => {
-      const source = dataSources.find((item) => item.id === current.sourceDataSourceId);
-      const target = dataSources.find((item) => item.id === current.targetDataSourceId);
-      return {
-        ...current,
-        sourceDatabase: source?.database || current.sourceDatabase,
-        sourceSchema: source?.schema || current.sourceSchema,
-        targetDatabase: target?.database || current.targetDatabase,
-        targetSchema: target?.schema || current.targetSchema,
-      };
+    if (id || savedTask.current) return;
+    writeTaskDraft(draftKey, {
+      sourceType: draft.sourceType,
+      targetType: draft.targetType,
+      solutionType: draft.solutionType,
+      steps: draft.steps,
+      name: form.name,
+      form: {
+        ...form,
+        solutionType: draft.solutionType,
+        steps: draft.steps,
+        tableMappings: batch ? mappings : undefined,
+        incremental: !batch && useIncremental ? form.incremental : undefined,
+      },
     });
-  }, [dataSources]);
-
-  useEffect(() => {
-    if (!id) return;
-    let active = true;
-    setLoading(true);
-    void getDataSyncTask(id)
-      .then((task) => {
-        if (!active) return;
-        if (task.syncType !== syncType) {
-          toast.error("任务类型与当前页面不匹配");
-          navigate(basePath, { replace: true });
-          return;
-        }
-        setTaskStatus(task.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED");
-        setParametersDirty(false);
-        setForm({
-          name: task.name,
-          remark: task.remark || "",
-          writeMode: task.writeMode === "UPSERT" ? "UPSERT" : "APPEND",
-          sourceDataSourceId: task.sourceDataSourceId,
-          sourceDatabase: task.sourceDatabase || "",
-          sourceSchema: task.sourceSchema || "",
-          sourceTable: task.sourceTable,
-          targetDataSourceId: task.targetDataSourceId,
-          targetDatabase: task.targetDatabase || "",
-          targetSchema: task.targetSchema || "",
-          targetTable: task.targetTable,
-        });
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [basePath, id, navigate, realtime, syncType]);
+  }, [
+    id,
+    draftKey,
+    draft.sourceType,
+    draft.targetType,
+    draft.solutionType,
+    draft.steps,
+    form,
+    batch,
+    mappings,
+  ]);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
-    if (key !== "name" && key !== "remark") setParametersDirty(true);
+    setTaskDirty(true);
+    if (key !== "name" && key !== "remark" && key !== "debug") setParametersDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateMappings = (value: DataSyncTableMapping[]) => {
+    setMappings(value);
+    setTaskDirty(true);
+    setParametersDirty(true);
+  };
+  const changeConnection = (side: "source" | "target", value: string) => {
+    setMappings([]);
+    if (side === "source") {
+      const selected = dataSources.find((item) => item.id === value);
+      setTaskDirty(true);
+      setParametersDirty(true);
+      setForm((current) => ({
+        ...current,
+        sourceDataSourceId: value,
+        sourceDatabase: selected?.database || "",
+        sourceSchema: selected?.schema || "",
+        sourceTable: "",
+      }));
+    } else {
+      const selected = dataSources.find((item) => item.id === value);
+      setTaskDirty(true);
+      setParametersDirty(true);
+      setForm((current) => ({
+        ...current,
+        targetDataSourceId: value,
+        targetDatabase: selected?.database || "",
+        targetSchema: selected?.schema || "",
+        targetTable: "",
+      }));
+    }
+  };
+  const requestConnectionChange = (side: "source" | "target", value: string) => {
+    if (batch && mappings.length) setPendingConnection({ side, value });
+    else changeConnection(side, value);
   };
 
   const payload = (): DataSyncTaskSavePayload => {
     const common = {
       name: form.name.trim(),
+      debug: form.debug,
       sourceDataSourceId: form.sourceDataSourceId,
       sourceDatabase: form.sourceDatabase || undefined,
       sourceSchema: form.sourceSchema || undefined,
@@ -447,88 +698,146 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
       targetTable: form.targetTable,
       remark: form.remark.trim() || undefined,
     };
-    if (realtime) {
-      return {
-        ...common,
-        syncType: "REALTIME",
-      };
-    }
     return {
       ...common,
+      solutionType: draft.solutionType,
+      steps: draft.steps,
       writeMode: form.writeMode,
-      syncType: "OFFLINE",
+      tableMappings: batch ? mappings : undefined,
     };
   };
 
   const published = editing && taskStatus === "PUBLISHED";
   const canSave =
     !published &&
+    Boolean(combination) &&
+    !solutionsLoading &&
+    !solutionsError &&
+    combination!.writeModes.includes(form.writeMode) &&
+    (!useIncremental ||
+      (batch
+        ? mappings.every((mapping) => validIncrementalConfig(mapping.incremental, !initialLoad))
+        : validIncrementalConfig(form.incremental, !initialLoad))) &&
+    selectedSourceDataSource?.dbType === draft.sourceType &&
+    selectedTargetDataSource?.dbType === draft.targetType &&
+    (!supportsScheduling ||
+      (!scheduleLoading &&
+        !scheduleNeedsReload &&
+        (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
     form.name.trim() &&
-    Boolean(
-      form.sourceDataSourceId &&
-      form.sourceTable &&
-      form.targetDataSourceId &&
-      selectedTableKey(
-        targetCatalog.tables,
-        form.targetDatabase,
-        form.targetSchema,
-        form.targetTable,
-      ),
-    ) &&
+    Boolean(form.sourceDataSourceId && form.targetDataSourceId) &&
+    (!prepareSchema ||
+      Boolean(form.targetDatabase && (draft.targetType !== "POSTGRE_SQL" || form.targetSchema))) &&
+    (batch
+      ? validTableMappings(
+          mappings,
+          targetCatalog.tables,
+          combination?.writeModes || [],
+          prepareSchema,
+        )
+      : Boolean(
+          form.sourceTable &&
+          (prepareSchema
+            ? Boolean(form.targetTable.trim())
+            : selectedTableKey(
+                targetCatalog.tables,
+                form.targetDatabase,
+                form.targetSchema,
+                form.targetTable,
+              )),
+        )) &&
     !sourceCatalog.loading &&
-    !targetCatalog.loading;
+    !targetCatalog.loading &&
+    !sourceCatalog.error &&
+    !targetCatalog.error;
 
   const save = async (publishAfterSave = false) => {
-    if (!canSave || saving) return;
+    const signal = saveSession.current?.signal;
+    if (!canSave || saving || !signal || signal.aborted) return;
     setSaving(true);
     try {
-      const request = payload();
-      const saved =
-        editing && id
-          ? await updateDataSyncTask(
-              id,
-              parametersDirty ? request : { name: request.name, remark: request.remark },
-            )
-          : await createDataSyncTask(request);
-
-      if (publishAfterSave) {
+      const ruleChanged =
+        supportsScheduling && !sameScheduleRule(scheduleForm, schedule || EMPTY_SCHEDULE);
+      if (ruleChanged && scheduleForm.cronExpression.trim()) {
         try {
-          await publishDataSyncTask(saved.id);
-        } catch {
-          toast.warning("任务已保存，但上线失败，当前保持已下线");
-          navigate(`${basePath}/${saved.id}`, { replace: true });
+          await previewSchedule(scheduleForm, signal);
+        } catch (failure) {
+          if (!signal.aborted) setScheduleError(scheduleErrorMessage(failure));
           return;
         }
-        toast.success(realtime ? "实时同步任务已保存并上线" : "同步任务已保存并上线");
+      }
+      if (signal.aborted) return;
+      const request = payload();
+      const metadataRequest = { name: request.name, remark: request.remark, debug: request.debug };
+      let saved = savedTask.current;
+      // A completed Task write is retained across a later Schedule failure.
+      if (!saved || taskDirty) {
+        const savedId = id || saved?.id;
+        saved = savedId
+          ? await updateDataSyncTask(savedId, parametersDirty ? request : metadataRequest, signal)
+          : await createDataSyncTask(request, signal);
+        if (signal.aborted) return;
+        savedTask.current = saved;
+        clearTaskDraft(draftKey);
+        setTaskDirty(false);
+        setParametersDirty(false);
+      }
+      if (ruleChanged && scheduleForm.cronExpression.trim()) {
+        try {
+          const value = schedule
+            ? await updateSchedule(schedule.id, schedule.revision, scheduleForm, signal)
+            : await createSchedule(saved.id, scheduleForm, signal);
+          if (signal.aborted) return;
+          setSchedule(value);
+          setScheduleForm(value);
+          scheduleDraft.current = undefined;
+          setScheduleError("");
+        } catch (failure) {
+          if (signal.aborted) return;
+          const message = "任务已保存，调度未确认保存。" + scheduleErrorMessage(failure);
+          setScheduleError(message);
+          setScheduleNeedsReload(true);
+          scheduleDraft.current = scheduleForm;
+          if (!id)
+            navigate(`${basePath}/${saved.id}/edit`, {
+              replace: true,
+              state: { scheduleDraft: scheduleForm, scheduleSaveError: message },
+            });
+          return;
+        }
+      }
+      if (signal.aborted) return;
+      if (publishAfterSave) {
+        try {
+          await publishDataSyncTask(saved.id, signal);
+        } catch {
+          if (!signal.aborted) {
+            toast.warning("任务已保存，但上线失败，当前保持已下线");
+            navigate(`${basePath}/${saved.id}/edit`, { replace: true });
+          }
+          return;
+        }
+        if (signal.aborted) return;
+        toast.success("同步任务已保存并上线");
         navigate(basePath, { replace: true });
         return;
       }
       toast.success(editing ? "同步任务已保存，当前仍为已下线" : "同步任务已创建，当前为已下线");
-      navigate(`${basePath}/${saved.id}`, { replace: true });
+      navigate(`${basePath}/${saved.id}/edit`, { replace: true, state: null });
+    } catch {
+      // Task request errors are reported by the existing transport; drafts remain editable.
     } finally {
-      setSaving(false);
+      if (!signal.aborted) setSaving(false);
     }
   };
 
-  const pageTitle = editing
-    ? form.name || (realtime ? "编辑实时同步任务" : "编辑离线同步任务")
-    : realtime
-      ? "新建实时同步任务"
-      : "新建离线同步任务";
-  const pageDescription = realtime
-    ? "MySQL CDC 单表实时同步 · 首次全量后持续消费 Binlog"
-    : undefined;
-
-  if (loading) {
-    return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
-  }
+  const pageTitle = editing ? form.name || "编辑同步任务" : "新建同步任务";
 
   if (published) {
     return (
       <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
         <PageHeader
           title={pageTitle}
-          description={pageDescription}
           bordered
           className="bg-white px-6 max-md:px-4"
           extra={
@@ -554,7 +863,6 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
     >
       <PageHeader
         title={pageTitle}
-        description={pageDescription}
         bordered
         className={localScroll ? "shrink-0 bg-white px-6 max-md:px-4" : "bg-white px-6 max-md:px-4"}
         extra={
@@ -593,25 +901,27 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
               : "min-w-0 flex-1 space-y-4"
           }
         >
-          {editing ? (
+          {solutionsError ? (
             <Alert>
-              {realtime
-                ? "当前任务已下线，可修改任务定义。执行配置变化会生成新版本，新版本上线后首次启动会重新全量同步；仅修改名称或备注不会增加版本。"
-                : "当前任务已下线，可修改任务定义。保存后仍需上线，任务才可以运行。"}
+              {solutionsError}
+              <Button size="small" onClick={reloadSolutions}>
+                重试
+              </Button>
             </Alert>
-          ) : (
-            <Alert>新建任务保存后默认处于已下线状态，需要上线后才可以运行或启动。</Alert>
-          )}
-
-          {realtime ? (
-            <div className="rounded-lg border border-[#b2ccff] bg-[#f5f8ff] px-4 py-3 text-xs leading-5 text-[#344054]">
-              首次启动会先同步来源表当前全量数据，随后持续消费 MySQL
-              Binlog；停止后再次启动同一任务版本会从已保存的 CDC 状态继续。
-            </div>
+          ) : null}
+          {!solutionsLoading && !solutionsError && !combination ? (
+            <Alert>当前链路不再支持所选同步方案</Alert>
+          ) : null}
+          {usesChangelog ? (
+            <Alert>重新提交会创建新的执行实例并重新全量初始化，不会续用上次实例的检查点。</Alert>
           ) : null}
 
           <CollapseSection id="basic" title="基本信息">
             <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+              <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-3 text-sm">
+                <span>同步方案</span>
+                <span>{solutionSummary(draft.solutionType, draft.steps)}</span>
+              </div>
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                 <FieldLabel required>任务名称</FieldLabel>
                 <Input
@@ -635,6 +945,14 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
                   onValueChange={(value) => patch("remark", value)}
                 />
               </Field>
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                <FieldLabel>Debug</FieldLabel>
+                <Switch
+                  size="small"
+                  checked={form.debug}
+                  onCheckedChange={(checked) => patch("debug", checked)}
+                />
+              </Field>
             </div>
           </CollapseSection>
 
@@ -642,100 +960,221 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
             <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
               <DataSourceEndpointCard
                 title="来源"
+                dataSourceType={draft.sourceType}
                 dataSources={sourceDataSources}
                 dataSourceId={form.sourceDataSourceId}
                 refreshing={dataSourcesLoading}
                 onRefresh={loadDataSources}
-                onCreateDataSource={() => navigate("/data-source?create=1")}
-                onDataSourceChange={(value) => {
-                  const selected = dataSources.find((item) => item.id === value);
-                  setParametersDirty(true);
-                  setForm((current) => ({
-                    ...current,
-                    sourceDataSourceId: value,
-                    sourceDatabase: selected?.database || "",
-                    sourceSchema: selected?.schema || "",
-                    sourceTable: "",
-                  }));
-                }}
+                onCreateDataSource={() =>
+                  navigate(
+                    "/data-source?create=1&returnTo=" +
+                      encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+                  )
+                }
+                onDataSourceChange={(value) => requestConnectionChange("source", value)}
               />
               <DataSourceEndpointCard
                 title="去向"
+                dataSourceType={draft.targetType}
                 dataSources={targetDataSources}
                 dataSourceId={form.targetDataSourceId}
                 refreshing={dataSourcesLoading}
                 onRefresh={loadDataSources}
-                onCreateDataSource={() => navigate("/data-source?create=1")}
-                onDataSourceChange={(value) => {
-                  const selected = dataSources.find((item) => item.id === value);
-                  setParametersDirty(true);
-                  setForm((current) => ({
-                    ...current,
-                    targetDataSourceId: value,
-                    targetDatabase: selected?.database || "",
-                    targetSchema: selected?.schema || "",
-                    targetTable: "",
-                  }));
-                }}
+                onCreateDataSource={() =>
+                  navigate(
+                    "/data-source?create=1&returnTo=" +
+                      encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+                  )
+                }
+                onDataSourceChange={(value) => requestConnectionChange("target", value)}
               />
             </div>
           </CollapseSection>
 
           <CollapseSection id="source" title="数据来源">
-            <TableSection
-              dataSourceId={form.sourceDataSourceId}
-              boundSchema={selectedSourceDataSource?.schema}
-              database={form.sourceDatabase}
-              schema={form.sourceSchema}
-              table={form.sourceTable}
-              catalog={sourceCatalog}
-              onSchemaChange={(value) => {
-                setParametersDirty(true);
-                setForm((current) => ({
-                  ...current,
-                  sourceSchema: value,
-                  sourceTable: "",
-                }));
-              }}
-              onTableChange={(table) => {
-                setParametersDirty(true);
-                setForm((current) => ({
-                  ...current,
-                  sourceDatabase: current.sourceDatabase || table.database || "",
-                  sourceSchema: current.sourceSchema || table.schema || "",
-                  sourceTable: table.name,
-                }));
-              }}
-            >
-              {realtime ? (
-                <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
-              ) : null}
-            </TableSection>
+            {batch ? (
+              <ExplicitTableSelection
+                prepareSchema={prepareSchema}
+                targetNamespace={{
+                  database: form.targetDatabase || undefined,
+                  schema: form.targetSchema || undefined,
+                }}
+                writeMode={combination?.writeModes[0]}
+                sourceTables={sourceCatalog.tables}
+                targetTables={targetCatalog.tables}
+                mappings={mappings}
+                loading={sourceCatalog.loading}
+                error={sourceCatalog.error}
+                refresh={sourceCatalog.refresh}
+                onChange={updateMappings}
+              />
+            ) : (
+              <TableSection
+                dataSourceId={form.sourceDataSourceId}
+                boundSchema={selectedSourceDataSource?.schema}
+                database={form.sourceDatabase}
+                schema={form.sourceSchema}
+                table={form.sourceTable}
+                catalog={sourceCatalog}
+                onSchemaChange={(value) => {
+                  setTaskDirty(true);
+                  setParametersDirty(true);
+                  setForm((current) => ({
+                    ...current,
+                    sourceSchema: value,
+                    sourceTable: "",
+                  }));
+                }}
+                onTableChange={(table) => {
+                  setTaskDirty(true);
+                  setParametersDirty(true);
+                  setForm((current) => ({
+                    ...current,
+                    sourceDatabase: current.sourceDatabase || table.database || "",
+                    sourceSchema: current.sourceSchema || table.schema || "",
+                    sourceTable: table.name,
+                  }));
+                }}
+              >
+                {usesChangelog ? (
+                  <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
+                ) : null}
+                {useIncremental ? (
+                  <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-start !gap-3">
+                    <FieldLabel required>增量设置</FieldLabel>
+                    <div className="w-1/2 min-w-0 max-lg:w-full">
+                      <IncrementalFields
+                        value={form.incremental}
+                        initialLoad={initialLoad}
+                        onChange={(value) => patch("incremental", value)}
+                      />
+                    </div>
+                  </Field>
+                ) : null}
+              </TableSection>
+            )}
           </CollapseSection>
 
-          <CollapseSection id="target" title="数据去向">
-            <TableSection
-              dataSourceId={form.targetDataSourceId}
-              boundSchema={selectedTargetDataSource?.schema}
-              database={form.targetDatabase}
-              schema={form.targetSchema}
-              table={form.targetTable}
-              catalog={targetCatalog}
-              onSchemaChange={(value) => {
-                setParametersDirty(true);
-                setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }));
-              }}
-              onTableChange={(table) => {
-                setParametersDirty(true);
-                setForm((current) => ({
-                  ...current,
-                  targetDatabase: current.targetDatabase || table.database || "",
-                  targetSchema: current.targetSchema || table.schema || "",
-                  targetTable: table.name,
-                }));
-              }}
-            />
+          <CollapseSection id="target" title="目标表映射">
+            {prepareSchema ? (
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <SchemaPreview value={payload()} disabled={!canSave} />
+                {batch && !selectedTargetDataSource?.schema && targetCatalog.schemas.length ? (
+                  <DataSyncSearchableSelect
+                    ariaLabel="去向 Schema"
+                    value={form.targetSchema || null}
+                    options={targetCatalog.schemas.map((value) => ({ value, label: value }))}
+                    placeholder="去向 Schema"
+                    onValueChange={(value) => {
+                      patch("targetSchema", value);
+                      updateMappings(
+                        mappings.map((mapping) => ({
+                          ...mapping,
+                          target: { ...mapping.target, schema: value },
+                        })),
+                      );
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            {batch ? (
+              <TableMappingEditor
+                prepareSchema={prepareSchema}
+                incremental={useIncremental}
+                initialLoad={initialLoad}
+                writeModes={combination?.writeModes || []}
+                mappings={mappings}
+                targetTables={targetCatalog.tables}
+                loading={targetCatalog.loading}
+                error={targetCatalog.error}
+                refresh={targetCatalog.refresh}
+                onChange={updateMappings}
+              />
+            ) : (
+              <TableSection
+                prepareSchema={prepareSchema}
+                onTableNameChange={(value) => patch("targetTable", value)}
+                dataSourceId={form.targetDataSourceId}
+                boundSchema={selectedTargetDataSource?.schema}
+                database={form.targetDatabase}
+                schema={form.targetSchema}
+                table={form.targetTable}
+                catalog={targetCatalog}
+                onSchemaChange={(value) => {
+                  setTaskDirty(true);
+                  setParametersDirty(true);
+                  setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }));
+                }}
+                onTableChange={(table) => {
+                  setTaskDirty(true);
+                  setParametersDirty(true);
+                  setForm((current) => ({
+                    ...current,
+                    targetDatabase: current.targetDatabase || table.database || "",
+                    targetSchema: current.targetSchema || table.schema || "",
+                    targetTable: table.name,
+                  }));
+                }}
+              >
+                <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                  <FieldLabel required>写入方式</FieldLabel>
+                  <DataSyncSearchableSelect
+                    placeholder="请选择写入方式"
+                    value={form.writeMode}
+                    disabled={!combination || combination.writeModes.length === 1}
+                    options={(combination?.writeModes || []).map((mode) => ({
+                      value: mode,
+                      label: mode === "UPSERT" ? "按主键更新" : "追加写入",
+                    }))}
+                    onValueChange={(value) => patch("writeMode", value as DataSyncWriteMode)}
+                  />
+                </Field>
+              </TableSection>
+            )}
           </CollapseSection>
+          {supportsScheduling ? (
+            <CollapseSection id="schedule" title="调度配置">
+              <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+                {scheduleError ? (
+                  <Alert>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{scheduleError}</span>
+                      {scheduleNeedsReload ? (
+                        <Button
+                          size="small"
+                          disabled={saving || scheduleLoading}
+                          onClick={() => {
+                            scheduleDraft.current = scheduleForm;
+                            setScheduleReload((value) => value + 1);
+                          }}
+                        >
+                          重新加载状态
+                        </Button>
+                      ) : null}
+                    </div>
+                  </Alert>
+                ) : null}
+                {scheduleLoading ? (
+                  <div className="text-xs text-[#667085]">加载调度…</div>
+                ) : (
+                  <ScheduleForm
+                    value={scheduleForm}
+                    onChange={(value) => {
+                      setScheduleForm(value);
+                      scheduleDraft.current = value;
+                      setScheduleError("");
+                    }}
+                    disabled={saving || scheduleNeedsReload || Boolean(schedule?.enabled)}
+                    allowClear={!schedule}
+                  />
+                )}
+                {schedule?.enabled ? (
+                  <div className="text-xs text-[#667085]">请先在任务列表停止调度再修改配置</div>
+                ) : null}
+              </div>
+            </CollapseSection>
+          ) : null}
         </main>
 
         <aside
@@ -751,6 +1190,34 @@ export function DataSyncTaskEditorPage({ syncType }: DataSyncTaskEditorPageProps
           />
         </aside>
       </div>
+      {pendingConnection ? (
+        <Modal
+          open
+          centered
+          width={420}
+          title="更换数据源"
+          onClose={() => setPendingConnection(undefined)}
+          footer={
+            <>
+              <Button size="small" onClick={() => setPendingConnection(undefined)}>
+                取消
+              </Button>
+              <Button
+                size="small"
+                variant="primary"
+                onClick={() => {
+                  changeConnection(pendingConnection.side, pendingConnection.value);
+                  setPendingConnection(undefined);
+                }}
+              >
+                确认
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm">更换数据源将清除已选择的表映射。</p>
+        </Modal>
+      ) : null}
     </div>
   );
 }

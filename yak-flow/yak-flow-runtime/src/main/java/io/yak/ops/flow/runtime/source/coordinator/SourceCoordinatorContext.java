@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -41,6 +42,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     private final ExecutorService discoveryExecutor;
     private final Supplier<Thread> coordinatorThread;
     private final Consumer<Throwable> onFailure;
+    private final IntConsumer plannedSplits;
     private final SplitAssignmentTracker<SplitT> assignments = new SplitAssignmentTracker<>();
     private final Map<Integer, SubtaskGateway> readers = new HashMap<>();
     private final Map<Integer, RuntimeTaskInfo> readerIdentities = new HashMap<>();
@@ -59,13 +61,15 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             ExecutorService coordinatorExecutor,
             ExecutorService discoveryExecutor,
             Supplier<Thread> coordinatorThread,
-            Consumer<Throwable> onFailure) {
+            Consumer<Throwable> onFailure,
+            IntConsumer plannedSplits) {
         this.operatorContext = Objects.requireNonNull(operatorContext, "operatorContext must not be null");
         this.splitSerializer = Objects.requireNonNull(splitSerializer, "splitSerializer must not be null");
         this.coordinatorExecutor = Objects.requireNonNull(coordinatorExecutor);
         this.discoveryExecutor = Objects.requireNonNull(discoveryExecutor);
         this.coordinatorThread = Objects.requireNonNull(coordinatorThread);
         this.onFailure = Objects.requireNonNull(onFailure);
+        this.plannedSplits = Objects.requireNonNull(plannedSplits);
     }
 
     void registerReader(RuntimeTaskInfo taskInfo, SubtaskGateway gateway) {
@@ -157,6 +161,12 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         pendingNoMore.clear();
         noMoreRequested.clear();
         noMoreDispatched.clear();
+    }
+
+    @Override
+    public void reportPlannedSplits(int count) {
+        assertCoordinatorThread();
+        plannedSplits.accept(count);
     }
 
     @Override

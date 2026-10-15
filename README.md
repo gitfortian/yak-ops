@@ -11,10 +11,13 @@ Yak Ops 是面向数据集成与同步场景的数据平台。当前 `main` 分�
 ```sh
 # Docker Compose，内置元数据库
 cp .env.example .env
+# 按下方说明编辑 .env，然后启动
 docker compose up -d
 ```
 
-在非本地环境必须修改示例密码并设置新的 `YAK_OPS_DATASOURCE_MASTER_KEY`。使用外部数据库可选择 `compose.without-mysql.yaml`。
+首次使用空数据库时，在 `.env` 设置 `YAK_SECURITY_BOOTSTRAP_ENABLED=true` 和独立的强密码 `YAK_SECURITY_BOOTSTRAP_PASSWORD`，启动成功并创建管理员后将开关改回 `false` 并重新部署。已有用户数据的环境保持关闭。没有配置管理员密码时，不允许启用初始化。
+
+在非本地环境必须修改示例数据库密码并设置新的 `YAK_OPS_DATASOURCE_MASTER_KEY`。使用外部数据库可选择 `compose.without-mysql.yaml`，两种部署方式都使用 `YAK_DATABASE_*` 连接元数据库。
 
 正式 Distribution 为 `yak-ops-{version}.tar.gz`，解压后通过 `./bin/run-yak-ops.sh` 启动。
 

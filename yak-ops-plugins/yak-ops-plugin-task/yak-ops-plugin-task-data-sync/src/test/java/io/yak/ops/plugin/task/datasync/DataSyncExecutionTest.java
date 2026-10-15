@@ -5,48 +5,48 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
+import io.yak.ops.configuration.ConfigParser;
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.MySqlHybridCdcSource;
+import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.connector.jdbc.JdbcSourceOptions;
+import io.yak.ops.connector.jdbc.sink.JdbcSink;
+import io.yak.ops.connector.jdbc.source.JdbcSource;
 import io.yak.ops.core.api.common.JobExecutionResult;
 import io.yak.ops.core.api.common.JobID;
 import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.api.dag.Pipeline;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.configuration.Configuration;
-import io.yak.ops.configuration.ConfigParser;
-import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
-import io.yak.ops.plugin.task.datasync.config.JobConfig;
-import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.connector.jdbc.sink.JdbcSink;
-import io.yak.ops.connector.jdbc.source.JdbcSource;
-import io.yak.ops.connector.cdc.mysql.source.MySqlHybridCdcSource;
-import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.flow.runtime.graph.StreamGraph;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.plan.JobPlan;
-import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
+import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
+import io.yak.ops.plugin.task.datasync.config.JobConfig;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
-import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
-import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
-import java.util.Map;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
+import io.yak.ops.plugin.task.datasync.plan.JobPlan;
+import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,9 +56,7 @@ import org.junit.jupiter.api.Test;
 /** Verifies product DATA_SYNC planning and execution without opening physical JDBC connections. */
 class DataSyncExecutionTest {
     private static final TableSchema SCHEMA = new TableSchema(
-            List.of(
-                    new Column("id", LogicalTypes.BIGINT.copy(false)),
-                    new Column("name", LogicalTypes.varchar(32))),
+            List.of(new Column("id", LogicalTypes.BIGINT.copy(false)), new Column("name", LogicalTypes.varchar(32))),
             List.of("id"));
     private static final TaskExecutionIdentity CONTEXT =
             new TaskExecutionIdentity("ws", "definition", 1, "instance-123");
@@ -74,10 +72,12 @@ class DataSyncExecutionTest {
         assertEquals("DATA_SYNC_TARGET", plan.exclusiveResources().getFirst().type());
         assertEquals(0, resources.connections.get());
 
-        var handle = plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join();
+        var handle =
+                plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
         assertEquals(1, submissions.get());
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
-        assertEquals(TaskOutcome.FINISHED, handle.completion().toCompletableFuture().join());
+        assertEquals(
+                TaskOutcome.FINISHED, handle.completion().toCompletableFuture().join());
         assertEquals(0, resources.openedConnections.get());
         assertEquals(4, resources.tables.get());
         assertEquals(2, resources.connections.get());
@@ -92,7 +92,7 @@ class DataSyncExecutionTest {
         assertEquals(JobConfig.from(parameters).source(), prepared.sourceParameters());
         assertEquals(JobConfig.from(parameters).sink(), prepared.sinkParameters());
         assertEquals("orders", prepared.source().table().table());
-        assertEquals("ods_orders", prepared.target().table().table());
+        assertEquals("ods_orders", prepared.tables().getFirst().targetTable().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
         assertEquals(0, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
@@ -112,7 +112,9 @@ class DataSyncExecutionTest {
                 List.of("id"));
         CompletionException failure = assertThrows(
                 CompletionException.class,
-                () -> plugin.start(parameters, admitted, CONTEXT).toCompletableFuture().join());
+                () -> plugin.start(parameters, admitted, CONTEXT, false)
+                        .toCompletableFuture()
+                        .join());
         assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.connections.get());
@@ -129,7 +131,9 @@ class DataSyncExecutionTest {
         resources.targetRevision++;
         CompletionException failure = assertThrows(
                 CompletionException.class,
-                () -> plugin.start(parameters, admitted, CONTEXT).toCompletableFuture().join());
+                () -> plugin.start(parameters, admitted, CONTEXT, false)
+                        .toCompletableFuture()
+                        .join());
         assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.connections.get());
@@ -144,7 +148,8 @@ class DataSyncExecutionTest {
         ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         assertTrue(plan.resourceRevision().length() <= 128);
-        var handle = plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join();
+        var handle =
+                plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
         assertEquals(1, submissions.get());
         assertEquals(0, resources.openedConnections.get());
@@ -163,20 +168,34 @@ class DataSyncExecutionTest {
         };
         DataSyncTaskPlugin plugin = plugin(resources, capture);
         ReadonlyConfig jdbc = parameters(false);
-        plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT).toCompletableFuture().join();
+        plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT, false)
+                .toCompletableFuture()
+                .join();
         StreamGraph bounded = lastGraph.get();
         assertTrue(bounded.isBounded());
-        assertInstanceOf(JdbcSource.class, bounded.getSourceNodes().getFirst().getSource().orElseThrow());
-        assertInstanceOf(JdbcSink.class, bounded.getSinkNodes().getFirst().getSink().orElseThrow());
-        assertEquals("data-sync-source-definition", bounded.getSourceNodes().getFirst().getUid());
-        assertEquals("data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
+        assertInstanceOf(
+                JdbcSource.class,
+                bounded.getSourceNodes().getFirst().getSource().orElseThrow());
+        assertInstanceOf(
+                JdbcSink.class, bounded.getSinkNodes().getFirst().getSink().orElseThrow());
+        assertEquals(
+                "data-sync-source-definition",
+                bounded.getSourceNodes().getFirst().getUid());
+        assertEquals(
+                "data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
         assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         ReadonlyConfig cdc = parameters(true);
-        plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT).toCompletableFuture().join();
+        plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT, false)
+                .toCompletableFuture()
+                .join();
         StreamGraph continuous = lastGraph.get();
         assertTrue(!continuous.isBounded());
-        assertInstanceOf(MySqlHybridCdcSource.class, continuous.getSourceNodes().getFirst().getSource().orElseThrow());
-        assertEquals(java.time.Duration.ofSeconds(10), lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertInstanceOf(
+                MySqlHybridCdcSource.class,
+                continuous.getSourceNodes().getFirst().getSource().orElseThrow());
+        assertEquals(
+                java.time.Duration.ofSeconds(10),
+                lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         assertEquals(2, submissions.get());
         assertEquals(0, resources.openedConnections.get());
     }
@@ -191,7 +210,9 @@ class DataSyncExecutionTest {
         resources.sourceConnectionRevision = 2;
         CompletionException failure = assertThrows(
                 CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join());
+                () -> plugin.start(parameters, plan, CONTEXT, false)
+                        .toCompletableFuture()
+                        .join());
         assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
@@ -207,7 +228,9 @@ class DataSyncExecutionTest {
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         CompletionException failure = assertThrows(
                 CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT).toCompletableFuture().join());
+                () -> plugin.start(parameters, plan, CONTEXT, false)
+                        .toCompletableFuture()
+                        .join());
         assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
@@ -219,14 +242,13 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
         ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan admitted = planner.admissionPlan(parameters, CONTEXT);
-        TaskExecutionIdentity repeatedPlan =
-                new TaskExecutionIdentity("ws", "definition", 1, "instance-123");
+        TaskExecutionIdentity repeatedPlan = new TaskExecutionIdentity("ws", "definition", 1, "instance-123");
 
         assertEquals(2, admitted.exclusiveResources().size());
-        assertTrue(admitted.exclusiveResources().stream().anyMatch(
-                resource -> resource.type().equals("DATA_SYNC_TARGET")));
-        assertTrue(admitted.exclusiveResources().stream().anyMatch(
-                resource -> resource.type().equals("MYSQL_CDC_SERVER_ID")));
+        assertTrue(admitted.exclusiveResources().stream()
+                .anyMatch(resource -> resource.type().equals("DATA_SYNC_TARGET")));
+        assertTrue(admitted.exclusiveResources().stream()
+                .anyMatch(resource -> resource.type().equals("MYSQL_CDC_SERVER_ID")));
         assertEquals(admitted, planner.admissionPlan(parameters, repeatedPlan));
         assertEquals(0, resources.connections.get());
     }
@@ -237,13 +259,20 @@ class DataSyncExecutionTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         ReadonlyConfig options = runtimeOptions(2, 1, Duration.ofMillis(750), 2);
-        PipelineBuilder builder = new PipelineBuilder(resources, factories, options,
+        PipelineBuilder builder = new PipelineBuilder(
+                resources,
+                factories,
+                options,
                 new ExecutionConfigurationFactory(options, Path.of("target/data-sync")),
-                Map.of("MYSQL_CDC", new Configuration()
-                        .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, 512)
-                        .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, 64).toReadonlyConfig()));
+                Map.of(
+                        "MYSQL_CDC",
+                        new Configuration()
+                                .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, 512)
+                                .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, 64)
+                                .toReadonlyConfig()),
+                Map.of());
         ReadonlyConfig parameters = parameters(true);
-        var compiled = builder.build(planner.plan(parameters, CONTEXT), CONTEXT);
+        var compiled = builder.build(planner.plan(parameters, CONTEXT), CONTEXT, false);
         assertEquals(2, compiled.graph().getSourceNodes().getFirst().getParallelism());
         assertEquals(1, compiled.graph().getSinkNodes().getFirst().getParallelism());
         assertEquals(Duration.ofMillis(750), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
@@ -268,11 +297,108 @@ class DataSyncExecutionTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         ReadonlyConfig settings = runtimeOptions(2, 2, Duration.ofSeconds(10), 1);
-        PipelineBuilder builder = new PipelineBuilder(resources, factories, settings,
+        PipelineBuilder builder = new PipelineBuilder(
+                resources,
+                factories,
+                settings,
                 new ExecutionConfigurationFactory(settings, Path.of("target/data-sync")));
         ReadonlyConfig parameters = parameters(true);
-        assertThrows(UnsupportedOperationException.class, () -> builder.build(planner.plan(parameters, CONTEXT), CONTEXT));
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> builder.build(planner.plan(parameters, CONTEXT), CONTEXT, false));
         assertEquals(0, resources.connections.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void isolatesJdbcSourceTuningFromJdbcSinkWithTheSameFactoryIdentifier() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        ReadonlyConfig sourceSettings = new Configuration()
+                .set(JdbcSourceOptions.RESULT_SET_FETCH_SIZE, 1000)
+                .toReadonlyConfig();
+        PipelineBuilder builder = new PipelineBuilder(
+                resources,
+                factories,
+                JobOptions.defaults(),
+                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                Map.of("JDBC", sourceSettings),
+                Map.of());
+
+        var compiled = builder.build(planner.plan(parameters(false), CONTEXT), CONTEXT, false);
+        Object source = compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow();
+        Configuration sourceConfiguration = (Configuration) field(source, "configuration");
+        assertEquals(1000, sourceConfiguration.get(JdbcSourceOptions.RESULT_SET_FETCH_SIZE));
+        Object sink = compiled.graph().getSinkNodes().getFirst().getSink().orElseThrow();
+        assertInstanceOf(JdbcSink.class, sink);
+        JdbcConnectionOptions sinkConnection = (JdbcConnectionOptions) field(field(sink, "connections"), "connection");
+        assertTrue(!sinkConnection.configuration().contains(JdbcSourceOptions.RESULT_SET_FETCH_SIZE));
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void keepsSameNamedConnectionDefaultsSeparateAndPreservesTrustedCredentials() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        ReadonlyConfig sourceSettings = new Configuration()
+                .set(JdbcConnectionOptions.TIMEOUT, 7)
+                .set(JdbcConnectionOptions.PASSWORD, "not-the-datasource-password")
+                .toReadonlyConfig();
+        ReadonlyConfig sinkSettings =
+                new Configuration().set(JdbcConnectionOptions.TIMEOUT, 13).toReadonlyConfig();
+        PipelineBuilder builder = new PipelineBuilder(
+                resources,
+                factories,
+                JobOptions.defaults(),
+                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                Map.of("JDBC", sourceSettings),
+                Map.of("JDBC", sinkSettings));
+
+        var plan = new JobPlanner(resources, factories).plan(parameters(false), CONTEXT);
+        var compiled = builder.build(plan, CONTEXT, false);
+        Object source = compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow();
+        Object sink = compiled.graph().getSinkNodes().getFirst().getSink().orElseThrow();
+        JdbcConnectionOptions sourceConnection =
+                (JdbcConnectionOptions) field(field(source, "connectionProvider"), "connection");
+        JdbcConnectionOptions sinkConnection = (JdbcConnectionOptions) field(field(sink, "connections"), "connection");
+        assertEquals(7, sourceConnection.configuration().get(JdbcConnectionOptions.TIMEOUT));
+        assertEquals(13, sinkConnection.configuration().get(JdbcConnectionOptions.TIMEOUT));
+        assertEquals("secret", sourceConnection.password());
+        assertEquals("secret", sinkConnection.password());
+        assertEquals("not-the-datasource-password", sourceSettings.get(JdbcConnectionOptions.PASSWORD));
+        assertTrue(!compiled.configuration().contains(JdbcConnectionOptions.PASSWORD));
+        assertTrue(!plan.sourceOptions().contains(JdbcConnectionOptions.PASSWORD));
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void rejectsUnknownOrMisplacedPhysicalOptionsInsteadOfSilentlyFilteringThem() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        var plan = new JobPlanner(resources, factories).plan(parameters(false), CONTEXT);
+        ReadonlyConfig unknown = ReadonlyConfig.fromMap(Map.of("misspelled.option", 123));
+        ReadonlyConfig sourceOnly = new Configuration()
+                .set(JdbcSourceOptions.RESULT_SET_FETCH_SIZE, 1000)
+                .toReadonlyConfig();
+        PipelineBuilder invalidSource = new PipelineBuilder(
+                resources,
+                factories,
+                JobOptions.defaults(),
+                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                Map.of("JDBC", unknown),
+                Map.of());
+        assertThrows(IllegalArgumentException.class, () -> invalidSource.build(plan, CONTEXT, false));
+        for (ReadonlyConfig invalidSink : List.of(unknown, sourceOnly)) {
+            PipelineBuilder builder = new PipelineBuilder(
+                    resources,
+                    factories,
+                    JobOptions.defaults(),
+                    new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                    Map.of(),
+                    Map.of("JDBC", invalidSink));
+            assertThrows(IllegalArgumentException.class, () -> builder.build(plan, CONTEXT, false));
+        }
         assertEquals(0, resources.openedConnections.get());
     }
 
@@ -281,7 +407,9 @@ class DataSyncExecutionTest {
             var field = value.getClass().getDeclaredField(name);
             field.setAccessible(true);
             return field.get(value);
-        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        } catch (ReflectiveOperationException failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private static DataSyncTaskPlugin plugin(DataSourceLookupService resources, PipelineExecutor executor) {
@@ -303,11 +431,14 @@ class DataSyncExecutionTest {
                 """.formatted(type, writeMode));
     }
 
-    private static ReadonlyConfig runtimeOptions(int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
-        return new Configuration().set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
+    private static ReadonlyConfig runtimeOptions(
+            int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
+        return new Configuration()
+                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
                 .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
                 .set(JobOptions.CHECKPOINT_INTERVAL, checkpointInterval)
-                .set(JobOptions.MAX_RESTARTS, maxRestarts).toReadonlyConfig();
+                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .toReadonlyConfig();
     }
 
     private static PipelineExecutor finishedExecutor(AtomicInteger submissions) {
@@ -316,13 +447,24 @@ class DataSyncExecutionTest {
             JobID id = JobID.generate();
             JobClient client = new JobClient() {
                 @Override
-                public JobID getJobID() { return id; }
+                public JobID getJobID() {
+                    return id;
+                }
+
                 @Override
-                public CompletableFuture<JobStatus> getJobStatus() { return CompletableFuture.completedFuture(JobStatus.FINISHED); }
+                public CompletableFuture<JobStatus> getJobStatus() {
+                    return CompletableFuture.completedFuture(JobStatus.FINISHED);
+                }
+
                 @Override
-                public CompletableFuture<Void> cancel() { return CompletableFuture.completedFuture(null); }
+                public CompletableFuture<Void> cancel() {
+                    return CompletableFuture.completedFuture(null);
+                }
+
                 @Override
-                public CompletableFuture<JobExecutionResult> getJobExecutionResult() { return CompletableFuture.completedFuture(new JobExecutionResult(id, 1)); }
+                public CompletableFuture<JobExecutionResult> getJobExecutionResult() {
+                    return CompletableFuture.completedFuture(new JobExecutionResult(id, 1));
+                }
             };
             return CompletableFuture.completedFuture(client);
         };
@@ -332,47 +474,65 @@ class DataSyncExecutionTest {
         private final AtomicInteger connections = new AtomicInteger();
         private final AtomicInteger tables = new AtomicInteger();
         private final AtomicInteger openedConnections = NeverOpenDriver.OPENS;
-        Resources() { openedConnections.set(0); }
+
+        Resources() {
+            openedConnections.set(0);
+        }
+
         private long targetRevision = 1;
         private long sourceConnectionRevision = 1;
         private boolean sourceTunneled;
         private TableSchema targetSchema = SCHEMA;
+
         @Override
-        public DataSourceTable table(String workspace, String datasource, String database, String schema, String table) {
+        public DataSourceTable table(
+                String workspace, String datasource, String database, String schema, String table) {
             assertEquals("ws", workspace);
             tables.incrementAndGet();
             if ("source".equals(datasource)) {
                 return new DataSourceTable("MYSQL", new TableId("app", null, "orders"), SCHEMA, 1);
             }
-            return new DataSourceTable("POSTGRE_SQL", new TableId(null, "public", "ods_orders"), targetSchema, targetRevision);
+            return new DataSourceTable(
+                    "POSTGRE_SQL", new TableId(null, "public", "ods_orders"), targetSchema, targetRevision);
         }
+
         @Override
         public ReadonlyConfig connectionOptions(String workspace, String datasource, long expectedRevision) {
             assertEquals("ws", workspace);
             connections.incrementAndGet();
             boolean source = "source".equals(datasource);
             long revision = targetRevision;
-            if (source) { revision = sourceConnectionRevision; }
-            if (expectedRevision != revision) { throw new IllegalStateException("Datasource revision changed before execution"); }
+            if (source) {
+                revision = sourceConnectionRevision;
+            }
+            if (expectedRevision != revision) {
+                throw new IllegalStateException("Datasource revision changed before execution");
+            }
             Configuration configuration = new Configuration()
                     .set(JdbcConnectionOptions.USERNAME, "user")
                     .set(JdbcConnectionOptions.PASSWORD, "secret")
                     .set(JdbcConnectionOptions.DRIVER_CLASS, NeverOpenDriver.class.getName())
                     .set(JdbcConnectionOptions.HOST, "localhost");
             if (source) {
-                return configuration.set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3306/app")
+                return configuration
+                        .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3306/app")
                         .set(JdbcConnectionOptions.DATABASE_TYPE, "MYSQL")
                         .set(JdbcConnectionOptions.PORT, 3306)
-                        .set(JdbcConnectionOptions.SSH_ENABLED, sourceTunneled).toReadonlyConfig();
+                        .set(JdbcConnectionOptions.SSH_ENABLED, sourceTunneled)
+                        .toReadonlyConfig();
             }
-            return configuration.set(JdbcConnectionOptions.URL, "jdbc:postgresql://localhost:5432/app")
+            return configuration
+                    .set(JdbcConnectionOptions.URL, "jdbc:postgresql://localhost:5432/app")
                     .set(JdbcConnectionOptions.DATABASE_TYPE, "POSTGRE_SQL")
-                    .set(JdbcConnectionOptions.PORT, 5432).toReadonlyConfig();
+                    .set(JdbcConnectionOptions.PORT, 5432)
+                    .toReadonlyConfig();
         }
+
         @Override
         public ReadonlyConfig connectionOptions(String workspace, String datasource) {
             throw new AssertionError("Execution must use a pinned revision");
         }
+
         @Override
         public DataSourceInfo dataSource(String workspace, String datasource) {
             throw new AssertionError("Planning resolves table metadata instead");
@@ -382,27 +542,52 @@ class DataSyncExecutionTest {
     /** Fails observably if graph construction tries to open any JDBC connection. */
     public static final class NeverOpenDriver implements java.sql.Driver {
         private static final AtomicInteger OPENS = new AtomicInteger();
+
         static {
-            try { java.sql.DriverManager.registerDriver(new NeverOpenDriver()); }
-            catch (SQLException failure) { throw new ExceptionInInitializerError(failure); }
+            try {
+                java.sql.DriverManager.registerDriver(new NeverOpenDriver());
+            } catch (SQLException failure) {
+                throw new ExceptionInInitializerError(failure);
+            }
         }
+
         @Override
         public java.sql.Connection connect(String url, java.util.Properties properties) throws SQLException {
-            if (!acceptsURL(url)) { return null; }
+            if (!acceptsURL(url)) {
+                return null;
+            }
             OPENS.incrementAndGet();
             throw new SQLException("Graph construction must not open connections");
         }
+
         @Override
-        public boolean acceptsURL(String url) { return url.startsWith("jdbc:mysql:") || url.startsWith("jdbc:postgresql:"); }
+        public boolean acceptsURL(String url) {
+            return url.startsWith("jdbc:mysql:") || url.startsWith("jdbc:postgresql:");
+        }
+
         @Override
-        public java.sql.DriverPropertyInfo[] getPropertyInfo(String url, java.util.Properties properties) { return new java.sql.DriverPropertyInfo[0]; }
+        public java.sql.DriverPropertyInfo[] getPropertyInfo(String url, java.util.Properties properties) {
+            return new java.sql.DriverPropertyInfo[0];
+        }
+
         @Override
-        public int getMajorVersion() { return 1; }
+        public int getMajorVersion() {
+            return 1;
+        }
+
         @Override
-        public int getMinorVersion() { return 0; }
+        public int getMinorVersion() {
+            return 0;
+        }
+
         @Override
-        public boolean jdbcCompliant() { return false; }
+        public boolean jdbcCompliant() {
+            return false;
+        }
+
         @Override
-        public java.util.logging.Logger getParentLogger() { return java.util.logging.Logger.getGlobal(); }
+        public java.util.logging.Logger getParentLogger() {
+            return java.util.logging.Logger.getGlobal();
+        }
     }
 }

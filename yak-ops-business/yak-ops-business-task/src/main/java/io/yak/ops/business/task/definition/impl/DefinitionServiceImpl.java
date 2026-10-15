@@ -9,6 +9,7 @@ import io.yak.ops.common.bean.vo.task.DefinitionVO;
 import io.yak.ops.common.bean.vo.task.DefinitionVersionVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.common.CommonErrorCode;
+import io.yak.ops.common.enums.schedule.ScheduleTargetType;
 import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.page.PagingData;
@@ -19,6 +20,7 @@ import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
+import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
@@ -49,6 +51,9 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Resource
     private PublicationService publicationService;
 
+    @Resource
+    private ScheduleRepository schedules;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO create(CreateDefinitionDTO dto, String operatorId) {
@@ -64,6 +69,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         definition.setTaskType(type);
         definition.setStatus(DefinitionStatus.UNPUBLISHED);
         definition.setCurrentVersion(1);
+        definition.setDebug(Boolean.TRUE.equals(dto.getDebug()));
         definition.setRemark(dto.getRemark());
         definition.initCreate(operatorId);
         definitionRepository.add(definition);
@@ -81,7 +87,13 @@ public class DefinitionServiceImpl implements DefinitionService {
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
             String updated = validatedParameters(definition.getTaskType(), dto.getParameters());
-            String existing = currentVersion(definition).getParameters();
+            DefinitionVersionEntity stored = currentVersion(definition);
+            TaskPlugin plugin = pluginRegistry.get(definition.getTaskType());
+            plugin.validateUpdate(
+                    plugin.parse(stored.getParameterSchemaVersion(), stored.getParameters()),
+                    plugin.parse(updated),
+                    validationContext);
+            String existing = stored.getParameters();
             if (!updated.equals(existing)) {
                 definition.setCurrentVersion(definition.getCurrentVersion() + 1);
                 appendVersion(definition, updated, operatorId);
@@ -89,6 +101,9 @@ public class DefinitionServiceImpl implements DefinitionService {
         }
         definition.setName(name);
         definition.setRemark(dto.getRemark());
+        if (dto.getDebug() != null) {
+            definition.setDebug(dto.getDebug());
+        }
         definition.initUpdate(operatorId);
         if (definitionRepository.update(definition.getWorkspaceId(), definition) == null) {
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
@@ -100,7 +115,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     public DefinitionVO publish(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, false);
         int expectedVersion = definition.getCurrentVersion();
-        validatePublication(definition.getTaskType(), currentVersion(definition).getParameters());
+        validatePublication(definition.getTaskType(), currentVersion(definition));
         return toVO(publicationService.publish(id, expectedVersion, operatorId));
     }
 
@@ -110,6 +125,8 @@ public class DefinitionServiceImpl implements DefinitionService {
         DefinitionEntity definition = requireDefinition(id, true);
         definition.setStatus(DefinitionStatus.UNPUBLISHED);
         definition.initUpdate(operatorId);
+        schedules.disableForTarget(
+                definition.getWorkspaceId(), ScheduleTargetType.TASK, id, definition.getUpdateTime(), operatorId);
         definitionRepository.update(definition.getWorkspaceId(), definition);
         return toVO(definition);
     }
@@ -123,6 +140,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         if (StringUtils.isBlank(operator)) {
             operator = "system";
         }
+        schedules.disableForTarget(definition.getWorkspaceId(), ScheduleTargetType.TASK, id, DateUtils.now(), operator);
         if (!definitionRepository.softDelete(definition.getWorkspaceId(), id, DateUtils.now(), operator)) {
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         }
@@ -151,7 +169,11 @@ public class DefinitionServiceImpl implements DefinitionService {
         if (filters.size() > 16
                 || filters.keySet().stream()
                         .anyMatch(k -> k == null
-                                || !java.util.Set.of("sourceType", "sourceDataSourceId", "targetDataSourceId")
+                                || !java.util.Set.of(
+                                                "sourceType",
+                                                "solutionType",
+                                                "sourceDataSourceId",
+                                                "targetDataSourceId")
                                         .contains(k))) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
@@ -223,9 +245,9 @@ public class DefinitionServiceImpl implements DefinitionService {
         return ConfigParser.toJson(parsed);
     }
 
-    private void validatePublication(String type, String parameters) {
+    private void validatePublication(String type, DefinitionVersionEntity version) {
         TaskPlugin plugin = pluginRegistry.get(type);
-        ReadonlyConfig parsed = plugin.parse(parameters);
+        ReadonlyConfig parsed = plugin.parse(version.getParameterSchemaVersion(), version.getParameters());
         plugin.validateReferences(parsed, validationContext);
         plugin.validate(parsed, validationContext);
     }

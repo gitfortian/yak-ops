@@ -11,6 +11,126 @@ export interface PaginationInfo {
 
 export type DataSyncType = "OFFLINE" | "REALTIME";
 
+export type DataSyncSolutionType =
+  | "SINGLE_TABLE_OFFLINE"
+  | "SINGLE_TABLE_REALTIME"
+  | "DATABASE_OFFLINE"
+  | "DATABASE_REALTIME";
+export type DataSyncStep = "SCHEMA" | "FULL" | "INCREMENTAL";
+
+export interface DataSyncSolution {
+  solutionType: DataSyncSolutionType;
+  displayName: string;
+  steps: DataSyncStep[];
+  defaultSteps: DataSyncStep[];
+  allowedCombinations: Array<{
+    steps: DataSyncStep[];
+    supportsScheduling: boolean;
+    writeModes: DataSyncWriteMode[];
+  }>;
+}
+
+export interface DataSyncDraft {
+  sourceType: string;
+  targetType: string;
+  solutionType: DataSyncSolutionType;
+  steps: DataSyncStep[];
+  name: string;
+  form?: DataSyncTaskSavePayload;
+}
+
+export interface DataSyncTablePath {
+  database?: string;
+  schema?: string;
+  table: string;
+}
+
+export interface DataSyncIncrementalConfig {
+  mode: "TIMESTAMP" | "INCREASING";
+  column: string;
+  initialValue?: string;
+  delaySeconds?: number;
+  lookbackSeconds?: number;
+}
+
+export interface DataSyncTableMapping {
+  source: DataSyncTablePath;
+  target: DataSyncTablePath;
+  writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
+}
+
+export interface DataSyncTableResult {
+  mappingIndex: number;
+  step: "FULL" | "INCREMENTAL";
+  status: "WAITING" | "RUNNING" | "FINISHED" | "FAILED" | "CANCELED";
+  progressPercent: number | null;
+  progressUnit: "SPLITS";
+  readRows: number;
+  committedRows: number;
+  plannedSplits: number | null;
+  completedSplits: number;
+  failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
+}
+
+export interface DataSyncBatchReport {
+  version: 1;
+  observedAt: string;
+  tables: DataSyncTableResult[];
+}
+
+export type DataSyncStageStatus =
+  | "WAITING"
+  | "RUNNING"
+  | "FINISHED"
+  | "FAILED"
+  | "CANCELED"
+  | "UNKNOWN";
+
+export interface DataSyncStageResult {
+  step: DataSyncStep;
+  status: DataSyncStageStatus;
+  progressPercent: number | null;
+  progressUnit: "SPLITS" | "RECORDS" | "TABLES";
+  readRows: number | null;
+  committedRows: number | null;
+  plannedSplits: number | null;
+  completedSplits: number | null;
+  failureCode: string | null;
+  plannedTables?: number | null;
+  completedTables?: number | null;
+  action?: "PREPARED" | "VERIFIED" | null;
+}
+
+export interface DataSyncExecutionSummary {
+  version: 2 | 3;
+  observedAt: string;
+  generation: number;
+  restored: boolean;
+  counterScope: "GENERATION" | "INSTANCE";
+  phase: "SCHEMA" | "FULL" | "INCREMENTAL" | "INITIALIZING" | "SNAPSHOT" | "HANDOFF" | "STREAMING";
+  checkpoints: { handoffId: number | null; completedId: number | null };
+  stages: DataSyncStageResult[];
+}
+
+export interface DataSyncStageReport extends DataSyncExecutionSummary {
+  tables: Array<{ mappingIndex: number; stages: DataSyncStageResult[] }>;
+}
+
+export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
+
+export interface DataSyncParameters {
+  solutionType: DataSyncSolutionType;
+  steps: DataSyncStep[];
+  source: { datasourceId: string };
+  sink: { datasourceId: string };
+  tableSelection: { mode: "EXPLICIT" };
+  tableMappings: DataSyncTableMapping[];
+}
+
 export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
 
 export type DataSyncRuntimePolicy = "AUTO" | "FIXED";
@@ -52,9 +172,14 @@ export interface DataSyncMappingConfig {
 
 export interface DataSyncTaskRecord {
   id: string;
+  tableMappings: DataSyncTableMapping[];
+  incremental?: DataSyncIncrementalConfig;
+  solutionType: DataSyncSolutionType;
+  steps: DataSyncStep[];
   name: string;
   syncType: DataSyncType | string;
   status: DataSyncTaskStatus | string;
+  debug: boolean;
   writeMode: DataSyncWriteMode | string;
   sourceDataSourceId: string;
   sourceDatabase?: string;
@@ -80,6 +205,7 @@ export interface DataSyncTaskPageParams {
   pageSize: number;
   keyword?: string;
   syncType?: DataSyncType;
+  solutionType?: DataSyncSolutionType;
   status?: DataSyncTaskStatus;
   sourceDataSourceId?: string;
   targetDataSourceId?: string;
@@ -98,6 +224,7 @@ export interface TaskDefinitionRecord {
   definitionVersion: number;
   parameterSchemaVersion: number;
   parameters: string;
+  debug: boolean;
   remark?: string;
   createTime?: string;
   updateTime?: string;
@@ -111,6 +238,7 @@ export interface TaskDefinitionPageResult {
 
 interface DataSyncTaskSaveBase {
   name: string;
+  debug: boolean;
   sourceDataSourceId: string;
   sourceDatabase?: string;
   sourceSchema?: string;
@@ -122,22 +250,17 @@ interface DataSyncTaskSaveBase {
   remark?: string;
 }
 
-export interface OfflineDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
-  syncType: "OFFLINE";
-  writeMode?: DataSyncWriteMode;
+export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
+  tableMappings?: DataSyncTableMapping[];
+  solutionType: DataSyncSolutionType;
+  steps: DataSyncStep[];
+  writeMode: DataSyncWriteMode;
+  incremental?: DataSyncIncrementalConfig;
 }
-
-export interface RealtimeDataSyncTaskSavePayload extends DataSyncTaskSaveBase {
-  syncType: "REALTIME";
-}
-
-export type DataSyncTaskSavePayload =
-  | OfflineDataSyncTaskSavePayload
-  | RealtimeDataSyncTaskSavePayload;
 
 export type DataSyncTaskUpdatePayload =
   | DataSyncTaskSavePayload
-  | Pick<DataSyncTaskSaveBase, "name" | "remark">;
+  | Pick<DataSyncTaskSaveBase, "name" | "remark" | "debug">;
 
 export interface SyncPipelineParameters {
   source: {
@@ -179,7 +302,10 @@ export interface DataSyncOfflineRuntimePlan {
 }
 
 export interface DataSyncDefinitionSnapshot {
+  tableMappings?: DataSyncTableMapping[];
   taskId: string;
+  solutionType?: DataSyncSolutionType;
+  steps?: DataSyncStep[];
   taskName: string;
   taskVersion: number;
   syncType?: DataSyncType | string;
@@ -195,13 +321,20 @@ export interface DataSyncDefinitionSnapshot {
 }
 
 export interface DataSyncInstanceRecord {
+  executionReport?: DataSyncExecutionReport;
   id: string;
+  solutionType: DataSyncSolutionType;
+  steps: DataSyncStep[];
   taskId: string;
   taskName: string;
   taskVersion: number;
   syncType: DataSyncType | string;
   triggerType?: "MANUAL" | "SCHEDULE" | "WORKFLOW";
+  scheduleId?: string | null;
+  scheduleRevision?: number | null;
+  scheduledTime?: string | null;
   status: DataSyncInstanceStatus;
+  progressPercent?: number;
   runtimeEngine?: string;
   runtimeId?: string;
   readRows?: number;
@@ -231,4 +364,11 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
+}
+
+export interface DataSyncSchemaPreview {
+  mappingIndex: number;
+  target: { catalog: string; schema: string | null; table: string };
+  action: "CREATE" | "VERIFY";
+  statements: string[];
 }

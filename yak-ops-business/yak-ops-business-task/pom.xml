@@ -16,6 +16,9 @@
     <description>Plugin-independent Task Definition CRUD, publication and immutable versions</description>
 
     <dependencies>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-scheduler-api</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-platform</artifactId></dependency>
+
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-configuration</artifactId></dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>

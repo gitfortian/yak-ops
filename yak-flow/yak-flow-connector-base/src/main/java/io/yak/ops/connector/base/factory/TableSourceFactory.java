@@ -16,6 +16,20 @@ public interface TableSourceFactory extends Factory {
     /** Checks whether the physical datasource type is supported. */
     default void validateDatasource(String datasourceType) {}
 
+    /** Validates source schema requirements before admission without opening a reader. */
+    default void validateSchema(io.yak.ops.core.types.TableSchema schema) {}
+
     /** Constructs one reusable Source definition without starting its readers. */
     Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context);
+
+    /**
+     * Constructs one physical Source for a nonempty ordered collection of resolved tables.
+     *
+     * @param contexts effective connection and table inputs for the shared execution
+     * @return reusable Source definition; unsupported multi-table factories reject the request
+     */
+    default Source<TableRecord, ?, ?> createSource(java.util.List<TableSourceFactoryContext> contexts) {
+        if (contexts.size() != 1) throw new UnsupportedOperationException("Factory does not support multiple tables");
+        return createSource(contexts.getFirst());
+    }
 }

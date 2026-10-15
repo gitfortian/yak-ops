@@ -153,7 +153,7 @@ public class EmbeddedTaskDispatcher implements TaskExecutionCoordinator, AutoClo
             var version = definitions
                     .queryCurrent(workspaceId, ticket.definitionId(), ticket.definitionVersion())
                     .orElseThrow(() -> new IllegalStateException("Pinned Task version is not available"));
-            ReadonlyConfig parameters = executable.parse(version.getParameters());
+            ReadonlyConfig parameters = executable.parse(version.getParameterSchemaVersion(), version.getParameters());
             TaskAdmissionPlan plan = executable.plan(parameters, context);
             Set<ExecutionResource> owned = claims.findByInstance(workspaceId, instanceId).stream()
                     .map(this::resource)
@@ -171,7 +171,7 @@ public class EmbeddedTaskDispatcher implements TaskExecutionCoordinator, AutoClo
                     return;
                 }
                 physicalStartInvoked = true;
-                submitted = executable.start(parameters, plan, context);
+                submitted = executable.start(parameters, plan, context, ticket.debug());
             }
             // Runtime completion may run on an interrupted YakFlow Job thread. Business
             // transactions must execute on a fresh thread to keep JDBC connections usable.

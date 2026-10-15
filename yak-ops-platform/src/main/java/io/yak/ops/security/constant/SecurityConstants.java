@@ -16,8 +16,8 @@ public final class SecurityConstants {
     /** Security Bootstrap 配置前缀。 */
     public static final String BOOTSTRAP_CONFIG_PREFIX = CONFIG_PREFIX + ".bootstrap";
 
-    /** Security API 根路径。 */
-    public static final String API_PREFIX = "/yak-security" + CommonConstants.API_PREFIX;
+    /** 应用 API 根路径。 */
+    public static final String API_PREFIX = CommonConstants.API_PREFIX;
 
     /** 登录与当前用户 API 根路径。 */
     public static final String ACCOUNT_API_PREFIX = API_PREFIX + "/account";

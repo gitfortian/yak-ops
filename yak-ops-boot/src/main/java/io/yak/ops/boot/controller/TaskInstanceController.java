@@ -1,6 +1,7 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.task.instance.InstanceService;
+import io.yak.ops.common.bean.dto.task.InstanceLatestDTO;
 import io.yak.ops.common.bean.dto.task.InstancePageDTO;
 import io.yak.ops.common.bean.vo.task.InstanceDefinitionVO;
 import io.yak.ops.common.bean.vo.task.InstanceVO;
@@ -9,12 +10,15 @@ import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
+import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.task.execution.TaskExecutionService;
+import io.yak.ops.task.execution.dispatch.embedded.TaskExecutionObserver;
 import io.yak.ops.task.execution.log.TaskLogService;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,11 +43,14 @@ public class TaskInstanceController {
     private TaskExecutionService execution;
 
     @Resource
+    private TaskExecutionObserver observer;
+
+    @Resource
     private TaskLogService logs;
 
     @GetMapping("/{id}")
     public Result<InstanceVO> detail(@PathVariable String id) {
-        return Result.success(toInstance(instances.instance(WorkspaceContext.requireWorkspaceId(), id)));
+        return Result.success(toInstance(instances.instance(WorkspaceContext.requireWorkspaceId(), id), true));
     }
 
     @GetMapping("/{id}/definition")
@@ -65,6 +72,17 @@ public class TaskInstanceController {
                         query.getStatus(),
                         query.getTaskType())
                 .map(this::toInstance)));
+    }
+
+    /** Reads the newest Instance of each visible Definition in a single Workspace-scoped operation. */
+    @PostMapping("/latest")
+    public Result<List<InstanceVO>> latest(@Valid @RequestBody InstanceLatestDTO query) {
+        return Result.success(
+                instances
+                        .latest(WorkspaceContext.requireWorkspaceId(), query.getDefinitionIds(), query.isActiveOnly())
+                        .stream()
+                        .map(this::toInstance)
+                        .toList());
     }
 
     /** Reads a bounded log page for a Workspace-owned Instance. */
@@ -95,11 +113,49 @@ public class TaskInstanceController {
         return Result.success(execution.cancel(workspaceId, id).name());
     }
 
+    private String reportSummary(String report) {
+        if (report == null) return null;
+        try {
+            var summary = JSONUtils.readTree(report).get("summary");
+            if (summary == null || !summary.isObject()) return null;
+            String json = summary.toString();
+            if (json.length() > 16384) return null;
+            return json;
+        } catch (RuntimeException unavailable) {
+            return null;
+        }
+    }
+
     private InstanceVO toInstance(InstanceEntity value) {
+        return toInstance(value, false);
+    }
+
+    private InstanceVO toInstance(InstanceEntity value, boolean includeReport) {
+        java.time.Instant scheduledTime = null;
+        if (value.getScheduledTime() != null) {
+            scheduledTime = value.getScheduledTime().toInstant(java.time.ZoneOffset.UTC);
+        }
+        Integer progress = value.getProgressPercent();
+        if (value.getStatus() == io.yak.ops.common.enums.task.TaskInstanceStatus.FINISHED) {
+            progress = 100;
+        } else if (!value.getStatus().isTerminal()) {
+            var live = observer.progressPercent(value.getId());
+            if (live.isPresent()) {
+                progress = live.getAsInt();
+            }
+        }
+        String report = value.getExecutionReport();
+        if (!includeReport) report = reportSummary(report);
+        if (!value.getStatus().isTerminal()
+                && value.getStatus() != io.yak.ops.common.enums.task.TaskInstanceStatus.RECONCILING) {
+            if (includeReport) report = observer.executionReport(value.getId()).orElse(report);
+            else report = observer.executionSummary(value.getId()).orElse(report);
+        }
         return new InstanceVO(
                 value.getId(),
                 value.getDefinitionId(),
                 value.getDefinitionVersion(),
+                value.isDebug(),
                 value.getTaskType(),
                 value.getTriggerType().name(),
                 value.getStatus().name(),
@@ -108,6 +164,11 @@ public class TaskInstanceController {
                 value.getStartTime(),
                 value.getEndTime(),
                 value.getFailureCode(),
-                value.getCreateTime());
+                value.getCreateTime(),
+                value.getScheduleId(),
+                value.getScheduleRevision(),
+                scheduledTime,
+                progress,
+                report);
     }
 }

@@ -23,8 +23,16 @@ public class InstanceEntity extends BaseEntity {
     private Integer definitionVersion;
     /** Registered Task type captured from the pinned Definition. */
     private String taskType;
+    /** Debug diagnostics captured when this Instance was admitted. */
+    private boolean debug;
     /** Submission namespace for the idempotency key. */
     private TaskTriggerType triggerType;
+    /** Originating schedule ID, absent for non-scheduled submissions. */
+    private String scheduleId;
+    /** Revision captured from the fired trigger, absent for non-scheduled submissions. */
+    private Long scheduleRevision;
+    /** Logical scheduled UTC time, independent of physical start time. */
+    private LocalDateTime scheduledTime;
     /** Caller-stable identity of this execution request. */
     private String requestId;
     /** Non-secret intent fingerprint used to identify conflicting retries. */
@@ -50,6 +58,10 @@ public class InstanceEntity extends BaseEntity {
     private LocalDateTime startTime;
     /** Confirmed terminal time, absent while execution is active. */
     private LocalDateTime endTime;
+    /** Last sampled bounded-source progress (0-99), persisted before terminal outcome. */
+    private Integer progressPercent;
+    /** Plugin-owned public JSON report, fixed with the terminal outcome; null when not observed. */
+    private String executionReport;
     /** Safe failure category without credentials, absent while healthy. */
     private String failureCode;
 }

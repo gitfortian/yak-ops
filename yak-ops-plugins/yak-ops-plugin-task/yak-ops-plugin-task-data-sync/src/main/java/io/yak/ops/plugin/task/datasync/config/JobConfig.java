@@ -1,39 +1,188 @@
 package io.yak.ops.plugin.task.datasync.config;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.ConfigValidator;
+import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
+import io.yak.ops.plugin.task.datasync.solution.SolutionType;
+import io.yak.ops.plugin.task.datasync.solution.Step;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Parsed single-source, single-sink definition retaining the persisted JSON v2 structure. */
+/** Immutable task parameters and their executable table Connector projections. */
 public final class JobConfig {
-
     private final ReadonlyConfig parameters;
-    private final ReadonlyConfig source;
-    private final ReadonlyConfig sink;
+    private final SolutionType solutionType;
+    private final List<TableConfig> tables;
 
-    private JobConfig(ReadonlyConfig parameters, ReadonlyConfig source, ReadonlyConfig sink) {
+    /** Maximum explicit mappings admitted by one product task. */
+    public static final int MAX_TABLES = 100;
+
+    private JobConfig(
+            ReadonlyConfig parameters, ReadonlyConfig source, ReadonlyConfig sink, SolutionType solutionType) {
         this.parameters = parameters;
-        this.source = source;
-        this.sink = sink;
+        this.solutionType = solutionType;
+        this.tables = List.of(new TableConfig(source, sink));
     }
 
-    /** Resolves structured endpoint configurations and adds the empty transform default. */
+    private JobConfig(ReadonlyConfig parameters, List<TableConfig> tables, SolutionType type) {
+        this.parameters = parameters;
+        this.tables = List.copyOf(tables);
+        this.solutionType = type;
+    }
+
+    /** Reads validated product or stored version-two parameters without changing their persisted format. */
     public static JobConfig from(ReadonlyConfig parameters) {
         Objects.requireNonNull(parameters, "parameters");
-        Map<String, Object> source = parameters.get(JobOptions.SOURCE);
-        Map<String, Object> sink = parameters.get(JobOptions.SINK);
-        List<Object> transforms = parameters.get(JobOptions.TRANSFORM);
-        if (source == null || sink == null || transforms == null || !transforms.isEmpty()) {
-            throw new IllegalArgumentException("DATA_SYNC requires a Source, Sink and empty transforms");
+        if (parameters.getSourceMap().containsKey("solutionType")) {
+            return solution(parameters);
         }
-        Map<String, Object> values = new LinkedHashMap<>();
-        values.put("source", source);
-        values.put("transform", transforms);
-        values.put("sink", sink);
-        return new JobConfig(
-                ReadonlyConfig.fromMap(values), ReadonlyConfig.fromMap(source), ReadonlyConfig.fromMap(sink));
+        return pipeline(parameters);
+    }
+
+    private static JobConfig solution(ReadonlyConfig parameters) {
+        validate(parameters, SolutionOptions.RULE, "DATA_SYNC");
+        SolutionType type = parameters.get(SolutionOptions.SOLUTION_TYPE);
+        List<String> steps = parameters.get(SolutionOptions.STEPS);
+        if (steps.size() != new HashSet<>(steps).size()) {
+            throw new IllegalArgumentException("Duplicate synchronization step");
+        }
+        List<String> expected = new java.util.ArrayList<>();
+        if (steps.contains(Step.SCHEMA.name())) expected.add(Step.SCHEMA.name());
+        if (type.supportsScheduling()) {
+            if (steps.contains(Step.FULL.name())) expected.add(Step.FULL.name());
+            if (steps.contains(Step.INCREMENTAL.name())) expected.add(Step.INCREMENTAL.name());
+            if (expected.isEmpty()
+                    || expected.equals(List.of(Step.SCHEMA.name()))
+                    || (expected.contains(Step.SCHEMA.name()) && !expected.contains(Step.FULL.name()))) {
+                throw new IllegalArgumentException("Schema preparation requires initial full load");
+            }
+        } else {
+            expected.addAll(type.steps().stream().map(Step::name).toList());
+        }
+        if (steps.size() != expected.size() || !new HashSet<>(steps).equals(new HashSet<>(expected))) {
+            throw new IllegalArgumentException("Unsupported synchronization step combination");
+        }
+        ReadonlyConfig from = ReadonlyConfig.fromMap(parameters.get(JobOptions.SOURCE));
+        ReadonlyConfig to = ReadonlyConfig.fromMap(parameters.get(JobOptions.SINK));
+        validate(from, SolutionOptions.CONNECTION_RULE, "source");
+        validate(to, SolutionOptions.CONNECTION_RULE, "sink");
+        ReadonlyConfig selection = ReadonlyConfig.fromMap(parameters.get(SolutionOptions.TABLE_SELECTION));
+        validate(selection, SolutionOptions.SELECTION_RULE, "tableSelection");
+        if (!"EXPLICIT".equals(selection.get(SolutionOptions.SELECTION_MODE))) {
+            throw new IllegalArgumentException("Only explicit table selection is supported");
+        }
+        List<Object> mappings = parameters.get(SolutionOptions.TABLE_MAPPINGS);
+        if (mappings.isEmpty()
+                || mappings.size() > MAX_TABLES
+                || (!type.supportsMultipleTables() && mappings.size() != 1)) {
+            throw new IllegalArgumentException("Unsupported explicit table mapping count");
+        }
+        List<TableConfig> tables = new java.util.ArrayList<>();
+        java.util.Set<List<String>> sources = new HashSet<>();
+        java.util.Set<List<String>> targets = new HashSet<>();
+        for (Object entryValue : mappings) {
+            if (!(entryValue instanceof Map<?, ?> mapping)) {
+                throw new IllegalArgumentException("Table mapping must be an object");
+            }
+            Map<String, Object> values = new LinkedHashMap<>();
+            for (var entry : mapping.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new IllegalArgumentException("Table mapping property must be a string");
+                }
+                values.put(key, entry.getValue());
+            }
+            ReadonlyConfig table = ReadonlyConfig.fromMap(values);
+            validate(table, SolutionOptions.TABLE_MAPPING_RULE, "tableMappings");
+            ReadonlyConfig sourceTable = ReadonlyConfig.fromMap(table.get(JobOptions.SOURCE));
+            ReadonlyConfig targetTable = ReadonlyConfig.fromMap(table.get(SolutionOptions.TARGET));
+            validate(sourceTable, SolutionOptions.TABLE_RULE, "tableMappings.source");
+            validate(targetTable, SolutionOptions.TABLE_RULE, "tableMappings.target");
+            requireEmptyTransforms(parameters);
+            Map<String, Object> input = new LinkedHashMap<>(sourceTable.getSourceMap());
+            input.put("datasourceId", from.get(JobOptions.DATASOURCE_ID));
+            input.put("type", type.sourceIdentifier());
+            Map<String, Object> output = new LinkedHashMap<>(targetTable.getSourceMap());
+            output.put("datasourceId", to.get(JobOptions.DATASOURCE_ID));
+            output.put("type", "JDBC");
+            output.put("writeMode", table.get(JdbcSinkOptions.WRITE_MODE).name());
+            if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
+                throw new IllegalArgumentException("Source and target tables must be unique");
+            }
+            IncrementalConfig incremental = null;
+            boolean selectedIncremental = expected.contains(Step.INCREMENTAL.name()) && type.supportsScheduling();
+            if (selectedIncremental) {
+                Map<String, Object> options = table.get(SolutionOptions.INCREMENTAL);
+                if (options == null) throw new IllegalArgumentException("Incremental table settings are required");
+                incremental = IncrementalConfig.from(options);
+                if (table.get(JdbcSinkOptions.WRITE_MODE) != io.yak.ops.connector.jdbc.sink.JdbcWriteMode.UPSERT) {
+                    throw new IllegalArgumentException("Offline incremental requires UPSERT");
+                }
+            } else if (table.getSourceMap().containsKey(SolutionOptions.INCREMENTAL.key())) {
+                throw new IllegalArgumentException("Incremental settings require an offline incremental step");
+            }
+            tables.add(new TableConfig(ReadonlyConfig.fromMap(input), ReadonlyConfig.fromMap(output), incremental));
+        }
+        Map<String, Object> canonical = new LinkedHashMap<>(parameters.getSourceMap());
+        canonical.put("steps", expected);
+        return new JobConfig(ReadonlyConfig.fromMap(canonical), tables, type);
+    }
+
+    private static List<String> tableKey(ReadonlyConfig table) {
+        return java.util.Arrays.asList(
+                table.get(JobOptions.DATABASE), table.get(JobOptions.SCHEMA), table.get(JobOptions.TABLE));
+    }
+
+    /** Returns the complete immutable explicit table mapping collection. */
+    public List<TableConfig> tables() {
+        return tables;
+    }
+
+    /** Returns the shared source connection identity, independent of table cardinality. */
+    public String sourceDataSourceId() {
+        return tables.getFirst().source().get(JobOptions.DATASOURCE_ID);
+    }
+
+    /** Returns the shared destination connection identity. */
+    public String targetDataSourceId() {
+        return tables.getFirst().sink().get(JobOptions.DATASOURCE_ID);
+    }
+
+    private static JobConfig pipeline(ReadonlyConfig parameters) {
+        validate(parameters, JobOptions.PIPELINE_RULE, "DATA_SYNC");
+        Map<String, Object> input = parameters.get(JobOptions.SOURCE);
+        Map<String, Object> output = parameters.get(JobOptions.SINK);
+        requireEmptyTransforms(parameters);
+        ReadonlyConfig source = ReadonlyConfig.fromMap(input);
+        ReadonlyConfig sink = ReadonlyConfig.fromMap(output);
+        String identifier = source.get(JobOptions.TYPE);
+        if (!"JDBC".equals(sink.get(JobOptions.TYPE))) {
+            throw new IllegalArgumentException("Stored DATA_SYNC Sink is not supported");
+        }
+        SolutionType type;
+        if ("JDBC".equals(identifier)) {
+            type = SolutionType.SINGLE_TABLE_OFFLINE;
+        } else if ("MYSQL_CDC".equals(identifier)) {
+            type = SolutionType.SINGLE_TABLE_REALTIME;
+        } else {
+            throw new IllegalArgumentException("Stored DATA_SYNC Source is not supported");
+        }
+        return new JobConfig(parameters, source, sink, type);
+    }
+
+    private static void requireEmptyTransforms(ReadonlyConfig parameters) {
+        List<Object> transforms = parameters.get(JobOptions.TRANSFORM);
+        if (transforms == null || !transforms.isEmpty()) {
+            throw new IllegalArgumentException("DATA_SYNC requires empty transforms");
+        }
+    }
+
+    private static void validate(ReadonlyConfig parameters, OptionRule rule, String component) {
+        ConfigValidator.of(parameters).validate(rule);
+        ConfigValidator.validateUnknownKeys(parameters, rule, component);
     }
 
     public ReadonlyConfig parameters() {
@@ -41,10 +190,22 @@ public final class JobConfig {
     }
 
     public ReadonlyConfig source() {
-        return source;
+        if (tables.size() != 1) throw new IllegalStateException("Use explicit table mappings for a multi-table task");
+        return tables.getFirst().source();
     }
 
     public ReadonlyConfig sink() {
-        return sink;
+        if (tables.size() != 1) throw new IllegalStateException("Use explicit table mappings for a multi-table task");
+        return tables.getFirst().sink();
+    }
+
+    /** Returns canonical requested steps, including optional target structure preparation. */
+    public List<Step> steps() {
+        if (!parameters.getSourceMap().containsKey("solutionType")) return solutionType.steps();
+        return parameters.get(SolutionOptions.STEPS).stream().map(Step::valueOf).toList();
+    }
+
+    public SolutionType solutionType() {
+        return solutionType;
     }
 }

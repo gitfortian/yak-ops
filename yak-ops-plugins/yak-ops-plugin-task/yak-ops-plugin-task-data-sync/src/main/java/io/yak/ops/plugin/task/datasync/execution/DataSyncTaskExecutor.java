@@ -20,8 +20,19 @@ public final class DataSyncTaskExecutor {
     private final JobPlanner planner;
     private final PipelineBuilder builder;
     private final PipelineExecutor executor;
+    private final io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner;
 
     public DataSyncTaskExecutor(JobPlanner planner, PipelineBuilder builder, PipelineExecutor executor) {
+        this(planner, builder, executor, null);
+    }
+
+    /** Creates the executor with the platform-owned cursor store required for offline incremental. */
+    public DataSyncTaskExecutor(
+            JobPlanner planner,
+            PipelineBuilder builder,
+            PipelineExecutor executor,
+            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+        this.incrementalPlanner = incrementalPlanner;
         this.planner = Objects.requireNonNull(planner, "planner");
         this.builder = Objects.requireNonNull(builder, "builder");
         this.executor = Objects.requireNonNull(executor, "executor");
@@ -33,17 +44,30 @@ public final class DataSyncTaskExecutor {
      * @param parameters pinned Task parameters
      * @param plan admitted resource claims and revision fingerprint
      * @param identity trusted Task execution identity
+     * @param debug diagnostics mode captured for the admitted Instance
      * @return asynchronous execution handle or pre-submission rejection
      */
     public CompletionStage<TaskHandle> start(
-            ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity) {
+            ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity, boolean debug) {
+        var job = io.yak.ops.plugin.task.datasync.config.JobConfig.from(parameters);
+        boolean offlineIncremental = job.solutionType().supportsScheduling()
+                && job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.INCREMENTAL);
+        if (job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA) || offlineIncremental) {
+            if (offlineIncremental && incrementalPlanner == null) {
+                return CompletableFuture.failedFuture(new TaskStartRejectedException(
+                        "Offline incremental cursor store is unavailable",
+                        new IllegalStateException("No Task cursor store")));
+            }
+            return CompletableFuture.completedFuture(new DataSyncTaskHandle(
+                    parameters, plan, identity, debug, planner, builder, executor, incrementalPlanner));
+        }
         CompiledPipeline pipeline;
         try {
             JobPlan prepared = planner.plan(parameters, identity);
             if (!plan.equals(prepared.admissionPlan())) {
                 throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
             }
-            pipeline = builder.build(prepared, identity);
+            pipeline = builder.build(prepared, identity, debug);
         } catch (RuntimeException error) {
             return CompletableFuture.failedFuture(
                     new TaskStartRejectedException("DATA_SYNC rejected before engine submission", error));
@@ -51,7 +75,7 @@ public final class DataSyncTaskExecutor {
 
         try {
             return executor.execute(pipeline.graph(), pipeline.configuration())
-                    .thenApply(client -> (TaskHandle) new YakFlowTaskHandle(client));
+                    .thenApply(client -> (TaskHandle) new YakFlowTaskHandle(client, pipeline.progress()));
         } catch (RuntimeException error) {
             return CompletableFuture.failedFuture(error);
         }

@@ -43,6 +43,9 @@ public abstract class StreamTask implements AutoCloseable {
     private volatile Thread worker;
     private volatile boolean cancelRequested;
     private boolean startRequested;
+    /** Originating failure published under lifecycleLock before mailbox teardown. */
+    private Throwable terminationFailure;
+
     private volatile boolean dataFinished;
     private boolean inputFinished;
     private boolean finished;
@@ -144,11 +147,13 @@ public abstract class StreamTask implements AutoCloseable {
             }
             startRequested = true;
             String logId = environment.configuration().get(ExecutionOptions.LOG_ID);
+            boolean debug = environment.configuration().get(ExecutionOptions.DEBUG);
             Thread thread = Thread.ofVirtual().name(taskInfo().threadName()).unstarted(() -> {
                 if (logId == null || logId.isBlank()) {
                     run();
                 } else {
-                    try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId)) {
+                    try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", logId);
+                            MDC.MDCCloseable details = MDC.putCloseable("taskLogDebug", Boolean.toString(debug))) {
                         run();
                     }
                 }
@@ -158,6 +163,7 @@ public abstract class StreamTask implements AutoCloseable {
                 thread.start();
             } catch (Throwable failure) {
                 worker = null;
+                terminationFailure = failure;
                 mailboxProcessor.close(failure);
                 started.completeExceptionally(failure);
                 completion.completeExceptionally(failure);
@@ -224,6 +230,9 @@ public abstract class StreamTask implements AutoCloseable {
     protected final <R> CompletableFuture<R> submitMailbox(Callable<R> action) {
         Objects.requireNonNull(action, "action must not be null");
         synchronized (lifecycleLock) {
+            if (terminationFailure != null && !(terminationFailure instanceof CancellationException)) {
+                return CompletableFuture.failedFuture(terminationFailure);
+            }
             if (!startRequested || cancelRequested || completion.isDone()) {
                 return CompletableFuture.failedFuture(
                         new IllegalStateException("StreamTask has not started or has already terminated"));
@@ -285,7 +294,7 @@ public abstract class StreamTask implements AutoCloseable {
             }
             case NOTHING_AVAILABLE -> {
                 CompletableFuture<Void> availability =
-                        Objects.requireNonNull(getAvailableFuture(), "getAvailableFuture must not return null");
+                        Objects.requireNonNull(getAvailableFuture(), "getAvailableFuture must not be null");
                 if (availability.isDone()) {
                     // A wakeup can race with pollNext(). Retry once, but reject a permanently
                     // completed readiness future instead of spinning with arbitrary retry limits.
@@ -341,7 +350,10 @@ public abstract class StreamTask implements AutoCloseable {
         } catch (Throwable error) {
             failure = error;
         } finally {
-            mailboxProcessor.prepareClose();
+            synchronized (lifecycleLock) {
+                terminationFailure = failure;
+                mailboxProcessor.prepareClose();
+            }
             processingTimeService.close();
             try {
                 closeTask();
@@ -364,6 +376,9 @@ public abstract class StreamTask implements AutoCloseable {
             if (failure == null && asyncFailure.get() != null) {
                 failure = asyncFailure.get();
             }
+            synchronized (lifecycleLock) {
+                terminationFailure = failure;
+            }
             if (failure != null && !(failure instanceof CancellationException)) {
                 LOG.error("YakFlow StreamTask failed, task={}", taskInfo().threadName(), failure);
                 try {
@@ -383,7 +398,9 @@ public abstract class StreamTask implements AutoCloseable {
                 completion.completeExceptionally(failure);
             }
             if (cancelRequested) {
-                if (failure instanceof CancellationException) {
+                // A late cancellation may race with an already successful task termination.
+                // Never completeExceptionally(null): it would strand the Job's cancellation path.
+                if (failure == null || failure instanceof CancellationException) {
                     cancellation.complete(null);
                 } else {
                     cancellation.completeExceptionally(failure);

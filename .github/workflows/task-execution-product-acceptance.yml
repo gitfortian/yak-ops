@@ -1,33 +1,93 @@
 name: Task Execution Product Acceptance
 
 on:
+  # Always publish the gate; classify the full diff rather than using path-filter limits.
   pull_request:
-    paths:
-      - '.github/workflows/task-execution-product-acceptance.yml'
-      - '.github/workflows/backend-acceptance.yml'
-      - '.github/workflows/v1-release-gate.yml'
-      - 'scripts/acceptance/task-execution-e2e.py'
-      - 'yak-flow/**'
-      - 'yak-ops-core/**'
-      - 'yak-ops-platform/**'
-      - 'yak-ops-common/**'
-      - 'yak-ops-boot/**'
-      - 'yak-ops-business/yak-ops-business-task/**'
-      - 'yak-ops-business/yak-ops-business-datasource/**'
-      - 'yak-ops-task-execution/**'
-      - 'yak-ops-dao/**'
-      - 'yak-ops-plugins/yak-ops-plugin-task/**'
   workflow_call:
+    inputs:
+      suite:
+        description: Acceptance scope; reusable/release callers default to the complete suite.
+        type: string
+        required: false
+        default: full
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Select a focused suite for diagnosis or full acceptance for release evidence.
+        type: choice
+        required: true
+        default: full
+        options: [full, browser, batch, schedule, realtime, schema]
 
 permissions:
   contents: read
 
+# Only superseded direct PR runs cancel each other. Reusable/release runs are isolated.
+concurrency:
+  group: task-product-${{ github.workflow }}-${{ github.event_name == 'pull_request' && inputs.suite == '' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && inputs.suite == '' }}
+
 jobs:
+  scope:
+    name: Product Acceptance Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      plan: ${{ steps.scope.outputs.plan }}
+      browser: ${{ steps.scope.outputs.browser }}
+      suites: ${{ steps.scope.outputs.suites }}
+      matrix: ${{ steps.scope.outputs.matrix }}
+      real_browser: ${{ steps.scope.outputs.real_browser }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify scope and runner contracts
+        run: python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
+      - name: Select acceptance scope
+        id: scope
+        env:
+          ACCEPTANCE_SUITE: ${{ inputs.suite || 'auto' }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/product_acceptance_scope.py --suite "$ACCEPTANCE_SUITE"
+
+  browser-contracts:
+    name: Controlled Browser Contracts
+    needs: scope
+    if: needs.scope.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/acceptance-browser
+      - name: Verify browser interaction contracts
+        run: python3 -u scripts/acceptance/task_schedule_ui_test.py
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-browser-contracts
+          path: /tmp/yak-schedule-browser/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   product-e2e:
-    name: MySQL JDBC + CDC to PostgreSQL Product E2E
+    name: Product E2E (${{ matrix.suite }})
+    needs: scope
+    if: needs.scope.outputs.suites != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
+    env:
+      E2E_DB_PASSWORD: localtestpass
+      E2E_USER_PASSWORD: test-only-account-password
+      E2E_BROWSER: ${{ needs.scope.outputs.real_browser }}
+      PRODUCT_SUITE: ${{ matrix.suite }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -35,15 +95,17 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - uses: ./.github/actions/acceptance-browser
+        if: needs.scope.outputs.real_browser == 'true'
       - name: Start disposable MySQL
         shell: bash
         run: |
           docker run -d --name yak-task-mysql \
-            -e MYSQL_ROOT_PASSWORD=localtestpass -e MYSQL_DATABASE=yak_security \
+            -e MYSQL_ROOT_PASSWORD="$E2E_DB_PASSWORD" -e MYSQL_DATABASE=yak_ops \
             -p 3306:3306 mysql:8.0 \
             --server-id=5577 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL
           for attempt in $(seq 1 90); do
-            if docker exec yak-task-mysql mysqladmin ping --host=127.0.0.1 --user=root --password=localtestpass --silent; then exit 0; fi
+            if docker exec yak-task-mysql mysqladmin ping --host=127.0.0.1 --user=root --password="$E2E_DB_PASSWORD" --silent; then exit 0; fi
             sleep 2
           done
           docker logs yak-task-mysql
@@ -52,7 +114,7 @@ jobs:
         shell: bash
         run: |
           docker run -d --name yak-task-postgres \
-            -e POSTGRES_DB=ods -e POSTGRES_USER=yak -e POSTGRES_PASSWORD=localtestpass \
+            -e POSTGRES_DB=ods -e POSTGRES_USER=yak -e POSTGRES_PASSWORD="$E2E_DB_PASSWORD" \
             -p 5432:5432 postgres:16
           for attempt in $(seq 1 90); do
             if docker exec yak-task-postgres pg_isready -U yak -d ods; then exit 0; fi
@@ -60,17 +122,52 @@ jobs:
           done
           docker logs yak-task-postgres
           exit 1
-      - name: Package Yak Ops executable
-        run: bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
-      - name: Exercise authenticated Task execution and reconciliation
+      - name: Package product and verify applicable scheduled admission
+        shell: bash
         env:
-          E2E_DB_PASSWORD: localtestpass
-          E2E_USER_PASSWORD: test-only-account-password
-        run: python3 scripts/acceptance/task-execution-e2e.py
+          SCHEDULE_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/yak_schedule_contract?useSSL=false&allowPublicKeyRetrieval=true
+        run: |
+          if [[ "$PRODUCT_SUITE" == full || "$PRODUCT_SUITE" == schedule ]]; then
+            docker exec yak-task-mysql mysql -uroot -p"$E2E_DB_PASSWORD" -e 'CREATE DATABASE yak_schedule_contract'
+            bash mvnw -B -ntp -pl yak-ops-boot -am -Dtest=ScheduleAdmissionIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false package
+          else
+            bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
+          fi
+      - name: Execute selected product suite
+        run: python3 -u scripts/acceptance/run_product_acceptance.py --suite "$PRODUCT_SUITE"
       - name: Diagnostics on failure
         if: failure()
         run: |
+          tail -n 140 /tmp/yak-schedule-vite.log || true
           tail -n 140 /tmp/yak-task-e2e-output.log || true
           tail -n 140 /tmp/yak-task-e2e-application.log || true
           docker logs --tail 65 yak-task-mysql || true
           docker logs --tail 65 yak-task-postgres || true
+      - name: Upload suite evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-${{ matrix.suite }}
+          path: |
+            /tmp/yak-acceptance-results/*.json
+            /tmp/yak-schedule-browser/*.png
+            **/target/surefire-reports/*.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  acceptance-required:
+    # Preserve the former required-check name; the summary states which suites actually ran.
+    name: MySQL JDBC + Multi-Table CDC Product E2E
+    if: always()
+    needs: [scope, browser-contracts, product-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Require every selected suite to succeed
+        env:
+          ACCEPTANCE_PLAN: ${{ needs.scope.outputs.plan }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          BROWSER_RESULT: ${{ needs.browser-contracts.result }}
+          PRODUCT_RESULT: ${{ needs.product-e2e.result }}
+        run: python3 scripts/ci/product_acceptance_scope.py --check-results

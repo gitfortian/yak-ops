@@ -7,6 +7,7 @@ import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.executiongraph.ExecutionGraph;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 /** Client-side view of one embedded ExecutionGraph; no worker thread or duplicated job state. */
@@ -25,6 +26,11 @@ public final class EmbeddedJobClient implements JobClient {
     @Override
     public JobID getJobID() {
         return executionGraph.getJobID();
+    }
+
+    @Override
+    public OptionalInt getProgressPercent() {
+        return executionGraph.getProgressPercent();
     }
 
     @Override

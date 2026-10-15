@@ -10,8 +10,11 @@ import io.yak.ops.dao.mapper.task.InstanceMapper;
 import io.yak.ops.dao.repository.task.InstanceRepository;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /** Workspace-scoped Instance queries and guarded business lifecycle transitions. */
@@ -20,6 +23,9 @@ public class InstanceRepositoryImpl implements InstanceRepository {
 
     @Resource
     private InstanceMapper mapper;
+
+    @Resource
+    private JdbcTemplate jdbcTemplate;
 
     @Override
     public void add(InstanceEntity instance) {
@@ -55,6 +61,16 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
+    public Optional<InstanceEntity> findByRequestForUpdate(
+            String workspaceId, TaskTriggerType trigger, String requestId) {
+        return Optional.ofNullable(mapper.selectOne(Wrappers.<InstanceEntity>lambdaQuery()
+                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                .eq(InstanceEntity::getTriggerType, trigger)
+                .eq(InstanceEntity::getRequestId, requestId)
+                .last("FOR UPDATE")));
+    }
+
+    @Override
     public List<InstanceEntity> recent(String workspaceId, int limit) {
         return mapper.selectList(Wrappers.<InstanceEntity>lambdaQuery()
                 .eq(InstanceEntity::getWorkspaceId, workspaceId)
@@ -85,6 +101,55 @@ public class InstanceRepositoryImpl implements InstanceRepository {
                 selected.getPages(),
                 selected.getCurrent(),
                 selected.getSize());
+    }
+
+    @Override
+    public List<InstanceEntity> latest(String workspaceId, List<String> definitionIds, boolean activeOnly) {
+        if (definitionIds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(", ", Collections.nCopies(definitionIds.size(), "?"));
+        String filter =
+                activeOnly ? " AND status IN ('SUBMITTED', 'LAUNCHING', 'RUNNING', 'CANCELLING', 'RECONCILING')" : "";
+        String sql = """
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY definition_id ORDER BY create_time DESC, id DESC
+                    ) AS row_rank
+                    FROM yak_ops_task_instance
+                    WHERE workspace_id = ? AND definition_id IN (%s)%s
+                ) ranked WHERE row_rank = 1
+                """.formatted(placeholders, filter);
+        List<Object> parameters = new ArrayList<>(definitionIds.size() + 1);
+        parameters.add(workspaceId);
+        parameters.addAll(definitionIds);
+        List<String> ids = jdbcTemplate.queryForList(sql, String.class, parameters.toArray());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectList(Wrappers.<InstanceEntity>lambdaQuery()
+                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                .in(InstanceEntity::getId, ids));
+    }
+
+    @Override
+    public boolean updateProgress(String workspaceId, String instanceId, String dispatchToken, int progressPercent) {
+        if (progressPercent < 0 || progressPercent > 99) {
+            throw new IllegalArgumentException("Measured progress must be between 0 and 99");
+        }
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                                .in(
+                                        InstanceEntity::getStatus,
+                                        TaskInstanceStatus.LAUNCHING,
+                                        TaskInstanceStatus.RUNNING,
+                                        TaskInstanceStatus.CANCELLING)
+                                .set(InstanceEntity::getProgressPercent, progressPercent))
+                == 1;
     }
 
     @Override
@@ -164,6 +229,27 @@ public class InstanceRepositoryImpl implements InstanceRepository {
     }
 
     @Override
+    public boolean bindRuntimeReference(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId) {
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                                .and(value -> value.nested(empty -> empty.isNull(InstanceEntity::getRuntimeEngine)
+                                                .isNull(InstanceEntity::getRuntimeId))
+                                        .or()
+                                        .nested(same -> same.eq(InstanceEntity::getRuntimeEngine, engine)
+                                                .eq(InstanceEntity::getRuntimeId, runtimeId)))
+                                .set(InstanceEntity::getRuntimeEngine, engine)
+                                .set(InstanceEntity::getRuntimeId, runtimeId)
+                                .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
+                                .setSql("state_version = state_version + 1"))
+                == 1;
+    }
+
+    @Override
     public boolean cancelSubmitted(String workspaceId, String instanceId) {
         return mapper.update(
                         null,
@@ -234,6 +320,23 @@ public class InstanceRepositoryImpl implements InstanceRepository {
                                 .set(InstanceEntity::getFailureCode, "EXECUTION_OWNER_UNCERTAIN")
                                 .set(InstanceEntity::getUpdateTime, LocalDateTime.now())
                                 .setSql("state_version = state_version + 1"))
+                == 1;
+    }
+
+    @Override
+    public boolean updateExecutionReport(String workspaceId, String instanceId, String dispatchToken, String report) {
+        return mapper.update(
+                        null,
+                        Wrappers.<InstanceEntity>lambdaUpdate()
+                                .eq(InstanceEntity::getWorkspaceId, workspaceId)
+                                .eq(InstanceEntity::getId, instanceId)
+                                .eq(InstanceEntity::getDispatchToken, dispatchToken)
+                                .in(
+                                        InstanceEntity::getStatus,
+                                        TaskInstanceStatus.LAUNCHING,
+                                        TaskInstanceStatus.RUNNING,
+                                        TaskInstanceStatus.CANCELLING)
+                                .set(InstanceEntity::getExecutionReport, report))
                 == 1;
     }
 }

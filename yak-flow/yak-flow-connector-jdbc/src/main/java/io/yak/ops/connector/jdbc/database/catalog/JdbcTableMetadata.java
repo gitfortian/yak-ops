@@ -155,7 +155,10 @@ public final class JdbcTableMetadata {
                         position,
                         keyPosition != null,
                         keyPosition,
-                        result.getString("REMARKS"));
+                        result.getString("REMARKS"),
+                        result.getString("COLUMN_DEF") != null,
+                        metadataFlag(result.getString("IS_AUTOINCREMENT")),
+                        metadataFlag(result.getString("IS_GENERATEDCOLUMN")));
                 if (columns.putIfAbsent(position, column) != null) {
                     throw new SQLException("Duplicate JDBC column ordinal");
                 }
@@ -196,6 +199,12 @@ public final class JdbcTableMetadata {
             }
         }
         return keys;
+    }
+
+    private static Boolean metadataFlag(String value) {
+        if ("YES".equalsIgnoreCase(value)) return true;
+        if ("NO".equalsIgnoreCase(value)) return false;
+        return null;
     }
 
     private static Integer nullableInteger(ResultSet result, String name) throws SQLException {

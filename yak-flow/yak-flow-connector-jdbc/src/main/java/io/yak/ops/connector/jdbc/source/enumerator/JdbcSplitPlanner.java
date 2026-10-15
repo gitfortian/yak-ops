@@ -8,6 +8,7 @@ import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvid
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionRetry;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.source.JdbcIncrementalRange;
 import io.yak.ops.connector.jdbc.source.split.JdbcSchemaFingerprint;
 import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
 import io.yak.ops.core.data.TableId;
@@ -41,6 +42,7 @@ public final class JdbcSplitPlanner {
     private final int queryTimeoutSeconds;
     private final int connectionAttempts;
     private final Map<TableId, List<String>> projections;
+    private final Map<TableId, JdbcIncrementalRange> ranges;
 
     public JdbcSplitPlanner(JdbcConnectionOptions connectionOptions, JdbcDialect dialect, Configuration configuration) {
         this(new DefaultJdbcConnectionProvider(connectionOptions), dialect, configuration);
@@ -55,6 +57,17 @@ public final class JdbcSplitPlanner {
             JdbcDialect dialect,
             Configuration configuration,
             Map<TableId, List<String>> projections) {
+        this(connections, dialect, configuration, projections, Map.of());
+    }
+
+    /** Plans frozen per-table incremental ranges alongside existing primary-key splits. */
+    public JdbcSplitPlanner(
+            JdbcConnectionProvider connections,
+            JdbcDialect dialect,
+            Configuration configuration,
+            Map<TableId, List<String>> projections,
+            Map<TableId, JdbcIncrementalRange> ranges) {
+        this.ranges = Map.copyOf(Objects.requireNonNull(ranges, "ranges"));
         this.connections = Objects.requireNonNull(connections, "connections");
         this.projections = Map.copyOf(Objects.requireNonNull(projections, "projections"));
         this.dialect = Objects.requireNonNull(dialect, "dialect");
@@ -87,6 +100,22 @@ public final class JdbcSplitPlanner {
         }
         try (Connection connection = JdbcConnectionRetry.open(connections, connectionAttempts)) {
             TableSchema schema = JdbcTableMetadata.readTable(connection, dialect, table);
+            JdbcIncrementalRange range = ranges.get(table);
+            if (range != null) {
+                Column chosen = schema.columns().stream()
+                        .filter(column -> column.name().equals(range.column()))
+                        .findFirst()
+                        .orElseThrow(() -> new SQLException("Incremental column is missing"));
+                var root = chosen.dataType().getTypeRoot();
+                if (chosen.dataType().isNullable()) throw new SQLException("Incremental column must be NOT NULL");
+                boolean valid = range.mode() == JdbcIncrementalRange.Mode.TIMESTAMP
+                        ? root == io.yak.ops.core.types.LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE
+                        : root == io.yak.ops.core.types.LogicalTypeRoot.BIGINT
+                                || root == io.yak.ops.core.types.LogicalTypeRoot.INTEGER
+                                || root == io.yak.ops.core.types.LogicalTypeRoot.SMALLINT
+                                || root == io.yak.ops.core.types.LogicalTypeRoot.TINYINT;
+                if (!valid) throw new SQLException("Unsupported JDBC incremental column type");
+            }
             List<String> availableColumns =
                     schema.columns().stream().map(Column::name).toList();
             List<String> selectedColumns = selectedColumns(availableColumns, projections.get(table));
@@ -147,7 +176,8 @@ public final class JdbcSplitPlanner {
                                 start,
                                 end,
                                 null,
-                                schemaFingerprint));
+                                schemaFingerprint,
+                                range));
                     }
                     return List.copyOf(result);
                 }
@@ -191,7 +221,8 @@ public final class JdbcSplitPlanner {
 
     private JdbcSourceSplit fullScan(
             int index, TableId table, List<String> columns, String key, String schemaFingerprint) {
-        return new JdbcSourceSplit(splitId(index, 0), table, columns, key, null, null, null, schemaFingerprint);
+        return new JdbcSourceSplit(
+                splitId(index, 0), table, columns, key, null, null, null, schemaFingerprint, ranges.get(table));
     }
 
     /**

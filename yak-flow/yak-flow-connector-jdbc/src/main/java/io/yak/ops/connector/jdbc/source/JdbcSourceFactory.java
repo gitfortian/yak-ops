@@ -46,10 +46,43 @@ public final class JdbcSourceFactory implements TableSourceFactory {
 
     @Override
     public Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context) {
-        FactoryUtil.validateCreation(context.options(), this);
+        return createSource(List.of(context));
+    }
+
+    @Override
+    public Source<TableRecord, ?, ?> createSource(List<TableSourceFactoryContext> contexts) {
+        if (contexts.isEmpty()) throw new IllegalArgumentException("Source needs tables");
+        var first = contexts.getFirst();
+        var shared = withoutRange(first.options());
+        java.util.Map<io.yak.ops.core.data.TableId, JdbcIncrementalRange> ranges = new java.util.LinkedHashMap<>();
+        for (var context : contexts) {
+            FactoryUtil.validateCreation(context.options(), this);
+            if (!withoutRange(context.options()).equals(shared)) {
+                throw new IllegalArgumentException("JDBC tables must share effective connection and fetch settings");
+            }
+            JdbcIncrementalRange range = JdbcSourceOptions.range(context.options());
+            if (range != null && ranges.putIfAbsent(context.table(), range) != null) {
+                throw new IllegalArgumentException("Duplicate incremental table range");
+            }
+        }
+        var connection = new JdbcConnectionOptions(first.options());
         return new JdbcSource(
-                new JdbcConnectionOptions(context.options()),
-                List.of(context.table()),
-                JdbcSourceOptions.configuration(context.options()));
+                new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(connection),
+                connection.url(),
+                contexts.stream().map(TableSourceFactoryContext::table).toList(),
+                JdbcSourceOptions.configuration(first.options()),
+                java.util.Map.of(),
+                first.metrics(),
+                ranges);
+    }
+
+    private static io.yak.ops.configuration.ReadonlyConfig withoutRange(
+            io.yak.ops.configuration.ReadonlyConfig options) {
+        var values = new java.util.LinkedHashMap<>(options.getSourceMap());
+        values.remove(JdbcSourceOptions.RANGE_MODE.key());
+        values.remove(JdbcSourceOptions.RANGE_COLUMN.key());
+        values.remove(JdbcSourceOptions.RANGE_LOWER.key());
+        values.remove(JdbcSourceOptions.RANGE_UPPER.key());
+        return io.yak.ops.configuration.ReadonlyConfig.fromMap(values);
     }
 }

@@ -1,6 +1,7 @@
 package io.yak.ops.connector.jdbc.source.reader;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
@@ -29,6 +30,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * Performs blocking JDBC split reads on one source fetcher thread with task-owned connections.
@@ -40,7 +44,10 @@ import java.util.stream.Collectors;
  */
 public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPosition, JdbcSourceSplit> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JdbcSourceSplitReader.class);
+
     private final JdbcConnectionProvider connections;
+    private final TableMetrics metrics;
     private final JdbcDialect dialect;
     private final int fetchBatchSize;
     private final int resultSetFetchSize;
@@ -57,6 +64,9 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
     private JdbcSourceSplit active;
     private boolean hasRow;
     private boolean closed;
+    private long splitStartedNanos;
+    private long splitRows;
+    private long fetchBatchId;
 
     public JdbcSourceSplitReader(
             JdbcConnectionOptions connectionOptions, JdbcDialect dialect, Configuration configuration) {
@@ -64,6 +74,16 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
     }
 
     public JdbcSourceSplitReader(JdbcConnectionProvider connections, JdbcDialect dialect, Configuration configuration) {
+        this(connections, dialect, configuration, new TableMetrics());
+    }
+
+    /** Binds blocking fetch failures to their active table without retaining raw diagnostics. */
+    public JdbcSourceSplitReader(
+            JdbcConnectionProvider connections,
+            JdbcDialect dialect,
+            Configuration configuration,
+            TableMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
         Objects.requireNonNull(configuration, "configuration");
@@ -95,6 +115,15 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
      */
     @Override
     public RecordsWithSplitIds<JdbcRecordAndPosition> fetch() throws Exception {
+        try {
+            return fetchRecords();
+        } catch (Exception failure) {
+            if (active != null && !cancellationRequested) metrics.readFailed(active.tableId());
+            throw failure;
+        }
+    }
+
+    private RecordsWithSplitIds<JdbcRecordAndPosition> fetchRecords() throws Exception {
         if (closed || cancellationRequested) {
             throw new IllegalStateException("JDBC split reader is closed or cancelled");
         }
@@ -107,6 +136,7 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         }
 
         String splitId = active.splitId();
+        long fetchStartedNanos = System.nanoTime();
         List<JdbcRecordAndPosition> batch = new ArrayList<>(Math.min(fetchBatchSize, 1_024));
         for (int remaining = fetchBatchSize; remaining > 0 && hasRow; remaining--) {
             if (cancellationRequested) {
@@ -120,8 +150,24 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         }
 
         boolean complete = !hasRow;
+        splitRows += batch.size();
+        if ("true".equals(MDC.get("taskLogDebug"))) {
+            LOG.debug(
+                    "JDBC fetch completed, split={}, batch={}, batchRows={}, fetchMs={}",
+                    splitId,
+                    ++fetchBatchId,
+                    batch.size(),
+                    (System.nanoTime() - fetchStartedNanos) / 1_000_000);
+        }
         if (complete) {
             closeStatementAndResultSet();
+            if ("true".equals(MDC.get("taskLogDebug"))) {
+                LOG.debug(
+                        "JDBC split finished, split={}, fetchedRows={}, durationMs={}",
+                        splitId,
+                        splitRows,
+                        (System.nanoTime() - splitStartedNanos) / 1_000_000);
+            }
             active = null;
         }
         Map<String, List<JdbcRecordAndPosition>> records = batch.isEmpty() ? Map.of() : Map.of(splitId, batch);
@@ -203,6 +249,9 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
 
     private void openSplit(JdbcSourceSplit split) throws SQLException {
         closeStatementAndResultSet();
+        splitStartedNanos = System.nanoTime();
+        splitRows = 0;
+        fetchBatchId = 0;
         ensureConnection();
         try {
             openResultSet(split);
@@ -281,11 +330,11 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         List<String> readColumns = split.readColumns();
         String columns = readColumns.stream().map(dialect::quoteIdentifier).collect(Collectors.joining(", "));
         String sql = "SELECT " + columns + " FROM " + dialect.qualifiedTable(split.tableId());
-        List<Long> bounds = new ArrayList<>(3);
+        List<Object> bounds = new ArrayList<>(5);
+        List<String> predicates = new ArrayList<>(5);
         String key = split.splitColumn();
         if (key != null) {
             String quoted = dialect.quoteIdentifier(key);
-            List<String> predicates = new ArrayList<>(3);
             if (split.lowerBound() != null) {
                 predicates.add(quoted + " >= ?");
                 bounds.add(split.lowerBound());
@@ -296,11 +345,25 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
                 predicates.add(quoted + " > ?");
                 bounds.add(split.lastEmittedKey());
             }
-            if (!predicates.isEmpty()) {
-                sql += " WHERE " + String.join(" AND ", predicates);
-            }
-            sql += " ORDER BY " + quoted;
         }
+        var range = split.incrementalRange();
+        if (range != null) {
+            String quoted = dialect.quoteIdentifier(range.column());
+            if (range.lower() != null) {
+                predicates.add(quoted
+                        + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                                ? " >= ?"
+                                : " > ?"));
+                bounds.add(range.lowerParameter());
+            }
+            predicates.add(quoted
+                    + (range.mode() == io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.TIMESTAMP
+                            ? " < ?"
+                            : " <= ?"));
+            bounds.add(range.upperParameter());
+        }
+        if (!predicates.isEmpty()) sql += " WHERE " + String.join(" AND ", predicates);
+        if (key != null) sql += " ORDER BY " + dialect.quoteIdentifier(key);
         statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         cancellableStatement = statement;
         if (cancellationRequested) {
@@ -309,9 +372,19 @@ public final class JdbcSourceSplitReader implements SplitReader<JdbcRecordAndPos
         statement.setFetchSize(resultSetFetchSize);
         statement.setQueryTimeout(queryTimeoutSeconds);
         for (int index = 0; index < bounds.size(); index++) {
-            statement.setLong(index + 1, bounds.get(index));
+            Object value = bounds.get(index);
+            if (value instanceof Long number) statement.setLong(index + 1, number);
+            else statement.setObject(index + 1, value);
         }
+        long queryStartedNanos = System.nanoTime();
         resultSet = statement.executeQuery();
+        if ("true".equals(MDC.get("taskLogDebug"))) {
+            LOG.debug(
+                    "JDBC query executed, split={}, sql={}, executeQueryMs={}",
+                    split.splitId(),
+                    sql,
+                    (System.nanoTime() - queryStartedNanos) / 1_000_000);
+        }
         converter = dialect.createRowConverter(resultSet.getMetaData());
         if (converter.schema().columnCount() != readColumns.size()) {
             throw new SQLException("JDBC ResultSet shape changed since split planning");

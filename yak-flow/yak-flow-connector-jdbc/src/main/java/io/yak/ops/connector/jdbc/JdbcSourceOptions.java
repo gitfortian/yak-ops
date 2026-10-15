@@ -26,6 +26,25 @@ public final class JdbcSourceOptions {
 
     public static final Option<Integer> CONNECTION_ATTEMPTS = option("connector.jdbc.source.connection-attempts", 3);
 
+    /** Engine-supplied, per-table cursor window; never provided as executable SQL. */
+    public static final Option<String> RANGE_MODE =
+            Options.key("connector.jdbc.source.range-mode").stringType().noDefaultValue();
+
+    public static final Option<String> RANGE_COLUMN =
+            Options.key("connector.jdbc.source.range-column").stringType().noDefaultValue();
+    public static final Option<String> RANGE_LOWER =
+            Options.key("connector.jdbc.source.range-lower").stringType().noDefaultValue();
+    public static final Option<String> RANGE_UPPER =
+            Options.key("connector.jdbc.source.range-upper").stringType().noDefaultValue();
+
+    public static io.yak.ops.connector.jdbc.source.JdbcIncrementalRange range(ReadonlyConfig options) {
+        if (!options.getSourceMap().containsKey(RANGE_MODE.key())) return null;
+        var mode = io.yak.ops.connector.jdbc.source.JdbcIncrementalRange.Mode.valueOf(options.get(RANGE_MODE));
+        String lower = options.getSourceMap().containsKey(RANGE_LOWER.key()) ? options.get(RANGE_LOWER) : null;
+        return new io.yak.ops.connector.jdbc.source.JdbcIncrementalRange(
+                mode, options.get(RANGE_COLUMN), lower, options.get(RANGE_UPPER));
+    }
+
     private static final List<Option<Integer>> OPTIONS = List.of(
             TARGET_ROWS_PER_SPLIT,
             MAX_SPLITS_PER_TABLE,
@@ -34,8 +53,10 @@ public final class JdbcSourceOptions {
             QUERY_TIMEOUT_SECONDS,
             CONNECTION_ATTEMPTS);
 
-    public static final OptionRule RULE =
-            OptionRule.builder().optional(OPTIONS.toArray(Option<?>[]::new)).build();
+    public static final OptionRule RULE = OptionRule.builder()
+            .optional(OPTIONS.toArray(Option<?>[]::new))
+            .optional(RANGE_MODE, RANGE_COLUMN, RANGE_LOWER, RANGE_UPPER)
+            .build();
 
     /** Copies source planning and reader settings without copying connection credentials. */
     public static Configuration configuration(ReadonlyConfig options) {

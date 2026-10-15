@@ -20,12 +20,28 @@ public interface InstanceLifecycleService {
     DispatchTicket claim(String workspaceId, String instanceId, String ownerIncarnation, String dispatchToken);
 
     /**
-     * Records Job identity without reviving terminal or cancelling Instances.
+     * Records Task start without reviving terminal or cancelling Instances.
      *
      * @param ticket winning dispatcher
-     * @param reference engine-provided Job identity
+     * @param reference engine-provided Job identity, or null while preparing a deferred Task
      */
     void started(DispatchTicket ticket, TaskRuntimeReference reference);
+
+    /**
+     * Binds a late engine identity without changing Task state or replacing another Job identity.
+     *
+     * @param ticket winning dispatcher
+     * @param reference engine-provided physical Job identity
+     */
+    void runtimeReference(DispatchTicket ticket, TaskRuntimeReference reference);
+
+    /**
+     * Persists the executing Job's last measured progress under its dispatch ownership.
+     *
+     * @param ticket winning dispatcher
+     * @param percentage bounded measured percentage (0-99)
+     */
+    void progress(DispatchTicket ticket, int percentage);
 
     /**
      * Persists an authoritative completed physical execution and releases its claims.
@@ -41,6 +57,14 @@ public interface InstanceLifecycleService {
      * @param ticket winning dispatcher
      */
     void uncertain(DispatchTicket ticket);
+
+    /**
+     * Persists the last safe observation and protects an unconfirmed physical execution.
+     *
+     * @param ticket winning dispatcher
+     * @param executionReport public plugin observation, or null when unavailable
+     */
+    void uncertain(DispatchTicket ticket, String executionReport);
 
     /**
      * Atomically closes a pending run, or persists cancellation intent for launched work.
@@ -60,4 +84,13 @@ public interface InstanceLifecycleService {
 
     /** @param currentOwner current embedded JVM incarnation that has obtained the OS process lock */
     void reconcilePrevious(String currentOwner);
+
+    /**
+     * Atomically stores the final public plugin report, terminal outcome and release of owned claims.
+     *
+     * @param ticket winning physical execution ownership
+     * @param outcome authoritative physical terminal outcome
+     * @param executionReport plugin-owned JSON observation, or null when unavailable
+     */
+    void complete(DispatchTicket ticket, TaskOutcome outcome, String executionReport);
 }

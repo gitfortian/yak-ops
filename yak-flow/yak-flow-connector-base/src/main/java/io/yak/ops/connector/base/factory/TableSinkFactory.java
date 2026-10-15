@@ -1,6 +1,7 @@
 package io.yak.ops.connector.base.factory;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.TableSchema;
@@ -17,4 +18,26 @@ public interface TableSinkFactory extends Factory {
 
     /** Constructs one reusable Sink definition without starting a writer. */
     Sink<TableRecord> createSink(TableSinkFactoryContext context);
+
+    /**
+     * Creates an independently owned metadata applier without executing database operations.
+     *
+     * @param options effective Sink creation options, including authorized connection settings
+     * @return an applier that the execution owner must close after schema preparation
+     * @throws UnsupportedOperationException when this Sink does not support schema preparation
+     */
+    default MetadataApplier createMetadataApplier(ReadonlyConfig options) {
+        throw new UnsupportedOperationException("Sink factory does not support schema preparation");
+    }
+
+    /**
+     * Constructs one physical Sink for a nonempty ordered collection of resolved tables.
+     *
+     * @param contexts effective connection and table inputs for the shared execution
+     * @return reusable Sink definition; unsupported multi-table factories reject the request
+     */
+    default Sink<TableRecord> createSink(java.util.List<TableSinkFactoryContext> contexts) {
+        if (contexts.size() != 1) throw new UnsupportedOperationException("Factory does not support multiple tables");
+        return createSink(contexts.getFirst());
+    }
 }

@@ -31,6 +31,20 @@ class JdbcSourceStateTest {
     }
 
     @Test
+    void incrementalSplitRoundTripPinsCursorAndCheckpointProgress() throws Exception {
+        JdbcIncrementalRange range = new JdbcIncrementalRange(
+                JdbcIncrementalRange.Mode.TIMESTAMP, "updated_at", "2026-10-01T00:00:00", "2026-10-02T00:00:00");
+        JdbcSourceSplit split = new JdbcSourceSplit(
+                "incremental", table, List.of("id", "updated_at"), "id", 1L, 100L, 10L, "c".repeat(64), range);
+        JdbcSourceSplit restored = splitSerializer.deserialize(splitSerializer.getVersion(), splitSerializer.serialize(split));
+        assertEquals(split, restored);
+        assertEquals(range, restored.withLastEmittedKey(11L).incrementalRange());
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcIncrementalRange(JdbcIncrementalRange.Mode.TIMESTAMP, "updated_at",
+                        "2026-10-03T00:00:00", "2026-10-02T00:00:00"));
+    }
+
+    @Test
     void stateRoundTripAndDefinitionMismatchFailClosed() throws Exception {
         JdbcSource source = new JdbcSource(
                 new JdbcConnectionOptions("jdbc:h2:mem:snapshot", "sa", ""), List.of(table));

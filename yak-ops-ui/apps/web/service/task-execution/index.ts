@@ -31,8 +31,23 @@ export const listTaskInstances = (
 ): Promise<TaskInstancePageResult> =>
   HttpUtils.postData<TaskInstancePageResult>(`${TASK_INSTANCES_API}/page`, params);
 
-export const getTaskInstance = (id: string): Promise<TaskInstanceRecord> =>
-  HttpUtils.getData<TaskInstanceRecord>(`${TASK_INSTANCES_API}/${id}`);
+/** Returns newest Workspace-owned instances for the visible Definition page. */
+export const listLatestTaskInstances = (
+  definitionIds: string[],
+  activeOnly = false,
+  signal?: AbortSignal,
+): Promise<TaskInstanceRecord[]> =>
+  HttpUtils.postData<TaskInstanceRecord[]>(
+    `${TASK_INSTANCES_API}/latest`,
+    {
+      definitionIds,
+      activeOnly,
+    },
+    { signal },
+  );
+
+export const getTaskInstance = (id: string, signal?: AbortSignal): Promise<TaskInstanceRecord> =>
+  HttpUtils.getData<TaskInstanceRecord>(`${TASK_INSTANCES_API}/${id}`, { signal });
 
 export const getTaskInstanceDefinition = (id: string): Promise<TaskInstanceDefinitionRecord> =>
   HttpUtils.getData<TaskInstanceDefinitionRecord>(`${TASK_INSTANCES_API}/${id}/definition`);

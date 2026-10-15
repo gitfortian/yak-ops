@@ -4,12 +4,15 @@ import io.yak.ops.business.task.instance.DispatchTicket;
 import io.yak.ops.business.task.instance.InstanceLifecycleService;
 import io.yak.ops.business.task.instance.InstanceService;
 import io.yak.ops.common.enums.task.TaskInstanceStatus;
+import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,6 +66,45 @@ public class TaskExecutionObserver implements AutoCloseable {
         }
     }
 
+    /** Returns process-local progress for the physical Job currently owned by this Instance. */
+    public OptionalInt progressPercent(String instanceId) {
+        TaskHandle handle = active.get(instanceId);
+        return handle == null ? OptionalInt.empty() : handle.progressPercent();
+    }
+
+    /** Returns a process-owned observation only; terminal reads use the persisted Instance report. */
+    public java.util.Optional<String> executionReport(String instanceId) {
+        TaskHandle handle = active.get(instanceId);
+        if (handle == null) return java.util.Optional.empty();
+        return publicObservation(instanceId, handle, false);
+    }
+
+    /** Returns a compact observation for an owned active Instance without table detail. */
+    public Optional<String> executionSummary(String instanceId) {
+        TaskHandle handle = active.get(instanceId);
+        if (handle == null) return Optional.empty();
+        return publicObservation(instanceId, handle, true);
+    }
+
+    private Optional<String> publicObservation(String instanceId, TaskHandle handle, boolean summary) {
+        try {
+            var report = summary ? handle.executionSummary() : handle.executionReport();
+            int limit = summary ? 16384 : 262144;
+            if (report.isEmpty()) return Optional.empty();
+            if (report.get().length() > limit
+                    || !JSONUtils.readTree(report.get()).isObject()) {
+                throw new IllegalArgumentException("Invalid public Task execution observation");
+            }
+            return report;
+        } catch (RuntimeException failure) {
+            LOG.warn(
+                    "Task observation is unavailable, instanceId={}, exceptionType={}",
+                    instanceId,
+                    failure.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
     /** Requests cancellation for all active physical executions during process shutdown. */
     public void cancelActive() {
         active.forEach((instanceId, handle) -> {
@@ -100,10 +142,28 @@ public class TaskExecutionObserver implements AutoCloseable {
         String instanceId = ticket.instanceId();
         active.put(instanceId, handle);
         try {
-            TaskRuntimeReference reference =
-                    handle.runtimeReference().orElse(new TaskRuntimeReference(ticket.taskType(), ticket.instanceId()));
+            TaskRuntimeReference reference = handle.runtimeReference().orElse(null);
             lifecycle.started(ticket, reference);
-            LOG.info("Task Instance Job started, instanceId={}, jobId={}", instanceId, reference.id());
+            LOG.info("Task Instance started, instanceId={}", instanceId);
+            handle.runtimeReferenceReady()
+                    .whenCompleteAsync(
+                            (known, referenceFailure) -> {
+                                try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", instanceId)) {
+                                    if (referenceFailure == null && known != null && known.isPresent()) {
+                                        try {
+                                            lifecycle.runtimeReference(ticket, known.orElseThrow());
+                                        } catch (RuntimeException persistenceFailure) {
+                                            LOG.warn(
+                                                    "Task runtime identity is awaiting persistence, instanceId={}, exceptionType={}",
+                                                    instanceId,
+                                                    persistenceFailure
+                                                            .getClass()
+                                                            .getSimpleName());
+                                        }
+                                    }
+                                }
+                            },
+                            callbacks);
             if (instances.instance(ticket.workspaceId(), instanceId).getStatus() == TaskInstanceStatus.CANCELLING) {
                 handle.cancel();
             }
@@ -115,7 +175,13 @@ public class TaskExecutionObserver implements AutoCloseable {
                                 }
                             },
                             callbacks);
+            handle.start();
         } catch (RuntimeException observationFailure) {
+            try {
+                handle.cancel();
+            } catch (RuntimeException cancellationFailure) {
+                observationFailure.addSuppressed(cancellationFailure);
+            }
             lifecycle.uncertain(ticket);
             active.remove(instanceId, handle);
             LOG.error(
@@ -128,10 +194,26 @@ public class TaskExecutionObserver implements AutoCloseable {
     private void observeTerminal(DispatchTicket ticket, TaskHandle handle, TaskOutcome outcome, Throwable failure) {
         try {
             if (failure == null && outcome != null) {
-                lifecycle.complete(ticket, outcome);
+                handle.runtimeReference().ifPresent(reference -> lifecycle.runtimeReference(ticket, reference));
+                try {
+                    OptionalInt percent = handle.progressPercent();
+                    if (percent.isPresent()) {
+                        lifecycle.progress(ticket, percent.getAsInt());
+                    }
+                } catch (RuntimeException metricsFailure) {
+                    LOG.warn(
+                            "Unable to persist Task progress, instanceId={}, exceptionType={}",
+                            ticket.instanceId(),
+                            metricsFailure.getClass().getSimpleName());
+                }
+                var report = publicObservation(ticket.instanceId(), handle, false);
+                if (report.isPresent()) lifecycle.complete(ticket, outcome, report.get());
+                else lifecycle.complete(ticket, outcome);
                 LOG.info("Task Instance completed, instanceId={}, outcome={}", ticket.instanceId(), outcome);
             } else {
-                lifecycle.uncertain(ticket);
+                var report = publicObservation(ticket.instanceId(), handle, false);
+                if (report.isPresent()) lifecycle.uncertain(ticket, report.get());
+                else lifecycle.uncertain(ticket);
             }
         } catch (RuntimeException persistenceFailure) {
             LOG.error(

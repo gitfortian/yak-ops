@@ -226,10 +226,14 @@ final class TaskDeployment {
                     source,
                     coordinatorContext,
                     enumeratorState,
-                    jobGraph.configuration().get(ExecutionOptions.LOG_ID));
+                    jobGraph.configuration().get(ExecutionOptions.LOG_ID),
+                    executionGraph::reportPlannedSplits);
         } else {
             coordinator = new SourceCoordinator<>(
-                    source, coordinatorContext, jobGraph.configuration().get(ExecutionOptions.LOG_ID));
+                    source,
+                    coordinatorContext,
+                    jobGraph.configuration().get(ExecutionOptions.LOG_ID),
+                    executionGraph::reportPlannedSplits);
         }
 
         JobEdge firstEdge = edges.getFirst();
@@ -247,7 +251,8 @@ final class TaskDeployment {
                     environment(execution),
                     output,
                     null,
-                    restoredReaderSplits.getOrDefault(subtask, List.of()));
+                    restoredReaderSplits.getOrDefault(subtask, List.of()),
+                    executionGraph::reportCompletedSplits);
             sourceTasks.add(task);
             bind(execution, task);
         }
@@ -319,11 +324,20 @@ final class TaskDeployment {
         OperatorCoordinatorContext context =
                 new OperatorCoordinatorContext(jobGraph.jobID(), vertex.getId(), vertex.getParallelism());
         coordinator = new SourceCoordinator<>(
-                source, context, jobGraph.configuration().get(ExecutionOptions.LOG_ID));
+                source,
+                context,
+                jobGraph.configuration().get(ExecutionOptions.LOG_ID),
+                executionGraph::reportPlannedSplits);
         OperatorChain chain = new OperatorChain(operators.subList(1, operators.size() - 1), sinkNode);
         Execution execution = executionGraph.currentExecution(vertex.getId(), 0);
-        SourceOperatorStreamTask<Object, SourceSplit> task =
-                new SourceOperatorStreamTask<>(source, coordinator, environment(execution), chain, chain);
+        SourceOperatorStreamTask<Object, SourceSplit> task = new SourceOperatorStreamTask<>(
+                source,
+                coordinator,
+                environment(execution),
+                chain,
+                chain,
+                List.of(),
+                executionGraph::reportCompletedSplits);
         sourceTasks.add(task);
         bind(execution, task);
         // For a chained Source/Operator/Sink, preserve the StreamTask's originating failure.
@@ -381,33 +395,49 @@ final class TaskDeployment {
     }
 
     private Throwable closeAll() {
-        Throwable failure = null;
+        List<AutoCloseable> resources = new ArrayList<>();
         if (checkpointCoordinator != null) {
-            try {
-                checkpointCoordinator.close();
-            } catch (Throwable error) {
-                failure = accumulate(failure, error);
-            }
+            resources.add(checkpointCoordinator);
         }
-        for (Execution execution : executions) {
-            try {
-                execution.close();
-            } catch (Throwable error) {
-                failure = accumulate(failure, error);
-            }
-        }
+        resources.addAll(executions);
         if (coordinator != null) {
-            try {
-                coordinator.close();
-            } catch (Throwable error) {
-                failure = accumulate(failure, error);
-            }
+            resources.add(coordinator);
         }
         if (checkpointStore != null) {
-            try {
-                checkpointStore.close();
-            } catch (Throwable error) {
-                failure = accumulate(failure, error);
+            resources.add(checkpointStore);
+        }
+        return closeAll(resources);
+    }
+
+    /**
+     * Awaits idempotent deployment shutdown before the Job publishes its terminal outcome.
+     * Cancellation interrupts wake execution waits but cannot release resource ownership early.
+     *
+     * @param resources deployment resources in shutdown order
+     * @return accumulated cleanup failure, or null after successful cleanup
+     */
+    static Throwable closeAll(List<? extends AutoCloseable> resources) {
+        boolean interrupted = Thread.interrupted();
+        Throwable failure = null;
+        try {
+            for (AutoCloseable resource : resources) {
+                boolean closed = false;
+                while (!closed) {
+                    try {
+                        resource.close();
+                        closed = true;
+                    } catch (InterruptedException error) {
+                        interrupted = true;
+                        Thread.interrupted();
+                    } catch (Throwable error) {
+                        failure = accumulate(failure, error);
+                        closed = true;
+                    }
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
         return failure;

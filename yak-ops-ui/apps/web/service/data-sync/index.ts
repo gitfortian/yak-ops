@@ -7,13 +7,15 @@ import {
   listTaskInstances,
   submitTaskInstance,
   type TaskInstanceRecord,
+  type TaskInstanceDefinitionRecord,
   type TaskInstanceStatus,
   type TaskSubmissionResult,
 } from "@/service/task-execution";
 
-import { matchesDataSyncInstance, toDataSyncInstanceRecord } from "./execution";
+import { toDataSyncInstanceRecord } from "./execution";
 
 import {
+  buildSyncParameters,
   createDefinitionRequest,
   definitionPageRequest,
   toSyncTaskRecord,
@@ -21,6 +23,8 @@ import {
 } from "./definition";
 
 import type {
+  DataSyncSolution,
+  DataSyncSchemaPreview,
   DataSyncInstancePageParams,
   DataSyncInstancePageResult,
   DataSyncInstanceRecord,
@@ -37,29 +41,56 @@ export type * from "./types";
 
 const TASK_DEFINITION_API_PREFIX = "/api/v1/task-definitions";
 
+export const listDataSyncSolutions = (
+  sourceType: string,
+  targetType: string,
+  signal?: AbortSignal,
+): Promise<DataSyncSolution[]> => {
+  const query = new URLSearchParams({ sourceType, targetType });
+  return HttpUtils.getData<DataSyncSolution[]>(`/api/v1/data-sync/solutions?${query}`, { signal });
+};
+
+export const previewDataSyncSchema = (
+  payload: DataSyncTaskSavePayload,
+  signal?: AbortSignal,
+): Promise<DataSyncSchemaPreview[]> =>
+  HttpUtils.postData<DataSyncSchemaPreview[]>(
+    "/api/v1/data-sync/schema/preview",
+    { parameters: JSON.stringify(buildSyncParameters(payload)) },
+    { signal },
+  );
+
 export const listDataSyncTasks = async (
   params: DataSyncTaskPageParams,
+  signal?: AbortSignal,
 ): Promise<DataSyncTaskPageResult> => {
   const page = await HttpUtils.postData<TaskDefinitionPageResult>(
     `${TASK_DEFINITION_API_PREFIX}/page`,
     definitionPageRequest(params),
+    { signal },
   );
   return { ...page, bizData: page.bizData.map(toSyncTaskRecord) };
 };
 
-export const getDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+export const getDataSyncTask = async (
+  id: string,
+  signal?: AbortSignal,
+): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.getData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}`,
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
 
 export const createDataSyncTask = async (
   payload: DataSyncTaskSavePayload,
+  signal?: AbortSignal,
 ): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.postData<TaskDefinitionRecord>(
     TASK_DEFINITION_API_PREFIX,
     createDefinitionRequest(payload),
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
@@ -67,10 +98,12 @@ export const createDataSyncTask = async (
 export const updateDataSyncTask = async (
   id: string,
   payload: DataSyncTaskUpdatePayload,
+  signal?: AbortSignal,
 ): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.putData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}`,
     updateDefinitionRequest(payload),
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
@@ -79,9 +112,14 @@ export const deleteDataSyncTask = async (id: string): Promise<void> => {
   await HttpUtils.deleteData<boolean>(`${TASK_DEFINITION_API_PREFIX}/${id}`);
 };
 
-export const publishDataSyncTask = async (id: string): Promise<DataSyncTaskRecord> => {
+export const publishDataSyncTask = async (
+  id: string,
+  signal?: AbortSignal,
+): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.postData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}/publish`,
+    undefined,
+    { signal },
   );
   return toSyncTaskRecord(definition);
 };
@@ -98,17 +136,22 @@ export const runDataSyncTask = (
   idempotencyKey: string = createTaskRunIdempotencyKey(),
 ): Promise<TaskSubmissionResult> => submitTaskInstance(id, idempotencyKey);
 
-const TASK_INSTANCE_BATCH_SIZE = 200;
-
 async function projectDataSyncInstances(
   instances: TaskInstanceRecord[],
 ): Promise<DataSyncInstanceRecord[]> {
+  const definitions = new Map<string, Promise<TaskInstanceDefinitionRecord>>();
   return Promise.all(
-    instances
-      .filter((instance) => instance.taskType === "DATA_SYNC")
-      .map(async (instance) =>
-        toDataSyncInstanceRecord(instance, await getTaskInstanceDefinition(instance.id)),
-      ),
+    instances.map(async (instance) => {
+      if (instance.taskType !== "DATA_SYNC")
+        throw new Error("Task Instance is not a DATA_SYNC task");
+      const key = JSON.stringify([instance.definitionId, instance.definitionVersion]);
+      let definition = definitions.get(key);
+      if (!definition) {
+        definition = getTaskInstanceDefinition(instance.id);
+        definitions.set(key, definition);
+      }
+      return toDataSyncInstanceRecord(instance, await definition);
+    }),
   );
 }
 
@@ -120,56 +163,18 @@ export const getDataSyncInstance = async (id: string): Promise<DataSyncInstanceR
   return records[0];
 };
 
-// Only the source kind and optional task-name filter are resolved by the frontend.
-// Definition, Task type, and lifecycle filters are applied by the Workspace-scoped repository.
+/** Page a single task's history using repository-side ordering and lifecycle filters. */
 export const listDataSyncInstances = async (
   params: DataSyncInstancePageParams,
 ): Promise<DataSyncInstancePageResult> => {
-  // Active views query only nonterminal states instead of scanning all execution history.
-  const statuses: Array<TaskInstanceStatus | undefined> =
-    params.activeOnly && !params.status
-      ? ["SUBMITTED", "LAUNCHING", "RUNNING", "CANCELLING", "RECONCILING"]
-      : [params.status];
-
-  const batches = await Promise.all(
-    statuses.map(async (status) => {
-      const items: TaskInstanceRecord[] = [];
-      let pageNo = 1;
-      let pages = 1;
-      do {
-        const result = await listTaskInstances({
-          pageNo,
-          pageSize: TASK_INSTANCE_BATCH_SIZE,
-          definitionId: params.taskId,
-          taskType: "DATA_SYNC",
-          status,
-        });
-        items.push(...result.bizData);
-        pages = result.pagination.pages;
-        pageNo += 1;
-      } while (pageNo <= pages);
-      return items;
-    }),
-  );
-  const instances = batches.flat();
-  if (statuses.length > 1) {
-    instances.sort((first, second) =>
-      (second.createTime ?? "").localeCompare(first.createTime ?? ""),
-    );
-  }
-  const records = (await projectDataSyncInstances(instances)).filter((instance) =>
-    matchesDataSyncInstance(instance, params),
-  );
-  const offset = (params.pageNo - 1) * params.pageSize;
-  return {
-    bizData: records.slice(offset, offset + params.pageSize),
-    pagination: {
-      pageNo: params.pageNo,
-      pageSize: params.pageSize,
-      total: records.length,
-      pages: Math.ceil(records.length / params.pageSize),
-    },
-  };
+  const page = await listTaskInstances({
+    pageNo: params.pageNo,
+    pageSize: params.pageSize,
+    definitionId: params.taskId,
+    taskType: "DATA_SYNC",
+    status: params.status,
+  });
+  return { ...page, bizData: await projectDataSyncInstances(page.bizData) };
 };
 
 export const cancelDataSyncInstance = (id: string): Promise<TaskInstanceStatus> =>

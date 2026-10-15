@@ -2,6 +2,7 @@ package io.yak.ops.flow.runtime.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,8 +27,10 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.configuration.CoreOptions;
 import io.yak.ops.core.execution.JobClient;
 import io.yak.ops.flow.runtime.configuration.RuntimeOptions;
+import io.yak.ops.flow.runtime.executiongraph.ExecutionGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
 import io.yak.ops.flow.runtime.graph.StreamGraphGenerator;
+import io.yak.ops.flow.runtime.graph.StreamingJobGraphGenerator;
 import io.yak.ops.flow.runtime.graph.StreamPartitioning;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
 import io.yak.ops.flow.runtime.operators.OneInputOperatorFactory;
@@ -46,9 +49,27 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 class ExecutionGraphParallelTest {
+
+    @Test
+    void shouldMeasureBoundedSplitProgressWithoutClaimingJobCompletion() {
+        ParallelSource source = new ParallelSource(true, List.of(List.of("row")));
+        ParallelSink sink = new ParallelSink(null);
+        Configuration configuration = config(1, 2);
+        StreamGraph graph = graph(source, 1, sink, 1, configuration);
+        ExecutionGraph execution = new ExecutionGraph(new StreamingJobGraphGenerator(graph, configuration).generate());
+
+        assertTrue(execution.getProgressPercent().isEmpty());
+        execution.reportPlannedSplits(8);
+        assertEquals(0, execution.getProgressPercent().orElseThrow());
+        execution.reportCompletedSplits(3);
+        assertEquals(37, execution.getProgressPercent().orElseThrow());
+        execution.reportCompletedSplits(5);
+        assertEquals(99, execution.getProgressPercent().orElseThrow());
+    }
 
     @Test
     void shouldFanInFourSourceReadersToOneSinkWithoutLosingRecords() throws Exception {
@@ -183,7 +204,7 @@ class ExecutionGraphParallelTest {
         assertTrue(sink.allRows().containsAll(List.of("s0", "s1", "s2")));
     }
 
-    @Test
+    @RepeatedTest(10)
     void shouldFailWholeJobAndCloseOtherTasksWhenSinkFails() throws Exception {
         ParallelSource source = new ParallelSource(true,
                 List.of(List.of("a"), List.of("FAIL"), List.of("c"), List.of("d")));
@@ -194,7 +215,7 @@ class ExecutionGraphParallelTest {
 
         ExecutionException failure = assertThrows(
                 ExecutionException.class, () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
-        assertTrue(failure.getCause().toString().contains("writer failed"));
+        assertRootFailure(failure, "writer failed: FAIL");
         assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
         assertEquals(0, sink.finalFlushes.get());
         assertEquals(1, sink.closed.get());
@@ -237,7 +258,7 @@ class ExecutionGraphParallelTest {
         assertEquals(0, sink.writers.size());
     }
 
-    @Test
+    @RepeatedTest(10)
     void shouldPropagateOperatorFailureAndCloseEveryCreatedInstance() throws Exception {
         ParallelSource source = new ParallelSource(true, List.of(List.of("good"), List.of("BAD")));
         ParallelSink sink = new ParallelSink(null);
@@ -272,12 +293,23 @@ class ExecutionGraphParallelTest {
         JobClient job = new EmbeddedPipelineExecutor().execute(graph, configuration).get(5, TimeUnit.SECONDS);
         ExecutionException failure = assertThrows(
                 ExecutionException.class, () -> job.getJobExecutionResult().get(5, TimeUnit.SECONDS));
-        assertTrue(failure.getCause().toString().contains("operator processing failed"));
+        assertRootFailure(failure, "operator processing failed");
         assertEquals(JobStatus.FAILED, job.getJobStatus().get(5, TimeUnit.SECONDS));
         assertEquals(opened.get(), closed.get());
         assertEquals(source.readerCreated.get(), source.readerClosed.get());
         assertEquals(1, sink.closed.get());
         assertEquals(0, sink.finalFlushes.get());
+    }
+
+    private static void assertRootFailure(ExecutionException failure, String message) {
+        // A downstream failure may reach the job through a SourceCoordinator wrapper first.
+        // Verify the originating error, independent of which asynchronous reporter wins.
+        Throwable cause = failure.getCause();
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        assertInstanceOf(IllegalStateException.class, cause);
+        assertEquals(message, cause.getMessage());
     }
 
     private static Configuration config(int defaultParallelism, int capacity) {

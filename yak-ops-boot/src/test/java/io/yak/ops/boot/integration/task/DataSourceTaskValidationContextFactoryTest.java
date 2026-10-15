@@ -46,7 +46,7 @@ class DataSourceTaskValidationContextFactoryTest {
             @Override
             public DataSourceInfo dataSource(String workspaceId, String datasourceId) {
                 observedWorkspace.set(workspaceId);
-                return new DataSourceInfo("MYSQL", "app", null);
+                return new DataSourceInfo("MYSQL", "app", null, 1);
             }
         };
         DataSourceTaskValidationContextFactory factory = new DataSourceTaskValidationContextFactory();

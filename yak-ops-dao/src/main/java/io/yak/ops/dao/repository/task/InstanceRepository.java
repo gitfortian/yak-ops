@@ -46,6 +46,15 @@ public interface InstanceRepository {
     Optional<InstanceEntity> findByRequest(String workspaceId, TaskTriggerType trigger, String requestId);
 
     /**
+     * Reads current idempotency evidence inside serialized scheduled admission.
+     * @param workspaceId owning Workspace
+     * @param trigger trigger namespace
+     * @param requestId stable request identity
+     * @return locked existing Instance or empty
+     */
+    Optional<InstanceEntity> findByRequestForUpdate(String workspaceId, TaskTriggerType trigger, String requestId);
+
+    /**
      * @param workspaceId authorized Workspace
      * @param limit maximum recent Instances
      * @return recent Instances ordered by creation time
@@ -68,6 +77,27 @@ public interface InstanceRepository {
             String definitionId,
             TaskInstanceStatus status,
             String taskType);
+
+    /**
+     * Selects the most recent Instance per requested Definition with a bounded database-side query.
+     *
+     * @param workspaceId authorized Workspace
+     * @param definitionIds current page's Definition identities
+     * @param activeOnly only nonterminal executions when true
+     * @return one Instance per matching Definition
+     */
+    List<InstanceEntity> latest(String workspaceId, List<String> definitionIds, boolean activeOnly);
+
+    /**
+     * Saves nonterminal source progress without changing dispatch ownership or lifecycle state.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId executing Instance
+     * @param dispatchToken owning launch token
+     * @param progressPercent bounded measured progress from 0 to 99
+     * @return true if the original owner and active lifecycle remain valid
+     */
+    boolean updateProgress(String workspaceId, String instanceId, String dispatchToken, int progressPercent);
 
     /** @return committed Task Instances awaiting their first physical submission */
     List<InstanceEntity> pending();
@@ -95,11 +125,25 @@ public interface InstanceRepository {
      * @param workspaceId owning Workspace
      * @param instanceId launched Instance
      * @param dispatchToken winning launcher token
-     * @param engine physical execution engine
-     * @param runtimeId physical Job identifier
+     * @param engine physical execution engine, or null before engine submission
+     * @param runtimeId physical Job identifier, or null before engine submission
      * @return true when the launch is still owned by the caller
      */
     boolean markRunning(String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
+
+    /**
+     * Binds one late Job reference under the original dispatch token, including after a fast terminal result.
+     * This operation is idempotent and never changes status or replaces a different runtime identity.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId launched Instance
+     * @param dispatchToken winning launch token
+     * @param engine physical execution engine
+     * @param runtimeId physical Job identifier
+     * @return true when the owner matches and the reference is unset or already equal
+     */
+    boolean bindRuntimeReference(
+            String workspaceId, String instanceId, String dispatchToken, String engine, String runtimeId);
 
     /**
      * Atomically cancels a SUBMITTED Instance before dispatch.
@@ -141,4 +185,15 @@ public interface InstanceRepository {
      * @return true if reconciliation was recorded
      */
     boolean markReconciling(String workspaceId, String instanceId, String dispatchToken);
+
+    /**
+     * Persists a bounded plugin report under the active dispatch owner, in the caller's terminal transaction.
+     *
+     * @param workspaceId owning Workspace
+     * @param instanceId active execution identity
+     * @param dispatchToken winning physical dispatch token
+     * @param report public JSON report without secrets or checkpoint state
+     * @return true when the owner and active status still match
+     */
+    boolean updateExecutionReport(String workspaceId, String instanceId, String dispatchToken, String report);
 }

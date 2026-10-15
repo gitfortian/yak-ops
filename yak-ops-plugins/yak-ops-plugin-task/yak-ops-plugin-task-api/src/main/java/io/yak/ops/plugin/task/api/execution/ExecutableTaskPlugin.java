@@ -8,6 +8,15 @@ import java.util.concurrent.CompletionStage;
 public interface ExecutableTaskPlugin extends TaskPlugin {
 
     /**
+     * Declares whether these parsed parameters permit periodic submission without external access.
+     * @param parameters validated immutable plugin parameters
+     * @return true for configurations suitable for periodic execution; false by default
+     */
+    default boolean supportsScheduling(ReadonlyConfig parameters) {
+        return false;
+    }
+
+    /**
      * Declares canonical exclusive resources and resource-binding revision.
      *
      * @param parameters validated immutable Task configuration
@@ -22,7 +31,9 @@ public interface ExecutableTaskPlugin extends TaskPlugin {
      * @param parameters pinned Task configuration
      * @param plan admitted resource claims and binding revision
      * @param context authorized Instance and Attempt identity
+     * @param debug detailed diagnostics captured for this Instance
      * @return execution handle
      */
-    CompletionStage<TaskHandle> start(ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context);
+    CompletionStage<TaskHandle> start(
+            ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity context, boolean debug);
 }
