@@ -7,7 +7,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import java.util.Objects;
 
 /**
- * Mailbox-confined Snapshot key and Binlog phase/offset for one active Source split.
+ * Mailbox-confined normalized snapshot output, preparation checkpoint, and Binlog phase/offset.
  *
  * <p>Fetcher prefetch never mutates checkpoint state. Each UPDATE pair advances the
  * Binlog offset only after both TableRecords have been emitted in one mailbox step.
@@ -89,6 +89,9 @@ public final class MySqlHybridSplitState {
             return;
         }
         if (binlog.phase() == MySqlHybridBinlogSplit.Phase.STREAMING) {
+            if (!Objects.equals(high, binlog.highWatermark()) || !finished.equals(binlog.finishedSplits())) {
+                throw new IllegalStateException("Restored streaming metadata conflicts with coordinator handoff");
+            }
             return;
         }
         binlog = binlog.startStreaming(high, finished);

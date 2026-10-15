@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -67,6 +68,23 @@ public record MySqlHybridEnumeratorState(
         for (var entry : assignedSnapshots.entrySet()) {
             if (!entry.getKey().equals(entry.getValue().splitId()) || !allIds.add(entry.getKey())) {
                 throw new IllegalArgumentException("Duplicate or invalid assigned chunk");
+            }
+        }
+        if (phase == Phase.HANDOFF || phase == Phase.STREAMING) {
+            if (!snapshotPlanned
+                    || totalSnapshotSplits == 0
+                    || finishedSnapshots.size() != totalSnapshotSplits
+                    || highWatermark == null
+                    || lowWatermark == null) {
+                throw new IllegalArgumentException("Hybrid handoff requires all normalized chunks to be completed");
+            }
+            BinlogOffset maximum = finishedSplitInfos.stream()
+                    .map(FinishedSnapshotSplitInfo::highWatermark)
+                    .max(BinlogOffsetOrder::compare)
+                    .orElseThrow();
+            if (BinlogOffsetOrder.compare(highWatermark, maximum) != 0
+                    || BinlogOffsetOrder.compare(lowWatermark, highWatermark) > 0) {
+                throw new IllegalArgumentException("Hybrid coordinator watermarks differ from completed chunks");
             }
         }
         if (binlogAssigned == (pendingBinlog != null)

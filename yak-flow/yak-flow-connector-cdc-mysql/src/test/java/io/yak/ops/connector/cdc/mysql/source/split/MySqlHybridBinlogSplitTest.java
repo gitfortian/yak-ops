@@ -93,4 +93,14 @@ class MySqlHybridBinlogSplitTest {
         return java.util.List.of(new FinishedSnapshotSplitInfo(
                 new io.yak.ops.core.data.TableId("shop", null, "orders"), "chunk", null, null, high));
     }
+
+    @org.junit.jupiter.api.Test
+    void refusesStreamingStateWithoutMatchingCompletedChunkMetadata() {
+        var binlog = new MySqlBinlogSplit("fp", offset(200L), new byte[]{1});
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new MySqlHybridBinlogSplit(binlog, MySqlHybridBinlogSplit.Phase.STREAMING, offset(200L)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new MySqlHybridBinlogSplit(binlog, MySqlHybridBinlogSplit.Phase.STREAMING,
+                        offset(300L), completed(offset(200L))));
+    }
 }

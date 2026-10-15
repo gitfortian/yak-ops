@@ -9,8 +9,9 @@ import java.util.Objects;
  * Checkpointable Binlog split with the initial snapshot handoff phase and watermark.
  *
  * <p>BOOTSTRAP captures a resume point before any snapshot is assigned. PAUSED retains
- * that point while snapshot ranges are emitted. STREAMING reads from the anchor after
- * a completed snapshot checkpoint. No Binlog offset advances while paused.
+ * bootstrap history while normalized snapshot ranges are checkpointed and emitted.
+ * STREAMING starts at the minimum completed chunk High and filters each key by its
+ * chunk's High. No Binlog offset advances while paused.
  *
  * <p>Each phase transition returns a new split. The nested Binlog split owns its
  * serialized Schema History bytes and exposes them only through defensive copies.
@@ -53,6 +54,25 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
         this.phase = Objects.requireNonNull(phase, "phase");
         if (phase != Phase.BOOTSTRAP && (binlog.offset() == null || binlog.schemaHistory().length == 0)) {
             throw new IllegalArgumentException("Snapshot handoff requires a Binlog anchor and schema history");
+        }
+        if (phase == Phase.STREAMING) {
+            if (highWatermark == null || this.finishedSplits.isEmpty()) {
+                throw new IllegalArgumentException("Streaming Hybrid state requires completed chunk watermarks");
+            }
+            var ids = new java.util.HashSet<String>();
+            BinlogOffset maximum = null;
+            for (FinishedSnapshotSplitInfo info : this.finishedSplits) {
+                if (!ids.add(info.splitId())) throw new IllegalArgumentException("Duplicate streaming chunk identity");
+                BinlogOffsetOrder.compare(binlog.offset(), info.highWatermark());
+                if (maximum == null || BinlogOffsetOrder.compare(info.highWatermark(), maximum) > 0) {
+                    maximum = info.highWatermark();
+                }
+            }
+            if (BinlogOffsetOrder.compare(highWatermark, maximum) != 0) {
+                throw new IllegalArgumentException("Hybrid handoff High differs from completed chunk metadata");
+            }
+        } else if (highWatermark != null || !this.finishedSplits.isEmpty()) {
+            throw new IllegalArgumentException("Unfinished Hybrid state must not contain streaming metadata");
         }
         this.highWatermark = highWatermark;
     }

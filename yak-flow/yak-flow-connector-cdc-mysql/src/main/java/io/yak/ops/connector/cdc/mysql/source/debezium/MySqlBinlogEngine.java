@@ -73,6 +73,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         sessionId = CheckpointOffsetBackingStore.register(connectorName, split.offset());
         var properties = config.debeziumProperties(sessionId, historyPath);
         properties.setProperty("database.server.id", Integer.toString(serverId));
+        // Snapshot readers share a logical source but must own distinct JMX registrations.
+        properties.setProperty("custom.metric.tags", "reader=" + serverId);
         engine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
                 .using(properties)
                 .notifying(this::handleBatch)
