@@ -33,4 +33,4 @@ docker compose up -d
 - [历史 GitHub Releases](https://github.com/weifuwan/yak-ops/releases)
 - [发布操作](scripts/release/README.md)
 
-发布以真实 CI、Full Backend Acceptance、产品 E2E、Distribution 与 Docker/Compose 验收及版本一致性为准。发布证据来自 GitHub Actions、Git Tags 和 Release Assets。
+发布以真实 CI、Backend E2E（JUnit + Testcontainers）、Distribution 与 Docker/Compose 验收及版本一致性为准。发布证据来自 GitHub Actions、Git Tags 和 Release Assets。

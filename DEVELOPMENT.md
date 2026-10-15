@@ -39,21 +39,32 @@ Frontend commands and quality gates are documented in [frontend tooling](yak-ops
 | UI automation | Playwright | Release; manual as needed | `yak-ops-ui/tests/e2e/` |
 | Deployment smoke | Docker Compose | Release | `scripts/release/smoke-compose.sh` |
 
-**During the backend migration**, existing Python backend product suites remain under `scripts/acceptance/`; they test real MySQL/PostgreSQL and task lifecycle without any Playwright dependency. Move them to JUnit with Docker in a follow-up PR, one suite at a time; do not discard unique assertions before they have Java replacements.
-
 ### Backend E2E
 
-[Backend E2E Tests](.github/workflows/task-execution-product-acceptance.yml) uses [the complete PR diff and scope map](scripts/ci/product_acceptance_scope.py). Ordinary frontend-only changes select **no backend suites**. Targeted backend changes select `batch`, `schedule`, `realtime`, or `schema`; shared backend or unknown changes conservatively select `full`. A non-selected suite is **NOT EXECUTED**, not evidence of success.
+[Backend E2E Tests](.github/workflows/backend-e2e.yml) uses the complete PR diff and
+[backend E2E scope map](scripts/ci/backend_e2e_scope.py). Relevant backend PRs run one or
+more of batch, schedule, realtime and schema; shared or unclassified backend changes run
+full. Frontend-only changes do not start Testcontainers. A non-selected suite is NOT RUN.
 
-Direct PR runs are risk scoped. Manual and reusable release calls default to `full`; selected suites use fresh disposable MySQL/PostgreSQL environments and isolated state. Backend E2E remains separate from Maven's ordinary `verify` phase.
+Backend E2E uses JUnit 5 with real MySQL and PostgreSQL containers started automatically
+by Testcontainers. The tests run a packaged Spring Boot JVM through its real authenticated
+HTTP APIs and verify physical database changes, CDC handoff, checkpoint, Quartz, persisted
+history, server-side failure and process restart. No Python backend E2E runner remains.
 
-```sh
-python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
-bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
-python3 -u scripts/acceptance/run_product_acceptance.py --suite schema
+```bash
+# Docker must be running. No fixed database host ports are required.
+bash scripts/backend-e2e/run.sh batch
+bash scripts/backend-e2e/run.sh schedule
+bash scripts/backend-e2e/run.sh realtime
+bash scripts/backend-e2e/run.sh schema
+bash scripts/backend-e2e/run.sh full
 ```
 
-For local backend product suites, start fresh `yak-task-mysql` and `yak-task-postgres` as configured in the workflow, set test-only `E2E_DB_PASSWORD` and `E2E_USER_PASSWORD`, and never reuse production or shared databases. A failed or dirty fixture must block the run rather than be silently cleared.
+The script selects Maven Failsafe `*IT.java` tests in yak-ops-boot through the
+explicit backend-e2e profile. Ordinary Maven verify runs unit tests without the profile and
+does not start Docker. Each E2E class owns isolated databases and a state directory; tests
+use JUnit assertions, JDBC, bounded waits, deterministic SQL fixtures and test-only credentials.
+A Docker failure is a test failure, not a skip. Failsafe reports are uploaded as CI evidence.
 
 ### Playwright UI Tests
 
@@ -72,7 +83,7 @@ The Playwright report is `/tmp/yak-playwright/v<VERSION>/<SHA>/playwright-result
 
 ### Test and review evidence
 
-The backend E2E workflow records selected scopes and phase durations under `/tmp/yak-acceptance-results`, plus per-suite Actions artifacts. Playwright has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
+The backend E2E workflow collects Maven Failsafe XML reports and per-suite Actions artifacts. Playwright has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
 
 
 ## Incremental Review Evidence
