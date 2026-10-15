@@ -130,7 +130,9 @@ public final class MySqlHybridSourceEnumerator
         if (closed) return;
         if (event instanceof MySqlLowWatermarkEvent low) {
             if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may report bootstrap");
+            boolean bootstrap = assigner.phase() == MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
             assigner.captureLow(low.offset());
+            if (!bootstrap) return;
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
             planSnapshotAsync();
         } else if (event instanceof MySqlSnapshotFinishedEvent finished) {

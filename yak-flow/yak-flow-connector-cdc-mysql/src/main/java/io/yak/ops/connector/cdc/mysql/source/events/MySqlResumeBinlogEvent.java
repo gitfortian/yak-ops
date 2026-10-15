@@ -15,4 +15,9 @@ public record MySqlResumeBinlogEvent(BinlogOffset highWatermark, List<FinishedSn
         if (finishedSplits.isEmpty())
             throw new IllegalArgumentException("Binlog handoff requires finished chunk metadata");
     }
+
+    @Override
+    public String toString() {
+        return "MySqlResumeBinlogEvent{checkpoint=redacted}";
+    }
 }

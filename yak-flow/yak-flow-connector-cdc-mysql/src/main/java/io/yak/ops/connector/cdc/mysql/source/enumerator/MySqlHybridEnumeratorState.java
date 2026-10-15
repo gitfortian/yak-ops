@@ -78,4 +78,10 @@ public record MySqlHybridEnumeratorState(
             throw new IllegalArgumentException("Inconsistent MySQL hybrid coordinator state");
         }
     }
+
+    @Override
+    public String toString() {
+        return "MySqlHybridEnumeratorState{phase=" + phase + ", chunks=" + totalSnapshotSplits
+                + ", checkpoint=redacted}";
+    }
 }

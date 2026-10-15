@@ -13,4 +13,9 @@ public record MySqlSnapshotFinishedEvent(FinishedSnapshotSplitInfo finished) imp
     public String splitId() {
         return finished.splitId();
     }
+
+    @Override
+    public String toString() {
+        return "MySqlSnapshotFinishedEvent{split=" + splitId() + ", checkpoint=redacted}";
+    }
 }
