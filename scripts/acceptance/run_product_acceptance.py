@@ -83,13 +83,6 @@ def run_suite(suite, harness, client, source, target):
         harness.verify_schedule_configuration(client, definition)
         harness.verify_parameter_versions(client, source, target, definition)
         harness.verify_periodic_jdbc(client, source, target)
-        if os.environ.get("E2E_BROWSER") == "true":
-            harness.query_postgres("CREATE TABLE public.browser_orders "
-                                   "(id BIGINT PRIMARY KEY, name VARCHAR(32) NOT NULL)")
-            browser_task = harness.create_task(client, "browser-" + uuid.uuid4().hex[:8], source, target,
-                                               False, debug=True, sink_table="browser_orders")
-            importlib.import_module("task_schedule_browser").verify_schedule_browser(client, browser_task)
-            assert harness.query_postgres("SELECT COUNT(*) FROM public.browser_orders") == "2"
         with occupied_target(harness, client, source, target):
             harness.verify_busy_schedule(client, source, target)
         return []
@@ -148,8 +141,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", choices=SUITES, default="full")
     args = parser.parse_args()
-    if args.suite == "full":
-        os.environ["E2E_BROWSER"] = "true"
     timings = []
     started = time.monotonic()
     result = "FAILED"

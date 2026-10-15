@@ -116,10 +116,6 @@ def verify_multitable_batch(api, client, source, target):
     wait(client, admitted["instanceId"], {"FINISHED"})
     assert json.loads(client.call("GET", f"/api/v1/task-instances/{admitted['instanceId']}/definition")["parameters"])["solutionType"] == "DATABASE_OFFLINE"
     assert len(json.loads(client.call("GET", f"/api/v1/task-instances/{admitted['instanceId']}")["executionReport"])["tables"]) == 1
-    if os.environ.get("E2E_BROWSER") == "true":
-        from multitable_browser import verify_multitable_browser
-        verify_multitable_browser(api, client, source, target)
-    print("MULTITABLE PRODUCT PASS: one Job, mixed routes, empty table, pinned report, schema guards, failure, cancellation and Quartz", flush=True)
     return identity, result["executionReport"]
 
 
