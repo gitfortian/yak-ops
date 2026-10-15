@@ -126,8 +126,8 @@ class GateTest(unittest.TestCase):
 
     def test_empty_scope_is_not_a_pass(self):
         output = io.StringIO()
-        with patch.dict(os.environ, {"ACCEPTANCE_PLAN": json.dumps(scope.plan()),
-                  "SCOPE_RESULT": "success", "PRODUCT_RESULT": "skipped",
+        with patch.dict(os.environ, {"BACKEND_TEST_PLAN": json.dumps(scope.plan()),
+                  "SCOPE_RESULT": "success", "BACKEND_RESULT": "skipped",
                   "GITHUB_STEP_SUMMARY": ""}), patch("sys.argv", ["scope", "--check-results"]), redirect_stdout(output):
             scope.main()
         self.assertIn("NOT EXECUTED", output.getvalue())
@@ -241,15 +241,17 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(2, backend.count("default: full"))
         self.assertIn("fetch-depth: 0", backend)
         self.assertIn("max-parallel: 2", backend)
-        self.assertIn("MySQL JDBC + Multi-Table CDC Product E2E", backend)
+        self.assertIn("name: Select Backend Tests", backend)
+        self.assertIn("Backend E2E Check", backend)
         self.assertNotIn("acceptance-browser", backend)
         self.assertNotIn("browser-contracts", backend)
         self.assertNotIn("E2E_BROWSER", backend)
-        self.assertIn("YAK_UI_ACCEPTANCE: 'true'", release)
+        self.assertIn("YAK_PLAYWRIGHT: 'true'", release)
+        self.assertIn("name: Playwright UI Tests", ui)
         self.assertIn("workflow_dispatch:", ui)
         self.assertIn("yak-ops-ui/tests/e2e/run.py", ui)
         scenarios = (ROOT / "yak-ops-ui/tests/e2e/run.py").read_text()
-        for scenario in ("multitable-mapping", "schema-preview", "realtime-stages"):
+        for scenario in ("multitable-mapping", "multitable-selection", "schema-preview", "realtime-stages"):
             self.assertIn(scenario, scenarios)
 
     def test_browser_runner_has_no_backend_acceptance_dependency(self):

@@ -1,8 +1,8 @@
-name: UI Acceptance
+name: Playwright UI Tests
 
 on:
   workflow_dispatch:
-  # Exception for test framework changes; normal product feature PRs skip Playwright.
+  # Run on Playwright changes; normal feature PRs use frontend checks.
   pull_request:
     paths:
       - 'yak-ops-ui/tests/e2e/**'
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   ui-contracts:
-    name: Production-build UI Contracts
+    name: Playwright (Mocked UI)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -43,7 +43,7 @@ jobs:
         run: |
           python3 -m pip install playwright==1.57.0
           python3 -m playwright install --with-deps chromium
-      - name: Run mocked UI workflows
+      - name: Run Playwright UI tests
         run: |
           python3 -u yak-ops-ui/tests/e2e/run.py --suite mocked --base-url http://127.0.0.1:5173 --version "$(node -p "require('./yak-ops-ui/package.json').version")" --sha "$GITHUB_SHA"
       - name: Preview logs on failure
@@ -53,7 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-acceptance
-          path: /tmp/yak-ui-acceptance/
+          name: playwright-ui-tests
+          path: /tmp/yak-playwright/
           if-no-files-found: ignore
           retention-days: 14

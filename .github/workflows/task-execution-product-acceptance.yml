@@ -1,4 +1,4 @@
-name: Task Execution Product Acceptance
+name: Backend E2E Tests
 
 on:
   # Always publish the gate; classify the full diff rather than using path-filter limits.
@@ -6,14 +6,14 @@ on:
   workflow_call:
     inputs:
       suite:
-        description: Acceptance scope; reusable/release callers default to the complete suite.
+        description: Backend test suite; reusable/release callers run all suites by default.
         type: string
         required: false
         default: full
   workflow_dispatch:
     inputs:
       suite:
-        description: Select a focused suite for diagnosis or full acceptance for release evidence.
+        description: Run one backend suite or all suites.
         type: choice
         required: true
         default: full
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   scope:
-    name: Product Acceptance Scope
+    name: Select Backend Tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -40,19 +40,19 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Verify scope and runner contracts
+      - name: Test backend suite selection
         run: python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
-      - name: Select acceptance scope
+      - name: Select backend suites
         id: scope
         env:
-          ACCEPTANCE_SUITE: ${{ inputs.suite || 'auto' }}
+          BACKEND_TEST_SUITE: ${{ inputs.suite || 'auto' }}
           CI_EVENT_NAME: ${{ github.event_name }}
           CI_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 scripts/ci/product_acceptance_scope.py --suite "$ACCEPTANCE_SUITE"
+        run: python3 scripts/ci/product_acceptance_scope.py --suite "$BACKEND_TEST_SUITE"
 
-  product-e2e:
-    name: Product E2E (${{ matrix.suite }})
+  backend-e2e:
+    name: Backend E2E (${{ matrix.suite }})
     needs: scope
     if: needs.scope.outputs.suites != '[]'
     runs-on: ubuntu-latest
@@ -64,7 +64,7 @@ jobs:
     env:
       E2E_DB_PASSWORD: localtestpass
       E2E_USER_PASSWORD: test-only-account-password
-      PRODUCT_SUITE: ${{ matrix.suite }}
+      BACKEND_SUITE: ${{ matrix.suite }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -97,19 +97,19 @@ jobs:
           done
           docker logs yak-task-postgres
           exit 1
-      - name: Package product and verify applicable scheduled admission
+      - name: Build backend and test scheduled admission
         shell: bash
         env:
           SCHEDULE_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/yak_schedule_contract?useSSL=false&allowPublicKeyRetrieval=true
         run: |
-          if [[ "$PRODUCT_SUITE" == full || "$PRODUCT_SUITE" == schedule ]]; then
+          if [[ "$BACKEND_SUITE" == full || "$BACKEND_SUITE" == schedule ]]; then
             docker exec yak-task-mysql mysql -uroot -p"$E2E_DB_PASSWORD" -e 'CREATE DATABASE yak_schedule_contract'
             bash mvnw -B -ntp -pl yak-ops-boot -am -Dtest=ScheduleAdmissionIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false package
           else
             bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
           fi
-      - name: Execute selected product suite
-        run: python3 -u scripts/acceptance/run_product_acceptance.py --suite "$PRODUCT_SUITE"
+      - name: Run backend E2E suite
+        run: python3 -u scripts/acceptance/run_product_acceptance.py --suite "$BACKEND_SUITE"
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -122,7 +122,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: acceptance-${{ matrix.suite }}
+          name: backend-e2e-${{ matrix.suite }}
           path: |
             /tmp/yak-acceptance-results/*.json
             /tmp/yak-schedule-browser/*.png
@@ -130,18 +130,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  acceptance-required:
-    # Preserve the former required-check name; the summary states which suites actually ran.
-    name: MySQL JDBC + Multi-Table CDC Product E2E
+  backend-e2e-check:
+    # The check passes only when every selected database suite succeeds.
+    name: Backend E2E Check
     if: always()
-    needs: [scope, product-e2e]
+    needs: [scope, backend-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - name: Require every selected suite to succeed
         env:
-          ACCEPTANCE_PLAN: ${{ needs.scope.outputs.plan }}
+          BACKEND_TEST_PLAN: ${{ needs.scope.outputs.plan }}
           SCOPE_RESULT: ${{ needs.scope.result }}
-          PRODUCT_RESULT: ${{ needs.product-e2e.result }}
+          BACKEND_RESULT: ${{ needs.backend-e2e.result }}
         run: python3 scripts/ci/product_acceptance_scope.py --check-results

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release-scoped Playwright UI acceptance. The browser never owns backend E2E."""
+"""Playwright UI tests; JDBC and CDC correctness belong to backend E2E."""
 import argparse
 import asyncio
 import json
@@ -11,27 +11,28 @@ import sys
 import time
 import traceback
 
-SCENARIOS = ("solution-selection", "schedule-save-recovery", "multitable-mapping", "schema-preview", "realtime-stages", "schedule-history", "schedule-errors")
-PRODUCT = "product-login"
-ALL = (*SCENARIOS, PRODUCT)
+SCENARIOS = ("solution-selection", "schedule-save-recovery", "multitable-mapping", "multitable-selection", "schema-preview", "realtime-stages", "schedule-history", "schedule-errors")
+LOGIN = "login-smoke"
+ALL = (*SCENARIOS, LOGIN)
 
 async def check(name, directory):
     from playwright.async_api import async_playwright
     from mock_api import mock, state
     from data_sync import (verify_solution_creation, verify_partial_task_save,
-                           verify_multitable_mapping, verify_schema_preview, verify_realtime_stages)
+                           verify_multitable_mapping, verify_multitable_selection, verify_schema_preview, verify_realtime_stages)
     from scheduling import verify_schedule_history, verify_schedule_errors
-    from product import verify_product_login
+    from login import verify_login
 
     scenarios = {
         "solution-selection": verify_solution_creation,
         "schedule-save-recovery": verify_partial_task_save,
         "multitable-mapping": verify_multitable_mapping,
+        "multitable-selection": verify_multitable_selection,
         "schema-preview": verify_schema_preview,
         "realtime-stages": verify_realtime_stages,
         "schedule-history": verify_schedule_history,
         "schedule-errors": verify_schedule_errors,
-        PRODUCT: verify_product_login,
+        LOGIN: verify_login,
     }
     directory.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
@@ -41,10 +42,10 @@ async def check(name, directory):
         context.set_default_navigation_timeout(20000)
         errors = []
         # Browser traces can record password field values. Do not trace live authentication.
-        trace_enabled = name != PRODUCT
+        trace_enabled = name != LOGIN
         if trace_enabled:
             await context.tracing.start(screenshots=True, snapshots=True, sources=False)
-        if name != PRODUCT:
+        if name != LOGIN:
             await context.add_init_script("localStorage.setItem('yak-ops.current-workspace-id','ws1');")
             await context.route("**/api/**", mock)
         page = await context.new_page()
@@ -52,7 +53,7 @@ async def check(name, directory):
         try:
             await asyncio.wait_for(scenarios[name](page), timeout=150)
             assert not errors, f"Browser page errors: {errors}"
-            if name != PRODUCT:
+            if name != LOGIN:
                 assert not state["unexpected_requests"], f"Unhandled mocked API paths: {state['unexpected_requests']}"
         except BaseException:
             try:
@@ -68,7 +69,7 @@ async def check(name, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("mocked", "product", "full"), default="mocked")
+    parser.add_argument("--suite", choices=("mocked", "login", "full"), default="mocked")
     parser.add_argument("--scenario", choices=ALL)
     parser.add_argument("--base-url", default="http://127.0.0.1:5173")
     parser.add_argument("--version", default="local")
@@ -77,7 +78,7 @@ def main():
     os.environ["YAK_UI_BASE_URL"] = args.base_url.rstrip("/")
     version = re.sub(r"[^A-Za-z0-9._-]", "_", args.version)
     sha = re.sub(r"[^A-Za-z0-9._-]", "_", args.sha)
-    root = Path(os.environ.get("YAK_UI_ARTIFACTS", "/tmp/yak-ui-acceptance")) / ("v" + version.removeprefix("v")) / sha[:12]
+    root = Path(os.environ.get("YAK_PLAYWRIGHT_ARTIFACTS", "/tmp/yak-playwright")) / ("v" + version.removeprefix("v")) / sha[:12]
     if args.scenario:
         os.environ["YAK_UI_ARTIFACT_DIR"] = str(root / args.scenario)
         start = time.monotonic()
@@ -89,7 +90,7 @@ def main():
             return 1
         print(f"PASS {args.scenario} ({time.monotonic() - start:.1f}s)", flush=True)
         return 0
-    names = SCENARIOS if args.suite == "mocked" else (PRODUCT,) if args.suite == "product" else ALL
+    names = SCENARIOS if args.suite == "mocked" else (LOGIN,) if args.suite == "login" else ALL
     root.mkdir(parents=True, exist_ok=True)
     results = []
     for name in names:
@@ -101,11 +102,11 @@ def main():
                         "durationSeconds": round(time.monotonic() - start, 2)})
     report = {"version": args.version, "commitSha": args.sha, "suite": args.suite,
               "results": results, "status": "PASS" if all(x["status"] == "PASS" for x in results) else "FAIL"}
-    (root / "ui-acceptance.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (root / "playwright-results.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report), flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-            summary.write(f"## UI Acceptance v{args.version.removeprefix('v')} ({args.sha[:12]})\n\n")
+            summary.write(f"## Playwright UI Tests v{args.version.removeprefix('v')} ({args.sha[:12]})\n\n")
             for entry in results:
                 summary.write(f"- {entry['scenario']}: {entry['status']} ({entry['durationSeconds']}s)\n")
     return 0 if report["status"] == "PASS" else 1

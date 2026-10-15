@@ -5,7 +5,7 @@ import uuid
 
 from playwright.async_api import expect
 
-async def verify_product_login(page):
+async def verify_login(page):
     base_url = os.environ["YAK_UI_BASE_URL"].rstrip("/")
     username = os.environ["YAK_UI_LOGIN_USERNAME"]
     password = os.environ["YAK_UI_LOGIN_PASSWORD"]
@@ -22,7 +22,7 @@ async def verify_product_login(page):
     await page.get_by_role("menuitem", name="新建工作空间").click()
     dialog = page.get_by_role("dialog", name="新建工作空间")
     await dialog.get_by_role("textbox", name="工作空间名称").fill(
-        "UI acceptance " + uuid.uuid4().hex[:8])
+        "Playwright " + uuid.uuid4().hex[:8])
     await dialog.get_by_role("button", name="创建", exact=True).click()
     await expect(dialog).to_have_count(0)
     await page.goto(base_url + "/data-sync")
