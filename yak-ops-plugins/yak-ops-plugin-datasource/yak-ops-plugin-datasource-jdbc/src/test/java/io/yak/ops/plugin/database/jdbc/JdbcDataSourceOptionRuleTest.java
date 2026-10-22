@@ -48,7 +48,7 @@ class JdbcDataSourceOptionRuleTest {
                   "username":"app",
                   "password":"private-credential",
                   "driverId":"MYSQL_8",
-                  "properties":{"serverTimezone":"Asia/Shanghai","useSSL":"FALSE"}
+                  "properties":{"connectionTimeZone":"Asia/Shanghai","useSSL":"FALSE"}
                 }
                 """));
         JdbcConnectionProperties second =
@@ -59,6 +59,7 @@ class JdbcDataSourceOptionRuleTest {
         assertEquals(first.driverId(), second.driverId());
         assertEquals(first.properties(), second.properties());
         assertEquals("false", second.properties().get("useSSL"));
+        assertEquals("Asia/Shanghai", second.properties().get("connectionTimeZone"));
         assertEquals("private-credential", second.password());
     }
 
