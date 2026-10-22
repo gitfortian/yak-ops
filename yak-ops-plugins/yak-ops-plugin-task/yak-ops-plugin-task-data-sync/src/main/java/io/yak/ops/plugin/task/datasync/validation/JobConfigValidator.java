@@ -5,6 +5,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.task.api.TaskPluginException;
+import io.yak.ops.plugin.task.api.TaskValidationException;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
@@ -103,8 +104,40 @@ public final class JobConfigValidator {
                 throw new IllegalArgumentException("Batch destinations overlap their source tables");
             }
         } catch (RuntimeException failure) {
+            if (schemas && failure instanceof IllegalArgumentException) {
+                throw new TaskValidationException("SCHEMA_VALIDATION", safeSchemaMessage(failure), failure);
+            }
             throw new TaskPluginException("Invalid DATA_SYNC resource binding or Schema", failure);
         }
+    }
+
+    /**
+     * Only fixed diagnostic prefixes and simple column identifiers may reach the client.
+     * Native driver exceptions, raw DDL, credentials and configuration values are excluded.
+     */
+    private static String safeSchemaMessage(RuntimeException failure) {
+        String message = failure.getMessage();
+        if (message != null) {
+            String[][] reasons = {
+                {"Unsupported default expression for column: ", "不支持的默认值表达式"},
+                {"CURRENT_TIMESTAMP requires a timestamp column: ", "时间默认值与字段类型不匹配"},
+                {"AUTO_INCREMENT requires an integer primary key: ", "自增列必须是整型主键"},
+                {"Generated column requires a verified expression and write projection: ", "生成列尚不支持安全写入"},
+                {"Unknown generation metadata for column: ", "无法确认字段生成规则"},
+                {"Unknown target generation metadata for column: ", "无法确认目标字段生成规则"},
+                {"Target column properties do not match: ", "目标字段属性与来源不一致"},
+                {"Unexpected target column properties: ", "目标表存在不兼容的字段属性"},
+                {"Target dialect cannot preserve column properties: ", "目标数据库暂不支持该字段属性"}
+            };
+            for (String[] reason : reasons) {
+                if (!message.startsWith(reason[0])) continue;
+                String column = message.substring(reason[0].length());
+                if (column.matches("[A-Za-z_][A-Za-z_0-9]{0,127}")) {
+                    return "字段 " + column + "：" + reason[1];
+                }
+            }
+        }
+        return "目标表结构不兼容，请检查字段类型和默认值等属性";
     }
 
     /** Resolves explicitly selected namespace values without changing the persisted configuration. */
