@@ -223,7 +223,8 @@ jobs:
           FRONTEND_RESULT: ${{ needs.frontend-quality.result }}
           DISTRIBUTION_RESULT: ${{ needs.distribution-quality.result }}
           BACKEND_TESTS_RESULT: ${{ needs.backend-tests.result }}
-          EVENT_NAME: ${{ github.event_name }}        run: |
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
           set -euo pipefail
           echo "## PR Required Checks" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
