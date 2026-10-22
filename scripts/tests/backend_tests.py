@@ -12,6 +12,9 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ci'))
+import impact
+
 ROOT = Path(__file__).resolve().parents[2]
 JDBC = "yak-flow/yak-flow-connector-jdbc"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql"
@@ -32,34 +35,8 @@ SUITES = {
 
 
 def select(paths: list[str]) -> list[str]:
-    """Classify both sides of renames; unknown/shared backend changes fail closed."""
-    selected: set[str] = set()
-    for path in paths:
-        if path in {"pom.xml", "mvnw", "mvnw.cmd"} or path.startswith((".mvn/", "yak-ops-test-utils/", "scripts/tests/", "scripts/ci/", ".github/workflows/backend-tests.yml")):
-            return list(SUITES)
-        if path.endswith(".md") or path.startswith(("docs/", "yak-ops-ui/", ".github/ISSUE_TEMPLATE/")):
-            continue
-        if path.startswith((".github/workflows/playwright-", "yak-ops-dist/", "docker/", "scripts/release/")) or path in {"Dockerfile", "compose.yaml", "compose.without-mysql.yaml", "release.env", ".gitignore", "LICENSE", "NOTICE"}:
-            continue
-        if path.startswith(JDBC + "/"):
-            vendor = next((v for v in ("mysql", "postgres", "oracle") if v in path.lower()), None)
-            if "/src/test/" in path and "/integration/" in path:
-                selected.add("pipeline")
-            elif vendor and path.endswith(".java"):
-                selected.update(("jdbc-" + vendor, "pipeline", "cdc-pipeline"))
-            else:
-                selected.update(("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc-pipeline", "backend-e2e"))
-        elif path.startswith(CDC + "/"):
-            selected.update(("cdc", "cdc-pipeline", "backend-e2e", "recovery-e2e"))
-        elif path.startswith(E2E + "/"):
-            selected.update(("backend-e2e", "recovery-e2e"))
-        elif path.startswith(("yak-flow/yak-flow-runtime/", "yak-flow/yak-flow-connector-base/", "yak-ops-core/")):
-            selected.update(("pipeline", "cdc", "cdc-pipeline", "backend-e2e", "recovery-e2e"))
-        elif path.startswith(("yak-ops-business/", "yak-ops-task-execution/", "yak-ops-plugins/", "yak-ops-boot/", "yak-ops-platform/")):
-            selected.update(("business", "backend-e2e", "recovery-e2e"))
-        else:
-            return list(SUITES)
-    return [name for name in SUITES if name in selected]
+    """Use the same change impact classification as the PR quality jobs."""
+    return impact.select_suites(paths)
 
 
 def selected_suites(request: str) -> list[str]:

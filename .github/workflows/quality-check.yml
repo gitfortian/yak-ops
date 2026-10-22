@@ -24,64 +24,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend-quality:
-    name: Backend Quality
+  scope:
+    name: Detect Changes
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.impact.outputs.backend }}
+      frontend: ${{ steps.impact.outputs.frontend }}
+      distribution: ${{ steps.impact.outputs.distribution }}
+      release: ${{ steps.impact.outputs.release }}
+      tests: ${{ steps.impact.outputs.tests }}
+      modules: ${{ steps.impact.outputs.modules }}
+      suites: ${{ steps.impact.outputs.suites }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Detect CI scope
-        id: scope
+      - name: Detect changed modules and tests
+        id: impact
         run: bash scripts/ci/detect-changes.sh
+      - name: Verify change selection
+        run: |
+          bash scripts/ci/test-detect-changes.sh
+          python3 -m unittest discover -s scripts/ci -p 'test_impact.py' -v
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
-      - name: Verify CI scope
-        if: steps.scope.outputs.backend == 'true'
-        run: bash scripts/ci/test-detect-changes.sh
-
-      - name: Setup Java
-        if: steps.scope.outputs.backend == 'true'
-        uses: actions/setup-java@v5
+  backend-quality:
+    name: Backend Quality
+    needs: scope
+    if: needs.scope.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: '21'
           cache: maven
-
-      - name: Release tooling syntax
-        run: bash -n scripts/release/*.sh
-
-      - name: Release metadata consistency
-        run: bash scripts/release/check-release-metadata.sh
-
-      - name: Release migration contract
-        run: |
-          source release.env
-          bash scripts/release/check-release-migration.sh "$YAK_OPS_VERSION"
-
-      - name: Release notes structure
-        run: |
-          source release.env
-          bash scripts/release/check-release-notes.sh "$YAK_OPS_VERSION"
-
       - name: Backend logging rules
-        if: steps.scope.outputs.backend == 'true'
         run: |
           python3 scripts/ci/test_logging_rules.py
           python3 scripts/verify_logging_rules.py
-
-      # Maven verify already binds Checkstyle and Spotless. Execute the reactor
-      # once while keeping unit tests and both style checks mandatory.
-      - name: Backend verify (unit tests, Checkstyle, Spotless)
-        if: steps.scope.outputs.backend == 'true'
-        run: >-
-          bash mvnw -B -ntp
-          -pl '!yak-ops-ui,!yak-ops-dist'
-          verify
-
+      - name: Verify changed Maven modules and upstream dependencies
+        env:
+          CI_MODULES: ${{ needs.scope.outputs.modules }}
+        run: |
+          test -n "${CI_MODULES}"
+          bash mvnw -B -ntp -pl "${CI_MODULES}" -am verify
       - name: Upload failed test reports
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,8 +81,31 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  release-checks:
+    name: Release Checks
+    needs: scope
+    if: needs.scope.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Release tooling syntax
+        run: bash -n scripts/release/*.sh
+      - name: Release metadata consistency
+        run: bash scripts/release/check-release-metadata.sh
+      - name: Release migration contract
+        run: |
+          source release.env
+          bash scripts/release/check-release-migration.sh "$YAK_OPS_VERSION"
+      - name: Release notes structure
+        run: |
+          source release.env
+          bash scripts/release/check-release-notes.sh "$YAK_OPS_VERSION"
+
   frontend-quality:
     name: Frontend Quality
+    needs: scope
+    if: needs.scope.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -105,12 +118,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect CI scope
-        id: scope
-        run: bash ../scripts/ci/detect-changes.sh
-
       - name: Setup Node
-        if: steps.scope.outputs.frontend == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: "22.13"
@@ -118,36 +126,31 @@ jobs:
           cache-dependency-path: yak-ops-ui/package-lock.json
 
       - name: Install dependencies
-        if: steps.scope.outputs.frontend == 'true'
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run format:check
 
       - name: Frontend lint
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run lint
 
       - name: Frontend type check
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run typecheck
 
       - name: Frontend architecture
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run architecture:check
 
       - name: Frontend contract
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run contract:check
 
       - name: Frontend build
-        if: steps.scope.outputs.frontend == 'true'
         run: npm run build
 
 
   distribution-quality:
     name: Distribution Quality
+    needs: scope
+    if: needs.scope.outputs.distribution == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -157,12 +160,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect CI scope
-        id: changes
-        run: bash scripts/ci/detect-changes.sh
-
       - name: Setup Java
-        if: steps.changes.outputs.distribution == 'true'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -170,7 +168,6 @@ jobs:
           cache: maven
 
       - name: Setup Node
-        if: steps.changes.outputs.distribution == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: "22.13"
@@ -178,28 +175,25 @@ jobs:
           cache-dependency-path: yak-ops-ui/package-lock.json
 
       - name: Install frontend dependencies
-        if: steps.changes.outputs.distribution == 'true'
         working-directory: yak-ops-ui
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Build frontend distribution
-        if: steps.changes.outputs.distribution == 'true'
         working-directory: yak-ops-ui
         run: npm run build
 
       - name: Build Yak Ops distribution
-        if: steps.changes.outputs.distribution == 'true'
         run: bash mvnw -B -ntp -DskipTests package
 
       - name: Verify Yak Ops distribution
-        if: steps.changes.outputs.distribution == 'true'
         run: bash scripts/release/verify-distribution.sh
 
   # On PRs, run affected real-database tests as part of this workflow. The
   # standalone Backend Tests workflow remains available manually and for releases.
   backend-tests:
     name: Affected Backend Tests
-    if: github.event_name == 'pull_request'
+    needs: scope
+    if: github.event_name == 'pull_request' && needs.scope.outputs.tests == 'true'
     uses: ./.github/workflows/backend-tests.yml
     with:
       suite: auto
@@ -210,9 +204,11 @@ jobs:
     name: PR Required Checks
     if: ${{ always() }}
     needs:
+      - scope
       - backend-quality
       - frontend-quality
       - distribution-quality
+      - release-checks
       - backend-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -220,6 +216,13 @@ jobs:
       - name: Verify quality and selected backend tests
         shell: bash
         env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SELECT_BACKEND: ${{ needs.scope.outputs.backend }}
+          SELECT_FRONTEND: ${{ needs.scope.outputs.frontend }}
+          SELECT_DISTRIBUTION: ${{ needs.scope.outputs.distribution }}
+          SELECT_RELEASE: ${{ needs.scope.outputs.release }}
+          SELECT_TESTS: ${{ needs.scope.outputs.tests }}
+          RELEASE_RESULT: ${{ needs.release-checks.result }}
           BACKEND_RESULT: ${{ needs.backend-quality.result }}
           FRONTEND_RESULT: ${{ needs.frontend-quality.result }}
           DISTRIBUTION_RESULT: ${{ needs.distribution-quality.result }}
@@ -227,33 +230,30 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-
           echo "## PR Required Checks" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Quality job | Result |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
-
+          echo "| Check | Required | Result |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| --- | --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
+          [[ "${SCOPE_RESULT}" == "success" ]] || { echo "::error::Change selection failed"; exit 1; }
           failed=0
           checks=(
-            "Backend Quality:${BACKEND_RESULT}"
-            "Frontend Quality:${FRONTEND_RESULT}"
-            "Distribution Quality:${DISTRIBUTION_RESULT}"
+            "Backend Quality:${SELECT_BACKEND}:${BACKEND_RESULT}"
+            "Frontend Quality:${SELECT_FRONTEND}:${FRONTEND_RESULT}"
+            "Distribution Quality:${SELECT_DISTRIBUTION}:${DISTRIBUTION_RESULT}"
+            "Release Checks:${SELECT_RELEASE}:${RELEASE_RESULT}"
           )
-          # Skipped backend suites are valid only when none was selected; the
-          # called workflow's Backend Tests Check verifies this distinction.
-          # Skipping the entire reusable workflow on a PR is always a failure.
-          if [[ "${EVENT_NAME}" == "pull_request" || "${BACKEND_TESTS_RESULT}" != "skipped" ]]; then
-            checks+=("Affected Backend Tests:${BACKEND_TESTS_RESULT}")
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            checks+=("Affected Backend Tests:${SELECT_TESTS}:${BACKEND_TESTS_RESULT}")
           fi
           for check in "${checks[@]}"; do
             name="${check%%:*}"
-            result="${check#*:}"
-            echo "| ${name} | ${result} |" >> "${GITHUB_STEP_SUMMARY}"
-            if [[ "${result}" != "success" ]]; then
-              echo "::error::${name} was ${result}; all quality jobs must succeed."
+            rest="${check#*:}"
+            required="${rest%%:*}"
+            actual="${rest#*:}"
+            echo "| ${name} | ${required} | ${actual} |" >> "${GITHUB_STEP_SUMMARY}"
+            if [[ "${required}" == "true" && "${actual}" != "success" ]] || [[ "${required}" != "true" && "${actual}" != "skipped" ]]; then
+              echo "::error::${name} expected ${required}, got ${actual}"
               failed=1
             fi
           done
-
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
           exit "${failed}"
