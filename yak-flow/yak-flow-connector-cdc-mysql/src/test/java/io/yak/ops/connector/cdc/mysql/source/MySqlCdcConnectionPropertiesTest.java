@@ -23,7 +23,7 @@ class MySqlCdcConnectionPropertiesTest {
             new TableSchema(List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
 
     @Test
-    void usesUtcSessionsWhenServerTimezoneIsUnknown() {
+    void usesUtcSessionsWhenConnectionTimezoneIsUnspecified() {
         var config = config(Map.of());
         assertEquals("+00:00", config.connectionProperties().get("connectionTimeZone"));
         assertEquals("true", config.connectionProperties().get("forceConnectionTimeZoneToSession"));
@@ -51,9 +51,12 @@ class MySqlCdcConnectionPropertiesTest {
 
     @Test
     void rejectsConflictingAndUnsafeConnectionProperties() {
-        assertThrows(IllegalArgumentException.class, () -> config(Map.of(
-                "connectionTimeZone", "UTC", "forceConnectionTimeZoneToSession", "false")));
-        // Explicit timezone remains in charge of the session; no extra defaults.
+        // An explicit timezone does not force a different database session timezone.
+        assertEquals(
+                "false",
+                config(Map.of("connectionTimeZone", "UTC", "forceConnectionTimeZoneToSession", "false"))
+                        .connectionProperties()
+                        .get("forceConnectionTimeZoneToSession"));
         assertFalse(config(Map.of("connectionTimeZone", "Asia/Shanghai"))
                 .connectionProperties()
                 .containsKey("forceConnectionTimeZoneToSession"));
