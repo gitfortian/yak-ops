@@ -63,7 +63,10 @@ export default function PlanningDetails(props: Props) {
 
   return (
     <section className="min-w-0 space-y-4">
-      <div className="rounded border border-[var(--yak-components-panel-border)] p-4">
+      <section
+        aria-label={`${node.name}详情`}
+        className="rounded border border-[var(--yak-components-panel-border)] p-4"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="min-w-0 break-words font-medium">{node.name}</h2>
           <div className="flex gap-2">
@@ -92,7 +95,7 @@ export default function PlanningDetails(props: Props) {
           <dt>描述</dt>
           <dd className="whitespace-pre-wrap break-words">{node.description || "—"}</dd>
         </dl>
-      </div>
+      </section>
       {node.kind === "PROCESS" ? (
         <ProcessAssets key={node.id} processId={node.id} />
       ) : (
