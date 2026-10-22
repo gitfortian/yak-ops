@@ -22,6 +22,7 @@ const taskList = read("../apps/web/app/data-sync/index.tsx");
 const router = read("../apps/web/app/router/AppRouter.tsx");
 const page = read("../apps/web/app/data-sync/task-detail.tsx");
 const css = read("../apps/web/app/data-sync/execution-detail.css");
+const logPanel = read("../apps/web/app/data-sync/task-instance-log-panel.tsx");
 
 for (const source of [detail, page]) {
   assert.doesNotMatch(source, /DataSyncExecutionConfigContent|本次运行配置|配置快照/);
@@ -52,6 +53,16 @@ assert.match(page, /request !== detailRequest.current/);
 assert.match(page, /<ExecutionStatusIcon\s+status=\{instance.status\}/);
 assert.match(page, /key=\{selectedInstance.id\}/);
 assert.match(page, /<TaskInstanceLogPanel/);
+assert.ok(logPanel.includes('className="relative rounded-xl bg-[#151b2d]"'));
+assert.ok(logPanel.includes('className="absolute top-3 right-3 z-10 flex gap-1"'));
+assert.ok(logPanel.includes("<TooltipProvider>"));
+assert.equal((logPanel.match(/<TooltipTrigger/g) || []).length, 3);
+for (const label of ["刷新日志", "复制日志", "下载日志"]) {
+  assert.ok(logPanel.includes('aria-label="' + label + '"'));
+}
+assert.ok(logPanel.includes("navigator.clipboard.writeText(content)"));
+assert.ok(logPanel.includes("ref={bodyRef}"));
+assert.doesNotMatch(logPanel, /className="mt-3/);
 assert.equal((page.match(/<TabsTab\s/g) || []).length, 2);
 
 assert.match(router, /path="\/data-sync"/);
