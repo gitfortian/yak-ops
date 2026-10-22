@@ -1,4 +1,13 @@
-import { Button, SectionCard } from "@yak-ops/yak-ui";
+import {
+  Button,
+  SectionCard,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  toast,
+} from "@yak-ops/yak-ui";
+import { Copy, Download, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { downloadTaskInstanceLogs, getTaskInstanceLogs } from "@/service/task-execution";
@@ -64,6 +73,16 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
     if (element) element.scrollTop = element.scrollHeight;
   }, [content]);
 
+  const copy = async () => {
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("已复制日志");
+    } catch {
+      toast.error("复制失败");
+    }
+  };
+
   const download = async () => {
     if (downloading) return;
     setDownloading(true);
@@ -81,22 +100,68 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
   };
 
   const contentView = (
-    <>
-      <div className="flex justify-end gap-2">
-        <Button size="small" onClick={() => setRevision((value) => value + 1)}>
-          刷新
-        </Button>
-        <Button size="small" loading={downloading} onClick={() => void download()}>
-          下载
-        </Button>
+    <TooltipProvider>
+      <div className="relative rounded-xl bg-[#151b2d]">
+        <div className="absolute top-3 right-3 z-10 flex gap-1">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-md border-0 bg-white/10 p-0 text-[#ecf0f8] hover:bg-white/20"
+                  aria-label="刷新日志"
+                  onClick={() => setRevision((value) => value + 1)}
+                >
+                  <RefreshCw size={14} aria-hidden="true" />
+                </Button>
+              }
+            />
+            <TooltipContent side="top">刷新日志</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-md border-0 bg-white/10 p-0 text-[#ecf0f8] hover:bg-white/20"
+                  aria-label="复制日志"
+                  disabled={!content}
+                  onClick={() => void copy()}
+                >
+                  <Copy size={14} aria-hidden="true" />
+                </Button>
+              }
+            />
+            <TooltipContent side="top">复制日志</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-md border-0 bg-white/10 p-0 text-[#ecf0f8] hover:bg-white/20"
+                  aria-label="下载日志"
+                  loading={downloading}
+                  onClick={() => void download()}
+                >
+                  <Download size={14} aria-hidden="true" />
+                </Button>
+              }
+            />
+            <TooltipContent side="top">下载日志</TooltipContent>
+          </Tooltip>
+        </div>
+        <pre
+          ref={bodyRef}
+          className="max-h-96 min-h-36 overflow-auto rounded-xl p-4 text-xs leading-5 whitespace-pre-wrap break-words text-[#ecf0f8]"
+        >
+          {content || (error ? "日志加载失败" : "暂无日志")}
+        </pre>
       </div>
-      <pre
-        ref={bodyRef}
-        className="mt-3 max-h-96 min-h-36 overflow-auto rounded-xl bg-[#151b2d] p-4 text-xs leading-5 whitespace-pre-wrap break-words text-[#ecf0f8]"
-      >
-        {content || (error ? "日志加载失败" : "暂无日志")}
-      </pre>
-    </>
+    </TooltipProvider>
   );
 
   if (embedded) return contentView;
