@@ -28,9 +28,12 @@ export function SchemaPreview({
       .then((rows) => {
         if (!controller.signal.aborted) setResult({ key, rows });
       })
-      .catch(() => {
+      .catch((failure) => {
         if (!controller.signal.aborted)
-          setResult({ key, error: "结构预览失败，请检查字段类型、目标结构与权限" });
+          setResult({
+            key,
+            error: failure instanceof Error ? failure.message : "结构预览失败，请检查字段类型、目标结构与权限",
+          });
       });
     return () => controller.abort();
   }, [open, disabled, key]);
