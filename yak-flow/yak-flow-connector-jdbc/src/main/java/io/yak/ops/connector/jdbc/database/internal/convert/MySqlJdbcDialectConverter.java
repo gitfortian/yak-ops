@@ -11,6 +11,16 @@ import java.sql.Types;
 /** MySQL-specific BIT and unsigned numeric metadata normalization. */
 public final class MySqlJdbcDialectConverter extends AbstractDialectConverter {
 
+    private static final java.util.Set<String> SPATIAL_TYPES = java.util.Set.of(
+            "POINT",
+            "GEOMETRY",
+            "LINESTRING",
+            "POLYGON",
+            "MULTIPOINT",
+            "MULTILINESTRING",
+            "MULTIPOLYGON",
+            "GEOMETRYCOLLECTION");
+
     public MySqlJdbcDialectConverter(ResultSetMetaData metadata) throws SQLException {
         super(metadata);
     }
@@ -21,8 +31,7 @@ public final class MySqlJdbcDialectConverter extends AbstractDialectConverter {
         if (java.util.Set.of("ENUM", "SET", "JSON").contains(name)) {
             return LogicalTypes.STRING;
         }
-        if (java.util.Set.of("POINT", "GEOMETRY", "LINESTRING", "POLYGON", "MULTIPOINT",
-                        "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION").contains(name)) {
+        if (SPATIAL_TYPES.contains(name)) {
             throw new SQLFeatureNotSupportedException(
                     "Unsupported JDBC type " + name + " for field " + metadata.getColumnLabel(index));
         }
