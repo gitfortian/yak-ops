@@ -9,6 +9,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -179,7 +180,57 @@ public final class JdbcTableMetadata {
                 throw new SQLException("JDBC primary key refers to an unknown column");
             }
         }
+        if ("MySQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())) {
+            return readMySqlUpdates(connection, catalog, tableId.table(), ordered);
+        }
         return List.copyOf(ordered);
+    }
+
+    /**
+     * JDBC COLUMN_DEF does not contain MySQL's ON UPDATE clause. Read the server's
+     * canonical EXTRA metadata separately, using bound schema/table identifiers.
+     */
+    private static List<JdbcColumnInfo> readMySqlUpdates(
+            Connection connection, String catalog, String table, List<JdbcColumnInfo> columns) throws SQLException {
+        Map<String, String> updates = new HashMap<>();
+        String sql = "SELECT COLUMN_NAME, EXTRA FROM information_schema.COLUMNS "
+                + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, catalog == null ? connection.getCatalog() : catalog);
+            statement.setString(2, table);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    String extra = rows.getString("EXTRA");
+                    if (extra == null || !extra.toLowerCase(java.util.Locale.ROOT).contains("on update")) continue;
+                    var matcher = java.util.regex.Pattern
+                            .compile("(?i)on update\\s+(current_timestamp(?:\\([0-6]\\))?)")
+                            .matcher(extra);
+                    updates.put(
+                            rows.getString("COLUMN_NAME"),
+                            matcher.find() ? matcher.group(1) : "UNSUPPORTED_ON_UPDATE");
+                }
+            }
+        }
+        List<JdbcColumnInfo> enriched = new ArrayList<>(columns.size());
+        for (JdbcColumnInfo column : columns) {
+            enriched.add(new JdbcColumnInfo(
+                    column.name(),
+                    column.typeName(),
+                    column.jdbcType(),
+                    column.size(),
+                    column.scale(),
+                    column.nullable(),
+                    column.ordinalPosition(),
+                    column.primaryKey(),
+                    column.primaryKeyPosition(),
+                    column.remarks(),
+                    column.hasDefaultValue(),
+                    column.autoIncrement(),
+                    column.generated(),
+                    column.defaultExpression(),
+                    updates.get(column.name())));
+        }
+        return List.copyOf(enriched);
     }
 
     private static TreeMap<Integer, String> readPrimaryKeys(
