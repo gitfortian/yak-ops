@@ -126,8 +126,7 @@ public final class JobPlanner {
                     source.get(JobOptions.DATABASE),
                     source.get(JobOptions.SCHEMA),
                     source.get(JobOptions.TABLE));
-            DataSourceTable from =
-                    prepareSchema ? SchemaValidator.sourceMetadata(sourceLookup) : sourceLookup.get();
+            DataSourceTable from = prepareSchema ? SchemaValidator.sourceMetadata(sourceLookup) : sourceLookup.get();
             DataSourceInfo targetInfo;
             TableId targetTable;
             DataSourceTable actual;
