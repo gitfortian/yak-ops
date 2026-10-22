@@ -110,7 +110,11 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             }
         }
         return dialect.createTablePlan(
-                event.tableId(), schema, event.getTableComment(), event.getColumnComments(), event.getColumnProperties());
+                event.tableId(),
+                schema,
+                event.getTableComment(),
+                event.getColumnComments(),
+                event.getColumnProperties());
     }
 
     @Override
@@ -193,7 +197,10 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         for (JdbcColumnInfo column : catalog.getColumns(event.tableId())) {
             ColumnProperties planned = expected.get(column.name());
             ColumnProperties actualProperties = new ColumnProperties(
-                    column.defaultExpression(), column.autoIncrement(), column.generated(), column.onUpdateExpression());
+                    column.defaultExpression(),
+                    column.autoIncrement(),
+                    column.generated(),
+                    column.onUpdateExpression());
             validateColumnProperties(column.name(), planned, actualProperties);
             comments.put(column.name(), column.remarks());
         }
