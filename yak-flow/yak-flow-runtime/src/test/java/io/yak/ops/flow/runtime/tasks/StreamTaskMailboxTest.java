@@ -11,6 +11,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -67,6 +68,77 @@ class StreamTaskMailboxTest {
         assertEquals(0, task.finishes.get());
         assertEquals(1, task.closes.get());
         assertThrows(ExecutionException.class, () -> task.runControl().get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void shouldTreatWrappedInterruptedWaitAsCancellation() throws Exception {
+        CountDownLatch waiting = new CountDownLatch(1);
+        TestTask task = new TestTask() {
+            @Override
+            protected InputStatus processInput() {
+                waiting.countDown();
+                try {
+                    new CountDownLatch(1).await();
+                } catch (InterruptedException interrupted) {
+                    throw new CompletionException(new CompletionException(interrupted));
+                }
+                return InputStatus.NOTHING_AVAILABLE;
+            }
+        };
+        task.start().get(5, TimeUnit.SECONDS);
+        assertTrue(waiting.await(5, TimeUnit.SECONDS));
+
+        task.cancelAsync().get(5, TimeUnit.SECONDS);
+        ExecutionException completion = assertThrows(
+                ExecutionException.class, () -> task.completionFuture().get(5, TimeUnit.SECONDS));
+        assertTrue(completion.getCause() instanceof CancellationException);
+        assertEquals(1, task.closes.get());
+        assertEquals(0, task.finishes.get());
+    }
+
+    @Test
+    void shouldNotSuppressRealFailureDuringCancellation() throws Exception {
+        CountDownLatch waiting = new CountDownLatch(1);
+        TestTask task = new TestTask() {
+            @Override
+            protected InputStatus processInput() {
+                waiting.countDown();
+                try {
+                    new CountDownLatch(1).await();
+                } catch (InterruptedException interrupted) {
+                    throw new IllegalStateException("Real writer failure", interrupted);
+                }
+                return InputStatus.NOTHING_AVAILABLE;
+            }
+        };
+        task.start().get(5, TimeUnit.SECONDS);
+        assertTrue(waiting.await(5, TimeUnit.SECONDS));
+
+        ExecutionException failure = assertThrows(
+                ExecutionException.class, () -> task.cancelAsync().get(5, TimeUnit.SECONDS));
+        assertTrue(failure.getCause().toString().contains("Real writer failure"));
+        assertEquals(1, task.closes.get());
+    }
+
+    @Test
+    void shouldPreserveCleanupFailureOnCanceledTask() throws Exception {
+        TestTask task = new TestTask() {
+            @Override
+            protected void closeTask() {
+                super.closeTask();
+                throw new IllegalStateException("Connection cleanup failed");
+            }
+        };
+        task.start().get(5, TimeUnit.SECONDS);
+        assertTrue(task.firstPoll.await(5, TimeUnit.SECONDS));
+
+        task.cancelAsync().get(5, TimeUnit.SECONDS);
+        ExecutionException completion = assertThrows(
+                ExecutionException.class, () -> task.completionFuture().get(5, TimeUnit.SECONDS));
+        assertTrue(completion.getCause() instanceof CancellationException);
+        assertEquals(1, completion.getCause().getSuppressed().length);
+        assertTrue(completion.getCause().getSuppressed()[0].getMessage().contains("Connection cleanup failed"));
+        assertEquals(1, task.closes.get());
     }
 
     @Test
