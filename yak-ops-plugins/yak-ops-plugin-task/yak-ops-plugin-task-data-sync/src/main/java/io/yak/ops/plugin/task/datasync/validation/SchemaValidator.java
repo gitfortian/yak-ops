@@ -55,8 +55,7 @@ public final class SchemaValidator {
                 throw new IllegalArgumentException("Source physical column properties are unavailable");
             }
             boolean hasNativeFeatures = source.columnProperties().values().stream()
-                    .anyMatch(properties -> properties.hasFeatures()
-                            || requiresSameVendor(properties.nativeType()));
+                    .anyMatch(properties -> properties.hasFeatures() || requiresSameVendor(properties.nativeType()));
             if (hasNativeFeatures && !source.datasourceType().equals(target.type())) {
                 throw new IllegalArgumentException(
                         "Physical column expressions require a verified same-database dialect");
@@ -72,7 +71,8 @@ public final class SchemaValidator {
 
     private static boolean requiresSameVendor(String nativeType) {
         return nativeType != null
-                && nativeType.toLowerCase(java.util.Locale.ROOT)
+                && nativeType
+                        .toLowerCase(java.util.Locale.ROOT)
                         .matches(".*\\b(enum|set|json|unsigned|zerofill|year)\\b.*");
     }
 
