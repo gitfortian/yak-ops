@@ -16,7 +16,7 @@ See .github/CONTRIBUTING.md.
 ## Verifying this change
 
 <!-- List commands/tests actually executed and their results. Distinguish skipped,
-blocked or manual checks from passing automated tests. See DEVELOPMENT.md#product-acceptance-scopes. -->
+blocked or manual checks from passing automated tests. See DEVELOPMENT.md#backend-integration-tests. -->
 
 - Selected verification scope and risk-based reason:
 - Reviewed head / base / tested merge or tree SHA:
@@ -25,7 +25,7 @@ blocked or manual checks from passing automated tests. See DEVELOPMENT.md#produc
 
 <!-- For follow-up fixes, record the previously reviewed SHA and the delta reviewed.
 Reuse evidence only for matching head, tested base/tree, suite and configuration.
-A focused run is not full product or release acceptance. -->
+A focused run is not full backend E2E or release verification. -->
 
 ## Does this pull request potentially affect any of the following?
 

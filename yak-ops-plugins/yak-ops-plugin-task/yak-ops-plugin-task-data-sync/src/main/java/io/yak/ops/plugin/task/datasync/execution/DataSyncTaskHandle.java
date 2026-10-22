@@ -103,10 +103,12 @@ final class DataSyncTaskHandle implements TaskHandle {
                 String dataStep = incremental == null || incremental.initialLoad() ? "FULL" : "INCREMENTAL";
                 progress = new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous, dataStep);
                 status = JobStatus.RUNNING;
-                LOG.info(
-                        "Schema preparation started, tableCount={}",
-                        plan.tables().size());
-                preparation.prepare(plan, identity, progress);
+                if (config.steps().contains(Step.SCHEMA)) {
+                    LOG.info(
+                            "Schema preparation started, tableCount={}",
+                            plan.tables().size());
+                    preparation.prepare(plan, identity, progress);
+                }
                 checkCanceled();
                 // Re-read source and target metadata after DDL; creation itself leaves admission stable.
                 JobPlan current = planner.plan(parameters, identity);

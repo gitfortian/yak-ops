@@ -1,7 +1,7 @@
 name: Release Gate
 
 on:
-  # Formal release validation is manually triggered; ordinary PRs use Quality Check only.
+  # Formal release validation is manually triggered; PRs run quality and affected backend tests.
   workflow_dispatch:
     inputs:
       release_version:
@@ -56,30 +56,19 @@ jobs:
     name: Quality Gate
     uses: ./.github/workflows/quality-check.yml
 
-  backend-acceptance:
-    name: Full Backend Acceptance
-    uses: ./.github/workflows/backend-acceptance.yml
+  backend-tests:
+    name: Full Backend Tests
+    uses: ./.github/workflows/backend-tests.yml
     with:
-      full_sweep: true
-
-  # Real JDBC driver/database checks run at release time, not for ordinary PRs.
-  jdbc-source-acceptance:
-    name: JDBC Source Acceptance
-    uses: ./.github/workflows/jdbc-source-acceptance.yml
-
-  jdbc-sink-acceptance:
-    name: JDBC Sink Cross-Database Acceptance
-    uses: ./.github/workflows/jdbc-sink-cross-database-acceptance.yml
+      suite: full
 
   package-smoke:
     name: Distribution + Docker + Compose Smoke
     needs:
       - quality
-      - backend-acceptance
-      - jdbc-source-acceptance
-      - jdbc-sink-acceptance
+      - backend-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -175,8 +164,24 @@ jobs:
             echo "OK  ${image} version=${version} revision=${revision}"
           done
 
-      - name: Compose login smoke
+      - name: Install pinned Playwright and Chromium
+        run: |
+          python3 -m pip install playwright==1.57.0
+          python3 -m playwright install --with-deps chromium
+
+      - name: Compose smoke and Playwright UI tests
+        env:
+          YAK_PLAYWRIGHT: 'true'
         run: bash scripts/release/smoke-compose.sh "v${RELEASE_VERSION}"
+
+      - name: Upload Playwright results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yak-ops-${{ env.RELEASE_VERSION }}-playwright
+          path: /tmp/yak-playwright/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Build release candidate evidence
         shell: bash
@@ -209,13 +214,13 @@ jobs:
             printf -- '- Frontend Image: `%s`\n' "${frontend_image}"
             printf -- '- Frontend Local Image ID: `%s`\n' "${frontend_id}"
             printf -- '- Quality Gate: PASS\n'
-            printf -- '- JDBC Source Acceptance: PASS\n'
-            printf -- '- JDBC Sink Cross-Database Acceptance: PASS\n'
-            printf -- '- Full Backend Acceptance: PASS\n'
-            printf -- '- Task Execution Product Acceptance: PASS\n'
+            printf -- '- JDBC Source IT: PASS\n'
+            printf -- '- JDBC Sink Cross-Database IT: PASS\n'
+            printf -- '- Backend Tests: PASS (full suite; see the exact Release Gate run)\n'
             printf -- '- Distribution Verification: PASS\n'
             printf -- '- Docker Image Identity: PASS\n'
             printf -- '- Compose Login Smoke: PASS\n\n'
+            printf -- '- Playwright UI Tests: PASS\n\n'
             printf '%s\n' 'Local image IDs are candidate-build evidence. Registry manifest digests are recorded only after immutable version tags are pushed during the publish step.'
           } > release-evidence/release-evidence.md
 
@@ -234,9 +239,7 @@ jobs:
     if: always()
     needs:
       - quality
-      - backend-acceptance
-      - jdbc-source-acceptance
-      - jdbc-sink-acceptance
+      - backend-tests
       - package-smoke
     runs-on: ubuntu-latest
 
@@ -245,14 +248,12 @@ jobs:
         shell: bash
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
-          ACCEPTANCE_RESULT: ${{ needs.backend-acceptance.result }}
-          JDBC_SOURCE_RESULT: ${{ needs.jdbc-source-acceptance.result }}
-          JDBC_SINK_RESULT: ${{ needs.jdbc-sink-acceptance.result }}
+          BACKEND_TESTS_RESULT: ${{ needs.backend-tests.result }}
           PACKAGE_SMOKE_RESULT: ${{ needs.package-smoke.result }}
         run: |
           set -euo pipefail
 
-          for result in "${QUALITY_RESULT}" "${ACCEPTANCE_RESULT}" "${JDBC_SOURCE_RESULT}" "${JDBC_SINK_RESULT}" "${PACKAGE_SMOKE_RESULT}"; do
+          for result in "${QUALITY_RESULT}" "${BACKEND_TESTS_RESULT}" "${PACKAGE_SMOKE_RESULT}"; do
             if [[ "${result}" != "success" ]]; then
               echo "Automated release gate failed: ${result}"
               exit 1

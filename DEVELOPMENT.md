@@ -26,43 +26,68 @@ bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.
 bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
 ```
 
-Run relevant tests before the full reactor where possible. Connector real-database ITs and product acceptance are separate from Maven `verify`. Current CI scopes and required checks are defined by [Quality Check](.github/workflows/quality-check.yml). Skipped acceptance is not successful acceptance.
+Run relevant tests before the full reactor. Ordinary Maven `verify` runs unit and architecture tests without Docker. Database tests use the explicit `integration-tests` profile and Failsafe; Backend E2E also uses `backend-e2e` and runs the packaged Boot JAR. An unexecuted test is not a pass.
 
-Frontend commands and quality gates are documented in [frontend tooling](yak-ops-ui/docs/tooling.md). Do not run frontend or release builds to validate a Markdown-only change unless its scope requires them.
+Frontend commands and quality checks are documented in [frontend tooling](yak-ops-ui/docs/tooling.md).
 
-## Product Acceptance Scopes
+## Test types and execution
 
-[Task Execution Product Acceptance](.github/workflows/task-execution-product-acceptance.yml) selects work from the complete PR diff. Its [scope map](scripts/ci/product_acceptance_scope.py) is executable and covered by tests. Documentation needs no product environment. Ordinary frontend presentation runs controlled browser contracts without Java or databases. Known outbound sync parameters, preview and schedule paths select their applicable real suites; shared backend, dependency, acceptance infrastructure and unclassified changes use full coverage. Paths cannot distinguish a styling edit from a behavioral edit inside the same file: review the behavior and broaden coverage when needed.
+| Tests | Ownership | Execution |
+| --- | --- | --- |
+| Unit / frontend contracts | Java modules / `yak-ops-ui` | Affected PR quality checks |
+| JDBC / CDC IT | Connector test packages | Selected backend PRs; full release suite |
+| YakFlow integration | Runtime tests and Connector `integration` packages | Selected backend PRs; full release suite |
+| Business database IT | Business modules | Selected backend PRs; full release suite |
+| Backend E2E | `yak-ops-e2e` | Selected backend PRs; full release suite |
+| UI automation / deployment | Playwright / Docker Compose | Release; manual as needed |
 
-The workflow supports `browser`, `batch`, `schedule`, `realtime`, `schema` and `full` through **Run workflow**. Direct PR runs select automatically. Reusable callers and manual runs default to `full`; the existing Backend Acceptance / Release Gate chain therefore retains complete acceptance. Focused dispatches are diagnostic evidence for their named scope, not full release acceptance.
+### Backend integration tests
 
-The controlled browser job is independent of database suites. Selected real suites run on separate disposable runners, at most two in parallel; they never share containers or state directories. Full mode preserves the complete cross-scenario sequence, including restart reconciliation. Batch, realtime and schema focused runs also restart the product and compare their pinned reports. Schedule mode includes real admission, version checks, resource-busy checks and optional browser interaction.
-
-Run the fast routing, gate and runner contract tests without Docker, Java, Playwright or credentials:
-
-```sh
-python3 -m unittest discover -s scripts/ci -p 'test_product_acceptance*.py' -v
-```
-
-For local product acceptance, use **fresh disposable** `yak-task-mysql` and `yak-task-postgres` containers with the databases, ports and MySQL binlog options shown in the workflow. Export `E2E_DB_PASSWORD` and `E2E_USER_PASSWORD` with test-only values. Never point the harness at a production or shared database. The focused runner rejects pre-existing fixture tables rather than clearing them. Run one suite per fresh environment.
-
-```sh
-bash mvnw -B -ntp -pl yak-ops-boot -am -DskipTests package
-python3 -u scripts/acceptance/run_product_acceptance.py --suite schema
-# Other focused choices: batch, schedule, realtime.
-```
-
-Focused local runs include their real browser tests when `E2E_BROWSER=true`. Prepare the pinned Playwright version, Chromium and the frontend on port 5173 as in [.github/actions/acceptance-browser](.github/actions/acceptance-browser/action.yml). Full mode always includes browser tests and requires that setup:
+Use Java 21 and a working Docker daemon. Tests create their own disposable databases on dynamic ports; no external database URL or shared environment is needed. `yak-ops-test-utils` is a test-only dependency and must not enter application distributions.
 
 ```sh
-python3 -u scripts/acceptance/run_product_acceptance.py --suite full
+bash scripts/tests/run.sh jdbc mysql
+bash scripts/tests/run.sh jdbc postgres
+bash scripts/tests/run.sh jdbc oracle
+bash scripts/tests/run.sh cdc mysql
+bash scripts/tests/run.sh pipeline
+bash scripts/tests/run.sh cdc-pipeline
+bash scripts/tests/run.sh business
+bash scripts/tests/run.sh backend-e2e
+bash scripts/tests/run.sh recovery-e2e
+bash scripts/tests/run.sh full
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 ```
 
-The workflow additionally executes `ScheduleAdmissionIntegrationTest` on its separate MySQL database for `schedule` and `full`, in the same Maven invocation that packages Boot. Ordinary unit, style, architecture and distribution checks remain owned by Quality Check; a product-scope selection does not replace them.
+Each command is one Maven invocation. Failsafe discovers `*IT` classes by JUnit tags; ordinary tests use `*Test`. Register every concrete IT in `scripts/tests/backend_tests.py`. Selected classes must produce complete XML reports with no failed, skipped or missing cases. IDE execution of one IT class remains available; Backend E2E requires a freshly packaged Boot JAR.
 
-Suite results and phase durations are written to `/tmp/yak-acceptance-results`, the Actions summary and per-suite artifacts. A failure remains nonzero and retains its traceback. Focused failure-state output allowlists identity, status and failure codes; it excludes credentials, task parameters, SQL and raw error messages. Timing reports are measurements, not guaranteed runtime budgets.
+Common Source/Sink behavior belongs in reusable Connector test bases, database-specific types and DDL in their subclasses. Connector and Runtime tests do not depend on HTTP or Boot. Cross-database cases retain the supported MySQL/PostgreSQL/Oracle routes without multiplying every common scenario by every pair. Transaction and concurrency checks belong in business database tests; only API wiring and process lifecycle require Backend E2E.
 
-The aggregate check retains the name **MySQL JDBC + Multi-Table CDC Product E2E** for existing check references. It verifies the scope job and every selected child job. Its summary, not the historical name, identifies what actually ran. Unselected suites are **NOT EXECUTED**. Failed, cancelled, missing or unexpectedly skipped selected checks block the gate. New direct PR commits cancel superseded product runs; separate manual and reusable runs do not cancel one another.
+JUnit owns shared containers within one module's test execution. Data is isolated per scenario; normal E2E shares the application process, not Workspace or task state. Destructive and process-recovery cases own independent processes. Stop running tasks before deleting their data. Do not mix class-scoped container shutdown with root-store reuse, share resources across CI jobs, or enable parallel methods without proving isolation.
+
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
+
+Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
+
+### Playwright UI Tests
+
+Playwright is **not a default feature PR gate**. The standalone [Playwright UI Tests workflow](.github/workflows/playwright-ui-tests.yml) runs on manual dispatch and when its own tests/workflow change. Its mocked scenarios run against the **built** frontend, not the Vite development server. Ordinary UI feature PRs rely on frontend quality and contract checks; reviewers may explicitly request a browser run for high-risk interactions.
+
+The formal [Release Gate](.github/workflows/v1-release-gate.yml) always runs the **full** UI suite against a disposable Docker Compose stack containing the exact candidate images. The suite includes mocked interaction contracts and a real authenticated login/navigation smoke. UI tests must not wait for real JDBC/CDC, checkpoints, or Cron triggering; these belong to backend integration tests.
+
+```sh
+python3 -m pip install playwright==1.57.0
+python3 -m playwright install chromium
+# Serve yak-ops-ui's production build on http://127.0.0.1:5173
+python3 yak-ops-ui/tests/e2e/run.py --suite mocked --base-url http://127.0.0.1:5173
+```
+
+The Playwright report is `/tmp/yak-playwright/v<VERSION>/<SHA>/playwright-results.json`, with per-scenario Playwright traces and failure screenshots. Only results from the **exact release version and SHA** apply to that build. A skipped, failed, cancelled, or missing required run blocks release.
+
+### Test and review evidence
+
+Connector integration workflows collect their own test reports. Playwright has its own versioned artifact. Preserve failures and traceback while redacting credentials and task parameters. Use condition-based bounded waits; arbitrary sleep, hiding failed assertions through retries, or changes to production checkpoint timing are prohibited.
+
 
 ## Incremental Review Evidence
 

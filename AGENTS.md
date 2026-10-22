@@ -24,6 +24,8 @@ For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only
 - `yak-ops-common`: cross-module shared types and utilities.
 - `yak-ops-boot`: HTTP boundary and application assembly.
 - `yak-ops-ui`: frontend application and shared UI components.
+- `yak-ops-test-utils`: JUnit-owned database resources and typed assertions; test-only dependencies.
+- `yak-ops-e2e`: real HTTP Task tests against the packaged Boot process.
 
 Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Derive current functionality from code, tests, and supported public interfaces.
 
@@ -78,21 +80,22 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 
 - Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
 - Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
-- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database acceptance workflows. Never weaken or skip checks to make a PR green.
+- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database integration-test workflows. Never weaken or skip checks to make a PR green.
 - Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
 - For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
 - Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
 
 ## Verification Scope and Incremental Review
 
-- Choose verification by affected behavior and dependencies, not changed-line count. Use the [product acceptance scopes](DEVELOPMENT.md#product-acceptance-scopes). Presentation-only changes do not require starting real synchronization jobs; outbound parameters, authorization, lifecycle, resource ownership and checkpoint changes require their applicable integration coverage. Reviewers must broaden a path-selected scope when the actual behavior warrants it.
-- Keep `scripts/ci/product_acceptance_scope.py` as the executable product-scope map. Classify the complete PR diff, not only the newest commit. Include deletions and both sides of renames; unavailable comparisons, shared backend changes and unknown paths require full acceptance. Test changes to the scope map and gate behavior.
-- Keep focused suites independently runnable against disposable fixtures. Do not make one suite depend on another having run first. Preserve full acceptance, cross-scenario assertions, real cancellation, recovery and release checks; an unselected suite is NOT EXECUTED, not a passing test.
-- Use condition-based, bounded waits. Fixed observation windows need an explicit assertion about time-dependent behavior. Do not shorten timeouts, remove assertions, change production checkpoint intervals or add retries merely to hide a failure. Isolate databases and state directories before parallelizing; report suite durations and original failures without secrets.
-- At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. Fetch only the relevant failing job log and inspect its exact traceback; do not infer causes from a different run, file version or remembered error.
-- After a fix, review the delta from the previously reviewed SHA and its affected context. Reopen wider review when the base, shared contracts or risk scope changes. Reuse CI evidence only when head, tested base/tree, suite and test configuration match; an old green check is not evidence for a new commit.
-- Query a running workflow at most once per minute and back off while it is queued. Stop polling terminal runs; reuse retrieved logs and check metadata. Do not repeat tool discovery or whole-file fetches already available for the same SHA. When only PR creation is requested, report the submitted PR and current verification state rather than delaying delivery for unrelated or unrequested full regression.
-- Carry known unresolved failures into the review outcome even when a later focused run does not select them. Require every selected job to succeed; missing, failed, cancelled or unexpectedly skipped checks block that scope's gate. Keep release/reusable acceptance full by default. Never change branch protection or silently waive an existing failure to speed up merging.
+- JUnit / TypeScript unit and frontend contract checks run on affected PRs. `Backend Tests` selects Connector, YakFlow, business database and Backend E2E tests from the complete diff. Manual and release calls run all suites by default. Playwright verifies UI interactions; Docker Compose verifies release deployment.
+- Ordinary Maven `verify` must not start Docker. Use `scripts/tests/run.sh` for database tests. Register every concrete `*IT` class in the suite manifest; missing, skipped, failed or incomplete selected reports fail the check. Backend E2E belongs in `yak-ops-e2e`, not Boot or Connector tests.
+- Name jobs after the test type or tool actually executed, such as `Playwright UI Tests`, `JDBC Source IT` or `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` for test jobs.
+- UI automation verifies browser-facing behavior only. Do not add per-feature or per-PR browser scripts, or depend on real JDBC, CDC, Cron, checkpoint, or process recovery waits inside Playwright. Extend stable business scenario files in `yak-ops-ui/tests/e2e/`. Keep Playwright setup out of normal product PR jobs.
+- The Release Gate requires full Backend Tests, including Oracle, CDC and process recovery, plus candidate Playwright and Docker Compose. Match release version, commit SHA and built artifacts. Unselected tests are NOT SELECTED, not passed tests.
+- Reuse database processes inside a JUnit root execution; isolate tables, schemas, Workspace and state per test. Process recovery and destructive tests need private environments. Capture diagnostics before cleanup, and stop tasks before deleting their data. Do not ship test utilities or add reverse dependencies from Runtime to Connectors.
+- Use fresh isolated fixtures and condition-based bounded waits for integration tests. Never hide flakes with silent retries or change production checkpoint intervals for tests.
+- At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. After a fix, review the delta from the previously reviewed SHA; reopen wider scope if the base or shared contracts changed. Known unresolved failures remain blockers even when a later scope omits their suite.
+- Do not change branch protection to speed merging. If an obsolete required check remains after retiring a suite, report it explicitly and resolve it as a separate repository setting change.
 
 ## Persistence and Public Contract Documentation
 

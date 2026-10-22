@@ -34,10 +34,13 @@
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <checkstyle.version>10.18.2</checkstyle.version>
         <quartz.version>2.5.2</quartz.version>
+        <backend.test.groups>jdbc | cdc | pipeline | business</backend.test.groups>
+        <maven-failsafe-plugin.version>3.5.3</maven-failsafe-plugin.version>
     </properties>
 
     <modules>
         <module>yak-ops-bom</module>
+        <module>yak-ops-test-utils</module>
         <module>yak-ops-common</module>
         <module>yak-ops-platform</module>
         <module>yak-ops-dao</module>
@@ -54,6 +57,7 @@
         <module>yak-ops-plugins/yak-ops-plugin-scheduler</module>
         <module>yak-ops-task-execution</module>
         <module>yak-ops-boot</module>
+        <module>yak-ops-e2e</module>
         <module>yak-ops-ui</module>
         <module>yak-ops-dist</module>
     </modules>
@@ -69,6 +73,35 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <id>integration-tests</id>
+            <build><plugins>
+            <!-- Quality Check owns Surefire unit tests. Each integration-test
+                 matrix job only executes its selected Failsafe tests. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration><skipTests>true</skipTests></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven-failsafe-plugin.version}</version>
+                <configuration>
+                    <includes><include>**/*IT.java</include></includes>
+                    <groups>${backend.test.groups}</groups>
+                    <failIfNoTests>false</failIfNoTests>
+                    <rerunFailingTestsCount>0</rerunFailingTestsCount>
+                    <forkCount>1</forkCount><reuseForks>true</reuseForks>
+                    <systemPropertyVariables>
+                        <junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions>
+            </plugin></plugins></build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>

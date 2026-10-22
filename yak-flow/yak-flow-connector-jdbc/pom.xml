@@ -15,6 +15,7 @@
     <description>Bounded multi-table JDBC Source and Changelog JDBC Sink for YakFlow</description>
 
     <dependencies>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-test-utils</artifactId><version>${project.version}</version><scope>test</scope></dependency>
         <dependency><groupId>com.github.mwiede</groupId><artifactId>jsch</artifactId><version>2.28.6</version></dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
