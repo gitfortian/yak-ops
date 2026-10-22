@@ -193,7 +193,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         for (JdbcColumnInfo column : catalog.getColumns(event.tableId())) {
             ColumnProperties planned = expected.get(column.name());
             ColumnProperties actualProperties = new ColumnProperties(
-                    column.defaultExpression(), column.autoIncrement(), column.generated());
+                    column.defaultExpression(), column.autoIncrement(), column.generated(), column.onUpdateExpression());
             validateColumnProperties(column.name(), planned, actualProperties);
             comments.put(column.name(), column.remarks());
         }
@@ -217,6 +217,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         if (!expected.isKnown()
                 || !java.util.Objects.equals(expected.autoIncrement(), actual.autoIncrement())
                 || !java.util.Objects.equals(expected.generated(), actual.generated())
+                || !normalizeDefault(expected.onUpdateExpression())
+                        .equals(normalizeDefault(actual.onUpdateExpression()))
                 || !normalizeDefault(expected.defaultExpression())
                         .equals(normalizeDefault(actual.defaultExpression()))) {
             throw new IllegalArgumentException("Target column properties do not match: " + column);
