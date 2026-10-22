@@ -135,7 +135,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
         if (defaultValue == null) return "";
         String value = defaultValue.trim();
         String root = column.dataType().getTypeRoot().name();
-        if (value.matches("(?i)CURRENT_TIMESTAMP(?:\\\\([0-6]\\\\))?")) {
+        if (value.matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]\\))?")) {
             if (!root.startsWith("TIMESTAMP")) {
                 throw new IllegalArgumentException("CURRENT_TIMESTAMP requires a timestamp column: " + column.name());
             }
@@ -150,7 +150,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
             return " DEFAULT " + stringLiteral(literal);
         }
         if (java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "DECIMAL", "BOOLEAN")
-                .contains(root) && value.matches("[-+]?[0-9]+(?:\\\\.[0-9]+)?")) {
+                .contains(root) && value.matches("[-+]?[0-9]+(?:\\.[0-9]+)?")) {
             return " DEFAULT " + value;
         }
         throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
