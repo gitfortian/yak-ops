@@ -120,12 +120,14 @@ public final class JobPlanner {
             String sinkId = sink.get(JobOptions.DATASOURCE_ID);
             var sourceFactory = factories.source(source.get(JobOptions.TYPE));
             var sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
-            DataSourceTable from = resources.table(
+            java.util.function.Supplier<DataSourceTable> sourceLookup = () -> resources.table(
                     workspaceId,
                     sourceId,
                     source.get(JobOptions.DATABASE),
                     source.get(JobOptions.SCHEMA),
                     source.get(JobOptions.TABLE));
+            DataSourceTable from =
+                    prepareSchema ? SchemaValidator.sourceMetadata(sourceLookup) : sourceLookup.get();
             DataSourceInfo targetInfo;
             TableId targetTable;
             DataSourceTable actual;
