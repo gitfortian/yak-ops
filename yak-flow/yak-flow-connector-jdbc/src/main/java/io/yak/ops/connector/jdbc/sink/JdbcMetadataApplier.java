@@ -7,6 +7,7 @@ import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
@@ -101,7 +102,11 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         JdbcSinkSchemaValidator.validate(schema, schema, !schema.primaryKeys().isEmpty());
         for (Column column : schema.columns()) {
             JdbcNativeType nativeType = dialect.nativeType(column);
-            if (nativeType.warning() != null) {
+            ColumnProperties property = event.getColumnProperties().get(column.name());
+            boolean vendorType = dialect instanceof MySqlJdbcDialect
+                    && property != null
+                    && property.nativeType() != null;
+            if (nativeType.warning() != null && !vendorType) {
                 throw new IllegalArgumentException("Target type requires explicit conversion: " + column.name());
             }
             if (schema.primaryKeys().contains(column.name())
