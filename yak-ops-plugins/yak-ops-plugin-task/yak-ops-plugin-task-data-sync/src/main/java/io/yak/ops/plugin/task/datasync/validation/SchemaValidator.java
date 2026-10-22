@@ -25,6 +25,15 @@ public final class SchemaValidator {
         }
     }
 
+    /** Classifies schema source-metadata failures separately from connection failures. */
+    public static DataSourceTable sourceMetadata(java.util.function.Supplier<DataSourceTable> lookup) {
+        try {
+            return lookup.get();
+        } catch (IllegalArgumentException failure) {
+            throw new SchemaValidationException(failure);
+        }
+    }
+
     /**
      * Builds a complete desired target event from an authorized source table.
      *
