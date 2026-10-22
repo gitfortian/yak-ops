@@ -80,7 +80,7 @@ assert.ok(logPanel.includes('backgroundColor: "#0b0f19"'));
 assert.ok(logPanel.includes("hover:text-white"));
 assert.ok(logPanel.includes("cursor-pointer items-center"));
 assert.ok(logPanel.includes('translate: "none"'));
-assert.ok(logPanel.includes('inset: 12'));
+assert.ok(logPanel.includes("inset: 12"));
 assert.ok(logPanel.includes('width: "calc(100vw - 24px)"'));
 assert.ok(logPanel.includes('height: "calc(100dvh - 24px)"'));
 assert.ok(logPanel.includes("ref={expanded ? fullscreenBodyRef : bodyRef}"));
