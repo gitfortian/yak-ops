@@ -114,7 +114,7 @@ public final class JobConfigValidator {
      * Only fixed diagnostic prefixes and simple column identifiers may reach the client.
      * Native driver exceptions, raw DDL, credentials and configuration values are excluded.
      */
-    private static String safeSchemaMessage(RuntimeException failure) {
+    public static String safeSchemaMessage(RuntimeException failure) {
         String message = failure.getMessage();
         if (message != null) {
             String[][] reasons = {
