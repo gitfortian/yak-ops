@@ -4,6 +4,7 @@ import { DataSourcePage } from "@/app/datasource";
 import LoginPage from "@/app/login";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { DataSyncPage } from "@/app/data-sync";
+import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/task-editor";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/task-detail";
 import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "@/app/data-sync/redirects";
@@ -19,6 +20,8 @@ import AppLayout from "../layout/AppLayout";
 import {
   DATA_INTEGRATION_NAVIGATION,
   DATA_INTEGRATION_PRODUCT_LABEL,
+  DATA_MODELING_NAVIGATION,
+  DATA_MODELING_PRODUCT_LABEL,
   MANAGEMENT_NAVIGATION,
   MANAGEMENT_PRODUCT_LABEL,
   OPERATIONS_NAVIGATION,
@@ -28,6 +31,7 @@ import AppLoading from "./AppLoading";
 
 const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
+  "/data-modeling/warehouse-planning",
   "/data-source",
   "/data-sync",
   "/data-sync/new",
@@ -110,6 +114,18 @@ export default function AppRouter() {
       <Route path="/login" element={<LoginRoute />} />
 
       <Route element={<ProtectedRoute />}>
+        <Route
+          element={
+            <AppLayout
+              productLabel={DATA_MODELING_PRODUCT_LABEL}
+              productPath="/data-modeling/warehouse-planning"
+              navigation={DATA_MODELING_NAVIGATION}
+              workspaceScoped
+            />
+          }
+        >
+          <Route path="/data-modeling/warehouse-planning" element={<WarehousePlanningPage />} />
+        </Route>
         <Route
           element={
             <AppLayout

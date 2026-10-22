@@ -26,7 +26,8 @@ SUITES = {
     "cdc": (CDC, "cdc", {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2}),
     "cdc-pipeline": (CDC, "cdc-pipeline", {name: 1 for name in ("MySqlCdcToMySqlIT", "MySqlCdcToPostgresIT", "MySqlCdcToOracleIT")}),
     "business": (BUSINESS, "business", {"TaskCursorIT": 5, "ScheduleAdmissionIT": 13}),
-    "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1}),
+    "modeling": ("yak-ops-business/yak-ops-business-modeling", "modeling", {"PlanningDatabaseIT": 6}),
+    "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1, "WarehousePlanningIT": 1}),
     "recovery-e2e": (E2E, "recovery-e2e", {"ProcessRecoveryIT": 2}),
 }
 
@@ -56,7 +57,7 @@ def select(paths: list[str]) -> list[str]:
         elif path.startswith(("yak-flow/yak-flow-runtime/", "yak-flow/yak-flow-connector-base/", "yak-ops-core/")):
             selected.update(("pipeline", "cdc", "cdc-pipeline", "backend-e2e", "recovery-e2e"))
         elif path.startswith(("yak-ops-business/", "yak-ops-task-execution/", "yak-ops-plugins/", "yak-ops-boot/", "yak-ops-platform/")):
-            selected.update(("business", "backend-e2e", "recovery-e2e"))
+            selected.update(("business", "modeling", "backend-e2e", "recovery-e2e"))
         else:
             return list(SUITES)
     return [name for name in SUITES if name in selected]

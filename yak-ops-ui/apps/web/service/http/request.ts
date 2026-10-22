@@ -138,6 +138,7 @@ export default async function request<T>(url: string, options: RequestOptions = 
       credentials: requestInit.credentials ?? "include",
     });
   } catch (error) {
+    if (requestInit.signal?.aborted) throw error;
     if (!skipErrorHandler) {
       notifyOnce("network", {
         type: "warning",

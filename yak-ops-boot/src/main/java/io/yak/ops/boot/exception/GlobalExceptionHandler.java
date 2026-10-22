@@ -3,6 +3,7 @@ package io.yak.ops.boot.exception;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
+import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
@@ -107,6 +108,12 @@ public class GlobalExceptionHandler {
     }
 
     private static HttpStatus businessStatus(ErrorCode errorCode) {
+        if (errorCode instanceof ModelingErrorCode code) {
+            return switch (code) {
+                case INVALID_CODE, INVALID_OWNER -> HttpStatus.BAD_REQUEST;
+                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+            };
+        }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;
         if (errorCode == CommonErrorCode.RESOURCE_NOT_EXISTS) return HttpStatus.NOT_FOUND;
         if (errorCode == CommonErrorCode.RESOURCE_DUPLICATION) return HttpStatus.CONFLICT;
