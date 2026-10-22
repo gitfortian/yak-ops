@@ -14,18 +14,22 @@ import io.yak.ops.common.bean.dto.task.CreateDefinitionDTO;
 import io.yak.ops.common.bean.dto.task.UpdateDefinitionDTO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.schedule.ScheduleTargetType;
+import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.entity.task.DefinitionVersionEntity;
+import io.yak.ops.dao.entity.task.InstanceEntity;
 import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
+import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +44,7 @@ class DefinitionCrudContractTest {
     private final TaskValidationContext context = mock(TaskValidationContext.class);
     private final PublicationService publication = mock(PublicationService.class);
     private final ScheduleRepository schedules = mock(ScheduleRepository.class);
+    private final InstanceRepository instances = mock(InstanceRepository.class);
     private final Map<Integer, DefinitionVersionEntity> snapshots = new HashMap<>();
     private DefinitionEntity stored;
 
@@ -50,6 +55,7 @@ class DefinitionCrudContractTest {
         inject("validationContext", context);
         inject("publicationService", publication);
         inject("schedules", schedules);
+        inject("instances", instances);
         TaskPlugin plugin = mock(TaskPlugin.class);
         when(plugin.parameterSchemaVersion()).thenReturn(1);
         when(registry.get("DATA_SYNC")).thenReturn(plugin);
@@ -128,6 +134,37 @@ class DefinitionCrudContractTest {
         assertEquals(2, service.unpublish(stored.getId(), "user-1").getDefinitionVersion());
         org.mockito.Mockito.verify(schedules)
                 .disableForTarget(eq("ws"), eq(ScheduleTargetType.TASK), eq(stored.getId()), any(), eq("user-1"));
+    }
+
+    @Test
+    void activeInstanceBlocksUnpublishEditAndDelete() {
+        WorkspaceContext.bind("ws");
+        CreateDefinitionDTO create = new CreateDefinitionDTO();
+        create.setName("orders");
+        create.setTaskType("DATA_SYNC");
+        create.setParameters("{\"sourceTable\":\"orders\"}");
+        service.create(create, "user-1");
+        service.publish(stored.getId(), "user-1");
+        when(instances.latest("ws", List.of(stored.getId()), true)).thenReturn(List.of(new InstanceEntity()));
+
+        UpdateDefinitionDTO update = new UpdateDefinitionDTO();
+        update.setName("renamed");
+        BusinessException unpublish =
+                assertThrows(BusinessException.class, () -> service.unpublish(stored.getId(), "user-1"));
+        assertEquals(CommonErrorCode.TASK_INSTANCE_ACTIVE, unpublish.getErrorCode());
+        assertEquals(io.yak.ops.common.enums.task.DefinitionStatus.PUBLISHED, stored.getStatus());
+        org.mockito.Mockito.verify(schedules, org.mockito.Mockito.never())
+                .disableForTarget(eq("ws"), eq(ScheduleTargetType.TASK), eq(stored.getId()), any(), any());
+
+        stored.setStatus(io.yak.ops.common.enums.task.DefinitionStatus.UNPUBLISHED);
+        BusinessException edit = assertThrows(
+                BusinessException.class, () -> service.update(stored.getId(), update, "user-1"));
+        BusinessException delete = assertThrows(
+                BusinessException.class, () -> service.delete(stored.getId(), "user-1"));
+        assertEquals(CommonErrorCode.TASK_INSTANCE_ACTIVE, edit.getErrorCode());
+        assertEquals(CommonErrorCode.TASK_INSTANCE_ACTIVE, delete.getErrorCode());
+        assertEquals("orders", stored.getName());
+        assertEquals(1, snapshots.size());
     }
 
     @Test

@@ -15,6 +15,17 @@ export const isTaskInstanceActive = (status: TaskInstanceStatus): boolean =>
   status === "CANCELLING" ||
   status === "RECONCILING";
 
+/** No Definition changes while an execution is nonterminal or its status is unknown. */
+export const canManageTaskDefinition = (
+  ready: boolean,
+  instance?: Pick<TaskInstanceRecord, "status">,
+): boolean =>
+  ready &&
+  (!instance ||
+    instance.status === "FINISHED" ||
+    instance.status === "FAILED" ||
+    instance.status === "CANCELED");
+
 export const canCancelTaskInstance = (status: TaskInstanceStatus): boolean =>
   status === "SUBMITTED" || status === "LAUNCHING" || status === "RUNNING";
 
