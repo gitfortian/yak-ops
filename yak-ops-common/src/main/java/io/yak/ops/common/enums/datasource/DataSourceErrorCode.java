@@ -23,7 +23,8 @@ public enum DataSourceErrorCode implements ErrorCode {
     PLUGIN_NOT_FOUND(41011, "数据源插件未安装"),
     INVALID_BATCH_OPERATION(41012, "数据源批量操作参数不合法"),
     INVALID_CONNECTION_STATUS(41013, "数据源连接状态不合法"),
-    CATALOG_QUERY_FAILED(41014, "数据源 Catalog 查询失败");
+    CATALOG_QUERY_FAILED(41014, "数据源 Catalog 查询失败"),
+    IN_USE(41015, "数据源已被数仓分层绑定，无法删除");
 
     private final Integer code;
     private final String message;
