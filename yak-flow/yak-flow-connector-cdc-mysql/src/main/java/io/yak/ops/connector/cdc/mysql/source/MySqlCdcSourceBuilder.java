@@ -90,6 +90,14 @@ public final class MySqlCdcSourceBuilder {
     /** Builds a reusable Source definition without opening a database connection. */
     public MySqlCdcSource build() {
         return new MySqlCdcSource(new MySqlCdcSourceConfig(
-                hostname, port, username, password, serverId, topicPrefix, tables, queueCapacity, connectionProperties));
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                tables,
+                queueCapacity,
+                connectionProperties));
     }
 }

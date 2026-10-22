@@ -112,9 +112,21 @@ public final class MySqlCdcSourceConfig {
             if (key == null || !key.matches("[A-Za-z][A-Za-z0-9_.-]*") || value == null) {
                 throw new IllegalArgumentException("Invalid MySQL JDBC connection property");
             }
-            if (Set.of("user", "username", "password", "host", "hostname", "port", "database", "database.hostname",
-                            "database.user", "database.password", "database.port").contains(key.toLowerCase(java.util.Locale.ROOT))) {
-                throw new IllegalArgumentException("MySQL JDBC connection property must not override connection identity: " + key);
+            if (Set.of(
+                            "user",
+                            "username",
+                            "password",
+                            "host",
+                            "hostname",
+                            "port",
+                            "database",
+                            "database.hostname",
+                            "database.user",
+                            "database.password",
+                            "database.port")
+                    .contains(key.toLowerCase(java.util.Locale.ROOT))) {
+                throw new IllegalArgumentException(
+                        "MySQL JDBC connection property must not override connection identity: " + key);
             }
             values.put(key, value);
         });

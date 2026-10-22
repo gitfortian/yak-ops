@@ -118,8 +118,8 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
      * The URL takes precedence, including the serverTimezone alias.
      */
     private static Map<String, String> mergedConnectionProperties(JdbcConnectionOptions connection) {
-        Map<String, String> properties = new LinkedHashMap<>(
-                connection.configuration().get(JdbcConnectionOptions.PROPERTIES));
+        Map<String, String> properties =
+                new LinkedHashMap<>(connection.configuration().get(JdbcConnectionOptions.PROPERTIES));
         String query = URI.create(connection.url().substring("jdbc:".length())).getRawQuery();
         if (query == null || query.isBlank()) return properties;
         for (String part : query.split("&")) {
