@@ -74,10 +74,7 @@ const getFixedOffset = <RecordType extends object>(
       : Array.from({ length: columns.length - index - 1 }, (_, offset) => index + offset + 1);
   const offsets = indexes
     .filter((columnIndex) => columns[columnIndex]?.fixed === side)
-    .map(
-      (columnIndex) =>
-        resolvedWidths?.[columnIndex] ?? toCssLength(columns[columnIndex]?.width),
-    )
+    .map((columnIndex) => resolvedWidths?.[columnIndex] ?? toCssLength(columns[columnIndex]?.width))
     .filter((width): width is number | string => width != null);
   if (offsets.length === 0) return 0;
   if (offsets.every((width) => typeof width === "number")) {
@@ -393,7 +390,8 @@ export function InternalTable<RecordType extends object>({
                             "border-b border-[var(--yak-components-table-border)] px-3",
                             bordered && "border-r first:border-l",
                             bordered && rowIndex === 0 && "border-t",
-                            column.fixed != null && "sticky z-10 bg-[var(--yak-components-table-bg)]",
+                            column.fixed != null &&
+                              "sticky z-10 bg-[var(--yak-components-table-bg)]",
                           )}
                         >
                           <Skeleton
