@@ -1,6 +1,7 @@
 package io.yak.ops.plugin.datasource.api.lookup;
 
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.TableSchema;
 import java.util.Map;
 import java.util.Objects;
@@ -19,7 +20,8 @@ public record DataSourceTable(
         long revision,
         String tableComment,
         Map<String, String> columnComments,
-        Set<String> columnFeatures) {
+        Set<String> columnFeatures,
+        Map<String, ColumnProperties> columnProperties) {
 
     public DataSourceTable {
         Objects.requireNonNull(datasourceType, "datasourceType");
@@ -28,11 +30,24 @@ public record DataSourceTable(
         if (revision < 1) throw new IllegalArgumentException("Datasource revision is required");
         columnComments = Map.copyOf(columnComments);
         columnFeatures = Set.copyOf(columnFeatures);
+        columnProperties = Map.copyOf(columnProperties);
+    }
+
+    /** Preserves the original metadata constructor for existing callers. */
+    public DataSourceTable(
+            String datasourceType,
+            TableId table,
+            TableSchema schema,
+            long revision,
+            String tableComment,
+            Map<String, String> columnComments,
+            Set<String> columnFeatures) {
+        this(datasourceType, table, schema, revision, tableComment, columnComments, columnFeatures, Map.of());
     }
 
     /** Creates metadata for a physical table containing plain columns without comments. */
     public DataSourceTable(String datasourceType, TableId table, TableSchema schema, long revision) {
-        this(datasourceType, table, schema, revision, null, Map.of(), Set.of());
+        this(datasourceType, table, schema, revision, null, Map.of(), Set.of(), Map.of());
     }
 
     @Override
