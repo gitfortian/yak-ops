@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   canCancelTaskInstance,
+  canManageTaskDefinition,
   isTaskInstanceActive,
   matchesDataSyncInstance,
   toDataSyncInstanceRecord,
@@ -64,6 +65,16 @@ assert.equal(canCancelTaskInstance("CANCELLING"), false);
 assert.equal(isTaskInstanceActive("LAUNCHING"), true);
 assert.equal(isTaskInstanceActive("FINISHED"), false);
 assert.equal(isTaskInstanceActive("CANCELED"), false);
+
+for (const status of ["SUBMITTED", "LAUNCHING", "RUNNING", "CANCELLING", "RECONCILING"]) {
+  assert.equal(canManageTaskDefinition(true, { status }), false);
+}
+for (const status of ["FINISHED", "FAILED", "CANCELED"]) {
+  assert.equal(canManageTaskDefinition(true, { status }), true);
+}
+assert.equal(canManageTaskDefinition(true), true);
+assert.equal(canManageTaskDefinition(false), false);
+assert.equal(canManageTaskDefinition(false, { status: "FINISHED" }), false);
 
 assert.equal(
   matchesDataSyncInstance(mapped, { pageNo: 1, pageSize: 20, syncType: "REALTIME" }),
