@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   Database,
   LayoutGrid,
+  Network,
   Settings,
   Users,
   Wrench,
@@ -32,6 +33,11 @@ type AllProductGroup = {
 export const DATA_INTEGRATION_PRODUCT_LABEL = "数据集成";
 export const OPERATIONS_PRODUCT_LABEL = "运维中心";
 export const MANAGEMENT_PRODUCT_LABEL = "管理中心";
+export const DATA_MODELING_PRODUCT_LABEL = "数据建模";
+
+export const DATA_MODELING_NAVIGATION: ProductNavigationItem[] = [
+  { label: "数仓规划", path: "/data-modeling/warehouse-planning", icon: Network },
+];
 
 export const DATA_INTEGRATION_NAVIGATION: ProductNavigationItem[] = [
   {
@@ -95,13 +101,22 @@ const MANAGEMENT_PRODUCT: GlobalProductMenuItem = {
   path: "/management/users",
 };
 
+const DATA_MODELING_PRODUCT: GlobalProductMenuItem = {
+  id: "data-modeling",
+  label: DATA_MODELING_PRODUCT_LABEL,
+  icon: Network,
+  path: "/data-modeling/warehouse-planning",
+};
+
 export const GLOBAL_PRODUCT_MENU: GlobalProductMenuItem[] = [
   DATA_INTEGRATION_PRODUCT,
+  DATA_MODELING_PRODUCT,
   OPERATIONS_PRODUCT,
   MANAGEMENT_PRODUCT,
 ];
 
 export const ALL_PRODUCT_GROUPS: AllProductGroup[] = [
+  { id: "data-modeling", label: DATA_MODELING_PRODUCT_LABEL, products: [DATA_MODELING_PRODUCT] },
   {
     id: "data-integration",
     label: DATA_INTEGRATION_PRODUCT_LABEL,

@@ -10,6 +10,11 @@ import backend_tests as subject
 
 
 class SuiteSelectionTest(unittest.TestCase):
+    def test_modeling_and_membership_changes_select_modeling_database_tests(self):
+        for path in ("yak-ops-business/yak-ops-business-modeling/src/main/java/Planning.java",
+                     "yak-ops-platform/src/main/java/Workspace.java"):
+            self.assertIn("modeling", subject.select([path]))
+
     def test_docs_and_frontend_do_not_run_databases(self):
         self.assertEqual([], subject.select(["README.md", "yak-ops-ui/src/App.tsx"]))
 
