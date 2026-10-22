@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 import backend_tests as subject
@@ -49,6 +50,34 @@ class SuiteSelectionTest(unittest.TestCase):
         for result in ("skipped", "failure", "cancelled", ""):
             self.assertRaises(ValueError, subject.require_results, ["cdc"], "success", result)
         self.assertRaises(ValueError, subject.require_results, [], "failure", "skipped")
+
+
+class MavenIntegrationProfileTest(unittest.TestCase):
+    def test_integration_profile_skips_surefire_but_not_failsafe(self):
+        namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+        pom = ET.parse(subject.ROOT / "pom.xml").getroot()
+        profiles = pom.findall("./m:profiles/m:profile", namespace)
+        integration = next(
+            profile for profile in profiles
+            if profile.findtext("m:id", namespaces=namespace) == "integration-tests"
+        )
+        plugins = integration.findall("./m:build/m:plugins/m:plugin", namespace)
+        by_artifact = {
+            plugin.findtext("m:artifactId", namespaces=namespace): plugin
+            for plugin in plugins
+        }
+        surefire = by_artifact["maven-surefire-plugin"]
+        failsafe = by_artifact["maven-failsafe-plugin"]
+        self.assertEqual(
+            "true", surefire.findtext("./m:configuration/m:skipTests", namespaces=namespace)
+        )
+        self.assertIsNone(failsafe.find("./m:configuration/m:skipTests", namespace))
+        self.assertEqual(
+            ["integration-test", "verify"],
+            [goal.text for goal in failsafe.findall(
+                "./m:executions/m:execution/m:goals/m:goal", namespace
+            )]
+        )
 
 
 class ReportTest(unittest.TestCase):

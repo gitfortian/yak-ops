@@ -43,10 +43,6 @@ jobs:
         if: steps.scope.outputs.backend == 'true'
         run: bash scripts/ci/test-detect-changes.sh
 
-      - name: Test backend suite selection and reports
-        if: steps.scope.outputs.backend == 'true'
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
-
       - name: Setup Java
         if: steps.scope.outputs.backend == 'true'
         uses: actions/setup-java@v5
@@ -67,26 +63,13 @@ jobs:
           python3 scripts/ci/test_logging_rules.py
           python3 scripts/verify_logging_rules.py
 
-      - name: Backend Checkstyle
+      # Maven verify already binds Checkstyle and Spotless. Execute the reactor
+      # once while keeping unit tests and both style checks mandatory.
+      - name: Backend verify (unit tests, Checkstyle, Spotless)
         if: steps.scope.outputs.backend == 'true'
         run: >-
           bash mvnw -B -ntp
-          -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist'
-          org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
-
-      - name: Backend format
-        if: steps.scope.outputs.backend == 'true'
-        run: >-
-          bash mvnw -q -DskipTests
-          -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist'
-          com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
-
-      - name: Backend verify
-        if: steps.scope.outputs.backend == 'true'
-        run: >-
-          bash mvnw -q
           -pl '!yak-ops-ui,!yak-ops-dist'
-          -Dspotless.check.skip=true -Dcheckstyle.skip=true
           verify
 
       - name: Upload failed test reports
@@ -202,8 +185,17 @@ jobs:
         if: steps.changes.outputs.distribution == 'true'
         run: bash scripts/release/verify-distribution.sh
 
-  # Stable required status: the three quality jobs must ALL succeed. Do not treat a
-  # skipped, cancelled, or missing check as a pass. This job runs after failures.
+  # On PRs, run affected real-database tests as part of this workflow. The
+  # standalone Backend Tests workflow remains available manually and for releases.
+  backend-tests:
+    name: Affected Backend Tests
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/backend-tests.yml
+    with:
+      suite: auto
+
+  # One stable PR result: quality and selected Backend Tests must all succeed.
+  # On main pushes and Release Gate quality calls Backend Tests is deliberately skipped.
   pr-required-checks:
     name: PR Required Checks
     if: ${{ always() }}
@@ -211,15 +203,18 @@ jobs:
       - backend-quality
       - frontend-quality
       - distribution-quality
+      - backend-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify all quality jobs
+      - name: Verify quality and selected backend tests
         shell: bash
         env:
           BACKEND_RESULT: ${{ needs.backend-quality.result }}
           FRONTEND_RESULT: ${{ needs.frontend-quality.result }}
           DISTRIBUTION_RESULT: ${{ needs.distribution-quality.result }}
+          BACKEND_TESTS_RESULT: ${{ needs.backend-tests.result }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
@@ -234,6 +229,12 @@ jobs:
             "Frontend Quality:${FRONTEND_RESULT}"
             "Distribution Quality:${DISTRIBUTION_RESULT}"
           )
+          # Skipped backend suites are valid only when none was selected; the
+          # called workflow's Backend Tests Check verifies this distinction.
+          # Skipping the entire reusable workflow on a PR is always a failure.
+          if [[ "${EVENT_NAME}" == "pull_request" || "${BACKEND_TESTS_RESULT}" != "skipped" ]]; then
+            checks+=("Affected Backend Tests:${BACKEND_TESTS_RESULT}")
+          fi
           for check in "${checks[@]}"; do
             name="${check%%:*}"
             result="${check#*:}"
@@ -245,5 +246,4 @@ jobs:
           done
 
           echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "This job checks code quality, not JDBC/CDC integration tests." >> "${GITHUB_STEP_SUMMARY}"
           exit "${failed}"

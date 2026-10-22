@@ -1,7 +1,6 @@
 name: Backend Tests
 
 on:
-  pull_request:
   workflow_call:
     inputs:
       suite:
@@ -19,6 +18,8 @@ on:
 permissions:
   contents: read
 
+# Reusable PR runs inherit pull_request context from Quality Check. Manual and
+# Release Gate runs use their own independent run ID.
 concurrency:
   group: backend-tests-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
