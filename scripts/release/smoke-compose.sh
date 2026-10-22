@@ -44,7 +44,7 @@ export YAK_OPS_DATASOURCE_MASTER_KEY="${YAK_OPS_DATASOURCE_MASTER_KEY:-release_g
 
 # Use a dedicated Compose project and Docker resource names for each smoke run.
 # Never allow cleanup to remove the regular deployment's named volumes.
-SMOKE_PROJECT="yak-release-$-$RANDOM"
+SMOKE_PROJECT="yak-release-${BASHPID}-${RANDOM}"
 SMOKE_OVERLAY="$(mktemp "${TMPDIR:-/tmp}/yak-release-overlay-XXXXXX.yaml")"
 cat > "$SMOKE_OVERLAY" <<EOF
 services:
