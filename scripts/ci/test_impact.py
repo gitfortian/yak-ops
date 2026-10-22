@@ -16,15 +16,24 @@ class ImpactTest(unittest.TestCase):
 
     def test_backend_module_uses_reactor_path(self):
         check = impact.analyze(["yak-ops-common/src/main/java/io/yak/ops/common/enums/common/CommonErrorCode.java"])
-        self.assertEqual({"yak-ops-common"}, check["modules"])
+        self.assertIn("yak-ops-common", check["modules"])
+        self.assertIn("yak-ops-boot", check["modules"])
         self.assertEqual(set(), check["suites"])
         self.assertTrue(check["backend"])
-        self.assertEqual("yak-ops-common", impact.outputs(["yak-ops-common/src/main/java/Example.java"]).split("modules=")[1].splitlines()[0])
+        self.assertIn("yak-ops-boot", impact.outputs(["yak-ops-common/src/main/java/Example.java"]).split("modules=")[1].splitlines()[0])
 
     def test_business_task_only_relevant_suites(self):
         check = impact.analyze(["yak-ops-business/yak-ops-business-task/src/main/java/X.java"])
-        self.assertEqual({"yak-ops-business/yak-ops-business-task"}, check["modules"])
+        self.assertIn("yak-ops-business/yak-ops-business-task", check["modules"])
+        self.assertIn("yak-ops-boot", check["modules"])
         self.assertEqual({"business", "backend-e2e"}, check["suites"])
+
+    def test_downstream_checks_follow_runtime_dependencies(self):
+        selected = impact.affected_modules(["yak-flow/yak-flow-runtime"])
+        self.assertIn("yak-flow/yak-flow-runtime", selected)
+        self.assertIn("yak-ops-boot", selected)
+        self.assertNotIn("yak-ops-dist", selected)
+        self.assertNotIn("yak-ops-ui", selected)
 
     def test_vendor_specific_and_shared_jdbc(self):
         vendor = impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/main/java/dialect/MySqlDialect.java"])

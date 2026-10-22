@@ -47,7 +47,42 @@ def module_for(path: str) -> list[str]:
     return []
 
 
-def test_suites(path: str) -> set[str]:
+@lru_cache(maxsize=1)
+def module_dependents() -> dict[str, set[str]]:
+    """Map reactor dependencies to consumers so changed contracts compile downstream."""
+    projects = {}
+    artifacts = {}
+    for module in reactor_modules():
+        project = ET.parse(ROOT / module / "pom.xml").getroot()
+        projects[module] = project
+        artifact = project.findtext("m:artifactId", namespaces=NAMESPACE)
+        if artifact:
+            artifacts[artifact] = module
+    consumers = {module: set() for module in projects}
+    for module, project in projects.items():
+        for dependency in project.findall("m:dependencies/m:dependency", NAMESPACE):
+            if dependency.findtext("m:groupId", namespaces=NAMESPACE) != "io.yak.ops":
+                continue
+            producer = artifacts.get(dependency.findtext("m:artifactId", namespaces=NAMESPACE))
+            if producer:
+                consumers[producer].add(module)
+    return consumers
+
+
+def affected_modules(owners: list[str]) -> set[str]:
+    """Only changed modules and actual transitively dependent modules need unit checks."""
+    consumers = module_dependents()
+    selected = set(owners)
+    pending = list(owners)
+    while pending:
+        for module in consumers.get(pending.pop(), set()):
+            if module not in selected:
+                selected.add(module)
+                pending.append(module)
+    return selected - {"yak-ops-ui", "yak-ops-dist"}
+
+
+def test_suites(path: str) -> set[str>:
     """Select integration suites only for production code and the owning *IT tests."""
     if "/src/test/" in path:
         if not path.endswith("IT.java"):
@@ -144,7 +179,7 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
         owners = [m for m in module_for(path) if m not in {"yak-ops-ui", "yak-ops-dist"}]
         if owners:
             result["backend"] = True
-            result["modules"].update(owners)
+            result["modules"].update(affected_modules(owners))
             result["suites"].update(test_suites(path))
             continue
         # An unknown path might change a build or generated contract: fail closed.
