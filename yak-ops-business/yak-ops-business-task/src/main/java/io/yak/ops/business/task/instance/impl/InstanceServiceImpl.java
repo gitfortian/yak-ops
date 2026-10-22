@@ -45,7 +45,7 @@ public class InstanceServiceImpl implements InstanceService {
         return new InstanceDefinitionVO(
                 instance.getDefinitionId(),
                 instance.getDefinitionVersion(),
-                definition.getName(),
+                instance.getDefinitionName() == null ? definition.getName() : instance.getDefinitionName(),
                 instance.getTaskType(),
                 version.getParameterSchemaVersion(),
                 version.getParameters());

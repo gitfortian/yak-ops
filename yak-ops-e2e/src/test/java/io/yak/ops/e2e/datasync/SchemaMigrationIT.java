@@ -34,10 +34,9 @@ class SchemaMigrationIT extends BackendTestBase {
         fixture.target.execute("CREATE TABLE " + fixture.table("bad_orders") + " (id BIGINT PRIMARY KEY)");
         var parameters = fixture.parameters(
                 "SINGLE_TABLE_OFFLINE", List.of("SCHEMA", "FULL"), List.of(fixture.route("orders", "bad_orders")));
-        String definition = fixture.create(parameters, true);
-        String instance = fixture.submit(definition);
-        fixture.awaitState(instance, "FAILED");
-        assertEquals(0, fixture.claimCount(instance));
+        // The invalid target is rejected before publication, not after a Job has started.
+        String definition = fixture.create(parameters, false);
+        fixture.api.expect("POST", "/api/v1/task-definitions/" + definition + "/publish", null, 400);
         try (var connection = fixture.target.connect();
                 var statement = connection.createStatement();
                 var rows = statement.executeQuery("SELECT COUNT(*) FROM " + fixture.table("bad_orders"))) {
