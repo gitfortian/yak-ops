@@ -99,7 +99,7 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
   };
 
   const actionClassName =
-    "flex h-8 w-8 items-center justify-center rounded-md border-0 bg-white/10 text-[#ecf0f8] transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-45";
+    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-white/10 text-[#ecf0f8] transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-45";
 
   const tooltipStyle = { border: "none", backgroundColor: "#0b0f19", color: "#fff" };
 
@@ -202,6 +202,7 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
             height: "calc(100dvh - 24px)",
             maxWidth: "none",
             maxHeight: "none",
+            translate: "none",
             transform: "none",
             padding: 0,
             border: "none",
