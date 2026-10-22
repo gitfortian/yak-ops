@@ -109,6 +109,8 @@ export interface TableProps<RecordType extends object> {
   dataSource?: readonly RecordType[];
   rowKey?: keyof RecordType | ((record: RecordType) => Key);
   loading?: boolean;
+  /** Exact body row height in pixels. Long cell content is clipped. */
+  rowHeight?: number;
   pagination?: false | TablePaginationConfig;
   footer?: ReactNode;
   rowSelection?: TableRowSelection<RecordType>;

@@ -10,6 +10,7 @@ import {
   SelectItemText,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   Table,
   toast,
   type TableColumns,
@@ -60,6 +61,8 @@ export function DataSyncPage() {
   const [records, setRecords] = useState<DataSyncTaskRecord[]>([]);
   const [updateUsers, setUpdateUsers] = useState<UserRecord[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(true);
+  const [updateUsersLoading, setUpdateUsersLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
@@ -115,6 +118,7 @@ export function DataSyncPage() {
   const {
     activeByTask,
     latestByTask,
+    loading: instancesLoading,
     refresh: refreshActiveInstances,
   } = useActiveTaskInstances(true, taskIds);
 
@@ -127,11 +131,14 @@ export function DataSyncPage() {
     [updateUsers],
   );
   const loadDataSources = useCallback(async () => {
+    setDataSourcesLoading(true);
     try {
       const result = await listDataSources({ pageNo: 1, pageSize: 200 });
       setDataSources(result?.bizData || []);
     } catch {
       // Keep existing endpoint labels while transport reports an unavailable catalog.
+    } finally {
+      setDataSourcesLoading(false);
     }
   }, []);
 
@@ -184,9 +191,11 @@ export function DataSyncPage() {
     ];
     if (userIds.length === 0) {
       setUpdateUsers([]);
+      setUpdateUsersLoading(false);
       return;
     }
 
+    setUpdateUsersLoading(true);
     let active = true;
     void getUsersByIds(userIds)
       .then((users) => {
@@ -194,6 +203,9 @@ export function DataSyncPage() {
       })
       .catch(() => {
         if (active) setUpdateUsers([]);
+      })
+      .finally(() => {
+        if (active) setUpdateUsersLoading(false);
       });
     return () => {
       active = false;
@@ -262,7 +274,7 @@ export function DataSyncPage() {
     {
       key: "name",
       title: "任务名称",
-      minWidth: 180,
+      minWidth: 240,
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="truncate text-[13px] font-medium text-[#252832]">{record.name}</div>
@@ -273,18 +285,23 @@ export function DataSyncPage() {
     {
       key: "route",
       title: "同步链路",
-      minWidth: 300,
-      render: (_value, record) => (
-        <TaskRoute
-          source={dataSourceMap.get(record.sourceDataSourceId)}
-          target={dataSourceMap.get(record.targetDataSourceId)}
-        />
-      ),
+      minWidth: 320,
+      render: (_value, record) =>
+        dataSourcesLoading &&
+        (!dataSourceMap.has(record.sourceDataSourceId) ||
+          !dataSourceMap.has(record.targetDataSourceId)) ? (
+          <Skeleton width="90%" height={16} />
+        ) : (
+          <TaskRoute
+            source={dataSourceMap.get(record.sourceDataSourceId)}
+            target={dataSourceMap.get(record.targetDataSourceId)}
+          />
+        ),
     },
     {
       key: "solution",
       title: "同步方案",
-      minWidth: 205,
+      minWidth: 220,
       render: (_value, record) => (
         <span className="text-xs text-[#475467]">
           {solutionSummary(record.solutionType, record.steps)}
@@ -294,7 +311,7 @@ export function DataSyncPage() {
     {
       key: "schedule",
       title: "调度",
-      width: 230,
+      width: 200,
       render: (_value, record) =>
         record.syncType === "OFFLINE" ? (
           <TaskScheduleCell
@@ -320,10 +337,11 @@ export function DataSyncPage() {
     {
       key: "execution",
       title: "执行概况",
-      width: 190,
+      width: 180,
       render: (_value, record) => {
         const instance = latestByTask.get(record.id);
         if (!instance) {
+          if (instancesLoading) return <Skeleton width="100%" height={22} />;
           return <ExecutionProgressBar realtime={record.syncType === "REALTIME"} />;
         }
         return (
@@ -358,7 +376,14 @@ export function DataSyncPage() {
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="truncate text-xs font-medium text-[#475467]" title={record.updateBy}>
-            {updateOperatorText(record)}
+            {updateUsersLoading &&
+            record.updateBy &&
+            record.updateBy !== "system" &&
+            !updateUserMap.has(record.updateBy) ? (
+              <Skeleton width={90} height={12} />
+            ) : (
+              updateOperatorText(record)
+            )}
           </div>
           <div className="mt-0.5 text-xs text-[#98a2b3]">{record.updateTime || "-"}</div>
         </div>
@@ -367,7 +392,7 @@ export function DataSyncPage() {
     {
       key: "actions",
       title: "操作",
-      width: 320,
+      width: 280,
       fixed: "right",
       align: "center",
       render: (_value, record) => (
@@ -423,8 +448,8 @@ export function DataSyncPage() {
       <div className="flex min-h-full flex-col bg-[#f6f6f6] text-[#242731]">
         <PageHeader title="数据同步" bordered className="bg-white px-6 max-md:px-4" />
 
-        <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
-          <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-4">
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Button
                 size="small"
@@ -506,7 +531,7 @@ export function DataSyncPage() {
               </div>
             </div>
 
-            <div className="mt-4 min-h-0 flex-1">
+            <div className="mt-4 min-h-0 min-w-0 flex-1">
               <Table<DataSyncTaskRecord>
                 className="min-h-full"
                 columns={columns}
@@ -515,7 +540,8 @@ export function DataSyncPage() {
                 loading={loading}
                 bordered
                 size="medium"
-                scroll={{ x: 1480 }}
+                rowHeight={64}
+                scroll={{ x: 1700 }}
                 emptyText="还没有同步任务"
                 pagination={
                   total > 0
