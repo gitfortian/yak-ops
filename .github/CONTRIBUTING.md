@@ -28,6 +28,8 @@ A YOIP is appropriate for a significant new subsystem, externally supported API,
 
 ## Documentation Policy
 
+Versioned user-facing release notes follow [docs/releases/README.md](../docs/releases/README.md). Ordinary internal refactors do not require a release-note entry; public behavior, compatibility and operational changes do.
+
 Code, types and tests describe the implemented behavior. Update JavaDoc for contracts that callers cannot infer; update user guides when visible behavior, compatibility or operations change. Do **not** require updates to Architecture, Capability or module Rules Markdown solely because a class, method or package changed. Do not create new descriptions of existing implementation just to satisfy a PR checklist.
 
 Use code, JavaDoc, TypeScript contracts, tests, persisted data and accepted YOIP decisions for current behavior. The same YOIP threshold applies to frontend and backend public changes; ordinary UI layout, styling and internal component refactors use focused PRs without separate descriptive design documents. Preserve security, CI, migration checks and release validation. Write YOIPs for significant proposed designs, not routine changes.

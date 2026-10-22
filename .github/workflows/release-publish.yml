@@ -81,6 +81,7 @@ jobs:
           set -euo pipefail
           bash scripts/release/check-release-metadata.sh "v${RELEASE_VERSION}"
           bash scripts/release/check-release-migration.sh "${RELEASE_VERSION}"
+          bash scripts/release/check-release-notes.sh "${RELEASE_VERSION}"
           test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT}"
 
       - name: Download formal Gate artifact
@@ -107,12 +108,15 @@ jobs:
           decision=release-attestations/release-decision.md
           test -s "${notes}"
           test -s "${decision}"
+          test -s release-attestations/release-notes.sha256
           grep -Fxq -- "- Product Version: ${RELEASE_VERSION}" "${decision}"
           grep -Fxq -- "- Candidate Commit: ${RELEASE_COMMIT}" "${decision}"
           grep -Fxq -- "- Formal Gate Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GATE_RUN_ID}" "${decision}"
-          grep -Fxq -- "# Yak Ops v${RELEASE_VERSION} Release Notes" "${notes}"
-          grep -Fxq -- "## Summary" "${notes}"
+          grep -Fxq -- "# Yak Ops v${RELEASE_VERSION}" "${notes}"
+          grep -Fxq -- "## Overview" "${notes}"
           grep -Fxq -- "## Known Limitations" "${notes}"
+          sha256sum -c release-attestations/release-notes.sha256
+          cmp "${notes}" "docs/releases/v${RELEASE_VERSION}.md"
           grep -Fxq -- '- Backend Tests: PASS (full suite; see the exact Release Gate run)' release-candidate/release-evidence.md
 
       - name: Verify candidate distribution
@@ -384,8 +388,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --title "Yak Ops ${tag}" \
-            --generate-notes \
-            --notes "$(cat "${notes}")"
+            --notes-file "${notes}"
 
       - name: Verify GitHub Release
         shell: bash
@@ -398,7 +401,7 @@ jobs:
 
           if [[ "${RELEASE_EXISTS}" != "true" ]]; then
             body="$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq '.body')"
-            grep -Fq '## Summary' <<< "${body}"
+            grep -Fq '## Overview' <<< "${body}"
             grep -Fq '## Known Limitations' <<< "${body}"
           fi
 

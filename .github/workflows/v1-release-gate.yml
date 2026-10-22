@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
       release_notes_confirmed:
-        description: Release summary and known limitations have been reviewed.
+        description: Versioned release notes, compatibility and limitations have been reviewed.
         required: true
         default: false
         type: boolean
@@ -34,14 +34,6 @@ on:
         type: string
       migration_review_evidence:
         description: Reviewed migration evidence (or no migration justification).
-        required: true
-        type: string
-      release_summary:
-        description: User-facing release summary.
-        required: true
-        type: string
-      known_limitations:
-        description: Known limitations or None.
         required: true
         type: string
 permissions:
@@ -276,8 +268,6 @@ jobs:
       RELEASE_NOTES_CONFIRMED: ${{ inputs.release_notes_confirmed }}
       MANUAL_E2E_EVIDENCE: ${{ inputs.manual_e2e_evidence }}
       MIGRATION_REVIEW_EVIDENCE: ${{ inputs.migration_review_evidence }}
-      RELEASE_SUMMARY: ${{ inputs.release_summary }}
-      KNOWN_LIMITATIONS: ${{ inputs.known_limitations }}
 
     steps:
       - name: Checkout
@@ -315,7 +305,7 @@ jobs:
             fi
           done
 
-          for field in MANUAL_E2E_EVIDENCE MIGRATION_REVIEW_EVIDENCE RELEASE_SUMMARY KNOWN_LIMITATIONS; do
+          for field in MANUAL_E2E_EVIDENCE MIGRATION_REVIEW_EVIDENCE; do
             value="${!field}"
             if [[ -z "${value//[[:space:]]/}" ]]; then
               echo "Required release evidence is empty: ${field}"
@@ -323,12 +313,11 @@ jobs:
             fi
           done
 
+          # Preserve exactly the notes reviewed in this commit.
+          bash scripts/release/check-release-notes.sh "${RELEASE_VERSION}"
           mkdir -p release-attestations
-          {
-            printf '# Yak Ops v%s Release Notes\n\n' "${RELEASE_VERSION}"
-            printf '## Summary\n\n%s\n\n' "${RELEASE_SUMMARY}"
-            printf '## Known Limitations\n\n%s\n' "${KNOWN_LIMITATIONS}"
-          } > release-attestations/release-notes.md
+          cp "docs/releases/v${RELEASE_VERSION}.md" release-attestations/release-notes.md
+          sha256sum release-attestations/release-notes.md > release-attestations/release-notes.sha256
 
           {
             printf '# Yak Ops v%s Release Decision\n\n' "${RELEASE_VERSION}"
