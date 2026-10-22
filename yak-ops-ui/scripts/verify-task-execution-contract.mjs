@@ -75,6 +75,7 @@ for (const status of ["FINISHED", "FAILED", "CANCELED"]) {
 assert.equal(canManageTaskDefinition(true), true);
 assert.equal(canManageTaskDefinition(false), false);
 assert.equal(canManageTaskDefinition(false, { status: "FINISHED" }), false);
+assert.equal(canManageTaskDefinition(true, { status: "UNKNOWN" }), false);
 
 assert.equal(
   matchesDataSyncInstance(mapped, { pageNo: 1, pageSize: 20, syncType: "REALTIME" }),
