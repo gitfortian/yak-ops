@@ -8,6 +8,7 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.plugin.task.api.TaskPluginException;
+import io.yak.ops.plugin.task.api.TaskValidationException;
 import io.yak.ops.security.enums.SecurityErrorCode;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import jakarta.validation.ConstraintViolationException;
@@ -35,8 +36,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TaskPluginException.class)
     public ResponseEntity<Result<Void>> handleTaskParameters(TaskPluginException exception) {
-        // User-supplied JSON errors must never log or return raw configuration values.
-        return ResponseEntity.badRequest().body(Result.fail(CommonErrorCode.PARAM_NOT_VALID));
+        // The exception chain can contain JDBC SQL, connection details or raw JSON. Do not log it.
+        Throwable cause = exception.getCause();
+        LOG.warn(
+                "Task plugin validation rejected, stage={}, exceptionType={}, causeType={}",
+                exception instanceof TaskValidationException validation ? validation.stage() : "CONFIG_OR_RESOURCE",
+                exception.getClass().getSimpleName(),
+                cause == null ? "NONE" : cause.getClass().getSimpleName());
+        String publicMessage = exception instanceof TaskValidationException validation
+                ? validation.publicMessage()
+                : null;
+        return ResponseEntity.badRequest()
+                .body(publicMessage == null
+                        ? Result.fail(CommonErrorCode.PARAM_NOT_VALID)
+                        : Result.fail(CommonErrorCode.PARAM_NOT_VALID.getCode(), publicMessage));
     }
 
     @ExceptionHandler(BusinessException.class)
