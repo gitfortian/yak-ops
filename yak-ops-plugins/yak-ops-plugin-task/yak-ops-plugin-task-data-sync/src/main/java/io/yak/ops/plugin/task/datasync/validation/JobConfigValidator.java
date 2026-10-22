@@ -121,6 +121,7 @@ public final class JobConfigValidator {
             String[][] reasons = {
                 {"Unsupported default expression for column: ", "不支持的默认值表达式"},
                 {"CURRENT_TIMESTAMP requires a timestamp column: ", "时间默认值与字段类型不匹配"},
+                {"Unsupported ON UPDATE expression for column: ", "暂不支持的自动更新时间表达式"},
                 {"AUTO_INCREMENT requires an integer primary key: ", "自增列必须是整型主键"},
                 {"Generated column requires a verified expression and write projection: ", "生成列尚不支持安全写入"},
                 {"Unknown generation metadata for column: ", "无法确认字段生成规则"},
