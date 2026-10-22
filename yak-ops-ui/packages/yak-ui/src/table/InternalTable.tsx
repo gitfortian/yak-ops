@@ -74,7 +74,10 @@ const getFixedOffset = <RecordType extends object>(
       : Array.from({ length: columns.length - index - 1 }, (_, offset) => index + offset + 1);
   const offsets = indexes
     .filter((columnIndex) => columns[columnIndex]?.fixed === side)
-    .map((columnIndex) => resolvedWidths?.[columnIndex] ?? toCssLength(columns[columnIndex]?.width))
+    .map(
+      (columnIndex) =>
+        resolvedWidths?.[columnIndex] ?? toCssLength(columns[columnIndex]?.width),
+    )
     .filter((width): width is number | string => width != null);
   if (offsets.length === 0) return 0;
   if (offsets.every((width) => typeof width === "number")) {
@@ -271,7 +274,10 @@ export function InternalTable<RecordType extends object>({
           >
             <colgroup>
               {mergedColumns.map((column, index) => (
-                <col key={getTableColumnKey(column, index)} style={getColumnStyle(column, index, layout.widths)} />
+                <col
+                  key={getTableColumnKey(column, index)}
+                  style={getColumnStyle(column, index, layout.widths)}
+                />
               ))}
             </colgroup>
 
@@ -354,7 +360,8 @@ export function InternalTable<RecordType extends object>({
                             className={cn(
                               "min-w-0",
                               column.ellipsis && "truncate",
-                              fixedRowHeight != null && "flex w-full flex-col justify-center overflow-hidden",
+                              fixedRowHeight != null &&
+                                "flex w-full flex-col justify-center overflow-hidden",
                             )}
                             style={
                               fixedRowHeight != null
@@ -414,7 +421,6 @@ export function InternalTable<RecordType extends object>({
             </tbody>
           </table>
         </div>
-
       </div>
 
       {footer || resolvedPagination ? (
