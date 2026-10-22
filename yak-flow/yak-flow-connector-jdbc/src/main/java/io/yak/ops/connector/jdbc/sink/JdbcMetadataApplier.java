@@ -245,8 +245,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
     private static String normalizeDefault(String expression, Boolean generated) {
         if (expression == null) return null;
         if (Boolean.TRUE.equals(generated)
-                && expression.replaceAll("[()\\\\s]+", "").matches("(?i)curdate(?:\\\\+interval[0-9]{1,3}day)?")) {
-            return expression.replaceAll("[()\\\\s]+", "").toUpperCase(java.util.Locale.ROOT);
+                && expression.replaceAll("[()\\s]+", "").matches("(?i)curdate(?:[+]interval[0-9]{1,3}day)?")) {
+            return expression.replaceAll("[()\\s]+", "").toUpperCase(java.util.Locale.ROOT);
         }
         if (Boolean.TRUE.equals(generated) && expression.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]?\\))?")) {
             return expression
