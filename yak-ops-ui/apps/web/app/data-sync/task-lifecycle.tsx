@@ -2,6 +2,7 @@ import { Badge, Button, type BadgeProps } from "@yak-ops/yak-ui";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { listLatestTaskInstances, type TaskInstanceRecord } from "@/service/task-execution";
+import { canManageTaskDefinition } from "@/service/data-sync/execution";
 
 import {
   type DataSyncInstanceRecord,
@@ -34,6 +35,7 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
   const [latestByTask, setLatestByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
   const [activeByTask, setActiveByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [readFailed, setReadFailed] = useState(false);
   const loadedTaskIdsRef = useRef("");
   const requestId = useRef(0);
   const pendingRequest = useRef<AbortController>();
@@ -45,6 +47,7 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
     const request = ++requestId.current;
     if (!enabled || taskIds.length === 0) {
       loadedTaskIdsRef.current = "";
+      setReadFailed(false);
       setLoading(false);
       setLatestByTask(new Map());
       setActiveByTask(new Map());
@@ -61,10 +64,14 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
       setLatestByTask(new Map(latest.map((record) => [record.definitionId, record])));
       setActiveByTask(new Map(active.map((record) => [record.definitionId, record])));
       loadedTaskIdsRef.current = scope;
+      setReadFailed(false);
       setLoading(false);
     } catch {
       // Keep the last observation. Authorization and transport errors are reported centrally.
-      if (!controller.signal.aborted && request === requestId.current) setLoading(false);
+      if (!controller.signal.aborted && request === requestId.current) {
+        setReadFailed(true);
+        setLoading(false);
+      }
     }
   }, [enabled, taskIds]);
 
@@ -82,7 +89,13 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
     return () => window.clearInterval(timer);
   }, [activeByTask.size, enabled, refresh, taskIds.length]);
 
-  return { latestByTask, activeByTask, loading, refresh };
+  const ready =
+    enabled &&
+    taskIds.length > 0 &&
+    !loading &&
+    !readFailed &&
+    loadedTaskIdsRef.current === taskIds.join("|");
+  return { latestByTask, activeByTask, loading, ready, refresh };
 }
 
 interface LifecycleAction {
@@ -105,6 +118,7 @@ export interface DataSyncTaskRuntimeAction {
 interface DataSyncTaskLifecycleActionsProps {
   record: DataSyncTaskRecord;
   activeInstance?: Pick<DataSyncInstanceRecord, "id" | "status">;
+  instanceStateReady?: boolean;
   actionKey?: string;
   runtimeAction?: DataSyncTaskRuntimeAction;
   onRun?: (record: DataSyncTaskRecord) => void;
@@ -118,6 +132,7 @@ interface DataSyncTaskLifecycleActionsProps {
 export function DataSyncTaskLifecycleActions({
   record,
   activeInstance,
+  instanceStateReady = false,
   actionKey,
   runtimeAction,
   onRun,
@@ -128,6 +143,7 @@ export function DataSyncTaskLifecycleActions({
   onDelete,
 }: DataSyncTaskLifecycleActionsProps) {
   const published = isPublishedTask(record);
+  const canManage = canManageTaskDefinition(instanceStateReady, activeInstance);
   const lifecycleAction = published ? "unpublish" : "publish";
   const actions: LifecycleAction[] = [
     {
@@ -136,6 +152,7 @@ export function DataSyncTaskLifecycleActions({
       className: "text-[var(--yak-color-primary)]",
 
       loading: actionKey === `${record.id}:${lifecycleAction}`,
+      disabled: !canManage,
       onClick: () => (published ? onUnpublish(record) : onPublish(record)),
     },
     {
@@ -144,7 +161,7 @@ export function DataSyncTaskLifecycleActions({
       className: published
         ? "text-[#667085]"
         : "text-[#667085] hover:text-[var(--yak-color-primary)]",
-      disabled: published,
+      disabled: published || !canManage,
       onClick: () => onEdit(record),
     },
     {
@@ -157,7 +174,7 @@ export function DataSyncTaskLifecycleActions({
       key: "delete",
       label: "删除",
       className: published ? "text-[#667085]" : "text-[#667085] hover:text-[#d92d20]",
-      disabled: published,
+      disabled: published || !canManage,
       onClick: () => onDelete(record),
     },
   ];
@@ -173,7 +190,7 @@ export function DataSyncTaskLifecycleActions({
       label: "运行",
       className:
         published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[#667085]",
-      disabled: !published || Boolean(activeInstance),
+      disabled: !published || !canManage,
       loading: actionKey === `${record.id}:run`,
       onClick: () => onRun(record),
     });
