@@ -104,7 +104,9 @@ final class DataSyncTaskHandle implements TaskHandle {
                 progress = new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous, dataStep);
                 status = JobStatus.RUNNING;
                 if (config.steps().contains(Step.SCHEMA)) {
-                    LOG.info("Schema preparation started, tableCount={}", plan.tables().size());
+                    LOG.info(
+                            "Schema preparation started, tableCount={}",
+                            plan.tables().size());
                     preparation.prepare(plan, identity, progress);
                 }
                 checkCanceled();
