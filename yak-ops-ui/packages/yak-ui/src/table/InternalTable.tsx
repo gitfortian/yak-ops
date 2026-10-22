@@ -1,9 +1,9 @@
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "../cn";
 import { Empty } from "../empty";
 import { Pagination } from "../pagination";
-import { Spinner } from "../spinner";
+import { Skeleton } from "../skeleton";
 import { useFilter } from "./hooks/useFilter";
 import { usePagination } from "./hooks/usePagination";
 import { useSelection } from "./hooks/useSelection";
@@ -19,6 +19,7 @@ import type {
   TableSize,
   TableSorterResult,
 } from "./interface";
+import { resolveTableLayout } from "./layout";
 import { getTableColumnKey, resolveTableRowKey } from "./utils";
 
 const sizeClasses: Record<TableSize, { header: string; cell: string }> = {
@@ -44,10 +45,17 @@ const alignClasses: Record<TableAlign, string> = {
 
 const getColumnStyle = <RecordType extends object>(
   column: TableColumn<RecordType>,
-): CSSProperties => ({
-  width: column.width,
-  minWidth: column.minWidth,
-});
+  index: number,
+  widths: number[] | null,
+): CSSProperties => {
+  const width = widths?.[index];
+  if (width != null) return { width, minWidth: width, maxWidth: width };
+  return {
+    width: column.width,
+    minWidth: column.width ?? column.minWidth,
+    maxWidth: column.width,
+  };
+};
 
 const toCssLength = (width: CSSProperties["width"]): string | undefined => {
   if (typeof width === "number") return `${width}px`;
@@ -58,28 +66,32 @@ const getFixedOffset = <RecordType extends object>(
   columns: readonly TableColumn<RecordType>[],
   index: number,
   side: "left" | "right",
+  resolvedWidths: number[] | null,
 ): CSSProperties["left"] => {
   const indexes =
     side === "left"
       ? Array.from({ length: index }, (_, offset) => offset)
       : Array.from({ length: columns.length - index - 1 }, (_, offset) => index + offset + 1);
-  const widths = indexes
+  const offsets = indexes
     .filter((columnIndex) => columns[columnIndex]?.fixed === side)
-    .map((columnIndex) => toCssLength(columns[columnIndex]?.width))
-    .filter((width): width is string => Boolean(width));
-  if (widths.length === 0) return 0;
-  if (widths.length === 1) return widths[0];
-  return `calc(${widths.join(" + ")})`;
+    .map((columnIndex) => resolvedWidths?.[columnIndex] ?? toCssLength(columns[columnIndex]?.width))
+    .filter((width): width is number | string => width != null);
+  if (offsets.length === 0) return 0;
+  if (offsets.every((width) => typeof width === "number")) {
+    return (offsets as number[]).reduce((sum, width) => sum + width, 0);
+  }
+  return `calc(${offsets.map((width) => toCssLength(width) ?? width).join(" + ")})`;
 };
 
 const getCellStyle = <RecordType extends object>(
   column: TableColumn<RecordType>,
   index: number,
   columns: readonly TableColumn<RecordType>[],
+  widths: number[] | null,
 ): CSSProperties => ({
-  ...getColumnStyle(column),
-  ...(column.fixed === "left" ? { left: getFixedOffset(columns, index, "left") } : {}),
-  ...(column.fixed === "right" ? { right: getFixedOffset(columns, index, "right") } : {}),
+  ...getColumnStyle(column, index, widths),
+  ...(column.fixed === "left" ? { left: getFixedOffset(columns, index, "left", widths) } : {}),
+  ...(column.fixed === "right" ? { right: getFixedOffset(columns, index, "right", widths) } : {}),
 });
 
 const fixedEdgeShadow = <RecordType extends object>(
@@ -111,6 +123,7 @@ export function InternalTable<RecordType extends object>({
   onRow,
   pagination,
   rowHoverable = true,
+  rowHeight,
   rowKey,
   rowSelection,
   scroll,
@@ -118,8 +131,7 @@ export function InternalTable<RecordType extends object>({
   sticky = false,
 }: TableProps<RecordType>) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLTableSectionElement>(null);
-  const loadingRef = useRef<HTMLDivElement>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const filtersRef = useRef<TableFilters>({});
   const sorterRef = useRef<TableSorterResult<RecordType>>({});
   const paginationStateRef = useRef<TablePaginationState | false>(false);
@@ -134,34 +146,17 @@ export function InternalTable<RecordType extends object>({
   >((data) => data);
 
   useLayoutEffect(() => {
-    if (!loading) return;
-
     const viewport = viewportRef.current;
-    const header = headerRef.current;
-    const mask = loadingRef.current;
-    if (!viewport || !header || !mask) return;
-
-    const updateLoadingBounds = () => {
-      const viewportTop = viewport.getBoundingClientRect().top;
-      // Measure a cell because sticky th elements can move independently of thead.
-      const headerBottom = header.rows[0]?.cells[0]?.getBoundingClientRect().bottom ?? viewportTop;
-      const top = Math.min(viewport.clientHeight, Math.max(0, headerBottom - viewportTop));
-      mask.style.top = `${top}px`;
-      mask.style.height = `${Math.max(0, viewport.clientHeight - top)}px`;
-      mask.style.width = `${viewport.clientWidth}px`;
+    if (!viewport) return;
+    const measure = () => {
+      const width = viewport.clientWidth;
+      setViewportWidth((current) => (current === width ? current : width));
     };
-
-    updateLoadingBounds();
-    const observer = new ResizeObserver(updateLoadingBounds);
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(viewport);
-    observer.observe(header);
-    viewport.addEventListener("scroll", updateLoadingBounds, { passive: true });
-
-    return () => {
-      observer.disconnect();
-      viewport.removeEventListener("scroll", updateLoadingBounds);
-    };
-  }, [loading, sticky]);
+    return () => observer.disconnect();
+  }, []);
 
   const emitChange = (
     action: TableChangeAction,
@@ -239,15 +234,19 @@ export function InternalTable<RecordType extends object>({
     filterState.columns,
     rowKey,
   );
-  const tableLayoutFixed = mergedColumns.some((column) => column.ellipsis);
+  const layout = resolveTableLayout(mergedColumns, viewportWidth, scroll?.x);
   const scrollStyle: CSSProperties | undefined =
     scroll?.y == null ? undefined : { maxHeight: scroll.y };
   const tableStyle: CSSProperties =
-    scroll?.x === true
-      ? { minWidth: "max-content" }
-      : scroll?.x == null
-        ? {}
-        : { minWidth: scroll.x };
+    layout.tableWidth != null
+      ? { width: layout.tableWidth }
+      : scroll?.x === true
+        ? { minWidth: "max-content" }
+        : scroll?.x == null
+          ? {}
+          : { minWidth: scroll.x };
+  const fixedRowHeight = rowHeight != null && rowHeight > 0 ? rowHeight : undefined;
+  const stickyHeader = sticky || scroll?.y != null;
   const sizeClass = sizeClasses[size];
 
   return (
@@ -264,19 +263,19 @@ export function InternalTable<RecordType extends object>({
           <table
             aria-busy={loading || undefined}
             className={cn(
-              "w-full text-[var(--yak-components-table-text)]",
+              "text-[var(--yak-components-table-text)]",
               bordered ? "border-separate border-spacing-0" : "border-collapse",
-              tableLayoutFixed ? "table-fixed" : "table-auto",
+              layout.widths != null ? "table-fixed" : "w-full table-auto",
             )}
             style={tableStyle}
           >
             <colgroup>
               {mergedColumns.map((column, index) => (
-                <col key={getTableColumnKey(column, index)} style={getColumnStyle(column)} />
+                <col key={getTableColumnKey(column, index)} style={getColumnStyle(column, index, layout.widths)} />
               ))}
             </colgroup>
 
-            <thead ref={headerRef}>
+            <thead>
               <tr>
                 {mergedColumns.map((column, index) => {
                   const align = column.align ?? "left";
@@ -286,14 +285,14 @@ export function InternalTable<RecordType extends object>({
                     <th
                       key={getTableColumnKey(column, index)}
                       scope="col"
-                      style={getCellStyle(column, index, mergedColumns)}
+                      style={getCellStyle(column, index, mergedColumns, layout.widths)}
                       className={cn(
                         "bg-[var(--yak-components-table-header-bg)] font-medium text-[var(--yak-components-table-header-text)]",
                         sizeClass.header,
                         alignClasses[align],
-                        (sticky || fixed) && "sticky",
-                        sticky && "top-0",
-                        fixed ? "z-30" : sticky && "z-20",
+                        (stickyHeader || fixed) && "sticky",
+                        stickyHeader && "top-0",
+                        fixed ? "z-30" : stickyHeader && "z-20",
                         scroll?.x != null && fixedEdgeShadow(mergedColumns, index),
                       )}
                     >
@@ -335,7 +334,12 @@ export function InternalTable<RecordType extends object>({
                       return (
                         <td
                           key={getTableColumnKey(column, columnIndex)}
-                          style={getCellStyle(column, columnIndex, mergedColumns)}
+                          style={{
+                            ...getCellStyle(column, columnIndex, mergedColumns, layout.widths),
+                            ...(fixedRowHeight != null
+                              ? { height: fixedRowHeight, paddingTop: 0, paddingBottom: 0 }
+                              : {}),
+                          }}
                           className={cn(
                             "border-b border-[var(--yak-components-table-border)] align-middle",
                             sizeClass.cell,
@@ -347,7 +351,16 @@ export function InternalTable<RecordType extends object>({
                           )}
                         >
                           <div
-                            className={cn("min-w-0", column.ellipsis && "truncate")}
+                            className={cn(
+                              "min-w-0",
+                              column.ellipsis && "truncate",
+                              fixedRowHeight != null && "flex w-full flex-col justify-center overflow-hidden",
+                            )}
+                            style={
+                              fixedRowHeight != null
+                                ? { height: Math.max(0, fixedRowHeight - 1) }
+                                : undefined
+                            }
                             title={column.ellipsis ? getCellTitle(cell) : undefined}
                           >
                             {cell ?? null}
@@ -359,7 +372,33 @@ export function InternalTable<RecordType extends object>({
                 );
               })}
 
-              {data.length === 0 ? (
+              {data.length === 0 && loading
+                ? Array.from({ length: 3 }, (_, rowIndex) => (
+                    <tr key={`skeleton-${rowIndex}`} aria-hidden="true">
+                      {mergedColumns.map((column, columnIndex) => (
+                        <td
+                          key={getTableColumnKey(column, columnIndex)}
+                          style={{
+                            ...getCellStyle(column, columnIndex, mergedColumns, layout.widths),
+                            height: fixedRowHeight ?? 56,
+                          }}
+                          className={cn(
+                            "border-b border-[var(--yak-components-table-border)] px-3",
+                            bordered && "border-r first:border-l",
+                            bordered && rowIndex === 0 && "border-t",
+                            column.fixed != null && "sticky z-10 bg-[var(--yak-components-table-bg)]",
+                          )}
+                        >
+                          <Skeleton
+                            width={columnIndex === mergedColumns.length - 1 ? "65%" : "80%"}
+                            height={12}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                : null}
+              {data.length === 0 && !loading ? (
                 <tr>
                   <td
                     colSpan={Math.max(mergedColumns.length, 1)}
@@ -368,11 +407,7 @@ export function InternalTable<RecordType extends object>({
                       bordered && "border-x border-t",
                     )}
                   >
-                    {loading ? (
-                      <div aria-hidden="true" className="min-h-48" />
-                    ) : (
-                      <Empty className="min-h-48" description={emptyText ?? "No data"} />
-                    )}
+                    <Empty className="min-h-48" description={emptyText ?? "No data"} />
                   </td>
                 </tr>
               ) : null}
@@ -380,14 +415,6 @@ export function InternalTable<RecordType extends object>({
           </table>
         </div>
 
-        {loading ? (
-          <div
-            ref={loadingRef}
-            className="absolute left-0 z-20 flex items-center justify-center overflow-hidden bg-[var(--yak-components-table-loading-bg)]"
-          >
-            <Spinner size="xlarge" label="Loading table" />
-          </div>
-        ) : null}
       </div>
 
       {footer || resolvedPagination ? (
