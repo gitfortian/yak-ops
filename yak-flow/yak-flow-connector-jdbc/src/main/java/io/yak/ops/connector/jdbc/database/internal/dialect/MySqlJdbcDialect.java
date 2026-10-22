@@ -89,8 +89,8 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                             comment == null || comment.isBlank() ? "" : " COMMENT " + stringLiteral(comment);
                     ColumnProperties attribute = properties.get(column.name());
                     String extras = renderProperties(column, schema, attribute);
-                    return quoteIdentifier(column.name()) + " "
-                            + validatedColumnType(column, attribute) + nullable + extras + commentClause;
+                    return quoteIdentifier(column.name()) + " " + validatedColumnType(column, attribute) + nullable
+                            + extras + commentClause;
                 })
                 .collect(Collectors.joining(", "));
 
@@ -188,8 +188,8 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                         .matcher(value);
                 if (dateExpression.matches()) {
                     String interval = dateExpression.group(1);
-                    return " DEFAULT (CURDATE()"
-                            + (interval == null ? "" : " + INTERVAL " + interval + " DAY") + ")" + onUpdate;
+                    return " DEFAULT (CURDATE()" + (interval == null ? "" : " + INTERVAL " + interval + " DAY") + ")"
+                            + onUpdate;
                 }
             }
             throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
