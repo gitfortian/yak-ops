@@ -131,11 +131,7 @@ public final class MySqlCdcSourceConfig {
             values.put(key, value);
         });
         String zone = getIgnoreCase(values, "connectionTimeZone");
-        String alias = getIgnoreCase(values, "serverTimezone");
-        if (zone != null && alias != null && !zone.equals(alias)) {
-            throw new IllegalArgumentException("Conflicting MySQL connectionTimeZone and serverTimezone values");
-        }
-        if (zone == null && alias == null) {
+        if (zone == null) {
             String forced = getIgnoreCase(values, "forceConnectionTimeZoneToSession");
             if (forced != null && !Boolean.parseBoolean(forced)) {
                 throw new IllegalArgumentException(

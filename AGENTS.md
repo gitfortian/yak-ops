@@ -42,14 +42,14 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
 - **New major subsystem or public contract change:** discuss and accept a YOIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [YOIP template](.github/YOIP_TEMPLATE.md).
 - **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
-- **Database migration:** keep published Flyway migrations immutable; review upgrades, use forward-only migrations and test compatibility. Never use `flyway repair` to conceal a changed published checksum.
+- **Database migration:** v1.3.0 intentionally resets to one fresh-install-only Flyway baseline and does not upgrade existing databases. After publication, keep the new V1 and subsequent release migrations immutable; use forward-only migrations for explicitly approved changes, never rewrite business rows implicitly, and never use `flyway repair` to conceal incompatible history.
 - **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md`, TypeScript contracts and affected tests; apply the repository-wide YOIP process to significant public changes, and use focused PRs for routine UI work.
 
 ## Repository-Specific Invariants
 
 - Keep task-definition identity, Workspace authorization and immutable definition versions in the business/persistence boundary. Plugin validation must not access credentials or silently rewrite requested parameters; accepted task configuration is JSON.
 - Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
-- Keep published Flyway migrations frozen; draft migrations must be reconciled before the release migration gate. The release scripts verify names and sequence, not the semantic safety of SQL.
+- Keep the v1.3.0 fresh-install baseline and later published Flyway migrations frozen. Old databases need a separate explicitly approved upgrade path; release scripts verify naming and ordering but cannot establish data safety.
 - Internal SLF4J log templates and Core / YakFlow technical diagnostics use English. Preserve exception types, causes and contextual fields; execution decisions must not parse exception message text.
 - Product-facing ErrorCode descriptions, Bean Validation messages and other user messages remain localized at their owning boundary. Never expose raw internal diagnostics or credentials to users.
 - Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English.
