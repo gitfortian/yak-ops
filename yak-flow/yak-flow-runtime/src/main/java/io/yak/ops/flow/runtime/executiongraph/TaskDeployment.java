@@ -386,11 +386,18 @@ final class TaskDeployment {
     }
 
     private void stopAll(Throwable cause) {
-        for (InputGate<Object> inputGate : inputGates) {
-            inputGate.abort(cause);
-        }
+        // Set the cancellation flag on each task before waking its InputGate. Otherwise a
+        // downstream task can observe the interrupted await as an asynchronous failure.
         for (Execution execution : executions) {
             execution.cancelAsync();
+        }
+        Throwable stopCause = executionGraph.isCancellationRequested()
+                        && (unwrap(cause) instanceof InterruptedException
+                                || unwrap(cause) instanceof CancellationException)
+                ? new CancellationException("Job cancellation requested")
+                : cause;
+        for (InputGate<Object> inputGate : inputGates) {
+            inputGate.abort(stopCause);
         }
     }
 
