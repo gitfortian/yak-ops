@@ -21,6 +21,8 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
@@ -180,8 +182,7 @@ public final class ExecutionGraph {
                 if (failure instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
-                if (cancellationRequested
-                        && (failure instanceof InterruptedException || failure instanceof CancellationException)) {
+                if (cancellationRequested && isCancellationSignal(failure)) {
                     completeCanceled();
                     return;
                 }
@@ -242,6 +243,15 @@ public final class ExecutionGraph {
             LOG.info("YakFlow Job finished, jobId={}, durationMs={}", getJobID(), durationMillis);
             result.complete(new JobExecutionResult(getJobID(), durationMillis));
         }
+    }
+
+    private static boolean isCancellationSignal(Throwable failure) {
+        Throwable cause = failure;
+        while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+                && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause instanceof InterruptedException || cause instanceof CancellationException;
     }
 
     private void completeCanceled() {

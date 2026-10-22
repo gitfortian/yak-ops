@@ -49,6 +49,9 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
     private volatile boolean cancelled;
     private volatile boolean closed;
     private boolean failed;
+    // Only executed but uncommitted statements require a physical rollback. Buffered rows have
+    // not reached the database; rolling back an idle connection can fail on a stale socket.
+    private boolean rollbackRequired;
     private long committedRecords;
     private long reportedRecords;
     private final long startedNanos = System.nanoTime();
@@ -179,6 +182,7 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
         try {
             statements.requireCompleteUpdate();
             long statementStartedNanos = System.nanoTime();
+            rollbackRequired = true;
             executor.executeBatch();
             long statementMs = (System.nanoTime() - statementStartedNanos) / 1_000_000;
             if (cancelled) {
@@ -186,6 +190,7 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             }
             long commitStartedNanos = System.nanoTime();
             connection.commit();
+            rollbackRequired = false;
             long commitMs = (System.nanoTime() - commitStartedNanos) / 1_000_000;
             executor.acknowledgeCommit();
             pendingTableRows.forEach((table, count) -> metrics.committed(metricsGeneration, table, count));
@@ -203,10 +208,13 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
         } catch (SQLException | RuntimeException failure) {
             failed = true;
             if (!cancelled) pendingTableRows.keySet().forEach(table -> metrics.writeFailed(metricsGeneration, table));
-            try {
-                connection.rollback();
-            } catch (SQLException rollbackFailure) {
-                failure.addSuppressed(rollbackFailure);
+            if (rollbackRequired) {
+                try {
+                    connection.rollback();
+                    rollbackRequired = false;
+                } catch (SQLException rollbackFailure) {
+                    failure.addSuppressed(rollbackFailure);
+                }
             }
             throw failure;
         }
@@ -237,10 +245,14 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
         closed = true;
         reportProgress(true);
         SQLException failure = null;
-        try {
-            connection.rollback();
-        } catch (SQLException exception) {
-            failure = exception;
+        if (rollbackRequired) {
+            try {
+                connection.rollback();
+                rollbackRequired = false;
+            } catch (SQLException exception) {
+                // Preserve transaction uncertainty and still release statements and the connection.
+                failure = exception;
+            }
         }
         try {
             executor.closeStatements();
