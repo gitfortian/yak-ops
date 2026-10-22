@@ -57,6 +57,11 @@ jobs:
       - name: Release metadata consistency
         run: bash scripts/release/check-release-metadata.sh
 
+      - name: Release migration contract
+        run: |
+          source release.env
+          bash scripts/release/check-release-migration.sh "$YAK_OPS_VERSION"
+
       - name: Backend logging rules
         if: steps.scope.outputs.backend == 'true'
         run: |

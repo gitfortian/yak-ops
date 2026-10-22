@@ -42,6 +42,36 @@ export YAK_SECURITY_BOOTSTRAP_USERNAME="${YAK_SECURITY_BOOTSTRAP_USERNAME:-relea
 export YAK_SECURITY_BOOTSTRAP_PASSWORD="${YAK_SECURITY_BOOTSTRAP_PASSWORD:-ReleaseGate@123456}"
 export YAK_OPS_DATASOURCE_MASTER_KEY="${YAK_OPS_DATASOURCE_MASTER_KEY:-release_gate_only_master_key_change_me}"
 
+# Use a dedicated Compose project and Docker resource names for each smoke run.
+# Never allow cleanup to remove the regular deployment's named volumes.
+SMOKE_PROJECT="yak-release-${BASHPID}-${RANDOM}"
+SMOKE_OVERLAY="$(mktemp "${TMPDIR:-/tmp}/yak-release-overlay-XXXXXX.yaml")"
+cat > "$SMOKE_OVERLAY" <<EOF
+services:
+  mysql:
+    container_name: ${SMOKE_PROJECT}-mysql
+  yak-ops-backend:
+    container_name: ${SMOKE_PROJECT}-backend
+  yak-ops-frontend:
+    container_name: ${SMOKE_PROJECT}-frontend
+volumes:
+  mysql-data:
+    name: ${SMOKE_PROJECT}-mysql-data
+  yak-ops-data:
+    name: ${SMOKE_PROJECT}-app-data
+  yak-ops-logs:
+    name: ${SMOKE_PROJECT}-logs
+  yak-ops-jdbc-drivers:
+    name: ${SMOKE_PROJECT}-drivers
+networks:
+  yak-ops-network:
+    name: ${SMOKE_PROJECT}-network
+EOF
+
+compose() {
+    docker compose --project-name "$SMOKE_PROJECT" -f compose.yaml -f "$SMOKE_OVERLAY" "$@"
+}
+
 COOKIE_FILE="$(mktemp)"
 LOGIN_RESPONSE="$(mktemp)"
 CURRENT_RESPONSE="$(mktemp)"
@@ -52,35 +82,58 @@ cleanup() {
 
     if (( status != 0 )); then
         printf '\nCompose smoke failed. Container status:\n' >&2
-        docker compose -f compose.yaml ps >&2 || true
+        compose ps >&2 || true
         printf '\nCompose logs:\n' >&2
-        docker compose -f compose.yaml logs --no-color >&2 || true
+        compose logs --no-color >&2 || true
     fi
 
-    docker compose -f compose.yaml down -v --remove-orphans >/dev/null 2>&1 || true
-    rm -f "$COOKIE_FILE" "$LOGIN_RESPONSE" "$CURRENT_RESPONSE"
+    compose down -v --remove-orphans >/dev/null 2>&1 || true
+    rm -f "$COOKIE_FILE" "$LOGIN_RESPONSE" "$CURRENT_RESPONSE" "$SMOKE_OVERLAY"
     exit "$status"
 }
 trap cleanup EXIT
 
-printf 'Starting Yak Ops Compose stack with prebuilt images...\n'
-docker compose -f compose.yaml up -d --no-build
+printf 'Starting isolated Yak Ops Compose stack (%s)...\n' "$SMOKE_PROJECT"
+compose config --quiet
+compose up -d --no-build
 
-printf 'Waiting for backend health...\n'
-backend_ready=false
-for _ in $(seq 1 90); do
-    health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' yak-ops-backend 2>/dev/null || true)"
-    if [[ "$health" == "healthy" ]]; then
-        backend_ready=true
-        break
-    fi
-    sleep 2
-done
-
-if [[ "$backend_ready" != "true" ]]; then
+wait_backend() {
+    printf 'Waiting for backend health...\n'
+    for _ in $(seq 1 90); do
+        health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${SMOKE_PROJECT}-backend" 2>/dev/null || true)"
+        if [[ "$health" == "healthy" ]]; then
+            return 0
+        fi
+        sleep 2
+    done
     printf 'Backend did not become healthy.\n' >&2
-    exit 1
-fi
+    return 1
+}
+
+mysql_query() {
+    compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -D "$MYSQL_DATABASE" -N -B -e "$1"' sh "$1"
+}
+
+check_flyway_baseline() {
+    local table_count history_count applied_count obsolete_count
+    table_count="$(mysql_query "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE' AND table_name <> 'flyway_schema_history'")"
+    history_count="$(mysql_query "SELECT COUNT(*) FROM flyway_schema_history")"
+    applied_count="$(mysql_query "SELECT COUNT(*) FROM flyway_schema_history WHERE version='1' AND success=1")"
+    obsolete_count="$(mysql_query "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('yak_ops_data_sync_task', 'yak_ops_data_sync_instance', 'yak_ops_task_attempt')")"
+    if [[ "$table_count" != "25" || "$history_count" != "1" || "$applied_count" != "1" || "$obsolete_count" != "0" ]]; then
+        printf 'Unexpected Flyway schema: tables=%s history=%s baseline=%s old_tables=%s\n' \
+            "$table_count" "$history_count" "$applied_count" "$obsolete_count" >&2
+        return 1
+    fi
+    printf 'Flyway baseline verified: 25 tables, V1 only, no obsolete tables.\n'
+}
+
+wait_backend
+check_flyway_baseline
+printf 'Restarting backend to verify Flyway does not rerun...\n'
+compose restart yak-ops-backend
+wait_backend
+check_flyway_baseline
 
 printf 'Waiting for frontend HTTP ingress...\n'
 frontend_ready=false
