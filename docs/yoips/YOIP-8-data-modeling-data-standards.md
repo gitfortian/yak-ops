@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Pending proposal PR in gitfortian/yak-ops
+Discussion: https://github.com/gitfortian/yak-ops/pull/5
 
 Decision: Pending explicit maintainer acceptance
 
