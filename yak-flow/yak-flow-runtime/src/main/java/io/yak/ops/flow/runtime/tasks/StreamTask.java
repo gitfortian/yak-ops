@@ -355,20 +355,29 @@ public abstract class StreamTask implements AutoCloseable {
                 mailboxProcessor.prepareClose();
             }
             processingTimeService.close();
+            Throwable closeFailure = null;
             try {
                 closeTask();
             } catch (Throwable closeError) {
+                closeFailure = closeError;
                 if (failure == null) {
                     failure = closeError;
                 } else if (failure != closeError) {
                     failure.addSuppressed(closeError);
                 }
             }
-            if (cancelRequested
-                    && (failure == null
-                            || failure instanceof InterruptedException
-                            || failure instanceof CancellationException)) {
-                failure = new CancellationException("StreamTask was cancelled");
+            if (cancelRequested && (failure == null || isCancellationSignal(failure))) {
+                // Cleanup failures must remain visible, but an expected interrupted wait is not
+                // a task failure merely because CompletableFuture wrapped its cause.
+                if (closeFailure != null) {
+                    LOG.warn("YakFlow StreamTask cleanup after cancellation failed, task={}",
+                            taskInfo().threadName(), closeFailure);
+                }
+                CancellationException cancellation = new CancellationException("StreamTask was cancelled");
+                if (closeFailure != null) {
+                    cancellation.addSuppressed(closeFailure);
+                }
+                failure = cancellation;
             }
             if (failure == null && !finished) {
                 failure = new IllegalStateException("StreamTask exited before finishing its input");
@@ -407,6 +416,15 @@ public abstract class StreamTask implements AutoCloseable {
                 }
             }
         }
+    }
+
+    private static boolean isCancellationSignal(Throwable failure) {
+        Throwable cause = failure;
+        while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+                && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause instanceof InterruptedException || cause instanceof CancellationException;
     }
 
     private void checkStop() {
