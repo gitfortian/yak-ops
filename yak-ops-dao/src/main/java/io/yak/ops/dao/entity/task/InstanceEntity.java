@@ -21,6 +21,8 @@ public class InstanceEntity extends BaseEntity {
     private String definitionId;
     /** Immutable Definition version used for this execution. */
     private Integer definitionVersion;
+    /** Definition display name captured when this Instance was admitted; never updated by a rename. */
+    private String definitionName;
     /** Registered Task type captured from the pinned Definition. */
     private String taskType;
     /** Debug diagnostics captured when this Instance was admitted. */

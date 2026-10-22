@@ -85,6 +85,30 @@ class InstanceServiceTest {
     }
 
     @Test
+    void preservesAdmittedNameAfterDefinitionRename() {
+        InstanceEntity instance = new InstanceEntity();
+        instance.setId("i");
+        instance.setDefinitionId("d");
+        instance.setDefinitionVersion(1);
+        instance.setDefinitionName("original");
+        instance.setTaskType("DATA_SYNC");
+        when(instances.findById("ws", "i")).thenReturn(Optional.of(instance));
+
+        DefinitionEntity current = new DefinitionEntity();
+        current.setId("d");
+        current.setName("renamed");
+        when(definitions.queryByIdIncludingDeleted("ws", "d")).thenReturn(Optional.of(current));
+
+        DefinitionVersionEntity pinned = new DefinitionVersionEntity();
+        pinned.setVersion(1);
+        pinned.setParameterSchemaVersion(3);
+        pinned.setParameters("{}");
+        when(versions.queryCurrent("ws", "d", 1)).thenReturn(Optional.of(pinned));
+
+        assertEquals("original", service.definition("ws", "i").name());
+    }
+
+    @Test
     void filtersInstancesWithinWorkspace() {
         service.page("ws", 1, 20, "d", TaskInstanceStatus.FINISHED, "DATA_SYNC");
         verify(instances).page("ws", 1, 20, "d", TaskInstanceStatus.FINISHED, "DATA_SYNC");

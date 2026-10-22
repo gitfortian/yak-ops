@@ -70,7 +70,7 @@ class ProcessRecoveryIT {
     }
 
     @Test
-    void gracefulShutdownCancelsPhysicalExecutionAndRetainsHistory() throws Exception {
+    void gracefulShutdownWithoutConfirmedTerminationRetainsClaims() throws Exception {
         String instance = fixture.submit(fixture.realtime());
         fixture.awaitState(instance, "RUNNING");
         fixture.awaitTarget("orders", List.of(List.of(1L, "one"), List.of(2L, "two")));
@@ -78,7 +78,9 @@ class ProcessRecoveryIT {
         app.restart(false);
         fixture.api = app.login();
         fixture.api.workspace(workspace);
-        fixture.awaitState(instance, "CANCELED");
-        assertEquals(0, fixture.claimCount(instance));
+        // Process exit is not proof that external writers stopped. The new owner must
+        // reconcile uncertain execution without releasing the previous owner's claims.
+        fixture.awaitState(instance, "RECONCILING");
+        assertTrue(fixture.claimCount(instance) > 0);
     }
 }

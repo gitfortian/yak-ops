@@ -7,6 +7,7 @@ import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.JdbcAssertions;
 import io.yak.ops.testutils.TestNames;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -159,8 +160,22 @@ public final class DataSyncFixture implements AutoCloseable {
                     last[0] = api.call("GET", "/api/v1/task-instances/" + instance);
                     String status = last[0].path("status").asText();
                     Files.writeString(app.directory().resolve("instance-" + instance + ".json"), last[0].toString());
-                    if (TERMINAL.contains(status) && !status.equals(expected))
-                        throw new IllegalStateException("Task ended in " + status + ", expected " + expected);
+                    if (TERMINAL.contains(status) && !status.equals(expected)) {
+                        // Retain the masked task log beside the failing Instance snapshot.
+                        // Never print raw database connections or Task parameters into CI output.
+                        Path failureLog = app.directory().resolve("instance-" + instance + "-failure.log");
+                        try {
+                            Files.writeString(failureLog,
+                                    api.download("/api/v1/task-instances/" + instance + "/logs/download"));
+                        } catch (Exception unavailable) {
+                            Files.writeString(failureLog, "Task log unavailable: "
+                                    + unavailable.getClass().getSimpleName());
+                        }
+                        throw new IllegalStateException(
+                                "Task ended in " + status + ", expected " + expected
+                                        + "; failureCode=" + last[0].path("failureCode").asText("")
+                                        + "; diagnostics=" + failureLog);
+                    }
                     return status.equals(expected);
                 });
         return last[0];
