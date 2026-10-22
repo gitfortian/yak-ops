@@ -53,16 +53,24 @@ assert.match(page, /request !== detailRequest.current/);
 assert.match(page, /<ExecutionStatusIcon\s+status=\{instance.status\}/);
 assert.match(page, /key=\{selectedInstance.id\}/);
 assert.match(page, /<TaskInstanceLogPanel/);
-assert.ok(logPanel.includes('className="relative rounded-xl bg-[#151b2d]"'));
-assert.ok(logPanel.includes('className="absolute top-3 right-3 z-10 flex gap-1"'));
+assert.ok(logPanel.includes("absolute top-3 right-3 z-10 flex gap-1"));
 assert.ok(logPanel.includes("<TooltipProvider>"));
 assert.equal((logPanel.match(/<TooltipTrigger/g) || []).length, 3);
-for (const label of ["刷新日志", "复制日志", "下载日志"]) {
-  assert.ok(logPanel.includes('aria-label="' + label + '"'));
+for (const label of ["刷新日志", "全屏查看日志", "退出全屏", "下载日志"]) {
+  assert.ok(logPanel.includes('"' + label + '"'));
 }
-assert.ok(logPanel.includes("navigator.clipboard.writeText(content)"));
-assert.ok(logPanel.includes("ref={bodyRef}"));
-assert.doesNotMatch(logPanel, /className="mt-3/);
+assert.ok(logPanel.includes("<Dialog open={fullscreen} onOpenChange={setFullscreen}>"));
+assert.ok(logPanel.includes('<DialogTitle className="sr-only">运行日志</DialogTitle>'));
+assert.ok(logPanel.includes("h-[clamp(420px,55vh,640px)]"));
+assert.ok(logPanel.includes("fullscreenBodyRef"));
+assert.ok(logPanel.includes("onScroll={(event) => {"));
+assert.ok(logPanel.includes("scrollHeight - element.scrollTop - element.clientHeight <= 32"));
+assert.ok(logPanel.includes("[content, fullscreen]"));
+assert.ok(logPanel.includes('border: "none"'));
+assert.ok(logPanel.includes('backgroundColor: "#0b0f19"'));
+assert.ok(logPanel.includes("hover:text-white"));
+assert.ok(logPanel.includes("ref={expanded ? fullscreenBodyRef : bodyRef}"));
+assert.doesNotMatch(logPanel, /navigator\.clipboard\.writeText|<Copy|mt-3 max-h-96/);
 assert.equal((page.match(/<TabsTab\s/g) || []).length, 2);
 
 assert.match(router, /path="\/data-sync"/);
