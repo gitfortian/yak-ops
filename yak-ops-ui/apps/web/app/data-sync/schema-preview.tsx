@@ -54,7 +54,7 @@ export function SchemaPreview({
           }
         >
           <div className="max-h-[60vh] space-y-3 overflow-auto">
-            <Alert>仅迁移字段、主键和注释；默认值、自增列、生成列不支持。预览不执行 DDL。</Alert>
+            <Alert>预览不执行 DDL。暂不支持的字段属性会在预览时提示。</Alert>
             {current?.error ? (
               <Alert>{current.error}</Alert>
             ) : !current?.rows ? (
