@@ -78,7 +78,7 @@ public final class JobConfigValidator {
                 }
                 if (prepareSchema) SchemaValidator.validateNamespace(to, target);
                 if (schemas && prepareSchema) {
-                    var sourceTable = context.tableMetadata(sourceId, source);
+                    var sourceTable = SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
                     SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceTable.schema()));
                     var event = SchemaValidator.createEvent(sourceTable, to, target);
                     SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
