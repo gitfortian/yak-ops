@@ -103,8 +103,8 @@ public final class MySqlCdcSourceConfig {
     }
 
     /**
-     * Use UTC only for new JDBC sessions when no time zone was explicitly configured.
-     * This avoids ambiguous OS time zone names without changing the MySQL global setting.
+     * Use a numeric UTC offset for new JDBC sessions when no time zone was explicitly configured.
+     * This avoids ambiguous OS names and does not require MySQL named time zone tables.
      */
     private static Map<String, String> normalizeConnectionProperties(Map<String, String> supplied) {
         Map<String, String> values = new LinkedHashMap<>();
@@ -129,7 +129,7 @@ public final class MySqlCdcSourceConfig {
                 throw new IllegalArgumentException(
                         "forceConnectionTimeZoneToSession=false requires an explicit connectionTimeZone");
             }
-            values.put("connectionTimeZone", "UTC");
+            values.put("connectionTimeZone", "+00:00");
             if (forced == null) {
                 values.put("forceConnectionTimeZoneToSession", "true");
             }

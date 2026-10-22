@@ -23,10 +23,10 @@ class MySqlCdcConnectionPropertiesTest {
     @Test
     void usesUtcSessionsWhenServerTimezoneIsUnknown() {
         var config = config(Map.of());
-        assertEquals("UTC", config.connectionProperties().get("connectionTimeZone"));
+        assertEquals("+00:00", config.connectionProperties().get("connectionTimeZone"));
         assertEquals("true", config.connectionProperties().get("forceConnectionTimeZoneToSession"));
         var debezium = config.debeziumProperties("session", Path.of("history.dat"));
-        assertEquals("UTC", debezium.getProperty("driver.connectionTimeZone"));
+        assertEquals("+00:00", debezium.getProperty("driver.connectionTimeZone"));
         assertEquals("true", debezium.getProperty("driver.forceConnectionTimeZoneToSession"));
         assertEquals("root", debezium.getProperty("database.user"));
     }
