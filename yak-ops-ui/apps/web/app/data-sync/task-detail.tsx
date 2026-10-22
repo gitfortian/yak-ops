@@ -593,7 +593,7 @@ export function DataSyncTaskDetailPage() {
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5 max-md:px-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-5 max-md:px-4">
           <div className="space-y-8">
             <section aria-labelledby="task-basic-info">
               <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[#344054]">
