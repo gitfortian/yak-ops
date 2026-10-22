@@ -311,75 +311,75 @@ Use Yak UI, shared design tokens, and existing interaction conventions. Keep hel
 
 ## Compatibility, Deprecation, and Migration Plan
 
-### 现有任务和参数
+### Existing Tasks and Parameters
 
-版本 2 任务使用服务端确定性投影进入统一产品界面：
+Version 2 tasks enter the unified product UI through deterministic server-side projections:
 
-| 已存配置 | 产品投影 | 必须保留 |
+| Stored configuration | Product projection | Must preserve |
 | --- | --- | --- |
-| 已验证的单表 JDBC Source 与 JDBC Sink | `SINGLE_TABLE_OFFLINE`，`FULL` | 原连接、表、写入方式、任务状态和调度配置 |
-| 已验证的单表 Hybrid MySQL CDC 与 JDBC Sink | `SINGLE_TABLE_REALTIME`，`FULL, INCREMENTAL` | 初始化及持续消费的既有执行行为 |
-| 未识别或与上述形态不符的配置 | 明确提示不可识别，阻止误执行 | 原始数据，不猜测方案或静默转换 |
+| Verified single-table JDBC Source and JDBC Sink | `SINGLE_TABLE_OFFLINE`, `FULL` | Original connections, tables, write mode, publication status, and schedule configuration |
+| Verified single-table Hybrid MySQL CDC and JDBC Sink | `SINGLE_TABLE_REALTIME`, `FULL, INCREMENTAL` | Existing initialization and continuous-consumption behavior |
+| Unrecognized configuration or a shape not matching the above | Explicitly indicate it is unrecognized and block unsafe execution | Original data; do not guess the solution or silently convert it |
 
-首次新建及修改执行参数写入版本 3，并形成新的不可变 Definition Version；仅修改名称、备注和 Debug 保持现有版本规则。保持仅针对版本 2 的明确读取与执行路径，使现有已发布版本无需重新发布即可继续使用。停止新写入版本 2，不在两套参数格式间双写。
+New tasks and executable-parameter edits initially write format version 3 and create a new immutable Definition Version. Changes limited to name, description, and Debug retain the existing versioning behavior. Keep an explicit read-and-execute path for version 2 so already published versions continue working without republishing. Stop writing new version 2 parameters; do not dual-write two parameter formats.
 
-已经固定的历史版本不原地重写，Instance 继续读取自己的参数版本。兼容读取的删除需要后续明确的历史保留与迁移决策，不能仅因默认写入已经切换就删除。未来按方案筛选必须同时覆盖版本 2 的确定性投影和版本 3，不能先分页再在浏览器过滤。
+Do not rewrite pinned historical versions in place; each Instance continues to read its own parameter schema version. Removing version 2 compatibility requires a subsequent explicit history-retention and migration decision. A switch in the default write version alone is insufficient justification. Future solution filters must cover both the deterministic version 2 projection and version 3; filtering after browser-side pagination is not acceptable.
 
-界面和路由迁移不改变任务 ID、Workspace、审计字段、发布状态、实例、日志、调度启用状态或恢复目录，不触发 DDL、目标清理、自动启动或重新初始化。已应用 Flyway 脚本保持不变。若实现需要索引或新持久字段，使用前向迁移并单独验证升级，不把 SQL 混入本提案 PR。
+The UI and route migration must not change Task IDs, Workspace, audit fields, publication status, Instances, logs, enabled schedules, or recovery directories. It must not trigger DDL, target cleanup, automatic startup, or reinitialization. Leave previously applied Flyway migrations unchanged. If implementation needs indexes or persisted fields, add forward-only migrations and separately verify upgrades; do not put SQL migrations into the proposal PR.
 
-### 页面与旧链接
+### Pages and Legacy Links
 
-迁移两边有效能力后，删除 `app/offline-sync`、`app/realtime-sync` 下独立页面和包装入口，由 `app/data-sync` 拥有统一产品页面。不是将离线页面改名后继续保留一套实时分支页面。
+After migrating valid features from both paths, remove the separate pages and wrappers under `app/offline-sync` and `app/realtime-sync`. The unified product pages belong to `app/data-sync`; do not merely rename the offline pages while retaining an independent realtime branch.
 
-旧地址只在路由边界转换，不保留旧业务页面：
+Translate old addresses only at the routing boundary, without retaining old business pages:
 
-- 旧列表地址进入 `/data-sync`，可保留对应的离线或实时筛选含义，仍使用同一列表。
-- 旧 `/:id` 编辑地址和 `/:taskId/detail` 转向统一编辑、详情地址，保留任务与 `executionId` 等受支持参数。
-- 旧 `/instances/:id` 先通过授权的 Instance 查询解析所属 Definition，再定位统一详情；不可访问时按现有权限或不存在语义处理。
-- 旧 `/new` 地址进入统一创建流程，可预选合法的时效偏好，但不能绕过类型组合、步骤和连接校验。
+- Old list addresses open `/data-sync`. They may preserve the intended offline or realtime filter, but use the same list.
+- Old `/:id` edit and `/:taskId/detail` addresses redirect to unified edit/details routes, preserving supported Task and `executionId` parameters.
+- Old `/instances/:id` addresses first resolve the owning Definition via an authorized Instance query, then navigate to unified details. Inaccessible Instances follow existing authorization and not-found semantics.
+- Old `/new` addresses enter the unified creation flow and may preselect a legal latency preference, but must not bypass type-pair, step, or connection validation.
 
-同步更新菜单、返回列表、面包屑、登录回跳允许列表、运维中心详情链接和接受测试。只允许同源、安全的内部回跳；非法目标不因兼容地址转换获得访问能力。切换 Workspace 清理缓存与过期请求，历史 URL 不成为越权读取入口。
+Update navigation, Back to List, breadcrumbs, allowed post-login redirects, Operations Center detail links, and applicable tests together. Only safe, same-origin internal redirects are allowed; an invalid destination must not gain access through URL compatibility conversion. Workspace changes clear caches and stale requests. Historical links must never become an unauthorized data access path.
 
-### 提案与实施关系
+### Proposal and Implementation Relationship
 
-本文固定产品目标、参数语义和能力开放条件。接受之后，按可验收的垂直范围提交实现 PR；首次交付不以实现全部未来能力为前提，也不允许用未实现的控件替代实际能力。实现或 CI 通过不自动将本文标记为 Accepted；决定在提案 PR 中明确记录。
+This document defines the product target, parameter semantics, and conditions for exposing capabilities. After acceptance, implement in independently verifiable vertical slices. The first delivery does not need to implement every future capability; controls without implementation are not substitutes for working features. Implementation work or green CI alone must not mark the proposal Accepted; the decision must be explicitly recorded in the proposal PR.
 
 ## Test Plan
 
-以下是实现的验收要求，不是此文档 PR 已运行的测试结果。
+These are requirements for implementation verification, not tests claimed to have run as part of the original document-only proposal.
 
-| 范围 | 必须验证的场景 |
+| Area | Required scenarios |
 | --- | --- |
-| 类型与步骤 | 不同有向类型组合返回不同方案；默认组合合法；当前 Hybrid 不允许取消必选数据步骤；无数据步骤、未知步骤、重复步骤和不支持组合被后端拒绝 |
-| 联动与网络 | 快速切换来源、去向和具体类型；乱序响应、查询失败、无候选；旧结果不污染新选择，下一步不能使用过期组合 |
-| 创建草稿 | 类型先于连接；新增连接后返回；刷新、返回和取消；用户名称不被覆盖；没有有效配置前不产生持久任务 |
-| 单一产品入口 | 同一页混合展示所有同步方案；筛选、排序、总数和分页由服务端统一；无离线实时分页拼接、逐行实例或 Schedule 请求 |
-| 参数版本 | 版本 2 的两类任务按原语义投影和执行；新参数版本 3 保存回显一致；非法混合格式被拒绝；不修改历史快照、不自动发布或运行 |
-| 映射 | 单表恰好一条映射；批量零表、重复来源、重复目标、不兼容 Schema、来源或目标命名空间越界；整库只选一张表时方案身份不变 |
-| 规则边界 | 初次统一拒绝规则输入；日后验证明确过滤与持续规则的区别、切换确认、预览失效和固定实例对象集合 |
-| 结构与写入 | 校验和预览不执行 DDL；未启用结构迁移仍校验目标；覆盖范围与清理次数；不兼容目标不被悄悄删除；实时变更不降级为 Append |
-| 运行与调度 | 已上线条件、实际调度资格；停止实例与停用调度互不混淆；任务保存成功但调度失败后重试不重复创建；现有取消和资源占用回归 |
-| 阶段与进度 | 全量 37% 到阶段 100% 后进入增量动画；实例仍运行；未知、过期、失败、取消与待确认不伪造进度；Split 口径不冒充行数；不平均无限增量进度 |
-| 历史与恢复 | 当前配置变更不改变历史阶段、映射和日志；新 Instance 不隐式恢复旧检查点；复制新建不复制位点或启用调度 |
-| 多表准入 | 一个目标冲突时不部分启动；全部资源原子获得或释放；局部失败不会显示整体成功，不能通过 UI 绕过任务恢复边界 |
-| Workspace 与访问 | 类型查询认证、实际连接授权、批量摘要、草稿、旧链接和登录回跳的隔离；没有明文凭据、跨空间缓存或迟到响应泄露 |
-| 浏览器交互 | 真实列表、创建、编辑、详情和调度操作；键盘、焦点、窄屏、长名称、异常返回和 `prefers-reduced-motion` |
+| Types and steps | Directed type pairs return distinct solutions; defaults are legal; current Hybrid cannot uncheck required steps; reject missing data steps, unknown or duplicate steps, and unsupported combinations server-side |
+| Dependencies and network | Rapid source, target, and solution switching; out-of-order responses, query failures, and no candidates; stale data cannot pollute new choices or let Next use an outdated combination |
+| Creation drafts | Types before connections; returning after adding a connection; refresh, Back, and Cancel; preserve user-edited names; no persistent Task before a valid configuration |
+| Single product entry | One page shows all solution types; server-wide filtering, sorting, counts, and pagination; no concatenation of separate offline/realtime pages or per-row Instance/Schedule queries |
+| Parameter versions | Project and execute both version 2 task shapes without changing semantics; version 3 saving and reload agree; reject incompatible mixed formats; do not modify snapshots or auto-publish/run |
+| Mappings | Exactly one mapping for single-table; zero selected tables, duplicate sources or targets, incompatible schemas, or namespace violations in batch mode; database-wide identity stays unchanged when only one table is selected |
+| Rules boundary | Reject rule-based input in the initial release; subsequently test explicit filtering versus persistent rules, switching confirmation, preview expiration, and pinned per-Instance object sets |
+| Schema and writes | Validation and preview execute no DDL; validate targets even without schema migration; overwrite scope and number of cleanups; never silently delete incompatible targets; realtime changelogs cannot degrade to Append |
+| Execution and scheduling | Published-state requirements and actual scheduling eligibility; do not conflate canceling Instances with disabling schedules; retry after Task save success/Schedule save failure creates no duplicate; existing cancellation and resource-claim regressions |
+| Stages and progress | Full 37% to stage 100%, then incremental animation while Instance stays running; no fabricated progress for unknown, stale, failed, canceled, or uncertain states; Split metrics are not row counts; do not average unbounded incremental progress |
+| History and recovery | Editing current configuration does not alter historical stages, mappings, or logs; a new Instance does not implicitly restore an old checkpoint; duplication copies neither offsets nor enabled schedules |
+| Multi-table admission | A single target conflict prevents partial launch; all claims are acquired or released atomically; partial failure is not overall success and UI cannot bypass recovery constraints |
+| Workspace and access | Authorization for type queries and actual connections, batch summaries, drafts, legacy links, and post-login redirects; no plaintext credentials, cross-Workspace caches, or leaks from late responses |
+| Browser interaction | Real list, creation, editing, detail, and scheduling flows; keyboard, focus, narrow screens, long names, error responses, and `prefers-reduced-motion` |
 
-保留现有格式、类型、架构、构建和 CI 检查。新开放的 JDBC、CDC、步骤和目标写入组合必须提供真实数据库的产品端到端证据；引擎单测或前端构建通过不能代替这种验收。提案文档自身检查六章节、元数据、链接和单文件范围；文档范围 CI 的跳过项不能报告为运行验收通过。
+Keep existing format, type, architecture, build, and CI checks. Every newly exposed JDBC, CDC, step, and target-write combination requires real-database end-to-end verification. Engine unit tests or a successful frontend build alone are not sufficient. The proposal document itself is checked for its six required sections, metadata, links, and document-only scope; skipped checks on a documentation PR are not evidence of passing runtime validation.
 
 ## Rejected Alternatives
 
-| 方案 | 不采用的原因 |
+| Alternative | Reason for rejection |
 | --- | --- |
-| 保留离线、实时两套页面，外面套两个 Tab | 只改导航外观，查询、操作与表单仍有两套身份 |
-| 四个认知维度都做独立必填下拉框 | 用户重复表达时效与策略，容易保存冲突配置 |
-| 先选实际连接，再决定是否存在支持方案 | 本次选择类型先行的方案发现入口；没有连接也能了解可用链路，连接权限检查留在具体配置阶段 |
-| 根据映射数量或 Connector 名称猜测具体类型 | 规则恰好匹配一张表或更换 Connector 时，任务方案身份会错误改变 |
-| 让三个 Checkbox 自由组合、执行时再报错 | 无法保证配置承诺与真实计划一致，可能跳过初始化或创建不终止的 Job |
-| 为单表、多表、全量、增量分别新增 Task 插件和执行引擎 | 重复既有 Task、Factory、Planner 和 YakFlow 责任，不能解决产品表达问题 |
-| 为动态候选建设通用表单平台和多层能力注册框架 | 当前只需具体的同步业务契约和已有组件，不需要没有独立调用方的抽象 |
-| 为统一页面重写历史参数、自动覆盖目标或恢复旧检查点 | 页面合并不能改变执行事实、数据安全和已接受恢复边界 |
-| 一次展示所有未来选项，再用说明文字标记尚未实现 | 用户可见选择应对应真实可运行能力，完整产品设计不等于已经交付 |
+| Keep independent offline and realtime pages and wrap them in two tabs | Only changes the navigation appearance; queries, actions, and forms still have two identities |
+| Make all four conceptual dimensions separate mandatory dropdowns | Users repeat latency and strategy selections and can save contradictory configurations |
+| Select actual connections before discovering whether a solution exists | This design intentionally discovers solutions by types first; users can inspect available paths without saved connections, while connection authorization belongs to the configuration stage |
+| Infer a specific solution from mapping count or Connector name | One-table rule matches or Connector replacements could incorrectly change the Task's solution identity |
+| Allow all checkbox combinations and report errors only at execution | Configuration promises may not match actual plans, potentially skipping initialization or creating non-terminating Jobs |
+| Add separate Task plugins and execution engines for single-table, multi-table, full, and incremental | Duplicates existing Task, Factory, Planner, and YakFlow responsibilities without solving the product modeling problem |
+| Build a generic dynamic-form framework and multiple layers of capability registries | The current design needs a concrete Data Sync business contract and existing components, not abstractions without independent consumers |
+| Rewrite historical parameters, automatically overwrite targets, or restore old checkpoints for unified pages | Page consolidation must not alter execution history, data safety, or accepted recovery boundaries |
+| Show all future options at once with explanatory "not implemented" text | Visible choices should represent genuinely executable capabilities; a complete product design is not a claim of shipped functionality |
 
 [dw-realtime]: https://help.aliyun.com/zh/dataworks/user-guide/configure-a-data-synchronization-solution-in-data-integration
 [dw-offline]: https://help.aliyun.com/zh/dataworks/user-guide/configure-a-database-wide-offline-synchronization-task
