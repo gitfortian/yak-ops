@@ -370,8 +370,10 @@ public abstract class StreamTask implements AutoCloseable {
                 // Cleanup failures must remain visible, but an expected interrupted wait is not
                 // a task failure merely because CompletableFuture wrapped its cause.
                 if (closeFailure != null) {
-                    LOG.warn("YakFlow StreamTask cleanup after cancellation failed, task={}",
-                            taskInfo().threadName(), closeFailure);
+                    LOG.warn(
+                            "YakFlow StreamTask cleanup after cancellation failed, task={}",
+                            taskInfo().threadName(),
+                            closeFailure);
                 }
                 CancellationException cancellation = new CancellationException("StreamTask was cancelled");
                 if (closeFailure != null) {
