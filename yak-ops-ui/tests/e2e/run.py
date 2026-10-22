@@ -11,7 +11,7 @@ import sys
 import time
 import traceback
 
-SCENARIOS = ("solution-selection", "schedule-save-recovery", "multitable-mapping", "multitable-selection", "schema-preview", "realtime-stages", "schedule-history", "schedule-errors")
+SCENARIOS = ("table-layout", "solution-selection", "schedule-save-recovery", "multitable-mapping", "multitable-selection", "schema-preview", "realtime-stages", "schedule-history", "schedule-errors")
 LOGIN = "login-smoke"
 ALL = (*SCENARIOS, LOGIN)
 
@@ -20,10 +20,12 @@ async def check(name, directory):
     from mock_api import mock, state
     from data_sync import (verify_solution_creation, verify_partial_task_save,
                            verify_multitable_mapping, verify_multitable_selection, verify_schema_preview, verify_realtime_stages)
+    from table_layout import verify_table_layout
     from scheduling import verify_schedule_history, verify_schedule_errors
     from login import verify_login
 
     scenarios = {
+        "table-layout": verify_table_layout,
         "solution-selection": verify_solution_creation,
         "schedule-save-recovery": verify_partial_task_save,
         "multitable-mapping": verify_multitable_mapping,

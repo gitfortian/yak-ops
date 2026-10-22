@@ -33,6 +33,8 @@ export function DataSyncTaskStatusBadge({ status }: { status: DataSyncTaskStatus
 export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
   const [latestByTask, setLatestByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
   const [activeByTask, setActiveByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const loadedTaskIdsRef = useRef("");
   const requestId = useRef(0);
   const pendingRequest = useRef<AbortController>();
 
@@ -42,10 +44,14 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
     pendingRequest.current = controller;
     const request = ++requestId.current;
     if (!enabled || taskIds.length === 0) {
+      loadedTaskIdsRef.current = "";
+      setLoading(false);
       setLatestByTask(new Map());
       setActiveByTask(new Map());
       return;
     }
+    const scope = taskIds.join("|");
+    if (loadedTaskIdsRef.current !== scope) setLoading(true);
     try {
       const [latest, active] = await Promise.all([
         listLatestTaskInstances(taskIds, false, controller.signal),
@@ -54,8 +60,11 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
       if (controller.signal.aborted || request !== requestId.current) return;
       setLatestByTask(new Map(latest.map((record) => [record.definitionId, record])));
       setActiveByTask(new Map(active.map((record) => [record.definitionId, record])));
+      loadedTaskIdsRef.current = scope;
+      setLoading(false);
     } catch {
       // Keep the last observation. Authorization and transport errors are reported centrally.
+      if (!controller.signal.aborted && request === requestId.current) setLoading(false);
     }
   }, [enabled, taskIds]);
 
@@ -73,7 +82,7 @@ export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
     return () => window.clearInterval(timer);
   }, [activeByTask.size, enabled, refresh, taskIds.length]);
 
-  return { latestByTask, activeByTask, refresh };
+  return { latestByTask, activeByTask, loading, refresh };
 }
 
 interface LifecycleAction {

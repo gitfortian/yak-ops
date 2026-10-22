@@ -1,4 +1,4 @@
-import { Button, Switch } from "@yak-ops/yak-ui";
+import { Button, Skeleton, Switch } from "@yak-ops/yak-ui";
 import type { ScheduleSummary } from "@/service/schedule";
 import { registrationText } from "./schedule-presentation";
 
@@ -22,7 +22,13 @@ export function TaskScheduleCell({
   onConfigure: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
-  if (loading) return <span className="text-xs text-[#98a2b3]">加载中…</span>;
+  if (loading)
+    return (
+      <div className="flex items-center gap-2">
+        <Skeleton width={110} height={14} />
+        <Skeleton width={26} height={16} />
+      </div>
+    );
   if (error)
     return (
       <Button size="small" variant="ghost" onClick={onConfigure}>

@@ -20,6 +20,7 @@ export * from "./page-header";
 export * from "./pagination";
 export * from "./popover";
 export * from "./select";
+export * from "./skeleton";
 export * from "./spinner";
 export * from "./switch";
 export * from "./table";
