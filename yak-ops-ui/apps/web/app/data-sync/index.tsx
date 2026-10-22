@@ -42,7 +42,7 @@ import { ExecutionStages } from "./execution-stages";
 import { readExecutionSummary } from "@/service/data-sync/report";
 import { CreateSyncTaskDialog } from "./create-dialog";
 import { SOLUTION_LABELS, solutionSummary } from "./solution-presentation";
-import { canCancelTaskInstance } from "@/service/data-sync/execution";
+import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
 import type { TaskInstanceRecord } from "@/service/task-execution";
 import { TaskRoute } from "@/app/data-sync/task-route";
 import {
@@ -119,6 +119,7 @@ export function DataSyncPage() {
     activeByTask,
     latestByTask,
     loading: instancesLoading,
+    ready: instancesReady,
     refresh: refreshActiveInstances,
   } = useActiveTaskInstances(true, taskIds);
 
@@ -220,7 +221,7 @@ export function DataSyncPage() {
   };
 
   const runTask = async (record: DataSyncTaskRecord) => {
-    if (actionKey) return;
+    if (actionKey || !canManageTaskDefinition(instancesReady, activeByTask.get(record.id))) return;
     setActionKey(`${record.id}:run`);
     try {
       await runDataSyncTask(record.id);
@@ -245,7 +246,7 @@ export function DataSyncPage() {
   };
 
   const publishTask = async (record: DataSyncTaskRecord) => {
-    if (actionKey) return;
+    if (actionKey || !canManageTaskDefinition(instancesReady, activeByTask.get(record.id))) return;
     setActionKey(`${record.id}:publish`);
     try {
       await publishDataSyncTask(record.id);
@@ -258,7 +259,7 @@ export function DataSyncPage() {
   };
 
   const unpublishTask = async (record: DataSyncTaskRecord) => {
-    if (actionKey) return;
+    if (actionKey || !canManageTaskDefinition(instancesReady, activeByTask.get(record.id))) return;
     setActionKey(`${record.id}:unpublish`);
     try {
       await unpublishDataSyncTask(record.id);
@@ -399,6 +400,7 @@ export function DataSyncPage() {
         <DataSyncTaskLifecycleActions
           record={record}
           activeInstance={activeByTask.get(record.id)}
+          instanceStateReady={instancesReady}
           actionKey={actionKey}
           runtimeAction={{
             label: activeByTask.has(record.id)
@@ -410,9 +412,9 @@ export function DataSyncPage() {
               ? "text-[#d92d20]"
               : "text-[var(--yak-color-primary)]",
             loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
-            disabled: activeByTask.has(record.id)
+            disabled: !instancesReady || (activeByTask.has(record.id)
               ? !canCancelTaskInstance(activeByTask.get(record.id)!.status)
-              : record.status !== "PUBLISHED",
+              : record.status !== "PUBLISHED"),
             onClick: () => {
               const active = activeByTask.get(record.id);
               if (active) void stopTask(record, active);
@@ -421,16 +423,23 @@ export function DataSyncPage() {
           }}
           onPublish={(value) => void publishTask(value)}
           onUnpublish={(value) => void unpublishTask(value)}
-          onEdit={(value) => navigate(`/data-sync/${value.id}/edit`)}
+          onEdit={(value) => {
+            if (canManageTaskDefinition(instancesReady, activeByTask.get(value.id)))
+              navigate(`/data-sync/${value.id}/edit`);
+          }}
           onDetail={(value) => navigate(`/data-sync/${value.id}/detail`)}
-          onDelete={setPendingDelete}
+          onDelete={(value) => {
+            if (canManageTaskDefinition(instancesReady, activeByTask.get(value.id)))
+              setPendingDelete(value);
+          }}
         />
       ),
     },
   ];
 
   const confirmDelete = async () => {
-    if (!pendingDelete || deleting) return;
+    if (!pendingDelete || deleting ||
+      !canManageTaskDefinition(instancesReady, activeByTask.get(pendingDelete.id))) return;
     setDeleting(true);
     try {
       await deleteDataSyncTask(pendingDelete.id);
