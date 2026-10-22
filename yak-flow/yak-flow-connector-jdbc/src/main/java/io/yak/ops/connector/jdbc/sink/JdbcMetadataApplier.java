@@ -234,13 +234,20 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                         normalizeDefault(actual.onUpdateExpression(), true))
                 || !java.util.Objects.equals(
                         normalizeDefault(expected.defaultExpression(), expected.defaultGenerated()),
-                        normalizeDefault(actual.defaultExpression(), actual.defaultGenerated()))) {
+                        normalizeDefault(actual.defaultExpression(), actual.defaultGenerated()))
+                || (expected.nativeType() != null
+                        && actual.nativeType() != null
+                        && !expected.nativeType().equals(actual.nativeType()))) {
             throw new IllegalArgumentException("Target column properties do not match: " + column);
         }
     }
 
     private static String normalizeDefault(String expression, Boolean generated) {
         if (expression == null) return null;
+        if (Boolean.TRUE.equals(generated)
+                && expression.replaceAll("[()\\\\s]+", "").matches("(?i)curdate(?:\\\\+interval[0-9]{1,3}day)?")) {
+            return expression.replaceAll("[()\\\\s]+", "").toUpperCase(java.util.Locale.ROOT);
+        }
         if (Boolean.TRUE.equals(generated) && expression.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]?\\))?")) {
             return expression
                     .trim()
