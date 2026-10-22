@@ -133,6 +133,26 @@ class SchemaExecutionTest {
     }
 
     @Test
+    void dataOnlyExecutionSkipsSchemaPreparationAndSubmitsRows() throws Exception {
+        Fixture f = new Fixture();
+        f.targets.put(new TableId("ods", "public", "copy_0"), SHAPE);
+        Map<String, Object> values = new java.util.LinkedHashMap<>(options(1, false).getSourceMap());
+        values.put("steps", List.of("FULL"));
+        ReadonlyConfig parameters = ReadonlyConfig.fromMap(values);
+        var admission = f.planner.admissionPlan(parameters, ID);
+        TaskHandle handle = new DataSyncTaskExecutor(f.planner, f.builder, f.engine)
+                .start(parameters, admission, ID, false)
+                .toCompletableFuture()
+                .join();
+        handle.start();
+        assertEquals(TaskOutcome.FINISHED, handle.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
+        assertEquals(0, f.applied.get());
+        assertEquals(0, f.closed.get());
+        assertEquals(1, f.submitted.get());
+        assertEquals(1, JSONUtils.readTree(handle.executionReport().orElseThrow()).path("version").asInt());
+    }
+
+    @Test
     void deferredHandleDoesNothingUntilRegisteredAndHonorsCancellationBeforeActivation() throws Exception {
         Fixture f = new Fixture();
         TaskHandle handle = f.handle(1, false);
