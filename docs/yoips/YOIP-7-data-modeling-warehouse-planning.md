@@ -1,12 +1,12 @@
 # YOIP-7: Data Modeling — Warehouse Planning
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/3
 
-Decision: Pending explicit maintainer decision
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/3#issuecomment-6332458363
 
-Implementation: N/A until accepted
+Implementation: Planned — Warehouse Planning
 
 Release: N/A until released
 
