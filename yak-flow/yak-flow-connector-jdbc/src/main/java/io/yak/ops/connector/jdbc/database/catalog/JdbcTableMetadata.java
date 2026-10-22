@@ -158,7 +158,8 @@ public final class JdbcTableMetadata {
                         result.getString("REMARKS"),
                         result.getString("COLUMN_DEF") != null,
                         metadataFlag(result.getString("IS_AUTOINCREMENT")),
-                        metadataFlag(result.getString("IS_GENERATEDCOLUMN")));
+                        metadataFlag(result.getString("IS_GENERATEDCOLUMN")),
+                        result.getString("COLUMN_DEF"));
                 if (columns.putIfAbsent(position, column) != null) {
                     throw new SQLException("Duplicate JDBC column ordinal");
                 }
