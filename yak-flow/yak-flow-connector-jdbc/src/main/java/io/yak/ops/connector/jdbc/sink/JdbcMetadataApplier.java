@@ -201,7 +201,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                     column.autoIncrement(),
                     column.generated(),
                     column.onUpdateExpression(),
-                    column.defaultGenerated());
+                    column.defaultGenerated(),
+                    column.nativeType());
             validateColumnProperties(column.name(), planned, actualProperties);
             comments.put(column.name(), column.remarks());
         }
