@@ -129,8 +129,10 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
             String value = URLDecoder.decode(equal < 0 ? "" : part.substring(equal + 1), StandardCharsets.UTF_8);
             if (key.isBlank()) throw new IllegalArgumentException("MySQL JDBC URL contains a blank property name");
             // Alias fields are the same option; don't retain an older conflicting time zone.
-            properties.keySet().removeIf(existing -> existing.equalsIgnoreCase(key)
-                    || (isTimeZoneKey(existing) && isTimeZoneKey(key)));
+            properties
+                    .keySet()
+                    .removeIf(existing ->
+                            existing.equalsIgnoreCase(key) || (isTimeZoneKey(existing) && isTimeZoneKey(key)));
             properties.put(key, value);
         }
         return properties;
