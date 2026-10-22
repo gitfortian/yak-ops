@@ -7,6 +7,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
@@ -69,6 +70,16 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     @Override
     public JdbcDdlPlan createTablePlan(
             TableId table, TableSchema schema, String tableComment, Map<String, String> columnComments) {
+        return createTablePlan(table, schema, tableComment, columnComments, Map.of());
+    }
+
+    @Override
+    public JdbcDdlPlan createTablePlan(
+            TableId table,
+            TableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments,
+            Map<String, ColumnProperties> properties) {
         Map<String, String> comments = columnComments == null ? Map.of() : columnComments;
         String definitions = schema.columns().stream()
                 .map(column -> {
@@ -76,8 +87,10 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                     String comment = comments.get(column.name());
                     String commentClause =
                             comment == null || comment.isBlank() ? "" : " COMMENT " + stringLiteral(comment);
+                    ColumnProperties attribute = properties.get(column.name());
+                    String extras = renderProperties(column, schema, attribute);
                     return quoteIdentifier(column.name()) + " "
-                            + nativeType(column).ddl() + nullable + commentClause;
+                            + nativeType(column).ddl() + nullable + extras + commentClause;
                 })
                 .collect(Collectors.joining(", "));
 
@@ -91,6 +104,65 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                 tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
         String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
         return new JdbcDdlPlan(createTableSql, List.of(createTableSql));
+    }
+
+    /**
+     * Preserve only metadata whose SQL semantics are known. A JDBC default is not trusted SQL:
+     * numeric values are parsed, strings are quoted, and time functions are whitelisted.
+     */
+    private String renderProperties(Column column, TableSchema schema, ColumnProperties properties) {
+        if (properties == null) return "";
+        if (!properties.isKnown()) {
+            throw new IllegalArgumentException("Unknown generation metadata for column: " + column.name());
+        }
+        if (Boolean.TRUE.equals(properties.generated())) {
+            throw new IllegalArgumentException(
+                    "Generated column requires a verified expression and write projection: " + column.name());
+        }
+        boolean identity = Boolean.TRUE.equals(properties.autoIncrement());
+        String defaultValue = properties.defaultExpression();
+        if (identity && defaultValue != null) {
+            throw new IllegalArgumentException("Identity column also declares a default: " + column.name());
+        }
+        if (identity) {
+            if (!schema.primaryKeys().contains(column.name())
+                    || !java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT")
+                            .contains(column.dataType().getTypeRoot().name())) {
+                throw new IllegalArgumentException("AUTO_INCREMENT requires an integer primary key: " + column.name());
+            }
+            return " AUTO_INCREMENT";
+        }
+        String update = properties.onUpdateExpression();
+        String onUpdate = "";
+        if (update != null) {
+            if (!column.dataType().getTypeRoot().name().startsWith("TIMESTAMP")
+                    || !update.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]\\))?")) {
+                throw new IllegalArgumentException("Unsupported ON UPDATE expression for column: " + column.name());
+            }
+            onUpdate = " ON UPDATE " + update.trim().toUpperCase(java.util.Locale.ROOT);
+        }
+        if (defaultValue == null) return onUpdate;
+        String value = defaultValue.trim();
+        String root = column.dataType().getTypeRoot().name();
+        if (value.matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]\\))?")) {
+            if (!root.startsWith("TIMESTAMP")) {
+                throw new IllegalArgumentException("CURRENT_TIMESTAMP requires a timestamp column: " + column.name());
+            }
+            return " DEFAULT " + value.toUpperCase(java.util.Locale.ROOT) + onUpdate;
+        }
+        if (java.util.Set.of("CHAR", "VARCHAR", "DATE", "TIME_WITHOUT_TIME_ZONE", "TIMESTAMP_WITHOUT_TIME_ZONE")
+                .contains(root)) {
+            // MySQL metadata may return either the unquoted value or an SQL string literal.
+            String literal = value.length() >= 2 && value.startsWith("'") && value.endsWith("'")
+                    ? value.substring(1, value.length() - 1).replace("''", "'")
+                    : value;
+            return " DEFAULT " + stringLiteral(literal) + onUpdate;
+        }
+        if (java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "DECIMAL", "BOOLEAN")
+                .contains(root) && value.matches("[-+]?[0-9]+(?:\\.[0-9]+)?")) {
+            return " DEFAULT " + value + onUpdate;
+        }
+        throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
     }
 
     private JdbcNativeType stringType(Integer length) {

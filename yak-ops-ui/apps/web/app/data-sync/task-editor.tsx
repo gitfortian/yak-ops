@@ -809,10 +809,11 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       if (signal.aborted) return;
       if (publishAfterSave) {
         try {
-          await publishDataSyncTask(saved.id, signal);
-        } catch {
+          await publishDataSyncTask(saved.id, signal, true);
+        } catch (failure) {
           if (!signal.aborted) {
-            toast.warning("任务已保存，但上线失败，当前保持已下线");
+            const reason = failure instanceof Error ? failure.message : "请检查同步配置";
+            toast.error(`任务已保存，仍处于下线状态。上线失败：${reason}`);
             navigate(`${basePath}/${saved.id}/edit`, { replace: true });
           }
           return;

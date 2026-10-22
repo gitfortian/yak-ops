@@ -1,6 +1,7 @@
 package io.yak.ops.connector.jdbc.database.dialect;
 
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
@@ -106,6 +107,24 @@ public interface JdbcDialect extends java.io.Serializable {
      */
     JdbcDdlPlan createTablePlan(
             TableId table, TableSchema schema, String tableComment, Map<String, String> columnComments);
+
+    /**
+     * Plans schema and physical column attributes with the same rules for preview and execution.
+     * Dialects without a tested attribute renderer reject nontrivial attributes explicitly.
+     */
+    default JdbcDdlPlan createTablePlan(
+            TableId table,
+            TableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments,
+            Map<String, ColumnProperties> properties) {
+        for (var entry : properties.entrySet()) {
+            if (!entry.getValue().isKnown() || entry.getValue().hasFeatures()) {
+                throw new IllegalArgumentException("Target dialect cannot preserve column properties: " + entry.getKey());
+            }
+        }
+        return createTablePlan(table, schema, tableComment, columnComments);
+    }
 
     /**
      * Escapes a string literal for generated DDL comment statements.

@@ -40,6 +40,7 @@ public class CreateTableEvent implements SchemaChangeEvent {
     private final TableSchema schema;
     private final String tableComment;
     private final Map<String, String> columnComments;
+    private final Map<String, ColumnProperties> columnProperties;
 
     /**
      * Creates an event without comment metadata.
@@ -61,12 +62,26 @@ public class CreateTableEvent implements SchemaChangeEvent {
      */
     public CreateTableEvent(
             TableId tableId, TableSchema schema, String tableComment, Map<String, String> columnComments) {
+        this(tableId, schema, tableComment, columnComments, Map.of());
+    }
+
+    /** Creates an event retaining target column properties for dialect-specific validation. */
+    public CreateTableEvent(
+            TableId tableId,
+            TableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments,
+            Map<String, ColumnProperties> columnProperties) {
         this.tableId = Objects.requireNonNull(tableId, "tableId");
         this.schema = Objects.requireNonNull(schema, "schema");
         this.tableComment = tableComment;
         this.columnComments = Map.copyOf(Objects.requireNonNull(columnComments, "columnComments"));
+        this.columnProperties = Map.copyOf(Objects.requireNonNull(columnProperties, "columnProperties"));
         Set<String> columns =
                 schema.columns().stream().map(column -> column.name()).collect(Collectors.toSet());
+        if (!columns.containsAll(this.columnProperties.keySet())) {
+            throw new IllegalArgumentException("Column properties must reference declared columns");
+        }
         if (!columns.containsAll(this.columnComments.keySet())) {
             throw new IllegalArgumentException("Column comments must reference declared columns");
         }
@@ -87,6 +102,11 @@ public class CreateTableEvent implements SchemaChangeEvent {
         return columnComments;
     }
 
+    /** Returns column-scoped properties; absent entries describe ordinary writable columns. */
+    public Map<String, ColumnProperties> getColumnProperties() {
+        return columnProperties;
+    }
+
     @Override
     public TableId tableId() {
         return tableId;
@@ -99,7 +119,7 @@ public class CreateTableEvent implements SchemaChangeEvent {
 
     @Override
     public CreateTableEvent copy(TableId newTableId) {
-        return new CreateTableEvent(newTableId, schema, tableComment, columnComments);
+        return new CreateTableEvent(newTableId, schema, tableComment, columnComments, columnProperties);
     }
 
     @Override
@@ -113,12 +133,13 @@ public class CreateTableEvent implements SchemaChangeEvent {
         return Objects.equals(tableId, that.tableId)
                 && Objects.equals(schema, that.schema)
                 && Objects.equals(tableComment, that.tableComment)
-                && Objects.equals(columnComments, that.columnComments);
+                && Objects.equals(columnComments, that.columnComments)
+                && Objects.equals(columnProperties, that.columnProperties);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(tableId, schema, tableComment, columnComments);
+        return Objects.hash(tableId, schema, tableComment, columnComments, columnProperties);
     }
 
     @Override

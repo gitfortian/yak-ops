@@ -8,6 +8,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
@@ -108,7 +109,12 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 throw new IllegalArgumentException("Target primary key is not safely representable: " + column.name());
             }
         }
-        return dialect.createTablePlan(event.tableId(), schema, event.getTableComment(), event.getColumnComments());
+        return dialect.createTablePlan(
+                event.tableId(),
+                schema,
+                event.getTableComment(),
+                event.getColumnComments(),
+                event.getColumnProperties());
     }
 
     @Override
@@ -187,15 +193,52 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         TableSchema actual = catalog.getTable(event.tableId());
         validateSchema(event, actual);
         Map<String, String> comments = new HashMap<>();
+        Map<String, ColumnProperties> expected = event.getColumnProperties();
         for (JdbcColumnInfo column : catalog.getColumns(event.tableId())) {
-            if (column.hasDefaultValue()
-                    || !Boolean.FALSE.equals(column.autoIncrement())
-                    || !Boolean.FALSE.equals(column.generated())) {
-                throw new IllegalArgumentException("Target columns must be explicitly writable plain columns");
-            }
+            ColumnProperties planned = expected.get(column.name());
+            ColumnProperties actualProperties = new ColumnProperties(
+                    column.defaultExpression(),
+                    column.autoIncrement(),
+                    column.generated(),
+                    column.onUpdateExpression());
+            validateColumnProperties(column.name(), planned, actualProperties);
             comments.put(column.name(), column.remarks());
         }
         validateComments(event, table.remarks(), comments);
+    }
+
+    /**
+     * Verifies every writable column attribute without accepting an altered target.
+     * Default literals may be returned quoted by JDBC and are normalized for comparison.
+     */
+    public static void validateColumnProperties(String column, ColumnProperties expected, ColumnProperties actual) {
+        if (!actual.isKnown()) {
+            throw new IllegalArgumentException("Unknown target generation metadata for column: " + column);
+        }
+        if (expected == null) {
+            if (actual.hasFeatures()) {
+                throw new IllegalArgumentException("Unexpected target column properties: " + column);
+            }
+            return;
+        }
+        if (!expected.isKnown()
+                || !java.util.Objects.equals(expected.autoIncrement(), actual.autoIncrement())
+                || !java.util.Objects.equals(expected.generated(), actual.generated())
+                || !normalizeDefault(expected.onUpdateExpression())
+                        .equals(normalizeDefault(actual.onUpdateExpression()))
+                || !normalizeDefault(expected.defaultExpression())
+                        .equals(normalizeDefault(actual.defaultExpression()))) {
+            throw new IllegalArgumentException("Target column properties do not match: " + column);
+        }
+    }
+
+    private static String normalizeDefault(String expression) {
+        if (expression == null) return "";
+        String value = expression.trim();
+        if (value.length() > 1 && value.startsWith("'") && value.endsWith("'")) {
+            value = value.substring(1, value.length() - 1).replace("''", "'");
+        }
+        return value.replaceAll("(?i)\\bcurrent_timestamp\\(\\)", "CURRENT_TIMESTAMP");
     }
 
     /**

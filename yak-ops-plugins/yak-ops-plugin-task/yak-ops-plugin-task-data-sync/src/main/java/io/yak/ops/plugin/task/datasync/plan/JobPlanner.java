@@ -186,12 +186,14 @@ public final class JobPlanner {
                     + encodePart(Long.toString(from.revision()))
                     + encodeTable(from.table())
                     + encodeSchema(from.schema())
+                    + encodeProperties(from.columnProperties())
                     + encodePart(sinkId)
                     + encodePart(Long.toString(targetInfo.revision()))
                     + encodeTable(targetTable)
                     + encodeSchema(expected);
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
+                binding += encodeProperties(event.getColumnProperties());
                 for (var comment : new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
                     binding += encodePart(comment.getKey()) + encodePart(comment.getValue());
                 }
@@ -225,6 +227,20 @@ public final class JobPlanner {
 
     private static String encodeTable(TableId table) {
         return encodePart(table.catalog()) + encodePart(table.schema()) + encodePart(table.table());
+    }
+
+    /** Physical metadata changes invalidate previously admitted schema plans. */
+    private static String encodeProperties(java.util.Map<String, io.yak.ops.core.event.ColumnProperties> properties) {
+        StringBuilder value = new StringBuilder();
+        for (var entry : new java.util.TreeMap<>(properties).entrySet()) {
+            var attribute = entry.getValue();
+            value.append(encodePart(entry.getKey()))
+                    .append(encodePart(attribute.defaultExpression()))
+                    .append(encodePart(attribute.onUpdateExpression()))
+                    .append(encodePart(String.valueOf(attribute.autoIncrement())))
+                    .append(encodePart(String.valueOf(attribute.generated())));
+        }
+        return value.toString();
     }
 
     private static String encodeSchema(TableSchema schema) {

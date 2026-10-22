@@ -10,6 +10,7 @@ import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.catalog.factory.JdbcCatalogFactory;
 import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.repository.datasource.DataSourceEntityRepository;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
@@ -22,6 +23,7 @@ import jakarta.annotation.Resource;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -69,6 +71,7 @@ public class DataSourceLookupServiceImpl implements DataSourceLookupService {
             var columns = catalog.getColumns(selected);
             var comments = new HashMap<String, String>();
             var features = new HashSet<String>();
+            Map<String, ColumnProperties> attributes = new HashMap<>();
             if (!"TABLE".equalsIgnoreCase(description.type()) && !"BASE TABLE".equalsIgnoreCase(description.type())) {
                 features.add("NON_TABLE");
             }
@@ -78,6 +81,8 @@ public class DataSourceLookupServiceImpl implements DataSourceLookupService {
                 if (Boolean.TRUE.equals(column.autoIncrement())) features.add("IDENTITY");
                 if (Boolean.TRUE.equals(column.generated())) features.add("GENERATED");
                 if (column.autoIncrement() == null || column.generated() == null) features.add("UNKNOWN_GENERATION");
+                attributes.put(column.name(), new ColumnProperties(
+                        column.defaultExpression(), column.autoIncrement(), column.generated(), column.onUpdateExpression()));
             }
             return Optional.of(new DataSourceTable(
                     entity.getDbType(),
@@ -86,7 +91,8 @@ public class DataSourceLookupServiceImpl implements DataSourceLookupService {
                     entity.getRevision(),
                     description.remarks(),
                     comments,
-                    features));
+                    features,
+                    attributes));
         } catch (SQLException failure) {
             throw new IllegalStateException("Unable to resolve datasource table metadata", failure);
         }

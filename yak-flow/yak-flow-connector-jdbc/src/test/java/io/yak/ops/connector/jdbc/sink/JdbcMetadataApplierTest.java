@@ -14,6 +14,7 @@ import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
@@ -63,6 +64,53 @@ class JdbcMetadataApplierTest {
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> new JdbcSinkFactory().createMetadataApplier(oracle.toReadonlyConfig()));
+    }
+
+    @Test
+    void mysqlPlanPreservesValidatedDefaultsAndIdentityWithoutOpeningConnections() {
+        TableSchema schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(32)),
+                        new Column("created_at", LogicalTypes.TIMESTAMP)),
+                List.of("id"));
+        Map<String, ColumnProperties> properties = Map.of(
+                "id", new ColumnProperties(null, true, false),
+                "name", new ColumnProperties("hello", false, false),
+                "created_at", new ColumnProperties("CURRENT_TIMESTAMP", false, false));
+        var event = new CreateTableEvent(
+                new TableId("app", null, "orders"), schema, null, Map.of(), properties);
+        JdbcDialect mysql = JdbcFactoryLoader.loadDialect("jdbc:mysql:");
+        var plan = JdbcMetadataApplier.plan(event, mysql);
+        assertTrue(plan.createTableSql().contains("AUTO_INCREMENT"));
+        assertTrue(plan.createTableSql().contains("DEFAULT 'hello'"));
+        assertTrue(plan.createTableSql().contains("DEFAULT CURRENT_TIMESTAMP"));
+        assertEquals(properties, event.copy(new TableId("app", null, "copied")).getColumnProperties());
+        JdbcMetadataApplier.validateColumnProperties(
+                "name", properties.get("name"), new ColumnProperties("'hello'", false, false));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcMetadataApplier.validateColumnProperties(
+                        "name", properties.get("name"), new ColumnProperties("different", false, false)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcMetadataApplier.plan(event, JdbcFactoryLoader.loadDialect("jdbc:postgresql:")));
+    }
+
+    @Test
+    void rejectedGeneratedAndUnknownColumnsNeverProduceExecutableDdl() {
+        TableSchema schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))),
+                List.of("id"));
+        var table = new TableId("app", null, "orders");
+        JdbcDialect mysql = JdbcFactoryLoader.loadDialect("jdbc:mysql:");
+        for (ColumnProperties attributes : List.of(
+                new ColumnProperties(null, null, false),
+                new ColumnProperties(null, false, true),
+                new ColumnProperties("UNSUPPORTED_FUNC()", false, false))) {
+            var event = new CreateTableEvent(table, schema, null, Map.of(), Map.of("id", attributes));
+            assertThrows(IllegalArgumentException.class, () -> JdbcMetadataApplier.plan(event, mysql));
+        }
     }
 
     @Test
