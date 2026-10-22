@@ -87,17 +87,15 @@ public final class JobConfigValidator {
                         if (actual.revision() != to.revision())
                             throw new IllegalStateException("Target datasource revision changed during validation");
                         SchemaValidator.validateTarget(event, actual);
-                        sinkFactory.validateSchema(
-                                table.sink(), sourceTable.schema(), actual.schema(), sourceFactory.producesChangelog());
+                        SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
+                            table.sink(), sourceTable.schema(), actual.schema(), sourceFactory.producesChangelog()));
                     });
                 } else if (schemas) {
                     var sourceSchema = context.tableSchema(sourceId, source);
-                    sourceFactory.validateSchema(sourceSchema);
-                    sinkFactory.validateSchema(
-                            table.sink(),
-                            sourceSchema,
-                            context.tableSchema(sinkId, target),
-                            sourceFactory.producesChangelog());
+                    SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceSchema));
+                    var targetSchema = context.tableSchema(sinkId, target);
+                    SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
+                            table.sink(), sourceSchema, targetSchema, sourceFactory.producesChangelog()));
                 }
             }
             if (sourceId.equals(sinkId) && sources.stream().anyMatch(targets::contains)) {
