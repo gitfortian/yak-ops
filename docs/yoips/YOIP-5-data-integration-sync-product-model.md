@@ -116,94 +116,94 @@ The Data Sync business projection supplies these observations. Do not push table
 
 ## Proposed Changes
 
-### 1. 四个维度与实际控件的关系
+### 1. Four Dimensions and Their UI Controls
 
-| 维度 | 概念 | 回答的问题 | 页面表达 |
+| Dimension | Concepts | Question answered | UI representation |
 | --- | --- | --- | --- |
-| 同步时效 | 离线、实时 | 按有限批次同步，还是持续同步变化？ | 包含在具体类型中 |
-| 同步范围 | 单表、多表、整库、分库分表 | 同步哪些对象，这些对象如何组织？ | 具体类型提供入口，选表方式和映射表达对象范围 |
-| 数据策略 | 全量、增量、全量加增量 | 同步存量、变化，还是两者衔接？ | 由全量和增量步骤组合表达 |
-| 写入方式 | Append、Overwrite、Upsert 等 | 数据如何影响目标已有内容？ | 靠近目标表映射配置，按已支持能力提供 |
+| Synchronization latency | Offline, realtime | Run bounded batches or continuously synchronize changes? | Encoded in the specific solution type |
+| Synchronization scope | Single table, multiple tables, database-wide, sharded databases/tables | Which objects are synchronized, and how are they organized? | A specific type opens the flow; selection and mapping define object scope |
+| Data strategy | Full, incremental, full plus incremental | Synchronize existing data, subsequent changes, or both? | Expressed as combinations of full and incremental steps |
+| Write mode | Append, Overwrite, Upsert, etc. | How does incoming data affect existing target data? | Configured alongside target-table mappings, limited to supported modes |
 
-四个认知维度不是四个彼此独立的下拉框。选择“整库实时”后，不重复填写“同步时效：实时”；勾选全量和增量后，不再填写另一项“数据策略：全量加增量”。
+These are four conceptual dimensions, not four independent required dropdowns. After selecting "database-wide realtime", do not ask again for "synchronization latency: realtime". After selecting full and incremental steps, do not separately require "data strategy: full plus incremental".
 
-同步时效不等于 Cron 周期；数据策略不等于启动位点；全量不等于覆盖写入；增量不等于 Upsert；结构迁移不属于第四种数据策略。
+Synchronization latency is not a Cron interval. Data strategy is not a starting offset. Full synchronization does not imply overwrite. Incremental synchronization does not imply Upsert. Schema migration is not a fourth data strategy.
 
-### 2. 具体类型与范围
+### 2. Specific Solution Types and Scope
 
-采用以下稳定的方案身份，不将单表和实时作为同层级互斥选项：
+Use these stable solution identities. Do not treat single-table and realtime as mutually exclusive options at the same level.
 
-| `solutionType` | 显示名称 | 范围语义 |
+| `solutionType` | Display name | Scope semantics |
 | --- | --- | --- |
-| `SINGLE_TABLE_OFFLINE` | 单表离线 | 一条表映射，按有限批次执行 |
-| `SINGLE_TABLE_REALTIME` | 单表实时 | 一条表映射，提供已实现的实时数据策略 |
-| `DATABASE_OFFLINE` | 整库离线 | 一个来源连接下的批量表选择与目标映射 |
-| `DATABASE_REALTIME` | 整库实时 | 一个来源连接下的批量表选择与持续同步方案 |
+| `SINGLE_TABLE_OFFLINE` | Single-table offline | One table mapping, executed as bounded batches |
+| `SINGLE_TABLE_REALTIME` | Single-table realtime | One table mapping, using a supported realtime data strategy |
+| `DATABASE_OFFLINE` | Database-wide offline | Batch table selection and target mappings from one source connection |
+| `DATABASE_REALTIME` | Database-wide realtime | Batch table selection and continuous synchronization from one source connection |
 
-这些名称定义目标产品词汇，不表示所有类型在首次交付时均可选。多表由整库方案的明确选表集合承载，不新增一套 `MULTI_TABLE` 页面或插件。整库方案只匹配到一张表时仍保持方案身份，不自动改成单表。
+These names define the target product vocabulary; they do not mean every type is selectable in the first release. Multiple tables are expressed through the explicit selection set of a database-wide solution, not a separate `MULTI_TABLE` page or plugin. A database-wide solution stays database-wide even when only one table matches; it is not automatically reclassified as single-table.
 
-分库分表是选表与多对一映射能力，不仅是表数量变化。开放前必须确定来源分片身份、目标主键冲突、Schema 一致性、事件顺序和删除语义。当前普通批量映射禁止多个来源写入同一目标表；未经该能力验收，不能通过把目标表名改成相同值绕过限制。
+Sharded databases/tables require selection and many-to-one mapping semantics, not just a different table count. Before exposing that capability, define source shard identity, target primary-key conflicts, schema consistency, event ordering, and deletion behavior. Ordinary batch mapping currently prohibits multiple sources writing into the same target table. Users must not bypass that restriction merely by giving targets the same name before the capability is verified.
 
-首次统一范围是一个来源连接到一个去向连接。跨数据源实例的分片聚合、运行中动态加表和热修改执行计划不随本提案自动开放；相关持久状态及准入变化需要补充设计评审。
+The first unified scope supports one source connection and one target connection. Cross-datasource shard aggregation, dynamically adding tables to running jobs, and live execution-plan changes are not automatically enabled. Their persisted state and admission semantics require further design review.
 
-### 3. 创建入口：先类型、后连接
+### 3. Creation Entry: Types Before Connections
 
-统一弹窗标题为“新建同步任务”，字段顺序固定为：
+Use a single "Create Sync Task" dialog with fields in this fixed order:
 
 ```text
-数据来源类型   [请选择]
-数据去向类型   [请选择]
-具体类型       [根据来源与去向加载]
-同步步骤       [结构迁移] [全量同步] [增量同步]
-名称           [自动建议，可修改]
+Source type        [Select]
+Target type        [Select]
+Solution type      [Load from source and target types]
+Sync steps         [Schema migration] [Full sync] [Incremental sync]
+Name               [Suggested automatically; editable]
 
-                         取消   下一步
+                                Cancel   Next
 ```
 
-步骤仅展示该方案适用且已经实现的项。必选项勾选且不可取消；可选项的切换只能落在允许组合中。至少选择全量或增量之一，首次设计不提供仅结构迁移任务。当前 Hybrid 实时路径只支持全量加增量时，两者均为必选，不提供无效的取消操作。
+Show only steps supported and applicable to the selected solution. Required steps are checked and cannot be unchecked; changing optional steps must result in an explicitly allowed combination. At least one of Full or Incremental is required; the initial design does not permit schema-only tasks. Where the current Hybrid realtime path supports only full plus incremental, both steps are required and cannot be deselected.
 
-来源与去向均由类型目录选择，实际连接在编辑器中选择。没有已保存连接不阻止查看类型级方案；进入编辑器后提供“新增数据源”并保留草稿。不给用户重复填写已经能够从具体连接确定的类型。
+Choose source and target *types* from the datasource type catalog; choose concrete connections in the editor. Having no saved connections must not prevent users from exploring type-level solutions. Offer "Add datasource" inside the editor and retain the draft. Do not ask again for a type that a concrete connection already determines.
 
-联动规则：
+Dependency and change rules:
 
-- 类型组合变化时取消旧请求或丢弃过期响应；加载期间禁用具体类型、步骤和下一步。旧结果不能覆盖新选择。
-- 改变类型组合后重新验证具体类型和步骤；仍合法的选择可以保留，否则清除失效选择并要求确认，不静默降级成其他数据策略。
-- 更换具体类型后使用该方案的合法默认步骤组合；若这会丢弃已经填写的对象、映射或阶段设置，必须先确认，再清除受影响字段。
-- 自动名称只在用户未手动修改时随选择更新。用户自定义名称不被数据源或步骤联动覆盖。
+- When the type pair changes, cancel earlier requests or discard stale responses. Disable solution, steps, and Next while loading. Old results must not overwrite new selections.
+- After changing the type pair, revalidate the solution and steps. Preserve selections that remain legal; otherwise clear invalid choices and require confirmation. Never silently downgrade to another data strategy.
+- After changing the specific solution type, use its legal default step combination. If this discards configured objects, mappings, or stage settings, require confirmation before clearing the affected fields.
+- Update an automatically suggested name only until the user manually edits it. Datasource or step changes must not overwrite a custom name.
 
-“下一步”只创建当前页面会话的非敏感草稿，不写入 Task Definition，不上线、不启用调度、不启动执行。草稿按用户、Workspace 和标签页隔离；刷新时恢复有效草稿，无法恢复则重新打开方案入口。退出登录或切换 Workspace 不泄露上一作用域的草稿和异步结果。
+"Next" creates a non-sensitive draft in the current page session only. It does not persist a Task Definition, publish a task, enable scheduling, or start execution. Isolate drafts by user, Workspace, and browser tab. On refresh, restore a valid draft; otherwise reopen the solution-selection entry. Logout or Workspace switching must not leak drafts or stale asynchronous results across scopes.
 
-首次“保存”仍要求形成有效任务配置，并创建已下线的 Definition；不为未选连接或未完成映射的草稿引入另一种持久化任务生命周期。
+The first "Save" still requires valid task configuration and creates an unpublished Definition. Do not add another persisted task lifecycle for drafts missing connections or mappings.
 
-### 4. 统一编辑器：按能力展开配置
+### 4. Unified Editor: Show Only Applicable Configuration
 
-统一编辑器由任务方案驱动。新建读取草稿，编辑读取已保存配置，不能根据旧 URL 或导航筛选重新解释任务类型。共同区域为基本信息、数据源、数据来源、目标表映射、运行配置。
+The unified editor is driven by the saved or selected solution. New tasks read the creation draft; existing tasks read persisted configuration. Never reinterpret task identity from an old URL or navigation filter. Common areas are Basic Information, Datasources, Source Data, Target Table Mappings, and Execution Settings.
 
-| 区域 | 用户操作 | 必须保持的行为 |
+| Area | User action | Required behavior |
 | --- | --- | --- |
-| 基本信息 | 名称、备注、Debug，查看所选方案与步骤 | 不重复配置已确定的认知维度 |
-| 数据源 | 选择实际来源与去向连接，测试连接 | 只提供类型匹配且有权限的连接；连接测试成功不等于 CDC 或目标写入条件均满足 |
-| 数据来源 | 单表选择或批量选表 | 单表保持轻量；批量模式提供来源对象、已选对象及搜索过滤 |
-| 目标表映射 | 目标名称、结构准备、写入方式和适用的映射配置 | 保存最终有效映射，明确区分预览结果与执行结果 |
-| 运行配置 | 必要的增量范围、启动设置和周期调度 | 按实际步骤能力展开；普通用户不直接配置引擎内部参数 |
+| Basic Information | Name, description, Debug, and review of selected solution and steps | Do not duplicate already-determined conceptual dimensions |
+| Datasources | Select actual source and target connections; test connectivity | Show only authorized connections of matching types; a successful connection test does not prove CDC prerequisites or target-write compatibility |
+| Source Data | Select one table or batch-select tables | Keep single-table configuration lightweight; batch mode offers available objects, selected objects, search, and filtering |
+| Target Table Mappings | Target names, schema preparation, write modes, and applicable mappings | Persist only valid final mappings, and distinguish previews from execution results |
+| Execution Settings | Necessary incremental ranges, start settings, and recurring scheduling | Expand only settings supported by the selected steps; ordinary users do not configure internal engine parameters |
 
-编辑器可组合单表选择、批量选择、映射和调度组件，但不建立通用动态表单平台。条件分支表达具体能力，不以一个 `realtime` 布尔值决定整页布局、路径、写入行为和进度。
+The editor may compose single-table selection, batch selection, mappings, and scheduling components. It does not need a generic dynamic-form platform. Conditional behavior expresses specific capabilities, rather than using a single `realtime` Boolean to control the entire layout, route, write behavior, and progress.
 
-#### 明确选表与规则选表
+#### Explicit Selection vs. Rule Selection
 
-`EXPLICIT` 保存明确对象集合；搜索或正则过滤后手动勾选，仍然是明确选表。`RULES` 才表示持久化规则及明确的对象发现时机；它不能由一个前端过滤框冒充。
+`EXPLICIT` persists a concrete object set. Manually checking tables after search or regex filtering is still explicit selection. Only `RULES` represents persisted discovery rules with a defined discovery time; a frontend search filter does not make a rule-based selection.
 
-首次交付只接受 `EXPLICIT`。未来开放规则选表时，必须同时定义 include/exclude、命名空间、零匹配行为、预览与提交间的对象变化、发现时机及历史解析结果。周期批次应固定该次执行的对象集合，不能在执行中因重新查询元数据而悄悄增加表。持续任务的动态加表还需要新表初始化和增量衔接契约。
+The initial release accepts only `EXPLICIT`. Before enabling rule selection, define include/exclude behavior, namespaces, zero-match handling, object changes between preview and submission, discovery timing, and historical resolved results. Each scheduled batch must pin its own object set; refreshing metadata during execution must not silently add tables. Dynamic tables in continuous jobs additionally require new-table initialization and incremental handoff contracts.
 
-指定选表与规则选表互斥。切换时若存在已选对象或映射，确认后清除不适用结果，不能暗中合并两种模式。表数量和批量上限由 Yak Ops 实际能力决定，不直接照搬截图中的数值。
+Explicit and rule-based selection are mutually exclusive. If selected objects or mappings exist, switching requires confirmation and clears incompatible values; never merge the two modes implicitly. Yak Ops determines actual table-count and batch-size limits, rather than copying limits from screenshots.
 
-#### 目标映射与结构准备
+#### Target Mappings and Schema Preparation
 
-批量映射复用同一数据模型，支持已实现的批量命名和批量编辑。每条映射展示来源、去向、写入方式及有意义的校验结果；目标冲突、缺失权限或不兼容 Schema 不能只放在全局 Toast 中。
+Batch mappings reuse the same model and support implemented bulk naming and bulk editing. Each mapping shows source, target, write mode, and useful validation results. Target conflicts, missing permissions, and incompatible schemas must not be reported only in a global toast.
 
-未选择 `SCHEMA` 时使用已有目标对象，仍进行必要结构校验。选择 `SCHEMA` 表示真实准备目标对象，不把“校验通过”称为“结构迁移完成”。结构预览不执行 DDL；真实创建必须在任务准入、权限和目标占用检查之后。已有不兼容目标不得被隐式删除、清空或改造。
+Without `SCHEMA`, use existing target objects while still performing necessary structural validation. Selecting `SCHEMA` means actual preparation of target objects; a passed validation is not "schema migration completed". Schema preview must not execute DDL. Actual creation occurs only after task admission, permission checks, and target-resource claims. Existing incompatible targets must not be implicitly dropped, truncated, or altered.
 
-初始建表与持续 DDL 传播是不同能力。自动建表、字段映射、分片合并只有在端到端实现和校验完成后开放，单独勾选结构迁移不承诺传播未来所有 DDL 变更。
+Initial table creation and continuous DDL propagation are different capabilities. Expose automatic creation, field mapping, and shard merging only after end-to-end implementation and verification. Checking schema migration alone must not promise propagation of every future DDL change.
 
 ### 5. 步骤组合与执行语义
 
