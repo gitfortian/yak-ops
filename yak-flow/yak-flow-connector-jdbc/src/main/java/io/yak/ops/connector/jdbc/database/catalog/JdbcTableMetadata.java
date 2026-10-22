@@ -201,13 +201,12 @@ public final class JdbcTableMetadata {
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     String extra = rows.getString("EXTRA");
-                    if (extra == null || !extra.toLowerCase(java.util.Locale.ROOT).contains("on update")) continue;
-                    var matcher = java.util.regex.Pattern
-                            .compile("(?i)on update\\s+(current_timestamp(?:\\([0-6]\\))?)")
+                    if (extra == null
+                            || !extra.toLowerCase(java.util.Locale.ROOT).contains("on update")) continue;
+                    var matcher = java.util.regex.Pattern.compile("(?i)on update\\s+(current_timestamp(?:\\([0-6]\\))?)")
                             .matcher(extra);
                     updates.put(
-                            rows.getString("COLUMN_NAME"),
-                            matcher.find() ? matcher.group(1) : "UNSUPPORTED_ON_UPDATE");
+                            rows.getString("COLUMN_NAME"), matcher.find() ? matcher.group(1) : "UNSUPPORTED_ON_UPDATE");
                 }
             }
         }
