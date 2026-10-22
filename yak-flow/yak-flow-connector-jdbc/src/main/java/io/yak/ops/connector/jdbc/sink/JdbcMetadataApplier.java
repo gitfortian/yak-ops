@@ -103,9 +103,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         for (Column column : schema.columns()) {
             JdbcNativeType nativeType = dialect.nativeType(column);
             ColumnProperties property = event.getColumnProperties().get(column.name());
-            boolean vendorType = dialect instanceof MySqlJdbcDialect
-                    && property != null
-                    && property.nativeType() != null;
+            boolean vendorType =
+                    dialect instanceof MySqlJdbcDialect && property != null && property.nativeType() != null;
             if (nativeType.warning() != null && !vendorType) {
                 throw new IllegalArgumentException("Target type requires explicit conversion: " + column.name());
             }
