@@ -65,7 +65,7 @@ export default function CategoryTree(props: Props) {
                 className={
                   "min-w-0 flex-1 justify-start " +
                   (selected
-                    ? "bg-[var(--yak-color-primary-subtle)] [color:var(--yak-color-primary)]"
+                    ? "bg-[var(--yak-color-primary-subtle)] [color:var(--yak-color-primary)] hover:bg-[var(--yak-color-primary-subtle)] hover:[color:var(--yak-color-primary)]"
                     : "")
                 }
                 onClick={() => props.onSelect(node.id)}

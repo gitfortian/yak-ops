@@ -84,7 +84,7 @@ public interface StandardService {
      * Creates a field with an immutable category and globally unique code.
      * @param workspaceId authorized current Workspace
      * @param actor authenticated user
-     * @param categoryId fixed category, or null for global search
+     * @param categoryId owning category in the current Workspace
      * @param input editable fields and expected revision where applicable
      * @return committed identity and revision
      */
