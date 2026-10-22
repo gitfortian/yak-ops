@@ -17,6 +17,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -26,10 +27,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -63,8 +62,7 @@ class TaskCursorIT {
                         + "?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=30000",
                 db.username(),
                 db.password());
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/yak-ops/V14__offline_incremental_state.sql"))
-                .execute(source);
+        Flyway.configure().dataSource(source).locations("classpath:db/migration/yak-ops").load().migrate();
         context = new AnnotationConfigApplicationContext();
         context.registerBean(DataSource.class, () -> source);
         context.register(Beans.class, TaskCursorRepositoryImpl.class, TaskCursorStoreService.class);
