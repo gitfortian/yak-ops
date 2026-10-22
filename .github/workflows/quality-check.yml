@@ -62,6 +62,11 @@ jobs:
           source release.env
           bash scripts/release/check-release-migration.sh "$YAK_OPS_VERSION"
 
+      - name: Release notes structure
+        run: |
+          source release.env
+          bash scripts/release/check-release-notes.sh "$YAK_OPS_VERSION"
+
       - name: Backend logging rules
         if: steps.scope.outputs.backend == 'true'
         run: |
