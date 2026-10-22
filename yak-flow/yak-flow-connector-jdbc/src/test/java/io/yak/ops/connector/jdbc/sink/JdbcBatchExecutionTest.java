@@ -46,6 +46,7 @@ class JdbcBatchExecutionTest {
         }
         assertEquals(List.of(500, 500), database.stats.batchRows);
         assertEquals(1, database.stats.commits);
+        assertEquals(0, database.stats.rollbacks);
         assertEquals(0, database.stats.open);
         assertEquals(500, database.count(0));
         assertEquals(500, database.count(1));
@@ -91,6 +92,7 @@ class JdbcBatchExecutionTest {
             assertThrows(IllegalStateException.class, () -> output.add(row(0, 3)));
         }
         assertEquals(0, database.stats.commits);
+        assertEquals(1, database.stats.rollbacks);
         assertEquals(0, database.stats.open);
         assertEquals(0, database.count(0));
         assertEquals(0, database.count(1));
@@ -105,8 +107,26 @@ class JdbcBatchExecutionTest {
         }
         assertEquals(0, database.stats.prepares);
         assertEquals(0, database.stats.commits);
+        assertEquals(0, database.stats.rollbacks);
         assertEquals(0, database.count(0));
         assertEquals(0, database.count(1));
+    }
+
+    @Test
+    void cancelAfterCommitDiscardsBufferedRowsWithoutRollback() throws Exception {
+        var database = new Fixture(1);
+        var output = database.output(JdbcBatchOrder.INPUT_ORDER, 16);
+        output.add(row(0, 1));
+        output.flush();
+        output.add(row(0, 2));
+
+        output.cancel();
+        output.close();
+
+        assertEquals(1, database.stats.commits);
+        assertEquals(0, database.stats.rollbacks);
+        assertEquals(0, database.stats.open);
+        assertEquals(1, database.count(0));
     }
 
     @Test
@@ -159,6 +179,7 @@ class JdbcBatchExecutionTest {
         private int open;
         private int peakOpen;
         private int commits;
+        private int rollbacks;
         private final List<Integer> batchRows = new ArrayList<>();
     }
 
@@ -174,6 +195,7 @@ class JdbcBatchExecutionTest {
                     }
                     Object result = invoke(connection, method, args);
                     if (method.getName().equals("commit")) stats.commits++;
+                    if (method.getName().equals("rollback")) stats.rollbacks++;
                     return result;
                 });
     }
