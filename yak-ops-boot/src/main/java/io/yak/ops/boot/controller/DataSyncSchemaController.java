@@ -8,6 +8,9 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.plugin.task.datasync.DataSyncTaskPlugin;
 import io.yak.ops.plugin.task.datasync.plan.SchemaPreview;
+import io.yak.ops.plugin.task.api.TaskValidationException;
+import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
+import io.yak.ops.plugin.task.datasync.validation.SchemaValidationException;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -34,6 +37,9 @@ public class DataSyncSchemaController {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         try {
             return Result.success(plugin.preview(request.getParameters(), workspaceId));
+        } catch (SchemaValidationException failure) {
+            throw new TaskValidationException(
+                    "SCHEMA_PREVIEW", JobConfigValidator.safeSchemaMessage(failure.failure()), failure);
         } catch (RuntimeException failure) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
