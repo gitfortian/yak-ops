@@ -14,6 +14,18 @@ public final class SchemaValidator {
     private SchemaValidator() {}
 
     /**
+     * WRITE validation checks only the JDBC write contract. It must never demand
+     * identical defaults, comments, indexes, or a source-derived target DDL.
+     */
+    public static void validateWrite(Runnable validation) {
+        try {
+            validation.run();
+        } catch (IllegalArgumentException | UnsupportedOperationException failure) {
+            throw new SchemaValidationException(failure);
+        }
+    }
+
+    /**
      * Builds a complete desired target event from an authorized source table.
      *
      * @param source physical source metadata
