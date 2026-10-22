@@ -1,5 +1,6 @@
 package io.yak.ops.dao.mapper.modeling;
 
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import java.util.List;
@@ -40,6 +41,8 @@ public interface PlanningMapper {
             @Param("id") String id,
             @Param("revision") long revision);
 
+    // This Workspace-scoped query has no Security tenant table. Preserve MySQL locking clause order.
+    @InterceptorIgnore(tenantLine = "true")
     @SelectProvider(type = PlanningSqlProvider.class, method = "children")
     String child(@Param("workspaceId") String workspaceId, @Param("kind") NodeKind kind, @Param("id") String id);
 
