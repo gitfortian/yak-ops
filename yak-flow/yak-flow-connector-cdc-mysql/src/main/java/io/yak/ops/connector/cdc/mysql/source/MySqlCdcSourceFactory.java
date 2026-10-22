@@ -18,7 +18,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /** Creates a hybrid MySQL Source from direct connection and replication settings. */
@@ -115,7 +114,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     /**
      * A MySQL URL can contain driver settings as well as connection.properties.
-     * The URL takes precedence, including the serverTimezone alias.
+     * The URL takes precedence over the same property in connection.properties.
      */
     private static Map<String, String> mergedConnectionProperties(JdbcConnectionOptions connection) {
         Map<String, String> properties =
@@ -128,18 +127,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
             String key = URLDecoder.decode(equal < 0 ? part : part.substring(0, equal), StandardCharsets.UTF_8);
             String value = URLDecoder.decode(equal < 0 ? "" : part.substring(equal + 1), StandardCharsets.UTF_8);
             if (key.isBlank()) throw new IllegalArgumentException("MySQL JDBC URL contains a blank property name");
-            // Alias fields are the same option; don't retain an older conflicting time zone.
-            properties
-                    .keySet()
-                    .removeIf(existing ->
-                            existing.equalsIgnoreCase(key) || (isTimeZoneKey(existing) && isTimeZoneKey(key)));
+            properties.keySet().removeIf(existing -> existing.equalsIgnoreCase(key));
             properties.put(key, value);
         }
         return properties;
-    }
-
-    private static boolean isTimeZoneKey(String key) {
-        String normalized = key.toLowerCase(Locale.ROOT);
-        return normalized.equals("connectiontimezone") || normalized.equals("servertimezone");
     }
 }

@@ -37,8 +37,8 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
             Options.key("properties.socketTimeout").intType().noDefaultValue();
     private static final Option<String> CHARACTER_ENCODING =
             Options.key("properties.characterEncoding").stringType().noDefaultValue();
-    private static final Option<String> SERVER_TIMEZONE =
-            Options.key("properties.serverTimezone").stringType().noDefaultValue();
+    private static final Option<String> CONNECTION_TIMEZONE =
+            Options.key("properties.connectionTimeZone").stringType().noDefaultValue();
     private static final Option<String> ENABLED_TLS =
             Options.key("properties.enabledTLSProtocols").stringType().noDefaultValue();
     private static final Option<Boolean> USE_UNICODE =
@@ -69,7 +69,7 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
                 .optional(CONNECT_TIMEOUT, Conditions.greaterOrEqual(CONNECT_TIMEOUT, 0))
                 .optional(SOCKET_TIMEOUT, Conditions.greaterOrEqual(SOCKET_TIMEOUT, 0))
                 .optional(CHARACTER_ENCODING, Conditions.notBlank(CHARACTER_ENCODING))
-                .optional(SERVER_TIMEZONE, Conditions.notBlank(SERVER_TIMEZONE))
+                .optional(CONNECTION_TIMEZONE, Conditions.notBlank(CONNECTION_TIMEZONE))
                 .optional(ENABLED_TLS, Conditions.notBlank(ENABLED_TLS))
                 .build();
     }
@@ -79,7 +79,7 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     private static final Map<String, String> PROPERTY_KEYS = Map.ofEntries(
             Map.entry("useunicode", "useUnicode"),
             Map.entry("characterencoding", "characterEncoding"),
-            Map.entry("servertimezone", "serverTimezone"),
+            Map.entry("connectiontimezone", "connectionTimeZone"),
             Map.entry("usessl", "useSSL"),
             Map.entry("sslmode", "sslMode"),
             Map.entry("requiressl", "requireSSL"),

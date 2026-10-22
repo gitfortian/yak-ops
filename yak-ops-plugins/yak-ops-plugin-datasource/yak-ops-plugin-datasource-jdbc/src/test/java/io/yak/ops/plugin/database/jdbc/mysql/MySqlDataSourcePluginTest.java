@@ -32,14 +32,14 @@ class MySqlDataSourcePluginTest {
                   "database": "yak_e2e_realtime_source",
                   "username": "root",
                   "properties": {
-                    "serverTimezone": "Asia/Shanghai",
+                    "connectionTimeZone": "Asia/Shanghai",
                     "useSSL": "false"
                   }
                 }
                 """));
 
         assertEquals(
-                "jdbc:mysql://127.0.0.1:3306/yak_e2e_realtime_source?serverTimezone=Asia%2FShanghai&useSSL=false",
+                "jdbc:mysql://127.0.0.1:3306/yak_e2e_realtime_source?connectionTimeZone=Asia%2FShanghai&useSSL=false",
                 plugin.displayJdbcUrl(connection));
     }
 }

@@ -38,7 +38,7 @@ class MySqlCdcFactoryCreationTest {
     void propagatesUrlAndAdvancedDriverSettingsToSnapshotAndDebezium() throws Exception {
         Configuration options = options()
                 .set(JdbcConnectionOptions.URL,
-                        "jdbc:mysql://localhost:3307/app?serverTimezone=Asia%2FShanghai&sslMode=REQUIRED&socketTimeout=12000")
+                        "jdbc:mysql://localhost:3307/app?connectionTimeZone=Asia%2FShanghai&sslMode=REQUIRED&socketTimeout=12000")
                 .set(JdbcConnectionOptions.PROPERTIES, Map.of(
                         "connectionTimeZone", "Europe/Berlin",
                         "sslMode", "DISABLED",
@@ -48,13 +48,13 @@ class MySqlCdcFactoryCreationTest {
         var field = MySqlHybridCdcSource.class.getDeclaredField("config");
         field.setAccessible(true);
         MySqlCdcSourceConfig config = (MySqlCdcSourceConfig) field.get(source);
-        assertEquals("Asia/Shanghai", config.connectionProperties().get("serverTimezone"));
+        assertEquals("Asia/Shanghai", config.connectionProperties().get("connectionTimeZone"));
         assertEquals("REQUIRED", config.connectionProperties().get("sslMode"));
         assertEquals("12000", config.connectionProperties().get("socketTimeout"));
         assertEquals("true", config.connectionProperties().get("allowPublicKeyRetrieval"));
-        assertTrue(!config.connectionProperties().containsKey("connectionTimeZone"));
+        assertTrue(!config.connectionProperties().containsKey("serverTimezone"));
         var debezium = config.debeziumProperties("test-session", Path.of("schema-history.dat"));
-        assertEquals("Asia/Shanghai", debezium.getProperty("driver.serverTimezone"));
+        assertEquals("Asia/Shanghai", debezium.getProperty("driver.connectionTimeZone"));
         assertEquals("REQUIRED", debezium.getProperty("driver.sslMode"));
         assertEquals("12000", debezium.getProperty("driver.socketTimeout"));
         assertEquals("true", debezium.getProperty("driver.allowPublicKeyRetrieval"));

@@ -1,80 +1,65 @@
 package io.yak.ops.dao.task;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** Checks required uniqueness and ownership columns in the append-only Flyway migration. */
+/** Checks the v1.3.0 fresh-install schema rather than removed historical migrations. */
 class TaskExecutionMigrationTest {
+    private static final String BASELINE = "/db/migration/yak-ops/V1__baseline.sql";
 
     @Test
-    void persistsDefinitionAndInstanceDebugFlags() throws IOException {
-        String sql;
-        try (var stream = getClass().getResourceAsStream(
-                "/db/migration/yak-ops/V9__task_debug_diagnostics.sql")) {
-            assertTrue(stream != null);
-            sql = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        assertTrue(sql.contains("ALTER TABLE yak_ops_task_definition"));
-        assertTrue(sql.contains("ALTER TABLE yak_ops_task_instance"));
-        assertTrue(sql.contains("debug TINYINT(1) NOT NULL DEFAULT 0"));
+    void createsOnlyFinalTablesWithoutDataMutations() throws IOException {
+        String sql = baseline();
+        assertEquals(25, Pattern.compile("(?m)^CREATE TABLE ").matcher(sql).results().count());
+        assertFalse(Pattern.compile("(?im)^\\s*(UPDATE|INSERT|DELETE|DROP|ALTER|TRUNCATE|REPLACE)\\s+")
+                .matcher(sql)
+                .find());
+        assertFalse(sql.contains("CREATE TABLE yak_ops_task_attempt"));
+        assertFalse(sql.contains("CREATE TABLE yak_ops_data_sync_task"));
+        assertFalse(sql.contains("CREATE TABLE yak_ops_data_sync_instance"));
     }
 
     @Test
-    void addsAnInstanceScopedRelativeLogPath() throws IOException {
-        String sql;
-        try (var stream = getClass().getResourceAsStream("/db/migration/yak-ops/V8__task_instance_logging.sql")) {
-            assertTrue(stream != null);
-            sql = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    void createsCompleteDefinitionInstanceAndResourceTables() throws IOException {
+        String sql = baseline();
+        for (String expected : new String[] {
+            "CREATE TABLE yak_ops_task_definition (",
+            "CREATE TABLE yak_ops_task_definition_version (",
+            "CREATE TABLE yak_ops_task_instance (",
+            "CREATE TABLE yak_ops_task_execution_claim (",
+            "CREATE TABLE yak_ops_task_execution_owner (",
+            "definition_name VARCHAR(128)",
+            "debug TINYINT(1) NOT NULL DEFAULT 0",
+            "log_path VARCHAR(512)",
+            "owner_incarnation VARCHAR(128)",
+            "dispatch_token VARCHAR(128)",
+            "runtime_engine VARCHAR(32)",
+            "runtime_id VARCHAR(128)",
+            "progress_percent TINYINT UNSIGNED",
+            "execution_report MEDIUMTEXT",
+            "uk_ops_task_instance_request",
+            "uk_ops_task_claim_resource",
+            "idx_ops_task_instance_owner",
+            "idx_ops_task_instance_latest",
+            "CREATE TABLE yak_ops_task_cursor (",
+            "CREATE TABLE yak_ops_task_cursor_batch (",
+            "revision BIGINT UNSIGNED NOT NULL DEFAULT 1"
+        }) {
+            assertTrue(sql.contains(expected), expected);
         }
-        assertTrue(sql.contains("ALTER TABLE yak_ops_task_instance"));
-        assertTrue(sql.contains("log_path VARCHAR(512)"));
-        assertTrue(sql.contains("COMMENT 'Relative task execution log path'"));
     }
 
-    @Test
-    void movesPhysicalDispatchIntoTheSingleInstanceRecord() throws IOException {
-        String sql;
-        try (var resource =
-                getClass().getResourceAsStream("/db/migration/yak-ops/V7__task_instance_execution_simplification.sql")) {
-            assertTrue(resource != null);
-            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+    private static String baseline() throws IOException {
+        try (var resource = TaskExecutionMigrationTest.class.getResourceAsStream(BASELINE)) {
+            assertNotNull(resource);
+            return new String(resource.readAllBytes(), StandardCharsets.UTF_8);
         }
-        assertTrue(sql.contains("ALTER TABLE yak_ops_task_instance"));
-        assertTrue(sql.contains("owner_incarnation VARCHAR(128)"));
-        assertTrue(sql.contains("dispatch_token VARCHAR(128)"));
-        assertTrue(sql.contains("runtime_engine VARCHAR(32)"));
-        assertTrue(sql.contains("runtime_id VARCHAR(128)"));
-        assertTrue(sql.contains("JOIN yak_ops_task_attempt"));
-        assertTrue(sql.contains("a.attempt_number = 1"));
-        assertTrue(sql.contains("DROP TABLE yak_ops_task_attempt"));
-        assertTrue(sql.indexOf("UPDATE yak_ops_task_instance") < sql.indexOf("DROP TABLE"));
-    }
-
-    @Test
-    void persistsAdmissionAndDispatchGuards() throws IOException {
-        String sql;
-        try (var resource =
-                getClass().getResourceAsStream("/db/migration/yak-ops/V5__task_execution_foundation.sql")) {
-            assertTrue(resource != null);
-            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        assertTrue(sql.contains("uk_ops_task_instance_request"));
-        assertTrue(sql.contains("(workspace_id, trigger_type, request_id)"));
-        assertTrue(sql.contains("uk_ops_task_claim_resource"));
-        assertTrue(sql.contains("(workspace_id, resource_type, resource_key)"));
-        assertTrue(sql.contains("owner_incarnation VARCHAR(128)"));
-        assertTrue(sql.contains("dispatch_token VARCHAR(128)"));
-        assertTrue(sql.contains("yak_ops_task_execution_owner"));
-        int documented = 0;
-        for (String line : sql.split("\\R")) {
-            if (line.matches("\\s*[a-z][a-z0-9_]*\\s+(?:VARCHAR|INT|DATETIME).*")) {
-                assertTrue(line.contains(" COMMENT '"), "Missing column COMMENT: " + line);
-                documented++;
-            }
-        }
-        assertTrue(documented >= 50, "Expected execution columns to be documented");
     }
 }

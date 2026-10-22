@@ -139,17 +139,11 @@ class ScheduleAdmissionIT {
         Flyway.configure()
                 .dataSource(source)
                 .locations("classpath:db/migration/yak-ops")
-                .target("10")
                 .load()
                 .migrate();
         insertDefinition();
         jdbc.update(
                 "INSERT INTO yak_ops_task_instance (id,workspace_id,definition_id,definition_version,task_type,trigger_type,request_id,request_fingerprint,resource_revision,status,state_version,create_time,update_time,create_by,update_by) VALUES ('historical','ws','task',1,'SCHEDULE_TEST','MANUAL','historical-key','MANUAL:task','v1','FINISHED',0,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'actor','actor')");
-        Flyway.configure()
-                .dataSource(source)
-                .locations("classpath:db/migration/yak-ops")
-                .load()
-                .migrate();
         assertEquals(1, count("yak_ops_task_instance"));
         assertEquals(
                 1,
