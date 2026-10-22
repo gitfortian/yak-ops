@@ -29,11 +29,8 @@ export function SchemaPreview({
         if (!controller.signal.aborted) setResult({ key, rows });
       })
       .catch((failure) => {
-        if (!controller.signal.aborted)
-          setResult({
-            key,
-            error: failure instanceof Error ? failure.message : "结构预览失败，请检查字段类型、目标结构与权限",
-          });
+        const reason = failure instanceof Error ? failure.message : "结构预览失败";
+        if (!controller.signal.aborted) setResult({ key, error: reason });
       });
     return () => controller.abort();
   }, [open, disabled, key]);
