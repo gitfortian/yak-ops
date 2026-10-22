@@ -16,6 +16,11 @@ Related FLIPs: N/A
 Based on the Apache Flink FLIP template:
 https://cwiki.apache.org/confluence/spaces/FLINK/pages/65145553/FLIP+Template
 
+Write YOIPs entirely in English, including titles, section headings, tables,
+examples, and explanatory text. Preserve exact API identifiers, code, external
+names, and links when translation would change their meaning. This rule applies
+to proposals and later revisions of accepted YOIPs.
+
 Use this only for major design or public interface changes. The permanent YOIP
 lives at docs/yoips/YOIP-XXXX-short-title.md; discussions and the recorded
 decision live in its proposal PR. Do not turn it into an implementation diary.
