@@ -136,7 +136,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
         String onUpdate = "";
         if (update != null) {
             if (!column.dataType().getTypeRoot().name().startsWith("TIMESTAMP")
-                    || !update.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\\\([0-6]\\\\))?")) {
+                    || !update.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]\\))?")) {
                 throw new IllegalArgumentException("Unsupported ON UPDATE expression for column: " + column.name());
             }
             onUpdate = " ON UPDATE " + update.trim().toUpperCase(java.util.Locale.ROOT);
