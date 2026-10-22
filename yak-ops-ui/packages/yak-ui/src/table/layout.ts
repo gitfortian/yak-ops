@@ -7,7 +7,7 @@ const FALLBACK_WIDTH = 160;
 const pixels = (value: CSSProperties["width"] | true | undefined): number | undefined => {
   if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : undefined;
   if (typeof value !== "string") return undefined;
-  const match = /^(\\d+(?:\\.\\d+)?)px$/.exec(value.trim());
+  const match = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
   return match ? Number(match[1]) : undefined;
 };
 
