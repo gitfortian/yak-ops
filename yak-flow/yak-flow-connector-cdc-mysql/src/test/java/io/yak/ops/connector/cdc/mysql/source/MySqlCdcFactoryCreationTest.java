@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
@@ -10,7 +11,9 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Verifies explicit replication inputs without task-platform dependencies. */
@@ -29,6 +32,32 @@ class MySqlCdcFactoryCreationTest {
         assertEquals(8123, config.serverId());
         assertEquals("replication_8123", config.topicPrefix());
         assertEquals(3307, config.port());
+    }
+
+    @Test
+    void propagatesUrlAndAdvancedDriverSettingsToSnapshotAndDebezium() throws Exception {
+        Configuration options = options()
+                .set(JdbcConnectionOptions.URL,
+                        "jdbc:mysql://localhost:3307/app?serverTimezone=Asia%2FShanghai&sslMode=REQUIRED&socketTimeout=12000")
+                .set(JdbcConnectionOptions.PROPERTIES, Map.of(
+                        "connectionTimeZone", "Europe/Berlin",
+                        "sslMode", "DISABLED",
+                        "allowPublicKeyRetrieval", "true"));
+        var source = (MySqlHybridCdcSource) new MySqlCdcSourceFactory()
+                .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA));
+        var field = MySqlHybridCdcSource.class.getDeclaredField("config");
+        field.setAccessible(true);
+        MySqlCdcSourceConfig config = (MySqlCdcSourceConfig) field.get(source);
+        assertEquals("Asia/Shanghai", config.connectionProperties().get("serverTimezone"));
+        assertEquals("REQUIRED", config.connectionProperties().get("sslMode"));
+        assertEquals("12000", config.connectionProperties().get("socketTimeout"));
+        assertEquals("true", config.connectionProperties().get("allowPublicKeyRetrieval"));
+        assertTrue(!config.connectionProperties().containsKey("connectionTimeZone"));
+        var debezium = config.debeziumProperties("test-session", Path.of("schema-history.dat"));
+        assertEquals("Asia/Shanghai", debezium.getProperty("driver.serverTimezone"));
+        assertEquals("REQUIRED", debezium.getProperty("driver.sslMode"));
+        assertEquals("12000", debezium.getProperty("driver.socketTimeout"));
+        assertEquals("true", debezium.getProperty("driver.allowPublicKeyRetrieval"));
     }
 
     @Test

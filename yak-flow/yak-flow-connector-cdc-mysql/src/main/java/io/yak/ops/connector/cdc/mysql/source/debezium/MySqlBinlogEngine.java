@@ -78,6 +78,16 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         engine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
                 .using(properties)
                 .notifying(this::handleBatch)
+                .using((success, message, error) -> {
+                    if (!success && !stopped) {
+                        // Preserve the original driver exception instead of only reporting an engine stop.
+                        failure.compareAndSet(
+                                null,
+                                error != null
+                                        ? error
+                                        : new IllegalStateException("Debezium MySQL connector failed: " + message));
+                    }
+                })
                 .build();
         worker = Thread.ofVirtual().name("yakflow-mysql-debezium").start(() -> {
             try {

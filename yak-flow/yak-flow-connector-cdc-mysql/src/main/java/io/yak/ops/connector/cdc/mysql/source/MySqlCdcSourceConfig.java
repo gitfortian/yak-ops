@@ -4,6 +4,9 @@ import io.yak.ops.connector.cdc.mysql.source.debezium.CheckpointOffsetBackingSto
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,6 +33,7 @@ public final class MySqlCdcSourceConfig {
     private final String topicPrefix;
     private final Map<TableId, TableSchema> schemas;
     private final int queueCapacity;
+    private final Map<String, String> connectionProperties;
 
     public MySqlCdcSourceConfig(
             String hostname,
@@ -40,6 +44,19 @@ public final class MySqlCdcSourceConfig {
             String topicPrefix,
             Map<TableId, TableSchema> schemas,
             int queueCapacity) {
+        this(hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity, Map.of());
+    }
+
+    public MySqlCdcSourceConfig(
+            String hostname,
+            int port,
+            String username,
+            String password,
+            int serverId,
+            String topicPrefix,
+            Map<TableId, TableSchema> schemas,
+            int queueCapacity,
+            Map<String, String> connectionProperties) {
         this.hostname = requireText(hostname, "hostname");
         this.username = requireText(username, "username");
         this.password = Objects.requireNonNull(password, "password");
@@ -53,6 +70,7 @@ public final class MySqlCdcSourceConfig {
         this.port = port;
         this.serverId = serverId;
         this.queueCapacity = queueCapacity;
+        this.connectionProperties = normalizeConnectionProperties(connectionProperties);
         Map<TableId, TableSchema> resolved = new LinkedHashMap<>();
         Objects.requireNonNull(schemas, "schemas").forEach((table, schema) -> {
             Objects.requireNonNull(table, "table");
@@ -82,6 +100,65 @@ public final class MySqlCdcSourceConfig {
             throw new IllegalArgumentException("MySQL CDC " + label + " must not be blank");
         }
         return value;
+    }
+
+    /**
+     * Use a numeric UTC offset for new JDBC sessions when no time zone was explicitly configured.
+     * This avoids ambiguous OS names and does not require MySQL named time zone tables.
+     */
+    private static Map<String, String> normalizeConnectionProperties(Map<String, String> supplied) {
+        Map<String, String> values = new LinkedHashMap<>();
+        Objects.requireNonNull(supplied, "connectionProperties").forEach((key, value) -> {
+            if (key == null || !key.matches("[A-Za-z][A-Za-z0-9_.-]*") || value == null) {
+                throw new IllegalArgumentException("Invalid MySQL JDBC connection property");
+            }
+            if (Set.of(
+                            "user",
+                            "username",
+                            "password",
+                            "host",
+                            "hostname",
+                            "port",
+                            "database",
+                            "database.hostname",
+                            "database.user",
+                            "database.password",
+                            "database.port")
+                    .contains(key.toLowerCase(java.util.Locale.ROOT))) {
+                throw new IllegalArgumentException(
+                        "MySQL JDBC connection property must not override connection identity: " + key);
+            }
+            values.put(key, value);
+        });
+        String zone = getIgnoreCase(values, "connectionTimeZone");
+        String alias = getIgnoreCase(values, "serverTimezone");
+        if (zone != null && alias != null && !zone.equals(alias)) {
+            throw new IllegalArgumentException("Conflicting MySQL connectionTimeZone and serverTimezone values");
+        }
+        if (zone == null && alias == null) {
+            String forced = getIgnoreCase(values, "forceConnectionTimeZoneToSession");
+            if (forced != null && !Boolean.parseBoolean(forced)) {
+                throw new IllegalArgumentException(
+                        "forceConnectionTimeZoneToSession=false requires an explicit connectionTimeZone");
+            }
+            values.put("connectionTimeZone", "+00:00");
+            if (forced == null) {
+                values.put("forceConnectionTimeZoneToSession", "true");
+            }
+        }
+        return Collections.unmodifiableMap(values);
+    }
+
+    private static String getIgnoreCase(Map<String, String> values, String key) {
+        for (var entry : values.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(key)) return entry.getValue();
+        }
+        return null;
+    }
+
+    /** Effective driver configuration, including the connection-local UTC compatibility default. */
+    public Map<String, String> connectionProperties() {
+        return connectionProperties;
     }
 
     public Map<TableId, TableSchema> schemas() {
@@ -126,10 +203,17 @@ public final class MySqlCdcSourceConfig {
      * <p>Never stores the connection in a Source definition or Checkpoint. This path uses
      * the MySQL JDBC driver provided by the Connector module.
      */
-    public java.sql.Connection openSnapshotConnection() throws java.sql.SQLException {
-        String url = "jdbc:mysql://" + hostname + ":" + port
-                + "/?useCursorFetch=true&useServerPrepStmts=true&connectTimeout=10000&socketTimeout=60000";
-        return java.sql.DriverManager.getConnection(url, username, password);
+    public Connection openSnapshotConnection() throws SQLException {
+        String url = "jdbc:mysql://" + hostname + ":" + port + "/";
+        Properties properties = new Properties();
+        properties.putAll(connectionProperties);
+        properties.putIfAbsent("useCursorFetch", "true");
+        properties.putIfAbsent("useServerPrepStmts", "true");
+        properties.putIfAbsent("connectTimeout", "10000");
+        properties.putIfAbsent("socketTimeout", "60000");
+        properties.setProperty("user", username);
+        properties.setProperty("password", password);
+        return DriverManager.getConnection(url, properties);
     }
 
     /**
@@ -147,6 +231,8 @@ public final class MySqlCdcSourceConfig {
         properties.setProperty("database.user", username);
         properties.setProperty("database.password", password);
         properties.setProperty("database.server.id", Integer.toString(serverId));
+        // Debezium 2.7 passes driver.* values to its own JDBC connections.
+        connectionProperties.forEach((key, value) -> properties.setProperty("driver." + key, value));
         properties.setProperty("topic.prefix", topicPrefix);
         Set<String> databaseNames = new TreeSet<>();
         schemas.keySet().forEach(table -> databaseNames.add(table.catalog()));
