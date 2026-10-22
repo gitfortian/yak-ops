@@ -90,7 +90,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                     ColumnProperties attribute = properties.get(column.name());
                     String extras = renderProperties(column, schema, attribute);
                     return quoteIdentifier(column.name()) + " "
-                            + nativeType(column).ddl() + nullable + extras + commentClause;
+                            + validatedColumnType(column, attribute) + nullable + extras + commentClause;
                 })
                 .collect(Collectors.joining(", "));
 
@@ -104,6 +104,34 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                 tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
         String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
         return new JdbcDdlPlan(createTableSql, List.of(createTableSql));
+    }
+
+    /**
+     * Native MySQL types are preserved only when the server-reported COLUMN_TYPE
+     * matches an explicit SQL grammar. Never interpolate arbitrary metadata into DDL.
+     */
+    private String validatedColumnType(Column column, ColumnProperties properties) {
+        if (properties == null || properties.nativeType() == null) {
+            return nativeType(column).ddl();
+        }
+        String type = properties.nativeType().trim();
+        if (type.chars().anyMatch(character -> character < 32)
+                || type.indexOf('\\') >= 0
+                || type.contains(";")
+                || type.contains("--")
+                || type.contains("/*")) {
+            throw new IllegalArgumentException("Unsupported MySQL native type for column: " + column.name());
+        }
+        String standard = "(?i)(?:tinyint|smallint|mediumint|int|integer|bigint|decimal|numeric|float|double|real"
+                + "|char|varchar|binary|varbinary|bit|date|time|datetime|timestamp|year"
+                + "|tinytext|text|mediumtext|longtext|tinyblob|blob|mediumblob|longblob|json|point)"
+                + "(?:\\([0-9]{1,6}(?:\\s*,\\s*[0-9]{1,6})?\\))?"
+                + "(?:\\s+unsigned)?(?:\\s+zerofill)?";
+        String enumerated = "(?i)(?:enum|set)\\('(?:[^'\\\\]|'')*'(?:\\s*,\\s*'(?:[^'\\\\]|'')*')*\\)";
+        if (!type.matches(standard) && !type.matches(enumerated)) {
+            throw new IllegalArgumentException("Unsupported MySQL native type for column: " + column.name());
+        }
+        return type;
     }
 
     /**
@@ -153,6 +181,17 @@ public final class MySqlJdbcDialect extends AbstractDialect {
             return " DEFAULT " + value.toUpperCase(java.util.Locale.ROOT) + onUpdate;
         }
         if (Boolean.TRUE.equals(properties.defaultGenerated())) {
+            if ("DATE".equals(root)) {
+                // MySQL 8 expression defaults: only deterministic, bounded grammar is allowed.
+                var dateExpression = java.util.regex.Pattern.compile(
+                                "(?i)^\\(*\\s*curdate\\(\\)\\s*(?:\\+\\s*interval\\s+([1-9][0-9]{0,2})\\s+day)?\\s*\\)*$")
+                        .matcher(value);
+                if (dateExpression.matches()) {
+                    String interval = dateExpression.group(1);
+                    return " DEFAULT (CURDATE()"
+                            + (interval == null ? "" : " + INTERVAL " + interval + " DAY") + ")" + onUpdate;
+                }
+            }
             throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
         }
         if (java.util.Set.of("CHAR", "VARCHAR", "DATE", "TIME_WITHOUT_TIME_ZONE", "TIMESTAMP_WITHOUT_TIME_ZONE")
