@@ -4,6 +4,7 @@ import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
+import io.yak.ops.common.enums.modeling.standard.StandardErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
@@ -108,6 +109,12 @@ public class GlobalExceptionHandler {
     }
 
     private static HttpStatus businessStatus(ErrorCode errorCode) {
+        if (errorCode instanceof StandardErrorCode code) {
+            return switch (code) {
+                case INVALID_CODE, INVALID_OWNER, INVALID_PRECISION, DEPTH_LIMIT -> HttpStatus.BAD_REQUEST;
+                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT, REFERENCED -> HttpStatus.CONFLICT;
+            };
+        }
         if (errorCode instanceof ModelingErrorCode code) {
             return switch (code) {
                 case INVALID_CODE, INVALID_OWNER -> HttpStatus.BAD_REQUEST;

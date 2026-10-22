@@ -6,9 +6,9 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/5
 
 Decision: [VOTE] +1 Accepted — https://github.com/gitfortian/yak-ops/pull/5#issuecomment-6334466443
 
-Implementation: Planned — Data Standards
+Implementation: Implemented — https://github.com/gitfortian/yak-ops/pull/6
 
-Release: Proposed 1.5.0, after warehouse planning 1.4.0
+Release: 1.4.0, shipped with warehouse planning
 
 Related FLIPs: N/A
 
@@ -56,7 +56,7 @@ Related FLIPs: N/A
 
 ### Fields and validation
 
-所有 JSON ID 均为字符串。名称不要求全部为汉字；允许常见业务字符。
+所有 JSON ID 均为字符串。名称不要求全部为汉字；允许常见业务字符。同级目录允许同名：目录以不可变的 `id` 标识，名称仅用于展示，因此不设同级唯一约束，重命名也不做同级查重（搜索结果中的所属路径可能重复，属于已接受的取舍）。
 
 | 字段 | 创建与编辑契约 |
 | --- | --- |
@@ -530,7 +530,7 @@ StandardDialog 使用现有 DialogContent、DialogTitle、Form、Field、FieldLa
 
 1. 本提案接受前不增加菜单、REST、业务类或 SQL。提案本身只新增文档，没有运行行为或数据库变化。
 2. 后续实现基于已合入的数仓规划代码，在数据建模菜单下新增独立入口；不修改数仓规划编码、数据和接口，不改变已有 Task/Runtime 契约。
-3. 提议以 1.5.0 承载数据标准，使用新 `V3__v1_5_0.sql`，要求 V2 已按 1.4.0 的发布顺序存在。保留 V1 和已被执行的 V2；不因同一天开发多个功能而改写已验证或已应用迁移的 checksum。
+3. 数据标准与数仓规划同属 1.4.0 发布，两者的 DDL 合并写入 `V2__v1_4_0.sql`，1.4.0 只包含这一个前向迁移。合并发生在 1.4.0 发布之前（当时没有 tag，`origin/main` 仍为 1.3.0），不改写已发布的 V1 基线；1.4.0 发布后 V2 保持不变，后续变更一律新增前向迁移，不使用 `flyway repair` 掩盖不兼容历史。
 4. 使用已有版本准备工具统一 Maven、前端、Compose 和 release.env；迁移版本检查与元数据检查保持启用。本提案不执行版本变更、发布、部署或打 tag。
 5. 默认分类通过显式初始化事务产生，不在 migration 中重写 Workspace、用户或业务行。旧版数据库仍遵循既有 v1.3.0 基线兼容约定，本模块不提供 v1.0–v1.2 数据库自动升级路径。
 6. 若实施前发布序列有其他迁移插入，按当时最新版本选择新的顺序号和产品版本后记录到实现 PR；不得复用或改写已执行迁移。

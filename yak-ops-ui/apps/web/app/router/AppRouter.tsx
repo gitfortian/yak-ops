@@ -5,6 +5,7 @@ import LoginPage from "@/app/login";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { DataSyncPage } from "@/app/data-sync";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
+import DataStandardsPage from "@/app/data-modeling/data-standards";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/task-editor";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/task-detail";
 import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "@/app/data-sync/redirects";
@@ -32,6 +33,7 @@ import AppLoading from "./AppLoading";
 const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
   "/data-modeling/warehouse-planning",
+  "/data-modeling/data-standards",
   "/data-source",
   "/data-sync",
   "/data-sync/new",
@@ -125,6 +127,7 @@ export default function AppRouter() {
           }
         >
           <Route path="/data-modeling/warehouse-planning" element={<WarehousePlanningPage />} />
+          <Route path="/data-modeling/data-standards" element={<DataStandardsPage />} />
         </Route>
         <Route
           element={

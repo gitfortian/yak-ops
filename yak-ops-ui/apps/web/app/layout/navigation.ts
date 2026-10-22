@@ -37,6 +37,7 @@ export const DATA_MODELING_PRODUCT_LABEL = "数据建模";
 
 export const DATA_MODELING_NAVIGATION: ProductNavigationItem[] = [
   { label: "数仓规划", path: "/data-modeling/warehouse-planning", icon: Network },
+  { label: "数据标准", path: "/data-modeling/data-standards", icon: Database },
 ];
 
 export const DATA_INTEGRATION_NAVIGATION: ProductNavigationItem[] = [
