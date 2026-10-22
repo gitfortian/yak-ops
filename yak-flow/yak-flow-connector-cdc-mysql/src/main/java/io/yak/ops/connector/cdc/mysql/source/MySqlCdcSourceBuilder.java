@@ -18,6 +18,7 @@ public final class MySqlCdcSourceBuilder {
     private int port = 3306;
     private String username;
     private String password;
+    private Map<String, String> connectionProperties = Map.of();
     private int serverId;
     private String topicPrefix;
     private final Map<TableId, TableSchema> tables = new LinkedHashMap<>();
@@ -40,6 +41,12 @@ public final class MySqlCdcSourceBuilder {
 
     public MySqlCdcSourceBuilder password(String value) {
         password = value;
+        return this;
+    }
+
+    /** Shares MySQL JDBC settings across Snapshot and Debezium connections. */
+    public MySqlCdcSourceBuilder connectionProperties(Map<String, String> value) {
+        connectionProperties = Map.copyOf(Objects.requireNonNull(value, "connectionProperties"));
         return this;
     }
 
@@ -83,6 +90,6 @@ public final class MySqlCdcSourceBuilder {
     /** Builds a reusable Source definition without opening a database connection. */
     public MySqlCdcSource build() {
         return new MySqlCdcSource(new MySqlCdcSourceConfig(
-                hostname, port, username, password, serverId, topicPrefix, tables, queueCapacity));
+                hostname, port, username, password, serverId, topicPrefix, tables, queueCapacity, connectionProperties));
     }
 }
