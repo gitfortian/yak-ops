@@ -132,14 +132,23 @@ public final class MySqlJdbcDialect extends AbstractDialect {
             }
             return " AUTO_INCREMENT";
         }
-        if (defaultValue == null) return "";
+        String update = properties.onUpdateExpression();
+        String onUpdate = "";
+        if (update != null) {
+            if (!column.dataType().getTypeRoot().name().startsWith("TIMESTAMP")
+                    || !update.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\\\([0-6]\\\\))?")) {
+                throw new IllegalArgumentException("Unsupported ON UPDATE expression for column: " + column.name());
+            }
+            onUpdate = " ON UPDATE " + update.trim().toUpperCase(java.util.Locale.ROOT);
+        }
+        if (defaultValue == null) return onUpdate;
         String value = defaultValue.trim();
         String root = column.dataType().getTypeRoot().name();
         if (value.matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]\\))?")) {
             if (!root.startsWith("TIMESTAMP")) {
                 throw new IllegalArgumentException("CURRENT_TIMESTAMP requires a timestamp column: " + column.name());
             }
-            return " DEFAULT " + value.toUpperCase(java.util.Locale.ROOT);
+            return " DEFAULT " + value.toUpperCase(java.util.Locale.ROOT) + onUpdate;
         }
         if (java.util.Set.of("CHAR", "VARCHAR", "DATE", "TIME_WITHOUT_TIME_ZONE", "TIMESTAMP_WITHOUT_TIME_ZONE")
                 .contains(root)) {
@@ -147,11 +156,11 @@ public final class MySqlJdbcDialect extends AbstractDialect {
             String literal = value.length() >= 2 && value.startsWith("'") && value.endsWith("'")
                     ? value.substring(1, value.length() - 1).replace("''", "'")
                     : value;
-            return " DEFAULT " + stringLiteral(literal);
+            return " DEFAULT " + stringLiteral(literal) + onUpdate;
         }
         if (java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "DECIMAL", "BOOLEAN")
                 .contains(root) && value.matches("[-+]?[0-9]+(?:\\.[0-9]+)?")) {
-            return " DEFAULT " + value;
+            return " DEFAULT " + value + onUpdate;
         }
         throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
     }
