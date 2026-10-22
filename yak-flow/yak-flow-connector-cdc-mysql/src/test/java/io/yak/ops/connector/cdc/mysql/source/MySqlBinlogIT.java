@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
@@ -50,6 +51,35 @@ class MySqlBinlogIT {
     private static final TableId ITEMS = new TableId("yak_cdc_it", null, "items");
     private static final String HOST = "127.0.0.1";
     private static final String USER = "root";
+
+    @Test
+    void snapshotSessionUsesUtcWithoutChangingGlobalTimeZone() throws Exception {
+        var db = DATABASE_RESOURCE.metadata();
+        var schema = new TableSchema(List.of(
+                new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var config = new MySqlCdcSourceConfig(
+                db.host(), db.port(), db.username(), db.password(), 7001, "tz-test",
+                Map.of(ORDERS, schema), 256);
+        String globalBefore;
+        try (Connection connection = db.connect();
+                Statement sql = connection.createStatement();
+                var result = sql.executeQuery("SELECT @@global.time_zone")) {
+            assertTrue(result.next());
+            globalBefore = result.getString(1);
+        }
+        try (Connection connection = config.openSnapshotConnection();
+                Statement sql = connection.createStatement();
+                var result = sql.executeQuery("SELECT @@session.time_zone")) {
+            assertTrue(result.next());
+            assertTrue(List.of("+00:00", "UTC").contains(result.getString(1)));
+        }
+        try (Connection connection = db.connect();
+                Statement sql = connection.createStatement();
+                var result = sql.executeQuery("SELECT @@global.time_zone")) {
+            assertTrue(result.next());
+            assertEquals(globalBefore, result.getString(1));
+        }
+    }
 
     @Test
     void streamsBinlogAndRestoresFromMailboxEmittedOffset() throws Exception {
