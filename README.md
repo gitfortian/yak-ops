@@ -21,6 +21,10 @@ docker compose up -d
 
 正式 Distribution 为 `yak-ops-{version}.tar.gz`，解压后通过 `./bin/run-yak-ops.sh` 启动。
 
+## 数仓规划
+
+登录后选择工作空间，进入「数据建模 → 数仓规划」，维护「业务分类 → 数据域 → 业务过程」三级业务归属。负责人从当前工作空间有效成员中选择；英文编码在所有工作空间的三类节点之间唯一，有子节点的规划节点禁止删除。逻辑模型关联当前尚未开放。
+
 ## Development
 
 - [开发与验证](DEVELOPMENT.md)

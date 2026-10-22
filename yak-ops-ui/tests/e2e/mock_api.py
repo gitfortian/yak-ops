@@ -84,6 +84,63 @@ def paging(rows):
     }
 
 
+async def mock_planning(route):
+    request = route.request
+    path = urlparse(request.url).path.removeprefix("/api/v1/data-modeling/warehouse-planning")
+    query = parse_qs(urlparse(request.url).query)
+    workspace = request.headers.get("x-workspace-id")
+    method = request.method
+    body = request.post_data_json if request.post_data else {}
+    rows = state.get("planning", [])
+    data, code, status, message = None, 200, 200, "成功"
+    def tree(parent=None):
+        return [{**{k: v for k, v in row.items() if k != "workspaceId"}, "children": tree(row["id"])}
+                for row in rows if row["workspaceId"] == workspace and row["parentId"] == parent]
+    if path == "/tree":
+        if state.get("planning_fail_tree"):
+            status, code, message = 503, 999, "加载失败"
+        else:
+            data = tree()
+    elif path == "/owners":
+        data = [{"userId": "user1", "displayName": "Tester"}]
+    elif path == "/codes/availability":
+        excluded = query.get("excludeId", [None])[0]
+        data = {"available": not any(row["code"] == query["code"][0] and row["id"] != excluded for row in rows)}
+    elif path.endswith("/logical-models"):
+        data = {"availability": "NOT_ENABLED", "page": None}
+    elif method == "POST":
+        parts = path.strip("/").split("/")
+        if any(row["code"] == body["code"] for row in rows):
+            status, code, message = 409, 19002, "英文编码已存在"
+        else:
+            kind = {"categories": "CATEGORY", "domains": "DOMAIN", "processes": "PROCESS"}[parts[-1]]
+            identity = "created_" + str(len(state["requests"]))
+            row = {**body, "id": identity, "kind": kind, "parentId": parts[1] if len(parts) == 3 else None,
+                   "workspaceId": workspace, "ownerName": "Tester", "ownerActive": True, "revision": 1}
+            rows.append(row)
+            data = {"id": identity, "kind": kind, "revision": 1}
+    elif method in ("PUT", "DELETE"):
+        identity = path.rsplit("/", 1)[-1]
+        row = next(row for row in rows if row["id"] == identity and row["workspaceId"] == workspace)
+        revision = body.get("revision") if method == "PUT" else int(query["revision"][0])
+        if revision != row["revision"]:
+            status, code, message = 409, 19004, "数据已变更，请刷新后重试"
+        elif method == "DELETE" and any(child["parentId"] == identity for child in rows):
+            status, code, message = 409, 19003, "存在关联子节点或资产，无法删除，请先清空"
+        elif method == "DELETE":
+            rows.remove(row)
+            data = True
+        elif any(other["code"] == body["code"] and other["id"] != identity for other in rows):
+            status, code, message = 409, 19002, "英文编码已存在"
+        else:
+            row.update({**body, "revision": row["revision"] + 1})
+            data = {"id": row["id"], "kind": row["kind"], "revision": row["revision"]}
+    else:
+        state["unexpected_requests"].append((method, path))
+    await route.fulfill(status=status, content_type="application/json",
+                        body=json.dumps({"code": code, "message": message, "data": data}))
+
+
 async def mock(route):
     r = route.request
     p = urlparse(r.url).path
@@ -93,6 +150,9 @@ async def mock(route):
     status = 200
     data = None
     code = 200
+    if p.startswith("/api/v1/data-modeling/warehouse-planning/"):
+        await mock_planning(route)
+        return
     if p.endswith("/account/current"):
         data = {
             "id": "user1",
