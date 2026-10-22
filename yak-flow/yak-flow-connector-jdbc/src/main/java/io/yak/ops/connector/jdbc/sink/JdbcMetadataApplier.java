@@ -229,7 +229,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         if (value.length() > 1 && value.startsWith("'") && value.endsWith("'")) {
             value = value.substring(1, value.length() - 1).replace("''", "'");
         }
-        return value.replaceAll("(?i)\\\\bcurrent_timestamp\\\\(\\\\)", "CURRENT_TIMESTAMP");
+        return value.replaceAll("(?i)\\bcurrent_timestamp\\(\\)", "CURRENT_TIMESTAMP");
     }
 
     /**
