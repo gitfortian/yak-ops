@@ -100,6 +100,17 @@ public class DataSourceLookupServiceImpl implements DataSourceLookupService {
                     comments,
                     features,
                     attributes));
+        } catch (java.sql.SQLFeatureNotSupportedException failure) {
+            // Only the column identifier is allowed through the public validation boundary.
+            String message = failure.getMessage();
+            var matcher = java.util.regex.Pattern.compile(
+                            "^Unsupported JDBC type .+ for field ([A-Za-z_][A-Za-z_0-9]{0,127})$")
+                    .matcher(message == null ? "" : message);
+            if (matcher.matches()) {
+                throw new IllegalArgumentException(
+                        "Unsupported source JDBC type for column: " + matcher.group(1), failure);
+            }
+            throw new IllegalStateException("Unable to resolve datasource table metadata", failure);
         } catch (SQLException failure) {
             throw new IllegalStateException("Unable to resolve datasource table metadata", failure);
         }
