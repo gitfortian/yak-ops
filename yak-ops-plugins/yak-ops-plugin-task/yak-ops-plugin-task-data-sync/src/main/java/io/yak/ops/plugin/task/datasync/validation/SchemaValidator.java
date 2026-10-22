@@ -4,8 +4,8 @@ import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 
@@ -22,26 +22,30 @@ public final class SchemaValidator {
      * @return validated target creation event
      */
     public static CreateTableEvent createEvent(DataSourceTable source, DataSourceInfo target, TableId table) {
-        validateNamespace(target, table);
-        if (source.columnFeatures().contains("NON_TABLE")) {
-            throw new IllegalArgumentException("Schema preparation requires a physical source table");
+        try {
+            validateNamespace(target, table);
+            if (source.columnFeatures().contains("NON_TABLE")) {
+                throw new IllegalArgumentException("Schema preparation requires a physical source table");
+            }
+            if (source.columnFeatures().contains("UNKNOWN_GENERATION")) {
+                throw new IllegalArgumentException("Source column generation metadata is incomplete");
+            }
+            if (!source.columnFeatures().isEmpty() && source.columnProperties().isEmpty()) {
+                throw new IllegalArgumentException("Source physical column properties are unavailable");
+            }
+            boolean hasNativeFeatures =
+                    source.columnProperties().values().stream().anyMatch(ColumnProperties::hasFeatures);
+            if (hasNativeFeatures && !source.datasourceType().equals(target.type())) {
+                throw new IllegalArgumentException(
+                        "Physical column expressions require a verified same-database dialect");
+            }
+            CreateTableEvent event = new CreateTableEvent(
+                    table, source.schema(), source.tableComment(), source.columnComments(), source.columnProperties());
+            ddl(target.type(), event);
+            return event;
+        } catch (IllegalArgumentException | UnsupportedOperationException failure) {
+            throw new SchemaValidationException(failure);
         }
-        if (source.columnFeatures().contains("UNKNOWN_GENERATION")) {
-            throw new IllegalArgumentException("Source column generation metadata is incomplete");
-        }
-        if (!source.columnFeatures().isEmpty() && source.columnProperties().isEmpty()) {
-            throw new IllegalArgumentException("Source physical column properties are unavailable");
-        }
-        boolean hasNativeFeatures = source.columnProperties().values().stream()
-                .anyMatch(ColumnProperties::hasFeatures);
-        if (hasNativeFeatures && !source.datasourceType().equals(target.type())) {
-            throw new IllegalArgumentException(
-                    "Physical column expressions require a verified same-database dialect");
-        }
-        CreateTableEvent event = new CreateTableEvent(
-                table, source.schema(), source.tableComment(), source.columnComments(), source.columnProperties());
-        ddl(target.type(), event);
-        return event;
     }
 
     /**
@@ -82,18 +86,24 @@ public final class SchemaValidator {
      * @param actual current physical target metadata
      */
     public static void validateTarget(CreateTableEvent event, DataSourceTable actual) {
-        if (!event.tableId().equals(actual.table())
-                || actual.columnFeatures().contains("NON_TABLE")
-                || actual.columnFeatures().contains("UNKNOWN_GENERATION")) {
-            throw new IllegalArgumentException("Target physical identity or column features are incompatible");
+        try {
+            if (!event.tableId().equals(actual.table())
+                    || actual.columnFeatures().contains("NON_TABLE")
+                    || actual.columnFeatures().contains("UNKNOWN_GENERATION")) {
+                throw new IllegalArgumentException("Target physical identity or column features are incompatible");
+            }
+            JdbcMetadataApplier.validateSchema(event, actual.schema());
+            for (var column : actual.schema().columns()) {
+                ColumnProperties properties = actual.columnProperties().get(column.name());
+                if (properties == null) {
+                    throw new IllegalArgumentException("Target column properties unavailable: " + column.name());
+                }
+                JdbcMetadataApplier.validateColumnProperties(
+                        column.name(), event.getColumnProperties().get(column.name()), properties);
+            }
+            JdbcMetadataApplier.validateComments(event, actual.tableComment(), actual.columnComments());
+        } catch (IllegalArgumentException | UnsupportedOperationException failure) {
+            throw new SchemaValidationException(failure);
         }
-        JdbcMetadataApplier.validateSchema(event, actual.schema());
-        for (var column : actual.schema().columns()) {
-            ColumnProperties properties = actual.columnProperties().getOrDefault(
-                    column.name(), new ColumnProperties(null, false, false));
-            JdbcMetadataApplier.validateColumnProperties(
-                    column.name(), event.getColumnProperties().get(column.name()), properties);
-        }
-        JdbcMetadataApplier.validateComments(event, actual.tableComment(), actual.columnComments());
     }
 }
