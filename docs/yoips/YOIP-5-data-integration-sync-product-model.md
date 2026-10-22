@@ -14,76 +14,76 @@ Related FLIPs: N/A
 
 ## Motivation
 
-数据集成提供一个“数据同步”产品入口。用户先选择来源类型和去向类型，再选择该链路支持的具体类型与同步步骤；随后配置实际连接、同步对象、目标映射和运行参数。列表、编辑器和执行详情使用同一份方案语义。
+Yak Ops Data Integration provides one "Data Sync" product entry. Users first choose source and target datasource types, then a supported synchronization solution and its steps. They subsequently configure actual connections, synchronization objects, target mappings, and execution settings. The list, editor, and execution details share one solution model.
 
-**离线、实时是同步方案的属性，不再各自拥有独立的列表、创建页、编辑页和详情页。** 统一页面不取消批处理与持续运行的区别，也不要求所有场景显示完全相同的表单。
+**Offline and realtime are properties of synchronization solutions, not separate list, creation, editing, or detail pages.** A unified page does not erase the distinction between bounded batches and continuous execution, nor does it require identical forms for every scenario.
 
-### 设计依据
+### Design References
 
-DataWorks 的[整库实时配置][dw-realtime]与[整库离线配置][dw-offline]均从“同步任务”进入，以来源类型、去向类型、具体类型、同步步骤选择方案，再配置实际数据源。其[支持方案说明][dw-solutions]区分单表与整库等使用场景；[离线增量配置][dw-incremental]使用过滤条件与调度参数表达批次范围。这些资料以及维护者提供的创建弹窗、批量选表和目标表映射截图，是本提案的产品参考。
+DataWorks' [database-wide realtime configuration][dw-realtime] and [database-wide offline configuration][dw-offline] both begin from a synchronization task. They select a solution through source type, target type, specific synchronization type, and synchronization steps before configuring actual datasources. Its [supported solutions documentation][dw-solutions] distinguishes single-table and database-wide scenarios. Its [offline incremental configuration][dw-incremental] expresses batch ranges through filters and scheduling parameters. These references, together with screenshots supplied by the maintainer showing the creation dialog, batch table selection, and target table mappings, informed this proposal.
 
-本提案采用这一交互组织方式，不宣称复制 DataWorks 的全部能力、接口或内部架构。本文的字段、类型标识和交付边界属于 Yak Ops。资源组购买、CU 配额、Data Agent、Base/Log 周期 Merge 等不纳入本次设计。
+This proposal adopts that interaction structure; it does not claim to reproduce every DataWorks capability, API, or internal architecture. The fields, type identifiers, and delivery boundaries here belong to Yak Ops. Purchasing resource groups, CU quotas, Data Agents, and periodic Base/Log merges are out of scope.
 
-### 当前代码与需要收敛的问题
+### Existing Code and Issues to Consolidate
 
-以下观察基于 `main` 的 `1da2d2555f4411e72550606b4fca45f5e2cdb788`，不是完整能力清单或运行验收结论。
+The following observations refer to `main` at `1da2d2555f4411e72550606b4fca45f5e2cdb788`. They are neither a complete capability inventory nor runtime test results.
 
-| 代码位置 | 当前事实 | 产品影响 |
+| Code location | Observed behavior | Product impact |
 | --- | --- | --- |
-| [AppRouter][code-router] 与 `app/offline-sync`、`app/realtime-sync` | 分别注册列表、创建、编辑和详情入口；编辑、详情已有共享组件 | 页面身份仍取决于路径，两个列表继续维护重复逻辑 |
-| [definition.ts][code-definition] | 任务参数为单表 `source / sink`；通过 `JDBC / MYSQL_CDC` 推导离线和实时 | 没有独立表达具体同步方案和所选步骤 |
-| [MySqlCdcSourceFactory][code-cdc] | 当前产品路径固定使用 Hybrid Source | 现有实时能力对应全量加持续增量，不能仅增加 Checkbox 就宣称支持任意步骤组合 |
-| [JdbcSinkFactory][code-sink] | 当前写入模式为 `APPEND / UPSERT`，变更流要求 `UPSERT` | 覆盖写入、结构迁移不能作为已经实现的选项展示 |
-| [ExecutionConfigurationFactory][code-execution] | 新 Instance 使用独立状态目录，初始 `RESTORE_LATEST=false` | 停止后再次提交不等于从前一个 Instance 的检查点继续 |
+| [AppRouter][code-router] and `app/offline-sync`, `app/realtime-sync` | Register separate list, creation, edit, and detail routes; editing and details already share components | Page identity remains path-dependent and both lists maintain duplicate logic |
+| [definition.ts][code-definition] | Task parameters contain single-table `source / sink`; `JDBC / MYSQL_CDC` implies offline or realtime | Specific solution identity and chosen steps are not represented independently |
+| [MySqlCdcSourceFactory][code-cdc] | The current product path always uses a Hybrid Source | Existing realtime behavior means a full load followed by continuous incremental updates; arbitrary step combinations cannot be enabled by adding checkboxes |
+| [JdbcSinkFactory][code-sink] | Existing write modes are `APPEND / UPSERT`, and changelog streams require `UPSERT` | Overwrite and schema migration must not appear as delivered options |
+| [ExecutionConfigurationFactory][code-execution] | New Instances use isolated state directories and initially set `RESTORE_LATEST=false` | Submitting again after stopping does not resume the previous Instance's checkpoint |
 
-任务身份、版本、提交和执行沿用 [YOIP-2](YOIP-2-task-execution-lifecycle.md)；连接器创建和数据源访问沿用 [YOIP-3](YOIP-3-connector-creation-and-datasource-lookup.md)；周期提交沿用 [YOIP-4](YOIP-4-schedule-lifecycle-quartz.md)；物理结束与检查点语义沿用 [YOIP-1](YOIP-1-checkpoint-and-end-of-input.md)。本提案不重写这些边界。
+Task identity, versions, submission, and execution follow [YOIP-2](YOIP-2-task-execution-lifecycle.md). Connector creation and datasource access follow [YOIP-3](YOIP-3-connector-creation-and-datasource-lookup.md). Scheduled submissions follow [YOIP-4](YOIP-4-schedule-lifecycle-quartz.md). Physical completion and checkpoint semantics follow [YOIP-1](YOIP-1-checkpoint-and-end-of-input.md). This proposal does not redefine those boundaries.
 
 ## Public Interfaces
 
-以下是拟议的产品公开契约。此提案 PR 只新增本文，不新增可用 API、参数版本、数据库迁移或运行能力。
+The following are proposed public product contracts. The original proposal PR introduced only this document, not an executable API, parameter version, database migration, or runtime capability.
 
-### 页面与地址
+### Pages and Routes
 
-数据集成导航保留“数据源管理”和“数据同步”。数据同步使用以下统一路由：
+Data Integration navigation retains "Datasources" and "Data Sync". Data Sync uses these unified routes:
 
-| 路由 | 用途 |
+| Route | Purpose |
 | --- | --- |
-| `/data-sync` | 所有同步任务的统一列表 |
-| `/data-sync/new` | 根据创建草稿配置任务 |
-| `/data-sync/:id/edit` | 根据已保存方案编辑任务 |
-| `/data-sync/:id/detail` | 任务信息与执行详情，使用 `executionId` 定位具体实例 |
+| `/data-sync` | One list for all synchronization tasks |
+| `/data-sync/new` | Configure a task from a creation draft |
+| `/data-sync/:id/edit` | Edit a task from its saved solution |
+| `/data-sync/:id/detail` | Task information and execution details, with `executionId` selecting a specific Instance |
 
-离线、实时筛选使用同一列表和服务端分页，不以两个 Tab 包装旧页面，不分别请求两份分页后在浏览器拼接。运维中心保留统计定位；只修改必要的详情链接，不迁移其统计功能或重做导航。
+Offline and realtime filters use one list and server-side pagination. The new page must not simply wrap the old pages in two tabs or fetch two independently paginated datasets and merge them in the browser. Operations Center retains its statistics role; update only necessary detail links, without moving its statistics or redesigning navigation.
 
-### 可用同步方案查询
+### Query Available Synchronization Solutions
 
-拟新增认证且具有 Workspace 上下文的只读接口：
+Proposed authenticated, Workspace-scoped read-only endpoint:
 
 `GET /api/v1/data-sync/solutions?sourceType={datasourceType}&targetType={datasourceType}`
 
-这里的 `sourceType / targetType` 是数据源产品类型，不是 `JDBC / MYSQL_CDC` 等 Connector 标识。沿用现有数据源类型 ID，例如 PostgreSQL 的现有 ID `POSTGRE_SQL`，不借本次设计重命名。两个类型参数均必填。
+Here `sourceType / targetType` are product datasource types, not Connector identifiers such as `JDBC / MYSQL_CDC`. Retain existing datasource type IDs, including PostgreSQL's existing `POSTGRE_SQL`; this proposal does not rename them. Both parameters are required.
 
-响应只返回该有向类型组合已经开放的方案。每个方案包含稳定的 `solutionType`、显示名称、适用步骤说明、明确允许的步骤组合和一个默认组合；每个允许组合声明其运行配置适用性，包括是否支持周期提交。Checkbox 的必选、可选和禁用关系由这些合法组合确定，而不是把三个独立布尔值任意组合。
+Return only enabled solutions for the directed source/target type pair. Each solution has a stable `solutionType`, display name, applicable step descriptions, explicitly allowed step combinations, and one default combination. Each allowed combination declares its applicable execution settings, including whether scheduled submission is supported. Required, optional, and disabled checkbox behavior derives from those combinations; the three checkboxes are not independent Boolean values.
 
-未知类型返回参数错误；已知但没有可用方案的类型组合返回空集合。查询失败不解释为空集合或自动选择离线方案。无可用方案时，创建入口阻止进入下一步并给出短原因。
+An unknown type produces a parameter error. A recognized pair with no available solutions returns an empty collection. A failed query must not be interpreted as an empty collection or trigger an automatic offline fallback. Without an available solution, the creation flow blocks progression and shows a concise reason.
 
-类型级查询不读取实际连接、不访问数据库或持有凭据。选定实际连接后，保存、上线及执行准入仍校验 Workspace 权限、实际数据源类型、表结构、步骤和写入规则。查询结果不构成后续执行授权；过期页面提交不再支持的组合必须被后端拒绝。
+The type-level query neither loads actual connections nor accesses databases or credentials. After selecting concrete connections, saving, publishing, and execution admission must still validate Workspace permissions, actual datasource types, table schemas, steps, and write rules. Query results do not authorize later execution; the backend must reject a stale page submitting a no-longer-supported combination.
 
-### 版本化同步参数
+### Versioned Synchronization Parameters
 
-继续使用通用 Task Definition、Version、Instance API 和 `taskType=DATA_SYNC`。新的产品参数采用下一个参数版本 `parameterSchemaVersion=3`；版本号是任务参数格式版本，不是 Definition 的递增版本号。
+Retain the generic Task Definition, Version, and Instance APIs with `taskType=DATA_SYNC`. New product parameters use the next format version, `parameterSchemaVersion=3`; this is the parameter *schema* version, not the incrementing Definition version.
 
-| 参数语义 | 权威来源与约束 |
+| Parameter | Authoritative meaning and constraints |
 | --- | --- |
-| `solutionType` | 用户选定的具体类型，明确表达方案身份，不从页面 URL 或 Connector 名称猜测 |
-| `steps` | 用户选择且经服务端验证的步骤；使用唯一标识，保存时按结构、全量、增量的展示顺序排列 |
-| `source / sink` | 所选 Workspace 数据源 ID；类型由后端解析并验证，秘密信息不进入任务参数 |
-| `tableSelection` | 选表意图；首次统一交付只接受 `EXPLICIT`，不接受尚未开放的规则模式 |
-| `tableMappings` | 明确的来源对象、目标对象及每条映射的写入方式；单表也是长度为一的集合 |
-| 同步时效、范围摘要、数据策略 | 由方案与步骤生成的只读投影，不作为另一套可以冲突的可写配置 |
-| Schedule、Instance、运行阶段与位点 | 不属于可编辑的静态同步参数，分别遵循其生命周期 |
+| `solutionType` | User-selected specific solution identity; never inferred from the page URL or Connector name |
+| `steps` | User-selected, server-validated steps with unique identifiers; persisted in schema, full, incremental display order |
+| `source / sink` | Selected Workspace datasource IDs; the backend resolves and validates types, and task parameters never contain secrets |
+| `tableSelection` | Selection intent; the first unified release accepts only `EXPLICIT`, not an unreleased rule mode |
+| `tableMappings` | Explicit source objects, target objects, and per-mapping write modes; a single-table task is a collection of length one |
+| Synchronization latency, scope summary, data strategy | Read-only projections of solution and steps, not a second set of conflicting writable options |
+| Schedule, Instance, execution stages, offsets | Not editable static synchronization parameters; each follows its own lifecycle |
 
-下面是拟议版本 3 的单表实时参数示例，表示使用已有目标表的全量加增量方案。它不是当前版本 2 API 的可直接提交示例。
+The proposed version 3 example below represents single-table realtime full-plus-incremental synchronization into an existing target table. It cannot be submitted directly to the current version 2 API.
 
 ```json
 {
@@ -102,17 +102,17 @@ DataWorks 的[整库实时配置][dw-realtime]与[整库离线配置][dw-offline
 }
 ```
 
-`EXPLICIT` 模式下，`tableMappings` 的来源对象就是持久化的明确选表集合，不再保存另一份重复的来源表列表；未完成映射只存在于页面草稿。来源、去向对象使用结构化的 database/schema/table 标识，不依赖含点字符串拆分。每条映射必须属于所选连接允许的命名空间。
+In `EXPLICIT` mode, the source objects in `tableMappings` are the persisted explicit selection. Do not persist a second, redundant source-table list; incomplete mappings exist only in the page draft. Source and target identifiers use structured database/schema/table values, rather than splitting dotted strings. Each mapping must belong to namespaces allowed by its selected connection.
 
-版本 3 的 Connector 选择由方案、所选数据源和已注册 Factory 解析；不同时接受可相互矛盾的 `source.type` 与 `solutionType`。如果需要扩展用户级 Connector 操作参数，必须在拥有该语义的配置中定义和校验，不引入无边界的任意属性包。现有 `transform` 的空集合语义保持不变，本提案不开放转换功能。
+For version 3, resolve Connector selection from the solution, selected datasources, and registered Factories; do not accept potentially contradictory `source.type` and `solutionType` fields. If user-configurable Connector parameters are added later, define and validate them in the configuration that owns their semantics, rather than introducing an unbounded arbitrary property bag. Preserve the existing empty-array meaning of `transform`; transformation is not enabled by this proposal.
 
-### 执行摘要与阶段观察
+### Execution Summaries and Stage Observation
 
-列表与详情通过相同的实例观察契约获取 `instanceId`、固定 Definition 版本、实例状态，以及有数据时的阶段列表。阶段观察至少区分步骤标识、步骤状态、可空百分比、计量口径和采样时间；阶段状态为等待、运行、完成、失败、取消或未知。
+Lists and details use the same Instance observation contract for `instanceId`, pinned Definition version, Instance status, and available stages. Each stage observation distinguishes at least the step identifier, stage status, nullable percentage, measurement basis, and sample time. Stage statuses include pending, running, completed, failed, canceled, and unknown.
 
-百分比属于指定实例的指定阶段，不是 Definition 的属性。未知进度使用空值，不用真实计量字段存储用于显示的失败兜底 0%。没有阶段数据的历史实例仍然可查看，不伪造已经执行过结构迁移或全量初始化的记录。
+A percentage belongs to a particular stage of a particular Instance, not to the Definition. Unknown progress is null. Do not store a display-only failure fallback of 0% in the actual measurement field. Historical Instances without stage data remain viewable; do not fabricate schema migration or full initialization steps for them.
 
-这类信息由数据同步业务投影提供；不把库表配置强塞进通用 Task 生命周期，不给 Core/Runtime 添加 UI 颜色、文案或 Workspace 依赖。具体实例端点在实现中沿用既有 Instance 查询与批量摘要入口，不增加第二套执行历史 API。
+The Data Sync business projection supplies these observations. Do not push table configuration into the generic Task lifecycle or add UI colors, labels, or Workspace dependencies to Core/Runtime. Implementations reuse existing Instance queries and batch summary endpoints instead of creating a second execution history API.
 
 ## Proposed Changes
 
