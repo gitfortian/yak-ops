@@ -38,7 +38,7 @@ class SuiteSelectionTest(unittest.TestCase):
         selected = subject.select([subject.JDBC + "/src/main/java/MySqlDialect.java", subject.CDC + "/src/main/java/X.java"])
         self.assertIn("jdbc-mysql", selected)
         self.assertIn("cdc", selected)
-        self.assertIn("recovery-e2e", selected)
+        self.assertIn("cdc-pipeline", selected)
 
     def test_deleted_test_keeps_owner_selected(self):
         self.assertIn("pipeline", subject.select([subject.JDBC + "/src/test/java/integration/MySqlToMySqlIT.java"]))
