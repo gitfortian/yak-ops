@@ -224,7 +224,9 @@ public class DefinitionServiceImpl implements DefinitionService {
 
     /** Called while the Definition row is locked, just like execution admission. */
     private void requireNoActiveInstance(DefinitionEntity definition) {
-        if (!instances.latest(definition.getWorkspaceId(), List.of(definition.getId()), true).isEmpty()) {
+        if (!instances
+                .latest(definition.getWorkspaceId(), List.of(definition.getId()), true)
+                .isEmpty()) {
             throw new BusinessException(CommonErrorCode.TASK_INSTANCE_ACTIVE);
         }
     }
