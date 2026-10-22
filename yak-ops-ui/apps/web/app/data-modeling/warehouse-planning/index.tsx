@@ -29,7 +29,7 @@ export default function WarehousePlanningPage() {
   };
   const saved = (node: SavedNode) => {
     setDraft(null);
-    planning.refresh(nodeKey(node));
+    planning.refresh(draft?.mode === "edit" ? undefined : nodeKey(node));
   };
 
   return (
@@ -84,12 +84,12 @@ export default function WarehousePlanningPage() {
               parent={findParent(planning.roots, selected)}
               onSelect={(node) => planning.select(nodeKey(node))}
               onCreateChild={createChild}
-              onDelete={() => setDeleting(selected)}
-              onEdit={() =>
+              onDelete={setDeleting}
+              onEdit={(node) =>
                 setDraft({
                   mode: "edit",
-                  node: selected,
-                  parent: findParent(planning.roots, selected),
+                  node,
+                  parent: findParent(planning.roots, node),
                 })
               }
             />

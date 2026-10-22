@@ -12,8 +12,8 @@ interface Props {
   parent: CategoryNode | DomainNode | null;
   onSelect: (node: PlanningNode) => void;
   onCreateChild: (parent: CategoryNode | DomainNode) => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (node: PlanningNode) => void;
+  onDelete: (node: PlanningNode) => void;
 }
 
 export default function PlanningDetails(props: Props) {
@@ -31,6 +31,34 @@ export default function PlanningDetails(props: Props) {
     { title: "英文编码", dataIndex: "code" },
     { title: "负责人", key: "owner", render: (_, row) => row.ownerName ?? row.ownerId },
     { title: "描述", dataIndex: "description", ellipsis: true },
+    {
+      title: "操作",
+      key: "actions",
+      width: 120,
+      fixed: "right",
+      align: "center",
+      render: (_, row) => (
+        <div className="flex items-center justify-center gap-1">
+          <Button
+            size="small"
+            variant="ghost"
+            className="px-0.5 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
+            onClick={() => props.onEdit(row)}
+          >
+            编辑
+          </Button>
+          <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[#e4e7ec]" />
+          <Button
+            size="small"
+            variant="ghost"
+            className="px-0.5 text-xs font-normal text-[#667085] hover:text-[#d92d20]"
+            onClick={() => props.onDelete(row)}
+          >
+            删除
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -39,10 +67,10 @@ export default function PlanningDetails(props: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="min-w-0 break-words font-medium">{node.name}</h2>
           <div className="flex gap-2">
-            <Button size="small" onClick={props.onEdit}>
+            <Button size="small" onClick={() => props.onEdit(node)}>
               编辑
             </Button>
-            <Button size="small" variant="danger" onClick={props.onDelete}>
+            <Button size="small" variant="danger" onClick={() => props.onDelete(node)}>
               删除
             </Button>
           </div>
