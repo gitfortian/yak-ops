@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Pending proposal PR in `gitfortian/yak-ops`
+Discussion: https://github.com/gitfortian/yak-ops/pull/3
 
 Decision: Pending explicit maintainer decision
 
@@ -18,7 +18,7 @@ Related FLIPs: N/A
 
 本次范围是数仓规划的树、详情、创建、编辑、删除、负责人选择与关联资产只读契约。逻辑建模、物理建模、数据标准、指标管理和建模执行不在本提案范围内。
 
-基于本地 `main` 的 `e985604dd6cf1727f7966043635ed53ee6163cfa` 检查到：
+基于 `origin/main` 的 `e2411a98c45eb014a2a25327387018ecd174e43c` 检查到：
 
 - 产品入口由 `app/layout/navigation.ts` 和 `app/router/AppRouter.tsx` 装配，目前没有数据建模入口。
 - `AppLayout` 已用 Workspace ID 作为内容的 React key；切换 Workspace 会重新挂载页面。HTTP transport 自动维护 Workspace Header。
@@ -242,7 +242,7 @@ HTTP transport 使用现有红色 Toast 展示受阻消息；页面不解析异�
 
 该功能不依赖 YakFlow、Core、Task Plugin 或执行模块。Maven 模块注册和现有架构检查需要随正式实现扩展，不建立从业务模块到 Boot 的依赖。
 
-拟新增以下表；最终迁移编号在实现时根据最新迁移序列分配，已有迁移保持不可变。
+拟新增以下表；最终迁移版本在实现时根据目标发布版本与最新迁移序列分配。当前 v1.3.0 使用仅用于新安装的 V1 基线，本功能不修改该基线，不把旧数据库自动升级纳入数仓规划。
 
 | 表 | 所有权与约束 |
 | --- | --- |
@@ -637,7 +637,7 @@ export default function WarehousePlanningPage() {
 ## Compatibility, Deprecation, and Migration Plan
 
 - 新增产品入口和 REST 接口，不改变数据集成、Task、Schedule、插件 SPI、任务定义 JSON 或 Checkpoint 格式。
-- 新表由正向 Flyway 迁移创建，已有业务数据无需回填，现有迁移不修改。不添加演示分类或假资产，不执行外部数据库 DDL。
+- 新表由正向 Flyway 迁移在受支持的新安装基线之上创建，不要求回填规划数据，现有迁移不修改。v1.0–v1.2 或历史草稿数据库的升级需要独立批准的路径，本功能不提供自动迁移，不操作 Flyway 历史。不添加演示分类或假资产，不执行外部数据库 DDL。
 - 新增全局编码命名空间仅约束本提案的三类规划节点，不追溯约束现有数据源或 Task 编码。
 - 前后端应一同交付。新前端遇到缺少规划接口的旧后端时显示请求失败，不回落到 mock、localStorage 或伪造的成功状态。
 - 逻辑模型能力开放时，需补充其真实持久化、授权、引用和删除保护的独立设计与验收；`NOT_ENABLED` 响应不能继续用于掩盖真实查询失败。
@@ -658,7 +658,7 @@ export default function WarehousePlanningPage() {
 | 可访问性 | Tab/Enter/Space 操作树和 Dialog、焦点恢复、仅键盘显示新增按钮、窄屏和减少动画 |
 | 关联资产 | 当前明确显示未开放；以后开放时验证真实分页、读失败与空结果区分，以及引用/删除并发保护 |
 
-数据库 IT 使用仓库现有 `scripts/tests/run.sh` 与套件清单，普通 Maven verify 不启动 Docker；新增 HTTP 产品测试归 `yak-ops-e2e`。浏览器验收扩展稳定业务场景，不增加临时每功能脚本或在 Playwright 中等待真实 JDBC/CDC。
+数据库 IT 使用仓库现有 `scripts/tests/run.sh` 与套件清单，普通 Maven verify 不启动 Docker；新增 HTTP 产品测试归 `yak-ops-e2e`。当前 Boot E2E 尚未配置，正式交付前需要提供可执行的规划 HTTP 验证入口并登记选择范围，不能用 Connector 测试替代 API 验收。浏览器验收扩展稳定业务场景，不增加临时每功能脚本或在 Playwright 中等待真实 JDBC/CDC。
 
 ## Rejected Alternatives
 
