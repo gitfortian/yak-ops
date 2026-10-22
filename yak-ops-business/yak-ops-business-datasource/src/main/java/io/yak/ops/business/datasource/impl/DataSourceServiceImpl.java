@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -156,8 +157,13 @@ public class DataSourceServiceImpl implements DataSourceService {
     public boolean deleteDataSource(String id) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         DataSourceEntity existing = requireEntity(workspaceId, id);
-        if (repository.deleteById(workspaceId, existing.getId()) <= 0) {
-            throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
+        try {
+            if (repository.deleteById(workspaceId, existing.getId()) <= 0) {
+                throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
+            }
+        } catch (DataIntegrityViolationException bound) {
+            // A warehouse layer still binds this datasource; the foreign key blocks the delete.
+            throw new DataSourceException(DataSourceErrorCode.IN_USE);
         }
         LOG.info(
                 "Datasource deleted, workspaceId={}, dataSourceId={}, type={}",
@@ -173,8 +179,12 @@ public class DataSourceServiceImpl implements DataSourceService {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         List<DataSourceEntity> entities = requireBatchEntities(workspaceId, dto);
         for (DataSourceEntity entity : entities) {
-            if (repository.deleteById(workspaceId, entity.getId()) <= 0) {
-                throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
+            try {
+                if (repository.deleteById(workspaceId, entity.getId()) <= 0) {
+                    throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
+                }
+            } catch (DataIntegrityViolationException bound) {
+                throw new DataSourceException(DataSourceErrorCode.IN_USE);
             }
         }
         LOG.info("Datasource batch deletion completed, workspaceId={}, count={}", workspaceId, entities.size());

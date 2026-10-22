@@ -1,4 +1,5 @@
 import { Alert, Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
+import { Layers } from "lucide-react";
 import { useState } from "react";
 import type {
   CategoryNode,
@@ -8,6 +9,7 @@ import type {
   SavedNode,
 } from "@/service/data-modeling/warehouse-planning/types";
 import DeleteDialog from "./delete-dialog";
+import LayerPanel from "./layer-panel";
 import NodeDialog from "./node-dialog";
 import PlanningDetails from "./planning-details";
 import PlanningTree from "./planning-tree";
@@ -17,6 +19,7 @@ export default function WarehousePlanningPage() {
   const planning = usePlanning();
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const [deleting, setDeleting] = useState<PlanningNode | null>(null);
+  const [view, setView] = useState<"plan" | "layer">("plan");
   const selected = planning.selected;
   const disabled = planning.loading || planning.failed;
 
@@ -39,22 +42,24 @@ export default function WarehousePlanningPage() {
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
-          <>
-            <Button size="small" disabled={planning.loading} onClick={() => planning.refresh()}>
-              刷新
-            </Button>
-            <Button
-              size="small"
-              variant="primary"
-              disabled={disabled}
-              onClick={() => setDraft({ mode: "create", kind: "CATEGORY", parent: null })}
-            >
-              新建业务分类
-            </Button>
-          </>
+          view === "plan" ? (
+            <>
+              <Button size="small" disabled={planning.loading} onClick={() => planning.refresh()}>
+                刷新
+              </Button>
+              <Button
+                size="small"
+                variant="primary"
+                disabled={disabled}
+                onClick={() => setDraft({ mode: "create", kind: "CATEGORY", parent: null })}
+              >
+                新建业务分类
+              </Button>
+            </>
+          ) : null
         }
       />
-      {planning.failed && (
+      {view === "plan" && planning.failed && (
         <Alert>
           数仓规划加载失败
           <Button size="small" onClick={() => planning.refresh()}>
@@ -67,16 +72,36 @@ export default function WarehousePlanningPage() {
         className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-4 pt-5 max-md:px-4 md:grid-cols-[250px_minmax(0,1fr)]"
       >
         <aside className="min-h-0 overflow-auto border-r border-[var(--yak-components-panel-border)] pr-3">
+          <nav aria-label="数仓规划导航" className="mb-3">
+            <Button
+              size="small"
+              variant={view === "layer" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              aria-current={view === "layer" ? true : undefined}
+              onClick={() => setView("layer")}
+            >
+              <Layers size={14} />
+              <span className="truncate">数仓分层</span>
+            </Button>
+          </nav>
           <PlanningTree
             nodes={planning.roots}
-            selectedKey={planning.selectedKey}
+            selectedKey={view === "plan" ? planning.selectedKey : null}
             disabled={disabled}
-            onSelect={planning.select}
+            onSelect={(key) => {
+              setView("plan");
+              planning.select(key);
+            }}
             onCreateChild={createChild}
           />
         </aside>
-        <section aria-label="规划详情" className="min-h-0 min-w-0 overflow-auto">
-          {planning.loading ? (
+        <section
+          aria-label={view === "layer" ? "数仓分层" : "规划详情"}
+          className="min-h-0 min-w-0 overflow-auto"
+        >
+          {view === "layer" ? (
+            <LayerPanel />
+          ) : planning.loading ? (
             <Spinner />
           ) : planning.failed ? null : selected ? (
             <PlanningDetails
