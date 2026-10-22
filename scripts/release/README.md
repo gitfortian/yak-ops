@@ -11,7 +11,9 @@ bash scripts/release/check-release-metadata.sh vX.Y.Z
 bash scripts/release/check-release-migration.sh X.Y.Z
 ```
 
-Published Flyway migrations are frozen. Audit upgrade behavior; never use Flyway repair to conceal incompatible history. The release migration check validates naming, ordering and draft migration removal.
+**v1.3.0 resets Flyway to one fresh-install `V1__baseline.sql`.** Only initialize an empty MySQL database with this schema. Databases that already ran v1.0–v1.2 or any v1.3 draft migrations are **not** upgraded by this release. Take backups and recreate the database explicitly, or separately review and execute a data-preserving upgrade plan before deployment. Never point this baseline at a populated database or edit `flyway_schema_history` / run Flyway `repair` to force acceptance.
+
+After v1.3.0 is published, V1 is immutable. Every later release with schema changes adds one new versioned SQL file, without altering previous checksums. The release migration check verifies the baseline, release sequence, and absence of implicit data rewrites in V1.
 
 ## Release Gate
 

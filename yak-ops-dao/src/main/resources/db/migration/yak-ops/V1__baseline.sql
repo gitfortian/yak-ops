@@ -1,6 +1,9 @@
--- Yak Ops first stable schema baseline.
--- Current product scope contains user/login persistence, workspace membership, user preferences, datasource management and data sync task/instance persistence.
--- This baseline is for rebuildable early-stage databases. Once released to a shared environment it becomes immutable.
+-- Yak Ops v1.3.0 fresh-install database schema.
+-- This baseline creates the final schema on an EMPTY database only.
+-- Databases with applied V1-V16 history are not automatically upgraded.
+-- No business rows are inserted, updated, deleted or converted.
+
+-- Users and workspaces
 
 CREATE TABLE yak_security_user (
     id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
@@ -30,7 +33,6 @@ CREATE TABLE yak_security_user (
   DEFAULT CHARACTER SET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='用户账号表';
-
 
 CREATE TABLE yak_ops_workspace (
     id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
@@ -104,70 +106,379 @@ CREATE TABLE yak_ops_data_source (
     KEY idx_ops_data_source_workspace_type (workspace_id, db_type),
     KEY idx_ops_data_source_workspace_environment (workspace_id, environment),
     KEY idx_ops_data_source_workspace_status (workspace_id, conn_status),
-    KEY idx_ops_data_source_workspace_update_time (workspace_id, update_time)
+    KEY idx_ops_data_source_workspace_update_time (workspace_id, update_time),
+  revision BIGINT UNSIGNED NOT NULL DEFAULT 1
+    COMMENT 'Monotonic datasource binding revision for verified background execution'
 ) ENGINE=InnoDB
   DEFAULT CHARACTER SET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='数据源管理表';
 
-CREATE TABLE yak_ops_data_sync_task (
-    id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
-    workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID，是同步任务业务归属与隔离边界',
-    name VARCHAR(128) NOT NULL COMMENT '同步任务名称，在同一工作空间内唯一',
-    sync_type TINYINT UNSIGNED NOT NULL COMMENT '同步类型：1 离线同步，2 实时同步',
-    status TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '任务发布状态：0 已下线，1 已上线；应用新建任务显式写入0，默认1用于兼容历史可执行任务',
-    write_mode TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '写入方式：1 追加，2 覆盖，3 更新；实时任务固定保存为追加',
-    source_data_source_id VARCHAR(64) NOT NULL COMMENT '来源数据源ID，仅保存资源引用，不保存连接凭证',
-    source_database VARCHAR(128) NULL COMMENT '来源数据库名称，无该层级时为空',
-    source_schema VARCHAR(128) NULL COMMENT '来源Schema名称，无该层级时为空',
-    source_table VARCHAR(128) NOT NULL COMMENT '来源表名称',
-    target_data_source_id VARCHAR(64) NOT NULL COMMENT '目标数据源ID，仅保存资源引用，不保存连接凭证',
-    target_database VARCHAR(128) NULL COMMENT '目标数据库名称，无该层级时为空',
-    target_schema VARCHAR(128) NULL COMMENT '目标Schema名称，无该层级时为空',
-    target_table VARCHAR(128) NOT NULL COMMENT '目标表名称',
-    runtime_config LONGTEXT NOT NULL COMMENT 'YakFlow运行参数JSON，不包含数据源连接凭证',
-    definition_version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '任务定义版本，从1开始，定义修改后递增',
-    remark VARCHAR(500) NULL COMMENT '同步任务备注',
-    create_time DATETIME(3) NOT NULL COMMENT '创建时间',
-    update_time DATETIME(3) NOT NULL COMMENT '更新时间',
-    create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
-    update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_ops_data_sync_task_workspace_name (workspace_id, name),
-    KEY idx_ops_data_sync_task_workspace_type_update (workspace_id, sync_type, update_time),
-    KEY idx_ops_data_sync_task_workspace_source (workspace_id, source_data_source_id),
-    KEY idx_ops_data_sync_task_workspace_target (workspace_id, target_data_source_id)
-) ENGINE=InnoDB
-  DEFAULT CHARACTER SET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='数据同步任务定义表';
+-- Task definitions
 
-CREATE TABLE yak_ops_data_sync_instance (
-    id VARCHAR(64) NOT NULL COMMENT '主键ID，由应用雪花算法生成',
-    workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID，是同步实例业务归属与隔离边界',
-    task_id VARCHAR(64) NOT NULL COMMENT '来源同步任务ID，不使用数据库物理外键',
-    task_name VARCHAR(128) NOT NULL COMMENT '实例启动时的任务名称快照',
-    task_version INT UNSIGNED NOT NULL COMMENT '实例启动时采用的任务定义版本',
-    sync_type TINYINT UNSIGNED NOT NULL COMMENT '实例同步类型：1 离线同步，2 实时同步',
-    trigger_type TINYINT UNSIGNED NOT NULL COMMENT '触发方式：1 手动，2 调度，3 重试',
-    status TINYINT UNSIGNED NOT NULL COMMENT '实例状态：1 等待，2 运行中，3 成功，4 失败，5 已取消，6 丢失',
-    definition_snapshot LONGTEXT NOT NULL COMMENT '实例启动时的脱敏任务定义快照，禁止包含密码、连接参数、SSH私钥或Token',
-    read_rows BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '累计读取行数',
-    write_rows BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '累计写入行数',
-    start_time DATETIME(3) NULL COMMENT '实例实际开始时间',
-    finish_time DATETIME(3) NULL COMMENT '实例进入终态的完成时间',
-    error_code INT UNSIGNED NULL COMMENT '失败时的结构化错误码',
-    error_message VARCHAR(1000) NULL COMMENT '失败时的脱敏错误信息',
-    create_time DATETIME(3) NOT NULL COMMENT '实例创建时间',
-    update_time DATETIME(3) NOT NULL COMMENT '实例更新时间',
-    create_by VARCHAR(64) NOT NULL COMMENT '创建人标识',
-    update_by VARCHAR(64) NOT NULL COMMENT '更新人标识',
-    PRIMARY KEY (id),
-    KEY idx_ops_data_sync_instance_workspace_task_create (workspace_id, task_id, create_time),
-    KEY idx_ops_data_sync_instance_workspace_type_create (workspace_id, sync_type, create_time),
-    KEY idx_ops_data_sync_instance_workspace_status_create (workspace_id, status, create_time),
-    KEY idx_ops_data_sync_instance_workspace_create (workspace_id, create_time)
-) ENGINE=InnoDB
-  DEFAULT CHARACTER SET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='数据同步任务实例表';
+CREATE TABLE yak_ops_task_definition (
+  id VARCHAR(64) NOT NULL COMMENT '任务定义稳定ID',
+  workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID',
+  name VARCHAR(128) NOT NULL COMMENT '任务名称',
+  task_type VARCHAR(64) NOT NULL COMMENT '任务插件类型',
+  status TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '发布状态0下线1上线',
+  current_version INT UNSIGNED NOT NULL COMMENT '当前可执行配置版本',
+  remark VARCHAR(500) NULL COMMENT '备注',
+  deleted_at DATETIME(3) NULL COMMENT '逻辑删除时间',
+  active_name VARCHAR(128) GENERATED ALWAYS AS
+    (CASE WHEN deleted_at IS NULL THEN name ELSE NULL END) STORED
+    COMMENT '未删除任务唯一名称',
+  create_time DATETIME(3) NOT NULL COMMENT '创建时间',
+  update_time DATETIME(3) NOT NULL COMMENT '更新时间',
+  create_by VARCHAR(64) NOT NULL COMMENT '创建人',
+  update_by VARCHAR(64) NOT NULL COMMENT '更新人',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_task_definition_workspace_active_name (workspace_id,active_name),
+  KEY idx_ops_task_definition_workspace_type (workspace_id,task_type,status,update_time),
+  debug TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Detailed diagnostics for future Task Instances'
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='通用任务定义';
+
+CREATE TABLE yak_ops_task_definition_version (
+  id VARCHAR(64) NOT NULL COMMENT '定义版本记录ID',
+  workspace_id VARCHAR(64) NOT NULL COMMENT '所属工作空间ID',
+  definition_id VARCHAR(64) NOT NULL COMMENT '任务定义ID',
+  version INT UNSIGNED NOT NULL COMMENT '可执行版本号',
+  parameters LONGTEXT NOT NULL COMMENT '不含连接凭证的插件参数',
+  parameter_schema_version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '参数结构版本',
+  create_time DATETIME(3) NOT NULL COMMENT '创建时间',
+  update_time DATETIME(3) NOT NULL COMMENT '更新时间',
+  create_by VARCHAR(64) NOT NULL COMMENT '创建人',
+  update_by VARCHAR(64) NOT NULL COMMENT '更新人',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_task_version_definition_version (workspace_id,definition_id,version)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='不可变任务参数版本';
+
+-- Task execution
+
+CREATE TABLE yak_ops_task_instance (
+  id VARCHAR(64) NOT NULL COMMENT 'Stable logical run identifier',
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning this run',
+  definition_id VARCHAR(64) NOT NULL COMMENT 'Task Definition pinned for execution',
+  definition_version INT UNSIGNED NOT NULL COMMENT 'Immutable pinned Definition version',
+  task_type VARCHAR(64) NOT NULL COMMENT 'Registered Task plugin type',
+  trigger_type VARCHAR(24) NOT NULL COMMENT 'Submission namespace for request identity',
+  request_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Case-sensitive idempotency key',
+  request_fingerprint VARCHAR(256) NOT NULL COMMENT 'Non-secret request intent fingerprint',
+  resource_revision VARCHAR(128) NOT NULL COMMENT 'Admitted resource binding revision',
+  status VARCHAR(24) NOT NULL COMMENT 'Business execution lifecycle state',
+  state_version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Optimistic lifecycle update version',
+  start_time DATETIME(3) NULL COMMENT 'Observed start time, absent before execution',
+  end_time DATETIME(3) NULL COMMENT 'Terminal time, absent while active',
+  failure_code VARCHAR(128) NULL COMMENT 'Safe failure category, absent unless failed',
+  create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
+  update_time DATETIME(3) NOT NULL COMMENT 'Last update timestamp',
+  create_by VARCHAR(64) NOT NULL COMMENT 'Actor creating this run',
+  update_by VARCHAR(64) NOT NULL COMMENT 'Actor updating this run',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_task_instance_request (workspace_id, trigger_type, request_id),
+  KEY idx_ops_task_instance_definition (workspace_id, definition_id, create_time),
+  KEY idx_ops_task_instance_status (workspace_id, status, update_time),
+  owner_incarnation VARCHAR(128) NULL COMMENT 'Embedded dispatcher that owns launch',
+  dispatch_token VARCHAR(128) NULL COMMENT 'Opaque launch ownership token',
+  runtime_engine VARCHAR(32) NULL COMMENT 'Submitted execution engine',
+  runtime_id VARCHAR(128) NULL COMMENT 'Engine-assigned Job identifier',
+  KEY idx_ops_task_instance_owner (status, owner_incarnation),
+  log_path VARCHAR(512) NULL COMMENT 'Relative task execution log path',
+  debug TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Detailed diagnostics captured at admission',
+  schedule_id VARCHAR(64) NULL COMMENT 'Originating schedule; null for historical or non-scheduled runs',
+  schedule_revision BIGINT NULL COMMENT 'Fired registration revision; null when provenance is absent',
+  scheduled_time DATETIME(3) NULL COMMENT 'Logical UTC occurrence, separate from execution start time',
+  KEY idx_ops_task_instance_schedule (workspace_id, schedule_id, scheduled_time),
+  CONSTRAINT ck_ops_task_schedule_provenance CHECK (
+    (schedule_id IS NULL AND schedule_revision IS NULL AND scheduled_time IS NULL) OR
+    (schedule_id IS NOT NULL AND schedule_revision IS NOT NULL AND schedule_revision >= 1 AND scheduled_time IS NOT NULL)),
+  progress_percent TINYINT UNSIGNED NULL COMMENT 'Last measured bounded Source split progress, 0 to 99; null if unavailable',
+  INDEX idx_ops_task_instance_latest (workspace_id, definition_id, create_time, id),
+  execution_report MEDIUMTEXT NULL COMMENT 'Plugin public execution report fixed with terminal outcome; null when unobserved',
+  definition_name VARCHAR(128) NULL
+    COMMENT 'Definition display name pinned at Task admission; nullable for historical runs'
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Durable Task execution intent';
+
+CREATE TABLE yak_ops_task_execution_claim (
+  id VARCHAR(64) NOT NULL COMMENT 'Stable exclusive claim identifier',
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the resource identity',
+  resource_type VARCHAR(32) NOT NULL COMMENT 'Resource category requiring exclusive use',
+  resource_key VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Case-sensitive canonical resource identity',
+  instance_id VARCHAR(64) NOT NULL COMMENT 'Instance authorized to release the claim',
+  create_time DATETIME(3) NOT NULL COMMENT 'Claim acquisition timestamp',
+  update_time DATETIME(3) NOT NULL COMMENT 'Last claim update timestamp',
+  create_by VARCHAR(64) NOT NULL COMMENT 'Actor creating this claim',
+  update_by VARCHAR(64) NOT NULL COMMENT 'Actor updating this claim',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_task_claim_resource (workspace_id, resource_type, resource_key),
+  KEY idx_ops_task_claim_instance (workspace_id, instance_id)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Exclusive claims held by nonterminal Task Instances';
+
+CREATE TABLE yak_ops_task_execution_owner (
+  id VARCHAR(64) NOT NULL COMMENT 'Singleton embedded owner record identity',
+  host_id VARCHAR(128) NOT NULL COMMENT 'Host holding the local execution lock',
+  state_root VARCHAR(512) NOT NULL COMMENT 'Canonical directory for execution owner lock',
+  owner_incarnation VARCHAR(128) NOT NULL COMMENT 'JVM incarnation with dispatch authority',
+  last_seen_time DATETIME(3) NOT NULL COMMENT 'Diagnostic heartbeat, not an execution fence',
+  create_time DATETIME(3) NOT NULL COMMENT 'Owner record creation timestamp',
+  update_time DATETIME(3) NOT NULL COMMENT 'Last owner record update timestamp',
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Single embedded dispatcher identity; heartbeat expiry is not an execution fence';
+
+-- Scheduling
+
+CREATE TABLE yak_ops_schedule (
+  id VARCHAR(64) NOT NULL COMMENT 'Stable schedule identifier, never reused',
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the schedule and target',
+  target_type VARCHAR(32) NOT NULL COMMENT 'Root target category; initially TASK',
+  target_id VARCHAR(64) NOT NULL COMMENT 'Immutable target Definition identifier',
+  cron_expression VARCHAR(256) NOT NULL COMMENT 'Quartz Cron expression retained as entered',
+  time_zone VARCHAR(64) NOT NULL COMMENT 'Explicit named zone for Cron evaluation',
+  enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Desired enablement, independent of engine health',
+  revision BIGINT NOT NULL DEFAULT 1 COMMENT 'Monotonic configuration and eligibility revision',
+  enabled_at DATETIME(3) NULL COMMENT 'UTC enablement boundary; null until enabled',
+  enabled_by VARCHAR(64) NULL COMMENT 'Actor authorizing latest enablement; rechecked at admission',
+  retired_before DATETIME(3) NULL COMMENT 'Monotonic UTC floor preventing readmission after history cleanup',
+  deleted_at DATETIME(3) NULL COMMENT 'Logical deletion time; null for active configuration',
+  active_target_id VARCHAR(64) GENERATED ALWAYS AS
+    (CASE WHEN deleted_at IS NULL THEN target_id ELSE NULL END) STORED
+    COMMENT 'Unique target only while schedule is not deleted',
+  create_time DATETIME(3) NOT NULL COMMENT 'Creation audit time',
+  update_time DATETIME(3) NOT NULL COMMENT 'Latest mutation audit time',
+  create_by VARCHAR(64) NOT NULL COMMENT 'Creating actor',
+  update_by VARCHAR(64) NOT NULL COMMENT 'Latest modifying actor',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_schedule_target (workspace_id, target_type, active_target_id),
+  KEY idx_ops_schedule_workspace_updated (workspace_id, update_time, id),
+  KEY idx_ops_schedule_enabled (enabled, deleted_at, id),
+  CONSTRAINT ck_ops_schedule_revision CHECK (revision >= 1),
+  CONSTRAINT ck_ops_schedule_enabled CHECK (enabled IN (0, 1)),
+  CONSTRAINT ck_ops_schedule_authority CHECK (enabled = 0 OR (enabled_at IS NOT NULL AND enabled_by IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Workspace-scoped periodic schedule intent';
+
+CREATE TABLE yak_ops_schedule_fire (
+  id VARCHAR(64) NOT NULL COMMENT 'Stable final occurrence result ID',
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning this result and target',
+  schedule_id VARCHAR(64) NOT NULL COMMENT 'Originating schedule identity retained after deletion',
+  schedule_revision BIGINT NOT NULL COMMENT 'Immutable fired registration revision',
+  target_type VARCHAR(32) NOT NULL COMMENT 'Historical root target category',
+  target_id VARCHAR(64) NOT NULL COMMENT 'Historical target Definition identity for authorization',
+  scheduled_time DATETIME(3) NOT NULL COMMENT 'Logical UTC occurrence at millisecond precision',
+  fire_time DATETIME(3) NOT NULL COMMENT 'Actual UTC callback time, not part of idempotency',
+  resolved_time DATETIME(3) NOT NULL COMMENT 'UTC final submission resolution time',
+  request_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Stable request key in the SCHEDULE namespace',
+  outcome VARCHAR(32) NOT NULL COMMENT 'ADMITTED, SKIPPED, REJECTED, or SUBMISSION_FAILED; not Task status',
+  reason VARCHAR(64) NULL COMMENT 'Safe non-admission reason; null for ADMITTED',
+  instance_id VARCHAR(64) NULL COMMENT 'Admitted Task Instance; null for non-admission',
+  create_time DATETIME(3) NOT NULL COMMENT 'Creation audit time',
+  update_time DATETIME(3) NOT NULL COMMENT 'Result persistence audit time',
+  create_by VARCHAR(64) NOT NULL COMMENT 'Authorizing or configuration-owning actor',
+  update_by VARCHAR(64) NOT NULL COMMENT 'Result audit actor',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_ops_schedule_fire_occurrence (workspace_id, schedule_id, schedule_revision, scheduled_time),
+  UNIQUE KEY uk_ops_schedule_fire_request (workspace_id, request_id),
+  KEY idx_ops_schedule_fire_history (workspace_id, schedule_id, scheduled_time, id),
+  CONSTRAINT ck_ops_schedule_fire_revision CHECK (schedule_revision >= 1),
+  CONSTRAINT ck_ops_schedule_fire_outcome CHECK (outcome IN ('ADMITTED','SKIPPED','REJECTED','SUBMISSION_FAILED')),
+  CONSTRAINT ck_ops_schedule_fire_instance CHECK (
+    (outcome = 'ADMITTED' AND instance_id IS NOT NULL AND reason IS NULL) OR
+    (outcome <> 'ADMITTED' AND instance_id IS NULL AND reason IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Final schedule submission results; execution belongs to Task Instances';
+
+-- Quartz persistent scheduler
+
+CREATE TABLE YAK_QRTZ_JOB_DETAILS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  JOB_NAME VARCHAR(190) NOT NULL COMMENT 'Engine job identity',
+  JOB_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine job group',
+  DESCRIPTION VARCHAR(250) NULL COMMENT 'Optional engine description',
+  JOB_CLASS_NAME VARCHAR(250) NOT NULL COMMENT 'Quartz job class',
+  IS_DURABLE VARCHAR(1) NOT NULL COMMENT 'Retain job when no triggers remain',
+  IS_NONCONCURRENT VARCHAR(1) NOT NULL COMMENT 'Serialize notification jobs by JobKey',
+  IS_UPDATE_DATA VARCHAR(1) NOT NULL COMMENT 'Whether the job persists changed data',
+  REQUESTS_RECOVERY VARCHAR(1) NOT NULL COMMENT 'Engine recovery request flag',
+  JOB_DATA BLOB NULL COMMENT 'String-only registration properties; no credentials or serialized beans',
+  PRIMARY KEY (SCHED_NAME,JOB_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_J_REQ_RECOVERY (SCHED_NAME,REQUESTS_RECOVERY),
+  KEY IDX_YAK_QRTZ_J_GRP (SCHED_NAME,JOB_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz job details; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  JOB_NAME VARCHAR(190) NOT NULL COMMENT 'Engine job identity',
+  JOB_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine job group',
+  DESCRIPTION VARCHAR(250) NULL COMMENT 'Optional engine description',
+  NEXT_FIRE_TIME BIGINT NULL COMMENT 'Next epoch-millisecond time; null when exhausted',
+  PREV_FIRE_TIME BIGINT NULL COMMENT 'Previous epoch-millisecond time',
+  PRIORITY INTEGER NULL COMMENT 'Engine acquisition priority',
+  TRIGGER_STATE VARCHAR(16) NOT NULL COMMENT 'Engine trigger acquisition state',
+  TRIGGER_TYPE VARCHAR(8) NOT NULL COMMENT 'Quartz trigger subtype',
+  START_TIME BIGINT NOT NULL COMMENT 'First eligible epoch-millisecond time',
+  END_TIME BIGINT NULL COMMENT 'Optional last eligible epoch-millisecond time',
+  CALENDAR_NAME VARCHAR(190) NULL COMMENT 'Optional calendar identity',
+  MISFIRE_INSTR SMALLINT NULL COMMENT 'Quartz subtype misfire instruction',
+  JOB_DATA BLOB NULL COMMENT 'String-only registration properties; no credentials or serialized beans',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  FOREIGN KEY (SCHED_NAME,JOB_NAME,JOB_GROUP) REFERENCES YAK_QRTZ_JOB_DETAILS(SCHED_NAME,JOB_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_T_J (SCHED_NAME,JOB_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_T_JG (SCHED_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_T_C (SCHED_NAME,CALENDAR_NAME),
+  KEY IDX_YAK_QRTZ_T_G (SCHED_NAME,TRIGGER_GROUP),
+  KEY IDX_YAK_QRTZ_T_STATE (SCHED_NAME,TRIGGER_STATE),
+  KEY IDX_YAK_QRTZ_T_N_STATE (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP,TRIGGER_STATE),
+  KEY IDX_YAK_QRTZ_T_N_G_STATE (SCHED_NAME,TRIGGER_GROUP,TRIGGER_STATE),
+  KEY IDX_YAK_QRTZ_T_NEXT_FIRE_TIME (SCHED_NAME,NEXT_FIRE_TIME),
+  KEY IDX_YAK_QRTZ_T_NFT_ST (SCHED_NAME,TRIGGER_STATE,NEXT_FIRE_TIME),
+  KEY IDX_YAK_QRTZ_T_NFT_MISFIRE (SCHED_NAME,MISFIRE_INSTR,NEXT_FIRE_TIME),
+  KEY IDX_YAK_QRTZ_T_NFT_ST_MISFIRE (SCHED_NAME,MISFIRE_INSTR,NEXT_FIRE_TIME,TRIGGER_STATE),
+  KEY IDX_YAK_QRTZ_T_NFT_ST_MISFIRE_GRP (SCHED_NAME,MISFIRE_INSTR,NEXT_FIRE_TIME,TRIGGER_GROUP,TRIGGER_STATE)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_SIMPLE_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  REPEAT_COUNT BIGINT NOT NULL COMMENT 'Quartz repeat count',
+  REPEAT_INTERVAL BIGINT NOT NULL COMMENT 'Quartz repeat interval in milliseconds',
+  TIMES_TRIGGERED BIGINT NOT NULL COMMENT 'Engine delivery count',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  FOREIGN KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP) REFERENCES YAK_QRTZ_TRIGGERS(SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz simple triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_CRON_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  CRON_EXPRESSION VARCHAR(256) NOT NULL COMMENT 'Quartz Cron expression, matching the schedule API length',
+  TIME_ZONE_ID VARCHAR(80) NULL COMMENT 'Named Cron time zone',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  FOREIGN KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP) REFERENCES YAK_QRTZ_TRIGGERS(SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz cron triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_SIMPROP_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  STR_PROP_1 VARCHAR(512) NULL COMMENT 'Optional simple trigger string property',
+  STR_PROP_2 VARCHAR(512) NULL COMMENT 'Optional simple trigger string property',
+  STR_PROP_3 VARCHAR(512) NULL COMMENT 'Optional simple trigger string property',
+  INT_PROP_1 INT NULL COMMENT 'Optional simple trigger integer property',
+  INT_PROP_2 INT NULL COMMENT 'Optional simple trigger integer property',
+  LONG_PROP_1 BIGINT NULL COMMENT 'Optional simple trigger long property',
+  LONG_PROP_2 BIGINT NULL COMMENT 'Optional simple trigger long property',
+  DEC_PROP_1 NUMERIC(13,4) NULL COMMENT 'Optional simple trigger decimal property',
+  DEC_PROP_2 NUMERIC(13,4) NULL COMMENT 'Optional simple trigger decimal property',
+  BOOL_PROP_1 VARCHAR(1) NULL COMMENT 'Optional simple trigger boolean property',
+  BOOL_PROP_2 VARCHAR(1) NULL COMMENT 'Optional simple trigger boolean property',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  FOREIGN KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP) REFERENCES YAK_QRTZ_TRIGGERS(SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz simprop triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_BLOB_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  BLOB_DATA BLOB NULL COMMENT 'Quartz binary trigger state, unused by Cron registrations',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  FOREIGN KEY (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP) REFERENCES YAK_QRTZ_TRIGGERS(SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz blob triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_CALENDARS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  CALENDAR_NAME VARCHAR(190) NOT NULL COMMENT 'Quartz calendar identity',
+  CALENDAR BLOB NOT NULL COMMENT 'Quartz calendar state',
+  PRIMARY KEY (SCHED_NAME,CALENDAR_NAME)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz calendars; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_PAUSED_TRIGGER_GRPS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  PRIMARY KEY (SCHED_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz paused trigger grps; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_FIRED_TRIGGERS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  ENTRY_ID VARCHAR(95) NOT NULL COMMENT 'Quartz callback identifier, not business idempotency',
+  TRIGGER_NAME VARCHAR(190) NOT NULL COMMENT 'Engine trigger identity',
+  TRIGGER_GROUP VARCHAR(190) NOT NULL COMMENT 'Engine trigger group',
+  INSTANCE_NAME VARCHAR(190) NOT NULL COMMENT 'Quartz owner identity',
+  FIRED_TIME BIGINT NOT NULL COMMENT 'Actual epoch-millisecond firing time',
+  SCHED_TIME BIGINT NOT NULL COMMENT 'Scheduled epoch-millisecond firing time',
+  PRIORITY INTEGER NOT NULL COMMENT 'Quartz priority',
+  STATE VARCHAR(16) NOT NULL COMMENT 'Engine firing state',
+  JOB_NAME VARCHAR(190) NULL COMMENT 'Optional owning job identity',
+  JOB_GROUP VARCHAR(190) NULL COMMENT 'Optional owning job group',
+  IS_NONCONCURRENT VARCHAR(1) NULL COMMENT 'Engine concurrency flag',
+  REQUESTS_RECOVERY VARCHAR(1) NULL COMMENT 'Engine recovery flag',
+  PRIMARY KEY (SCHED_NAME,ENTRY_ID),
+  KEY IDX_YAK_QRTZ_FT_TRIG_INST_NAME (SCHED_NAME,INSTANCE_NAME),
+  KEY IDX_YAK_QRTZ_FT_INST_JOB_REQ_RCVRY (SCHED_NAME,INSTANCE_NAME,REQUESTS_RECOVERY),
+  KEY IDX_YAK_QRTZ_FT_J_G (SCHED_NAME,JOB_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_FT_JG (SCHED_NAME,JOB_GROUP),
+  KEY IDX_YAK_QRTZ_FT_T_G (SCHED_NAME,TRIGGER_NAME,TRIGGER_GROUP),
+  KEY IDX_YAK_QRTZ_FT_TG (SCHED_NAME,TRIGGER_GROUP)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz fired triggers; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_SCHEDULER_STATE (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  INSTANCE_NAME VARCHAR(190) NOT NULL COMMENT 'Quartz instance identity',
+  LAST_CHECKIN_TIME BIGINT NOT NULL COMMENT 'Engine check-in epoch milliseconds',
+  CHECKIN_INTERVAL BIGINT NOT NULL COMMENT 'Engine check-in interval',
+  PRIMARY KEY (SCHED_NAME,INSTANCE_NAME)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz scheduler state; engine-owned state';
+
+CREATE TABLE YAK_QRTZ_LOCKS (
+  SCHED_NAME VARCHAR(120) NOT NULL COMMENT 'Engine namespace',
+  LOCK_NAME VARCHAR(40) NOT NULL COMMENT 'Quartz store lock identity',
+  PRIMARY KEY (SCHED_NAME,LOCK_NAME)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Quartz locks; engine-owned state';
+
+-- Offline incremental sync
+
+CREATE TABLE yak_ops_task_cursor (
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning this incremental state',
+  definition_id VARCHAR(64) NOT NULL COMMENT 'Task definition owning this table cursor',
+  table_key CHAR(64) NOT NULL COMMENT 'Stable SHA-256 of explicit source and target table identity',
+  binding CHAR(64) NOT NULL COMMENT 'SHA-256 of all incremental interpretation and routing options',
+  cursor_value VARCHAR(128) NULL COMMENT 'Committed position; null until a successful first batch',
+  pending_value VARCHAR(128) NULL COMMENT 'Frozen next position reused when an earlier run fails',
+  initialized TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether an initial batch has successfully committed',
+  revision BIGINT NOT NULL DEFAULT 0 COMMENT 'Monotonic optimistic progress revision',
+  PRIMARY KEY (workspace_id, definition_id, table_key)
+) COMMENT='Durable table-granular offline incremental progress';
+
+CREATE TABLE yak_ops_task_cursor_batch (
+  workspace_id VARCHAR(64) NOT NULL COMMENT 'Owning Workspace',
+  instance_id VARCHAR(64) NOT NULL COMMENT 'Task Instance whose snapshot is immutable',
+  table_key CHAR(64) NOT NULL COMMENT 'Source-to-target table identity digest',
+  binding CHAR(64) NOT NULL COMMENT 'Frozen incremental route configuration digest',
+  mode VARCHAR(16) NOT NULL COMMENT 'Incremental comparison mode',
+  column_name VARCHAR(128) NOT NULL COMMENT 'Validated source column',
+  initial_value VARCHAR(128) NULL COMMENT 'User-configured first cursor if applicable',
+  lower_value VARCHAR(128) NULL COMMENT 'Committed cursor when this batch was frozen',
+  upper_value VARCHAR(128) NOT NULL COMMENT 'Frozen next cursor for deterministic retry',
+  allow_initial_load TINYINT(1) NOT NULL COMMENT 'Whether an initial full scan is configured',
+  initial_load TINYINT(1) NOT NULL COMMENT 'Whether this Instance physically runs a full initial scan',
+  expected_version BIGINT NOT NULL COMMENT 'Cursor revision expected when result commits',
+  PRIMARY KEY (workspace_id, instance_id, table_key)
+) COMMENT='Immutable per-Instance incremental window and progress candidate';
