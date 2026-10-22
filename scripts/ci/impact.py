@@ -82,7 +82,7 @@ def affected_modules(owners: list[str]) -> set[str]:
     return selected - {"yak-ops-ui", "yak-ops-dist"}
 
 
-def test_suites(path: str) -> set[str>:
+def test_suites(path: str) -> set[str]:
     """Select integration suites only for production code and the owning *IT tests."""
     if "/src/test/" in path:
         if not path.endswith("IT.java"):
