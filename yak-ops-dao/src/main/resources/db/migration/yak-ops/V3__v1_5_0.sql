@@ -48,6 +48,7 @@ CREATE TABLE yak_ops_standard_field (
     PRIMARY KEY (id),
     UNIQUE KEY uk_standard_field_code (en_code),
     KEY idx_standard_field_category (workspace_id,category_id,update_time,id),
+    KEY idx_standard_field_workspace_update (workspace_id,update_time,id),
     CONSTRAINT fk_standard_field_category FOREIGN KEY (workspace_id,category_id)
         REFERENCES yak_ops_standard_category (workspace_id,id) ON DELETE RESTRICT,
     CONSTRAINT ck_standard_field_revision CHECK (revision>0),

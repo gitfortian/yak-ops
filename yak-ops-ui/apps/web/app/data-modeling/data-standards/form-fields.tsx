@@ -56,10 +56,12 @@ export function SelectField(props: {
   onChange: (value: string) => void;
   error?: string;
   disabled?: boolean;
+  required?: boolean;
 }) {
+  const required = props.required ?? true;
   return (
     <Field className={FIELD_CLASS} invalid={Boolean(props.error)}>
-      <FieldLabel htmlFor={props.id} required className="pt-1">
+      <FieldLabel htmlFor={props.id} required={required} className="pt-1">
         {props.label}
       </FieldLabel>
       <div>
@@ -73,7 +75,7 @@ export function SelectField(props: {
           <SelectTrigger
             id={props.id}
             variant="outlined"
-            aria-required
+            aria-required={required}
             aria-invalid={Boolean(props.error) || undefined}
           >
             <SelectValue placeholder="请选择" />

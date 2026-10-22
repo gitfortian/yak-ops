@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/5
 
 Decision: [VOTE] +1 Accepted — https://github.com/gitfortian/yak-ops/pull/5#issuecomment-6334466443
 
-Implementation: Planned — Data Standards
+Implementation: Implemented — https://github.com/gitfortian/yak-ops/pull/6
 
 Release: Proposed 1.5.0, after warehouse planning 1.4.0
 
@@ -56,7 +56,7 @@ Related FLIPs: N/A
 
 ### Fields and validation
 
-所有 JSON ID 均为字符串。名称不要求全部为汉字；允许常见业务字符。
+所有 JSON ID 均为字符串。名称不要求全部为汉字；允许常见业务字符。同级目录允许同名：目录以不可变的 `id` 标识，名称仅用于展示，因此不设同级唯一约束，重命名也不做同级查重（搜索结果中的所属路径可能重复，属于已接受的取舍）。
 
 | 字段 | 创建与编辑契约 |
 | --- | --- |

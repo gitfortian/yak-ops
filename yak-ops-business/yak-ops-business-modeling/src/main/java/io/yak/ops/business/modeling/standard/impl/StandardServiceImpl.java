@@ -118,7 +118,6 @@ public class StandardServiceImpl implements StandardService {
         var node = category(workspaceId, id);
         checkRevision(node.getRevision(), revision);
         var rows = nodes.categories(workspaceId);
-        categoryTree(rows);
         Set<String> descendants = new HashSet<>();
         collectDescendants(id, rows, descendants);
         if (descendants.size() > 1 || nodes.hasFields(workspaceId, id))
@@ -361,6 +360,10 @@ public class StandardServiceImpl implements StandardService {
             throw new BusinessException(StandardErrorCode.INVALID_OWNER);
         if (input.getBusinessCaliber() != null && input.getBusinessCaliber().length() > 2000) throw invalid();
         String value = input.getLengthPrecision();
+        if (value != null && value.isBlank()) {
+            value = null;
+            input.setLengthPrecision(null);
+        }
         if (value != null) {
             boolean valid = false;
             if (input.getDataType() == DataType.STRING)

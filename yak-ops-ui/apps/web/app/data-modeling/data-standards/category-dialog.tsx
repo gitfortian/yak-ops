@@ -1,6 +1,6 @@
 import { Alert, Button, Dialog, DialogContent, DialogTitle, Form, toast } from "@yak-ops/yak-ui";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { saveCategory, standardFailureField } from "@/service/data-modeling/data-standards";
+import { saveCategory, classifyStandardFailure } from "@/service/data-modeling/data-standards";
 import type { CategoryDraft, SavedStandard } from "@/service/data-modeling/data-standards/types";
 import { InputField } from "./form-fields";
 export default function CategoryDialog(props: {
@@ -12,6 +12,8 @@ export default function CategoryDialog(props: {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [failure, setFailure] = useState("");
+  const [stale, setStale] = useState(false);
   const busy = useRef(false),
     active = useRef(true);
   const id = useId();
@@ -23,7 +25,8 @@ export default function CategoryDialog(props: {
   }, []);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy.current || conflict) return;
+    if (busy.current || conflict || stale) return;
+    setFailure("");
     if (!name.trim() || name.trim().length > 128) {
       setError("请输入1至128个字符的目录名称");
       return;
@@ -36,8 +39,17 @@ export default function CategoryDialog(props: {
         toast.success("保存成功");
         props.onSaved(saved);
       }
-    } catch (failure) {
-      if (active.current && standardFailureField(failure) === "revision") setConflict(true);
+    } catch (error) {
+      if (!active.current) return;
+      const result = classifyStandardFailure(error);
+      if (result.kind === "conflict") setConflict(true);
+      else if (result.kind === "missing") {
+        setStale(true);
+        setFailure("目录已不存在，请关闭弹窗并刷新后重试。");
+      } else if (result.kind === "forbidden") {
+        setStale(true);
+        setFailure("无权修改该目录。");
+      } else setFailure(result.kind === "unknown" ? result.message : "目录保存失败，请稍后重试");
     } finally {
       busy.current = false;
       if (active.current) setSaving(false);
@@ -76,6 +88,7 @@ export default function CategoryDialog(props: {
             }}
           />
           {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
+          {failure && <Alert>{failure}</Alert>}
           <div className="flex justify-end gap-2 pt-2">
             <Button size="small" disabled={saving} onClick={props.onClose}>
               取消
@@ -85,7 +98,7 @@ export default function CategoryDialog(props: {
               variant="primary"
               type="submit"
               loading={saving}
-              disabled={conflict}
+              disabled={conflict || stale}
             >
               保存
             </Button>

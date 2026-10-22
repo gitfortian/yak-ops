@@ -1,5 +1,6 @@
 package io.yak.ops.dao.repository.modeling.standard.impl;
 
+import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.dao.entity.modeling.standard.CategoryEntity;
 import io.yak.ops.dao.entity.modeling.standard.StandardFieldEntity;
@@ -17,10 +18,19 @@ public class StandardRepositoryImpl implements StandardRepository {
     @Resource
     private StandardMapper mapper;
 
+    private static String normalize(String actor) {
+        return actor == null || actor.isBlank() ? CommonConstants.SYSTEM_USER : actor.strip();
+    }
+
     @Override
     public boolean lockCatalog(String workspaceId, String actor) {
-        mapper.reserveCatalog(workspaceId, actor, DateUtils.now());
-        return mapper.lockCatalog(workspaceId);
+        Boolean initialized = mapper.lockCatalog(workspaceId);
+        if (initialized == null) {
+            // Concurrent first writers block on the reservation; only the winner commits the defaults marker.
+            mapper.reserveCatalog(workspaceId, normalize(actor), DateUtils.now());
+            initialized = mapper.lockCatalog(workspaceId);
+        }
+        return Boolean.TRUE.equals(initialized);
     }
 
     @Override

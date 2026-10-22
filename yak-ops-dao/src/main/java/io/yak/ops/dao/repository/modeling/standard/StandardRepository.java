@@ -9,6 +9,10 @@ import java.util.Optional;
 public interface StandardRepository {
     /**
      * Creates or locks the Workspace catalog and reports its initialization state.
+     *
+     * <p>Writers observe the row lock before deciding to seed defaults, so concurrent first writers serialize on
+     * {@code SELECT ... FOR UPDATE} instead of racing to insert two default root sets.
+     *
      * @param workspaceId authorized current Workspace
      * @param actor authenticated initializing user
      * @return true only when its default directories have already been committed
@@ -86,6 +90,10 @@ public interface StandardRepository {
     boolean deleteField(String workspaceId, String id, long revision);
     /**
      * Checks the global standard namespace without exposing the occupying field.
+     *
+     * <p>The probe deliberately spans Workspaces because the code namespace is global; a caller can only learn
+     * that a code exists somewhere, never in which Workspace or on which field.
+     *
      * @param enCode exact validated standard code
      * @param excludeId authorized edited identity, or null for creation
      * @return true when another field owns the exact code

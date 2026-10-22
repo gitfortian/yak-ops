@@ -223,6 +223,10 @@ export default function DataStandardsPage() {
             setFieldDraft(null);
             setVersion((value) => value + 1);
           }}
+          onStaleCategory={() => {
+            catalog.refresh();
+            setVersion((value) => value + 1);
+          }}
         />
       )}
       {deleting && (

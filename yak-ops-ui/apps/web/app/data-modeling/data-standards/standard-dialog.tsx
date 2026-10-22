@@ -16,9 +16,9 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   checkCodeUnique,
+  classifyStandardFailure,
   getOwners,
   saveStandard,
-  standardFailureField,
 } from "@/service/data-modeling/data-standards";
 import {
   DATA_TYPES,
@@ -35,6 +35,7 @@ export default function StandardDialog(props: {
   draft: StandardDraft;
   onClose: () => void;
   onSaved: () => void;
+  onStaleCategory: () => void;
 }) {
   const edited = props.draft.mode === "edit" ? props.draft.standard : undefined;
   const category =
@@ -56,9 +57,12 @@ export default function StandardDialog(props: {
   const [ownerVersion, setOwnerVersion] = useState(0);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [failure, setFailure] = useState("");
+  const [stale, setStale] = useState(false);
   const [checkingCode, setCheckingCode] = useState(false);
   const active = useRef(true),
-    busy = useRef(false);
+    busy = useRef(false),
+    ownerTouched = useRef(false);
   const codeRequest = useRef<AbortController | null>(null);
   const latestCode = useRef(input.enCode);
   latestCode.current = input.enCode;
@@ -90,7 +94,15 @@ export default function StandardDialog(props: {
       controller.abort();
     };
   }, [ownerVersion]);
+  useEffect(() => {
+    // The session profile resolves asynchronously; fill the default only while the user has not chosen an owner.
+    if (edited || ownerTouched.current || !currentUser?.id) return;
+    setInput((previous) =>
+      previous.ownerId ? previous : { ...previous, ownerId: currentUser.id },
+    );
+  }, [currentUser?.id, edited]);
   const change = <K extends keyof StandardInput>(key: K, value: StandardInput[K]) => {
+    if (key === "ownerId") ownerTouched.current = true;
     setInput((previous) => ({ ...previous, [key]: value }));
     setErrors((previous) => ({ ...previous, [key]: undefined }));
     if (key === "enCode") {
@@ -127,7 +139,8 @@ export default function StandardDialog(props: {
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy.current || conflict || ownerState !== "ready") return;
+    if (busy.current || conflict || stale || ownerState !== "ready") return;
+    setFailure("");
     const next = validateStandard(input, owners);
     setErrors(next);
     if (Object.keys(next).length) {
@@ -151,18 +164,30 @@ export default function StandardDialog(props: {
         toast.success("保存成功");
         props.onSaved();
       }
-    } catch (failure) {
+    } catch (error) {
       if (active.current) {
-        const field = standardFailureField(failure);
-        if (field === "revision") setConflict(true);
-        else if (field === "enCode")
-          setErrors((previous) => ({ ...previous, enCode: "英文编码已存在或不符合规范" }));
-        else if (field === "lengthPrecision")
-          setErrors((previous) => ({ ...previous, lengthPrecision: "长度或精度与数据类型不匹配" }));
-        else if (field === "ownerId") {
-          setErrors((previous) => ({ ...previous, ownerId: "请选择当前工作空间有效成员" }));
-          setOwnerVersion((value) => value + 1);
-        }
+        const result = classifyStandardFailure(error);
+        if (result.kind === "field") {
+          if (result.field === "enCode")
+            setErrors((previous) => ({ ...previous, enCode: "英文编码已存在或不符合规范" }));
+          else if (result.field === "lengthPrecision")
+            setErrors((previous) => ({
+              ...previous,
+              lengthPrecision: "长度或精度与数据类型不匹配",
+            }));
+          else {
+            setErrors((previous) => ({ ...previous, ownerId: "请选择当前工作空间有效成员" }));
+            setOwnerVersion((value) => value + 1);
+          }
+        } else if (result.kind === "conflict") setConflict(true);
+        else if (result.kind === "missing") {
+          setStale(true);
+          setFailure("所属分类已不存在，请刷新后重试。");
+          props.onStaleCategory();
+        } else if (result.kind === "forbidden") {
+          setStale(true);
+          setFailure("无权在该分类下保存标准。");
+        } else setFailure(result.message);
       }
     } finally {
       busy.current = false;
@@ -319,6 +344,7 @@ export default function StandardDialog(props: {
             </div>
           </Field>
           {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
+          {failure && <Alert>{failure}</Alert>}
           <div className="flex justify-end gap-2 pt-2">
             <Button size="small" disabled={saving} onClick={props.onClose}>
               取消
@@ -328,7 +354,7 @@ export default function StandardDialog(props: {
               variant="primary"
               type="submit"
               loading={saving}
-              disabled={conflict || ownerState !== "ready"}
+              disabled={conflict || stale || ownerState !== "ready"}
             >
               保存
             </Button>

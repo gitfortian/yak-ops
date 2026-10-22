@@ -20,9 +20,14 @@ public interface StandardMapper {
     void reserveCatalog(
             @Param("workspaceId") String workspaceId, @Param("actor") String actor, @Param("now") LocalDateTime now);
 
+    /**
+     * Locks the Workspace catalog row in the calling transaction.
+     *
+     * @return null when the catalog row has not been reserved yet, otherwise whether defaults were committed
+     */
     @Select(
             "SELECT initialized_at IS NOT NULL FROM yak_ops_standard_catalog WHERE workspace_id=#{workspaceId} FOR UPDATE")
-    boolean lockCatalog(String workspaceId);
+    Boolean lockCatalog(String workspaceId);
 
     @Update("UPDATE yak_ops_standard_catalog SET initialized_at=#{now} WHERE workspace_id=#{workspaceId}")
     void markInitialized(@Param("workspaceId") String workspaceId, @Param("now") LocalDateTime now);

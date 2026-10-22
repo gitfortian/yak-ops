@@ -1,5 +1,5 @@
 import HttpUtils from "@/service/http/HttpUtils";
-import { BizError } from "@/service/http/request";
+import { BizError, handleAuthenticationFailure } from "@/service/http/request";
 import type {
   CategoryDraft,
   DeleteTarget,
@@ -14,28 +14,66 @@ import type {
 } from "./types";
 
 const API = "/api/v1/data-modeling/data-standards";
-export function standardFailureField(error: unknown) {
-  if (!(error instanceof BizError)) return null;
+
+// Pages and dialogs render these failures beside their controls; authentication keeps the transport's handling.
+async function standardRequest<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof BizError && (error.code === 401 || error.code === 2001)) {
+      handleAuthenticationFailure();
+    }
+    throw error;
+  }
+}
+
+export type StandardFailure =
+  | { kind: "field"; field: "enCode" | "ownerId" | "lengthPrecision" }
+  | { kind: "conflict" }
+  | { kind: "missing" }
+  | { kind: "forbidden" }
+  | { kind: "unknown"; message: string };
+
+/** Classifies a rejected request into the surface that must explain it. */
+export function classifyStandardFailure(error: unknown): StandardFailure {
+  if (!(error instanceof BizError)) return { kind: "unknown", message: "网络异常，请稍后重试" };
   switch (error.code) {
     case 19101:
     case 19102:
-      return "enCode";
+      return { kind: "field", field: "enCode" };
     case 19105:
-      return "ownerId";
+      return { kind: "field", field: "ownerId" };
     case 19106:
-      return "lengthPrecision";
+      return { kind: "field", field: "lengthPrecision" };
     case 19104:
-      return "revision";
+      return { kind: "conflict" };
+    case 10010:
+      return { kind: "missing" };
+    case 42002:
+      return { kind: "forbidden" };
     default:
-      return null;
+      return { kind: "unknown", message: error.message || "操作失败，请稍后重试" };
   }
 }
+
 export const initializeCatalog = (signal?: AbortSignal) =>
-  HttpUtils.postData<StandardCategory[]>(API + "/catalog/initialize", undefined, { signal });
+  standardRequest(
+    HttpUtils.postData<StandardCategory[]>(API + "/catalog/initialize", undefined, {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
 export const getCategoryTree = (signal?: AbortSignal) =>
-  HttpUtils.getData<StandardCategory[]>(API + "/categories/tree", { signal });
+  standardRequest(
+    HttpUtils.getData<StandardCategory[]>(API + "/categories/tree", {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
 export const getOwners = (signal?: AbortSignal) =>
-  HttpUtils.getData<OwnerOption[]>(API + "/owners", { signal });
+  standardRequest(
+    HttpUtils.getData<OwnerOption[]>(API + "/owners", { signal, skipErrorHandler: true }),
+  );
 export function getStandards(query: StandardQuery, signal?: AbortSignal) {
   const params = new URLSearchParams({
     pageNo: String(query.pageNo),
@@ -43,50 +81,73 @@ export function getStandards(query: StandardQuery, signal?: AbortSignal) {
   });
   if (query.scope === "CATEGORY") params.set("categoryId", query.categoryId);
   else params.set("keyword", query.keyword);
-  return HttpUtils.getData<StandardPage>(API + "/fields?" + params, { signal });
+  return standardRequest(
+    HttpUtils.getData<StandardPage>(API + "/fields?" + params, { signal, skipErrorHandler: true }),
+  );
 }
 export function checkCodeUnique(enCode: string, excludeId?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ enCode });
   if (excludeId) params.set("excludeId", excludeId);
-  return HttpUtils.getData<{ available: boolean }>(API + "/fields/codes/availability?" + params, {
-    signal,
-  });
+  return standardRequest(
+    HttpUtils.getData<{ available: boolean }>(API + "/fields/codes/availability?" + params, {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
 }
 export const checkStandardReferenced = (id: string, signal?: AbortSignal) =>
-  HttpUtils.getData<StandardReferences>(API + "/fields/" + encodeURIComponent(id) + "/references", {
-    signal,
-  });
+  standardRequest(
+    HttpUtils.getData<StandardReferences>(
+      API + "/fields/" + encodeURIComponent(id) + "/references",
+      {
+        signal,
+        skipErrorHandler: true,
+      },
+    ),
+  );
 export function saveStandard(draft: StandardDraft, input: StandardInput) {
-  return draft.mode === "edit"
-    ? HttpUtils.putData<SavedStandard>(API + "/fields/" + encodeURIComponent(draft.standard.id), {
-        ...input,
-        revision: draft.standard.revision,
-      })
-    : HttpUtils.postData<SavedStandard>(
-        API + "/categories/" + encodeURIComponent(draft.category.id) + "/fields",
-        input,
-      );
+  return standardRequest(
+    draft.mode === "edit"
+      ? HttpUtils.putData<SavedStandard>(
+          API + "/fields/" + encodeURIComponent(draft.standard.id),
+          { ...input, revision: draft.standard.revision },
+          { skipErrorHandler: true },
+        )
+      : HttpUtils.postData<SavedStandard>(
+          API + "/categories/" + encodeURIComponent(draft.category.id) + "/fields",
+          input,
+          { skipErrorHandler: true },
+        ),
+  );
 }
 export function saveCategory(draft: CategoryDraft, name: string) {
-  return draft.mode === "rename"
-    ? HttpUtils.putData<SavedStandard>(
-        API + "/categories/" + encodeURIComponent(draft.category.id),
-        { name, revision: draft.category.revision },
-      )
-    : HttpUtils.postData<SavedStandard>(API + "/categories", {
-        parentId: draft.parent?.id ?? null,
-        name,
-      });
+  return standardRequest(
+    draft.mode === "rename"
+      ? HttpUtils.putData<SavedStandard>(
+          API + "/categories/" + encodeURIComponent(draft.category.id),
+          { name, revision: draft.category.revision },
+          { skipErrorHandler: true },
+        )
+      : HttpUtils.postData<SavedStandard>(
+          API + "/categories",
+          { parentId: draft.parent?.id ?? null, name },
+          { skipErrorHandler: true },
+        ),
+  );
 }
 export function deleteStandardTarget(target: DeleteTarget) {
   const resource = target.kind === "category" ? "categories" : "fields";
-  return HttpUtils.deleteData<boolean>(
-    API +
-      "/" +
-      resource +
-      "/" +
-      encodeURIComponent(target.node.id) +
-      "?revision=" +
-      target.node.revision,
+  return standardRequest(
+    HttpUtils.deleteData<boolean>(
+      API +
+        "/" +
+        resource +
+        "/" +
+        encodeURIComponent(target.node.id) +
+        "?revision=" +
+        target.node.revision,
+      undefined,
+      { skipErrorHandler: true },
+    ),
   );
 }
