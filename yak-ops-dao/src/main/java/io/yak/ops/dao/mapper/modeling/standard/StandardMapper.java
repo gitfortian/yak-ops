@@ -74,11 +74,12 @@ public interface StandardMapper {
             "SELECT COUNT(*) FROM yak_ops_standard_field WHERE en_code=#{enCode} AND (#{excludeId} IS NULL OR id!=#{excludeId})")
     long occupied(@Param("enCode") String enCode, @Param("excludeId") String excludeId);
 
+    // en_code is ascii_bin while bound parameters arrive as utf8mb4; CONVERT keeps the LIKE collation-compatible.
     @Select(
-            "SELECT * FROM yak_ops_standard_field WHERE workspace_id=#{workspaceId} AND (#{query.categoryId} IS NULL OR category_id=#{query.categoryId}) AND (#{query.keyword} IS NULL OR cn_name LIKE #{query.keyword} ESCAPE '!' OR LOWER(en_code) LIKE #{query.keyword} ESCAPE '!') ORDER BY update_time DESC,id DESC LIMIT #{query.offset},#{query.pageSize}")
+            "SELECT * FROM yak_ops_standard_field WHERE workspace_id=#{workspaceId} AND (#{query.categoryId} IS NULL OR category_id=#{query.categoryId}) AND (#{query.keyword} IS NULL OR cn_name LIKE #{query.keyword} ESCAPE '!' OR CONVERT(en_code USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE #{query.keyword} ESCAPE '!') ORDER BY update_time DESC,id DESC LIMIT #{query.offset},#{query.pageSize}")
     List<StandardFieldEntity> fields(@Param("workspaceId") String workspaceId, @Param("query") FieldQuery query);
 
     @Select(
-            "SELECT COUNT(*) FROM yak_ops_standard_field WHERE workspace_id=#{workspaceId} AND (#{query.categoryId} IS NULL OR category_id=#{query.categoryId}) AND (#{query.keyword} IS NULL OR cn_name LIKE #{query.keyword} ESCAPE '!' OR LOWER(en_code) LIKE #{query.keyword} ESCAPE '!')")
+            "SELECT COUNT(*) FROM yak_ops_standard_field WHERE workspace_id=#{workspaceId} AND (#{query.categoryId} IS NULL OR category_id=#{query.categoryId}) AND (#{query.keyword} IS NULL OR cn_name LIKE #{query.keyword} ESCAPE '!' OR CONVERT(en_code USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE #{query.keyword} ESCAPE '!')")
     long countFields(@Param("workspaceId") String workspaceId, @Param("query") FieldQuery query);
 }

@@ -205,6 +205,7 @@ class StandardDatabaseIT {
         service.createField("ws", "actor", category.id(), input("order_percent", "订单%合计"));
         service.createField("ws", "actor", category.id(), input("order_bang", "折扣!金额"));
         assertEquals(1, service.page("ws", "actor", null, "订单_", 1, 20).total());
+        assertEquals(1, service.page("ws", "actor", null, "ORDER_", 1, 20).total());
         assertEquals(1, service.page("ws", "actor", null, "订单%", 1, 20).total());
         assertEquals(1, service.page("ws", "actor", null, "折扣!", 1, 20).total());
         assertEquals(2, service.page("ws", "actor", null, "订单", 1, 2).records().size());
