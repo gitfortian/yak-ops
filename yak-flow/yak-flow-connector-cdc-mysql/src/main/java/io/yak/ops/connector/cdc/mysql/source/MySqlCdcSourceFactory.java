@@ -132,5 +132,4 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         return properties;
     }
-
 }
