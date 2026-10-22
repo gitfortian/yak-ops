@@ -250,12 +250,12 @@ export function InternalTable<RecordType extends object>({
   const sizeClass = sizeClasses[size];
 
   return (
-    <div className={cn("flex min-w-0 flex-col", className)}>
+    <div className={cn("flex w-full min-w-0 flex-col", className)}>
       <div className="relative min-h-0 shrink-0">
         <div
           ref={viewportRef}
           className={cn(
-            "min-h-0 overflow-x-auto bg-[var(--yak-components-table-bg)]",
+            "min-h-0 w-full min-w-0 overflow-x-auto bg-[var(--yak-components-table-bg)]",
             scroll?.y != null && "overflow-y-auto",
           )}
           style={scrollStyle}

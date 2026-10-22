@@ -448,8 +448,8 @@ export function DataSyncPage() {
       <div className="flex min-h-full flex-col bg-[#f6f6f6] text-[#242731]">
         <PageHeader title="数据同步" bordered className="bg-white px-6 max-md:px-4" />
 
-        <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
-          <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-4">
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Button
                 size="small"
@@ -531,7 +531,7 @@ export function DataSyncPage() {
               </div>
             </div>
 
-            <div className="mt-4 min-h-0 flex-1">
+            <div className="mt-4 min-h-0 min-w-0 flex-1">
               <Table<DataSyncTaskRecord>
                 className="min-h-full"
                 columns={columns}
