@@ -88,7 +88,8 @@ public class DataSourceLookupServiceImpl implements DataSourceLookupService {
                                 column.autoIncrement(),
                                 column.generated(),
                                 column.onUpdateExpression(),
-                                column.defaultGenerated()));
+                                column.defaultGenerated(),
+                                column.nativeType()));
             }
             return Optional.of(new DataSourceTable(
                     entity.getDbType(),
