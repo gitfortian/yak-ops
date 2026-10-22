@@ -1,12 +1,12 @@
 # YOIP-8: Data Modeling — Data Standards
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/5
 
-Decision: Pending explicit maintainer acceptance
+Decision: [VOTE] +1 Accepted — https://github.com/gitfortian/yak-ops/pull/5#issuecomment-6334466443
 
-Implementation: N/A until accepted
+Implementation: Planned — Data Standards
 
 Release: Proposed 1.5.0, after warehouse planning 1.4.0
 
