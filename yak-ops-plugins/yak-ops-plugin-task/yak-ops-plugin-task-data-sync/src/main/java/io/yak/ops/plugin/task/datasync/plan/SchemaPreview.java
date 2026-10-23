@@ -6,11 +6,7 @@ import java.util.Objects;
 
 /** Read-only DDL and physical schema differences, never accepted as execution input. */
 public record SchemaPreview(
-        int mappingIndex,
-        TableId target,
-        String action,
-        List<String> statements,
-        List<Difference> differences) {
+        int mappingIndex, TableId target, String action, List<String> statements, List<Difference> differences) {
     public SchemaPreview {
         target = Objects.requireNonNull(target, "target");
         statements = List.copyOf(statements);
