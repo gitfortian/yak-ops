@@ -42,12 +42,14 @@ Scope: `yak-ops-ui/apps/**`、`yak-ops-ui/packages/**`、`yak-ops-ui/scripts/**`
 - 优先使用标准 Utility 和语义状态 `data-*`；只有动态几何值、专用关键帧、第三方 DOM 覆盖、日志语法着色等 Tailwind 难以自然表达的场景才保留局部 CSS。已有 CSS 按所属功能逐步迁移，不批量机械删除。
 - 局部 CSS 不得覆盖 Yak UI 通用基础组件，不依赖别的业务页面的私有 Class。交互状态需要覆盖亮暗主题与 `prefers-reduced-motion`；CSS 变量应从共享 Token 获取颜色，不另建平行的主题系统。
 - 禁止为规避语义 Token 规则，把硬编码颜色从 `className` 挪到 `style`；内联样式只用于真正运行时决定的数值。新增通用视觉能力应在 `packages/yak-ui` 内实现。
+- Data Sync 已迁移的 `list/`、`editor/`、`detail/` 由 `architecture:check` 检查源码字符串中的固定颜色；统一复用语义 Token。日志语法着色、执行流动画仍由功能根目录的专用 CSS 管理，不因此禁止必要的 CSS。
 
 ## Testing and Architecture Enforcement
 
 - 纯函数和业务转换使用就近单测；组件的输入、异步、焦点与错误状态使用组件行为测试；跨页面主要流程使用现有 Playwright。新增单测框架必须统一纳入 workspace，而不是各领域各装一套。
 - Data Sync 拆分时至少保护草稿恢复、字段依赖重置、校验、任务保存、调度局部失败、上线失败、Workspace 切换及执行轮询；测试保持真实断言，不为迁移放松已有契约。
 - `scripts/check-architecture.mjs` 以实际依赖方向为边界，禁止领域 Service 反向依赖 App、业务页面绕过 Service 访问 HTTP、Yak UI 反向依赖业务。支持别名、相对路径与动态导入的边界检查；不要禁止 `hooks/`、`editor/`、`model/` 这类本身有合理用途的目录名。
+- Data Sync 的 `list/`、`editor/`、`detail/`、`log/` 是私有行为所有者：其他领域不能深度导入这些目录，目录之间也不相互读取私有实现；共享交互由 `data-sync/` 根目录装配或建立公开的稳定入口。架构检查覆盖动态导入、re-export 和相对路径。
 - 架构检查的新增规则需要回归测试。对尚未迁移的历史交叉依赖先记录并逐步收敛，不能用假通过、宽泛忽略或删测试来掩盖；格式、Lint、类型、契约、构建和浏览器测试分别报告实际结果。
 
 ## Design System and Interaction
