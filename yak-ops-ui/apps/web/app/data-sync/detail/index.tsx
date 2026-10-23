@@ -33,13 +33,36 @@ export function DataSyncTaskDetailPage() {
   const activeInstance = taskId ? activeByTask.get(taskId) : undefined;
   const canStart = canManageTaskDefinition(instancesReady, activeInstance);
   const {
-    executionId, activeTab, instances, instancesLoading, status, pageNo, total,
-    selectedInstance, selectedLoading, autoRefresh, setAutoRefresh, refreshing,
-    loadInstances, refreshExecution, selectInstance, changeTab, changePage, changeStatus,
-    selectSubmitted, refreshAfterCancel, listError,
+    executionId,
+    activeTab,
+    instances,
+    instancesLoading,
+    status,
+    pageNo,
+    total,
+    selectedInstance,
+    selectedLoading,
+    autoRefresh,
+    setAutoRefresh,
+    refreshing,
+    loadInstances,
+    refreshExecution,
+    selectInstance,
+    changeTab,
+    changePage,
+    changeStatus,
+    selectSubmitted,
+    refreshAfterCancel,
+    listError,
   } = useExecutionHistory(scope, taskId, activeInstance, hasEnabledSchedule);
   const { run, cancel, copyTaskId, running, canceling } = useExecutionActions({
-    taskId, task, canStart, selectedInstance, refreshActiveInstances, refreshAfterCancel, selectSubmitted,
+    taskId,
+    task,
+    canStart,
+    selectedInstance,
+    refreshActiveInstances,
+    refreshAfterCancel,
+    selectSubmitted,
   });
 
   if (taskLoading || !task) {
@@ -49,7 +72,6 @@ export function DataSyncTaskDetailPage() {
       </div>
     );
   }
-
 
   return (
     <div

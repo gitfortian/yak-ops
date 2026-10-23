@@ -11,9 +11,7 @@ import { detailQueryKeys } from "./query-keys";
 export function useDetailScope() {
   const { currentUser } = useAuth();
   const { currentWorkspace } = useWorkspace();
-  return currentUser?.id && currentWorkspace?.id
-    ? currentUser.id + ":" + currentWorkspace.id
-    : "";
+  return currentUser?.id && currentWorkspace?.id ? currentUser.id + ":" + currentWorkspace.id : "";
 }
 
 export function useTaskInformation(taskId: string | undefined, scope: string) {
@@ -55,6 +53,6 @@ export function useTaskInformation(taskId: string | undefined, scope: string) {
     task,
     taskLoading: taskQuery.isPending,
     dataSources: sourcesQuery.data ?? {},
-    updatedBy: userId === "system" ? "SYSTEM" : userQuery.data ?? "-",
+    updatedBy: userId === "system" ? "SYSTEM" : (userQuery.data ?? "-"),
   };
 }

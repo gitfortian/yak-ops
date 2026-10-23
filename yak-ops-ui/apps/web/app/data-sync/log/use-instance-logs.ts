@@ -71,6 +71,5 @@ export function useInstanceLogs(instanceId: string, active: boolean) {
     };
   }, [instanceId, revision]);
 
-
   return { content, error, logLines, setRevision };
 }

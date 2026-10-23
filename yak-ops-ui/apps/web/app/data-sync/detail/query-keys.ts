@@ -1,7 +1,8 @@
 /** Cache isolation: user and Workspace are part of every detail key. */
 export const detailQueryKeys = {
   scope: (scope: string) => ["data-sync-detail", scope] as const,
-  task: (scope: string, taskId: string) => [...detailQueryKeys.scope(scope), "task", taskId] as const,
+  task: (scope: string, taskId: string) =>
+    [...detailQueryKeys.scope(scope), "task", taskId] as const,
   dataSources: (scope: string, sourceId: string, targetId: string) =>
     [...detailQueryKeys.scope(scope), "sources", sourceId, targetId] as const,
   updatedBy: (scope: string, userId: string) =>

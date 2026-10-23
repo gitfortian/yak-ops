@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { toast } from "@yak-ops/yak-ui";
 import { canCancelTaskInstance } from "@/service/data-sync/execution";
-import { cancelDataSyncInstance, runDataSyncTask, type DataSyncInstanceRecord, type DataSyncTaskRecord } from "@/service/data-sync";
+import {
+  cancelDataSyncInstance,
+  runDataSyncTask,
+  type DataSyncInstanceRecord,
+  type DataSyncTaskRecord,
+} from "@/service/data-sync";
 import { listLatestTaskInstances } from "@/service/task-execution";
 
 interface ActionsInput {
@@ -13,7 +18,15 @@ interface ActionsInput {
   refreshAfterCancel: () => Promise<void>;
   selectSubmitted: (id: string) => void;
 }
-export function useExecutionActions({ taskId, task, canStart, selectedInstance, refreshActiveInstances, refreshAfterCancel, selectSubmitted }: ActionsInput) {
+export function useExecutionActions({
+  taskId,
+  task,
+  canStart,
+  selectedInstance,
+  refreshActiveInstances,
+  refreshAfterCancel,
+  selectSubmitted,
+}: ActionsInput) {
   const [running, setRunning] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const run = async () => {
