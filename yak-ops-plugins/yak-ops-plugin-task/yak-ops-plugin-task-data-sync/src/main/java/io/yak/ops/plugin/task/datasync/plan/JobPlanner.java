@@ -233,7 +233,8 @@ public final class JobPlanner {
                     actual == null ? null : actual.schema(),
                     event,
                     ReadonlyConfig.fromMap(prepared),
-                    schema)));
+                    schema,
+                    actual)));
         }
         if (job.sourceDataSourceId().equals(job.targetDataSourceId())
                 && sources.stream().anyMatch(targets::contains)) {
