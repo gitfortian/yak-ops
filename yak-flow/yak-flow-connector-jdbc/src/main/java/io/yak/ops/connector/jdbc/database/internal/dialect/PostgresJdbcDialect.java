@@ -86,7 +86,8 @@ public final class PostgresJdbcDialect extends AbstractDialect {
 
     @Override
     public String dropColumnSql(TableId table, String column) {
-        return "ALTER TABLE " + qualifiedTable(table) + " DROP COLUMN " + quoteIdentifier(column) + " RESTRICT";
+        // PostgreSQL defaults to RESTRICT; omitting the keyword also supports the H2 JDBC contract tests.
+        return "ALTER TABLE " + qualifiedTable(table) + " DROP COLUMN " + quoteIdentifier(column);
     }
 
     @Override
