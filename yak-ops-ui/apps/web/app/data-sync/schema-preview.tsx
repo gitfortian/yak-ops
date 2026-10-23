@@ -66,9 +66,39 @@ export function SchemaPreview({
                     {[row.target.catalog, row.target.schema, row.target.table]
                       .filter(Boolean)
                       .join(".")}{" "}
-                    · {row.action === "CREATE" ? "创建并校验" : "已有结构校验通过"}
+                    · {row.action === "CREATE" ? "创建" : row.action === "ALTER" ? "调整结构" : "结构兼容"}
                   </div>
-                  {row.action === "CREATE" ? (
+                  {row.differences.filter((difference) => difference.action !== "COMPATIBLE").length > 0 ? (
+                    <div className="overflow-auto rounded-lg border text-xs">
+                      {row.differences
+                        .filter((difference) => difference.action !== "COMPATIBLE")
+                        .map((difference, index) => (
+                          <div
+                            key={`${difference.column ?? "table"}-${difference.reason}-${index}`}
+                            className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2 last:border-b-0"
+                          >
+                            <span className="min-w-28 font-medium">{difference.column ?? "目标表"}</span>
+                            <span>
+                              {difference.action === "CREATE_TABLE"
+                                ? "创建表"
+                                : difference.action === "ADD_COLUMN"
+                                  ? "新增字段"
+                                  : difference.action === "ALTER_COLUMN_TYPE"
+                                    ? "调整字段类型"
+                                    : difference.action === "METADATA_DIFFERENCE"
+                                      ? "物理属性存在差异（不自动迁移）"
+                                      : "结构不兼容"}
+                            </span>
+                            {difference.sourceType || difference.targetType ? (
+                              <span className="text-[var(--color-text-secondary)]">
+                                {[difference.targetType, difference.sourceType].filter(Boolean).join(" → ")}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  {row.statements.length > 0 ? (
                     <pre className="overflow-auto rounded-lg border p-3 text-xs">
                       <code>{row.statements.join(";\n\n")};</code>
                     </pre>
