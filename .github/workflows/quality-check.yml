@@ -70,7 +70,19 @@ jobs:
           python3 scripts/verify_logging_rules.py
       - name: PR4 Spotless only
         if: github.head_ref == 'feat/data-sync-schema-planning-preview-20261023'
-        run: bash mvnw -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync,yak-ops-boot com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
+        run: |
+          bash mvnw -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync,yak-ops-boot com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+          for path in changed:
+              print("PR4_FORMATTED_FILE_JSON:" + json.dumps(
+                  {"path": path, "content": Path(path).read_text(encoding="utf-8")},
+                  ensure_ascii=False))
+          PY
+          git diff --exit-code --quiet
       - name: Verify changed Maven modules and upstream dependencies
         if: github.head_ref != 'feat/data-sync-schema-planning-preview-20261023'
         env:
