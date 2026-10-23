@@ -88,7 +88,7 @@ public final class JobConfigValidator {
                             throw new IllegalStateException("Target datasource revision changed during validation");
                         SchemaValidator.validateTarget(event, actual);
                         SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
-                                    table.sink(),
+                                table.sink(),
                                 sourceTable.schema(),
                                 actual.schema(),
                                 sourceFactory.producesChangelog()));
