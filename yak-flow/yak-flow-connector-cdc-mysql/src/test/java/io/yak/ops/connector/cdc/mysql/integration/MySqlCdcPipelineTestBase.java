@@ -308,7 +308,10 @@ abstract class MySqlCdcPipelineTestBase {
 
     private static void ensureRunning(JobClient job) throws Exception {
         JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
-        if (status != JobStatus.RUNNING) {
+        // EmbeddedPipelineExecutor returns once the worker is submitted. Its asynchronous
+        // ExecutionGraph may still report CREATED until the worker enters run().
+        // Keep polling within the existing convergence deadline, but fail on terminal states.
+        if (status != JobStatus.CREATED && status != JobStatus.RUNNING) {
             throw new AssertionError("CDC pipeline stopped during schema evolution: " + status);
         }
     }
