@@ -59,7 +59,7 @@ public final class JobPlanner {
      * @return immutable logical plan; missing targets require explicit SCHEMA preparation
      */
     public JobPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
-        return resolve(parameters, context.workspaceId(), context.instanceId());
+        return resolve(parameters, context.workspaceId(), context.instanceId(), false);
     }
 
     /**
@@ -73,7 +73,7 @@ public final class JobPlanner {
         if (!JobConfig.from(parameters).steps().contains(Step.SCHEMA)) {
             throw new IllegalArgumentException("DDL preview requires the SCHEMA step");
         }
-        JobPlan plan = resolve(parameters, workspaceId, null);
+        JobPlan plan = resolve(parameters, workspaceId, null, true);
         List<SchemaPreview> results = new ArrayList<>();
         for (int index = 0; index < plan.tables().size(); index++) {
             TablePlan table = plan.tables().get(index);
@@ -93,8 +93,12 @@ public final class JobPlanner {
             results.add(new SchemaPreview(
                     index,
                     table.targetTable(),
-                    table.targetSchema() == null ? "CREATE" : schema.requiresDdl() ? "ALTER" : "VERIFY",
-                    SchemaValidator.statements(table.targetDatasource().type(), schema, table.targetMetadata()),
+                    schema.blocked()
+                            ? "BLOCKED"
+                            : table.targetSchema() == null ? "CREATE" : schema.requiresDdl() ? "ALTER" : "VERIFY",
+                    schema.blocked()
+                            ? List.of()
+                            : SchemaValidator.statements(table.targetDatasource().type(), schema, table.targetMetadata()),
                     differences));
         }
         return List.copyOf(results);
@@ -119,7 +123,7 @@ public final class JobPlanner {
         return plan.withTarget(actual);
     }
 
-    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId) {
+    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId, boolean preview) {
         JobConfig job = JobConfigValidator.validateConfig(parameters, factories);
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
@@ -190,10 +194,12 @@ public final class JobPlanner {
             }
             CreateTableEvent event = prepareSchema ? SchemaValidator.createEvent(from, targetInfo, targetTable) : null;
             SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
-            if (schema != null) SchemaValidator.requireCompatible(schema);
+            if (schema != null && !preview) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
-            sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
-            if (actual != null && (schema == null || !schema.requiresDdl())) {
+            if (schema == null || !schema.blocked()) {
+                sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
+            }
+            if (actual != null && (schema == null || (!schema.blocked() && !schema.requiresDdl()))) {
                 sinkFactory.validateSchema(sink, from.schema(), actual.schema(), sourceFactory.producesChangelog());
             }
             String target = encodePart(sinkId) + encodeTable(targetTable);
