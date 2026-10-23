@@ -29,7 +29,8 @@ public final class MySqlSchemaChangeGate {
         }
         advance = Objects.requireNonNull(advanceOffset, "advanceOffset");
         CompletionStage<Long> applied = context.sendSourceSchemaChange(Objects.requireNonNull(change, "change"));
-        pending = Objects.requireNonNull(applied, "schema change acknowledgment").toCompletableFuture();
+        pending =
+                Objects.requireNonNull(applied, "schema change acknowledgment").toCompletableFuture();
     }
 
     /** Returns false until the coordinator has committed the target and released the Source. */
