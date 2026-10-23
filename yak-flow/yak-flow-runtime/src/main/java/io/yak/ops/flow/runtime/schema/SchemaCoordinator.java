@@ -290,7 +290,7 @@ public final class SchemaCoordinator implements AutoCloseable {
 
     private static void await(CompletionStage<?> stage) throws Exception {
         try {
-            stage.toCompletableFuture().get();
+            stage.toCompletableFuture().get(60, TimeUnit.SECONDS);
         } catch (ExecutionException failure) {
             Throwable cause = unwrap(failure);
             if (cause instanceof Exception exception) throw exception;
