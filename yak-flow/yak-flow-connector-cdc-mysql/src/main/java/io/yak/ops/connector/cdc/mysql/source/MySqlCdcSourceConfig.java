@@ -1,10 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.cdc.mysql.source.debezium.CheckpointOffsetBackingStore;
-import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -62,8 +62,18 @@ public final class MySqlCdcSourceConfig {
             Map<TableId, TableSchema> schemas,
             int queueCapacity,
             Map<String, String> connectionProperties) {
-        this(hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity,
-                connectionProperties, null, false);
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                null,
+                false);
     }
 
     private MySqlCdcSourceConfig(
@@ -117,7 +127,8 @@ public final class MySqlCdcSourceConfig {
         this.schemas = Collections.unmodifiableMap(resolved);
         Map<TableId, Schema> shapes = new LinkedHashMap<>();
         resolved.forEach((table, tableSchema) -> shapes.put(
-                table, physicalSchemas == null
+                table,
+                physicalSchemas == null
                         ? Schema.from(tableSchema, null, Map.of(), Map.of())
                         : Objects.requireNonNull(physicalSchemas.get(table), "Physical source schema is missing")));
         this.physicalSchemas = Collections.unmodifiableMap(shapes);
@@ -217,15 +228,33 @@ public final class MySqlCdcSourceConfig {
             }
         }
         return new MySqlCdcSourceConfig(
-                hostname, port, username, password, serverId, topicPrefix, shape, queueCapacity,
-                connectionProperties, models, enabled);
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                shape,
+                queueCapacity,
+                connectionProperties,
+                models,
+                enabled);
     }
 
     /** Disables DDL adoption in snapshot-backfill readers, where schema changes cannot be replayed safely. */
     public MySqlCdcSourceConfig withoutSchemaEvolution() {
         return new MySqlCdcSourceConfig(
-                hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity,
-                connectionProperties, physicalSchemas, false);
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                physicalSchemas,
+                false);
     }
 
     public int queueCapacity() {
