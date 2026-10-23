@@ -1,24 +1,24 @@
 package io.yak.ops.plugin.task.datasync.validation;
 
-import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.event.ColumnProperties;
-import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
+import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
+import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
-import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 
 /** Read-only constraints shared by schema preview, publication and execution planning. */
 public final class SchemaValidator {
