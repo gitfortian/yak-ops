@@ -45,8 +45,8 @@ public record SchemaChangeRequest(
         if (sourceSchemaBefore.equals(sourceSchemaAfter)) {
             throw new IllegalArgumentException("Schema change must change the source schema");
         }
-        if (targetSchemaBefore.equals(targetSchemaAfter) || targetChanges.isEmpty()) {
-            throw new IllegalArgumentException("Schema change must include a target schema transition");
+        if (targetChanges.isEmpty() && !targetSchemaBefore.equals(targetSchemaAfter)) {
+            throw new IllegalArgumentException("Target schema was changed without executable target events");
         }
         Schema expectedTarget = targetSchemaBefore;
         for (SchemaChangeEvent change : targetChanges) {
