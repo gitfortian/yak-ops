@@ -43,6 +43,7 @@ public final class SchemaCoordinator implements AutoCloseable {
     private final SchemaManager manager;
     private final MetadataApplier metadataApplier;
     private final SchemaEvolutionSink schemaSink;
+    private final boolean allowDropColumns;
     private volatile List<SchemaSourceParticipant> sourceTasks;
     private final List<SchemaChangeParticipant> pipelineParticipants;
     private final List<SchemaChangeParticipant> sinkParticipants;
@@ -63,7 +64,7 @@ public final class SchemaCoordinator implements AutoCloseable {
             List<? extends SchemaChangeParticipant> pipelineParticipants,
             List<? extends SchemaChangeParticipant> sinkParticipants,
             Consumer<Throwable> onFailure) {
-        this(manager, metadataApplier, sourceTasks, pipelineParticipants, sinkParticipants, onFailure, null);
+        this(manager, metadataApplier, sourceTasks, pipelineParticipants, sinkParticipants, onFailure, null, false);
     }
 
     /** Uses the Sink's explicit schema planner; raw MySQL DDL is never passed to the target. */
@@ -75,6 +76,28 @@ public final class SchemaCoordinator implements AutoCloseable {
             List<? extends SchemaChangeParticipant> sinkParticipants,
             Consumer<Throwable> onFailure,
             SchemaEvolutionSink schemaSink) {
+        this(
+                manager,
+                metadataApplier,
+                sourceTasks,
+                pipelineParticipants,
+                sinkParticipants,
+                onFailure,
+                schemaSink,
+                false);
+    }
+
+    /** Allows only explicitly authorized destructive schema transitions in this Job attempt. */
+    public SchemaCoordinator(
+            SchemaManager manager,
+            MetadataApplier metadataApplier,
+            List<? extends SchemaSourceParticipant> sourceTasks,
+            List<? extends SchemaChangeParticipant> pipelineParticipants,
+            List<? extends SchemaChangeParticipant> sinkParticipants,
+            Consumer<Throwable> onFailure,
+            SchemaEvolutionSink schemaSink,
+            boolean allowDropColumns) {
+        this.allowDropColumns = allowDropColumns;
         this.manager = Objects.requireNonNull(manager, "manager");
         this.schemaSink = schemaSink;
         this.metadataApplier = Objects.requireNonNull(metadataApplier, "metadataApplier");
@@ -141,7 +164,7 @@ public final class SchemaCoordinator implements AutoCloseable {
                     new UnsupportedOperationException("Runtime schema evolution requires a Sink schema planner"));
         }
         try {
-            return applySchemaChange(schemaSink.planSchemaChange(change), sourceSubtask);
+            return applySchemaChange(schemaSink.planSchemaChange(change, allowDropColumns), sourceSubtask);
         } catch (RuntimeException failure) {
             return CompletableFuture.failedFuture(failure);
         }

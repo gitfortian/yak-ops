@@ -36,6 +36,7 @@ assert.deepEqual(json, {
   solutionType: "SINGLE_TABLE_REALTIME",
   steps: ["FULL", "INCREMENTAL"],
   schemaChangesEnabled: true,
+  allowDropColumns: false,
   source: { datasourceId: "mysql-source" },
   sink: { datasourceId: "pg-target" },
   tableSelection: { mode: "EXPLICIT" },
@@ -119,6 +120,25 @@ assert.throws(() => readSyncParameters(3, JSON.stringify(invalidPolicy)));
 const invalidOfflinePolicy = { ...buildSyncParameters(offline), schemaChangesEnabled: true };
 assert.throws(() => readSyncParameters(3, JSON.stringify(invalidOfflinePolicy)));
 assert.equal(buildSyncParameters(offline).schemaChangesEnabled, undefined);
+const dropEnabled = buildSyncParameters({ ...realtime, allowDropColumns: true });
+assert.equal(dropEnabled.allowDropColumns, true);
+assert.equal(buildSyncParameters(realtime).allowDropColumns, false);
+assert.equal(
+  toSyncTaskRecord({ ...definition, parameters: JSON.stringify(dropEnabled) }).allowDropColumns,
+  true,
+);
+assert.throws(() =>
+  readSyncParameters(3, JSON.stringify({ ...dropEnabled, schemaChangesEnabled: false })),
+);
+assert.throws(() =>
+  readSyncParameters(3, JSON.stringify({ ...dropEnabled, allowDropColumns: "true" })),
+);
+assert.throws(() =>
+  readSyncParameters(
+    3,
+    JSON.stringify({ ...buildSyncParameters(offline), allowDropColumns: true }),
+  ),
+);
 assert.equal(oldDefinition.parameters, oldParameters);
 assert.throws(() => readSyncParameters(1, oldParameters));
 assert.throws(() => readSyncParameters(3, oldParameters));

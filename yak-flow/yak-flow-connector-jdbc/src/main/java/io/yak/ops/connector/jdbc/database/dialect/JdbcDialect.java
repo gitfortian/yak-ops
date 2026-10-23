@@ -150,6 +150,14 @@ public interface JdbcDialect extends java.io.Serializable {
     }
 
     /**
+     * Renders removal of a single existing, non-key field. Never cascade dependencies.
+     * The metadata applier verifies the column's original identity and resulting absence.
+     */
+    default String dropColumnSql(TableId table, String column) {
+        throw new UnsupportedOperationException("DROP_COLUMN is not supported by this JDBC dialect");
+    }
+
+    /**
      * Renders a non-key column type widening without silently changing nullability or comments.
      * Defaults and computed column properties must be rejected by the metadata applier first.
      */

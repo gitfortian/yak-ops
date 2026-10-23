@@ -107,8 +107,11 @@ public record JdbcTableWritePlan(
         Objects.requireNonNull(nextSourceSchema, "nextSourceSchema");
         Objects.requireNonNull(nextTargetSchema, "nextTargetSchema");
         Map<String, String> mappings = new java.util.LinkedHashMap<>();
+        Set<String> nextNames = new HashSet<>();
+        nextTargetSchema.columns().forEach(column -> nextNames.add(column.name()));
         for (int index = 0; index < schema.columnCount(); index++) {
             Column target = schema.column(index);
+            if (!nextNames.contains(target.name())) continue;
             Column source = sourceSchema.column(sourcePositions.get(index));
             mappings.put(target.name(), source.name());
         }

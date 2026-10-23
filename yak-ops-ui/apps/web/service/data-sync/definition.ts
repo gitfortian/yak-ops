@@ -32,7 +32,11 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
     solutionType: task.solutionType,
     steps: [...task.steps],
     ...(solutionSyncType(task.solutionType) === "REALTIME"
-      ? { schemaChangesEnabled: task.schemaChangesEnabled ?? true }
+      ? {
+          schemaChangesEnabled: task.schemaChangesEnabled ?? true,
+          allowDropColumns:
+            Boolean(task.schemaChangesEnabled ?? true) && (task.allowDropColumns ?? false),
+        }
       : {}),
     source: { datasourceId: task.sourceDataSourceId },
     sink: { datasourceId: task.targetDataSourceId },
@@ -106,6 +110,10 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     schemaChangesEnabled:
       solutionSyncType(parameters.solutionType) === "REALTIME"
         ? (parameters.schemaChangesEnabled ?? false)
+        : undefined,
+    allowDropColumns:
+      solutionSyncType(parameters.solutionType) === "REALTIME"
+        ? (parameters.allowDropColumns ?? false)
         : undefined,
     syncType: solutionSyncType(parameters.solutionType),
     status: definition.status,

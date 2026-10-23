@@ -16,6 +16,7 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.event.SourceSchemaChange;
@@ -169,6 +170,11 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
      */
     @Override
     public synchronized SchemaChangeRequest planSchemaChange(SourceSchemaChange change) {
+        return planSchemaChange(change, false);
+    }
+
+    @Override
+    public synchronized SchemaChangeRequest planSchemaChange(SourceSchemaChange change, boolean allowDropColumns) {
         Objects.requireNonNull(change, "change");
         JdbcTableWritePlan plan = plans.stream()
                 .filter(route -> route.sourceTable().equals(change.tableId()))
@@ -190,8 +196,24 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
         }
 
         Schema currentTarget = Schema.from(plan.schema(), null, java.util.Map.of(), java.util.Map.of());
-        SchemaChangePlan diff =
-                JdbcSchemaDerivator.derive(plan.targetTable(), change.after(), Optional.of(currentTarget), dialect);
+        Set<String> nextNames = new HashSet<>();
+        change.after().columns().forEach(column -> nextNames.add(column.name()));
+        Set<String> deletedBySource = new HashSet<>();
+        if (allowDropColumns) {
+            for (PhysicalColumn previous : change.before().columns()) {
+                if (!nextNames.contains(previous.name())) {
+                    if (change.before().primaryKeys().contains(previous.name())
+                            || plan.schema().columns().stream()
+                                    .noneMatch(c -> c.name().equals(previous.name()))) {
+                        throw new UnsupportedOperationException(
+                                "CDC DROP COLUMN does not name a managed non-key target column");
+                    }
+                    deletedBySource.add(previous.name());
+                }
+            }
+        }
+        SchemaChangePlan diff = JdbcSchemaDerivator.derive(
+                plan.targetTable(), change.after(), Optional.of(currentTarget), dialect, deletedBySource);
         if (diff.blocked()) {
             throw new UnsupportedOperationException("MySQL CDC schema change is incompatible with the target: "
                     + diff.differences().stream()
@@ -216,6 +238,8 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
                         columns.set(index, field.copy(alter.typeMapping().get(field.name())));
                     }
                 }
+            } else if (event instanceof DropColumnEvent drop) {
+                columns.removeIf(column -> drop.droppedColumnNames().contains(column.name()));
             } else {
                 throw new UnsupportedOperationException("Unsupported runtime target schema event");
             }

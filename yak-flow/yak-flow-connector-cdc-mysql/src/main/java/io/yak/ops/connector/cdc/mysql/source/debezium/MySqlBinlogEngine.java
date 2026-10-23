@@ -19,7 +19,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -27,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Owns one Debezium engine and bounded handover queue for a MySQL Binlog split.
@@ -36,6 +37,8 @@ import org.apache.kafka.connect.source.SourceRecord;
  * ahead of emission, but are never promoted to a completed YakFlow checkpoint.
  */
 public final class MySqlBinlogEngine implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogEngine.class);
 
     private final MySqlCdcSourceConfig config;
     private final int serverId;
@@ -135,10 +138,16 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                     // It uses the previous offset: acknowledging the boundary must
                     // not checkpoint past the still-pending row.
                     BinlogEvent transition = reconcile(source, changed);
+                    LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
                     enqueue(transition);
                 }
                 BinlogEvent converted = converter.convert(source);
                 if (converted != null) {
+                    if (converted.schemaChange() != null) {
+                        LOG.info(
+                                "MySQL CDC independent DDL event: table={}",
+                                converted.schemaChange().tableId());
+                    }
                     enqueue(converted);
                     lastQueuedOffset = converted.offset();
                 }

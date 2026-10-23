@@ -75,6 +75,93 @@ class MySqlSchemaChangeConverterTest {
     }
 
     @Test
+    void quotedDebeziumTableIdentityStillEmitsIndependentSchemaChange() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        Struct tableChange = new Struct(TABLE_CHANGE)
+                .put("type", "ALTER")
+                .put("id", "\"shop\".\"orders\"")
+                .put("table", NEW_TABLE);
+        Struct envelope = new Struct(DDL)
+                .put("ddl", "redacted-structured-source-event")
+                .put("tableChanges", List.of(tableChange));
+        SourceRecord record = new SourceRecord(
+                Map.of("server", "yak"),
+                Map.of("file", "mysql-bin.000001", "pos", 100L),
+                "yak.shop",
+                DDL,
+                envelope);
+        BinlogEvent change = converter.convert(record);
+        assertTrue(change.records().isEmpty());
+        assertEquals(SOURCE, change.schemaChange().tableId());
+        assertEquals(3, change.schemaChange().after().columns().size());
+    }
+
+    @Test
+    void kafkaConnectStructTableMetadataIsConvertedWithoutLosingColumnTypes() {
+        var columnMetadata = SchemaBuilder.struct()
+                .field("name", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("jdbcType", org.apache.kafka.connect.data.Schema.INT32_SCHEMA)
+                .field("typeName", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("length", org.apache.kafka.connect.data.Schema.OPTIONAL_INT32_SCHEMA)
+                .field("optional", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
+                .build();
+        var idColumn = new Struct(columnMetadata)
+                .put("name", "id")
+                .put("jdbcType", java.sql.Types.BIGINT)
+                .put("typeName", "BIGINT")
+                .put("optional", false);
+        var nameColumn = new Struct(columnMetadata)
+                .put("name", "name")
+                .put("jdbcType", java.sql.Types.VARCHAR)
+                .put("typeName", "VARCHAR")
+                .put("length", 64)
+                .put("optional", true);
+        var noteColumn = new Struct(columnMetadata)
+                .put("name", "note")
+                .put("jdbcType", java.sql.Types.VARCHAR)
+                .put("typeName", "VARCHAR")
+                .put("length", 128)
+                .put("optional", true);
+        var tableMetadata = SchemaBuilder.struct()
+                .field(
+                        "primaryKeyColumnNames",
+                        SchemaBuilder.array(org.apache.kafka.connect.data.Schema.STRING_SCHEMA).build())
+                .field("columns", SchemaBuilder.array(columnMetadata).build())
+                .build();
+        var table = new Struct(tableMetadata)
+                .put("primaryKeyColumnNames", List.of("id"))
+                .put("columns", List.of(idColumn, nameColumn, noteColumn));
+        var changeMetadata = SchemaBuilder.struct()
+                .field("type", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("id", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("table", tableMetadata)
+                .build();
+        var change = new Struct(changeMetadata)
+                .put("type", "ALTER")
+                .put("id", "\"shop\".\"orders\"")
+                .put("table", table);
+        var ddlMetadata = SchemaBuilder.struct()
+                .field("ddl", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("tableChanges", SchemaBuilder.array(changeMetadata).build())
+                .build();
+        var ddl = new Struct(ddlMetadata)
+                .put("ddl", "redacted-structured-source-event")
+                .put("tableChanges", List.of(change));
+        var source = new SourceRecord(
+                Map.of("server", "yak"),
+                Map.of("file", "mysql-bin.000001", "pos", 200L),
+                "yak.shop",
+                ddlMetadata,
+                ddl);
+
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        SourceSchemaChange evolved = converter.convert(source).schemaChange();
+        assertEquals(SOURCE, evolved.tableId());
+        assertEquals(3, evolved.after().columns().size());
+        assertEquals(128, evolved.after().toTableSchema().column(2).length());
+    }
+
+    @Test
     void emptyStructuredTableChangesAdvancesOffsetWithoutMutatingRegisteredSchema() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         Struct ddl = new Struct(DDL)

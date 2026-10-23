@@ -9,6 +9,7 @@ import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
@@ -46,6 +47,17 @@ public final class JdbcSchemaDerivator {
      */
     public static SchemaChangePlan derive(
             TableId tableId, Schema source, Optional<Schema> target, JdbcDialect dialect) {
+        return derive(tableId, source, target, dialect, Set.of());
+    }
+
+    /** Allows deleting only the columns explicitly removed by an authenticated source transition. */
+    public static SchemaChangePlan derive(
+            TableId tableId,
+            Schema source,
+            Optional<Schema> target,
+            JdbcDialect dialect,
+            Set<String> authorizedDroppedColumns) {
+        Objects.requireNonNull(authorizedDroppedColumns, "authorizedDroppedColumns");
         Objects.requireNonNull(tableId, "tableId");
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");
@@ -175,14 +187,26 @@ public final class JdbcSchemaDerivator {
             add(differences, null, Kind.METADATA_DIFFERENCE, Reason.COLUMN_METADATA_DIFFERENCE, null, null);
         }
         Set<String> names = byName(source).keySet();
+        List<String> dropped = new ArrayList<>();
+        Map<String, LogicalType> droppedTypes = new LinkedHashMap<>();
         for (PhysicalColumn extra : current.columns()) {
             if (!names.contains(extra.name())) {
-                add(differences, extra.name(), Kind.INCOMPATIBLE, Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
+                if (authorizedDroppedColumns.contains(extra.name())
+                        && !current.primaryKeys().contains(extra.name())
+                        && ordinaryColumn(extra)
+                        && extra.type().isResolved()) {
+                    dropped.add(extra.name());
+                    droppedTypes.put(extra.name(), extra.type());
+                    add(differences, extra.name(), Kind.DROP_COLUMN, Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
+                } else {
+                    add(differences, extra.name(), Kind.INCOMPATIBLE, Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
+                }
             }
         }
         if (differences.stream().noneMatch(d -> d.kind() == Kind.INCOMPATIBLE)) {
             if (!additions.isEmpty()) changes.add(new AddColumnEvent(tableId, additions));
             if (!widened.isEmpty()) changes.add(new AlterColumnTypeEvent(tableId, widened, previous));
+            if (!dropped.isEmpty()) changes.add(new DropColumnEvent(tableId, dropped, droppedTypes));
         }
         return new SchemaChangePlan(tableId, differences, changes);
     }

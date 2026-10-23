@@ -21,6 +21,17 @@ public interface SchemaEvolutionSink {
         throw new UnsupportedOperationException("Sink does not plan source schema evolution");
     }
 
+    /**
+     * Plans a source event with explicit destructive-DDL permission. Sinks must opt in to
+     * handling the permission rather than silently interpreting it as a general DDL grant.
+     */
+    default SchemaChangeRequest planSchemaChange(SourceSchemaChange change, boolean allowDropColumns) {
+        if (allowDropColumns) {
+            throw new UnsupportedOperationException("Sink does not support authorized DROP COLUMN");
+        }
+        return planSchemaChange(change);
+    }
+
     /** Publishes a completed target route update for subsequent source schema events. */
     default void schemaChangeCompleted(SchemaChangeRequest request) throws Exception {
         throw new UnsupportedOperationException("Sink does not publish schema evolution");

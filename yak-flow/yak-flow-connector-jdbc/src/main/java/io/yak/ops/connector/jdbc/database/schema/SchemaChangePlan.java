@@ -48,6 +48,7 @@ public record SchemaChangePlan(TableId tableId, List<Difference> differences, Li
         CREATE_TABLE,
         ADD_COLUMN,
         ALTER_COLUMN_TYPE,
+        DROP_COLUMN,
         METADATA_DIFFERENCE,
         INCOMPATIBLE
     }

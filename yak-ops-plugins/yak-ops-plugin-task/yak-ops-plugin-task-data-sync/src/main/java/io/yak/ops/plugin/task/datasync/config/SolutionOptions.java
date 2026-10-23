@@ -25,9 +25,13 @@ public final class SolutionOptions {
     public static final Option<Boolean> SCHEMA_CHANGES_ENABLED =
             Options.key("schemaChangesEnabled").booleanType().defaultValue(false);
 
+    /** Explicit permission to remove managed non-key columns from the target database. */
+    public static final Option<Boolean> ALLOW_DROP_COLUMNS =
+            Options.key("allowDropColumns").booleanType().defaultValue(false);
+
     public static final OptionRule RULE = OptionRule.builder()
             .required(SOLUTION_TYPE, STEPS, JobOptions.SOURCE, JobOptions.SINK, TABLE_SELECTION, TABLE_MAPPINGS)
-            .optional(JobOptions.TRANSFORM, SCHEMA_CHANGES_ENABLED)
+            .optional(JobOptions.TRANSFORM, SCHEMA_CHANGES_ENABLED, ALLOW_DROP_COLUMNS)
             .build();
     public static final OptionRule CONNECTION_RULE = OptionRule.builder()
             .required(

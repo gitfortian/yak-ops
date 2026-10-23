@@ -267,7 +267,15 @@ final class TaskDeployment {
                     .filter(OneInputStreamTask::isSinkTask)
                     .toList();
             schemaCoordinator = new SchemaCoordinator(
-                    manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob, schemaSink);
+                    manager,
+                    applier,
+                    List.of(),
+                    orderedInputs,
+                    sinkTasks,
+                    this::failJob,
+                    schemaSink,
+                    jobGraph.configuration()
+                            .get(io.yak.ops.core.configuration.SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
         }
 
         JobVertex sourceVertex = vertices.getFirst();

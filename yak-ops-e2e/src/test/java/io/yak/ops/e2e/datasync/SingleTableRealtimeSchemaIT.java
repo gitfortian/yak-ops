@@ -68,6 +68,68 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
     }
 
     @Test
+    void standaloneDropColumnRequiresExplicitConsentAndUpdatesFollowingRows() throws Exception {
+        fixture.source.execute("CREATE TABLE drop_orders (id BIGINT PRIMARY KEY, name VARCHAR(64) NOT NULL, remark VARCHAR(200))");
+        fixture.source.execute("INSERT INTO drop_orders VALUES (1,'before','original')");
+        Map<String, Object> parameters = new LinkedHashMap<>(fixture.parameters(
+                "SINGLE_TABLE_REALTIME", List.of("SCHEMA", "FULL", "INCREMENTAL"),
+                List.of(fixture.route("drop_orders", "drop_orders"))));
+        parameters.put("schemaChangesEnabled", true);
+        parameters.put("allowDropColumns", true);
+        String instance = fixture.submit(fixture.create(parameters, true));
+        fixture.awaitState(instance, "RUNNING");
+        fixture.awaitTarget("drop_orders", List.of(List.of(1L, "before")));
+
+        fixture.source.execute("ALTER TABLE drop_orders DROP COLUMN remark");
+        await().alias("DROP COLUMN without following DML").atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var query = connection.prepareStatement(
+                                    "SELECT COUNT(*) FROM information_schema.columns "
+                                            + "WHERE table_schema=? AND table_name=? AND column_name=?")) {
+                        query.setString(1, fixture.targetSchema);
+                        query.setString(2, "drop_orders");
+                        query.setString(3, "remark");
+                        try (var rows = query.executeQuery()) {
+                            rows.next();
+                            assertEquals(0, rows.getInt(1));
+                        }
+                    }
+                });
+        fixture.source.execute("UPDATE drop_orders SET name='after-drop' WHERE id=1");
+        fixture.awaitTarget("drop_orders", List.of(List.of(1L, "after-drop")));
+        fixture.awaitState(instance, "RUNNING");
+    }
+
+    @Test
+    void standaloneDropWithoutPermissionFailsBeforeTargetDdl() throws Exception {
+        fixture.source.execute("CREATE TABLE drop_rejected (id BIGINT PRIMARY KEY, name VARCHAR(64) NOT NULL, remark VARCHAR(200))");
+        fixture.source.execute("INSERT INTO drop_rejected VALUES (1,'before','keep')");
+        Map<String, Object> parameters = new LinkedHashMap<>(fixture.parameters(
+                "SINGLE_TABLE_REALTIME", List.of("SCHEMA", "FULL", "INCREMENTAL"),
+                List.of(fixture.route("drop_rejected", "drop_rejected"))));
+        parameters.put("schemaChangesEnabled", true);
+        String instance = fixture.submit(fixture.create(parameters, true));
+        fixture.awaitState(instance, "RUNNING");
+        fixture.awaitTarget("drop_rejected", List.of(List.of(1L, "before")));
+
+        fixture.source.execute("ALTER TABLE drop_rejected DROP COLUMN remark");
+        fixture.awaitState(instance, "FAILED");
+        try (Connection connection = fixture.target.connect();
+                var statement = connection.prepareStatement(
+                        "SELECT COUNT(*) FROM information_schema.columns "
+                                + "WHERE table_schema=? AND table_name=? AND column_name=?")) {
+            statement.setString(1, fixture.targetSchema);
+            statement.setString(2, "drop_rejected");
+            statement.setString(3, "remark");
+            try (var rows = statement.executeQuery()) {
+                rows.next();
+                assertEquals(1, rows.getInt(1));
+            }
+        }
+    }
+
+    @Test
     void legacyRealtimeTaskDoesNotSilentlyApplySchemaChanges() throws Exception {
         // The field is intentionally absent. Existing persisted Task Definitions stay disabled.
         Map<String, Object> parameters = fixture.parameters(

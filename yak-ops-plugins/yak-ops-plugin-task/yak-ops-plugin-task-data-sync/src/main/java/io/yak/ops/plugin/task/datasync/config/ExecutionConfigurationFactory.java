@@ -48,10 +48,23 @@ public final class ExecutionConfigurationFactory {
     /** Enables schema coordination only for explicitly configured continuous tasks. */
     public Configuration create(
             TaskExecutionIdentity identity, Boundedness boundedness, boolean debug, boolean schemaChangesEnabled) {
+        return create(identity, boundedness, debug, schemaChangesEnabled, false);
+    }
+
+    /** Destructive target DDL is permitted only when both runtime flags are active. */
+    public Configuration create(
+            TaskExecutionIdentity identity,
+            Boundedness boundedness,
+            boolean debug,
+            boolean schemaChangesEnabled,
+            boolean allowDropColumns) {
         Objects.requireNonNull(identity, "identity");
         Objects.requireNonNull(boundedness, "boundedness");
         if (schemaChangesEnabled && boundedness == Boundedness.BOUNDED) {
             throw new IllegalArgumentException("Batch pipelines cannot enable runtime schema changes");
+        }
+        if (allowDropColumns && !schemaChangesEnabled) {
+            throw new IllegalArgumentException("DROP COLUMN requires runtime schema evolution");
         }
         Path stateDirectory = stateDirectory(identity.instanceId());
         Configuration configuration = new Configuration()
@@ -60,6 +73,7 @@ public final class ExecutionConfigurationFactory {
                 .set(ExecutionOptions.LOG_ID, identity.instanceId())
                 .set(ExecutionOptions.DEBUG, debug)
                 .set(SchemaEvolutionOptions.ENABLED, schemaChangesEnabled)
+                .set(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS, allowDropColumns)
                 .set(CheckpointingOptions.RESTORE_LATEST, false);
 
         if (boundedness == Boundedness.BOUNDED) {

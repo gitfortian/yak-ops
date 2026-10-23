@@ -62,6 +62,31 @@ class JdbcTableWritePlanTest {
         assertFalse(plan.sourcePositions().isEmpty());
     }
 
+    @Test
+    void schemaReplacementRemovesDeletedFieldMappingsBeforeWriterRebuild() {
+        TableSchema sourceBefore = new TableSchema(
+                List.of(
+                        new Column("SOURCE_NAME", LogicalTypes.STRING),
+                        new Column("SOURCE_ID", LogicalTypes.BIGINT),
+                        new Column("SOURCE_REMARK", LogicalTypes.varchar(200))),
+                List.of("SOURCE_ID"));
+        TableSchema targetBefore = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.BIGINT),
+                        new Column("NAME", LogicalTypes.STRING),
+                        new Column("REMARK", LogicalTypes.varchar(200))),
+                List.of("ID"));
+        JdbcTableWritePlan old = new JdbcTableWritePlan(
+                SOURCE, TARGET, targetBefore, JdbcWriteMode.UPSERT, sourceBefore,
+                Map.of("ID", "SOURCE_ID", "NAME", "SOURCE_NAME", "REMARK", "SOURCE_REMARK"));
+        JdbcTableWritePlan updated = old.withSchemas(sourceSchema(), targetSchema());
+        assertEquals(List.of(1, 0), updated.sourcePositions());
+        assertEquals(2, updated.schema().columnCount());
+        RowData projected = updated.project(GenericRowData.of("updated", 123L), RowKind.UPDATE_AFTER);
+        assertEquals("updated", projected.getString(1));
+        assertEquals(123L, projected.getLong(0));
+    }
+
     private static TableSchema sourceSchema() {
         return new TableSchema(
                 List.of(new Column("SOURCE_NAME", LogicalTypes.STRING),

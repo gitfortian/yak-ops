@@ -74,6 +74,17 @@ class DataSyncTaskPluginContractTest {
                 3, realtimeV3.replace("\"schemaChangesEnabled\":true", "\"schemaChangesEnabled\":\"true\"")));
         assertThrows(TaskPluginException.class, () -> registry.get("DATA_SYNC").parse(
                 3, realtimeV3.replace("SINGLE_TABLE_REALTIME", "SINGLE_TABLE_OFFLINE")));
+        var enabledDrop = registry.get("DATA_SYNC")
+                .parse(3, realtimeV3.replace("\"schemaChangesEnabled\":true,",
+                        "\"schemaChangesEnabled\":true,\"allowDropColumns\":true,"));
+        assertEquals(true, JobConfig.from(enabledDrop).allowDropColumns());
+        assertEquals(false, JobConfig.from(registry.get("DATA_SYNC").parse(3, realtimeV3)).allowDropColumns());
+        assertThrows(TaskPluginException.class, () -> registry.get("DATA_SYNC").parse(3,
+                realtimeV3.replace("\"schemaChangesEnabled\":true,",
+                        "\"schemaChangesEnabled\":false,\"allowDropColumns\":true,")));
+        assertThrows(TaskPluginException.class, () -> registry.get("DATA_SYNC").parse(3,
+                realtimeV3.replace("\"schemaChangesEnabled\":true,",
+                        "\"schemaChangesEnabled\":true,\"allowDropColumns\":\"true\",")));
     }
 
     @Test
