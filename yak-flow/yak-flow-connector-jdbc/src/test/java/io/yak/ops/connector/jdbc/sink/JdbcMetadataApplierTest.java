@@ -58,6 +58,11 @@ class JdbcMetadataApplierTest {
         JdbcMetadataApplier.validateColumnProperties(
                 "created_at", safe,
                 new ColumnProperties("(curdate())", false, false, null, true, "date"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcMetadataApplier.validateColumnProperties(
+                        "created_at", safe,
+                        new ColumnProperties("(curdate())", false, false, null, true, null)));
         ColumnProperties interval = new ColumnProperties(
                 "((curdate() + interval 1 day))", false, false, null, true, "date");
         assertTrue(JdbcMetadataApplier.plan(
