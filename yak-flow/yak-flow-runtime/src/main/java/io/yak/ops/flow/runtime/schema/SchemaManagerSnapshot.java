@@ -39,8 +39,9 @@ public record SchemaManagerSnapshot(List<TableState> tables) implements Serializ
             targetTable = Objects.requireNonNull(targetTable, "targetTable");
             sourceSchema = Objects.requireNonNull(sourceSchema, "sourceSchema");
             targetSchema = Objects.requireNonNull(targetSchema, "targetSchema");
-            appliedEventFingerprints = Map.copyOf(
-                    Objects.requireNonNull(appliedEventFingerprints, "appliedEventFingerprints"));
+            appliedEventFingerprints = java.util.Collections.unmodifiableMap(
+                    new java.util.LinkedHashMap<>(Objects.requireNonNull(
+                            appliedEventFingerprints, "appliedEventFingerprints")));
             if (version < 0 || appliedEventFingerprints.size() > 256) {
                 throw new IllegalArgumentException("Invalid schema version or replay history");
             }
