@@ -1,8 +1,8 @@
 package io.yak.ops.flow.runtime.tasks;
 
 import io.yak.ops.core.api.connector.sink.Sink;
-import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.api.connector.source.InputStatus;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointDeclinedException;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
