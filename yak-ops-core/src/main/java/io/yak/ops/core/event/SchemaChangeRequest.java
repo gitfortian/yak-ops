@@ -70,13 +70,14 @@ public record SchemaChangeRequest(
 
     private static Schema addColumns(Schema schema, AddColumnEvent event) {
         List<PhysicalColumn> columns = new ArrayList<>(schema.columns());
+        int firstOffset = 0;
         for (AddColumnEvent.ColumnWithPosition addition : event.addedColumns()) {
             PhysicalColumn column = addition.column();
             if (columns.stream().anyMatch(existing -> existing.name().equals(column.name()))) {
                 throw new IllegalArgumentException("Schema event adds an existing column");
             }
             int index = switch (addition.position()) {
-                case FIRST -> 0;
+                case FIRST -> firstOffset++;
                 case LAST -> columns.size();
                 case BEFORE, AFTER -> {
                     int reference = -1;
