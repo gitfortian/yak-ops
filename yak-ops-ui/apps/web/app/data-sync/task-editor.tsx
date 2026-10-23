@@ -1173,7 +1173,9 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
                   />
                 </div>
                 {form.allowDropColumns ? (
-                  <span className="text-xs text-red-600">来源字段删除后，目标端对应字段及数据也会删除。</span>
+                  <span className="text-xs text-red-600">
+                    来源字段删除后，目标端对应字段及数据也会删除。
+                  </span>
                 ) : null}
               </Field>
             ) : null}
