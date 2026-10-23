@@ -4,6 +4,7 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.schema.PhysicalColumn;
@@ -178,6 +179,12 @@ public final class SchemaManager {
                     appendToken(value, oldType == null ? null : oldType.asSerializableString());
                     appendToken(value, alter.typeMapping().get(name).asSerializableString());
                 });
+            } else if (event instanceof DropColumnEvent drop) {
+                appendToken(value, Integer.toString(drop.droppedColumnNames().size()));
+                for (String name : drop.droppedColumnNames()) {
+                    appendToken(value, name);
+                    appendToken(value, drop.expectedColumnTypes().get(name).asSerializableString());
+                }
             }
         }
         try {
