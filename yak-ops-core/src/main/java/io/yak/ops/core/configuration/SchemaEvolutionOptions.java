@@ -10,8 +10,10 @@ public final class SchemaEvolutionOptions {
             Options.key("execution.schema-evolution.enabled").booleanType().defaultValue(false);
 
     /** Destructive CDC schema changes require a separate, explicit task-level opt-in. */
-    public static final Option<Boolean> ALLOW_DROP_COLUMNS =
-            Options.key("execution.schema-evolution.allow-drop-columns").booleanType().defaultValue(false);
+    public static final Option<Boolean> ALLOW_DROP_COLUMNS = Options.key(
+                    "execution.schema-evolution.allow-drop-columns")
+            .booleanType()
+            .defaultValue(false);
 
     private SchemaEvolutionOptions() {}
 }
