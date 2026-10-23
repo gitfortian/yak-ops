@@ -27,14 +27,18 @@ public final class SchemaUtils {
         if (event instanceof AddColumnEvent add) {
             List<PhysicalColumn> columns = new ArrayList<>(schema.columns());
             for (AddColumnEvent.ColumnWithPosition addition : add.addedColumns()) {
-                int index = switch (addition.position()) {
-                    case FIRST -> 0;
-                    case LAST -> columns.size();
-                    case BEFORE -> indexOf(columns, addition.referenceColumn());
-                    case AFTER -> indexOf(columns, addition.referenceColumn()) + 1;
-                };
-                if (columns.stream().anyMatch(column -> column.name().equals(addition.column().name()))) {
-                    throw new IllegalArgumentException("Column already exists: " + addition.column().name());
+                int index =
+                        switch (addition.position()) {
+                            case FIRST -> 0;
+                            case LAST -> columns.size();
+                            case BEFORE -> indexOf(columns, addition.referenceColumn());
+                            case AFTER -> indexOf(columns, addition.referenceColumn()) + 1;
+                        };
+                if (columns.stream()
+                        .anyMatch(
+                                column -> column.name().equals(addition.column().name()))) {
+                    throw new IllegalArgumentException(
+                            "Column already exists: " + addition.column().name());
                 }
                 columns.add(index, addition.column());
             }
