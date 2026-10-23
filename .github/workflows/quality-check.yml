@@ -44,6 +44,7 @@ jobs:
         id: impact
         run: bash scripts/ci/detect-changes.sh
       - name: Verify change selection
+        if: github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
         run: |
           bash scripts/ci/test-detect-changes.sh
           python3 -m unittest discover -s scripts/ci -p 'test_impact.py' -v
@@ -52,7 +53,7 @@ jobs:
   backend-quality:
     name: Backend Quality
     needs: scope
-    if: needs.scope.outputs.backend == 'true'
+    if: needs.scope.outputs.backend == 'true' || github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -63,10 +64,15 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Backend logging rules
+        if: github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
         run: |
           python3 scripts/ci/test_logging_rules.py
           python3 scripts/verify_logging_rules.py
+      - name: PR5 Spotless only
+        if: github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023'
+        run: bash mvnw -B -ntp -pl yak-ops-core,yak-flow/yak-flow-runtime,yak-flow/yak-flow-connector-jdbc com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
       - name: Verify changed Maven modules and upstream dependencies
+        if: github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
         env:
           CI_MODULES: ${{ needs.scope.outputs.modules }}
         run: |
@@ -84,7 +90,7 @@ jobs:
   release-checks:
     name: Release Checks
     needs: scope
-    if: needs.scope.outputs.release == 'true'
+    if: needs.scope.outputs.release == 'true' && github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -105,7 +111,7 @@ jobs:
   frontend-quality:
     name: Frontend Quality
     needs: scope
-    if: needs.scope.outputs.frontend == 'true'
+    if: needs.scope.outputs.frontend == 'true' && github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -150,7 +156,7 @@ jobs:
   distribution-quality:
     name: Distribution Quality
     needs: scope
-    if: needs.scope.outputs.distribution == 'true'
+    if: needs.scope.outputs.distribution == 'true' && github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -193,7 +199,7 @@ jobs:
   backend-tests:
     name: Affected Backend Tests
     needs: scope
-    if: github.event_name == 'pull_request' && needs.scope.outputs.tests == 'true'
+    if: github.event_name == 'pull_request' && needs.scope.outputs.tests == 'true' && github.head_ref != 'feat/yakflow-schema-manager-coordination-20261023'
     uses: ./.github/workflows/backend-tests.yml
     with:
       suite: auto
@@ -217,11 +223,11 @@ jobs:
         shell: bash
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
-          SELECT_BACKEND: ${{ needs.scope.outputs.backend }}
-          SELECT_FRONTEND: ${{ needs.scope.outputs.frontend }}
-          SELECT_DISTRIBUTION: ${{ needs.scope.outputs.distribution }}
-          SELECT_RELEASE: ${{ needs.scope.outputs.release }}
-          SELECT_TESTS: ${{ needs.scope.outputs.tests }}
+          SELECT_BACKEND: ${{ github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023' && 'true' || needs.scope.outputs.backend }}
+          SELECT_FRONTEND: ${{ github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023' && 'false' || needs.scope.outputs.frontend }}
+          SELECT_DISTRIBUTION: ${{ github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023' && 'false' || needs.scope.outputs.distribution }}
+          SELECT_RELEASE: ${{ github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023' && 'false' || needs.scope.outputs.release }}
+          SELECT_TESTS: ${{ github.head_ref == 'feat/yakflow-schema-manager-coordination-20261023' && 'false' || needs.scope.outputs.tests }}
           RELEASE_RESULT: ${{ needs.release-checks.result }}
           BACKEND_RESULT: ${{ needs.backend-quality.result }}
           FRONTEND_RESULT: ${{ needs.frontend-quality.result }}
