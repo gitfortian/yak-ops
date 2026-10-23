@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkArchitectureImports } from "./architecture-imports.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const violations = [];
@@ -20,12 +21,6 @@ const forbiddenDirectories = [
   "apps/web/pages",
   "apps/web/shared",
   "packages/datasource",
-  "apps/web/app/datasource/management",
-  "apps/web/app/datasource/model",
-  "apps/web/app/datasource/plugin",
-  "apps/web/app/datasource/connection",
-  "apps/web/app/datasource/editor",
-  "apps/web/app/datasource/hooks",
 ];
 
 for (const path of forbiddenDirectories) {
@@ -33,15 +28,6 @@ for (const path of forbiddenDirectories) {
     fail(`forbidden legacy directory exists: ${path}`);
   }
 }
-
-const forbiddenDataSourceFiles = [
-  "apps/web/app/datasource/card.tsx",
-  "apps/web/app/datasource/toolbar.tsx",
-  "apps/web/app/datasource/summary.tsx",
-  "apps/web/app/datasource/empty-state.tsx",
-  "apps/web/app/datasource/utils.ts",
-  "apps/web/app/datasource/constants.tsx",
-];
 
 const requiredAppShellFiles = [
   "apps/web/app/layout/AppLayout.tsx",
@@ -62,25 +48,6 @@ const requiredAppShellFiles = [
 for (const path of requiredAppShellFiles) {
   if (!existsSync(join(root, path))) {
     fail(`required app shell file is missing: ${path}`);
-  }
-}
-
-for (const path of forbiddenDataSourceFiles) {
-  if (existsSync(join(root, path))) {
-    fail(`forbidden datasource file exists: ${path}`);
-  }
-}
-
-const dataSourceServiceRoot = join(root, "apps", "web", "service", "datasource");
-const allowedDataSourceServiceFiles = new Set(["index.ts", "types.ts"]);
-
-if (existsSync(dataSourceServiceRoot)) {
-  for (const entry of readdirSync(dataSourceServiceRoot, {
-    withFileTypes: true,
-  })) {
-    if (!entry.isFile() || !allowedDataSourceServiceFiles.has(entry.name)) {
-      fail(`unexpected datasource service entry: apps/web/service/datasource/${entry.name}`);
-    }
   }
 }
 
@@ -148,8 +115,6 @@ if (existsSync(rootTypeScriptConfig)) {
 }
 
 const directFetchPattern = /\b(?:globalThis\.|window\.)?fetch\s*\(/;
-const appImportPattern = /(?:from\s+|import\s*\()\s*["']@\/app\//;
-const httpImportPattern = /(?:from\s+|import\s*\()\s*["']@\/service\/http(?:\/|["'])/;
 const baseUiImportPattern = /(?:from\s+|import\s*\()\s*["']@base-ui\/react/;
 const framerMotionImportPattern = /(?:from\s+|import\s*\()\s*["']framer-motion["']/;
 
@@ -174,12 +139,10 @@ for (const path of files) {
     }
   }
 
-  if (relativePath.startsWith("apps/web/service/") && appImportPattern.test(content)) {
-    fail(`${relativePath} imports App code; service must not depend on app`);
-  }
-
-  if (relativePath.startsWith("apps/web/app/") && httpImportPattern.test(content)) {
-    fail(`${relativePath} imports service/http directly; App code must use a domain service`);
+  if ([".js", ".jsx", ".mjs", ".ts", ".tsx"].includes(extname(path))) {
+    for (const message of checkArchitectureImports(relativePath, content, root)) {
+      fail(message);
+    }
   }
 
   if (relativePath !== "apps/web/service/http/request.ts" && directFetchPattern.test(content)) {
