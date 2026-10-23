@@ -72,7 +72,7 @@ export function TableSection({
   const tableDisabled = !dataSourceId || (requiresSchema && !schema);
 
   return (
-    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
+    <div className="rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
       <div className="space-y-3">
         {requiresSchema ? (
           <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
