@@ -103,9 +103,17 @@ public final class JdbcSinkFactory implements TableSinkFactory {
                     context.sourceSchema(),
                     Map.of()));
         }
+        String url = connection.url();
+        var connections = new DefaultJdbcConnectionProvider(connection);
+        var dialect = JdbcFactoryLoader.loadDialect(url);
         return JdbcSink.builder()
-                .withConnectionProvider(new DefaultJdbcConnectionProvider(connection))
-                .withDialect(JdbcFactoryLoader.loadDialect(connection.url()))
+                .withConnectionProvider(connections)
+                .withDialect(dialect)
+                .withMetadataApplierFactory(() -> new JdbcMetadataApplier(
+                        connections,
+                        dialect,
+                        JdbcFactoryLoader.loadCatalog(url, connections),
+                        JdbcMetadataApplier.DEFAULT_STATEMENT_TIMEOUT_SECONDS))
                 .withTablePlans(plans)
                 .withBatchOrder(first.options().get(JdbcSinkOptions.BATCH_ORDER))
                 .withStatementCacheSize(first.options().get(JdbcSinkOptions.STATEMENT_CACHE_SIZE))
