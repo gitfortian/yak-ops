@@ -123,6 +123,24 @@ public final class JobConfigValidator {
     public static String safeSchemaMessage(RuntimeException failure) {
         String message = failure.getMessage();
         if (message != null) {
+            if (message.startsWith("Schema change blocked: ")) {
+                String detail = message.substring("Schema change blocked: ".length());
+                String[] parts = detail.split(": ", 2);
+                String reason = switch (parts[0]) {
+                    case "PRIMARY_KEY_MISMATCH", "MISSING_KEY_COLUMN" -> "主键与目标表不兼容";
+                    case "NULLABILITY_MISMATCH" -> "字段可空规则不兼容";
+                    case "UNSAFE_TYPE_CHANGE" -> "字段类型不能安全转换";
+                    case "COLUMN_ONLY_IN_TARGET" -> "目标表存在无法映射的字段";
+                    case "AMBIGUOUS_IDENTIFIER" -> "字段名大小写存在冲突";
+                    case "UNSAFE_COLUMN_PROPERTIES" -> "字段含有不支持自动迁移的物理属性";
+                    case "UNSUPPORTED_TYPE", "UNRESOLVED_TYPE" -> "目标数据库不支持该字段类型";
+                    default -> "目标表结构不兼容";
+                };
+                if (parts.length == 2 && parts[1].matches("[A-Za-z_][A-Za-z_0-9]{0,127}")) {
+                    return "字段 " + parts[1] + "：" + reason;
+                }
+                return reason;
+            }
             String[][] reasons = {
                 {"Unsupported default expression for column: ", "不支持的默认值表达式"},
                 {"Unsupported MySQL native type for column: ", "暂不支持该 MySQL 原生字段类型"},
