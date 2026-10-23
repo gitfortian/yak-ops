@@ -52,7 +52,6 @@ export function checkArchitectureImports(relativePath, content, root) {
       continue;
     }
 
-
     const sourceSurface = surfaceOf(source);
     const targetSurface = surfaceOf(target);
     if (targetSurface && !inside(source, dataSync)) {
@@ -61,7 +60,6 @@ export function checkArchitectureImports(relativePath, content, root) {
     if (sourceSurface && targetSurface && sourceSurface !== targetSurface) {
       violations.push(relativePath + " crosses Data Sync feature boundaries: " + specifier);
     }
-
     if (inside(source, service) && inside(target, app)) {
       violations.push(relativePath + " imports App code: " + specifier);
     }
