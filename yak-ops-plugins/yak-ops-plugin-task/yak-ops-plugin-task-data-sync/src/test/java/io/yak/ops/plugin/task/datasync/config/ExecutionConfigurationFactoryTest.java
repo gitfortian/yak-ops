@@ -9,6 +9,7 @@ import io.yak.ops.core.api.RuntimeExecutionMode;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
+import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -53,6 +54,26 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(2, options.get(JobOptions.SOURCE_PARALLELISM));
         assertEquals(1, options.get(JobOptions.SINK_PARALLELISM));
     }
+    @Test
+    void schemaChangesRequireExplicitRealtimeOptIn() {
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        assertEquals(
+                false,
+                factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false)
+                        .get(SchemaEvolutionOptions.ENABLED));
+        assertEquals(
+                true,
+                factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, true)
+                        .get(SchemaEvolutionOptions.ENABLED));
+        assertEquals(
+                false,
+                factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, false)
+                        .get(SchemaEvolutionOptions.ENABLED));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> factory.create(FIRST, Boundedness.BOUNDED, false, true));
+    }
+
     @Test
     void isolatesDifferentInstancesAndKeepsStateDirectoryStable() {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);

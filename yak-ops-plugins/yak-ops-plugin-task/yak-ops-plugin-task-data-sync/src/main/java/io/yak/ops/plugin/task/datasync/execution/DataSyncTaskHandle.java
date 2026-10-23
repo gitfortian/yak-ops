@@ -114,7 +114,11 @@ final class DataSyncTaskHandle implements TaskHandle {
                 JobPlan current = planner.plan(parameters, identity);
                 verifyAdmission(current);
                 var pipeline = builder.build(
-                        incremental == null ? current : incremental.apply(current), identity, debug, progress);
+                        incremental == null ? current : incremental.apply(current),
+                        identity,
+                        debug,
+                        progress,
+                        config.schemaChangesEnabled());
                 synchronized (this) {
                     checkCanceled();
                     submissionInvoked = true;

@@ -178,6 +178,8 @@ public final class JobPlanner {
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(from.schema());
             SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
+            SolutionCatalog.validateSchemaChanges(
+                    job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
             SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
             if (job.solutionType().supportsScheduling()
                     && job.steps().contains(Step.INCREMENTAL)

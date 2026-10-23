@@ -67,7 +67,7 @@ public final class DataSyncTaskExecutor {
             if (!plan.equals(prepared.admissionPlan())) {
                 throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
             }
-            pipeline = builder.build(prepared, identity, debug);
+            pipeline = builder.build(prepared, identity, debug, job.schemaChangesEnabled());
         } catch (RuntimeException error) {
             return CompletableFuture.failedFuture(
                     new TaskStartRejectedException("DATA_SYNC rejected before engine submission", error));
