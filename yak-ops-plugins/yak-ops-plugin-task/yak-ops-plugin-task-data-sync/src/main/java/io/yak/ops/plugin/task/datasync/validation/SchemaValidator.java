@@ -159,11 +159,48 @@ public final class SchemaValidator {
             }
             Schema existing = Schema.from(
                     actual.schema(), actual.tableComment(), actual.columnComments(), actual.columnProperties());
-            return JdbcSchemaDerivator.derive(
+            SchemaChangePlan derived = JdbcSchemaDerivator.derive(
                     desired.tableId(), desired.getPhysicalSchema(), Optional.of(existing), dialect);
+            return checkDdlCapabilities(derived, actual, dialect);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
             throw new SchemaValidationException(failure);
         }
+    }
+
+    /**
+     * A structurally safe type change is not executable if the physical target has defaults,
+     * generated values, or other attributes that the JDBC DDL would inadvertently remove.
+     * A blocked plan cannot contain partially executable statements.
+     */
+    private static SchemaChangePlan checkDdlCapabilities(
+            SchemaChangePlan plan, DataSourceTable actual, JdbcDialect dialect) {
+        if (plan.blocked()) return plan;
+        List<SchemaChangePlan.Difference> issues = new ArrayList<>();
+        for (SchemaChangeEvent event : plan.changes()) {
+            if (event instanceof AlterColumnTypeEvent alter) {
+                for (String name : alter.typeMapping().keySet()) {
+                    ColumnProperties properties = actual.columnProperties().get(name);
+                    if (properties == null
+                            || !properties.isKnown()
+                            || properties.hasFeatures()
+                            || (properties.nativeType() != null
+                                    && properties.nativeType()
+                                            .toLowerCase(java.util.Locale.ROOT)
+                                            .contains("unsigned"))) {
+                        issues.add(new SchemaChangePlan.Difference(
+                                name,
+                                SchemaChangePlan.Kind.INCOMPATIBLE,
+                                SchemaChangePlan.Reason.UNSAFE_COLUMN_PROPERTIES,
+                                alter.typeMapping().get(name),
+                                alter.oldTypeMapping().get(name)));
+                    }
+                }
+            }
+        }
+        if (issues.isEmpty()) return plan;
+        List<SchemaChangePlan.Difference> differences = new ArrayList<>(plan.differences());
+        differences.addAll(issues);
+        return new SchemaChangePlan(plan.tableId(), differences, List.of());
     }
 
     /** Refuses partial schema migration plans before the task can be published or admitted. */
