@@ -55,7 +55,9 @@ export function ExecutionTabs({
             realtime={selectedInstance.syncType === "REALTIME"}
             controls={
               <>
-                <label className="flex items-center gap-2 text-xs text-[var(--yak-components-collapse-section-icon)]">
+                <label
+                  className="flex items-center gap-2 text-xs text-[var(--yak-components-collapse-section-icon)]"
+                >
                   自动刷新
                   <Switch size="small" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                 </label>
@@ -106,7 +108,9 @@ export function ExecutionTabs({
             <Spinner size="medium" label="加载实例详情" />
           </div>
         ) : !selectedInstance ? (
-          <div className="py-12 text-center text-sm text-[var(--yak-components-muted-text)]">选择左侧执行记录</div>
+          <div className="py-12 text-center text-sm text-[var(--yak-components-muted-text)]">
+            选择左侧执行记录
+          </div>
         ) : null}
       </TabsPanel>
     </Tabs>
