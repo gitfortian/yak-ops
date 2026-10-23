@@ -60,7 +60,8 @@ public final class JobConfig {
                 && !(rawDrop instanceof Boolean)) {
             throw new IllegalArgumentException("allowDropColumns must be a boolean");
         }
-        if (type.supportsScheduling() && parameters.getSourceMap().containsKey(SolutionOptions.ALLOW_DROP_COLUMNS.key())) {
+        if (type.supportsScheduling()
+                && parameters.getSourceMap().containsKey(SolutionOptions.ALLOW_DROP_COLUMNS.key())) {
             throw new IllegalArgumentException("allowDropColumns is available only for realtime tasks");
         }
         if (Boolean.TRUE.equals(rawDrop) && !parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED)) {
