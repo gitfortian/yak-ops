@@ -1,7 +1,7 @@
 import { Alert, CollapseSection, Field, FieldLabel } from "@yak-ops/yak-ui";
 import { type Dispatch, type SetStateAction } from "react";
-import { ExplicitTableSelection } from "../table-mapping-editor";
-import { IncrementalFields } from "../incremental-fields";
+import { ExplicitTableSelection } from "./table-mapping-editor";
+import { IncrementalFields } from "./incremental-fields";
 import { TableSection } from "./table-section";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-sync";

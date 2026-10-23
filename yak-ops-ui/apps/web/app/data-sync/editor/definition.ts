@@ -1,5 +1,5 @@
 import { validIncrementalConfig } from "@/service/data-sync/parameters";
-import { validTableMappings } from "../table-mapping-editor";
+import { validTableMappings } from "./table-mapping-editor";
 import { sameScheduleRule } from "@/app/schedule/schedule-presentation";
 import { selectedTableKey } from "./table-section";
 import type {

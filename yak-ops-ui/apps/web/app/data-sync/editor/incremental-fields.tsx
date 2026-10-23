@@ -1,6 +1,6 @@
 import { Input } from "@yak-ops/yak-ui";
 import type { DataSyncIncrementalConfig } from "@/service/data-sync";
-import { DataSyncSearchableSelect } from "./searchable-select";
+import { DataSyncSearchableSelect } from "../searchable-select";
 
 interface Props {
   value?: DataSyncIncrementalConfig;
