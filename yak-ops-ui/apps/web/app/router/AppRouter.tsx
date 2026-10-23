@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 import { DataSourcePage } from "@/app/datasource";
 import LoginPage from "@/app/login";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
-import { DataSyncPage } from "@/app/data-sync";
+import { DataSyncPage } from "@/app/data-sync/list/page";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";
 import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "./data-sync-redirects";

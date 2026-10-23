@@ -37,7 +37,7 @@ export function checkArchitectureImports(relativePath, content, root) {
   const ui = resolve(root, "packages/yak-ui");
   const dataSync = resolve(app, "data-sync");
   const dataSyncSurfaces = ["list", "editor", "detail", "log"];
-  const dataSyncRouteEntries = new Set([resolve(dataSync, "editor/page"), resolve(dataSync, "detail")]);
+  const dataSyncRouteEntries = new Set([resolve(dataSync, "editor/page"), resolve(dataSync, "detail"), resolve(dataSync, "list/page")]);
   const surfaceOf = (path) =>
     dataSyncSurfaces.find((name) => inside(path, resolve(dataSync, name)));
 

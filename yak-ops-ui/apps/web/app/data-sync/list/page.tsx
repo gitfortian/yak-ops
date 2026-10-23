@@ -3,25 +3,25 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Modal, PageHeader } from "@yak-ops/yak-ui";
 
-import { CreateSyncTaskDialog } from "./create-dialog";
+import { CreateSyncTaskDialog } from "../create/dialog";
 import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
 import type { DataSyncTaskRecord } from "@/service/data-sync";
 
-import { TaskFilters } from "./list/task-filters";
-import { TaskTable } from "./list/task-table";
-import { useTaskListFilters } from "./list/use-list-filters";
+import { TaskFilters } from "./task-filters";
+import { TaskTable } from "./task-table";
+import { useTaskListFilters } from "./use-list-filters";
 import {
   useTaskPage,
   useListDataSources,
   useListUpdateUsers,
   useListSchedules,
   useListInstances,
-} from "./list/use-list-queries";
-import { useTaskListActions, type TaskCommand } from "./list/use-task-actions";
-import { listQueryKeys } from "./list/query-keys";
+} from "./use-list-queries";
+import { useTaskListActions, type TaskCommand } from "./use-task-actions";
+import { listQueryKeys } from "./query-keys";
 
 export function DataSyncPage() {
   const navigate = useNavigate();

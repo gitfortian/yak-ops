@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";
 import { ExecutionProgressBar } from "../execution/execution-progress-bar";
 import { ExecutionStages } from "../execution/execution-stages";
-import { TaskRoute } from "../task-route";
+import { TaskRoute } from "./task-route";
 import { DataSyncTaskLifecycleActions, DataSyncTaskStatusBadge } from "../task-lifecycle";
 import { readExecutionSummary } from "@/service/data-sync/report";
 import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
