@@ -60,10 +60,10 @@ class SchemaManagerTest {
         manager.complete(first);
 
         Schema third = schema(true, "note", "region");
-        SchemaChangeRequest stale = request("binlog:0001:101", before, third, "region");
+        SchemaChangeRequest stale = request("binlog:0001:101", before, third, after, third, "region");
         assertThrows(IllegalStateException.class, () -> manager.begin(stale));
 
-        SchemaChangeRequest reusedId = request("binlog:0001:100", after, third, "region");
+        SchemaChangeRequest reusedId = request("binlog:0001:100", after, third, after, third, "region");
         assertThrows(IllegalStateException.class, () -> manager.begin(reusedId));
     }
 
@@ -137,14 +137,24 @@ class SchemaManagerTest {
     }
 
     private static SchemaChangeRequest request(String eventId, Schema before, Schema after, String addedColumn) {
+        return request(eventId, before, after, before, after, addedColumn);
+    }
+
+    private static SchemaChangeRequest request(
+            String eventId,
+            Schema sourceBefore,
+            Schema sourceAfter,
+            Schema targetBefore,
+            Schema targetAfter,
+            String addedColumn) {
         return new SchemaChangeRequest(
                 eventId,
                 SOURCE,
                 TARGET,
-                before,
-                after,
-                before,
-                after,
+                sourceBefore,
+                sourceAfter,
+                targetBefore,
+                targetAfter,
                 java.util.List.of(AddColumnEvent.last(new PhysicalColumn(addedColumn, new VarCharType(64)))));
     }
 
