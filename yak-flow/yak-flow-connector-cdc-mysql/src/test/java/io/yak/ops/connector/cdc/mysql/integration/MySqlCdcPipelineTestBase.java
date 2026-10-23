@@ -241,7 +241,9 @@ abstract class MySqlCdcPipelineTestBase {
                         .withTablePlans(List.of(new JdbcTableWritePlan(from, to, initialSchema, JdbcWriteMode.UPSERT)))
                         .withBatchFlushPolicy(new BatchFlushPolicy(1, Duration.ZERO))
                         .build();
-                Configuration initial = configuration(false).set(SchemaEvolutionOptions.ENABLED, true);
+                Configuration initial = configuration(false)
+                        .set(SchemaEvolutionOptions.ENABLED, true)
+                        .set(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS, true);
                 StreamGraph graph = graph(source, sink, initial);
                 EmbeddedPipelineExecutor executor = new EmbeddedPipelineExecutor();
 
@@ -274,7 +276,9 @@ abstract class MySqlCdcPipelineTestBase {
                     cancelIfActive(first);
                 }
 
-                Configuration restore = configuration(true).set(SchemaEvolutionOptions.ENABLED, true);
+                Configuration restore = configuration(true)
+                        .set(SchemaEvolutionOptions.ENABLED, true)
+                        .set(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS, true);
                 JobClient second = executor.execute(graph, restore).get(30, TimeUnit.SECONDS);
                 try {
                     sql(sourceConnection,
@@ -287,15 +291,47 @@ abstract class MySqlCdcPipelineTestBase {
                     sql(sourceConnection, "UPDATE " + tableName + " SET EXTRA='after-restart' WHERE ID=2");
                     awaitColumnValues(second, targetConnection, targetDialect, to,
                             "EXTRA", java.util.Collections.singletonMap(2L, "after-restart"));
+                    // No following DML: Debezium must deliver the DDL independently.
+                    sql(sourceConnection, "ALTER TABLE " + tableName + " DROP COLUMN NOTE");
+                    awaitColumnAbsent(second, targetConnection, targetDialect, to, "NOTE");
+                    assertTrue(((EmbeddedJobClient) second)
+                                    .checkpoint().get(30, TimeUnit.SECONDS).checkpointId() > 0);
                     assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 } finally {
                     cancelIfActive(second);
+                }
+                JobClient third = executor.execute(graph, restore).get(30, TimeUnit.SECONDS);
+                try {
+                    sql(sourceConnection, "UPDATE " + tableName + " SET NAME='after-drop-restart' WHERE ID=1");
+                    awaitBaseSchemaRow(third, targetConnection, targetDialect, to, "after-drop-restart");
+                    assertEquals(JobStatus.RUNNING, third.getJobStatus().get(10, TimeUnit.SECONDS));
+                } finally {
+                    cancelIfActive(third);
                 }
             } finally {
                 drop(targetConnection, targetDialect, to);
                 sql(sourceConnection, "DROP TABLE IF EXISTS " + tableName);
             }
         }
+    }
+
+    private static void awaitColumnAbsent(
+            JobClient job, Connection connection, JdbcDialect dialect, TableId table, String column) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            try (Statement statement = connection.createStatement();
+                    ResultSet rows = statement.executeQuery(
+                            "SELECT * FROM " + dialect.qualifiedTable(table) + " WHERE 1=0")) {
+                boolean found = false;
+                for (int index = 1; index <= rows.getMetaData().getColumnCount(); index++) {
+                    if (column.equalsIgnoreCase(rows.getMetaData().getColumnName(index))) found = true;
+                }
+                if (!found) return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC pure DDL was not applied without following row change");
     }
 
     private static void awaitUnsupportedSchemaChange(JobClient job) throws Exception {

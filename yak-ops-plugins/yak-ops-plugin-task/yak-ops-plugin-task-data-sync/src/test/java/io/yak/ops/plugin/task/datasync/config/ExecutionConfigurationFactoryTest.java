@@ -75,6 +75,19 @@ class ExecutionConfigurationFactoryTest {
     }
 
     @Test
+    void dropColumnPermissionRequiresExplicitRuntimeOptIn() {
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        assertEquals(false, factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, true)
+                .get(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
+        assertEquals(true, factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, true, true)
+                .get(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
+        assertThrows(IllegalArgumentException.class,
+                () -> factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, false, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> factory.create(FIRST, Boundedness.BOUNDED, false, true, true));
+    }
+
+    @Test
     void isolatesDifferentInstancesAndKeepsStateDirectoryStable() {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
         TaskExecutionIdentity sameInstance =

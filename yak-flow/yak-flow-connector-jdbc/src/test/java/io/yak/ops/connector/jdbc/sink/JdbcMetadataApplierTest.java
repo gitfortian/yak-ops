@@ -17,6 +17,7 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
@@ -94,7 +95,8 @@ class JdbcMetadataApplierTest {
                 assertEquals(Set.of(
                         SchemaChangeEventType.CREATE_TABLE,
                         SchemaChangeEventType.ADD_COLUMN,
-                        SchemaChangeEventType.ALTER_COLUMN_TYPE), applier.getSupportedSchemaEvolutionTypes());
+                        SchemaChangeEventType.ALTER_COLUMN_TYPE,
+                        SchemaChangeEventType.DROP_COLUMN), applier.getSupportedSchemaEvolutionTypes());
                 assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.ADD_COLUMN));
                 assertFalse(applier.toString().contains("sensitive-password"));
             }
@@ -323,7 +325,8 @@ class JdbcMetadataApplierTest {
             assertEquals(Set.of(
                             SchemaChangeEventType.CREATE_TABLE,
                             SchemaChangeEventType.ADD_COLUMN,
-                            SchemaChangeEventType.ALTER_COLUMN_TYPE), applier.getSupportedSchemaEvolutionTypes());
+                            SchemaChangeEventType.ALTER_COLUMN_TYPE,
+                            SchemaChangeEventType.DROP_COLUMN), applier.getSupportedSchemaEvolutionTypes());
             applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_TABLE));
             assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.CREATE_TABLE));
             assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.DROP_TABLE));
@@ -346,6 +349,37 @@ class JdbcMetadataApplierTest {
             };
             assertThrows(SchemaEvolveException.class, () -> applier.applySchemaChange(drop));
             assertFalse(database.catalog.tableExists(TABLE));
+        }
+    }
+
+    @Test
+    void dropsManagedColumnAndReplaysWithoutReissuingSql() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY, \"remark\" VARCHAR(200))");
+            var event = new DropColumnEvent(TABLE, List.of("remark"), Map.of("remark", LogicalTypes.varchar(200)));
+            try (JdbcMetadataApplier first = database.applier()) {
+                first.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_COLUMN));
+                first.applySchemaChange(event);
+            }
+            assertEquals(1, database.catalog.getTable(TABLE).columnCount());
+            JdbcConnectionProvider noSecondSql = () -> { throw new AssertionError("DROP COLUMN must replay from metadata"); };
+            try (JdbcMetadataApplier restored = new JdbcMetadataApplier(noSecondSql, database.dialect, database.catalog, 30)) {
+                restored.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_COLUMN));
+                restored.applySchemaChange(event);
+            }
+        }
+    }
+
+    @Test
+    void rejectsDropOfKeyOrDifferentPhysicalType() throws Exception {
+        try (Database database = new Database(); JdbcMetadataApplier applier = database.applier()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY, \"remark\" VARCHAR(200))");
+            applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_COLUMN));
+            var key = new DropColumnEvent(TABLE, List.of("id"), Map.of("id", LogicalTypes.BIGINT.copy(false)));
+            var mismatch = new DropColumnEvent(TABLE, List.of("remark"), Map.of("remark", LogicalTypes.varchar(64)));
+            assertThrows(SchemaEvolveException.class, () -> applier.applySchemaChange(key));
+            assertThrows(SchemaEvolveException.class, () -> applier.applySchemaChange(mismatch));
+            assertEquals(2, database.catalog.getTable(TABLE).columnCount());
         }
     }
 

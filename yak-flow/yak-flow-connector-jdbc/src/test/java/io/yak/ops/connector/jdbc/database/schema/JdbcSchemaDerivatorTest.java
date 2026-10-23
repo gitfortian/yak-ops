@@ -13,12 +13,14 @@ import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.LogicalTypes;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** Tests schema derivation without using JDBC connections or applying schema changes. */
@@ -121,6 +123,26 @@ class JdbcSchemaDerivatorTest {
         assertTrue(plan.changes().isEmpty());
         assertTrue(plan.differences().stream().anyMatch(
                 d -> d.columnName().equals("required") && d.kind() == SchemaChangePlan.Kind.INCOMPATIBLE));
+    }
+
+    @Test
+    void derivesOnlyAuthorizedManagedNonKeyDrops() {
+        Schema source = schema(List.of(column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        Schema target = schema(List.of(
+                column("id", LogicalTypes.BIGINT.copy(false)),
+                column("remark", LogicalTypes.varchar(200))), List.of("id"));
+        assertTrue(JdbcSchemaDerivator.derive(TABLE, source, Optional.of(target), MYSQL).blocked());
+        SchemaChangePlan plan = JdbcSchemaDerivator.derive(
+                TABLE, source, Optional.of(target), MYSQL, Set.of("remark"));
+        assertFalse(plan.blocked());
+        DropColumnEvent drop = assertInstanceOf(DropColumnEvent.class, plan.changes().getFirst());
+        assertEquals(List.of("remark"), drop.droppedColumnNames());
+        assertEquals(LogicalTypes.varchar(200), drop.expectedColumnTypes().get("remark"));
+        assertTrue(JdbcSchemaDerivator.derive(
+                TABLE, source, Optional.of(target), POSTGRES, Set.of("other")).blocked());
+        assertTrue(JdbcSchemaDerivator.derive(
+                TABLE, source, Optional.of(target), POSTGRES, Set.of("id", "remark"))
+                .changes().stream().allMatch(event -> event.getType() != null));
     }
 
     @Test
