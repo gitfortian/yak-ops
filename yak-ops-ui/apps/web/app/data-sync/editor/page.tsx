@@ -6,8 +6,8 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { readTaskDraft, taskDraftKey } from "@/service/data-sync/draft";
 import { getDataSource } from "@/service/datasource";
 import { getDataSyncTask, type DataSyncDraft } from "@/service/data-sync";
-import { TaskEditor } from "./editor";
-import type { TaskEditorInput } from "./editor/types";
+import { TaskEditor } from "./index";
+import type { TaskEditorInput } from "./types";
 
 /** Resolve a saved solution from its definition, never from the route used to open it. */
 export function DataSyncTaskEditorPage() {

@@ -83,6 +83,22 @@ test("Data Sync surfaces cannot import each other's private implementation", () 
   assert.match(check(editor, required).join("\n"), /crosses Data Sync feature boundaries/);
 });
 
+test("router may import public Data Sync pages but not private components", () => {
+  const router = "apps/web/app/router/AppRouter.tsx";
+  assert.deepEqual(
+    check(router, 'import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";'),
+    [],
+  );
+  assert.deepEqual(
+    check(router, 'import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";'),
+    [],
+  );
+  assert.match(
+    check(router, 'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";').join("\n"),
+    /imports a private Data Sync feature/,
+  );
+});
+
 test("Data Sync root composition and shared domain dependencies remain legal", () => {
   const root = "apps/web/app/data-sync/index.tsx";
   const detail = "apps/web/app/data-sync/detail/index.tsx";

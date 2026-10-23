@@ -1,1 +1,0 @@
-export { DataSyncTaskDetailPage } from "./detail";
