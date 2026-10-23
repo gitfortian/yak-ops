@@ -1,18 +1,16 @@
 # YOIP-9: Data Modeling — Dimension Modeling
 
-Status: Proposed
+Status: Discussion
 
-Discussion: Pending proposal PR
+Discussion: https://github.com/gitfortian/yak-ops/pull/9
 
 Decision: Pending
 
 Implementation: N/A until accepted
 
-Release: 1.5.0 (proposed)
+Release: N/A until released
 
 Related FLIPs: N/A
-
-Revision: r2 — 已合入首轮评审意见（见文末 Review Resolutions）
 
 ## Motivation
 
@@ -313,27 +311,5 @@ export interface ReverseModelingProvider {
 3. **为「从指标导入」先建指标模块**：成本远超本模块，且没有真实使用场景验证指标口径。降级为 P1 的「手动度量 + 聚合方式」。
 4. **复用 `associatedModels` 返回空列表**：会让「没有模型」和「功能未开放」不可区分，掩盖真实状态。本期直接实现真实查询。
 5. **物理发布一并实现**：发布涉及引擎方言、库实例解析与幂等，属于独立风险面，单独 YOIP 评审。
-6. **`model.type` 用数据库 `CHECK` 枚举**（r1 原方案）：P1 扩 `DWS/ADS` 必须 `DROP CHECK / ADD CONSTRAINT`。改为 `VARCHAR` + 应用层枚举，代价是手工 SQL 可以写入未知 `type`，用读路径的「未知类型」兜底覆盖。
-7. **「从表/视图导入」按 `PROD` 环境硬过滤**（r1 原方案）：见 5 节的 schema 事实，硬过滤等价于关掉该功能。
-
-## Review Resolutions
-
-首轮评审（r1 → r2）共 10 条意见，处置如下。**必须修的 3 条已全部落进正文**，其余按影响面并入对应章节。
-
-| # | 意见 | 处置 | 落点 |
-| --- | --- | --- | --- |
-| 1 | 「生产环境」硬判定在私有化部署下致命 | **采纳**，改软约束（排序 + 徽标 + 插入前二次确认） | 5 节 |
-| 2 | 纯前端正则解析 DDL 过于乐观 | **采纳**，限定字段定义子集 + 括号/引号感知扫描 + 失败行不阻断 | 6 节 |
-| 3 | 概念维度与维度表的映射关系不清 | **采纳**，维度成为树的容器节点，概念维度下挂维度表 | Public Interfaces |
-| 4 | `type` 的 `CHECK` 阻碍 P1 扩张 | **采纳**，`VARCHAR` + 应用层枚举 + 读路径兜底 | 3 节、Persisted formats |
-| 5 | 标准强制覆盖 `is_not_null` 有 UX 陷阱 | **采纳**，强制继承收窄为三项，`is_not_null` 只作预填 | 4 节 |
-| 6 | 未说明是否支持跨 Workspace 数据源 | **采纳**，限定当前 Workspace，跨租户 id 返回 403 | 5 节 |
-| 7 | 缺表名检查器 | **采纳（改造）**，强制分层前缀；前缀取自 `layer.en_code` 而非硬编码 `dwd_`/`dim_` | 3 节 |
-| 8 | 缺数据地图后的检索入口 | **采纳**，列表补关键词/类型/分层/负责人/域筛选，API 补 `domainId`、`datamartId` | Public Interfaces、REST |
-| 9 | `ReverseModelingProvider` 接口过简 | **采纳**，增加 `describe()` 并定义 `ModelField` | Frontend internal contract |
-| 10 | 集市删除的「模型引用」检查在 P0 不会触发 | **部分不成立**，见下 | 1 节 |
-
-### 两处对评审前提的修正
-
-- **第 1 条的结论对，理由要换**：评审认为「部分团队没有环境标记，所以硬判定会不可用」。实际 schema 是 `environment TINYINT UNSIGNED NOT NULL DEFAULT 0`，即每个数据源**都有**环境标记，只是默认落在「开发」。因此硬过滤不是「部分团队不可用」，而是**默认配置下全员不可用**——结论一致，但据此不需要引入「无标记则放开」的分支逻辑，直接不作过滤条件更简单。
-- **第 10 条不成立**：评审认为「应用表本期不做，所以模型引用检查在 P0 是死代码」。但维度表支持挂在**应用层**（`datamart_id` 非空），`yak_ops_modeling_model.datamart_id` 在 P0 就是真实引用源。若按评审建议延到 P1 再补，P0 会出现「删掉集市后应用层维度表指向已删除的集市」的悬挂引用。因此两类引用检查都在 P0 实现，ADS 落地时只是增加第三种引用来源。
+6. **`model.type` 用数据库 `CHECK` 枚举**：P1 扩 `DWS/ADS` 必须 `DROP CHECK / ADD CONSTRAINT`。改为 `VARCHAR` + 应用层枚举，代价是手工 SQL 可以写入未知 `type`，用读路径的「未知类型」兜底覆盖。
+7. **「从表/视图导入」按 `PROD` 环境硬过滤**：`environment` 是 `NOT NULL DEFAULT 0`，硬过滤等价于关掉该功能，见 Proposed Changes 第 5 节。
