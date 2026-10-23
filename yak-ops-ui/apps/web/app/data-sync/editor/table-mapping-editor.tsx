@@ -99,7 +99,7 @@ export function ExplicitTableSelection({
     },
   ];
   return (
-    <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+    <div className="space-y-3 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
         <Input
           size="small"
@@ -122,7 +122,7 @@ export function ExplicitTableSelection({
         <Button size="small" onClick={refresh}>
           刷新
         </Button>
-        <span className="text-xs text-[#667085]">已选 {mappings.length} / 100</span>
+        <span className="text-xs text-[var(--yak-components-collapse-section-icon)]">已选 {mappings.length} / 100</span>
       </div>
       {error ? <Alert>{error}</Alert> : null}
       <div className="max-h-72 overflow-auto">
@@ -228,7 +228,7 @@ export function TableMappingEditor({
               />
             )}
             {duplicate ? (
-              <span role="alert" className="text-xs text-[#d92d20]">
+              <span role="alert" className="text-xs text-[var(--yak-components-danger-text)]">
                 去向表不能重复
               </span>
             ) : null}
@@ -283,7 +283,7 @@ export function TableMappingEditor({
     },
   ];
   return (
-    <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+    <div className="space-y-3 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
       <div className="flex items-center gap-2">
         <div className="w-44">
           <DataSyncSearchableSelect
