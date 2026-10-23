@@ -125,6 +125,55 @@ class SchemaChangeEventsTest {
     }
 
     @Test
+    void dropColumnRequestValidatesManagedSourceAndTargetSchemaTransitions() {
+        TableId target = new TableId("target", null, "orders");
+        Schema after =
+                new Schema(List.of(INITIAL.columns().getFirst()), INITIAL.primaryKeys(), INITIAL.comment());
+        DropColumnEvent drop = new DropColumnEvent(
+                target, List.of("name"), Map.of("name", LogicalTypes.varchar(20)));
+
+        SchemaChangeRequest request = new SchemaChangeRequest(
+                "binlog:0001:100", TABLE, target, INITIAL, after, INITIAL, after, List.of(drop));
+        assertEquals(after, request.targetSchemaAfter());
+        assertEquals(after, SchemaUtils.applySchemaChangeEvent(INITIAL, drop));
+        assertEquals(SchemaChangeEventType.DROP_COLUMN, drop.getType());
+        assertEquals(drop, drop.copy(target));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new SchemaChangeRequest(
+                        "binlog:0001:101", TABLE, target, INITIAL, after, INITIAL, INITIAL, List.of(drop)));
+
+        DropColumnEvent staleType = new DropColumnEvent(
+                target, List.of("name"), Map.of("name", LogicalTypes.varchar(21)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new SchemaChangeRequest(
+                        "binlog:0001:102", TABLE, target, INITIAL, after, INITIAL, after, List.of(staleType)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> SchemaUtils.applySchemaChangeEvent(INITIAL, staleType));
+
+        Schema withoutKey = new Schema(List.of(INITIAL.columns().get(1)), List.of(), INITIAL.comment());
+        DropColumnEvent primaryKey = new DropColumnEvent(
+                target, List.of("id"), Map.of("id", LogicalTypes.BIGINT.copy(false)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new SchemaChangeRequest(
+                        "binlog:0001:103",
+                        TABLE,
+                        target,
+                        INITIAL,
+                        withoutKey,
+                        INITIAL,
+                        withoutKey,
+                        List.of(primaryKey)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> SchemaUtils.applySchemaChangeEvent(INITIAL, primaryKey));
+    }
+
+    @Test
     void oldAndNewSchemaEventsSerializeAndCopySafely() throws Exception {
         List<AddColumnEvent.ColumnWithPosition> columns = new ArrayList<>(
                 List.of(AddColumnEvent.last(new PhysicalColumn("hidden", LogicalTypes.STRING, "private"))));
@@ -134,7 +183,8 @@ class SchemaChangeEventsTest {
         SchemaChangeEvent[] events = {
             new CreateTableEvent(TABLE, INITIAL),
             add,
-            new AlterColumnTypeEvent(TABLE, Map.of("name", LogicalTypes.varchar(40)))
+            new AlterColumnTypeEvent(TABLE, Map.of("name", LogicalTypes.varchar(40))),
+            new DropColumnEvent(TABLE, List.of("name"), Map.of("name", LogicalTypes.varchar(20)))
         };
         for (SchemaChangeEvent event : events) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();

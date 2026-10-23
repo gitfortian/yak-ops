@@ -7,10 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AddColumnEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.BasicType;
+import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.VarCharType;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
@@ -65,6 +67,40 @@ class SchemaManagerTest {
 
         SchemaChangeRequest reusedId = request("binlog:0001:100", after, third, after, third, "region");
         assertThrows(IllegalStateException.class, () -> manager.begin(reusedId));
+    }
+
+    @Test
+    void rejectsReusedDropEventIdWhenDroppedColumnsDiffer() {
+        Schema before = schema(true, "note", "region");
+        Schema after = schema(false);
+        Map<String, LogicalType> types =
+                Map.of("note", new VarCharType(64), "region", new VarCharType(64));
+        SchemaChangeRequest original = new SchemaChangeRequest(
+                "binlog:0001:200",
+                SOURCE,
+                TARGET,
+                before,
+                after,
+                before,
+                after,
+                java.util.List.of(
+                        new DropColumnEvent(TARGET, java.util.List.of("note", "region"), types)));
+        SchemaChangeRequest reordered = new SchemaChangeRequest(
+                "binlog:0001:200",
+                SOURCE,
+                TARGET,
+                before,
+                after,
+                before,
+                after,
+                java.util.List.of(
+                        new DropColumnEvent(TARGET, java.util.List.of("region", "note"), types)));
+
+        SchemaManager manager = new SchemaManager();
+        manager.begin(original);
+        manager.complete(original);
+
+        assertThrows(IllegalStateException.class, () -> manager.begin(reordered));
     }
 
     @Test
