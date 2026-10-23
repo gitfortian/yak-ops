@@ -6,6 +6,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.PostgresJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypes;
@@ -69,6 +70,27 @@ public final class PostgresJdbcDialect extends AbstractDialect {
             case TIMESTAMP_WITHOUT_TIME_ZONE -> timestampType(column, false);
             case TIMESTAMP_WITH_TIME_ZONE -> timestampType(column, true);
         };
+    }
+
+    @Override
+    public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        Column target = new Column(column.name(), column.type());
+        String identifier = qualifiedTable(table) + "." + quoteIdentifier(column.name());
+        String add = "ALTER TABLE " + qualifiedTable(table) + " ADD COLUMN " + quoteIdentifier(column.name()) + " "
+                + nativeType(target).ddl();
+        if (column.comment() == null || column.comment().isBlank()) {
+            return List.of(add);
+        }
+        return List.of(add, "COMMENT ON COLUMN " + identifier + " IS " + stringLiteral(column.comment()));
+    }
+
+    @Override
+    public String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
+        if (!previous.name().equals(updated.name()) || previous.nullable() != updated.nullable()) {
+            throw new IllegalArgumentException("Column identity and nullability must remain unchanged");
+        }
+        return "ALTER TABLE " + qualifiedTable(table) + " ALTER COLUMN " + quoteIdentifier(updated.name()) + " TYPE "
+                + nativeType(updated).ddl();
     }
 
     @Override
