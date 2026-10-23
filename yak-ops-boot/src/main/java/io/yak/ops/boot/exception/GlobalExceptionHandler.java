@@ -5,6 +5,7 @@ import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.enums.modeling.LayerErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
+import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.enums.modeling.standard.StandardErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
@@ -128,6 +129,12 @@ public class GlobalExceptionHandler {
                 // A missing binding is a state precondition for enabling, not a malformed request.
                 case DATASOURCE_REQUIRED -> HttpStatus.UNPROCESSABLE_ENTITY;
                 case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+            };
+        }
+        if (errorCode instanceof DimensionModelingErrorCode code) {
+            return switch (code) {
+                case INVALID_CODE, INVALID_SCOPE -> HttpStatus.BAD_REQUEST;
+                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;
