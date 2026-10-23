@@ -274,8 +274,8 @@ final class TaskDeployment {
                     sinkTasks,
                     this::failJob,
                     schemaSink,
-                    jobGraph.configuration().get(
-                            io.yak.ops.core.configuration.SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
+                    jobGraph.configuration()
+                            .get(io.yak.ops.core.configuration.SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
         }
 
         JobVertex sourceVertex = vertices.getFirst();

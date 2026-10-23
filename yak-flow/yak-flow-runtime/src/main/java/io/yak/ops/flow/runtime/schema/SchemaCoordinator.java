@@ -76,7 +76,15 @@ public final class SchemaCoordinator implements AutoCloseable {
             List<? extends SchemaChangeParticipant> sinkParticipants,
             Consumer<Throwable> onFailure,
             SchemaEvolutionSink schemaSink) {
-        this(manager, metadataApplier, sourceTasks, pipelineParticipants, sinkParticipants, onFailure, schemaSink, false);
+        this(
+                manager,
+                metadataApplier,
+                sourceTasks,
+                pipelineParticipants,
+                sinkParticipants,
+                onFailure,
+                schemaSink,
+                false);
     }
 
     /** Allows only explicitly authorized destructive schema transitions in this Job attempt. */
