@@ -84,11 +84,14 @@ public final class MySqlSchemaChangeConverter {
     }
 
     private static TableId resolveTable(String id) {
-        int delimiter = id.indexOf('.');
-        if (delimiter < 1 || delimiter == id.length() - 1 || id.indexOf('.', delimiter + 1) >= 0) {
+        // Debezium serializes identifiers as quoted catalog.table pairs, e.g.
+        // "\"shop\".\"orders\"". A raw String.split retains the quotes and silently
+        // treats selected tables as unrelated, dropping standalone DDL events.
+        io.debezium.relational.TableId parsed = io.debezium.relational.TableId.parse(id, true);
+        if (parsed == null || parsed.catalog() == null || parsed.schema() != null || parsed.table() == null) {
             throw new UnsupportedOperationException("Unsupported Debezium table identity");
         }
-        return new TableId(id.substring(0, delimiter), null, id.substring(delimiter + 1));
+        return new TableId(parsed.catalog(), null, parsed.table());
     }
 
     private static Schema tableSchema(Struct change, Schema previous) {
