@@ -2,12 +2,14 @@ package io.yak.ops.connector.jdbc.database.dialect;
 
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -136,6 +138,23 @@ public interface JdbcDialect extends java.io.Serializable {
             }
         }
         return createTablePlan(table, schema, tableComment, columnComments);
+    }
+
+    /**
+     * Renders a nullable, non-key column addition and any required comment statement.
+     *
+     * <p>Callers validate the complete physical table before invoking this method.
+     */
+    default List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        throw new UnsupportedOperationException("ADD_COLUMN is not supported by this JDBC dialect");
+    }
+
+    /**
+     * Renders a non-key column type widening without silently changing nullability or comments.
+     * Defaults and computed column properties must be rejected by the metadata applier first.
+     */
+    default String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
+        throw new UnsupportedOperationException("ALTER_COLUMN_TYPE is not supported by this JDBC dialect");
     }
 
     /**
