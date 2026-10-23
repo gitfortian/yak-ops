@@ -1,6 +1,7 @@
 package io.yak.ops.flow.runtime.tasks;
 
 import io.yak.ops.core.api.connector.sink.Sink;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointDeclinedException;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
@@ -13,6 +14,7 @@ import io.yak.ops.flow.runtime.operators.CheckpointedStreamOperator;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
 import io.yak.ops.flow.runtime.operators.StreamOperator;
 import io.yak.ops.flow.runtime.operators.sink.SinkWriterOperator;
+import io.yak.ops.flow.runtime.schema.SchemaChangeParticipant;
 import io.yak.ops.flow.runtime.state.OperatorStateBackend;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * A single-input StreamTask. Data, state callbacks and barrier forwarding run on its mailbox.
  * Each barrier is acknowledged only after input alignment, local snapshot and output propagation.
  */
-public final class OneInputStreamTask extends StreamTask {
+public final class OneInputStreamTask extends StreamTask implements SchemaChangeParticipant {
 
     private final StreamNode node;
     private final StreamTaskNetworkInput<Object> input;
@@ -105,6 +107,63 @@ public final class OneInputStreamTask extends StreamTask {
 
     public CheckpointSnapshot.OperatorSubtask checkpointIdentity() {
         return new CheckpointSnapshot.OperatorSubtask(node.getUid(), taskInfo().subtaskIndex());
+    }
+
+    public boolean isSinkTask() {
+        return node.isSink();
+    }
+
+    @Override
+    public CompletableFuture<Void> validateSchemaChange(SchemaChangeRequest request) {
+        Objects.requireNonNull(request, "request");
+        return submitMailbox(() -> {
+            if (sinkOperator == null) {
+                throw new UnsupportedOperationException("Only Sink tasks can adopt a runtime schema change");
+            }
+            sinkOperator.validateSchemaChange(request);
+            return null;
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> drainForSchemaChange() {
+        return submitMailbox(() -> {
+            while (true) {
+                InputStatus status;
+                if (sinkOperator != null) {
+                    status = input.emitNext(value -> sinkOperator.processElement(value, ignored -> {}), barrierHandler);
+                } else {
+                    status = input.emitNext(value -> operator.processElement(value, output::collect), barrierHandler);
+                }
+                if (status == InputStatus.MORE_AVAILABLE) continue;
+                if (status == InputStatus.NOTHING_AVAILABLE) return null;
+                throw new IllegalStateException("Schema change cannot drain a completed input task");
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> prepareSchemaChange(SchemaChangeRequest request) {
+        Objects.requireNonNull(request, "request");
+        return submitMailbox(() -> {
+            if (sinkOperator == null) {
+                throw new UnsupportedOperationException("Only Sink tasks can flush for a schema change");
+            }
+            sinkOperator.prepareSchemaChange(request);
+            return null;
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> commitSchemaChange(SchemaChangeRequest request, long schemaVersion) {
+        Objects.requireNonNull(request, "request");
+        return submitMailbox(() -> {
+            if (sinkOperator == null) {
+                throw new UnsupportedOperationException("Only Sink tasks can adopt a schema change");
+            }
+            sinkOperator.commitSchemaChange(request, schemaVersion);
+            return null;
+        });
     }
 
     /** Register before a source is allowed to emit the barrier, avoiding an ACK registration race. */
