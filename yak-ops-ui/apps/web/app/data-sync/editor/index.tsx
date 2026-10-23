@@ -259,9 +259,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   }
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
-    >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
       <PageHeader
         title={pageTitle}
         bordered
@@ -287,9 +285,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         }
       />
 
-      <div
-        className="flex min-h-0 flex-1 gap-5 px-6 max-md:px-4"
-      >
+      <div className="flex min-h-0 flex-1 gap-5 px-6 max-md:px-4">
         <main
           ref={editorScrollRef}
           className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
@@ -378,13 +374,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
           ) : null}
         </main>
 
-        <aside
-          className="hidden h-fit w-44 shrink-0 self-start pt-5 lg:block"
-        >
-          <EditorAnchorStepper
-            items={anchorItems}
-            scrollRootRef={editorScrollRef}
-          />
+        <aside className="hidden h-fit w-44 shrink-0 self-start pt-5 lg:block">
+          <EditorAnchorStepper items={anchorItems} scrollRootRef={editorScrollRef} />
         </aside>
       </div>
       {pendingConnection ? (

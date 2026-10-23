@@ -98,13 +98,16 @@ export function DataSyncTaskLifecycleActions({
     {
       key: "detail",
       label: "详情",
-      className: "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-color-primary)]",
+      className:
+        "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-color-primary)]",
       onClick: () => onDetail(record),
     },
     {
       key: "delete",
       label: "删除",
-      className: published ? "text-[var(--yak-components-collapse-section-icon)]" : "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-components-danger-text)]",
+      className: published
+        ? "text-[var(--yak-components-collapse-section-icon)]"
+        : "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-components-danger-text)]",
       disabled: published || !canManage,
       onClick: () => onDelete(record),
     },
@@ -120,7 +123,9 @@ export function DataSyncTaskLifecycleActions({
       key: "run",
       label: "运行",
       className:
-        published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[var(--yak-components-collapse-section-icon)]",
+        published && !activeInstance
+          ? "text-[var(--yak-color-primary)]"
+          : "text-[var(--yak-components-collapse-section-icon)]",
       disabled: !published || !canManage,
       loading: actionKey === `${record.id}:run`,
       onClick: () => onRun(record),
@@ -131,7 +136,9 @@ export function DataSyncTaskLifecycleActions({
     <div className="flex items-center justify-center gap-0">
       {actions.map((action, index) => (
         <Fragment key={action.key}>
-          {index > 0 ? <span className="mx-0.5 h-3 w-px bg-[var(--yak-components-table-border-strong)]" /> : null}
+          {index > 0 ? (
+            <span className="mx-0.5 h-3 w-px bg-[var(--yak-components-table-border-strong)]" />
+          ) : null}
           <Button
             variant="ghost"
             size="small"

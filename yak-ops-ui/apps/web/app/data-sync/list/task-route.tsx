@@ -23,7 +23,11 @@ export function TaskRoute({ source, target }: TaskRouteProps) {
         </span>
       </div>
       <span className="flex h-5 w-5 items-center justify-center">
-        <ArrowRight size={14} className="text-[var(--yak-components-muted-text)]" strokeWidth={1.8} />
+        <ArrowRight
+          size={14}
+          className="text-[var(--yak-components-muted-text)]"
+          strokeWidth={1.8}
+        />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">

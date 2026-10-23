@@ -122,7 +122,9 @@ export function ExplicitTableSelection({
         <Button size="small" onClick={refresh}>
           刷新
         </Button>
-        <span className="text-xs text-[var(--yak-components-collapse-section-icon)]">已选 {mappings.length} / 100</span>
+        <span className="text-xs text-[var(--yak-components-collapse-section-icon)]">
+          已选 {mappings.length} / 100
+        </span>
       </div>
       {error ? <Alert>{error}</Alert> : null}
       <div className="max-h-72 overflow-auto">

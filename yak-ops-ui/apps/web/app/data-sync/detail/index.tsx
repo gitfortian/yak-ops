@@ -71,9 +71,7 @@ export function DataSyncTaskDetailPage() {
   }
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row"
-    >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row">
       <ExecutionSidebar
         realtime={realtime}
         status={status}

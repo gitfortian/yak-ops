@@ -69,7 +69,11 @@ export function DataSyncTaskEditorPage() {
       </div>
     );
   if (!input || input.id !== id)
-    return <div className="p-8 text-sm text-[var(--yak-components-collapse-section-icon)]">正在加载同步任务...</div>;
+    return (
+      <div className="p-8 text-sm text-[var(--yak-components-collapse-section-icon)]">
+        正在加载同步任务...
+      </div>
+    );
   return <TaskEditor key={id} {...input} />;
 }
 

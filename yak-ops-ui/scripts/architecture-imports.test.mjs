@@ -85,10 +85,7 @@ test("Data Sync surfaces cannot import each other's private implementation", () 
 
 test("router may import public Data Sync pages but not private components", () => {
   const router = "apps/web/app/router/AppRouter.tsx";
-  assert.deepEqual(
-    check(router, 'import { DataSyncPage } from "@/app/data-sync/list/page";'),
-    [],
-  );
+  assert.deepEqual(check(router, 'import { DataSyncPage } from "@/app/data-sync/list/page";'), []);
   assert.deepEqual(
     check(router, 'import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";'),
     [],
@@ -98,7 +95,10 @@ test("router may import public Data Sync pages but not private components", () =
     [],
   );
   assert.match(
-    check(router, 'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";').join("\n"),
+    check(
+      router,
+      'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";',
+    ).join("\n"),
     /imports a private Data Sync feature/,
   );
 });
