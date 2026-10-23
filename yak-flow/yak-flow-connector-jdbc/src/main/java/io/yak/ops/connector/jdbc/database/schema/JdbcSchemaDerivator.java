@@ -67,8 +67,8 @@ public final class JdbcSchemaDerivator {
             if (differences.stream().noneMatch(d -> d.kind() == Kind.INCOMPATIBLE)) {
                 Schema targetSchema = new Schema(columns, source.primaryKeys(), source.comment());
                 changes.add(new CreateTableEvent(tableId, targetSchema));
-                differences.add(difference(null, Kind.CREATE_TABLE,
-                        Reason.TABLE_MISSING, null, null));
+                add(differences, null, Kind.CREATE_TABLE,
+                        Reason.TABLE_MISSING, null, null);
             }
             return new SchemaChangePlan(tableId, differences, changes);
         }
@@ -90,40 +90,40 @@ public final class JdbcSchemaDerivator {
                 if (normalized == null) continue;
                 if (source.primaryKeys().contains(incoming.name()) || !normalized.isNullable()
                         || !ordinaryColumn(incoming)) {
-                    differences.add(difference(incoming.name(), Kind.INCOMPATIBLE,
+                    add(differences, incoming.name(), Kind.INCOMPATIBLE,
                             source.primaryKeys().contains(incoming.name())
                                     ? Reason.MISSING_KEY_COLUMN
                                     : Reason.UNSAFE_COLUMN_PROPERTIES,
-                            normalized, null));
+                            normalized, null);
                 } else {
                     additions.add(AddColumnEvent.last(incoming.copy(normalized)));
-                    differences.add(difference(incoming.name(), Kind.ADD_COLUMN,
-                            Reason.COLUMN_MISSING, normalized, null));
+                    add(differences, incoming.name(), Kind.ADD_COLUMN,
+                            Reason.COLUMN_MISSING, normalized, null);
                 }
                 continue;
             }
 
             if (actual.properties() != null && Boolean.TRUE.equals(actual.properties().generated())) {
-                differences.add(difference(incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSAFE_COLUMN_PROPERTIES, incoming.type(), actual.type()));
+                add(differences, incoming.name(), Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_COLUMN_PROPERTIES, incoming.type(), actual.type());
                 continue;
             }
             if (!incoming.type().isResolved() || !actual.type().isResolved()) {
-                differences.add(difference(incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNRESOLVED_TYPE, incoming.type(), actual.type()));
+                add(differences, incoming.name(), Kind.INCOMPATIBLE,
+                        Reason.UNRESOLVED_TYPE, incoming.type(), actual.type());
                 continue;
             }
             if (incoming.type().isNullable() && !actual.type().isNullable()) {
-                differences.add(difference(incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.NULLABILITY_MISMATCH, incoming.type(), actual.type()));
+                add(differences, incoming.name(), Kind.INCOMPATIBLE,
+                        Reason.NULLABILITY_MISMATCH, incoming.type(), actual.type());
                 continue;
             }
             LogicalType planned =
                     normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
             if (canContain(planned, actual.type())) {
-                differences.add(difference(incoming.name(), Kind.COMPATIBLE,
-                        Reason.COMPATIBLE, planned, actual.type()));
+                add(differences, incoming.name(), Kind.COMPATIBLE,
+                        Reason.COMPATIBLE, planned, actual.type());
             } else if (!source.primaryKeys().contains(incoming.name())
                     && !current.primaryKeys().contains(incoming.name())
                     && ordinaryColumn(incoming)
@@ -131,28 +131,28 @@ public final class JdbcSchemaDerivator {
                     && canWiden(planned, actual.type())) {
                 widened.put(incoming.name(), planned.copy(actual.type().isNullable()));
                 previous.put(incoming.name(), actual.type());
-                differences.add(difference(incoming.name(), Kind.ALTER_COLUMN_TYPE,
-                        Reason.COLUMN_WIDENING, planned, actual.type()));
+                add(differences, incoming.name(), Kind.ALTER_COLUMN_TYPE,
+                        Reason.COLUMN_WIDENING, planned, actual.type());
             } else {
-                differences.add(difference(incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSAFE_TYPE_CHANGE, planned, actual.type()));
+                add(differences, incoming.name(), Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_TYPE_CHANGE, planned, actual.type());
             }
             if (!Objects.equals(incoming.properties(), actual.properties())
                     || !Objects.equals(incoming.comment(), actual.comment())) {
-                differences.add(difference(incoming.name(), Kind.METADATA_DIFFERENCE,
-                        Reason.COLUMN_METADATA_DIFFERENCE, incoming.type(), actual.type()));
+                add(differences, incoming.name(), Kind.METADATA_DIFFERENCE,
+                        Reason.COLUMN_METADATA_DIFFERENCE, incoming.type(), actual.type());
             }
         }
 
         if (!Objects.equals(source.comment(), current.comment())) {
-            differences.add(difference(null, Kind.METADATA_DIFFERENCE,
-                    Reason.COLUMN_METADATA_DIFFERENCE, null, null));
+            add(differences, null, Kind.METADATA_DIFFERENCE,
+                    Reason.COLUMN_METADATA_DIFFERENCE, null, null);
         }
         Set<String> names = byName(source).keySet();
         for (PhysicalColumn extra : current.columns()) {
             if (!names.contains(extra.name())) {
-                differences.add(difference(extra.name(), Kind.INCOMPATIBLE,
-                        Reason.COLUMN_ONLY_IN_TARGET, null, extra.type()));
+                add(differences, extra.name(), Kind.INCOMPATIBLE,
+                        Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
             }
         }
         if (differences.stream().noneMatch(d -> d.kind() == Kind.INCOMPATIBLE)) {
@@ -202,29 +202,29 @@ public final class JdbcSchemaDerivator {
             List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
-                differences.add(difference(column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNRESOLVED_TYPE, column.type(), null));
+                add(differences, column.name(), Kind.INCOMPATIBLE,
+                        Reason.UNRESOLVED_TYPE, column.type(), null);
                 return null;
             }
             ColumnProperties physical = column.properties();
             if (physical != null
                     && physical.nativeType() != null
                     && physical.nativeType().toLowerCase(Locale.ROOT).contains("unsigned")) {
-                differences.add(difference(column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSUPPORTED_TYPE, column.type(), null));
+                add(differences, column.name(), Kind.INCOMPATIBLE,
+                        Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
             Column logical = new Column(column.name(), column.type());
             var nativeType = dialect.nativeType(logical);
             if (key && !nativeType.primaryKeySupported()) {
-                differences.add(difference(column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSUPPORTED_TYPE, column.type(), null));
+                add(differences, column.name(), Kind.INCOMPATIBLE,
+                        Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
             return dialect.normalizeTargetType(logical);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
-            differences.add(difference(column.name(), Kind.INCOMPATIBLE,
-                    Reason.UNSUPPORTED_TYPE, column.type(), null));
+            add(differences, column.name(), Kind.INCOMPATIBLE,
+                    Reason.UNSUPPORTED_TYPE, column.type(), null);
             return null;
         }
     }
@@ -232,8 +232,8 @@ public final class JdbcSchemaDerivator {
     private static void checkKeys(
             Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
         if (!source.primaryKeys().equals(target.primaryKeys())) {
-            differences.add(difference(null, Kind.INCOMPATIBLE,
-                    Reason.PRIMARY_KEY_MISMATCH, null, null));
+            add(differences, null, Kind.INCOMPATIBLE,
+                    Reason.PRIMARY_KEY_MISMATCH, null, null);
         }
     }
 
@@ -243,8 +243,8 @@ public final class JdbcSchemaDerivator {
             Set<String> unique = new HashSet<>();
             for (PhysicalColumn column : schema.columns()) {
                 if (!unique.add(column.name().toLowerCase(Locale.ROOT))) {
-                    differences.add(difference(column.name(), Kind.INCOMPATIBLE,
-                            Reason.AMBIGUOUS_IDENTIFIER, column.type(), null));
+                    add(differences, column.name(), Kind.INCOMPATIBLE,
+                            Reason.AMBIGUOUS_IDENTIFIER, column.type(), null);
                 }
             }
         }
@@ -266,12 +266,13 @@ public final class JdbcSchemaDerivator {
         return result;
     }
 
-    private static SchemaChangePlan.Difference difference(
+    private static void add(
+            List<SchemaChangePlan.Difference> differences,
             String name,
-            SchemaChangePlan.Kind kind,
-            SchemaChangePlan.Reason reason,
+            Kind kind,
+            Reason reason,
             LogicalType sourceType,
             LogicalType targetType) {
-        return new SchemaChangePlan.Difference(name, kind, reason, sourceType, targetType);
+        differences.add(new SchemaChangePlan.Difference(name, kind, reason, sourceType, targetType));
     }
 }
