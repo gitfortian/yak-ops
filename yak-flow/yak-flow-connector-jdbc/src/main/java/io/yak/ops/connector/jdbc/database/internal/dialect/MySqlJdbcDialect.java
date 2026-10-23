@@ -7,8 +7,8 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypes;
@@ -73,7 +73,8 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     @Override
     public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
         Column target = new Column(column.name(), column.type());
-        String definition = quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
+        String definition =
+                quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
         String comment = column.comment();
         if (comment != null && !comment.isBlank()) {
             definition += " COMMENT " + stringLiteral(comment);
