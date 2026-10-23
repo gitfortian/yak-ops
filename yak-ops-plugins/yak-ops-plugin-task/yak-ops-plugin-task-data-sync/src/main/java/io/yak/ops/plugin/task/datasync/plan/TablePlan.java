@@ -44,8 +44,9 @@ public record TablePlan(
         if (schemaPlan != null && !targetTable.equals(schemaPlan.tableId())) {
             throw new IllegalArgumentException("Schema plan and target identities differ");
         }
-        if (targetMetadata != null && (!targetTable.equals(targetMetadata.table())
-                || targetMetadata.revision() != targetDatasource.revision())) {
+        if (targetMetadata != null
+                && (!targetTable.equals(targetMetadata.table())
+                        || targetMetadata.revision() != targetDatasource.revision())) {
             throw new IllegalArgumentException("Target metadata does not match the admitted route");
         }
     }
@@ -75,9 +76,7 @@ public record TablePlan(
 
     /** Ordered physical changes; existing CREATE_TABLE-only routes remain compatible. */
     public List<SchemaChangeEvent> schemaChanges() {
-        return schemaPlan == null
-                ? schemaChange == null ? List.of() : List.of(schemaChange)
-                : schemaPlan.changes();
+        return schemaPlan == null ? schemaChange == null ? List.of() : List.of(schemaChange) : schemaPlan.changes();
     }
 
     /** Existing constructor with a schema plan but without a physical target snapshot. */
