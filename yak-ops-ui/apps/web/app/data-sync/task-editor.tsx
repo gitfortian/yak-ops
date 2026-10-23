@@ -1156,7 +1156,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
                   onCheckedChange={(checked) => {
                     patch("schemaChangesEnabled", checked);
                     if (!checked) patch("allowDropColumns", false);
-                  }
+                  }}
                 />
               </Field>
             ) : null}

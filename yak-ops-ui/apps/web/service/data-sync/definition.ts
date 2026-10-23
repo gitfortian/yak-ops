@@ -34,7 +34,8 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
     ...(solutionSyncType(task.solutionType) === "REALTIME"
       ? {
           schemaChangesEnabled: task.schemaChangesEnabled ?? true,
-          allowDropColumns: Boolean(task.schemaChangesEnabled ?? true) && (task.allowDropColumns ?? false),
+          allowDropColumns:
+            Boolean(task.schemaChangesEnabled ?? true) && (task.allowDropColumns ?? false),
         }
       : {}),
     source: { datasourceId: task.sourceDataSourceId },
