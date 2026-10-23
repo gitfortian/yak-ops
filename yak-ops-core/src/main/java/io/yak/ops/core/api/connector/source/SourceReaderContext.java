@@ -1,10 +1,10 @@
 package io.yak.ops.core.api.connector.source;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.event.SourceSchemaChange;
 import io.yak.ops.core.schema.Schema;
-import io.yak.ops.core.data.TableId;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
