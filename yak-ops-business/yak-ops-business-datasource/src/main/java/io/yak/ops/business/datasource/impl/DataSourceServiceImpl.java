@@ -184,7 +184,9 @@ public class DataSourceServiceImpl implements DataSourceService {
                     throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
                 }
             } catch (DataIntegrityViolationException bound) {
-                throw new DataSourceException(DataSourceErrorCode.IN_USE);
+                // Name the offending datasource: a batch delete rolls back as a whole, so the caller otherwise
+                // cannot tell which entry still holds a warehouse layer binding.
+                throw new DataSourceException(DataSourceErrorCode.IN_USE, entity.getName());
             }
         }
         LOG.info("Datasource batch deletion completed, workspaceId={}, count={}", workspaceId, entities.size());

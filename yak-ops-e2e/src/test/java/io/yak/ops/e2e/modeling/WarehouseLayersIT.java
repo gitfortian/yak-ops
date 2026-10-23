@@ -9,6 +9,7 @@ import io.yak.ops.e2e.support.ApiClient;
 import io.yak.ops.e2e.support.BackendTestBase;
 import io.yak.ops.testutils.TestNames;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -36,8 +37,8 @@ class WarehouseLayersIT extends BackendTestBase {
         String datasourceName = datasourceRow.path("name").asText();
         assertEquals(2, api.call("GET", API + "/datasources").size());
 
-        // A layer cannot be enabled before it owns a physical datasource.
-        api.expect("PUT", API + "/" + odsId, layer("贴源层", "ODS", null, true, 1), 400);
+        // A layer cannot be enabled before it owns a physical datasource; the state precondition answers 422.
+        api.expect("PUT", API + "/" + odsId, layer("贴源层", "ODS", null, true, 1), 422);
         // Preset identity belongs to the server.
         api.expect("PUT", API + "/" + odsId, layer("贴源改名", "ODS", null, false, 1), 409);
         api.expect("PUT", API + "/" + odsId, layer("贴源层", "ODS_ALT", null, false, 1), 409);
@@ -47,8 +48,9 @@ class WarehouseLayersIT extends BackendTestBase {
         assertEquals(datasourceName, bound.path("dataSourceName").asText());
         assertEquals(1, api.call("GET", API + "/options").size());
 
-        // The foreign key keeps a bound datasource alive and the API reports the conflict.
+        // The foreign key keeps a bound datasource alive and the API reports the conflict, single or batched.
         api.expect("DELETE", "/api/v1/data-source/" + datasource, null, 409);
+        api.expect("POST", "/api/v1/data-source/batch-delete", Map.of("ids", List.of(datasource)), 409);
 
         var created = api.call("POST", API, layer("宽表层", "dwd_wide", datasource, true));
         String customId = created.path("id").asText();
@@ -57,7 +59,7 @@ class WarehouseLayersIT extends BackendTestBase {
         assertEquals(2, api.call("GET", API + "/options").size());
         api.expect("POST", API, layer("重复层", "DWD_WIDE", datasource, false), 409);
         api.expect("POST", API, layer("非法层", "2_LAYER", null, false), 400);
-        api.expect("POST", API, layer("无源层", "NO_SRC", null, true), 400);
+        api.expect("POST", API, layer("无源层", "NO_SRC", null, true), 422);
 
         assertFalse(api.call("GET", API + "/codes/availability?enCode=DWD_WIDE")
                 .path("available")

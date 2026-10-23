@@ -124,7 +124,9 @@ public class GlobalExceptionHandler {
         }
         if (errorCode instanceof LayerErrorCode code) {
             return switch (code) {
-                case INVALID_CODE, INVALID_DATASOURCE, DATASOURCE_REQUIRED -> HttpStatus.BAD_REQUEST;
+                case INVALID_CODE, INVALID_DATASOURCE -> HttpStatus.BAD_REQUEST;
+                // A missing binding is a state precondition for enabling, not a malformed request.
+                case DATASOURCE_REQUIRED -> HttpStatus.UNPROCESSABLE_ENTITY;
                 case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }
