@@ -6,9 +6,9 @@ import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorEventGateway;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
 import io.yak.ops.flow.runtime.source.event.RequestSplitEvent;
 import io.yak.ops.flow.runtime.source.event.SourceEventWrapper;
-import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
@@ -96,8 +96,8 @@ public final class SourceReaderRuntimeContext implements SourceReaderContext {
             return java.util.concurrent.CompletableFuture.failedFuture(
                     new java.util.concurrent.CancellationException("Source task is cancelling"));
         }
-        CompletionStage<Long> result = schemaCoordinator.applySchemaChange(
-                Objects.requireNonNull(request, "request"), getIndexOfSubtask());
+        CompletionStage<Long> result =
+                schemaCoordinator.applySchemaChange(Objects.requireNonNull(request, "request"), getIndexOfSubtask());
         result.whenComplete((unused, failure) -> {
             if (failure != null && !environment.isCancellationRequested()) {
                 asyncFailureHandler.accept(failure);
