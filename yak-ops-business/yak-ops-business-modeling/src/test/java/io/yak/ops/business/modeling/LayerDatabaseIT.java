@@ -81,6 +81,9 @@ class LayerDatabaseIT {
     void isolate() {
         reset(WORKSPACES);
         when(WORKSPACES.isActiveMember(anyString(), anyString())).thenReturn(true);
+        // Models reference layers and standards with RESTRICT, so they go first.
+        jdbc.update("DELETE FROM yak_ops_modeling_model_field");
+        jdbc.update("DELETE FROM yak_ops_modeling_model");
         jdbc.update("DELETE FROM yak_ops_modeling_layer");
         jdbc.update("DELETE FROM yak_ops_data_source");
         jdbc.update("DELETE FROM yak_ops_workspace WHERE id IN ('ws','other')");

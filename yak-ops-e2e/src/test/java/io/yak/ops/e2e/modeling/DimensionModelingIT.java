@@ -10,6 +10,7 @@ import io.yak.ops.e2e.support.BackendTestBase;
 import io.yak.ops.testutils.TestNames;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -94,11 +95,6 @@ class DimensionModelingIT extends BackendTestBase {
         String previous = api.workspace();
         String owner = api.call("GET", "/api/v1/account/current").path("id").asText();
         String prefix = TestNames.unique("model");
-        String workspace =
-                api.call("POST", "/api/v1/workspaces", Map.of("name", TestNames.unique("mdl")))
-                        .path("id")
-                        .asText();
-        api.workspace(workspace);
 
         String categoryId =
                 api.call("POST", PLANNING + "/categories", planning(prefix + "_cat", owner)).path("id").asText();
@@ -112,15 +108,20 @@ class DimensionModelingIT extends BackendTestBase {
                 .asText();
 
         // A layer is only selectable once enabled and bound to a physical datasource.
-        String layerId = layer(api, "DWD");
+        String datasource = firstDatasource(api);
+        String layerCode = TestNames.unique("mdl").toUpperCase(Locale.ROOT);
+        String layerId = api.call("POST", LAYERS, layer("自定义明细层", layerCode, datasource, false))
+                .path("id")
+                .asText();
         api.expect(
                 "POST",
                 API + "/models",
                 detailModel(prefix + "_blocked", layerId, categoryId, domainId, processId, List.of()),
                 422);
-        api.call("PUT", LAYERS + "/" + layerId, layerBinding("明细层", "DWD", firstDatasource(api), 1));
+        api.call("PUT", LAYERS + "/" + layerId, layer("自定义明细层", layerCode, datasource, true, 1));
+        String layerPrefix = layerCode.toLowerCase(Locale.ROOT) + "_";
         String suffix = prefix + "_detail";
-        String name = "dwd_" + suffix;
+        String name = layerPrefix + suffix;
 
         api.call("POST", STANDARDS + "/catalog/initialize");
         String standardCategory =
@@ -206,7 +207,7 @@ class DimensionModelingIT extends BackendTestBase {
                 dimensionTableWithDimension(prefix + "_product", layerId, categoryId, domainId, dimensionId));
         assertEquals("DIM", dimensionTable.path("type").asText());
         // The prefix always follows the selected layer, never the model type.
-        assertEquals("dwd_" + prefix + "_product", dimensionTable.path("name").asText());
+        assertEquals(layerPrefix + prefix + "_product", dimensionTable.path("name").asText());
 
         // Updating replaces the whole field list and advances the revision.
         var renamed = detailModel(
@@ -219,7 +220,7 @@ class DimensionModelingIT extends BackendTestBase {
         renamed.put("revision", 1);
         var updated = api.call("PUT", API + "/models/" + modelId, renamed);
         assertEquals(2, updated.path("revision").asInt());
-        assertEquals("dwd_" + suffix + "_v2", updated.path("name").asText());
+        assertEquals(layerPrefix + suffix + "_v2", updated.path("name").asText());
         assertEquals(1, updated.path("fields").size());
         api.expect("PUT", API + "/models/" + modelId, renamed, 409);
 
@@ -227,8 +228,12 @@ class DimensionModelingIT extends BackendTestBase {
         api.expect("DELETE", API + "/models/" + modelId + "?revision=2", null, 404);
 
         // Another Workspace cannot read the remaining dimension table by id.
-        api.workspace(previous);
+        String other = api.call("POST", "/api/v1/workspaces", Map.of("name", TestNames.unique("mdl")))
+                .path("id")
+                .asText();
+        api.workspace(other);
         api.expect("GET", API + "/models/" + dimensionTable.path("id").asText(), null, 404);
+        api.workspace(previous);
     }
 
     private static Map<String, Object> dimension(String scope, String domainId, String datamartId, String code) {
@@ -313,23 +318,22 @@ class DimensionModelingIT extends BackendTestBase {
                 "ownerId", owner);
     }
 
-    private static Map<String, Object> layerBinding(
-            String cnName, String enCode, String dataSourceId, long revision) {
+    private static Map<String, Object> layer(
+            String cnName, String enCode, String dataSourceId, boolean enabled) {
         var body = new LinkedHashMap<String, Object>();
         body.put("cnName", cnName);
         body.put("enCode", enCode);
         body.put("dataSourceId", dataSourceId);
         body.put("description", null);
-        body.put("enabled", true);
-        body.put("revision", revision);
+        body.put("enabled", enabled);
         return body;
     }
 
-    private static String layer(ApiClient api, String enCode) {
-        for (var row : api.call("GET", LAYERS)) {
-            if (enCode.equals(row.path("enCode").asText())) return row.path("id").asText();
-        }
-        throw new AssertionError("The preset layer was not returned: " + enCode);
+    private static Map<String, Object> layer(
+            String cnName, String enCode, String dataSourceId, boolean enabled, long revision) {
+        var body = layer(cnName, enCode, dataSourceId, enabled);
+        body.put("revision", revision);
+        return body;
     }
 
     private static String firstDatasource(ApiClient api) {

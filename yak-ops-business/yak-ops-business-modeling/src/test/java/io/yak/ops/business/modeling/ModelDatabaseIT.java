@@ -33,6 +33,7 @@ import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -103,6 +104,13 @@ class ModelDatabaseIT {
         seedWorkspace("other");
         seedPlanningGraph();
         seedStandard();
+    }
+
+    @AfterEach
+    void cleanup() {
+        // Later ITs clear layers and standards, which these rows hold alive through RESTRICT foreign keys.
+        jdbc.update("DELETE FROM yak_ops_modeling_model_field");
+        jdbc.update("DELETE FROM yak_ops_modeling_model");
     }
 
     @Test
@@ -217,7 +225,7 @@ class ModelDatabaseIT {
 
     @Test
     void keepsTheTableNameUniquePerWorkspace() {
-        createDetailModel("dwd_order_detail", 30, List.of());
+        createDetailModel("order_detail", 30, List.of());
 
         var duplicate = assertThrows(BusinessException.class,
                 () -> createDetailModel("order_detail", 30, List.of()));

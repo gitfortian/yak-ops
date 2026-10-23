@@ -122,7 +122,7 @@ public class ModelServiceImpl implements ModelService {
         row.setLayerId(layer.id());
         row.setName(fullName(layer, input.getNameSuffix()));
         applyModel(row, workspaceId, actor, input);
-        var fields = validateFields(workspaceId, row.getId(), input.getFields());
+        var fields = validateFields(workspaceId, actor, row.getId(), input.getFields());
         if (models.occupied(workspaceId, row.getName(), null))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
         try {
@@ -152,7 +152,7 @@ public class ModelServiceImpl implements ModelService {
         row.setLayerId(layer.id());
         row.setName(fullName(layer, input.getNameSuffix()));
         applyModel(row, workspaceId, actor, input);
-        var fields = validateFields(workspaceId, id, input.getFields());
+        var fields = validateFields(workspaceId, actor, id, input.getFields());
         if (models.occupied(workspaceId, row.getName(), id))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
         row.initUpdate(actor);
@@ -297,7 +297,8 @@ public class ModelServiceImpl implements ModelService {
      * desynchronize a field from the standard it claims to follow. Nullability and the primary-key
      * flag stay exactly as submitted.
      */
-    private List<ModelFieldEntity> validateFields(String workspaceId, String modelId, List<ModelFieldInputDTO> input) {
+    private List<ModelFieldEntity> validateFields(
+            String workspaceId, String actor, String modelId, List<ModelFieldInputDTO> input) {
         var submitted = input == null ? List.<ModelFieldInputDTO>of() : input;
         var rows = new ArrayList<ModelFieldEntity>(submitted.size());
         var codes = new HashSet<String>();
@@ -328,6 +329,7 @@ public class ModelServiceImpl implements ModelService {
                 if (++partitions > 1) throw new BusinessException(DimensionModelingErrorCode.PARTITION_RULE);
             }
             var row = new ModelFieldEntity();
+            row.initCreate(actor);
             row.setWorkspaceId(workspaceId);
             row.setModelId(modelId);
             row.setOrdinal(index + 1);
