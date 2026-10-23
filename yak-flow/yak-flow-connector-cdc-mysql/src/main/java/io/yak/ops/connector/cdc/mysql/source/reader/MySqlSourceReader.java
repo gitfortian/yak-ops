@@ -4,6 +4,10 @@ import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReader
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.api.connector.source.InputStatus;
+import io.yak.ops.core.api.connector.source.ReaderOutput;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Map;
 
@@ -17,14 +21,34 @@ public final class MySqlSourceReader
         extends SingleThreadMultiplexSourceReaderBase<BinlogEvent, TableRecord, MySqlBinlogSplit, MySqlCdcSplitState> {
 
     private final MySqlCdcSplitReader splitReader;
+    private final MySqlSchemaChangeGate schemaGate;
 
     public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context) {
-        this(new MySqlCdcSplitReader(config, fingerprint), context);
+        this(new MySqlCdcSplitReader(config, fingerprint), context, new MySqlSchemaChangeGate(context));
     }
 
-    private MySqlSourceReader(MySqlCdcSplitReader splitReader, SourceReaderContext context) {
-        super(() -> splitReader, new MySqlCdcRecordEmitter(), context);
+    private MySqlSourceReader(
+            MySqlCdcSplitReader splitReader, SourceReaderContext context, MySqlSchemaChangeGate schemaGate) {
+        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaGate), context);
         this.splitReader = splitReader;
+        this.schemaGate = schemaGate;
+    }
+
+    @Override
+    public InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
+        return schemaGate.consumeAcknowledgment() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
+    }
+
+    @Override
+    public CompletableFuture<Void> isAvailable() {
+        CompletableFuture<Void> pending = schemaGate.availability();
+        return pending == null ? super.isAvailable() : pending;
+    }
+
+    @Override
+    public List<MySqlBinlogSplit> snapshotState(long checkpointId) {
+        schemaGate.requireCheckpointReady();
+        return super.snapshotState(checkpointId);
     }
 
     @Override
