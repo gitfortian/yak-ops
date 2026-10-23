@@ -1,18 +1,18 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
-import io.yak.ops.core.exceptions.SchemaEvolveException;
 import io.yak.ops.core.event.SchemaChangeEventType;
-import java.util.HashSet;
-import java.util.Set;
+import io.yak.ops.core.exceptions.SchemaEvolveException;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /** Owns one Task's ordered target preparation and driver-level cancellation requests. */
 public final class SchemaPreparation {
