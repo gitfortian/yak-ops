@@ -26,7 +26,8 @@ export function TaskSummary({ task, updatedBy, dataSources, onCopyTaskId }: Prop
   return (
     <section aria-labelledby="task-basic-info">
       <h2
-        id="task-basic-info" className="mb-5 text-sm font-semibold text-[var(--yak-components-field-label)]"
+        id="task-basic-info"
+        className="mb-5 text-sm font-semibold text-[var(--yak-components-field-label)]"
       >
         基本信息
       </h2>
