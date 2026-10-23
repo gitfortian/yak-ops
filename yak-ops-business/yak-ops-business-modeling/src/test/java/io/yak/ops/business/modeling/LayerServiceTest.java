@@ -137,9 +137,33 @@ class LayerServiceTest {
     void reportsADuplicateAbbreviation() {
         doThrow(new DuplicateKeyException("uk_modeling_layer_code")).when(layers).add(any());
 
-        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("贴源", "ODS", false, null)));
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("重复层", "TMP", false, null)));
 
         assertEquals(LayerErrorCode.DUPLICATE_CODE, error.getErrorCode());
+    }
+
+    @Test
+    void refusesACustomLayerThatTakesAPresetAbbreviation() {
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("贴源", "ods", false, null)));
+
+        assertEquals(LayerErrorCode.DUPLICATE_CODE, error.getErrorCode());
+        verify(layers, never()).add(any());
+    }
+
+    @Test
+    void refusesRenamingACustomLayerOntoAPresetAbbreviation() {
+        var custom = preset("LOCAL", false, null);
+        custom.setBuiltin(false);
+        when(layers.layer("ws", "layer-1")).thenReturn(Optional.of(custom));
+
+        var update = new UpdateLayerDTO();
+        update.setCnName("改名层");
+        update.setEnCode("DWD");
+        update.setRevision(1L);
+        var error = assertThrows(BusinessException.class, () -> service.update("ws", "actor", "layer-1", update));
+
+        assertEquals(LayerErrorCode.DUPLICATE_CODE, error.getErrorCode());
+        verify(layers, never()).update(any());
     }
 
     @Test

@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Owns preset seeding, Workspace authorization and layer binding rules. */
@@ -43,8 +44,15 @@ public class LayerServiceImpl implements LayerService {
     @Resource
     private WorkspaceService workspaces;
 
+    /**
+     * Lists layers, seeding the presets on first use.
+     *
+     * <p>Runs at {@code READ_COMMITTED} on purpose: the seeder waits on the Workspace row lock, so its first
+     * consistent read happens after the winner committed. Under {@code REPEATABLE_READ} the snapshot taken by the
+     * pre-lock count would still be empty and this call would return no layers at all.
+     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public List<LayerVO> list(String workspaceId, String actor) {
         requireActor(workspaceId, actor);
         ensurePresets(workspaceId, actor);
@@ -55,7 +63,7 @@ public class LayerServiceImpl implements LayerService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public List<LayerOptionVO> options(String workspaceId, String actor) {
         requireActor(workspaceId, actor);
         ensurePresets(workspaceId, actor);
@@ -101,6 +109,7 @@ public class LayerServiceImpl implements LayerService {
     public LayerVO create(String workspaceId, String actor, LayerInputDTO input) {
         requireActor(workspaceId, actor);
         var fields = normalize(input);
+        if (reserved(fields.enCode())) throw new BusinessException(LayerErrorCode.DUPLICATE_CODE);
         requireBinding(workspaceId, fields.dataSourceId(), fields.enabled());
         var row = new LayerEntity();
         row.setWorkspaceId(workspaceId);
@@ -129,6 +138,7 @@ public class LayerServiceImpl implements LayerService {
         if (input == null || input.getRevision() == null || input.getRevision() < 1) throw invalid();
         if (row.getRevision() != input.getRevision()) throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
         var fields = normalize(input);
+        if (!row.isBuiltin() && reserved(fields.enCode())) throw new BusinessException(LayerErrorCode.DUPLICATE_CODE);
         if (row.isBuiltin() && !presetFieldsUnchanged(row, fields))
             throw new BusinessException(LayerErrorCode.BUILTIN_IMMUTABLE);
         requireBinding(workspaceId, fields.dataSourceId(), fields.enabled());
@@ -162,7 +172,8 @@ public class LayerServiceImpl implements LayerService {
      *
      * <p>Presets cannot be deleted, so the unique abbreviation is a stable marker: a second writer would discard
      * its duplicate codes, but the concurrent upserts still deadlock on the shared unique index. Seeding therefore
-     * locks the Workspace row first and re-reads the count, so only the first reader inserts.
+     * locks the Workspace row first and re-reads the count, so only the first reader inserts. Callers must run at
+     * {@code READ_COMMITTED}, otherwise the re-read after the lock still sees the pre-lock snapshot.
      */
     private void ensurePresets(String workspaceId, String actor) {
         if (layers.builtinCount(workspaceId) >= PRESETS.size()) return;
@@ -257,6 +268,16 @@ public class LayerServiceImpl implements LayerService {
         var normalized = enCode == null ? "" : enCode.strip().toUpperCase(Locale.ROOT);
         if (!CODE.matcher(normalized).matches()) throw new BusinessException(LayerErrorCode.INVALID_CODE);
         return normalized;
+    }
+
+    /**
+     * Reports whether an abbreviation belongs to a preset.
+     *
+     * <p>Presets are seeded lazily, so a custom layer created before the first read would otherwise take a preset
+     * code and leave the Workspace with four defaults plus one look-alike.
+     */
+    private static boolean reserved(String enCode) {
+        return PRESETS.stream().anyMatch(preset -> preset.enCode().equals(enCode));
     }
 
     private static BusinessException invalid() {
