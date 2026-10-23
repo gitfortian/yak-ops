@@ -27,6 +27,15 @@ public interface LayerRepository {
      */
     long builtinCount(String workspaceId);
     /**
+     * Serializes preset seeding for one Workspace inside the caller transaction.
+     *
+     * <p>Concurrent first readers otherwise insert the same five rows through an
+     * upsert and deadlock on the shared unique index.
+     *
+     * @param workspaceId authorized Workspace to lock
+     */
+    void lockWorkspace(String workspaceId);
+    /**
      * Inserts presets idempotently in the caller transaction.
      * @param rows fully initialized preset rows
      */

@@ -22,6 +22,9 @@ public interface LayerMapper {
     @Select("SELECT COUNT(*) FROM yak_ops_modeling_layer WHERE workspace_id=#{workspaceId} AND builtin=1")
     long builtinCount(String workspaceId);
 
+    @Select("SELECT id FROM yak_ops_workspace WHERE id=#{workspaceId} FOR UPDATE")
+    String lockWorkspace(@Param("workspaceId") String workspaceId);
+
     @Insert({
         "<script>",
         "INSERT INTO",

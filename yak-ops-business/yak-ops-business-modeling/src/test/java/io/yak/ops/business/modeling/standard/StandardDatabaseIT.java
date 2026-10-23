@@ -97,6 +97,8 @@ class StandardDatabaseIT {
         when(USERS.queryByIds(anyList())).thenReturn(List.of(user("owner")));
         for (String table : List.of("field", "category", "catalog"))
             jdbc.update("DELETE FROM yak_ops_standard_" + table);
+        // Layer presets hold a Workspace foreign key, so they must go before the Workspace row.
+        jdbc.update("DELETE FROM yak_ops_modeling_layer");
         jdbc.update("DELETE FROM yak_ops_workspace WHERE id IN ('ws','other','fresh')");
         for (String workspace : List.of("ws", "other", "fresh"))
             jdbc.update(

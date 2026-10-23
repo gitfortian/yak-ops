@@ -31,6 +31,11 @@ public class LayerRepositoryImpl implements LayerRepository {
     }
 
     @Override
+    public void lockWorkspace(String workspaceId) {
+        mapper.lockWorkspace(workspaceId);
+    }
+
+    @Override
     public void seed(List<LayerEntity> rows) {
         mapper.seed(rows);
     }

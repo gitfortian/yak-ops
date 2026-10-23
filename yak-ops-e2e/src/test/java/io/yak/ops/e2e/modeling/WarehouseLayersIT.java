@@ -27,7 +27,7 @@ class WarehouseLayersIT extends BackendTestBase {
         assertEquals("贴源层", presets.get(0).path("cnName").asText());
         assertTrue(presets.get(0).path("builtin").asBoolean());
         assertFalse(presets.get(0).path("enabled").asBoolean());
-        assertTrue(presets.get(0).path("dataSourceId").isNull());
+        assertTrue(absentOrNull(presets.get(0).path("dataSourceId")));
         assertEquals(0, api.call("GET", API + "/options").size());
         String odsId = presets.get(0).path("id").asText();
 
@@ -83,6 +83,11 @@ class WarehouseLayersIT extends BackendTestBase {
         api.expect("PUT", API + "/" + odsId, layer("贴源层", "ODS", null, false, 1), 404);
         api.workspace(workspace);
         assertEquals(5, api.call("GET", API).size());
+    }
+
+    /** Null fields are omitted by the product response, so an unbound layer reports neither null nor a value. */
+    private static boolean absentOrNull(JsonNode node) {
+        return node.isNull() || node.isMissingNode();
     }
 
     private static JsonNode firstDatasource(ApiClient api) {

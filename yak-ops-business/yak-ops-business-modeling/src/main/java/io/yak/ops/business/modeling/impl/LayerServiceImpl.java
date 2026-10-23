@@ -160,11 +160,13 @@ public class LayerServiceImpl implements LayerService {
     /**
      * Seeds the five presets once per Workspace.
      *
-     * <p>Presets cannot be deleted, so the unique abbreviation is a stable marker: concurrent first readers insert
-     * the same codes and the unique key discards the loser, which keeps the default set exactly once without a
-     * separate catalog row or an extra write on later reads.
+     * <p>Presets cannot be deleted, so the unique abbreviation is a stable marker: a second writer would discard
+     * its duplicate codes, but the concurrent upserts still deadlock on the shared unique index. Seeding therefore
+     * locks the Workspace row first and re-reads the count, so only the first reader inserts.
      */
     private void ensurePresets(String workspaceId, String actor) {
+        if (layers.builtinCount(workspaceId) >= PRESETS.size()) return;
+        layers.lockWorkspace(workspaceId);
         if (layers.builtinCount(workspaceId) >= PRESETS.size()) return;
         var rows = PRESETS.stream()
                 .map(preset -> {
