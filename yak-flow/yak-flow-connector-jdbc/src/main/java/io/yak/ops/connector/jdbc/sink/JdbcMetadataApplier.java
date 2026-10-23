@@ -239,8 +239,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 || !java.util.Objects.equals(
                         normalizeDefault(expected.defaultExpression(), expected.defaultGenerated()),
                         normalizeDefault(actual.defaultExpression(), actual.defaultGenerated()))
-                || (expected.nativeType() != null
-                        && !expected.nativeType().equals(actual.nativeType()))) {
+                || (expected.nativeType() != null && !expected.nativeType().equals(actual.nativeType()))) {
             throw new IllegalArgumentException("Target column properties do not match: " + column);
         }
     }
