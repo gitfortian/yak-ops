@@ -6,8 +6,6 @@ import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.SchemaManagerSnapshotSerializer;
-import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
-import io.yak.ops.flow.runtime.tasks.SourceOperatorStreamTask;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -41,8 +39,8 @@ public final class SchemaCoordinator implements AutoCloseable {
 
     private final SchemaManager manager;
     private final MetadataApplier metadataApplier;
-    private volatile List<SourceOperatorStreamTask<?, ?>> sourceTasks;
-    private final List<OneInputStreamTask> pipelineTasks;
+    private volatile List<SchemaSourceParticipant> sourceTasks;
+    private final List<SchemaChangeParticipant> pipelineParticipants;
     private final List<SchemaChangeParticipant> sinkParticipants;
     private final Consumer<Throwable> onFailure;
     private final ExecutorService eventLoop = Executors.newSingleThreadExecutor(
@@ -57,29 +55,34 @@ public final class SchemaCoordinator implements AutoCloseable {
     public SchemaCoordinator(
             SchemaManager manager,
             MetadataApplier metadataApplier,
-            List<? extends SourceOperatorStreamTask<?, ?>> sourceTasks,
-            List<OneInputStreamTask> pipelineTasks,
+            List<? extends SchemaSourceParticipant> sourceTasks,
+            List<? extends SchemaChangeParticipant> pipelineParticipants,
             List<? extends SchemaChangeParticipant> sinkParticipants,
             Consumer<Throwable> onFailure) {
         this.manager = Objects.requireNonNull(manager, "manager");
         this.metadataApplier = Objects.requireNonNull(metadataApplier, "metadataApplier");
         this.sourceTasks = List.copyOf(Objects.requireNonNull(sourceTasks, "sourceTasks"));
-        this.pipelineTasks = List.copyOf(Objects.requireNonNull(pipelineTasks, "pipelineTasks"));
+        this.pipelineParticipants = List.copyOf(Objects.requireNonNull(pipelineParticipants, "pipelineParticipants"));
         this.sinkParticipants = List.copyOf(Objects.requireNonNull(sinkParticipants, "sinkParticipants"));
         this.onFailure = Objects.requireNonNull(onFailure, "onFailure");
-        if (this.pipelineTasks.isEmpty() || this.sinkParticipants.isEmpty()) {
+        if (this.pipelineParticipants.isEmpty() || this.sinkParticipants.isEmpty()) {
             throw new IllegalArgumentException("Schema coordination requires input and Sink tasks");
         }
     }
 
     /** Binds Source tasks after the coordinator is constructed but before the Job is started. */
-    public synchronized void bindSourceTasks(List<? extends SourceOperatorStreamTask<?, ?>> tasks) {
+    public synchronized void bindSourceTasks(List<? extends SchemaSourceParticipant> tasks) {
         if (!sourceTasks.isEmpty()) {
             throw new IllegalStateException("Source tasks are already bound to SchemaCoordinator");
         }
-        List<SourceOperatorStreamTask<?, ?>> bound = List.copyOf(Objects.requireNonNull(tasks, "tasks"));
+        List<SchemaSourceParticipant> bound = List.copyOf(Objects.requireNonNull(tasks, "tasks"));
         if (bound.isEmpty()) {
             throw new IllegalArgumentException("Schema coordination requires Source tasks");
+        }
+        for (int index = 0; index < bound.size(); index++) {
+            if (bound.get(index).subtaskIndex() != index) {
+                throw new IllegalArgumentException("Source schema participants must be ordered by subtask index");
+            }
         }
         sourceTasks = bound;
     }
@@ -199,16 +202,16 @@ public final class SchemaCoordinator implements AutoCloseable {
                 await(participant.validateSchemaChange(request));
             }
 
-            List<SourceOperatorStreamTask<?, ?>> paused = new ArrayList<>();
-            for (SourceOperatorStreamTask<?, ?> source : sourceTasks) {
+            List<SchemaSourceParticipant> paused = new ArrayList<>();
+            for (SchemaSourceParticipant source : sourceTasks) {
                 await(source.pauseForSchemaChange());
                 paused.add(source);
             }
 
             // Drain every upstream stage before its downstream stage. This preserves channel order
             // without changing the connector's source/binlog implementation.
-            for (OneInputStreamTask task : pipelineTasks) {
-                await(task.drainForSchemaChange());
+            for (SchemaChangeParticipant participant : pipelineParticipants) {
+                await(participant.drainForSchemaChange());
             }
             for (SchemaChangeParticipant participant : sinkParticipants) {
                 await(participant.prepareSchemaChange(request));
@@ -232,7 +235,7 @@ public final class SchemaCoordinator implements AutoCloseable {
             if (committedVersion != change.version()) {
                 throw new IllegalStateException("Committed schema version changed during coordination");
             }
-            for (SourceOperatorStreamTask<?, ?> source : paused) {
+            for (SchemaSourceParticipant source : paused) {
                 await(source.resumeAfterSchemaChange());
             }
             pending.result().complete(committedVersion);
