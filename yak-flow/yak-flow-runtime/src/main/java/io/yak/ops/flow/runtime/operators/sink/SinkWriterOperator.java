@@ -1,16 +1,16 @@
 package io.yak.ops.flow.runtime.operators.sink;
 
 import io.yak.ops.core.api.connector.sink.CancellableSinkWriter;
+import io.yak.ops.core.api.connector.sink.SchemaChangeAwareSinkWriter;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.SinkWriter;
-import io.yak.ops.core.api.connector.sink.SchemaChangeAwareSinkWriter;
-import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.api.connector.sink.StatefulSinkWriter;
 import io.yak.ops.core.api.connector.sink.SupportsWriterState;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.api.operators.Collector;
 import io.yak.ops.core.configuration.CheckpointingOptions;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.flow.runtime.operators.CheckpointedStreamOperator;
 import io.yak.ops.flow.runtime.operators.OneInputStreamOperator;
 import io.yak.ops.flow.runtime.state.OperatorStateBackend;
