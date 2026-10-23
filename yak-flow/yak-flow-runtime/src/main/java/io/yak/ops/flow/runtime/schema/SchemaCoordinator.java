@@ -1,9 +1,13 @@
 package io.yak.ops.flow.runtime.schema;
 
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.event.SchemaChangeRequest;
+import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.SchemaManagerSnapshotSerializer;
 import java.io.IOException;
@@ -38,6 +42,7 @@ public final class SchemaCoordinator implements AutoCloseable {
 
     private final SchemaManager manager;
     private final MetadataApplier metadataApplier;
+    private final SchemaEvolutionSink schemaSink;
     private volatile List<SchemaSourceParticipant> sourceTasks;
     private final List<SchemaChangeParticipant> pipelineParticipants;
     private final List<SchemaChangeParticipant> sinkParticipants;
@@ -58,7 +63,20 @@ public final class SchemaCoordinator implements AutoCloseable {
             List<? extends SchemaChangeParticipant> pipelineParticipants,
             List<? extends SchemaChangeParticipant> sinkParticipants,
             Consumer<Throwable> onFailure) {
+        this(manager, metadataApplier, sourceTasks, pipelineParticipants, sinkParticipants, onFailure, null);
+    }
+
+    /** Uses the Sink's explicit schema planner; raw MySQL DDL is never passed to the target. */
+    public SchemaCoordinator(
+            SchemaManager manager,
+            MetadataApplier metadataApplier,
+            List<? extends SchemaSourceParticipant> sourceTasks,
+            List<? extends SchemaChangeParticipant> pipelineParticipants,
+            List<? extends SchemaChangeParticipant> sinkParticipants,
+            Consumer<Throwable> onFailure,
+            SchemaEvolutionSink schemaSink) {
         this.manager = Objects.requireNonNull(manager, "manager");
+        this.schemaSink = schemaSink;
         this.metadataApplier = Objects.requireNonNull(metadataApplier, "metadataApplier");
         this.sourceTasks = List.copyOf(Objects.requireNonNull(sourceTasks, "sourceTasks"));
         this.pipelineParticipants = List.copyOf(Objects.requireNonNull(pipelineParticipants, "pipelineParticipants"));
@@ -113,6 +131,28 @@ public final class SchemaCoordinator implements AutoCloseable {
             }
         }
         return result;
+    }
+
+    /** Plans a source change synchronously without I/O, then queues the normal coordination protocol. */
+    public CompletionStage<Long> applySourceSchemaChange(SourceSchemaChange change, int sourceSubtask) {
+        Objects.requireNonNull(change, "change");
+        if (schemaSink == null) {
+            return CompletableFuture.failedFuture(new UnsupportedOperationException(
+                    "Runtime schema evolution requires a Sink schema planner"));
+        }
+        try {
+            return applySchemaChange(schemaSink.planSchemaChange(change), sourceSubtask);
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    /** Returns the committed source schema for restoring the Debezium converter at the same offset. */
+    public java.util.Optional<Schema> sourceSchema(TableId sourceTable) {
+        return manager.snapshot().tables().stream()
+                .filter(state -> state.sourceTable().equals(sourceTable))
+                .findFirst()
+                .map(io.yak.ops.flow.runtime.schema.SchemaManagerSnapshot.TableState::sourceSchema);
     }
 
     /** Fences new schema requests and waits for the active transition to finish. */
@@ -236,6 +276,9 @@ public final class SchemaCoordinator implements AutoCloseable {
 
             for (SchemaChangeParticipant participant : sinkParticipants) {
                 await(participant.commitSchemaChange(request, change.version()));
+            }
+            if (schemaSink != null) {
+                schemaSink.schemaChangeCompleted(request);
             }
             long committedVersion = manager.complete(request);
             if (committedVersion != change.version()) {
