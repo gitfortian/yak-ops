@@ -98,7 +98,8 @@ public final class JobPlanner {
                             : table.targetSchema() == null ? "CREATE" : schema.requiresDdl() ? "ALTER" : "VERIFY",
                     schema.blocked()
                             ? List.of()
-                            : SchemaValidator.statements(table.targetDatasource().type(), schema, table.targetMetadata()),
+                            : SchemaValidator.statements(
+                                    table.targetDatasource().type(), schema, table.targetMetadata()),
                     differences));
         }
         return List.copyOf(results);
@@ -119,7 +120,8 @@ public final class JobPlanner {
                 table.catalog(),
                 table.schema(),
                 table.table());
-        SchemaValidator.validatePrepared(plan.schemaChange(), plan.targetDatasource().type(), actual);
+        SchemaValidator.validatePrepared(
+                plan.schemaChange(), plan.targetDatasource().type(), actual);
         return plan.withTarget(actual);
     }
 
