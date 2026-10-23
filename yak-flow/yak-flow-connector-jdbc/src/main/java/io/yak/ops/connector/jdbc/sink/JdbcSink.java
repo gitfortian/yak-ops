@@ -206,7 +206,7 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
                             || plan.schema().columns().stream()
                                     .noneMatch(c -> c.name().equals(previous.name()))) {
                         throw new UnsupportedOperationException(
-                            "CDC DROP COLUMN does not name a managed non-key target column");
+                                "CDC DROP COLUMN does not name a managed non-key target column");
                     }
                     deletedBySource.add(previous.name());
                 }
