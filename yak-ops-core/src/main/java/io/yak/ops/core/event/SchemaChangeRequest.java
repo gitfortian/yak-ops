@@ -45,8 +45,14 @@ public record SchemaChangeRequest(
             throw new IllegalArgumentException("Schema change must include a target schema transition");
         }
         for (SchemaChangeEvent change : targetChanges) {
-            if (!targetTable.equals(Objects.requireNonNull(change, "target change").tableId())) {
+            Objects.requireNonNull(change, "target change");
+            if (!targetTable.equals(change.tableId())) {
                 throw new IllegalArgumentException("Target schema event identity does not match the request");
+            }
+            if (change.getType() != SchemaChangeEventType.ADD_COLUMN
+                    && change.getType() != SchemaChangeEventType.ALTER_COLUMN_TYPE) {
+                throw new UnsupportedOperationException(
+                        "Runtime schema coordination supports only ADD_COLUMN and ALTER_COLUMN_TYPE");
             }
         }
     }
