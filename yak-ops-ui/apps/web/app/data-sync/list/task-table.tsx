@@ -84,8 +84,12 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       minWidth: 240,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-[#252832]">{record.name}</div>
-          <div className="mt-0.5 text-xs text-[#98a2b3]">v{record.definitionVersion}</div>
+          <div className="truncate text-[13px] font-medium text-[var(--yak-components-panel-text)]">
+            {record.name}
+          </div>
+          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">
+            v{record.definitionVersion}
+          </div>
         </div>
       ),
     },
@@ -110,7 +114,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       title: "同步方案",
       minWidth: 220,
       render: (_value, record) => (
-        <span className="text-xs text-[#475467]">
+        <span className="text-xs text-[var(--yak-components-tab-text-hover)]">
           {solutionSummary(record.solutionType, record.steps)}
         </span>
       ),
@@ -132,7 +136,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
             onToggle={(enabled) => actions.toggleSchedule(record, enabled)}
           />
         ) : (
-          <span className="text-[#98a2b3]">—</span>
+          <span className="text-[var(--yak-components-muted-text)]">—</span>
         ),
     },
     {
@@ -182,7 +186,10 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       width: 180,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="truncate text-xs font-medium text-[#475467]" title={record.updateBy}>
+          <div
+            className="truncate text-xs font-medium text-[var(--yak-components-tab-text-hover)]"
+            title={record.updateBy}
+          >
             {updateUsersLoading &&
             record.updateBy &&
             record.updateBy !== "system" &&
@@ -192,7 +199,9 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
               updateOperatorText(record)
             )}
           </div>
-          <div className="mt-0.5 text-xs text-[#98a2b3]">{record.updateTime || "-"}</div>
+          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">
+            {record.updateTime || "-"}
+          </div>
         </div>
       ),
     },
@@ -215,7 +224,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
                 ? "启动"
                 : "运行",
             className: activeByTask.has(record.id)
-              ? "text-[#d92d20]"
+              ? "text-[var(--yak-components-danger-text)]"
               : "text-[var(--yak-color-primary)]",
             loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
             disabled:

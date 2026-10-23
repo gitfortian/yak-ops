@@ -68,10 +68,12 @@ export function ExecutionSidebar({
   const changeStatus = onStatusChange;
   const loadInstances = onRefresh;
   return (
-    <aside className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[#e6e8eb] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0">
-      <div className="shrink-0 border-b border-[#eef0f3] px-4 py-3">
+    <aside className="flex max-h-64 w-full shrink-0 flex-col overflow-hidden border-b border-[var(--yak-components-panel-border)] bg-white md:max-h-none md:w-[300px] md:border-r md:border-b-0">
+      <div className="shrink-0 border-b border-[var(--yak-components-control-border)] px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-[#242731]">执行记录</span>
+          <span className="text-sm font-semibold text-[var(--yak-components-panel-text)]">
+            执行记录
+          </span>
           <Button
             size="small"
             variant="ghost"
@@ -119,7 +121,7 @@ export function ExecutionSidebar({
             <Spinner size="medium" label="加载执行记录" />
           </div>
         ) : instances.length === 0 ? (
-          <div className="flex min-h-32 items-center justify-center text-sm text-[#98a2b3]">
+          <div className="flex min-h-32 items-center justify-center text-sm text-[var(--yak-components-muted-text)]">
             暂无执行记录
           </div>
         ) : (
@@ -134,7 +136,7 @@ export function ExecutionSidebar({
                   className={
                     isSelected
                       ? "w-full cursor-pointer rounded-md bg-[var(--yak-color-primary-subtle)] px-3 py-2.5 text-left"
-                      : "w-full cursor-pointer rounded-md bg-white px-3 py-2.5 text-left hover:bg-[#f6f6f6]"
+                      : "w-full cursor-pointer rounded-md bg-white px-3 py-2.5 text-left hover:bg-[var(--yak-color-hover)]"
                   }
                   onClick={() => selectInstance(instance.id)}
                 >
@@ -143,11 +145,11 @@ export function ExecutionSidebar({
                       status={instance.status}
                       realtime={instance.syncType === "REALTIME"}
                     />
-                    <span className="truncate text-xs text-[#98a2b3]">
+                    <span className="truncate text-xs text-[var(--yak-components-muted-text)]">
                       {instance.startTime || instance.createTime || "-"}
                     </span>
                   </div>
-                  <div className="mt-2 truncate text-xs text-[#667085]">
+                  <div className="mt-2 truncate text-xs text-[var(--yak-components-collapse-section-icon)]">
                     {dataSyncTriggerText(instance.triggerType)} · v{instance.taskVersion} ·{" "}
                     {dataSyncDurationText(instance)}
                   </div>
@@ -159,7 +161,7 @@ export function ExecutionSidebar({
       </div>
 
       {total > PAGE_SIZE ? (
-        <div className="flex shrink-0 items-center justify-between border-t border-[#eef0f3] px-3 py-2">
+        <div className="flex shrink-0 items-center justify-between border-t border-[var(--yak-components-control-border)] px-3 py-2">
           <Button
             size="small"
             variant="ghost"
@@ -168,7 +170,7 @@ export function ExecutionSidebar({
           >
             上一页
           </Button>
-          <span className="text-xs text-[#98a2b3]">
+          <span className="text-xs text-[var(--yak-components-muted-text)]">
             {pageNo} / {totalPages}
           </span>
           <Button

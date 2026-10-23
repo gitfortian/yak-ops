@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkArchitectureImports } from "./architecture-imports.mjs";
+import { checkDataSyncStyleTokens } from "./data-sync-style-architecture.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const violations = [];
@@ -143,6 +144,10 @@ for (const path of files) {
     for (const message of checkArchitectureImports(relativePath, content, root)) {
       fail(message);
     }
+  }
+
+  for (const message of checkDataSyncStyleTokens(relativePath, content)) {
+    fail(message);
   }
 
   if (relativePath !== "apps/web/service/http/request.ts" && directFetchPattern.test(content)) {

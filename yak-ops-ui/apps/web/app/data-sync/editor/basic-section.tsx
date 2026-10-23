@@ -11,7 +11,7 @@ interface Props {
 export function BasicSection({ draft, form, patch }: Props) {
   return (
     <CollapseSection id="basic" title="基本信息">
-      <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="space-y-3 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
         <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-3 text-sm">
           <span>同步方案</span>
           <span>{solutionSummary(draft.solutionType, draft.steps)}</span>
