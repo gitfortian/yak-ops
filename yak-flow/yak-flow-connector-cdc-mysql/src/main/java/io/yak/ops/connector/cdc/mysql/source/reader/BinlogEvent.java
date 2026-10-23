@@ -29,7 +29,7 @@ public record BinlogEvent(List<TableRecord> records, BinlogOffset offset, Source
     /** Reports batch size without exposing changed rows or source offsets. */
     @Override
     public String toString() {
-        return "BinlogEvent{recordCount=" + records.size()
-                + ", schemaChange=" + (schemaChange != null) + ", offset=redacted}";
+        return "BinlogEvent{recordCount=" + records.size() + ", schemaChange=" + (schemaChange != null)
+                + ", offset=redacted}";
     }
 }
