@@ -72,7 +72,7 @@ export function DataSyncPage() {
 
   return (
     <>
-      <div className="flex min-h-full flex-col bg-[#f6f6f6] text-[#242731]">
+      <div className="flex min-h-full flex-col bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
         <PageHeader title="数据同步" bordered className="bg-white px-6 max-md:px-4" />
         <div className="flex min-h-0 min-w-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-4">
@@ -84,7 +84,7 @@ export function DataSyncPage() {
               onCreate={() => setCreateOpen(true)}
             />
             {page.error ? (
-              <div className="mt-3 flex items-center gap-2 text-sm text-[#d92d20]">
+              <div className="mt-3 flex items-center gap-2 text-sm text-[var(--yak-components-danger-text)]">
                 任务列表加载失败
                 <Button size="small" onClick={page.retry}>
                   重试
@@ -191,7 +191,7 @@ export function DataSyncPage() {
           </>
         }
       >
-        <div className="text-sm leading-6 text-[#667085]">
+        <div className="text-sm leading-6 text-[var(--yak-components-collapse-section-icon)]">
           确定删除任务“{pendingDelete?.name}”吗？历史任务实例不会在这里删除。
         </div>
       </Modal>
