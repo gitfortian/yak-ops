@@ -19,7 +19,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -145,7 +144,9 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                 BinlogEvent converted = converter.convert(source);
                 if (converted != null) {
                     if (converted.schemaChange() != null) {
-                        LOG.info("MySQL CDC independent DDL event: table={}", converted.schemaChange().tableId());
+                        LOG.info(
+                                "MySQL CDC independent DDL event: table={}",
+                                converted.schemaChange().tableId());
                     }
                     enqueue(converted);
                     lastQueuedOffset = converted.offset();
