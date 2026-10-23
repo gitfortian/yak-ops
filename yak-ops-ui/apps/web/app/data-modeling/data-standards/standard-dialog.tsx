@@ -28,7 +28,7 @@ import {
   type StandardDraft,
   type StandardInput,
 } from "@/service/data-modeling/data-standards/types";
-import { FIELD_CLASS, InputField, SelectField } from "./form-fields";
+import { FIELD_CLASS, InputField, SelectField } from "../shared/form-fields";
 import { STANDARD_CODE, validateStandard } from "./validation";
 
 export default function StandardDialog(props: {

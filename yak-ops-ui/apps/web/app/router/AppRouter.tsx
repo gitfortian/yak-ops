@@ -6,6 +6,9 @@ import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { DataSyncPage } from "@/app/data-sync";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
+import ConceptDimensionsPage from "@/app/data-modeling/dimensions";
+import LogicalModelsPage from "@/app/data-modeling/logical-models";
+import LogicalModelEditorPage from "@/app/data-modeling/logical-models/editor";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/task-editor";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/task-detail";
 import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "@/app/data-sync/redirects";
@@ -34,6 +37,9 @@ const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
   "/data-modeling/warehouse-planning",
   "/data-modeling/data-standards",
+  "/data-modeling/dimensions",
+  "/data-modeling/logical-models",
+  "/data-modeling/logical-models/new",
   "/data-source",
   "/data-sync",
   "/data-sync/new",
@@ -53,7 +59,8 @@ const isAuthenticatedPath = (pathname: string) =>
   pathname.startsWith("/data-sync/") ||
   pathname.startsWith("/offline-sync/") ||
   pathname.startsWith("/realtime-sync/") ||
-  pathname.startsWith("/operations/");
+  pathname.startsWith("/operations/") ||
+  pathname.startsWith("/data-modeling/logical-models/");
 
 const resolveReturnTo = (requested: string | null) => {
   if (!requested) return DEFAULT_AUTHENTICATED_PATH;
@@ -128,6 +135,10 @@ export default function AppRouter() {
         >
           <Route path="/data-modeling/warehouse-planning" element={<WarehousePlanningPage />} />
           <Route path="/data-modeling/data-standards" element={<DataStandardsPage />} />
+          <Route path="/data-modeling/dimensions" element={<ConceptDimensionsPage />} />
+          <Route path="/data-modeling/logical-models" element={<LogicalModelsPage />} />
+          <Route path="/data-modeling/logical-models/new" element={<LogicalModelEditorPage />} />
+          <Route path="/data-modeling/logical-models/:id" element={<LogicalModelEditorPage />} />
         </Route>
         <Route
           element={

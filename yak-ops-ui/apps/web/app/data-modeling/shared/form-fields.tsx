@@ -9,21 +9,27 @@ import {
   SelectItemText,
   SelectTrigger,
   SelectValue,
+  Textarea,
 } from "@yak-ops/yak-ui";
+
 export const FIELD_CLASS = "grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3";
-interface InputProps {
+
+interface InputFieldProps {
   id: string;
   label: string;
   value: string;
   onChange?: (value: string) => void;
   onBlur?: () => void;
   error?: string;
+  hint?: string;
   required?: boolean;
   disabled?: boolean;
   maxLength?: number;
   readOnly?: boolean;
+  placeholder?: string;
 }
-export function InputField(props: InputProps) {
+
+export function InputField(props: InputFieldProps) {
   return (
     <Field className={FIELD_CLASS} invalid={Boolean(props.error)}>
       <FieldLabel htmlFor={props.id} required={props.required} className="pt-1">
@@ -39,25 +45,34 @@ export function InputField(props: InputProps) {
           required={props.required}
           maxLength={props.maxLength}
           readOnly={props.readOnly}
+          placeholder={props.placeholder}
           aria-invalid={Boolean(props.error) || undefined}
           onChange={(event) => props.onChange?.(event.target.value)}
           onBlur={props.onBlur}
         />
         <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
+        {props.hint && !props.error && (
+          <p className="mt-1 text-[11px] leading-4 text-[#667085]">{props.hint}</p>
+        )}
       </div>
     </Field>
   );
 }
-export function SelectField(props: {
+
+interface SelectFieldProps {
   id: string;
   label: string;
   value: string;
   items: { value: string; label: string; disabled?: boolean }[];
   onChange: (value: string) => void;
   error?: string;
+  hint?: string;
   disabled?: boolean;
   required?: boolean;
-}) {
+  placeholder?: string;
+}
+
+export function SelectField(props: SelectFieldProps) {
   const required = props.required ?? true;
   return (
     <Field className={FIELD_CLASS} invalid={Boolean(props.error)}>
@@ -78,7 +93,7 @@ export function SelectField(props: {
             aria-required={required}
             aria-invalid={Boolean(props.error) || undefined}
           >
-            <SelectValue placeholder="请选择" />
+            <SelectValue placeholder={props.placeholder ?? "请选择"} />
           </SelectTrigger>
           <SelectContent>
             {props.items.map((item) => (
@@ -88,6 +103,46 @@ export function SelectField(props: {
             ))}
           </SelectContent>
         </Select>
+        <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
+        {props.hint && !props.error && (
+          <p className="mt-1 text-[11px] leading-4 text-[#667085]">{props.hint}</p>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+interface TextareaFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  rows?: number;
+  maxLength?: number;
+  placeholder?: string;
+}
+
+export function TextareaField(props: TextareaFieldProps) {
+  return (
+    <Field className={FIELD_CLASS} invalid={Boolean(props.error)}>
+      <FieldLabel htmlFor={props.id} required={props.required} className="pt-1">
+        {props.label}
+      </FieldLabel>
+      <div>
+        <Textarea
+          id={props.id}
+          size="small"
+          variant="outlined"
+          value={props.value}
+          rows={props.rows ?? 3}
+          maxLength={props.maxLength}
+          disabled={props.disabled}
+          placeholder={props.placeholder}
+          onValueChange={(value) => props.onChange(String(value ?? ""))}
+        />
         <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
       </div>
     </Field>
