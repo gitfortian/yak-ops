@@ -181,7 +181,7 @@ public final class JdbcSchemaDerivator {
             ColumnProperties physical = column.properties();
             if (physical != null
                     && physical.nativeType() != null
-                    && physical.nativeType().toLowerCase(Locale.ROOT).matches(".*\\\\bunsigned\\\\b.*")) {
+                    && physical.nativeType().toLowerCase(Locale.ROOT).contains("unsigned")) {
                 differences.add(difference(column.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
                         SchemaChangePlan.Reason.UNSUPPORTED_TYPE, column.type(), null));
                 return null;
