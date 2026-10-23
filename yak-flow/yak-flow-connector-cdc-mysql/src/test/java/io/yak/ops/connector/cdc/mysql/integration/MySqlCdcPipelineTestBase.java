@@ -163,7 +163,7 @@ abstract class MySqlCdcPipelineTestBase {
                                     .checkpointId()
                             > 0);
                 } finally {
-                    first.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(first);
                 }
 
                 Configuration restore = configuration(true);
@@ -182,7 +182,7 @@ abstract class MySqlCdcPipelineTestBase {
                             Map.of(20L, new ItemRow("new", 4L)));
                     assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 } finally {
-                    second.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(second);
                 }
             } finally {
                 drop(targetConnection, targetDialect, targetItems);
@@ -251,7 +251,7 @@ abstract class MySqlCdcPipelineTestBase {
                                     .checkpointId()
                             > 0);
                 } finally {
-                    first.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(first);
                 }
 
                 Configuration restore = configuration(true).set(SchemaEvolutionOptions.ENABLED, true);
@@ -263,7 +263,7 @@ abstract class MySqlCdcPipelineTestBase {
                             second, targetConnection, targetDialect, to, Map.of(1L, "added", 2L, "restored"));
                     assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 } finally {
-                    second.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(second);
                 }
             } finally {
                 drop(targetConnection, targetDialect, to);
@@ -308,11 +308,31 @@ abstract class MySqlCdcPipelineTestBase {
 
     private static void ensureRunning(JobClient job) throws Exception {
         JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
-        // EmbeddedPipelineExecutor returns once the worker is submitted. Its asynchronous
-        // ExecutionGraph may still report CREATED until the worker enters run().
-        // Keep polling within the existing convergence deadline, but fail on terminal states.
+        // The worker starts asynchronously: CREATED can briefly precede RUNNING.
+        if (status == JobStatus.FAILED) {
+            try {
+                job.getJobExecutionResult().get(5, TimeUnit.SECONDS);
+            } catch (java.util.concurrent.ExecutionException failure) {
+                throw new AssertionError("CDC pipeline failed during schema evolution", failure.getCause());
+            }
+        }
         if (status != JobStatus.CREATED && status != JobStatus.RUNNING) {
             throw new AssertionError("CDC pipeline stopped during schema evolution: " + status);
+        }
+    }
+
+    private static void cancelIfActive(JobClient job) throws Exception {
+        if (job.getJobStatus().get(5, TimeUnit.SECONDS).isTerminalState()) {
+            return;
+        }
+        try {
+            job.cancel().get(30, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.ExecutionException failure) {
+            // The job may terminate between the state read and the cancellation request.
+            // Do not replace the original assertion or job failure with a cleanup exception.
+            if (!job.getJobStatus().get(5, TimeUnit.SECONDS).isTerminalState()) {
+                throw failure;
+            }
         }
     }
 
