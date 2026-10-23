@@ -1,8 +1,8 @@
 package io.yak.ops.core.api.connector.sink;
 
-import io.yak.ops.core.schema.SchemaVersionedTableState;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import java.util.List;
 
 /**
