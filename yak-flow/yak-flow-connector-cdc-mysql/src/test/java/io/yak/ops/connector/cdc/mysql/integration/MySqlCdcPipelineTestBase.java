@@ -250,6 +250,13 @@ abstract class MySqlCdcPipelineTestBase {
                     sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='stream-ready' WHERE ID=1");
                     awaitIncrementalRow(first, sourceMetrics, from, targetConnection, targetDialect, to, "stream-ready");
                     sql(sourceConnection, "ALTER TABLE cdc_rt_schema_orders ADD COLUMN NOTE VARCHAR(128) NULL");
+                    if (targetOptions.url().startsWith("jdbc:oracle:")) {
+                        // Automatic JDBC ADD_COLUMN is currently supported only for MySQL/PostgreSQL.
+                        // Oracle must reject the change without silently applying following rows.
+                        awaitUnsupportedSchemaChange(first);
+                        assertEquals("stream-ready", orderRows(targetConnection, targetDialect, to).get(1L));
+                        return;
+                    }
                     sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='after', NOTE='added' WHERE ID=1");
                     awaitEvolvedRows(first, targetConnection, targetDialect, to, Map.of(1L, "added"));
                     assertTrue(((EmbeddedJobClient) first)
@@ -277,6 +284,32 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_schema_orders");
             }
         }
+    }
+
+    private static void awaitUnsupportedSchemaChange(JobClient job) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
+            if (status == JobStatus.FAILED) {
+                try {
+                    job.getJobExecutionResult().get(5, TimeUnit.SECONDS);
+                    throw new AssertionError("Unsupported JDBC schema change unexpectedly succeeded");
+                } catch (java.util.concurrent.ExecutionException failure) {
+                    for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause()) {
+                        if (cause.getMessage() != null
+                                && cause.getMessage().contains("does not support this schema change")) {
+                            return;
+                        }
+                    }
+                    throw new AssertionError("CDC failed for a reason other than unsupported Oracle DDL", failure);
+                }
+            }
+            if (status.isTerminalState()) {
+                throw new AssertionError("CDC did not fail closed for unsupported Oracle DDL: " + status);
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Unsupported Oracle DDL did not stop CDC before the deadline");
     }
 
     private static void awaitStreamingPhase(JobClient job, TableMetrics metrics) throws Exception {
