@@ -228,6 +228,45 @@ class JdbcSchemaDerivatorTest {
                 MYSQL.normalizeTargetType(new io.yak.ops.core.types.Column("txt", LogicalTypes.varchar(20000))));
     }
 
+    @Test
+    void unboundedSourceMustNeverFitInsideBoundedTargetWithoutWidening() {
+        Schema source = schema(
+                List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                        column("name", LogicalTypes.STRING)),
+                List.of("id"));
+        Schema target = schema(
+                List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                        column("name", LogicalTypes.varchar(100))),
+                List.of("id"));
+
+        SchemaChangePlan plan = JdbcSchemaDerivator.derive(TABLE, source, Optional.of(target), MYSQL);
+        assertFalse(plan.blocked());
+        AlterColumnTypeEvent widening = assertInstanceOf(AlterColumnTypeEvent.class, plan.changes().getFirst());
+        assertEquals(LogicalTypes.STRING, widening.typeMapping().get("name"));
+    }
+
+    @Test
+    void existingGeneratedColumnsMustNotBeTreatedAsOrdinaryWritableColumns() {
+        Schema source = schema(
+                List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                        column("computed", LogicalTypes.INTEGER)),
+                List.of("id"));
+        Schema target = schema(
+                List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                        new PhysicalColumn(
+                                "computed",
+                                LogicalTypes.INTEGER,
+                                null,
+                                new ColumnProperties(null, false, true, null, false))),
+                List.of("id"));
+
+        SchemaChangePlan plan = JdbcSchemaDerivator.derive(TABLE, source, Optional.of(target), MYSQL);
+        assertTrue(plan.blocked());
+        assertTrue(plan.changes().isEmpty());
+        assertTrue(plan.differences().stream().anyMatch(
+                d -> d.reason() == SchemaChangePlan.Reason.UNSAFE_COLUMN_PROPERTIES));
+    }
+
     private static Schema schema(List<PhysicalColumn> columns, List<String> keys) {
         return new Schema(columns, keys, null);
     }
