@@ -267,7 +267,7 @@ final class TaskDeployment {
                     .filter(OneInputStreamTask::isSinkTask)
                     .toList();
             schemaCoordinator =
-                    new SchemaCoordinator(manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob);
+                    new SchemaCoordinator(manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob, schemaSink);
         }
 
         JobVertex sourceVertex = vertices.getFirst();
