@@ -389,11 +389,9 @@ class JdbcMetadataApplierTest {
             try (JdbcMetadataApplier applier =
                     new JdbcMetadataApplier(flaky, database.dialect, database.catalog, 30)) {
                 applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
-                applier.applySchemaChange(new AddColumnEvent(
-                        TABLE,
-                        List.of(
-                                AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32))),
-                                AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)))))));
+                var first = AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32)));
+                var second = AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)));
+                applier.applySchemaChange(new AddColumnEvent(TABLE, List.of(first, second)));
                 assertEquals(3, database.catalog.getTable(TABLE).columnCount());
                 assertEquals(3, executed.get(), "the first successful column must not be added twice");
             }
@@ -481,11 +479,10 @@ class JdbcMetadataApplierTest {
             try (JdbcMetadataApplier applier =
                     new JdbcMetadataApplier(failing, database.dialect, database.catalog, 30)) {
                 applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
-                SchemaEvolveException failure = assertThrows(
-                        SchemaEvolveException.class,
-                        () -> applier.applySchemaChange(new AddColumnEvent(
-                                TABLE, List.of(AddColumnEvent.last(
-                                        new PhysicalColumn("note", LogicalTypes.varchar(64))))));
+                var column = AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)));
+                var change = new AddColumnEvent(TABLE, List.of(column));
+                SchemaEvolveException failure =
+                        assertThrows(SchemaEvolveException.class, () -> applier.applySchemaChange(change));
                 assertSame(deadlock, failure.getCause());
                 assertEquals(JdbcDdlRetryPolicy.MAX_RETRIES + 1, executed.get());
                 assertEquals(1, database.catalog.getTable(TABLE).columnCount());
