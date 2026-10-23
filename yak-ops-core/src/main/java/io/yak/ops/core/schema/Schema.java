@@ -19,8 +19,7 @@ import java.util.Set;
  * <p>Logical type nullability is owned by the column type. Database-specific properties are
  * retained as metadata, not SQL. The row-writing contract remains {@link TableSchema}.
  */
-public record Schema(List<PhysicalColumn> columns, List<String> primaryKeys, String comment)
-        implements Serializable {
+public record Schema(List<PhysicalColumn> columns, List<String> primaryKeys, String comment) implements Serializable {
     private static final long serialVersionUID = 1L;
 
     public Schema {
@@ -76,7 +75,10 @@ public record Schema(List<PhysicalColumn> columns, List<String> primaryKeys, Str
     /** Returns the ordered, database-independent type shape used by RowData readers and writers. */
     public TableSchema toTableSchema() {
         return new TableSchema(
-                columns.stream().map(column -> new Column(column.name(), column.type())).toList(), primaryKeys);
+                columns.stream()
+                        .map(column -> new Column(column.name(), column.type()))
+                        .toList(),
+                primaryKeys);
     }
 
     /** Returns a detached map of explicitly declared comments. */
@@ -114,7 +116,7 @@ public record Schema(List<PhysicalColumn> columns, List<String> primaryKeys, Str
     /** Diagnostics intentionally omit potentially sensitive source expressions and comments. */
     @Override
     public String toString() {
-        return "Schema{columns=" + columns.stream().map(PhysicalColumn::name).toList()
-                + ", primaryKeys=" + primaryKeys + "}";
+        return "Schema{columns=" + columns.stream().map(PhysicalColumn::name).toList() + ", primaryKeys=" + primaryKeys
+                + "}";
     }
 }
