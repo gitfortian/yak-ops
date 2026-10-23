@@ -41,7 +41,7 @@ public final class SchemaCoordinator implements AutoCloseable {
 
     private final SchemaManager manager;
     private final MetadataApplier metadataApplier;
-    private final List<SourceOperatorStreamTask<?, ?>> sourceTasks;
+    private volatile List<SourceOperatorStreamTask<?, ?>> sourceTasks;
     private final List<OneInputStreamTask> pipelineTasks;
     private final List<SchemaChangeParticipant> sinkParticipants;
     private final Consumer<Throwable> onFailure;
@@ -67,9 +67,21 @@ public final class SchemaCoordinator implements AutoCloseable {
         this.pipelineTasks = List.copyOf(Objects.requireNonNull(pipelineTasks, "pipelineTasks"));
         this.sinkParticipants = List.copyOf(Objects.requireNonNull(sinkParticipants, "sinkParticipants"));
         this.onFailure = Objects.requireNonNull(onFailure, "onFailure");
-        if (this.sourceTasks.isEmpty() || this.pipelineTasks.isEmpty() || this.sinkParticipants.isEmpty()) {
-            throw new IllegalArgumentException("Schema coordination requires Source, input and Sink tasks");
+        if (this.pipelineTasks.isEmpty() || this.sinkParticipants.isEmpty()) {
+            throw new IllegalArgumentException("Schema coordination requires input and Sink tasks");
         }
+    }
+
+    /** Binds Source tasks after the coordinator is constructed but before the Job is started. */
+    public synchronized void bindSourceTasks(List<? extends SourceOperatorStreamTask<?, ?>> tasks) {
+        if (!sourceTasks.isEmpty()) {
+            throw new IllegalStateException("Source tasks are already bound to SchemaCoordinator");
+        }
+        List<SourceOperatorStreamTask<?, ?>> bound = List.copyOf(Objects.requireNonNull(tasks, "tasks"));
+        if (bound.isEmpty()) {
+            throw new IllegalArgumentException("Schema coordination requires Source tasks");
+        }
+        sourceTasks = bound;
     }
 
     /**
