@@ -26,7 +26,8 @@ public record TablePlan(
         TableSchema targetSchema,
         CreateTableEvent schemaChange,
         ReadonlyConfig sourceOptions,
-        SchemaChangePlan schemaPlan) {
+        SchemaChangePlan schemaPlan,
+        DataSourceTable targetMetadata) {
     public TablePlan {
         Objects.requireNonNull(sourceParameters, "sourceParameters");
         Objects.requireNonNull(sinkParameters, "sinkParameters");
@@ -42,6 +43,10 @@ public record TablePlan(
         }
         if (schemaPlan != null && !targetTable.equals(schemaPlan.tableId())) {
             throw new IllegalArgumentException("Schema plan and target identities differ");
+        }
+        if (targetMetadata != null && (!targetTable.equals(targetMetadata.table())
+                || targetMetadata.revision() != targetDatasource.revision())) {
+            throw new IllegalArgumentException("Target metadata does not match the admitted route");
         }
     }
 
@@ -64,6 +69,7 @@ public record TablePlan(
                 targetSchema,
                 schemaChange,
                 sourceOptions,
+                null,
                 null);
     }
 
@@ -72,6 +78,30 @@ public record TablePlan(
         return schemaPlan == null
                 ? schemaChange == null ? List.of() : List.of(schemaChange)
                 : schemaPlan.changes();
+    }
+
+    /** Existing constructor with a schema plan but without a physical target snapshot. */
+    public TablePlan(
+            ReadonlyConfig sourceParameters,
+            ReadonlyConfig sinkParameters,
+            DataSourceTable source,
+            DataSourceInfo targetDatasource,
+            TableId targetTable,
+            TableSchema targetSchema,
+            CreateTableEvent schemaChange,
+            ReadonlyConfig sourceOptions,
+            SchemaChangePlan schemaPlan) {
+        this(
+                sourceParameters,
+                sinkParameters,
+                source,
+                targetDatasource,
+                targetTable,
+                targetSchema,
+                schemaChange,
+                sourceOptions,
+                schemaPlan,
+                null);
     }
 
     /** Creates a route to an existing target without initial schema preparation. */
@@ -108,7 +138,8 @@ public record TablePlan(
                 targetSchema,
                 schemaChange,
                 physical,
-                schemaPlan);
+                schemaPlan,
+                targetMetadata);
     }
 
     /** Returns the admitted desired schema; creating the target does not change this value. */
@@ -132,6 +163,7 @@ public record TablePlan(
                 target.schema(),
                 schemaChange,
                 sourceOptions,
-                schemaPlan);
+                schemaPlan,
+                target);
     }
 }
