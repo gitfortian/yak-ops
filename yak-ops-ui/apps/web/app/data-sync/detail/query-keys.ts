@@ -7,6 +7,8 @@ export const detailQueryKeys = {
     [...detailQueryKeys.scope(scope), "sources", sourceId, targetId] as const,
   updatedBy: (scope: string, userId: string) =>
     [...detailQueryKeys.scope(scope), "user", userId] as const,
+  activeInstance: (scope: string, taskId: string) =>
+    [...detailQueryKeys.scope(scope), "active-instance", taskId] as const,
   instances: (scope: string, taskId: string) =>
     [...detailQueryKeys.scope(scope), "instances", taskId] as const,
   instancePage: (scope: string, taskId: string, page: number, status: string) =>

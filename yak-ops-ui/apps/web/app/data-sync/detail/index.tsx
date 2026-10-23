@@ -1,10 +1,10 @@
 import { Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
 import { useTaskSchedules } from "@/app/schedule/use-task-schedules";
 import { canManageTaskDefinition } from "@/service/data-sync/execution";
-import { useActiveTaskInstances } from "../task-lifecycle";
+import { useActiveTaskInstance } from "./use-active-task-instance";
 import { ExecutionSidebar } from "./execution-sidebar";
 import { TaskSummary } from "./task-summary";
 import { ExecutionTabs } from "./execution-tabs";
@@ -14,7 +14,6 @@ import { useExecutionActions } from "./use-execution-actions";
 
 export function DataSyncTaskDetailPage() {
   const basePath = "/data-sync";
-  const localScroll = true;
   const { id: taskId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const scope = useDetailScope();
@@ -24,13 +23,11 @@ export function DataSyncTaskDetailPage() {
   const [historyScheduleId, setHistoryScheduleId] = useState<string>();
   const schedules = useTaskSchedules(!realtime && taskId ? [taskId] : []);
   const hasEnabledSchedule = Boolean(taskId && schedules.records.get(taskId)?.enabled);
-  const activeTaskIds = useMemo(() => (taskId ? [taskId] : []), [taskId]);
   const {
-    activeByTask,
+    activeInstance,
     ready: instancesReady,
     refresh: refreshActiveInstances,
-  } = useActiveTaskInstances(Boolean(taskId), activeTaskIds);
-  const activeInstance = taskId ? activeByTask.get(taskId) : undefined;
+  } = useActiveTaskInstance(scope, taskId);
   const canStart = canManageTaskDefinition(instancesReady, activeInstance);
   const {
     executionId,
@@ -74,13 +71,7 @@ export function DataSyncTaskDetailPage() {
   }
 
   return (
-    <div
-      className={
-        localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row"
-          : "flex min-h-full flex-col bg-white text-[var(--yak-components-panel-text)] md:flex-row"
-      }
-    >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row">
       <ExecutionSidebar
         realtime={realtime}
         status={status}

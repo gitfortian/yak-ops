@@ -74,7 +74,7 @@ export function EditorAnchorStepper({ items, scrollRootRef }: EditorAnchorSteppe
   return (
     <nav
       aria-label="任务配置导航"
-      className="rounded-xl border border-[#e6e8eb] bg-white px-4 py-3"
+      className="rounded-xl border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
     >
       {items.map((item, index) => {
         const active = item.id === activeId;
@@ -90,13 +90,13 @@ export function EditorAnchorStepper({ items, scrollRootRef }: EditorAnchorSteppe
           >
             <span className="relative mt-[18px] flex size-2 shrink-0 items-center justify-center">
               {!last ? (
-                <span className="absolute left-1/2 top-2 h-[40px] w-px -translate-x-1/2 bg-[#e4e7ec]" />
+                <span className="absolute left-1/2 top-2 h-[40px] w-px -translate-x-1/2 bg-[var(--yak-components-table-border-strong)]" />
               ) : null}
               <span
                 className={
                   active
                     ? "relative z-10 size-2 rounded-full bg-[var(--yak-color-primary)]"
-                    : "relative z-10 size-2 rounded-full bg-[#a4a7ae]"
+                    : "relative z-10 size-2 rounded-full bg-[var(--yak-components-tab-text)]"
                 }
               />
             </span>
@@ -104,7 +104,7 @@ export function EditorAnchorStepper({ items, scrollRootRef }: EditorAnchorSteppe
               className={
                 active
                   ? "pt-[13px] text-[13px] font-medium text-[var(--yak-color-primary)]"
-                  : "pt-[13px] text-[13px] text-[#98a2b3] transition-colors group-hover:text-[#667085]"
+                  : "pt-[13px] text-[13px] text-[var(--yak-components-muted-text)] transition-colors group-hover:text-[var(--yak-components-collapse-section-icon)]"
               }
             >
               {item.label}

@@ -6,8 +6,8 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { readTaskDraft, taskDraftKey } from "@/service/data-sync/draft";
 import { getDataSource } from "@/service/datasource";
 import { getDataSyncTask, type DataSyncDraft } from "@/service/data-sync";
-import { TaskEditor } from "./editor";
-import type { TaskEditorInput } from "./editor/types";
+import { TaskEditor } from "./index";
+import type { TaskEditorInput } from "./types";
 
 /** Resolve a saved solution from its definition, never from the route used to open it. */
 export function DataSyncTaskEditorPage() {
@@ -69,7 +69,11 @@ export function DataSyncTaskEditorPage() {
       </div>
     );
   if (!input || input.id !== id)
-    return <div className="p-8 text-sm text-[#667085]">正在加载同步任务...</div>;
+    return (
+      <div className="p-8 text-sm text-[var(--yak-components-collapse-section-icon)]">
+        正在加载同步任务...
+      </div>
+    );
   return <TaskEditor key={id} {...input} />;
 }
 

@@ -2,13 +2,13 @@ import { Skeleton, Table, type TableColumns } from "@yak-ops/yak-ui";
 import { useNavigate } from "react-router-dom";
 
 import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";
-import { ExecutionProgressBar } from "../execution-progress-bar";
-import { ExecutionStages } from "../execution-stages";
-import { TaskRoute } from "../task-route";
-import { DataSyncTaskLifecycleActions, DataSyncTaskStatusBadge } from "../task-lifecycle";
+import { ExecutionProgressBar } from "../execution/execution-progress-bar";
+import { ExecutionStages } from "../execution/execution-stages";
+import { TaskRoute } from "./task-route";
+import { DataSyncTaskLifecycleActions, DataSyncTaskStatusBadge } from "./task-lifecycle";
 import { readExecutionSummary } from "@/service/data-sync/report";
 import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
-import { solutionSummary } from "../solution-presentation";
+import { solutionSummary } from "../solution/presentation";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { UserRecord } from "@/service/user";
 import type { DataSyncTaskRecord } from "@/service/data-sync";

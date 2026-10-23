@@ -1,4 +1,4 @@
-import { DataSyncInstanceRedirect } from "@/app/data-sync/redirects";
+import { DataSyncInstanceRedirect } from "@/app/router/data-sync-redirects";
 
 import { DataSyncOperationsDashboard } from "./dashboard";
 

@@ -2,8 +2,11 @@ import { Button, Spinner, Switch, Tabs, TabsList, TabsPanel, TabsTab } from "@ya
 import { RefreshCw } from "lucide-react";
 import { canCancelTaskInstance } from "@/service/data-sync/execution";
 import type { DataSyncInstanceRecord } from "@/service/data-sync";
-import { DataSyncExecutionDetailContent, isActiveDataSyncInstance } from "../execution-detail";
-import { TaskInstanceLogPanel } from "../task-instance-log-panel";
+import {
+  DataSyncExecutionDetailContent,
+  isActiveDataSyncInstance,
+} from "../execution/execution-detail";
+import { TaskInstanceLogPanel } from "./log/task-instance-log-panel";
 
 interface Props {
   activeTab: string;

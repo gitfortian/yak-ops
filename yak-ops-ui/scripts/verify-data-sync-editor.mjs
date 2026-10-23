@@ -24,7 +24,7 @@ function compile(file, mocks) {
 
 const params = compile("../apps/web/app/data-sync/editor/definition.ts", {
   "@/service/data-sync/parameters": { validIncrementalConfig: (x) => Boolean(x?.column) },
-  "../table-mapping-editor": { validTableMappings: (rows) => rows.length > 0 },
+  "./table-mapping-editor": { validTableMappings: (rows) => rows.length > 0 },
   "@/app/schedule/schedule-presentation": {
     sameScheduleRule: (a, b) => a.cronExpression === b.cronExpression,
   },

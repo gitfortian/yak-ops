@@ -5,6 +5,10 @@ import ts from "typescript";
 import { detailQueryKeys } from "../apps/web/app/data-sync/detail/query-keys.ts";
 
 assert.notDeepEqual(
+  detailQueryKeys.activeInstance("user-a:ws-a", "t1"),
+  detailQueryKeys.activeInstance("user-a:ws-b", "t1"),
+);
+assert.notDeepEqual(
   detailQueryKeys.task("user-a:ws-a", "t1"),
   detailQueryKeys.task("user-b:ws-a", "t1"),
 );
@@ -115,7 +119,7 @@ await finalized.actions.cancel();
 assert.equal(finalized.called.length, 0, "finished executions cannot be canceled");
 
 const logSource = readFileSync(
-  new URL("../apps/web/app/data-sync/log/use-instance-logs.ts", import.meta.url),
+  new URL("../apps/web/app/data-sync/detail/log/use-instance-logs.ts", import.meta.url),
   "utf8",
 );
 assert.match(logSource, /activeRef\.current = active/);

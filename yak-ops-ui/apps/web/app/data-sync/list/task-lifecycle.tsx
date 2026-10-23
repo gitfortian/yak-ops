@@ -1,7 +1,6 @@
 import { Badge, Button, type BadgeProps } from "@yak-ops/yak-ui";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment } from "react";
 
-import { listLatestTaskInstances, type TaskInstanceRecord } from "@/service/task-execution";
 import { canManageTaskDefinition } from "@/service/data-sync/execution";
 
 import {
@@ -28,74 +27,6 @@ export const taskStatusMeta = (
 export function DataSyncTaskStatusBadge({ status }: { status: DataSyncTaskStatus | string }) {
   const meta = taskStatusMeta(status);
   return <Badge tone={meta.tone}>{meta.label}</Badge>;
-}
-
-/** Shared page-level execution summaries, queried in batches without Definition lookups. */
-export function useActiveTaskInstances(enabled: boolean, taskIds: string[]) {
-  const [latestByTask, setLatestByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
-  const [activeByTask, setActiveByTask] = useState<Map<string, TaskInstanceRecord>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [readFailed, setReadFailed] = useState(false);
-  const loadedTaskIdsRef = useRef("");
-  const requestId = useRef(0);
-  const pendingRequest = useRef<AbortController>();
-
-  const refresh = useCallback(async () => {
-    pendingRequest.current?.abort();
-    const controller = new AbortController();
-    pendingRequest.current = controller;
-    const request = ++requestId.current;
-    if (!enabled || taskIds.length === 0) {
-      loadedTaskIdsRef.current = "";
-      setReadFailed(false);
-      setLoading(false);
-      setLatestByTask(new Map());
-      setActiveByTask(new Map());
-      return;
-    }
-    const scope = taskIds.join("|");
-    if (loadedTaskIdsRef.current !== scope) setLoading(true);
-    try {
-      const [latest, active] = await Promise.all([
-        listLatestTaskInstances(taskIds, false, controller.signal),
-        listLatestTaskInstances(taskIds, true, controller.signal),
-      ]);
-      if (controller.signal.aborted || request !== requestId.current) return;
-      setLatestByTask(new Map(latest.map((record) => [record.definitionId, record])));
-      setActiveByTask(new Map(active.map((record) => [record.definitionId, record])));
-      loadedTaskIdsRef.current = scope;
-      setReadFailed(false);
-      setLoading(false);
-    } catch {
-      // Keep the last observation. Authorization and transport errors are reported centrally.
-      if (!controller.signal.aborted && request === requestId.current) {
-        setReadFailed(true);
-        setLoading(false);
-      }
-    }
-  }, [enabled, taskIds]);
-
-  useEffect(() => {
-    void refresh();
-    return () => {
-      requestId.current += 1;
-      pendingRequest.current?.abort();
-    };
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!enabled || taskIds.length === 0) return;
-    const timer = window.setInterval(() => void refresh(), activeByTask.size > 0 ? 2000 : 15000);
-    return () => window.clearInterval(timer);
-  }, [activeByTask.size, enabled, refresh, taskIds.length]);
-
-  const ready =
-    enabled &&
-    taskIds.length > 0 &&
-    !loading &&
-    !readFailed &&
-    loadedTaskIdsRef.current === taskIds.join("|");
-  return { latestByTask, activeByTask, loading, ready, refresh };
 }
 
 interface LifecycleAction {
@@ -159,21 +90,24 @@ export function DataSyncTaskLifecycleActions({
       key: "edit",
       label: "编辑",
       className: published
-        ? "text-[#667085]"
-        : "text-[#667085] hover:text-[var(--yak-color-primary)]",
+        ? "text-[var(--yak-components-collapse-section-icon)]"
+        : "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-color-primary)]",
       disabled: published || !canManage,
       onClick: () => onEdit(record),
     },
     {
       key: "detail",
       label: "详情",
-      className: "text-[#667085] hover:text-[var(--yak-color-primary)]",
+      className:
+        "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-color-primary)]",
       onClick: () => onDetail(record),
     },
     {
       key: "delete",
       label: "删除",
-      className: published ? "text-[#667085]" : "text-[#667085] hover:text-[#d92d20]",
+      className: published
+        ? "text-[var(--yak-components-collapse-section-icon)]"
+        : "text-[var(--yak-components-collapse-section-icon)] hover:text-[var(--yak-components-danger-text)]",
       disabled: published || !canManage,
       onClick: () => onDelete(record),
     },
@@ -189,7 +123,9 @@ export function DataSyncTaskLifecycleActions({
       key: "run",
       label: "运行",
       className:
-        published && !activeInstance ? "text-[var(--yak-color-primary)]" : "text-[#667085]",
+        published && !activeInstance
+          ? "text-[var(--yak-color-primary)]"
+          : "text-[var(--yak-components-collapse-section-icon)]",
       disabled: !published || !canManage,
       loading: actionKey === `${record.id}:run`,
       onClick: () => onRun(record),
@@ -200,7 +136,9 @@ export function DataSyncTaskLifecycleActions({
     <div className="flex items-center justify-center gap-0">
       {actions.map((action, index) => (
         <Fragment key={action.key}>
-          {index > 0 ? <span className="mx-0.5 h-3 w-px bg-[#e4e7ec]" /> : null}
+          {index > 0 ? (
+            <span className="mx-0.5 h-3 w-px bg-[var(--yak-components-table-border-strong)]" />
+          ) : null}
           <Button
             variant="ghost"
             size="small"

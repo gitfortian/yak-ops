@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { getDataSourceTypeLabel } from "@/app/datasource/constants";
 import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
-import { DataSyncSearchableSelect } from "../searchable-select";
+import { DataSyncSearchableSelect } from "../components/searchable-select";
 import type { DataSourceRecord } from "@/service/datasource";
 
 interface DataSourceEndpointCardProps {

@@ -1,3 +1,10 @@
+:root {
+  --yak-log-panel-bg: #151b2d;
+  --yak-log-toolbar-text: #ecf0f8;
+  --yak-log-tooltip-bg: #0b0f19;
+  --yak-log-tooltip-text: #fff;
+}
+
 .yak-log-viewer {
   --yak-log-time: #92a0ba;
   --yak-log-info: #79adff;

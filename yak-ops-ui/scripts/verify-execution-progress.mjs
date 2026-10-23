@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { getExecutionProgress } from "../apps/web/app/data-sync/execution-progress.ts";
+import { getExecutionProgress } from "../apps/web/app/data-sync/execution/execution-progress.ts";
 
 assert.deepEqual(getExecutionProgress("FINISHED"), { mode: "success", value: 100 });
 assert.deepEqual(getExecutionProgress("FAILED"), { mode: "failure", value: 0 });
@@ -16,8 +16,8 @@ for (const status of ["CANCELLING", "RECONCILING", "CANCELED"]) {
 }
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const detail = read("../apps/web/app/data-sync/execution-detail.tsx");
-const progressBar = read("../apps/web/app/data-sync/execution-progress-bar.tsx");
+const detail = read("../apps/web/app/data-sync/execution/execution-detail.tsx");
+const progressBar = read("../apps/web/app/data-sync/execution/execution-progress-bar.tsx");
 const taskList = read("../apps/web/app/data-sync/list/task-table.tsx");
 const router = read("../apps/web/app/router/AppRouter.tsx");
 const page = read("../apps/web/app/data-sync/detail/index.tsx");
@@ -25,8 +25,9 @@ const history = read("../apps/web/app/data-sync/detail/use-execution-history.ts"
 const actions = read("../apps/web/app/data-sync/detail/use-execution-actions.ts");
 const sidebar = read("../apps/web/app/data-sync/detail/execution-sidebar.tsx");
 const tabs = read("../apps/web/app/data-sync/detail/execution-tabs.tsx");
-const css = read("../apps/web/app/data-sync/execution-detail.css");
-const logPanel = read("../apps/web/app/data-sync/task-instance-log-panel.tsx");
+const css = read("../apps/web/app/data-sync/execution/execution-detail.css");
+const logPanel = read("../apps/web/app/data-sync/detail/log/task-instance-log-panel.tsx");
+const logCss = read("../apps/web/app/data-sync/detail/log/task-instance-log.css");
 
 for (const source of [detail, page]) {
   assert.doesNotMatch(source, /DataSyncExecutionConfigContent|本次运行配置|配置快照/);
@@ -60,7 +61,7 @@ assert.match(history, /selectedQuery\.isError && !selectedQuery\.data/);
 assert.match(sidebar, /<ExecutionStatusIcon\s+status=\{instance.status\}/);
 assert.match(tabs, /key=\{selectedInstance.id\}/);
 assert.match(tabs, /<TaskInstanceLogPanel/);
-assert.ok(page.includes("useActiveTaskInstances(Boolean(taskId), activeTaskIds)"));
+assert.ok(page.includes("useActiveTaskInstance(scope, taskId)"));
 assert.ok(page.includes("canManageTaskDefinition(instancesReady, activeInstance)"));
 assert.ok(actions.includes("listLatestTaskInstances([taskId], true)"));
 assert.ok(actions.includes("if (active.length > 0)"));
@@ -83,8 +84,10 @@ assert.ok(logPanel.includes("onScroll={(event) => {"));
 assert.ok(logPanel.includes("scrollHeight - element.scrollTop - element.clientHeight <= 32"));
 assert.ok(logPanel.includes("[content, fullscreen]"));
 assert.ok(logPanel.includes('border: "none"'));
-assert.ok(logPanel.includes('backgroundColor: "#0b0f19"'));
+assert.ok(logPanel.includes('backgroundColor: "var(--yak-log-tooltip-bg)"'));
 assert.ok(logPanel.includes("hover:text-white"));
+assert.match(logCss, /--yak-log-tooltip-bg: #0b0f19/);
+assert.match(logCss, /--yak-log-panel-bg: #151b2d/);
 assert.ok(logPanel.includes("cursor-pointer items-center"));
 assert.ok(logPanel.includes('translate: "none"'));
 assert.ok(logPanel.includes("inset: 12"));
