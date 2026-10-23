@@ -77,8 +77,8 @@ export function DataSyncTaskDetailPage() {
     <div
       className={
         localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#242731] md:flex-row"
-          : "flex min-h-full flex-col bg-white text-[#242731] md:flex-row"
+          ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row"
+          : "flex min-h-full flex-col bg-white text-[var(--yak-components-panel-text)] md:flex-row"
       }
     >
       <ExecutionSidebar
