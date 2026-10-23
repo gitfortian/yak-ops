@@ -87,13 +87,18 @@ public final class JdbcSchemaDerivator {
                 LogicalType normalized =
                         normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
                 if (normalized == null) continue;
-                if (source.primaryKeys().contains(incoming.name()) || !normalized.isNullable()
+                if (source.primaryKeys().contains(incoming.name())
+                        || !normalized.isNullable()
                         || !ordinaryColumn(incoming)) {
-                    add(differences, incoming.name(), Kind.INCOMPATIBLE,
+                    add(
+                            differences,
+                            incoming.name(),
+                            Kind.INCOMPATIBLE,
                             source.primaryKeys().contains(incoming.name())
                                     ? Reason.MISSING_KEY_COLUMN
                                     : Reason.UNSAFE_COLUMN_PROPERTIES,
-                            normalized, null);
+                            normalized,
+                            null);
                 } else {
                     additions.add(AddColumnEvent.last(incoming.copy(normalized)));
                     add(differences, incoming.name(), Kind.ADD_COLUMN, Reason.COLUMN_MISSING, normalized, null);
@@ -101,19 +106,35 @@ public final class JdbcSchemaDerivator {
                 continue;
             }
 
-            if (actual.properties() != null && Boolean.TRUE.equals(actual.properties().generated())) {
-                add(differences, incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSAFE_COLUMN_PROPERTIES, incoming.type(), actual.type());
+            if (actual.properties() != null
+                    && Boolean.TRUE.equals(actual.properties().generated())) {
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_COLUMN_PROPERTIES,
+                        incoming.type(),
+                        actual.type());
                 continue;
             }
             if (!incoming.type().isResolved() || !actual.type().isResolved()) {
-                add(differences, incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNRESOLVED_TYPE, incoming.type(), actual.type());
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.UNRESOLVED_TYPE,
+                        incoming.type(),
+                        actual.type());
                 continue;
             }
             if (incoming.type().isNullable() && !actual.type().isNullable()) {
-                add(differences, incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.NULLABILITY_MISMATCH, incoming.type(), actual.type());
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.NULLABILITY_MISMATCH,
+                        incoming.type(),
+                        actual.type());
                 continue;
             }
             LogicalType planned =
@@ -128,16 +149,31 @@ public final class JdbcSchemaDerivator {
                     && canWiden(planned, actual.type())) {
                 widened.put(incoming.name(), planned.copy(actual.type().isNullable()));
                 previous.put(incoming.name(), actual.type());
-                add(differences, incoming.name(), Kind.ALTER_COLUMN_TYPE,
-                        Reason.COLUMN_WIDENING, planned, actual.type());
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.ALTER_COLUMN_TYPE,
+                        Reason.COLUMN_WIDENING,
+                        planned,
+                        actual.type());
             } else {
-                add(differences, incoming.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSAFE_TYPE_CHANGE, planned, actual.type());
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_TYPE_CHANGE,
+                        planned,
+                        actual.type());
             }
             if (!Objects.equals(incoming.properties(), actual.properties())
                     || !Objects.equals(incoming.comment(), actual.comment())) {
-                add(differences, incoming.name(), Kind.METADATA_DIFFERENCE,
-                        Reason.COLUMN_METADATA_DIFFERENCE, incoming.type(), actual.type());
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.METADATA_DIFFERENCE,
+                        Reason.COLUMN_METADATA_DIFFERENCE,
+                        incoming.type(),
+                        actual.type());
             }
         }
 
@@ -233,8 +269,13 @@ public final class JdbcSchemaDerivator {
             Set<String> unique = new HashSet<>();
             for (PhysicalColumn column : schema.columns()) {
                 if (!unique.add(column.name().toLowerCase(Locale.ROOT))) {
-                    add(differences, column.name(), Kind.INCOMPATIBLE,
-                            Reason.AMBIGUOUS_IDENTIFIER, column.type(), null);
+                    add(
+                            differences,
+                            column.name(),
+                            Kind.INCOMPATIBLE,
+                            Reason.AMBIGUOUS_IDENTIFIER,
+                            column.type(),
+                            null);
                 }
             }
         }
