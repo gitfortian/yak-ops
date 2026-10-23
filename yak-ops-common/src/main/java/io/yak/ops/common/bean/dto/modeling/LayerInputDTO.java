@@ -18,7 +18,7 @@ public class LayerInputDTO {
     @Size(max = 32, message = "英文缩写不能超过32个字符")
     private String enCode;
 
-    @Size(max = 64, message = "数据源标识无效")
+    @Size(max = 64, message = "物理数据源标识过长")
     private String dataSourceId;
 
     @Size(max = 500, message = "描述不能超过500个字符")

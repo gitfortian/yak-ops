@@ -104,6 +104,13 @@ public class LayerServiceImpl implements LayerService {
         return !layers.occupied(workspaceId, code, excludeId);
     }
 
+    /**
+     * Creates a custom layer.
+     *
+     * <p>Presets are seeded by the read paths, not here, so this method refuses a preset abbreviation outright:
+     * otherwise a Workspace whose first action is a create would store a look-alike code and the later seeding
+     * upsert would silently skip that default.
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LayerVO create(String workspaceId, String actor, LayerInputDTO input) {
