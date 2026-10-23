@@ -1,19 +1,17 @@
 package io.yak.ops.flow.runtime.executiongraph;
 
-import io.yak.ops.core.api.connector.source.Source;
-import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
-import io.yak.ops.core.schema.SchemaVersionedTableState;
+import io.yak.ops.core.api.connector.source.Source;
+import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
 import io.yak.ops.flow.runtime.configuration.RuntimeOptions;
-import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
-import io.yak.ops.flow.runtime.schema.SchemaManager;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import io.yak.ops.flow.runtime.graph.StreamNode;
 import io.yak.ops.flow.runtime.graph.StreamPartitioning;
@@ -25,6 +23,8 @@ import io.yak.ops.flow.runtime.jobgraph.JobGraph;
 import io.yak.ops.flow.runtime.jobgraph.JobVertex;
 import io.yak.ops.flow.runtime.operators.OperatorChain;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorCoordinatorContext;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
+import io.yak.ops.flow.runtime.schema.SchemaManager;
 import io.yak.ops.flow.runtime.source.coordinator.SourceCoordinator;
 import io.yak.ops.flow.runtime.tasks.FinishedOnRestoreStreamTask;
 import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
@@ -241,8 +241,8 @@ final class TaskDeployment {
                 throw new UnsupportedOperationException(
                         "The configured Sink does not declare runtime schema evolution support");
             }
-            MetadataApplier applier = Objects.requireNonNull(
-                    schemaSink.createMetadataApplier(), "Sink returned a null MetadataApplier");
+            MetadataApplier applier =
+                    Objects.requireNonNull(schemaSink.createMetadataApplier(), "Sink returned a null MetadataApplier");
             SchemaManager manager = SchemaCoordinator.restoreManager(
                     restoredCheckpoint == null ? null : restoredCheckpoint.schemaManagerState());
             List<SchemaVersionedTableState> restoredSchemaStates = manager.snapshot().tables().stream()
@@ -263,10 +263,11 @@ final class TaskDeployment {
                     .sorted(java.util.Comparator.comparingInt(
                             task -> topologicalOrder.get(task.taskInfo().operatorId())))
                     .toList();
-            List<OneInputStreamTask> sinkTasks =
-                    orderedInputs.stream().filter(OneInputStreamTask::isSinkTask).toList();
-            schemaCoordinator = new SchemaCoordinator(
-                    manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob);
+            List<OneInputStreamTask> sinkTasks = orderedInputs.stream()
+                    .filter(OneInputStreamTask::isSinkTask)
+                    .toList();
+            schemaCoordinator =
+                    new SchemaCoordinator(manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob);
         }
 
         JobVertex sourceVertex = vertices.getFirst();
