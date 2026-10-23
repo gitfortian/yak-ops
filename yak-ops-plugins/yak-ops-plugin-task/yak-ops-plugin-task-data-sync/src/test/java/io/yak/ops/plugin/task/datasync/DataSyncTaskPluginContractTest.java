@@ -45,6 +45,38 @@ class DataSyncTaskPluginContractTest {
     }
 
     @Test
+    void retainsLegacyRealtimePolicyAndValidatesExplicitConfiguration() {
+        var oldParameters = registry.get("DATA_SYNC").parse(2, realtimeJson());
+        assertEquals(false, JobConfig.from(oldParameters).schemaChangesEnabled());
+
+        String realtimeV3 = """
+                {
+                  "solutionType":"SINGLE_TABLE_REALTIME",
+                  "steps":["FULL","INCREMENTAL"],
+                  "schemaChangesEnabled":true,
+                  "source":{"datasourceId":"source"},
+                  "sink":{"datasourceId":"target"},
+                  "tableSelection":{"mode":"EXPLICIT"},
+                  "tableMappings":[{"source":{"table":"orders"},"target":{"table":"orders_copy"},
+                                    "writeMode":"UPSERT"}]
+                }
+                """;
+        assertEquals(
+                true,
+                JobConfig.from(registry.get("DATA_SYNC").parse(3, realtimeV3))
+                        .schemaChangesEnabled());
+        assertEquals(
+                false,
+                JobConfig.from(registry.get("DATA_SYNC")
+                                .parse(3, realtimeV3.replace("\"schemaChangesEnabled\":true,", "")))
+                        .schemaChangesEnabled());
+        assertThrows(TaskPluginException.class, () -> registry.get("DATA_SYNC").parse(
+                3, realtimeV3.replace("\"schemaChangesEnabled\":true", "\"schemaChangesEnabled\":\"true\"")));
+        assertThrows(TaskPluginException.class, () -> registry.get("DATA_SYNC").parse(
+                3, realtimeV3.replace("SINGLE_TABLE_REALTIME", "SINGLE_TABLE_OFFLINE")));
+    }
+
+    @Test
     void registersBootConstructedPluginWithOneRegistry() {
         assertTrue(registry.types().contains("DATA_SYNC"));
         assertInstanceOf(DataSyncTaskPlugin.class, registry.get("DATA_SYNC"));
