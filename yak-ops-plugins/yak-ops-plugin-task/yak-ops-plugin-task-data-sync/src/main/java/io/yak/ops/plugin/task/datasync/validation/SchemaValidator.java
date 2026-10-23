@@ -1,8 +1,8 @@
 package io.yak.ops.plugin.task.datasync.validation;
 
+import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
@@ -184,7 +184,8 @@ public final class SchemaValidator {
                             || !properties.isKnown()
                             || properties.hasFeatures()
                             || (properties.nativeType() != null
-                                    && properties.nativeType()
+                                    && properties
+                                            .nativeType()
                                             .toLowerCase(java.util.Locale.ROOT)
                                             .contains("unsigned"))) {
                         issues.add(new SchemaChangePlan.Difference(
@@ -222,8 +223,8 @@ public final class SchemaValidator {
         SchemaChangePlan plan = plan(desired, targetType, actual);
         requireCompatible(plan);
         if (plan.requiresDdl()) {
-            throw new SchemaValidationException(new IllegalArgumentException(
-                    "Target structure still requires schema changes"));
+            throw new SchemaValidationException(
+                    new IllegalArgumentException("Target structure still requires schema changes"));
         }
     }
 
@@ -240,15 +241,16 @@ public final class SchemaValidator {
                     statements.addAll(dialect.addColumnStatements(event.tableId(), column.column()));
                 }
             } else if (event instanceof AlterColumnTypeEvent alter) {
-                for (String name : alter.typeMapping().keySet().stream().sorted().toList()) {
+                for (String name :
+                        alter.typeMapping().keySet().stream().sorted().toList()) {
                     Column before = new Column(name, alter.oldTypeMapping().get(name));
                     Column after = new Column(name, alter.typeMapping().get(name));
-                    String comment = actual == null ? null : actual.columnComments().get(name);
+                    String comment =
+                            actual == null ? null : actual.columnComments().get(name);
                     statements.add(dialect.alterColumnTypeSql(event.tableId(), before, after, comment));
                 }
             } else {
-                throw new SchemaValidationException(
-                        new IllegalArgumentException("Unsupported planned schema event"));
+                throw new SchemaValidationException(new IllegalArgumentException("Unsupported planned schema event"));
             }
         }
         return List.copyOf(statements);
@@ -256,11 +258,12 @@ public final class SchemaValidator {
 
     /** Resolves vendor dialect without opening a connection or accepting arbitrary SQL URLs. */
     private static JdbcDialect dialect(String targetType) {
-        String prefix = switch (targetType) {
-            case "MYSQL" -> "jdbc:mysql:";
-            case "POSTGRE_SQL" -> "jdbc:postgresql:";
-            default -> throw new IllegalArgumentException("Schema preparation target is not supported");
-        };
+        String prefix =
+                switch (targetType) {
+                    case "MYSQL" -> "jdbc:mysql:";
+                    case "POSTGRE_SQL" -> "jdbc:postgresql:";
+                    default -> throw new IllegalArgumentException("Schema preparation target is not supported");
+                };
         return JdbcFactoryLoader.loadDialect(prefix);
     }
 
