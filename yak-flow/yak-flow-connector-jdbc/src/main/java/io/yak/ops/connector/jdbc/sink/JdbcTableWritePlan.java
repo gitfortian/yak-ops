@@ -5,7 +5,6 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.util.ArrayList;
@@ -115,7 +114,8 @@ public record JdbcTableWritePlan(
         }
         for (Column target : nextTargetSchema.columns()) {
             if (!mappings.containsKey(target.name())
-                    && nextSourceSchema.columns().stream().anyMatch(column -> column.name().equals(target.name()))) {
+                    && nextSourceSchema.columns().stream()
+                            .anyMatch(column -> column.name().equals(target.name()))) {
                 mappings.put(target.name(), target.name());
             }
         }
