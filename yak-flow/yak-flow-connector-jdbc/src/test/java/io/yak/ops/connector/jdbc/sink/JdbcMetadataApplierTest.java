@@ -89,7 +89,11 @@ class JdbcMetadataApplierTest {
                     .set(JdbcConnectionOptions.PASSWORD, "sensitive-password")
                     .set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.APPEND);
             try (JdbcMetadataApplier applier = new JdbcSinkFactory().createMetadataApplier(configuration.toReadonlyConfig())) {
-                assertEquals(Set.of(SchemaChangeEventType.CREATE_TABLE), applier.getSupportedSchemaEvolutionTypes());
+                assertEquals(Set.of(
+                        SchemaChangeEventType.CREATE_TABLE,
+                        SchemaChangeEventType.ADD_COLUMN,
+                        SchemaChangeEventType.ALTER_COLUMN_TYPE), applier.getSupportedSchemaEvolutionTypes());
+                assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.ADD_COLUMN));
                 assertFalse(applier.toString().contains("sensitive-password"));
             }
         }
@@ -312,9 +316,12 @@ class JdbcMetadataApplierTest {
     }
 
     @Test
-    void onlyCreateTableIsSupportedAndFilteringCannotEnableDrop() throws Exception {
+    void addAndAlterRequireOptInAndFilteringStillRejectsDrop() throws Exception {
         try (Database database = new Database(); JdbcMetadataApplier applier = database.applier()) {
-            assertEquals(Set.of(SchemaChangeEventType.CREATE_TABLE), applier.getSupportedSchemaEvolutionTypes());
+            assertEquals(Set.of(
+                            SchemaChangeEventType.CREATE_TABLE,
+                            SchemaChangeEventType.ADD_COLUMN,
+                            SchemaChangeEventType.ALTER_COLUMN_TYPE), applier.getSupportedSchemaEvolutionTypes());
             applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_TABLE));
             assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.CREATE_TABLE));
             assertFalse(applier.acceptsSchemaEvolutionType(SchemaChangeEventType.DROP_TABLE));
