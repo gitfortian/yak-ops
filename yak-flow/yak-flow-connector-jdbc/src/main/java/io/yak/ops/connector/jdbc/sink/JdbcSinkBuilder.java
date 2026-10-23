@@ -165,10 +165,12 @@ public final class JdbcSinkBuilder {
         Supplier<? extends MetadataApplier> applierFactory = metadataApplierFactory;
         if (applierFactory == null && connectionOptions != null) {
             String url = connectionOptions.url();
+            JdbcConnectionProvider applierConnections = provider;
+            JdbcDialect applierDialect = resolvedDialect;
             applierFactory = () -> new JdbcMetadataApplier(
-                    provider,
-                    resolvedDialect,
-                    JdbcFactoryLoader.loadCatalog(url, provider),
+                    applierConnections,
+                    applierDialect,
+                    JdbcFactoryLoader.loadCatalog(url, applierConnections),
                     JdbcMetadataApplier.DEFAULT_STATEMENT_TIMEOUT_SECONDS);
         }
         if (tablePlans != null) {
