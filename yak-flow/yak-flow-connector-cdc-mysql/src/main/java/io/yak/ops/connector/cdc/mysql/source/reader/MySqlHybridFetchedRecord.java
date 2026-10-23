@@ -42,8 +42,7 @@ public record MySqlHybridFetchedRecord(
                 || (snapshotRowsEmitted != null && snapshotRowsEmitted < 0)
                 || (preparedSnapshot != null && (preparedSnapshot.output() == null || !rows.isEmpty()))
                 || (lowWatermark && (binlogOffset == null || !rows.isEmpty()))
-                || (schemaChange != null
-                        && (binlogOffset == null || !rows.isEmpty() || lowWatermark))) {
+                || (schemaChange != null && (binlogOffset == null || !rows.isEmpty() || lowWatermark))) {
             throw new IllegalArgumentException("Inconsistent Hybrid fetched record kind");
         }
     }
