@@ -126,10 +126,8 @@ public final class FileCheckpointStore implements AutoCloseable {
             Set<String> fullyFinished = format >= FORMAT_VERSION ? readFinishedOperators(in) : Set.of();
             Set<CheckpointSnapshot.OperatorSubtask> finishedSubtasks =
                     format >= FORMAT_VERSION ? readFinishedSubtasks(in) : Set.of();
-            CheckpointSnapshot.SerializedState schemaManagerState = format >= SCHEMA_MANAGER_FORMAT_VERSION
-                    && in.readBoolean()
-                    ? readState(in)
-                    : null;
+            CheckpointSnapshot.SerializedState schemaManagerState =
+                    format >= SCHEMA_MANAGER_FORMAT_VERSION && in.readBoolean() ? readState(in) : null;
             if (in.available() != 0) {
                 throw new IOException("Checkpoint file contains trailing bytes");
             }
