@@ -26,5 +26,16 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Spotless only (no tests or compilation)
-        run: bash mvnw -B -ntp -pl yak-ops-core,yak-flow/yak-flow-runtime,yak-flow/yak-flow-connector-jdbc com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
+      - name: Format PR6 changed Java sources
+        run: |
+          bash mvnw -B -ntp -pl yak-ops-core,yak-flow/yak-flow-runtime,yak-flow/yak-flow-connector-jdbc,yak-flow/yak-flow-connector-cdc-mysql com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          for path in subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines():
+              print("PR6_FORMATTED_FILE_JSON:" + json.dumps(
+                  {"path": path, "content": Path(path).read_text(encoding="utf-8")},
+                  ensure_ascii=False))
+          PY
+          git diff --exit-code --quiet
