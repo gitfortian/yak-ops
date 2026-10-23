@@ -81,6 +81,7 @@ interface EditorForm {
   remark: string;
   debug: boolean;
   schemaChangesEnabled: boolean;
+  allowDropColumns: boolean;
   writeMode: DataSyncWriteMode;
   incremental?: DataSyncIncrementalConfig;
   sourceDataSourceId: string;
@@ -106,6 +107,7 @@ const EMPTY_FORM: EditorForm = {
   remark: "",
   debug: false,
   schemaChangesEnabled: true,
+  allowDropColumns: false,
   writeMode: "APPEND",
   incremental: undefined,
   sourceDataSourceId: "",
@@ -481,6 +483,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       remark: value?.remark || "",
       debug: value?.debug ?? false,
       schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
+      allowDropColumns: value?.allowDropColumns ?? false,
       writeMode:
         value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
       incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
@@ -706,7 +709,12 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       solutionType: draft.solutionType,
       steps: draft.steps,
       writeMode: form.writeMode,
-      ...(usesChangelog ? { schemaChangesEnabled: form.schemaChangesEnabled } : {}),
+      ...(usesChangelog
+        ? {
+            schemaChangesEnabled: form.schemaChangesEnabled,
+            allowDropColumns: form.schemaChangesEnabled && form.allowDropColumns,
+          }
+        : {}),
       tableMappings: batch ? mappings : undefined,
     };
   };
@@ -1145,8 +1153,28 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
                   size="small"
                   checked={form.schemaChangesEnabled}
                   disabled={published || saving || draft.targetType === "ORACLE"}
-                  onCheckedChange={(checked) => patch("schemaChangesEnabled", checked)}
+                  onCheckedChange={(checked) => {
+                    patch("schemaChangesEnabled", checked);
+                    if (!checked) patch("allowDropColumns", false);
+                  }
                 />
+              </Field>
+            ) : null}
+            {usesChangelog && form.schemaChangesEnabled && draft.targetType !== "ORACLE" ? (
+              <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <FieldLabel>允许删除目标字段</FieldLabel>
+                  <Switch
+                    aria-label="允许删除目标字段"
+                    size="small"
+                    checked={form.allowDropColumns}
+                    disabled={published || saving}
+                    onCheckedChange={(checked) => patch("allowDropColumns", checked)}
+                  />
+                </div>
+                {form.allowDropColumns ? (
+                  <span className="text-xs text-red-600">来源字段删除后，目标端对应字段及数据也会删除。</span>
+                ) : null}
               </Field>
             ) : null}
           </CollapseSection>

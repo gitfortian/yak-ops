@@ -125,6 +125,7 @@ export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
 export interface DataSyncParameters {
   /** Optional for definitions created before runtime evolution was configurable. */
   schemaChangesEnabled?: boolean;
+  allowDropColumns?: boolean;
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
   source: { datasourceId: string };
@@ -175,6 +176,7 @@ export interface DataSyncMappingConfig {
 export interface DataSyncTaskRecord {
   id: string;
   schemaChangesEnabled?: boolean;
+  allowDropColumns?: boolean;
   tableMappings: DataSyncTableMapping[];
   incremental?: DataSyncIncrementalConfig;
   solutionType: DataSyncSolutionType;
@@ -255,6 +257,7 @@ interface DataSyncTaskSaveBase {
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   schemaChangesEnabled?: boolean;
+  allowDropColumns?: boolean;
   tableMappings?: DataSyncTableMapping[];
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
