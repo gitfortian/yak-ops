@@ -5,7 +5,7 @@ import {
   parseLogLine,
   tokenizeLogMessage,
   trimLogContent,
-} from "../apps/web/app/data-sync/task-instance-log-parser.ts";
+} from "../apps/web/app/data-sync/log/task-instance-log-parser.ts";
 
 const entry =
   "2026-10-22 15:48:07.418 INFO [yak-local-checkpoint-0] i.y.o.f.r.c.AlignedCheckpointCoordinator - YakFlow checkpoint saved, jobId=01785c, checkpointId=689";

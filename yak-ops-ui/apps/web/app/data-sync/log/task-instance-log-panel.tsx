@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { downloadTaskInstanceLogs } from "@/service/task-execution";
 
 import { TaskInstanceLogLine } from "./task-instance-log-line";
-import { useInstanceLogs } from "./log/use-instance-logs";
+import { useInstanceLogs } from "./use-instance-logs";
 
 import "./task-instance-log.css";
 

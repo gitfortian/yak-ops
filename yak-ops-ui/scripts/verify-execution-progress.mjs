@@ -26,7 +26,7 @@ const actions = read("../apps/web/app/data-sync/detail/use-execution-actions.ts"
 const sidebar = read("../apps/web/app/data-sync/detail/execution-sidebar.tsx");
 const tabs = read("../apps/web/app/data-sync/detail/execution-tabs.tsx");
 const css = read("../apps/web/app/data-sync/execution/execution-detail.css");
-const logPanel = read("../apps/web/app/data-sync/task-instance-log-panel.tsx");
+const logPanel = read("../apps/web/app/data-sync/log/task-instance-log-panel.tsx");
 
 for (const source of [detail, page]) {
   assert.doesNotMatch(source, /DataSyncExecutionConfigContent|本次运行配置|配置快照/);

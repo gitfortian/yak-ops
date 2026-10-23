@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getTaskInstanceLogs } from "@/service/task-execution";
-import { parseLogContent, trimLogContent, type ParsedLogLine } from "../task-instance-log-parser";
+import { parseLogContent, trimLogContent, type ParsedLogLine } from "./task-instance-log-parser";
 
 /** Cursor and accumulated lines belong to the selected Instance, never to the viewer DOM. */
 export function useInstanceLogs(instanceId: string, active: boolean) {
