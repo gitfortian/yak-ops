@@ -137,3 +137,35 @@ CREATE TABLE yak_ops_standard_field (
     CONSTRAINT ck_standard_field_security CHECK (security_level IN ('PUBLIC','INTERNAL','SENSITIVE','CONFIDENTIAL')),
     CONSTRAINT ck_standard_field_not_null CHECK (is_not_null IN (0,1))
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace field standards with globally unique codes';
+
+
+-- Data warehouse layers: five presets carry an immutable abbreviation, custom layers stay editable.
+
+CREATE TABLE yak_ops_modeling_layer (
+    id VARCHAR(64) NOT NULL COMMENT 'Application-generated immutable layer identity',
+    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the layer and its datasource binding',
+    en_code VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'Uppercase abbreviation unique inside the Workspace; immutable for presets',
+    cn_name VARCHAR(64) NOT NULL COMMENT 'Business display name such as 贴源层',
+    data_source_id VARCHAR(64) NULL COMMENT 'Bound physical datasource; required before the layer may be enabled',
+    description VARCHAR(500) NULL COMMENT 'Optional business description; null when absent',
+    enabled TINYINT NOT NULL DEFAULT 0 COMMENT '1 when dimension modeling may select this layer and publishing resolves its datasource',
+    builtin TINYINT NOT NULL DEFAULT 0 COMMENT '1 for the five preset layers, which cannot be deleted',
+    sort_no INT NOT NULL DEFAULT 1000 COMMENT 'Display order: presets use 10..50, custom layers append at 1000',
+    revision BIGINT NOT NULL DEFAULT 1 COMMENT 'Optimistic version incremented after every accepted update',
+    create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
+    update_time DATETIME(3) NOT NULL COMMENT 'Most recent accepted update timestamp',
+    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
+    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_modeling_layer_code (workspace_id, en_code),
+    KEY idx_modeling_layer_datasource (data_source_id),
+    KEY idx_modeling_layer_order (workspace_id, builtin, sort_no, id),
+    CONSTRAINT fk_modeling_layer_workspace FOREIGN KEY (workspace_id)
+        REFERENCES yak_ops_workspace (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_layer_datasource FOREIGN KEY (data_source_id)
+        REFERENCES yak_ops_data_source (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_modeling_layer_code CHECK (en_code REGEXP '^[A-Z][A-Z0-9_]{0,31}$'),
+    CONSTRAINT ck_modeling_layer_enabled CHECK (enabled IN (0,1)),
+    CONSTRAINT ck_modeling_layer_builtin CHECK (builtin IN (0,1)),
+    CONSTRAINT ck_modeling_layer_bound CHECK (enabled=0 OR data_source_id IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace data warehouse layers bound to physical datasources';

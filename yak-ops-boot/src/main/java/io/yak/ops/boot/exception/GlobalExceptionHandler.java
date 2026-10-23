@@ -3,6 +3,7 @@ package io.yak.ops.boot.exception;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
+import io.yak.ops.common.enums.modeling.LayerErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.standard.StandardErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
@@ -121,6 +122,14 @@ public class GlobalExceptionHandler {
                 case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }
+        if (errorCode instanceof LayerErrorCode code) {
+            return switch (code) {
+                case INVALID_CODE, INVALID_DATASOURCE -> HttpStatus.BAD_REQUEST;
+                // A missing binding is a state precondition for enabling, not a malformed request.
+                case DATASOURCE_REQUIRED -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+            };
+        }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;
         if (errorCode == CommonErrorCode.RESOURCE_NOT_EXISTS) return HttpStatus.NOT_FOUND;
         if (errorCode == CommonErrorCode.RESOURCE_DUPLICATION) return HttpStatus.CONFLICT;
@@ -129,7 +138,7 @@ public class GlobalExceptionHandler {
         if (errorCode instanceof DataSourceErrorCode code) {
             return switch (code) {
                 case NOT_FOUND -> HttpStatus.NOT_FOUND;
-                case DUPLICATE_NAME -> HttpStatus.CONFLICT;
+                case DUPLICATE_NAME, IN_USE -> HttpStatus.CONFLICT;
                 case INVALID_DB_TYPE,
                         INVALID_ENVIRONMENT,
                         INVALID_CONNECTION_PARAMS,
