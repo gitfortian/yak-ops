@@ -5,6 +5,10 @@ import ts from "typescript";
 import { detailQueryKeys } from "../apps/web/app/data-sync/detail/query-keys.ts";
 
 assert.notDeepEqual(
+  detailQueryKeys.activeInstance("user-a:ws-a", "t1"),
+  detailQueryKeys.activeInstance("user-a:ws-b", "t1"),
+);
+assert.notDeepEqual(
   detailQueryKeys.task("user-a:ws-a", "t1"),
   detailQueryKeys.task("user-b:ws-a", "t1"),
 );

@@ -1,10 +1,10 @@
 import { Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
 import { useTaskSchedules } from "@/app/schedule/use-task-schedules";
 import { canManageTaskDefinition } from "@/service/data-sync/execution";
-import { useActiveTaskInstances } from "../task-lifecycle";
+import { useActiveTaskInstance } from "./use-active-task-instance";
 import { ExecutionSidebar } from "./execution-sidebar";
 import { TaskSummary } from "./task-summary";
 import { ExecutionTabs } from "./execution-tabs";
@@ -24,13 +24,11 @@ export function DataSyncTaskDetailPage() {
   const [historyScheduleId, setHistoryScheduleId] = useState<string>();
   const schedules = useTaskSchedules(!realtime && taskId ? [taskId] : []);
   const hasEnabledSchedule = Boolean(taskId && schedules.records.get(taskId)?.enabled);
-  const activeTaskIds = useMemo(() => (taskId ? [taskId] : []), [taskId]);
   const {
-    activeByTask,
+    activeInstance,
     ready: instancesReady,
     refresh: refreshActiveInstances,
-  } = useActiveTaskInstances(Boolean(taskId), activeTaskIds);
-  const activeInstance = taskId ? activeByTask.get(taskId) : undefined;
+  } = useActiveTaskInstance(scope, taskId);
   const canStart = canManageTaskDefinition(instancesReady, activeInstance);
   const {
     executionId,

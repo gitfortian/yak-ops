@@ -60,7 +60,7 @@ assert.match(history, /selectedQuery\.isError && !selectedQuery\.data/);
 assert.match(sidebar, /<ExecutionStatusIcon\s+status=\{instance.status\}/);
 assert.match(tabs, /key=\{selectedInstance.id\}/);
 assert.match(tabs, /<TaskInstanceLogPanel/);
-assert.ok(page.includes("useActiveTaskInstances(Boolean(taskId), activeTaskIds)"));
+assert.ok(page.includes("useActiveTaskInstance(scope, taskId)"));
 assert.ok(page.includes("canManageTaskDefinition(instancesReady, activeInstance)"));
 assert.ok(actions.includes("listLatestTaskInstances([taskId], true)"));
 assert.ok(actions.includes("if (active.length > 0)"));
