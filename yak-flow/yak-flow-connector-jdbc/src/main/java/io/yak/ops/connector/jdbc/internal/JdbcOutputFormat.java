@@ -228,9 +228,6 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
     /** Validates a replacement route before the runtime applies any target DDL. */
     public void validateSchemaChange(SchemaChangeRequest request) {
         ensureActive();
-        if (executor.bufferedRecords() != 0) {
-            throw new IllegalStateException("JDBC Writer must be flushed before validating a schema change");
-        }
         updatedPlans(request);
     }
 
