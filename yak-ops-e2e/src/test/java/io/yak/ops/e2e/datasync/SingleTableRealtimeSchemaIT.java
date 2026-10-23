@@ -102,6 +102,34 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
     }
 
     @Test
+    void standaloneDropWithoutPermissionFailsBeforeTargetDdl() throws Exception {
+        fixture.source.execute("CREATE TABLE drop_rejected (id BIGINT PRIMARY KEY, name VARCHAR(64) NOT NULL, remark VARCHAR(200))");
+        fixture.source.execute("INSERT INTO drop_rejected VALUES (1,'before','keep')");
+        Map<String, Object> parameters = new LinkedHashMap<>(fixture.parameters(
+                "SINGLE_TABLE_REALTIME", List.of("SCHEMA", "FULL", "INCREMENTAL"),
+                List.of(fixture.route("drop_rejected", "drop_rejected"))));
+        parameters.put("schemaChangesEnabled", true);
+        String instance = fixture.submit(fixture.create(parameters, true));
+        fixture.awaitState(instance, "RUNNING");
+        fixture.awaitTarget("drop_rejected", List.of(List.of(1L, "before")));
+
+        fixture.source.execute("ALTER TABLE drop_rejected DROP COLUMN remark");
+        fixture.awaitState(instance, "FAILED");
+        try (Connection connection = fixture.target.connect();
+                var statement = connection.prepareStatement(
+                        "SELECT COUNT(*) FROM information_schema.columns "
+                                + "WHERE table_schema=? AND table_name=? AND column_name=?")) {
+            statement.setString(1, fixture.targetSchema);
+            statement.setString(2, "drop_rejected");
+            statement.setString(3, "remark");
+            try (var rows = statement.executeQuery()) {
+                rows.next();
+                assertEquals(1, rows.getInt(1));
+            }
+        }
+    }
+
+    @Test
     void legacyRealtimeTaskDoesNotSilentlyApplySchemaChanges() throws Exception {
         // The field is intentionally absent. Existing persisted Task Definitions stay disabled.
         Map<String, Object> parameters = fixture.parameters(

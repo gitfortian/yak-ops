@@ -36,6 +36,7 @@ assert.deepEqual(json, {
   solutionType: "SINGLE_TABLE_REALTIME",
   steps: ["FULL", "INCREMENTAL"],
   schemaChangesEnabled: true,
+  allowDropColumns: false,
   source: { datasourceId: "mysql-source" },
   sink: { datasourceId: "pg-target" },
   tableSelection: { mode: "EXPLICIT" },

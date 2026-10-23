@@ -371,6 +371,33 @@ class JdbcMetadataApplierTest {
     }
 
     @Test
+    void recoversTwoColumnDropAfterUnknownDdlResponse() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY, \"remark\" VARCHAR(200), \"tracking\" VARCHAR(32))");
+            AtomicInteger executed = new AtomicInteger();
+            JdbcConnectionProvider responseLost = () -> loseResponseAfterExecute(
+                    database.connections.getConnection(), executed);
+            var event = new DropColumnEvent(TABLE, List.of("remark", "tracking"), Map.of(
+                    "remark", LogicalTypes.varchar(200), "tracking", LogicalTypes.varchar(32)));
+            try (JdbcMetadataApplier first = new JdbcMetadataApplier(
+                    responseLost, database.dialect, database.catalog, 30)) {
+                first.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_COLUMN));
+                SchemaEvolveException failure =
+                        assertThrows(SchemaEvolveException.class, () -> first.applySchemaChange(event));
+                assertTrue(failure.isOutcomeUnknown());
+                assertEquals(2, executed.get());
+            }
+            assertEquals(1, database.catalog.getTable(TABLE).columnCount());
+            JdbcConnectionProvider noReplaySql = () -> { throw new AssertionError("Replay must compare actual target metadata"); };
+            try (JdbcMetadataApplier recovered = new JdbcMetadataApplier(
+                    noReplaySql, database.dialect, database.catalog, 30)) {
+                recovered.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.DROP_COLUMN));
+                recovered.applySchemaChange(event);
+            }
+        }
+    }
+
+    @Test
     void rejectsDropOfKeyOrDifferentPhysicalType() throws Exception {
         try (Database database = new Database(); JdbcMetadataApplier applier = database.applier()) {
             database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY, \"remark\" VARCHAR(200))");
