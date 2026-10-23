@@ -9,10 +9,10 @@ import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import java.util.ArrayList;
-import java.util.concurrent.CancellationException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 
 /** Owns one Task's ordered target preparation and driver-level cancellation requests. */
 public final class SchemaPreparation {
