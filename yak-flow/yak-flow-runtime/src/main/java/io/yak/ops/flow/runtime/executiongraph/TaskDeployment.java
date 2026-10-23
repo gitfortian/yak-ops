@@ -2,6 +2,8 @@ package io.yak.ops.flow.runtime.executiongraph;
 
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceSplit;
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
@@ -9,6 +11,8 @@ import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
 import io.yak.ops.flow.runtime.configuration.RuntimeOptions;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
+import io.yak.ops.flow.runtime.schema.SchemaManager;
 import io.yak.ops.flow.runtime.execution.TaskEnvironment;
 import io.yak.ops.flow.runtime.graph.StreamNode;
 import io.yak.ops.flow.runtime.graph.StreamPartitioning;
@@ -58,6 +62,7 @@ final class TaskDeployment {
     private CheckpointSnapshot restoredCheckpoint;
     private FileCheckpointStore checkpointStore;
     private AlignedCheckpointCoordinator checkpointCoordinator;
+    private SchemaCoordinator schemaCoordinator;
 
     TaskDeployment(ExecutionGraph executionGraph, boolean recoverFromLatestCheckpoint) {
         this.executionGraph = Objects.requireNonNull(executionGraph, "executionGraph");
@@ -144,6 +149,10 @@ final class TaskDeployment {
 
     private void assemble() throws Exception {
         if (jobGraph.isSingleChainedVertex()) {
+            if (jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+                throw new UnsupportedOperationException(
+                        "Runtime schema evolution requires an unchained, checkpointed pipeline");
+            }
             assembleChainedVertex();
             return;
         }
@@ -213,6 +222,35 @@ final class TaskDeployment {
             }
         }
 
+        if (jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            if (restoredCheckpoint != null && restoredCheckpoint.schemaManagerState() == null) {
+                throw new IllegalStateException(
+                        "Cannot restore schema evolution without the matching schema manager checkpoint state");
+            }
+            JobVertex sinkVertex = vertices.getLast();
+            Object sinkDefinition = sinkVertex.getHeadOperator().getSink().orElseThrow();
+            if (!(sinkDefinition instanceof SchemaEvolutionSink schemaSink)) {
+                throw new UnsupportedOperationException(
+                        "The configured Sink does not declare runtime schema evolution support");
+            }
+            MetadataApplier applier = Objects.requireNonNull(
+                    schemaSink.createMetadataApplier(), "Sink returned a null MetadataApplier");
+            SchemaManager manager = SchemaCoordinator.restoreManager(
+                    restoredCheckpoint == null ? null : restoredCheckpoint.schemaManagerState());
+            Map<Integer, Integer> topologicalOrder = new java.util.HashMap<>();
+            for (int index = 0; index < vertices.size(); index++) {
+                topologicalOrder.put(vertices.get(index).getHeadOperator().getId(), index);
+            }
+            List<OneInputStreamTask> orderedInputs = inputTasks.stream()
+                    .sorted(java.util.Comparator.comparingInt(
+                            task -> topologicalOrder.get(task.taskInfo().operatorId())))
+                    .toList();
+            List<OneInputStreamTask> sinkTasks =
+                    orderedInputs.stream().filter(OneInputStreamTask::isSinkTask).toList();
+            schemaCoordinator = new SchemaCoordinator(
+                    manager, applier, List.of(), orderedInputs, sinkTasks, this::failJob);
+        }
+
         JobVertex sourceVertex = vertices.getFirst();
         StreamNode sourceNode = sourceVertex.getHeadOperator();
         Source<Object, SourceSplit, Object> source = castSource(sourceNode);
@@ -252,9 +290,14 @@ final class TaskDeployment {
                     output,
                     null,
                     restoredReaderSplits.getOrDefault(subtask, List.of()),
-                    executionGraph::reportCompletedSplits);
+                    executionGraph::reportCompletedSplits,
+                    schemaCoordinator);
             sourceTasks.add(task);
             bind(execution, task);
+        }
+
+        if (schemaCoordinator != null) {
+            schemaCoordinator.bindSourceTasks(sourceTasks);
         }
 
         if (checkpointStore != null) {
@@ -267,7 +310,8 @@ final class TaskDeployment {
                     checkpointStore,
                     restoredCheckpoint,
                     executionGraph::isCancellationRequested,
-                    this::failJob);
+                    this::failJob,
+                    schemaCoordinator);
             if (checkpointCoordinator.requiresFinalCheckpoint()) {
                 CompletableFuture<Void> completed = checkpointCoordinator.finalCheckpointFuture();
                 for (SourceOperatorStreamTask<Object, SourceSplit> task : sourceTasks) {
@@ -407,6 +451,9 @@ final class TaskDeployment {
             resources.add(checkpointCoordinator);
         }
         resources.addAll(executions);
+        if (schemaCoordinator != null) {
+            resources.add(schemaCoordinator);
+        }
         if (coordinator != null) {
             resources.add(coordinator);
         }
