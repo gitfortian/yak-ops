@@ -93,7 +93,7 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
         if (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0) {
             throw new IllegalArgumentException("MySQL Binlog Source requires exactly one SourceReader");
         }
-        return new MySqlSourceReader(config, fingerprint, context);
+        return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context);
     }
 
     @Override
