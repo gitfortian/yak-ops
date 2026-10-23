@@ -35,8 +35,7 @@ final class JdbcDdlRetryPolicy {
                 return true;
             }
             // MySQL deadlock and metadata-lock wait timeout are server-confirmed errors.
-            if (dialect instanceof MySqlJdbcDialect
-                    && (error.getErrorCode() == 1205 || error.getErrorCode() == 1213)) {
+            if (dialect instanceof MySqlJdbcDialect && (error.getErrorCode() == 1205 || error.getErrorCode() == 1213)) {
                 return true;
             }
         }
