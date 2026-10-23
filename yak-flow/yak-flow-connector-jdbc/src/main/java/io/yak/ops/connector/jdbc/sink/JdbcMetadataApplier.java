@@ -32,11 +32,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -185,7 +183,6 @@ public final class JdbcMetadataApplier implements MetadataApplier {
     private void applyAddColumns(AddColumnEvent event) throws SQLException {
         requirePhysicalTable(event);
         TableSchema current = catalog.getTable(event.tableId());
-        List<JdbcColumnInfo> metadata = catalog.getColumns(event.tableId());
         List<AddColumnEvent.ColumnWithPosition> missing = new ArrayList<>();
         List<List<String>> plans = new ArrayList<>();
         Set<String> names = new HashSet<>();
@@ -306,9 +303,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
 
     private static void requirePlainColumn(PhysicalColumn column) {
         ColumnProperties properties = column.properties();
-        if (properties != null && (!properties.isKnown() || properties.hasFeatures()
-                || properties.nativeType() != null)) {
-            throw new IllegalArgumentException("Automatic column evolution cannot preserve native properties: "
+        if (properties != null && (!properties.isKnown() || properties.hasFeatures())) {
+            throw new IllegalArgumentException("Automatic column evolution cannot copy source column expressions: "
                     + column.name());
         }
     }
