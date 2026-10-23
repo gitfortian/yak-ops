@@ -103,8 +103,8 @@ public final class MySqlSchemaChangeConverter {
         try {
             if (document instanceof String json) {
                 table = JSON.readTree(json);
-            } else if (document instanceof Map<?, ?> map) {
-                table = JSON.valueToTree(map);
+            } else if (document instanceof Struct || document instanceof Map<?, ?>) {
+                table = connectJson(document);
             } else {
                 throw new UnsupportedOperationException("Unsupported Debezium schema table metadata representation");
             }
@@ -146,6 +146,35 @@ public final class MySqlSchemaChangeConverter {
                     existing == null ? null : existing.properties()));
         }
         return new Schema(columns, keys, previous.comment());
+    }
+
+    /** Converts Kafka Connect's nested Struct/array metadata into an ordinary JSON tree. */
+    private static JsonNode connectJson(Object value) {
+        if (value instanceof Struct struct) {
+            var result = JSON.createObjectNode();
+            for (var field : struct.schema().fields()) {
+                result.set(field.name(), connectJson(struct.get(field)));
+            }
+            return result;
+        }
+        if (value instanceof List<?> items) {
+            var result = JSON.createArrayNode();
+            for (Object item : items) {
+                result.add(connectJson(item));
+            }
+            return result;
+        }
+        if (value instanceof Map<?, ?> map) {
+            var result = JSON.createObjectNode();
+            for (var entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new UnsupportedOperationException("Debezium table metadata has non-string keys");
+                }
+                result.set(key, connectJson(entry.getValue()));
+            }
+            return result;
+        }
+        return JSON.valueToTree(value);
     }
 
     private static LogicalType logicalType(int jdbc, JsonNode column, boolean nullable) {
