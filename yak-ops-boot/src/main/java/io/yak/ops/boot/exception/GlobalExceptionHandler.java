@@ -133,8 +133,16 @@ public class GlobalExceptionHandler {
         }
         if (errorCode instanceof DimensionModelingErrorCode code) {
             return switch (code) {
-                case INVALID_CODE, INVALID_SCOPE -> HttpStatus.BAD_REQUEST;
-                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+                case INVALID_CODE,
+                        INVALID_SCOPE,
+                        INVALID_FIELD,
+                        INVALID_MODEL,
+                        INVALID_TABLE_NAME,
+                        UNKNOWN_MODEL_TYPE,
+                        PARTITION_RULE -> HttpStatus.BAD_REQUEST;
+                // A layer that is disabled or unbound is a state precondition, not a malformed request.
+                case LAYER_NOT_SELECTABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case DUPLICATE_CODE, DUPLICATE_TABLE_NAME, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;

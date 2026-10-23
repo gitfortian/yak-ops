@@ -98,6 +98,9 @@ class StandardDatabaseIT {
         for (String table : List.of("field", "category", "catalog"))
             jdbc.update("DELETE FROM yak_ops_standard_" + table);
         // Layer presets hold a Workspace foreign key, so they must go before the Workspace row.
+        // Models reference layers and standards with RESTRICT, so they go first.
+        jdbc.update("DELETE FROM yak_ops_modeling_model_field");
+        jdbc.update("DELETE FROM yak_ops_modeling_model");
         jdbc.update("DELETE FROM yak_ops_modeling_layer");
         jdbc.update("DELETE FROM yak_ops_workspace WHERE id IN ('ws','other','fresh')");
         for (String workspace : List.of("ws", "other", "fresh"))
