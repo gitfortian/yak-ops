@@ -9,8 +9,8 @@ import { solutionSummary } from "../solution-presentation";
 function BasicInfoField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] items-start gap-2 text-sm">
-      <span className="text-xs leading-5 text-[#98a2b3]">{label}</span>
-      <div className="min-w-0 break-words text-[#344054]">{children}</div>
+      <span className="text-xs leading-5 text-[var(--yak-components-muted-text)]">{label}</span>
+      <div className="min-w-0 break-words text-[var(--yak-components-field-label)]">{children}</div>
     </div>
   );
 }
@@ -25,7 +25,7 @@ export function TaskSummary({ task, updatedBy, dataSources, onCopyTaskId }: Prop
   const copyTaskId = onCopyTaskId;
   return (
     <section aria-labelledby="task-basic-info">
-      <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[#344054]">
+      <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[var(--yak-components-field-label)]">
         基本信息
       </h2>
       <div className="grid grid-cols-2 gap-x-10 gap-y-5 max-lg:grid-cols-1">
@@ -50,7 +50,7 @@ export function TaskSummary({ task, updatedBy, dataSources, onCopyTaskId }: Prop
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <DatabaseIcons dbType={dataSources.source?.dbType} width="16px" height="16px" />
             <span>{dataSources.source?.name || "-"}</span>
-            <ArrowRight size={14} className="shrink-0 text-[#98a2b3]" />
+            <ArrowRight size={14} className="shrink-0 text-[var(--yak-components-muted-text)]" />
             <DatabaseIcons dbType={dataSources.target?.dbType} width="16px" height="16px" />
             <span>{dataSources.target?.name || "-"}</span>
           </div>
