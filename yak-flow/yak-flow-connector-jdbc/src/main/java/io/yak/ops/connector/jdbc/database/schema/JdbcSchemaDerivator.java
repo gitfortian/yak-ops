@@ -1,9 +1,9 @@
 package io.yak.ops.connector.jdbc.database.schema;
 
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan.Kind;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan.Reason;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
