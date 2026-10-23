@@ -1,0 +1,82 @@
+import { Alert, Button, Dialog, DialogContent, DialogTitle, Textarea } from "@yak-ops/yak-ui";
+import { useMemo, useState } from "react";
+import type { FieldDraft } from "./fields";
+import { parseFieldLines } from "./fields";
+
+interface Props {
+  existing: FieldDraft[];
+  onClose: () => void;
+  onImport: (rows: FieldDraft[]) => void;
+}
+
+const SAMPLE =
+  "order_id,订单号,BIGINT\norder_amount,订单金额,DECIMAL,20,2\ncreate_date,创建日期,DATE";
+
+export default function BatchImportDialog({ existing, onClose, onImport }: Props) {
+  const [text, setText] = useState("");
+  const parsed = useMemo(() => parseFieldLines(text, existing), [text, existing]);
+  return (
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="w-[760px] rounded-xl p-5 shadow-none">
+        <DialogTitle className="text-sm font-medium">批量录入字段</DialogTitle>
+        <p className="mt-2 text-xs leading-5 text-[#667475]">
+          每行一个字段，列之间用 Tab 或逗号分隔：
+          <code className="mx-1 rounded bg-[#f2f4f7] px-1">
+            英文编码, 中文名, 数据类型[, 长度/精度]
+          </code>
+          。数据类型支持 STRING / BIGINT / DECIMAL / DATE / TIMESTAMP，也可写「字符串 / 整数 / 小数
+          / 日期 / 时间戳」。
+        </p>
+        <p className="mt-1 text-xs text-[#98a2b3]">示例：{SAMPLE.replace(/\n/g, "　")}</p>
+        <div className="mt-3">
+          <Textarea
+            size="small"
+            variant="outlined"
+            value={text}
+            rows={10}
+            spellCheck={false}
+            placeholder={SAMPLE}
+            className="font-mono"
+            onValueChange={(value) => setText(String(value ?? ""))}
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-3 text-xs">
+          <span className="text-[#475467]">可导入 {parsed.rows.length} 行</span>
+          {parsed.errors.length > 0 && (
+            <span className="text-[#b42318]">有 {parsed.errors.length} 行无法解析</span>
+          )}
+        </div>
+        {parsed.errors.length > 0 && (
+          <div className="mt-2 max-h-32 overflow-auto">
+            <Alert>
+              <ul className="space-y-1">
+                {parsed.errors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            </Alert>
+          </div>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button size="small" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            size="small"
+            variant="primary"
+            disabled={parsed.rows.length === 0}
+            onClick={() => onImport(parsed.rows)}
+          >
+            导入 {parsed.rows.length} 行
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

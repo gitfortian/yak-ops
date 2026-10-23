@@ -2,7 +2,7 @@ import { Alert, Button, Dialog, DialogContent, DialogTitle, Form, toast } from "
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { saveCategory, classifyStandardFailure } from "@/service/data-modeling/data-standards";
 import type { CategoryDraft, SavedStandard } from "@/service/data-modeling/data-standards/types";
-import { InputField } from "./form-fields";
+import { InputField } from "../shared/form-fields";
 export default function CategoryDialog(props: {
   draft: CategoryDraft;
   onClose: () => void;
