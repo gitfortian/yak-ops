@@ -80,6 +80,7 @@ interface EditorForm {
   name: string;
   remark: string;
   debug: boolean;
+  schemaChangesEnabled: boolean;
   writeMode: DataSyncWriteMode;
   incremental?: DataSyncIncrementalConfig;
   sourceDataSourceId: string;
@@ -104,6 +105,7 @@ const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
   debug: false,
+  schemaChangesEnabled: true,
   writeMode: "APPEND",
   incremental: undefined,
   sourceDataSourceId: "",
@@ -478,6 +480,8 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       name: draft.name,
       remark: value?.remark || "",
       debug: value?.debug ?? false,
+      schemaChangesEnabled:
+        value?.schemaChangesEnabled ?? (draft.targetType !== "ORACLE"),
       writeMode:
         value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
       incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
@@ -703,6 +707,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       solutionType: draft.solutionType,
       steps: draft.steps,
       writeMode: form.writeMode,
+      ...(usesChangelog ? { schemaChangesEnabled: form.schemaChangesEnabled } : {}),
       tableMappings: batch ? mappings : undefined,
     };
   };
@@ -1133,6 +1138,17 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
                 </Field>
               </TableSection>
             )}
+            {usesChangelog ? (
+              <div className="mt-4 flex items-center justify-between rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
+                <FieldLabel>同步结构变更</FieldLabel>
+                <Switch
+                  size="small"
+                  checked={form.schemaChangesEnabled}
+                  disabled={published || saving || draft.targetType === "ORACLE"}
+                  onCheckedChange={(checked) => patch("schemaChangesEnabled", checked)}
+                />
+              </div>
+            ) : null}
           </CollapseSection>
           {supportsScheduling ? (
             <CollapseSection id="schedule" title="调度配置">

@@ -35,6 +35,7 @@ const json = JSON.parse(created.parameters);
 assert.deepEqual(json, {
   solutionType: "SINGLE_TABLE_REALTIME",
   steps: ["FULL", "INCREMENTAL"],
+  schemaChangesEnabled: true,
   source: { datasourceId: "mysql-source" },
   sink: { datasourceId: "pg-target" },
   tableSelection: { mode: "EXPLICIT" },
@@ -102,7 +103,22 @@ const oldParameters = JSON.stringify({
   },
 });
 const oldDefinition = { ...definition, parameterSchemaVersion: 2, parameters: oldParameters };
-assert.deepEqual(toSyncTaskRecord(oldDefinition), result);
+assert.equal(toSyncTaskRecord(oldDefinition).schemaChangesEnabled, false);
+assert.deepEqual(
+  { ...toSyncTaskRecord(oldDefinition), schemaChangesEnabled: true },
+  result,
+);
+assert.equal(result.schemaChangesEnabled, true);
+assert.equal(
+  JSON.parse(createDefinitionRequest({ ...realtime, schemaChangesEnabled: false }).parameters)
+    .schemaChangesEnabled,
+  false,
+);
+assert.equal(readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: false })).schemaChangesEnabled, false);
+assert.equal(readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: undefined })).schemaChangesEnabled, undefined);
+assert.throws(() => readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: "false" })));
+assert.throws(() => readSyncParameters(3, JSON.stringify({ ...buildSyncParameters(offline), schemaChangesEnabled: true })));
+assert.equal(buildSyncParameters(offline).schemaChangesEnabled, undefined);
 assert.equal(oldDefinition.parameters, oldParameters);
 assert.throws(() => readSyncParameters(1, oldParameters));
 assert.throws(() => readSyncParameters(3, oldParameters));

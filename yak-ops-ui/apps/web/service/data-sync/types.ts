@@ -123,6 +123,8 @@ export interface DataSyncStageReport extends DataSyncExecutionSummary {
 export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
 
 export interface DataSyncParameters {
+  /** Optional for definitions created before runtime evolution was configurable. */
+  schemaChangesEnabled?: boolean;
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
   source: { datasourceId: string };
@@ -172,6 +174,7 @@ export interface DataSyncMappingConfig {
 
 export interface DataSyncTaskRecord {
   id: string;
+  schemaChangesEnabled?: boolean;
   tableMappings: DataSyncTableMapping[];
   incremental?: DataSyncIncrementalConfig;
   solutionType: DataSyncSolutionType;
@@ -251,6 +254,7 @@ interface DataSyncTaskSaveBase {
 }
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
+  schemaChangesEnabled?: boolean;
   tableMappings?: DataSyncTableMapping[];
   solutionType: DataSyncSolutionType;
   steps: DataSyncStep[];
