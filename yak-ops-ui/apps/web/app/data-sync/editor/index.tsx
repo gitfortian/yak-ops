@@ -1,26 +1,26 @@
-import { Alert, Button, PageHeader, Modal, toast } from "@yak-ops/yak-ui";
+import { Alert, Button, PageHeader, Modal } from "@yak-ops/yak-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { clearTaskDraft, taskDraftKey, writeTaskDraft } from "@/service/data-sync/draft";
-import { offlineIncremental, solutionSyncType, supportsMultipleTables, validIncrementalConfig } from "@/service/data-sync/parameters";
+import { taskDraftKey, writeTaskDraft } from "@/service/data-sync/draft";
+import { offlineIncremental, solutionSyncType, supportsMultipleTables } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "../incremental-fields";
 import { findStepCombination } from "../solution-presentation";
 import { useSolutions } from "../use-solutions";
-import { validTableMappings } from "../table-mapping-editor";
 import { EditorAnchorStepper, type EditorAnchorItem } from "../editor-anchor-stepper";
-import { EMPTY_SCHEDULE, sameScheduleRule } from "@/app/schedule/schedule-presentation";
-import { createSchedule, getTaskSchedule, previewSchedule, scheduleErrorMessage, updateSchedule, type ScheduleRecord, type ScheduleTimeRule } from "@/service/schedule";
+import { EMPTY_SCHEDULE } from "@/app/schedule/schedule-presentation";
+import { getTaskSchedule, scheduleErrorMessage, type ScheduleRecord, type ScheduleTimeRule } from "@/service/schedule";
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
-import { createDataSyncTask, publishDataSyncTask, updateDataSyncTask, type DataSyncTaskSavePayload, type DataSyncTableMapping } from "@/service/data-sync";
+import type { DataSyncTableMapping } from "@/service/data-sync";
 import { BasicSection } from "./basic-section";
 import { DataSourcesSection } from "./data-sources-section";
 import { SourceSection } from "./source-section";
 import { TargetSection } from "./target-section";
 import { EditorScheduleSection } from "./schedule-section";
 import { useCatalogOptions } from "./use-catalog-options";
-import { selectedTableKey } from "./table-section";
+import { buildEditorPayload, canSaveEditor } from "./definition";
+import { useEditorSubmission } from "./use-editor-submission";
 import { EMPTY_FORM, type TaskEditorInput, type EditorForm } from "./types";
 
 export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorInput) {
@@ -83,11 +83,9 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const [taskStatus] = useState<DataSyncTaskStatus>(
     initialTask?.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED",
   );
-  const [saving, setSaving] = useState(false);
   const [parametersDirty, setParametersDirty] = useState(false);
   const [taskDirty, setTaskDirty] = useState(!editing);
   const savedTask = useRef(initialTask);
-  const saveSession = useRef<AbortController>();
   const pendingSchedule = location.state as {
     scheduleDraft?: ScheduleTimeRule;
     scheduleSaveError?: string;
@@ -105,12 +103,6 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   );
   const [scheduleReload, setScheduleReload] = useState(0);
   const scheduleDraft = useRef(pendingSchedule?.scheduleDraft);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    saveSession.current = controller;
-    return () => controller.abort();
-  }, []);
 
   useEffect(() => {
     if (!supportsScheduling || !id) return;
@@ -271,159 +263,23 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     else changeConnection(side, value);
   };
 
-  const payload = (): DataSyncTaskSavePayload => {
-    const common = {
-      name: form.name.trim(),
-      debug: form.debug,
-      sourceDataSourceId: form.sourceDataSourceId,
-      sourceDatabase: form.sourceDatabase || undefined,
-      sourceSchema: form.sourceSchema || undefined,
-      sourceTable: form.sourceTable,
-      targetDataSourceId: form.targetDataSourceId,
-      targetDatabase: form.targetDatabase || undefined,
-      targetSchema: form.targetSchema || undefined,
-      targetTable: form.targetTable,
-      remark: form.remark.trim() || undefined,
-    };
-    return {
-      ...common,
-      solutionType: draft.solutionType,
-      steps: draft.steps,
-      writeMode: form.writeMode,
-      ...(usesChangelog
-        ? {
-            schemaChangesEnabled: form.schemaChangesEnabled,
-            allowDropColumns: form.schemaChangesEnabled && form.allowDropColumns,
-          }
-        : {}),
-      tableMappings: batch ? mappings : undefined,
-    };
-  };
+  const payload = () => buildEditorPayload(form, draft, batch, mappings, usesChangelog);
 
   const published = editing && taskStatus === "PUBLISHED";
-  const canSave =
-    !published &&
-    Boolean(combination) &&
-    !solutionsLoading &&
-    !solutionsError &&
-    combination!.writeModes.includes(form.writeMode) &&
-    (!useIncremental ||
-      (batch
-        ? mappings.every((mapping) => validIncrementalConfig(mapping.incremental, !initialLoad))
-        : validIncrementalConfig(form.incremental, !initialLoad))) &&
-    selectedSourceDataSource?.dbType === draft.sourceType &&
-    selectedTargetDataSource?.dbType === draft.targetType &&
-    (!supportsScheduling ||
-      (!scheduleLoading &&
-        !scheduleNeedsReload &&
-        (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
-    form.name.trim() &&
-    Boolean(form.sourceDataSourceId && form.targetDataSourceId) &&
-    (!prepareSchema ||
-      Boolean(form.targetDatabase && (draft.targetType !== "POSTGRE_SQL" || form.targetSchema))) &&
-    (batch
-      ? validTableMappings(
-          mappings,
-          targetCatalog.tables,
-          combination?.writeModes || [],
-          prepareSchema,
-        )
-      : Boolean(
-          form.sourceTable &&
-          (prepareSchema
-            ? Boolean(form.targetTable.trim())
-            : selectedTableKey(
-                targetCatalog.tables,
-                form.targetDatabase,
-                form.targetSchema,
-                form.targetTable,
-              )),
-        )) &&
-    !sourceCatalog.loading &&
-    !targetCatalog.loading &&
-    !sourceCatalog.error &&
-    !targetCatalog.error;
+  const canSave = canSaveEditor({
+    published, combination: combination ?? undefined, solutionsLoading, solutionsError,
+    useIncremental, initialLoad, batch, mappings, selectedSourceDataSource,
+    selectedTargetDataSource, draft, supportsScheduling, scheduleLoading,
+    scheduleNeedsReload, schedule, scheduleForm, form, prepareSchema,
+    targetCatalog, sourceCatalog,
+  });
 
-  const save = async (publishAfterSave = false) => {
-    const signal = saveSession.current?.signal;
-    if (!canSave || saving || !signal || signal.aborted) return;
-    setSaving(true);
-    try {
-      const ruleChanged =
-        supportsScheduling && !sameScheduleRule(scheduleForm, schedule || EMPTY_SCHEDULE);
-      if (ruleChanged && scheduleForm.cronExpression.trim()) {
-        try {
-          await previewSchedule(scheduleForm, signal);
-        } catch (failure) {
-          if (!signal.aborted) setScheduleError(scheduleErrorMessage(failure));
-          return;
-        }
-      }
-      if (signal.aborted) return;
-      const request = payload();
-      const metadataRequest = { name: request.name, remark: request.remark, debug: request.debug };
-      let saved = savedTask.current;
-      // A completed Task write is retained across a later Schedule failure.
-      if (!saved || taskDirty) {
-        const savedId = id || saved?.id;
-        saved = savedId
-          ? await updateDataSyncTask(savedId, parametersDirty ? request : metadataRequest, signal)
-          : await createDataSyncTask(request, signal);
-        if (signal.aborted) return;
-        savedTask.current = saved;
-        clearTaskDraft(draftKey);
-        setTaskDirty(false);
-        setParametersDirty(false);
-      }
-      if (ruleChanged && scheduleForm.cronExpression.trim()) {
-        try {
-          const value = schedule
-            ? await updateSchedule(schedule.id, schedule.revision, scheduleForm, signal)
-            : await createSchedule(saved.id, scheduleForm, signal);
-          if (signal.aborted) return;
-          setSchedule(value);
-          setScheduleForm(value);
-          scheduleDraft.current = undefined;
-          setScheduleError("");
-        } catch (failure) {
-          if (signal.aborted) return;
-          const message = "任务已保存，调度未确认保存。" + scheduleErrorMessage(failure);
-          setScheduleError(message);
-          setScheduleNeedsReload(true);
-          scheduleDraft.current = scheduleForm;
-          if (!id)
-            navigate(`${basePath}/${saved.id}/edit`, {
-              replace: true,
-              state: { scheduleDraft: scheduleForm, scheduleSaveError: message },
-            });
-          return;
-        }
-      }
-      if (signal.aborted) return;
-      if (publishAfterSave) {
-        try {
-          await publishDataSyncTask(saved.id, signal, true);
-        } catch (failure) {
-          if (!signal.aborted) {
-            const reason = failure instanceof Error ? failure.message : "请检查同步配置";
-            toast.error(`任务已保存，仍处于下线状态。上线失败：${reason}`);
-            navigate(`${basePath}/${saved.id}/edit`, { replace: true });
-          }
-          return;
-        }
-        if (signal.aborted) return;
-        toast.success("同步任务已保存并上线");
-        navigate(basePath, { replace: true });
-        return;
-      }
-      toast.success(editing ? "同步任务已保存，当前仍为已下线" : "同步任务已创建，当前为已下线");
-      navigate(`${basePath}/${saved.id}/edit`, { replace: true, state: null });
-    } catch {
-      // Task request errors are reported by the existing transport; drafts remain editable.
-    } finally {
-      if (!signal.aborted) setSaving(false);
-    }
-  };
+  const { save, saving } = useEditorSubmission({
+    id, editing, draftKey, canSave, taskDirty, parametersDirty, supportsScheduling,
+    schedule, scheduleForm, savedTask, scheduleDraft, payload, setTaskDirty,
+    setParametersDirty, setSchedule, setScheduleForm, setScheduleError,
+    setScheduleNeedsReload, navigate,
+  });
 
   const pageTitle = editing ? form.name || "编辑同步任务" : "新建同步任务";
 
@@ -556,6 +412,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
               usesChangelog={usesChangelog}
               useIncremental={useIncremental}
               initialLoad={initialLoad}
+              targetType={draft.targetType}
               published={published}
               saving={saving}
               patch={patch}

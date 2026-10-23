@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { DataSourceCatalogTable, DataSourceRecord } from "@/service/datasource";
 import type { DataSyncDraft, DataSyncTaskRecord, DataSyncIncrementalConfig, DataSyncWriteMode } from "@/service/data-sync";
 

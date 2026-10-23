@@ -14,15 +14,14 @@ interface Props {
   mappings: DataSyncTableMapping[]; updateMappings: (value: DataSyncTableMapping[]) => void;
   writeModes: DataSyncWriteMode[]; canSave: boolean; payload: () => DataSyncTaskSavePayload;
   usesChangelog: boolean; useIncremental: boolean; initialLoad: boolean;
-  published: boolean; saving: boolean;
+  targetType: string; published: boolean; saving: boolean;
   patch: <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => void;
   setTaskDirty: Dispatch<SetStateAction<boolean>>;
   setParametersDirty: Dispatch<SetStateAction<boolean>>;
   setForm: Dispatch<SetStateAction<EditorForm>>;
 }
-export function TargetSection({ batch, prepareSchema, form, targetCatalog, selectedTargetDataSource, mappings, updateMappings, writeModes, canSave, payload, usesChangelog, useIncremental, initialLoad, published, saving, patch, setTaskDirty, setParametersDirty, setForm }: Props) {
+export function TargetSection({ batch, prepareSchema, form, targetCatalog, selectedTargetDataSource, mappings, updateMappings, writeModes, canSave, payload, usesChangelog, useIncremental, initialLoad, targetType, published, saving, patch, setTaskDirty, setParametersDirty, setForm }: Props) {
   const combination = { writeModes };
-  const draft = { targetType: selectedTargetDataSource?.dbType || "" };
   return (
           <CollapseSection id="target" title="目标表映射">
             {prepareSchema ? (
@@ -108,7 +107,7 @@ export function TargetSection({ batch, prepareSchema, form, targetCatalog, selec
                   aria-label="同步结构变更"
                   size="small"
                   checked={form.schemaChangesEnabled}
-                  disabled={published || saving || draft.targetType === "ORACLE"}
+                  disabled={published || saving || targetType === "ORACLE"}
                   onCheckedChange={(checked) => {
                     patch("schemaChangesEnabled", checked);
                     if (!checked) patch("allowDropColumns", false);
@@ -116,7 +115,7 @@ export function TargetSection({ batch, prepareSchema, form, targetCatalog, selec
                 />
               </Field>
             ) : null}
-            {usesChangelog && form.schemaChangesEnabled && draft.targetType !== "ORACLE" ? (
+            {usesChangelog && form.schemaChangesEnabled && targetType !== "ORACLE" ? (
               <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
                 <div className="flex items-center justify-between">
                   <FieldLabel>允许删除目标字段</FieldLabel>

@@ -25,8 +25,7 @@ export function EditorScheduleSection({ schedule, scheduleForm, scheduleError, s
                           size="small"
                           disabled={saving || scheduleLoading}
                           onClick={() => {
-                            scheduleDraft.current = scheduleForm;
-                            setScheduleReload((value) => value + 1);
+                            onReload();
                           }}
                         >
                           重新加载状态
@@ -41,9 +40,7 @@ export function EditorScheduleSection({ schedule, scheduleForm, scheduleError, s
                   <ScheduleForm
                     value={scheduleForm}
                     onChange={(value) => {
-                      setScheduleForm(value);
-                      scheduleDraft.current = value;
-                      setScheduleError("");
+                      onChange(value);
                     }}
                     disabled={saving || scheduleNeedsReload || Boolean(schedule?.enabled)}
                     allowClear={!schedule}
