@@ -66,7 +66,13 @@ export function SchemaPreview({
                     {[row.target.catalog, row.target.schema, row.target.table]
                       .filter(Boolean)
                       .join(".")}{" "}
-                    · {row.action === "CREATE" ? "创建" : row.action === "ALTER" ? "调整结构" : row.action === "BLOCKED" ? "结构不兼容" : "结构兼容"}
+                    · {row.action === "CREATE"
+                      ? "创建"
+                      : row.action === "ALTER"
+                        ? "调整结构"
+                        : row.action === "BLOCKED"
+                          ? "结构不兼容"
+                          : "结构兼容"}
                   </div>
                   {row.differences.filter((difference) => difference.action !== "COMPATIBLE").length > 0 ? (
                     <div className="overflow-auto rounded-lg border text-xs">
