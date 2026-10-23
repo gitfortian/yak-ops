@@ -13,9 +13,7 @@ import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypeRoot;
-import io.yak.ops.core.types.LogicalTypes;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,7 +54,7 @@ public final class JdbcSchemaDerivator {
         if (target.isEmpty()) {
             List<PhysicalColumn> columns = new ArrayList<>();
             for (PhysicalColumn column : source.columns()) {
-                LogicalType normalized = normalize(dialect, column, differences);
+                LogicalType normalized = normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
                 if (normalized != null) {
                     columns.add(column.copy(normalized));
                 }
@@ -83,7 +81,7 @@ public final class JdbcSchemaDerivator {
         for (PhysicalColumn incoming : source.columns()) {
             PhysicalColumn actual = existing.get(incoming.name());
             if (actual == null) {
-                LogicalType normalized = normalize(dialect, incoming, differences);
+                LogicalType normalized = normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
                 if (normalized == null) continue;
                 if (source.primaryKeys().contains(incoming.name()) || !normalized.isNullable()
                         || !ordinaryColumn(incoming)) {
@@ -110,7 +108,7 @@ public final class JdbcSchemaDerivator {
                         SchemaChangePlan.Reason.NULLABILITY_MISMATCH, incoming.type(), actual.type()));
                 continue;
             }
-            LogicalType planned = normalize(dialect, incoming, differences);
+            LogicalType planned = normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
             Column expected = new Column(incoming.name(), planned);
             Column actualColumn = new Column(actual.name(), actual.type());
@@ -159,10 +157,6 @@ public final class JdbcSchemaDerivator {
                         LogicalTypeRoot.VARCHAR,
                         LogicalTypeRoot.VARBINARY,
                         LogicalTypeRoot.DECIMAL,
-                        LogicalTypeRoot.TINYINT,
-                        LogicalTypeRoot.SMALLINT,
-                        LogicalTypeRoot.INTEGER,
-                        LogicalTypeRoot.BIGINT,
                         LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE,
                         LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE)
                 .contains(from)) {
@@ -170,22 +164,34 @@ public final class JdbcSchemaDerivator {
         }
         Column old = new Column("column", current.copy(true));
         Column candidate = new Column("column", proposed.copy(true));
-        return JdbcSchemaCompatibility.isCompatible(old, candidate)
-                && JdbcSchemaCompatibility.isCompatible(candidate, candidate);
+        return JdbcSchemaCompatibility.isCompatible(old, candidate);
     }
 
     private static LogicalType normalize(
-            JdbcDialect dialect, PhysicalColumn column, List<SchemaChangePlan.Difference> differences) {
+            JdbcDialect dialect,
+            PhysicalColumn column,
+            boolean key,
+            List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
                 differences.add(difference(column.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
                         SchemaChangePlan.Reason.UNRESOLVED_TYPE, column.type(), null));
                 return null;
             }
+            ColumnProperties physical = column.properties();
+            if (physical != null
+                    && physical.nativeType() != null
+                    && physical.nativeType().toLowerCase(Locale.ROOT).matches(".*\\\\bunsigned\\\\b.*")) {
+                differences.add(difference(column.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
+                        SchemaChangePlan.Reason.UNSUPPORTED_TYPE, column.type(), null));
+                return null;
+            }
             Column logical = new Column(column.name(), column.type());
             var nativeType = dialect.nativeType(logical);
-            if (!nativeType.primaryKeySupported()) {
-                // A column may be a valid non-key type; callers verify key restrictions separately.
+            if (key && !nativeType.primaryKeySupported()) {
+                differences.add(difference(column.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
+                        SchemaChangePlan.Reason.UNSUPPORTED_TYPE, column.type(), null));
+                return null;
             }
             return dialect.normalizeTargetType(logical);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
