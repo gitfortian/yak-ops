@@ -160,7 +160,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
                 BinlogEvent filtered = filter.filter(event);
                 return records(
                         MySqlHybridBinlogSplit.ID,
-                        new MySqlHybridFetchedRecord(filtered.records(), null, filtered.offset(), false),
+                        MySqlHybridFetchedRecord.binlog(filtered),
                         false);
             }
         } else Thread.sleep(20);
