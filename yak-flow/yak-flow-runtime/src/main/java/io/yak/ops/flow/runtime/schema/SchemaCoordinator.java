@@ -19,7 +19,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -127,13 +126,15 @@ public final class SchemaCoordinator implements AutoCloseable {
                 return CompletableFuture.failedFuture(new IllegalStateException("SchemaCoordinator is already paused"));
             }
             checkpointPauseRequested = true;
-            submit(() -> {
-                synchronized (lock) {
-                    checkpointPaused = true;
-                    checkpointPauseRequested = false;
-                }
-                result.complete(null);
-            }, result);
+            submit(
+                    () -> {
+                        synchronized (lock) {
+                            checkpointPaused = true;
+                            checkpointPauseRequested = false;
+                        }
+                        result.complete(null);
+                    },
+                    result);
         }
         return result;
     }
@@ -146,7 +147,8 @@ public final class SchemaCoordinator implements AutoCloseable {
             }
         }
         SchemaManagerSnapshotSerializer serializer = new SchemaManagerSnapshotSerializer();
-        return new CheckpointSnapshot.SerializedState(serializer.getVersion(), serializer.serialize(manager.snapshot()));
+        return new CheckpointSnapshot.SerializedState(
+                serializer.getVersion(), serializer.serialize(manager.snapshot()));
     }
 
     /** Restores committed source/target schemas before any task or SourceReader is started. */
@@ -165,19 +167,21 @@ public final class SchemaCoordinator implements AutoCloseable {
             if (closed.get()) {
                 return CompletableFuture.failedFuture(new IllegalStateException("SchemaCoordinator is closed"));
             }
-            submit(() -> {
-                List<PendingChange> pendingChanges;
-                synchronized (lock) {
-                    checkpointPaused = false;
-                    checkpointPauseRequested = false;
-                    pendingChanges = List.copyOf(deferred);
-                    deferred.clear();
-                }
-                result.complete(null);
-                for (PendingChange pending : pendingChanges) {
-                    submit(() -> process(pending), pending.result());
-                }
-            }, result);
+            submit(
+                    () -> {
+                        List<PendingChange> pendingChanges;
+                        synchronized (lock) {
+                            checkpointPaused = false;
+                            checkpointPauseRequested = false;
+                            pendingChanges = List.copyOf(deferred);
+                            deferred.clear();
+                        }
+                        result.complete(null);
+                        for (PendingChange pending : pendingChanges) {
+                            submit(() -> process(pending), pending.result());
+                        }
+                    },
+                    result);
         }
         return result;
     }
@@ -306,8 +310,7 @@ public final class SchemaCoordinator implements AutoCloseable {
 
     private static Throwable unwrap(Throwable failure) {
         Throwable result = failure;
-        while ((result instanceof ExecutionException
-                        || result instanceof java.util.concurrent.CompletionException)
+        while ((result instanceof ExecutionException || result instanceof java.util.concurrent.CompletionException)
                 && result.getCause() != null) {
             result = result.getCause();
         }
@@ -322,7 +325,8 @@ public final class SchemaCoordinator implements AutoCloseable {
             waiting = List.copyOf(deferred);
             deferred.clear();
         }
-        IllegalStateException closing = new IllegalStateException("SchemaCoordinator closed before schema change completed");
+        IllegalStateException closing =
+                new IllegalStateException("SchemaCoordinator closed before schema change completed");
         waiting.forEach(pending -> pending.result().completeExceptionally(closing));
         eventLoop.shutdown();
         if (!eventLoop.awaitTermination(CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
