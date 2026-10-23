@@ -138,7 +138,7 @@ export function TargetSection({
         </TableSection>
       )}
       {usesChangelog ? (
-        <Field className="mt-4 flex items-center justify-between rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
+        <Field className="mt-4 flex items-center justify-between rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
           <FieldLabel>同步结构变更</FieldLabel>
           <Switch
             aria-label="同步结构变更"
@@ -153,7 +153,7 @@ export function TargetSection({
         </Field>
       ) : null}
       {usesChangelog && form.schemaChangesEnabled && targetType !== "ORACLE" ? (
-        <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[#e6e8eb] bg-white px-4 py-3">
+        <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
           <div className="flex items-center justify-between">
             <FieldLabel>允许删除目标字段</FieldLabel>
             <Switch
