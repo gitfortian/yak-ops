@@ -75,6 +75,28 @@ class MySqlSchemaChangeConverterTest {
     }
 
     @Test
+    void quotedDebeziumTableIdentityStillEmitsIndependentSchemaChange() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        Struct tableChange = new Struct(TABLE_CHANGE)
+                .put("type", "ALTER")
+                .put("id", "\"shop\".\"orders\"")
+                .put("table", NEW_TABLE);
+        Struct envelope = new Struct(DDL)
+                .put("ddl", "redacted-structured-source-event")
+                .put("tableChanges", List.of(tableChange));
+        SourceRecord record = new SourceRecord(
+                Map.of("server", "yak"),
+                Map.of("file", "mysql-bin.000001", "pos", 100L),
+                "yak.shop",
+                DDL,
+                envelope);
+        BinlogEvent change = converter.convert(record);
+        assertTrue(change.records().isEmpty());
+        assertEquals(SOURCE, change.schemaChange().tableId());
+        assertEquals(3, change.schemaChange().after().columns().size());
+    }
+
+    @Test
     void emptyStructuredTableChangesAdvancesOffsetWithoutMutatingRegisteredSchema() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         Struct ddl = new Struct(DDL)
