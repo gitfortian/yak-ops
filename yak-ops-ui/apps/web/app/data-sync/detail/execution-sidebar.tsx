@@ -21,6 +21,7 @@ interface Props {
   onStatusChange: (value: DataSyncInstanceStatus | "ALL") => void;
   instances: DataSyncInstanceRecord[];
   instancesLoading: boolean;
+  listError: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   total: number;
@@ -29,7 +30,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-export function ExecutionSidebar({ realtime, status, onStatusChange, instances, instancesLoading, selectedId, onSelect, total, pageNo, onPageChange, onRefresh }: Props) {
+export function ExecutionSidebar({ realtime, status, onStatusChange, instances, instancesLoading, listError, selectedId, onSelect, total, pageNo, onPageChange, onRefresh }: Props) {
   const statusItems = { ...INSTANCE_STATUS_ITEMS, CANCELED: realtime ? "已停止" : "已取消" };
   const totalPages = Math.max(1, Math.ceil(total / 20));
   const executionId = selectedId;
@@ -77,7 +78,12 @@ export function ExecutionSidebar({ realtime, status, onStatusChange, instances, 
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {instancesLoading && instances.length === 0 ? (
+          {listError ? (
+            <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-sm">
+              执行记录加载失败
+              <Button size="small" onClick={onRefresh}>重试</Button>
+            </div>
+          ) : instancesLoading && instances.length === 0 ? (
             <div className="flex min-h-32 items-center justify-center">
               <Spinner size="medium" label="加载执行记录" />
             </div>

@@ -1,31 +1,19 @@
-import { useState, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
+import { useState } from "react";
 import { toast } from "@yak-ops/yak-ui";
 import { canCancelTaskInstance } from "@/service/data-sync/execution";
-import { cancelDataSyncInstance, getDataSyncInstance, runDataSyncTask, type DataSyncInstanceRecord, type DataSyncInstanceStatus, type DataSyncTaskRecord } from "@/service/data-sync";
+import { cancelDataSyncInstance, runDataSyncTask, type DataSyncInstanceRecord, type DataSyncTaskRecord } from "@/service/data-sync";
 import { listLatestTaskInstances } from "@/service/task-execution";
-import type { SetURLSearchParams } from "react-router-dom";
 
 interface ActionsInput {
   taskId?: string;
   task?: DataSyncTaskRecord;
   canStart: boolean;
   selectedInstance?: DataSyncInstanceRecord;
-  detailRequest: MutableRefObject<number>;
-  loadInstances: () => Promise<void>;
   refreshActiveInstances: () => Promise<void>;
-  pageNo: number;
-  status: DataSyncInstanceStatus | "ALL";
-  setStatus: Dispatch<SetStateAction<DataSyncInstanceStatus | "ALL">>;
-  setPageNo: Dispatch<SetStateAction<number>>;
-  setInstances: Dispatch<SetStateAction<DataSyncInstanceRecord[]>>;
-  setInstancesLoading: Dispatch<SetStateAction<boolean>>;
-  setSelected: Dispatch<SetStateAction<DataSyncInstanceRecord | undefined>>;
-  setSearchParams: SetURLSearchParams;
+  refreshAfterCancel: () => Promise<void>;
+  selectSubmitted: (id: string) => void;
 }
-
-export function useExecutionActions({ taskId, task, canStart, selectedInstance, detailRequest,
-  loadInstances, refreshActiveInstances, pageNo, status, setStatus, setPageNo,
-  setInstances, setInstancesLoading, setSelected, setSearchParams }: ActionsInput) {
+export function useExecutionActions({ taskId, task, canStart, selectedInstance, refreshActiveInstances, refreshAfterCancel, selectSubmitted }: ActionsInput) {
   const [running, setRunning] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const run = async () => {
@@ -41,37 +29,22 @@ export function useExecutionActions({ taskId, task, canStart, selectedInstance, 
       const submitted = await runDataSyncTask(taskId);
       toast.success("运行请求已提交");
       await refreshActiveInstances();
-      setStatus("ALL");
-      setPageNo(1);
-      setInstances([]);
-      setInstancesLoading(true);
-      setSearchParams((previous) => {
-        const next = new URLSearchParams(previous);
-        next.set("executionId", submitted.instanceId);
-        next.delete("tab");
-        return next;
-      });
-      if (pageNo === 1 && status === "ALL") await loadInstances();
+      selectSubmitted(submitted.instanceId);
     } finally {
       setRunning(false);
     }
   };
-
   const cancel = async () => {
     if (!selectedInstance || !canCancelTaskInstance(selectedInstance.status) || canceling) return;
-    const request = ++detailRequest.current;
     setCanceling(true);
     try {
       await cancelDataSyncInstance(selectedInstance.id);
       toast.success("已发送停止请求");
-      const value = await getDataSyncInstance(selectedInstance.id);
-      if (request === detailRequest.current) setSelected(value);
-      await Promise.all([loadInstances(), refreshActiveInstances()]);
+      await Promise.all([refreshAfterCancel(), refreshActiveInstances()]);
     } finally {
       setCanceling(false);
     }
   };
-
   const copyTaskId = async () => {
     if (!task) return;
     try {
@@ -81,6 +54,5 @@ export function useExecutionActions({ taskId, task, canStart, selectedInstance, 
       toast.error("复制失败");
     }
   };
-
   return { run, cancel, copyTaskId, running, canceling };
 }

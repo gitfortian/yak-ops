@@ -8,7 +8,7 @@ import { useActiveTaskInstances } from "../task-lifecycle";
 import { ExecutionSidebar } from "./execution-sidebar";
 import { TaskSummary } from "./task-summary";
 import { ExecutionTabs } from "./execution-tabs";
-import { useTaskInformation } from "./use-task-information";
+import { useTaskInformation, useDetailScope } from "./use-task-information";
 import { useExecutionHistory } from "./use-execution-history";
 import { useExecutionActions } from "./use-execution-actions";
 
@@ -17,7 +17,8 @@ export function DataSyncTaskDetailPage() {
   const localScroll = true;
   const { id: taskId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { task, taskLoading, dataSources, updatedBy } = useTaskInformation(taskId);
+  const scope = useDetailScope();
+  const { task, taskLoading, dataSources, updatedBy } = useTaskInformation(taskId, scope);
   const realtime = task?.syncType === "REALTIME";
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [historyScheduleId, setHistoryScheduleId] = useState<string>();
@@ -35,14 +36,12 @@ export function DataSyncTaskDetailPage() {
     executionId, activeTab, instances, instancesLoading, status, pageNo, total,
     selectedInstance, selectedLoading, autoRefresh, setAutoRefresh, refreshing,
     loadInstances, refreshExecution, selectInstance, changeTab, changePage, changeStatus,
-    detailRequest, setSelected, setStatus, setPageNo, setInstances, setInstancesLoading,
-    setSearchParams,
-  } = useExecutionHistory(taskId, activeInstance, hasEnabledSchedule);
+    selectSubmitted, refreshAfterCancel, listError,
+  } = useExecutionHistory(scope, taskId, activeInstance, hasEnabledSchedule);
   const { run, cancel, copyTaskId, running, canceling } = useExecutionActions({
-    taskId, task, canStart, selectedInstance, detailRequest, loadInstances,
-    refreshActiveInstances, pageNo, status, setStatus, setPageNo,
-    setInstances, setInstancesLoading, setSelected, setSearchParams,
+    taskId, task, canStart, selectedInstance, refreshActiveInstances, refreshAfterCancel, selectSubmitted,
   });
+
   if (taskLoading || !task) {
     return (
       <div className="flex h-full items-center justify-center bg-white">
@@ -66,6 +65,7 @@ export function DataSyncTaskDetailPage() {
         onStatusChange={changeStatus}
         instances={instances}
         instancesLoading={instancesLoading}
+        listError={listError}
         selectedId={executionId}
         onSelect={selectInstance}
         total={total}
@@ -155,15 +155,7 @@ export function DataSyncTaskDetailPage() {
           onClose={() => setScheduleOpen(false)}
           onChanged={schedules.refresh}
           onViewInstance={(id) => {
-            setStatus("ALL");
-            setPageNo(1);
-            setSearchParams((previous) => {
-              const next = new URLSearchParams(previous);
-              next.set("executionId", id);
-              next.delete("tab");
-              return next;
-            });
-            void loadInstances();
+            selectSubmitted(id);
           }}
         />
       ) : null}
