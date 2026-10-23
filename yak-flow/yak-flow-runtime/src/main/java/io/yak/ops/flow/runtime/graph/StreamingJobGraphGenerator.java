@@ -80,9 +80,12 @@ public final class StreamingJobGraphGenerator {
     }
 
     private void validateConfiguration() {
-        if (configuration.get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED) && !checkpointEnabled()) {
-            throw new UnsupportedOperationException(
-                    "Runtime schema evolution requires periodic checkpoints for schema/binlog recovery consistency");
+        if (configuration.get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            Duration checkpointInterval = configuration.get(CheckpointingOptions.CHECKPOINTING_INTERVAL);
+            if (checkpointInterval.isNegative() || checkpointInterval.isZero()) {
+                throw new UnsupportedOperationException(
+                        "Runtime schema evolution requires periodic checkpoints for schema/binlog recovery consistency");
+            }
         }
         int maxRestarts = configuration.get(ExecutionOptions.MAX_RESTART_ATTEMPTS);
         if (maxRestarts < 0) {
