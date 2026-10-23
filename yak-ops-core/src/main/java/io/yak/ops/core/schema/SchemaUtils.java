@@ -3,6 +3,7 @@ package io.yak.ops.core.schema;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,22 @@ public final class SchemaUtils {
                             ? column.copy(alter.typeMapping().get(column.name()))
                             : column)
                     .toList();
+            return schema.withColumns(columns);
+        }
+        if (event instanceof DropColumnEvent drop) {
+            for (String name : drop.droppedColumnNames()) {
+                if (schema.primaryKeys().contains(name)) {
+                    throw new IllegalArgumentException("Cannot drop primary-key column: " + name);
+                }
+                PhysicalColumn current = schema.column(name)
+                        .orElseThrow(
+                                () -> new IllegalArgumentException("Unknown column for DROP COLUMN: " + name));
+                if (!current.type().equals(drop.expectedColumnTypes().get(name))) {
+                    throw new IllegalArgumentException("Column type changed before DROP COLUMN: " + name);
+                }
+            }
+            List<PhysicalColumn> columns = new ArrayList<>(schema.columns());
+            columns.removeIf(column -> drop.droppedColumnNames().contains(column.name()));
             return schema.withColumns(columns);
         }
         throw new UnsupportedOperationException("Unsupported schema event: " + event.getType());

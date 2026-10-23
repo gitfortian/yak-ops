@@ -3,6 +3,7 @@ package io.yak.ops.e2e.datasync;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.e2e.support.BackendTestBase;
 import java.sql.Connection;
 import java.time.Duration;
@@ -81,21 +82,7 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
         fixture.awaitTarget("drop_orders", List.of(List.of(1L, "before")));
 
         fixture.source.execute("ALTER TABLE drop_orders DROP COLUMN remark");
-        await().alias("DROP COLUMN without following DML").atMost(Duration.ofSeconds(120))
-                .pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-                    try (Connection connection = fixture.target.connect();
-                            var query = connection.prepareStatement(
-                                    "SELECT COUNT(*) FROM information_schema.columns "
-                                            + "WHERE table_schema=? AND table_name=? AND column_name=?")) {
-                        query.setString(1, fixture.targetSchema);
-                        query.setString(2, "drop_orders");
-                        query.setString(3, "remark");
-                        try (var rows = query.executeQuery()) {
-                            rows.next();
-                            assertEquals(0, rows.getInt(1));
-                        }
-                    }
-                });
+        awaitColumnAbsent(instance, "drop_orders", "remark");
         fixture.source.execute("UPDATE drop_orders SET name='after-drop' WHERE id=1");
         fixture.awaitTarget("drop_orders", List.of(List.of(1L, "after-drop")));
         fixture.awaitState(instance, "RUNNING");
@@ -153,6 +140,39 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
             rows.next();
             assertEquals(0, rows.getLong(1));
         }
+    }
+
+    private void awaitColumnAbsent(String instance, String table, String column) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
+        while (System.nanoTime() < deadline) {
+            JsonNode state = fixture.api.call("GET", "/api/v1/task-instances/" + instance);
+            String status = state.path("status").asText();
+            if (status.equals("FAILED")
+                    || status.equals("CANCELED")
+                    || status.equals("FINISHED")) {
+                // Reuse the fixture's failure artifact capture so the assertion exposes the
+                // task's original error instead of hiding it behind the full DDL timeout.
+                fixture.awaitState(instance, "RUNNING");
+            }
+            if (status.equals("RUNNING")) {
+                try (Connection connection = fixture.target.connect();
+                        var query = connection.prepareStatement(
+                                "SELECT COUNT(*) FROM information_schema.columns "
+                                        + "WHERE table_schema=? AND table_name=? AND column_name=?")) {
+                    query.setString(1, fixture.targetSchema);
+                    query.setString(2, table);
+                    query.setString(3, column);
+                    try (var rows = query.executeQuery()) {
+                        rows.next();
+                        if (rows.getInt(1) == 0) {
+                            return;
+                        }
+                    }
+                }
+            }
+            Thread.sleep(200);
+        }
+        throw new AssertionError("CDC pure DDL was not applied within 120 seconds: " + table + "." + column);
     }
 
     private void awaitString(String table, String column, long id, String expected) {

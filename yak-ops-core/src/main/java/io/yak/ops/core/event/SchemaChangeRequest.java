@@ -3,6 +3,7 @@ package io.yak.ops.core.event;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.schema.SchemaUtils;
 import io.yak.ops.core.types.LogicalType;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -58,9 +59,17 @@ public record SchemaChangeRequest(
                 expectedTarget = addColumns(expectedTarget, add);
             } else if (change instanceof AlterColumnTypeEvent alter) {
                 expectedTarget = alterColumnTypes(expectedTarget, alter);
+            } else if (change instanceof DropColumnEvent drop) {
+                for (String name : drop.droppedColumnNames()) {
+                    if (sourceSchemaBefore.column(name).isEmpty()
+                            || sourceSchemaAfter.column(name).isPresent()) {
+                        throw new IllegalArgumentException("DROP COLUMN must match a removed source column");
+                    }
+                }
+                expectedTarget = SchemaUtils.applySchemaChangeEvent(expectedTarget, drop);
             } else {
                 throw new UnsupportedOperationException(
-                        "Runtime schema coordination supports only ADD_COLUMN and ALTER_COLUMN_TYPE");
+                        "Unsupported runtime target schema event: " + change.getType());
             }
         }
         if (!expectedTarget.equals(targetSchemaAfter)) {
