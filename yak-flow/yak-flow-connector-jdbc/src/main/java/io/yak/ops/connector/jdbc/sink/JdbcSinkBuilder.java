@@ -6,7 +6,6 @@ import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
@@ -178,14 +177,26 @@ public final class JdbcSinkBuilder {
                 throw new IllegalArgumentException("Single-table and multi-table JDBC Sink settings cannot be mixed");
             }
             return new JdbcSink(
-                    provider, resolvedDialect, tablePlans, batchPolicy, metrics, batchOrder, statementCacheSize,
+                    provider,
+                    resolvedDialect,
+                    tablePlans,
+                    batchPolicy,
+                    metrics,
+                    batchOrder,
+                    statementCacheSize,
                     applierFactory);
         }
         TableId target = Objects.requireNonNull(targetTable, "targetTable");
         JdbcTableWritePlan plan = new JdbcTableWritePlan(
                 sourceTable == null ? target : sourceTable, target, Objects.requireNonNull(schema, "schema"), mode);
         return new JdbcSink(
-                provider, resolvedDialect, List.of(plan), batchPolicy, metrics, batchOrder, statementCacheSize,
+                provider,
+                resolvedDialect,
+                List.of(plan),
+                batchPolicy,
+                metrics,
+                batchOrder,
+                statementCacheSize,
                 applierFactory);
     }
 }
