@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { getPlanningTree } from "@/service/data-modeling/warehouse-planning";
 import type {
-  CategoryNode,
-  DomainNode,
   NodeKey,
+  NodeKind,
   PlanningNode,
+  PlanningTree,
 } from "@/service/data-modeling/warehouse-planning/types";
+
+const EMPTY_TREE: PlanningTree = { categories: [], datamarts: [] };
+
+/** Parent level of every level; null marks a root of one of the two trees. */
+const PARENT_KIND: Record<NodeKind, NodeKind | null> = {
+  CATEGORY: null,
+  DOMAIN: "CATEGORY",
+  PROCESS: "DOMAIN",
+  DATASET: null,
+  SUBJECT: "DATASET",
+};
 
 export const nodeKey = (node: Pick<PlanningNode, "kind" | "id">): NodeKey =>
   `${node.kind}:${node.id}`;
@@ -19,14 +30,14 @@ export function findNode(nodes: readonly PlanningNode[], key: NodeKey | null): P
   return null;
 }
 
-export function findParent(
-  nodes: readonly CategoryNode[],
-  node: PlanningNode,
-): CategoryNode | DomainNode | null {
-  if (node.kind === "CATEGORY") return null;
-  const kind = node.kind === "DOMAIN" ? "CATEGORY" : "DOMAIN";
-  const parent = findNode(nodes, `${kind}:${node.parentId}`);
-  return parent && parent.kind !== "PROCESS" ? parent : null;
+export function findNodeInTree(tree: PlanningTree, key: NodeKey | null): PlanningNode | null {
+  return findNode(tree.categories, key) ?? findNode(tree.datamarts, key);
+}
+
+export function findParent(tree: PlanningTree, node: PlanningNode): PlanningNode | null {
+  const parentKind = PARENT_KIND[node.kind];
+  if (!parentKind) return null;
+  return findNodeInTree(tree, `${parentKind}:${node.parentId}`);
 }
 
 export function ancestorKeys(
@@ -41,11 +52,16 @@ export function ancestorKeys(
   return null;
 }
 
+function firstKey(tree: PlanningTree): NodeKey | null {
+  const root = tree.categories[0] ?? tree.datamarts[0];
+  return root ? nodeKey(root) : null;
+}
+
 export function usePlanning() {
   const [snapshot, setSnapshot] = useState<{
-    roots: CategoryNode[];
+    tree: PlanningTree;
     selectedKey: NodeKey | null;
-  }>({ roots: [], selectedKey: null });
+  }>(() => ({ tree: EMPTY_TREE, selectedKey: null }));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
@@ -57,19 +73,15 @@ export function usePlanning() {
     setLoading(true);
     setFailed(false);
     void getPlanningTree(controller.signal)
-      .then((roots) => {
+      .then((tree) => {
         if (!active) return;
         const preferred = preferredKey.current;
         preferredKey.current = null;
         setSnapshot((previous) => {
           const requested = preferred ?? previous.selectedKey;
           return {
-            roots,
-            selectedKey: findNode(roots, requested)
-              ? requested
-              : roots[0]
-                ? nodeKey(roots[0])
-                : null,
+            tree,
+            selectedKey: findNodeInTree(tree, requested) ? requested : firstKey(tree),
           };
         });
       })
@@ -89,7 +101,7 @@ export function usePlanning() {
     ...snapshot,
     loading,
     failed,
-    selected: findNode(snapshot.roots, snapshot.selectedKey),
+    selected: findNodeInTree(snapshot.tree, snapshot.selectedKey),
     select: (selectedKey: NodeKey) => setSnapshot((previous) => ({ ...previous, selectedKey })),
     refresh: (preferred?: NodeKey) => {
       if (preferred) preferredKey.current = preferred;

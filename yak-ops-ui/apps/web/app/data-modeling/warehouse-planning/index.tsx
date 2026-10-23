@@ -2,8 +2,6 @@ import { Alert, Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
 import { Layers } from "lucide-react";
 import { useState } from "react";
 import type {
-  CategoryNode,
-  DomainNode,
   EditorDraft,
   PlanningNode,
   SavedNode,
@@ -23,12 +21,20 @@ export default function WarehousePlanningPage() {
   const selected = planning.selected;
   const disabled = planning.loading || planning.failed;
 
-  const createChild = (parent: CategoryNode | DomainNode) => {
-    setDraft(
-      parent.kind === "CATEGORY"
-        ? { mode: "create", kind: "DOMAIN", parent }
-        : { mode: "create", kind: "PROCESS", parent },
-    );
+  const createChild = (parent: PlanningNode) => {
+    switch (parent.kind) {
+      case "CATEGORY":
+        setDraft({ mode: "create", kind: "DOMAIN", parent });
+        return;
+      case "DOMAIN":
+        setDraft({ mode: "create", kind: "PROCESS", parent });
+        return;
+      case "DATASET":
+        setDraft({ mode: "create", kind: "SUBJECT", parent });
+        return;
+      default:
+        return;
+    }
   };
   const saved = (node: SavedNode) => {
     setDraft(null);
@@ -46,6 +52,13 @@ export default function WarehousePlanningPage() {
             <>
               <Button size="small" disabled={planning.loading} onClick={() => planning.refresh()}>
                 刷新
+              </Button>
+              <Button
+                size="small"
+                disabled={disabled}
+                onClick={() => setDraft({ mode: "create", kind: "DATASET", parent: null })}
+              >
+                新建数据集市
               </Button>
               <Button
                 size="small"
@@ -85,7 +98,7 @@ export default function WarehousePlanningPage() {
             </Button>
           </nav>
           <PlanningTree
-            nodes={planning.roots}
+            tree={planning.tree}
             selectedKey={view === "plan" ? planning.selectedKey : null}
             disabled={disabled}
             onSelect={(key) => {
@@ -106,7 +119,7 @@ export default function WarehousePlanningPage() {
           ) : planning.failed ? null : selected ? (
             <PlanningDetails
               node={selected}
-              parent={findParent(planning.roots, selected)}
+              parent={findParent(planning.tree, selected)}
               onSelect={(node) => planning.select(nodeKey(node))}
               onCreateChild={createChild}
               onDelete={setDeleting}
@@ -114,7 +127,7 @@ export default function WarehousePlanningPage() {
                 setDraft({
                   mode: "edit",
                   node,
-                  parent: findParent(planning.roots, node),
+                  parent: findParent(planning.tree, node),
                 })
               }
             />
@@ -129,7 +142,7 @@ export default function WarehousePlanningPage() {
           node={deleting}
           onClose={() => setDeleting(null)}
           onDeleted={() => {
-            const parent = findParent(planning.roots, deleting);
+            const parent = findParent(planning.tree, deleting);
             setDeleting(null);
             planning.refresh(parent ? nodeKey(parent) : undefined);
           }}
