@@ -468,10 +468,10 @@ final class TaskDeployment {
         if (checkpointCoordinator != null) {
             resources.add(checkpointCoordinator);
         }
-        resources.addAll(executions);
         if (schemaCoordinator != null) {
             resources.add(schemaCoordinator);
         }
+        resources.addAll(executions);
         if (coordinator != null) {
             resources.add(coordinator);
         }
