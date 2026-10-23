@@ -14,11 +14,13 @@ import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
@@ -374,6 +376,136 @@ class JdbcMetadataApplierTest {
         }
         assertFalse(JdbcMetadataApplier.isOutcomeUnknown(new SQLException("permission denied", "42501")));
         assertFalse(JdbcMetadataApplier.isOutcomeUnknown(new SQLException("canceled by server", "57014")));
+    }
+
+    @Test
+    void confirmedDeadlockRetriesOnlyTheRemainingNullableColumns() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY)");
+            SQLException deadlock = new SQLException("server aborted DDL due to deadlock", "40P01");
+            AtomicInteger executed = new AtomicInteger();
+            JdbcConnectionProvider flaky = () -> failOneExecute(
+                    database.connections.getConnection(), executed, 2, deadlock);
+            try (JdbcMetadataApplier applier =
+                    new JdbcMetadataApplier(flaky, database.dialect, database.catalog, 30)) {
+                applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                var first = AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32)));
+                var second = AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)));
+                applier.applySchemaChange(new AddColumnEvent(TABLE, List.of(first, second)));
+                assertEquals(3, database.catalog.getTable(TABLE).columnCount());
+                assertEquals(3, executed.get(), "the first successful column must not be added twice");
+            }
+        }
+    }
+
+    @Test
+    void catalogConnectionFailureRetriesBeforeDdlAndReadsFreshMetadata() throws Exception {
+        try (Database database = new Database()) {
+            AtomicInteger reads = new AtomicInteger();
+            JdbcCatalog flakyCatalog = (JdbcCatalog) Proxy.newProxyInstance(
+                    JdbcCatalog.class.getClassLoader(), new Class<?>[] {JdbcCatalog.class}, (proxy, method, args) -> {
+                        if (method.getName().equals("close")) return null;
+                        if (method.getName().equals("findTable") && reads.incrementAndGet() == 1) {
+                            throw new SQLException("temporary metadata connection failure", "08006");
+                        }
+                        return invoke(method, database.catalog, args);
+                    });
+            try (JdbcMetadataApplier applier =
+                    new JdbcMetadataApplier(database.connections, database.dialect, flakyCatalog, 30)) {
+                applier.applySchemaChange(new CreateTableEvent(TABLE, SCHEMA));
+                assertTrue(reads.get() >= 2);
+                assertEquals(SCHEMA, database.catalog.getTable(TABLE));
+            }
+        }
+    }
+
+    @Test
+    void lostDdlResponseReplaysFromRealTargetStateWithoutReissuingSql() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY)");
+            AtomicInteger executed = new AtomicInteger();
+            JdbcConnectionProvider responseLost = () -> loseResponseAfterExecute(
+                    database.connections.getConnection(), executed);
+            var event = new AddColumnEvent(
+                    TABLE,
+                    List.of(
+                            AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32))),
+                            AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)))));
+            try (JdbcMetadataApplier first =
+                    new JdbcMetadataApplier(responseLost, database.dialect, database.catalog, 30)) {
+                first.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                SchemaEvolveException failure =
+                        assertThrows(SchemaEvolveException.class, () -> first.applySchemaChange(event));
+                assertTrue(failure.isOutcomeUnknown());
+                assertEquals(2, executed.get(), "an unconfirmed response must not trigger another DDL attempt");
+            }
+            assertEquals(3, database.catalog.getTable(TABLE).columnCount());
+            JdbcConnectionProvider noSecondDdl = () -> {
+                throw new AssertionError("recovery must compare the target before attempting SQL");
+            };
+            try (JdbcMetadataApplier recovered =
+                    new JdbcMetadataApplier(noSecondDdl, database.dialect, database.catalog, 30)) {
+                recovered.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                recovered.applySchemaChange(event);
+            }
+        }
+    }
+
+    private static Connection loseResponseAfterExecute(Connection connection, AtomicInteger executed) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+                    Object result = invoke(method, connection, args);
+                    if (!method.getName().equals("createStatement")) return result;
+                    Statement statement = (Statement) result;
+                    return Proxy.newProxyInstance(
+                            Statement.class.getClassLoader(), new Class<?>[] {Statement.class}, (ignored, operation, values) -> {
+                                Object applied = invoke(operation, statement, values);
+                                if (operation.getName().equals("execute") && executed.incrementAndGet() == 2) {
+                                    throw new java.sql.SQLTimeoutException("DDL response lost after commit");
+                                }
+                                return applied;
+                            });
+                });
+    }
+
+    @Test
+    void persistentTransientFailureIsBoundedAndNeverCreatesPartialColumns() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY)");
+            SQLException deadlock = new SQLException("repeated deadlock", "40P01");
+            AtomicInteger executed = new AtomicInteger();
+            JdbcConnectionProvider failing = () -> failOneExecute(
+                    database.connections.getConnection(), executed, -1, deadlock);
+            try (JdbcMetadataApplier applier =
+                    new JdbcMetadataApplier(failing, database.dialect, database.catalog, 30)) {
+                applier.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                var column = AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)));
+                var change = new AddColumnEvent(TABLE, List.of(column));
+                SchemaEvolveException failure =
+                        assertThrows(SchemaEvolveException.class, () -> applier.applySchemaChange(change));
+                assertSame(deadlock, failure.getCause());
+                assertEquals(JdbcDdlRetryPolicy.MAX_RETRIES + 1, executed.get());
+                assertEquals(1, database.catalog.getTable(TABLE).columnCount());
+            }
+        }
+    }
+
+    private static Connection failOneExecute(
+            Connection connection, AtomicInteger executed, int failingCall, SQLException injected) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+                    Object result = invoke(method, connection, args);
+                    if (!method.getName().equals("createStatement")) return result;
+                    Statement statement = (Statement) result;
+                    return Proxy.newProxyInstance(
+                            Statement.class.getClassLoader(), new Class<?>[] {Statement.class}, (ignored, operation, values) -> {
+                                if (operation.getName().equals("execute")) {
+                                    int invocation = executed.incrementAndGet();
+                                    if (failingCall == -1 || invocation == failingCall) throw injected;
+                                }
+                                return invoke(operation, statement, values);
+                            });
+                });
     }
 
     private static Connection wrapConnection(

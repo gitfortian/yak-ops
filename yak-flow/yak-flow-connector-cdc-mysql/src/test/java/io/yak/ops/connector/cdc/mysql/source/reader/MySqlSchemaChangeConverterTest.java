@@ -75,6 +75,28 @@ class MySqlSchemaChangeConverterTest {
     }
 
     @Test
+    void emptyStructuredTableChangesAdvancesOffsetWithoutMutatingRegisteredSchema() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        Struct ddl = new Struct(DDL)
+                .put("ddl", "CREATE DATABASE unrelated")
+                .put("tableChanges", List.of());
+        SourceRecord source = new SourceRecord(
+                Map.of("server", "yak"),
+                Map.of("file", "mysql-bin.000001", "pos", 99L),
+                "yak.shop",
+                DDL,
+                ddl);
+        BinlogEvent ignored = converter.convert(source);
+        assertTrue(ignored.records().isEmpty());
+        assertEquals(null, ignored.schemaChange());
+        assertEquals(99L, ignored.offset().position().get("pos"));
+
+        SourceSchemaChange later = converter.convert(ddl("ALTER", NEW_TABLE, 100L)).schemaChange();
+        assertEquals(2, later.before().columns().size());
+        assertEquals(3, later.after().columns().size());
+    }
+
+    @Test
     void disablingEvolutionRejectsDdlBeforeAdvancingTheOffset() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL));
         assertThrows(UnsupportedOperationException.class, () -> converter.convert(ddl("ALTER", NEW_TABLE, 100L)));

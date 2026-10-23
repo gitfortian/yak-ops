@@ -47,8 +47,14 @@ public final class MySqlSchemaChangeConverter {
             throw new UnsupportedOperationException("Debezium DDL has no structured tableChanges metadata");
         }
         Object raw = envelope.get("tableChanges");
-        if (!(raw instanceof List<?> changes) || changes.isEmpty()) {
+        if (!(raw instanceof List<?> changes)) {
             throw new UnsupportedOperationException("Debezium DDL has no table change descriptions");
+        }
+        // Debezium's structured list can legitimately be empty for database-level DDL
+        // that changes no captured table. Only a nonempty table change is actionable;
+        // missing or malformed metadata still fails closed without parsing raw SQL.
+        if (changes.isEmpty()) {
+            return null;
         }
         SourceSchemaChange found = null;
         for (Object item : changes) {

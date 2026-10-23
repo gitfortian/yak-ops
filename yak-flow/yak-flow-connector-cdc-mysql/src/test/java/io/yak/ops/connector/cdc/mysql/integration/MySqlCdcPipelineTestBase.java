@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
 import io.yak.ops.connector.cdc.mysql.source.MySqlHybridCdcSource;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
@@ -163,7 +164,7 @@ abstract class MySqlCdcPipelineTestBase {
                                     .checkpointId()
                             > 0);
                 } finally {
-                    first.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(first);
                 }
 
                 Configuration restore = configuration(true);
@@ -182,7 +183,7 @@ abstract class MySqlCdcPipelineTestBase {
                             Map.of(20L, new ItemRow("new", 4L)));
                     assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 } finally {
-                    second.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(second);
                 }
             } finally {
                 drop(targetConnection, targetDialect, targetItems);
@@ -221,6 +222,7 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(targetConnection, targetDialect.createTableSql(to, initialSchema));
                 sql(sourceConnection, "INSERT INTO cdc_rt_schema_orders VALUES (1,'before')");
 
+                TableMetrics sourceMetrics = new TableMetrics();
                 MySqlHybridCdcSource source = MySqlCdcSource.builder()
                         .hostname(SOURCE.metadata().host())
                         .port(SOURCE.metadata().port())
@@ -229,7 +231,7 @@ abstract class MySqlCdcPipelineTestBase {
                         .serverId(5581)
                         .topicPrefix("yak_cdc_runtime_schema_evolution")
                         .table(from, initialSchema)
-                        .buildHybrid(1);
+                        .buildHybrid(1, sourceMetrics);
                 JdbcSink sink = JdbcSink.builder()
                         .withConnectionOptions(targetOptions)
                         .withTablePlans(List.of(new JdbcTableWritePlan(from, to, initialSchema, JdbcWriteMode.UPSERT)))
@@ -242,7 +244,19 @@ abstract class MySqlCdcPipelineTestBase {
                 JobClient first = executor.execute(graph, initial).get(30, TimeUnit.SECONDS);
                 try {
                     awaitBaseSchemaRow(first, targetConnection, targetDialect, to, "before");
+                    // A delivered snapshot row does not imply that the CDC Binlog gate is open.
+                    // Verify one genuine incremental mutation before testing a runtime DDL.
+                    awaitStreamingPhase(first, sourceMetrics);
+                    sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='stream-ready' WHERE ID=1");
+                    awaitIncrementalRow(first, sourceMetrics, from, targetConnection, targetDialect, to, "stream-ready");
                     sql(sourceConnection, "ALTER TABLE cdc_rt_schema_orders ADD COLUMN NOTE VARCHAR(128) NULL");
+                    if (targetOptions.url().startsWith("jdbc:oracle:")) {
+                        // Automatic JDBC ADD_COLUMN is currently supported only for MySQL/PostgreSQL.
+                        // Oracle must reject the change without silently applying following rows.
+                        awaitUnsupportedSchemaChange(first);
+                        assertEquals("stream-ready", orderRows(targetConnection, targetDialect, to).get(1L));
+                        return;
+                    }
                     sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='after', NOTE='added' WHERE ID=1");
                     awaitEvolvedRows(first, targetConnection, targetDialect, to, Map.of(1L, "added"));
                     assertTrue(((EmbeddedJobClient) first)
@@ -251,7 +265,7 @@ abstract class MySqlCdcPipelineTestBase {
                                     .checkpointId()
                             > 0);
                 } finally {
-                    first.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(first);
                 }
 
                 Configuration restore = configuration(true).set(SchemaEvolutionOptions.ENABLED, true);
@@ -263,13 +277,71 @@ abstract class MySqlCdcPipelineTestBase {
                             second, targetConnection, targetDialect, to, Map.of(1L, "added", 2L, "restored"));
                     assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
                 } finally {
-                    second.cancel().get(30, TimeUnit.SECONDS);
+                    cancelIfActive(second);
                 }
             } finally {
                 drop(targetConnection, targetDialect, to);
                 sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_schema_orders");
             }
         }
+    }
+
+    private static void awaitUnsupportedSchemaChange(JobClient job) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
+            if (status == JobStatus.FAILED) {
+                try {
+                    job.getJobExecutionResult().get(5, TimeUnit.SECONDS);
+                    throw new AssertionError("Unsupported JDBC schema change unexpectedly succeeded");
+                } catch (java.util.concurrent.ExecutionException failure) {
+                    for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause()) {
+                        if (cause.getMessage() != null
+                                && cause.getMessage().contains("does not support this schema change")) {
+                            return;
+                        }
+                    }
+                    throw new AssertionError("CDC failed for a reason other than unsupported Oracle DDL", failure);
+                }
+            }
+            if (status.isTerminalState()) {
+                throw new AssertionError("CDC did not fail closed for unsupported Oracle DDL: " + status);
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Unsupported Oracle DDL did not stop CDC before the deadline");
+    }
+
+    private static void awaitStreamingPhase(JobClient job, TableMetrics metrics) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            if (metrics.continuousSnapshot().phase() == TableMetrics.Phase.STREAMING) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC snapshot handoff did not enter STREAMING");
+    }
+
+    private static void awaitIncrementalRow(
+            JobClient job,
+            TableMetrics metrics,
+            TableId sourceTable,
+            Connection connection,
+            JdbcDialect dialect,
+            TableId target,
+            String expected) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            TableMetrics.Snapshot incremental = metrics.continuousSnapshot().incrementalTables().get(sourceTable);
+            if (incremental != null
+                    && incremental.readRows() > 0
+                    && expected.equals(orderRows(connection, dialect, target).get(1L))) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC Binlog mutation was not delivered after snapshot handoff");
     }
 
     private static void awaitBaseSchemaRow(
@@ -308,8 +380,31 @@ abstract class MySqlCdcPipelineTestBase {
 
     private static void ensureRunning(JobClient job) throws Exception {
         JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
-        if (status != JobStatus.RUNNING) {
+        // The worker starts asynchronously: CREATED can briefly precede RUNNING.
+        if (status == JobStatus.FAILED) {
+            try {
+                job.getJobExecutionResult().get(5, TimeUnit.SECONDS);
+            } catch (java.util.concurrent.ExecutionException failure) {
+                throw new AssertionError("CDC pipeline failed during schema evolution", failure.getCause());
+            }
+        }
+        if (status != JobStatus.CREATED && status != JobStatus.RUNNING) {
             throw new AssertionError("CDC pipeline stopped during schema evolution: " + status);
+        }
+    }
+
+    private static void cancelIfActive(JobClient job) throws Exception {
+        if (job.getJobStatus().get(5, TimeUnit.SECONDS).isTerminalState()) {
+            return;
+        }
+        try {
+            job.cancel().get(30, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.ExecutionException failure) {
+            // The job may terminate between the state read and the cancellation request.
+            // Do not replace the original assertion or job failure with a cleanup exception.
+            if (!job.getJobStatus().get(5, TimeUnit.SECONDS).isTerminalState()) {
+                throw failure;
+            }
         }
     }
 

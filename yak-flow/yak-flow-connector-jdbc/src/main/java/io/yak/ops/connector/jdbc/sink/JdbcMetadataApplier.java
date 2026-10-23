@@ -144,25 +144,54 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         }
         begin(event);
         try {
-            if (event instanceof CreateTableEvent create) {
-                applyCreateTable(create);
-            } else if (event instanceof AddColumnEvent add) {
-                applyAddColumns(add);
-            } else if (event instanceof AlterColumnTypeEvent alter) {
-                applyAlterColumnTypes(alter);
-            } else {
-                throw new SchemaEvolveException(event, "Unsupported JDBC schema change event");
+            int retries = 0;
+            while (true) {
+                checkCanceled(event);
+                try {
+                    // Every attempt reads physical target metadata again. An earlier statement
+                    // may already have committed in an auto-commit DDL batch.
+                    applyOnce(event);
+                    return;
+                } catch (SchemaEvolveException failure) {
+                    // In particular, outcome-unknown means the server may still be executing
+                    // DDL. Never send it a second time in this Job attempt.
+                    throw failure;
+                } catch (SQLException failure) {
+                    if (retries >= JdbcDdlRetryPolicy.MAX_RETRIES
+                            || !JdbcDdlRetryPolicy.isRetryable(failure, dialect)) {
+                        throw new SchemaEvolveException(
+                                event, "JDBC target schema preparation failed after " + retries + " retries", failure);
+                    }
+                    try {
+                        JdbcDdlRetryPolicy.pauseBeforeRetry(++retries);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new SchemaEvolveException(event, "Schema preparation was interrupted", interrupted);
+                    }
+                }
             }
-            checkCanceled(event);
         } catch (SchemaEvolveException failure) {
             throw failure;
-        } catch (SQLException | RuntimeException failure) {
+        } catch (RuntimeException failure) {
             throw new SchemaEvolveException(event, "JDBC target schema preparation could not be verified", failure);
         } finally {
             synchronized (this) {
                 applying = false;
             }
         }
+    }
+
+    private void applyOnce(SchemaChangeEvent event) throws SQLException {
+        if (event instanceof CreateTableEvent create) {
+            applyCreateTable(create);
+        } else if (event instanceof AddColumnEvent add) {
+            applyAddColumns(add);
+        } else if (event instanceof AlterColumnTypeEvent alter) {
+            applyAlterColumnTypes(alter);
+        } else {
+            throw new SchemaEvolveException(event, "Unsupported JDBC schema change event");
+        }
+        checkCanceled(event);
     }
 
     private void applyCreateTable(CreateTableEvent event) throws SQLException {
