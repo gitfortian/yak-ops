@@ -8,6 +8,7 @@ import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
+import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -41,14 +42,24 @@ public final class ExecutionConfigurationFactory {
      * @return independently mutable YakFlow configuration
      */
     public Configuration create(TaskExecutionIdentity identity, Boundedness boundedness, boolean debug) {
+        return create(identity, boundedness, debug, false);
+    }
+
+    /** Enables schema coordination only for explicitly configured continuous tasks. */
+    public Configuration create(
+            TaskExecutionIdentity identity, Boundedness boundedness, boolean debug, boolean schemaChangesEnabled) {
         Objects.requireNonNull(identity, "identity");
         Objects.requireNonNull(boundedness, "boundedness");
+        if (schemaChangesEnabled && boundedness == Boundedness.BOUNDED) {
+            throw new IllegalArgumentException("Batch pipelines cannot enable runtime schema changes");
+        }
         Path stateDirectory = stateDirectory(identity.instanceId());
         Configuration configuration = new Configuration()
                 .set(PipelineOptions.AUTO_GENERATE_UIDS, false)
                 .set(CheckpointingOptions.STATE_DIRECTORY, stateDirectory.toString())
                 .set(ExecutionOptions.LOG_ID, identity.instanceId())
                 .set(ExecutionOptions.DEBUG, debug)
+                .set(SchemaEvolutionOptions.ENABLED, schemaChangesEnabled)
                 .set(CheckpointingOptions.RESTORE_LATEST, false);
 
         if (boundedness == Boundedness.BOUNDED) {

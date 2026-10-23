@@ -21,10 +21,13 @@ public final class SolutionOptions {
             Options.key("mode").stringType().noDefaultValue();
     public static final Option<List<Object>> TABLE_MAPPINGS =
             Options.key("tableMappings").listType(Object.class).noDefaultValue();
+    /** Stored per Task Definition. Absent on existing definitions means evolution remains disabled. */
+    public static final Option<Boolean> SCHEMA_CHANGES_ENABLED =
+            Options.key("schemaChangesEnabled").booleanType().defaultValue(false);
 
     public static final OptionRule RULE = OptionRule.builder()
             .required(SOLUTION_TYPE, STEPS, JobOptions.SOURCE, JobOptions.SINK, TABLE_SELECTION, TABLE_MAPPINGS)
-            .optional(JobOptions.TRANSFORM)
+            .optional(JobOptions.TRANSFORM, SCHEMA_CHANGES_ENABLED)
             .build();
     public static final OptionRule CONNECTION_RULE = OptionRule.builder()
             .required(

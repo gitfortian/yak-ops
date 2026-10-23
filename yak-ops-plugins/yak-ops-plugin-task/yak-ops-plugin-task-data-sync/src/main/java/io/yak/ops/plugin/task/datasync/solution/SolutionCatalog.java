@@ -56,6 +56,17 @@ public final class SolutionCatalog {
         }
     }
 
+    /** Runtime DDL currently supports MySQL and PostgreSQL metadata appliers only. */
+    public static void validateSchemaChanges(
+            SolutionType solution, String sourceType, String targetType, boolean enabled) {
+        if (!enabled) return;
+        if (solution.supportsScheduling() || !"MYSQL".equals(sourceType)
+                || !SCHEMA_TYPES.contains(targetType)) {
+            throw new IllegalArgumentException(
+                    "Runtime schema changes require MySQL source and MySQL or PostgreSQL target");
+        }
+    }
+
     private static void validateTypes(String sourceType, String targetType) {
         if (sourceType == null
                 || targetType == null

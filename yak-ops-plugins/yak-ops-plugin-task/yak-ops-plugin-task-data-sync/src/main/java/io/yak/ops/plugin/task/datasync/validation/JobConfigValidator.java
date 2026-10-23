@@ -57,6 +57,8 @@ public final class JobConfigValidator {
             DataSourceInfo from = context.dataSource(sourceId);
             DataSourceInfo to = context.dataSource(sinkId);
             SolutionCatalog.validate(job.solutionType(), from.type(), to.type());
+            SolutionCatalog.validateSchemaChanges(
+                    job.solutionType(), from.type(), to.type(), job.schemaChangesEnabled());
             SolutionCatalog.validateSteps(from.type(), to.type(), job.steps());
             if (job.solutionType().supportsScheduling()
                     && job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.INCREMENTAL)
