@@ -84,8 +84,12 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       minWidth: 240,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-[var(--yak-components-panel-text)]">{record.name}</div>
-          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">v{record.definitionVersion}</div>
+          <div className="truncate text-[13px] font-medium text-[var(--yak-components-panel-text)]">
+            {record.name}
+          </div>
+          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">
+            v{record.definitionVersion}
+          </div>
         </div>
       ),
     },
@@ -182,7 +186,9 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       width: 180,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="truncate text-xs font-medium text-[var(--yak-components-tab-text-hover)]" title={record.updateBy}>
+          <div
+            className="truncate text-xs font-medium text-[var(--yak-components-tab-text-hover)]" title={record.updateBy}
+          >
             {updateUsersLoading &&
             record.updateBy &&
             record.updateBy !== "system" &&
@@ -192,7 +198,9 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
               updateOperatorText(record)
             )}
           </div>
-          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">{record.updateTime || "-"}</div>
+          <div className="mt-0.5 text-xs text-[var(--yak-components-muted-text)]">
+            {record.updateTime || "-"}
+          </div>
         </div>
       ),
     },
