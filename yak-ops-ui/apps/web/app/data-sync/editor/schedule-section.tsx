@@ -24,7 +24,7 @@ export function EditorScheduleSection({
 }: Props) {
   return (
     <CollapseSection id="schedule" title="调度配置">
-      <div className="space-y-3 rounded-lg border border-[#e6e8eb] bg-white p-4">
+      <div className="space-y-3 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
         {scheduleError ? (
           <Alert>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -44,7 +44,7 @@ export function EditorScheduleSection({
           </Alert>
         ) : null}
         {scheduleLoading ? (
-          <div className="text-xs text-[#667085]">加载调度…</div>
+          <div className="text-xs text-[var(--yak-components-collapse-section-icon)]">加载调度…</div>
         ) : (
           <ScheduleForm
             value={scheduleForm}
@@ -56,7 +56,7 @@ export function EditorScheduleSection({
           />
         )}
         {schedule?.enabled ? (
-          <div className="text-xs text-[#667085]">请先在任务列表停止调度再修改配置</div>
+          <div className="text-xs text-[var(--yak-components-collapse-section-icon)]">请先在任务列表停止调度再修改配置</div>
         ) : null}
       </div>
     </CollapseSection>
