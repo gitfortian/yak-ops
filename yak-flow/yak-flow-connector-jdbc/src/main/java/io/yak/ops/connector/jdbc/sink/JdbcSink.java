@@ -4,6 +4,8 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
+import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.internal.JdbcOutputFormat;
 import io.yak.ops.connector.jdbc.sink.writer.JdbcWriter;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
@@ -12,10 +14,19 @@ import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.event.AddColumnEvent;
+import io.yak.ops.core.event.AlterColumnTypeEvent;
+import io.yak.ops.core.event.SchemaChangeEvent;
+import io.yak.ops.core.event.SchemaChangeRequest;
+import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.PhysicalColumn;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.schema.SchemaVersionedTableState;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -150,6 +161,96 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
             throw new UnsupportedOperationException("This JDBC Sink was built without a schema applier factory");
         }
         return Objects.requireNonNull(metadataApplierFactory.get(), "MetadataApplier factory returned null");
+    }
+
+    /**
+     * Uses the existing JDBC SchemaDerivator and dialect rather than interpreting raw MySQL DDL.
+     * Only identity-mapped, previously configured table routes are changed automatically.
+     */
+    @Override
+    public synchronized SchemaChangeRequest planSchemaChange(SourceSchemaChange change) {
+        Objects.requireNonNull(change, "change");
+        JdbcTableWritePlan plan = plans.stream()
+                .filter(route -> route.sourceTable().equals(change.tableId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("CDC DDL references an unconfigured table"));
+
+        Schema currentSource = Schema.from(plan.sourceSchema(), null, java.util.Map.of(), java.util.Map.of());
+        if (!currentSource.toTableSchema().equals(change.before().toTableSchema())) {
+            throw new IllegalStateException("MySQL CDC DDL is stale relative to the configured write route");
+        }
+        for (int index = 0; index < plan.schema().columnCount(); index++) {
+            String source = plan.sourceSchema()
+                    .column(plan.sourcePositions().get(index))
+                    .name();
+            if (!plan.schema().column(index).name().equals(source)) {
+                throw new UnsupportedOperationException(
+                        "Automatic CDC DDL requires identity-mapped source and target columns");
+            }
+        }
+
+        Schema currentTarget = Schema.from(plan.schema(), null, java.util.Map.of(), java.util.Map.of());
+        SchemaChangePlan diff =
+                JdbcSchemaDerivator.derive(plan.targetTable(), change.after(), Optional.of(currentTarget), dialect);
+        if (diff.blocked()) {
+            throw new UnsupportedOperationException("MySQL CDC schema change is incompatible with the target: "
+                    + diff.differences().stream()
+                            .filter(d -> d.kind() == SchemaChangePlan.Kind.INCOMPATIBLE)
+                            .map(SchemaChangePlan.Difference::reason)
+                            .distinct()
+                            .toList());
+        }
+        List<PhysicalColumn> columns = new ArrayList<>(currentTarget.columns());
+        for (SchemaChangeEvent event : diff.changes()) {
+            if (event instanceof AddColumnEvent add) {
+                for (AddColumnEvent.ColumnWithPosition field : add.addedColumns()) {
+                    if (field.position() != AddColumnEvent.ColumnPosition.LAST) {
+                        throw new UnsupportedOperationException("Only append-column CDC DDL is supported");
+                    }
+                    columns.add(field.column());
+                }
+            } else if (event instanceof AlterColumnTypeEvent alter) {
+                for (int index = 0; index < columns.size(); index++) {
+                    PhysicalColumn field = columns.get(index);
+                    if (alter.typeMapping().containsKey(field.name())) {
+                        columns.set(index, field.copy(alter.typeMapping().get(field.name())));
+                    }
+                }
+            } else {
+                throw new UnsupportedOperationException("Unsupported runtime target schema event");
+            }
+        }
+        Schema nextTarget = currentTarget.withColumns(columns);
+        return new SchemaChangeRequest(
+                change.eventId(),
+                change.tableId(),
+                plan.targetTable(),
+                change.before(),
+                change.after(),
+                currentTarget,
+                nextTarget,
+                diff.changes());
+    }
+
+    @Override
+    public synchronized void schemaChangeCompleted(SchemaChangeRequest request) {
+        List<JdbcTableWritePlan> changed = new ArrayList<>(plans.size());
+        int matches = 0;
+        for (JdbcTableWritePlan plan : plans) {
+            if (plan.sourceTable().equals(request.sourceTable())
+                    && plan.targetTable().equals(request.targetTable())) {
+                changed.add(plan.withSchemas(
+                        request.sourceSchemaAfter().toTableSchema(),
+                        request.targetSchemaAfter().toTableSchema()));
+                matches++;
+            } else {
+                changed.add(plan);
+            }
+        }
+        if (matches != 1) {
+            throw new IllegalStateException("Committed schema event has no matching JDBC route");
+        }
+        plans = List.copyOf(changed);
     }
 
     @Override

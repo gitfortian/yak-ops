@@ -5,6 +5,8 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
@@ -17,6 +19,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,9 +37,25 @@ import org.apache.kafka.connect.source.SourceRecord;
 public final class MySqlDebeziumRecordConverter {
 
     private final Map<TableId, TableSchema> schemas;
+    private final Map<TableId, Schema> physicalSchemas;
+    private final MySqlSchemaChangeConverter schemaChanges;
+    private final boolean evolve;
 
     public MySqlDebeziumRecordConverter(Map<TableId, TableSchema> schemas) {
-        this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
+        this(schemas, Map.of(), false);
+    }
+
+    public MySqlDebeziumRecordConverter(
+            Map<TableId, TableSchema> schemas, Map<TableId, Schema> restored, boolean evolve) {
+        this.schemas = new LinkedHashMap<>(Objects.requireNonNull(schemas, "schemas"));
+        this.physicalSchemas = new LinkedHashMap<>();
+        this.schemas.forEach((table, model) -> this.physicalSchemas.put(
+                table,
+                Objects.requireNonNull(
+                        restored.getOrDefault(table, Schema.from(model, null, Map.of(), Map.of())),
+                        "physical schema")));
+        this.schemaChanges = new MySqlSchemaChangeConverter(this.schemas.keySet());
+        this.evolve = evolve;
     }
 
     /**
@@ -61,7 +80,16 @@ public final class MySqlDebeziumRecordConverter {
             throw new IllegalArgumentException("Unsupported Debezium MySQL event payload");
         }
         if (envelope.schema().field("ddl") != null) {
-            throw new UnsupportedOperationException("MySQL CDC schema evolution is not supported in PR1");
+            if (!evolve) {
+                throw new UnsupportedOperationException("MySQL CDC schema evolution is disabled");
+            }
+            SourceSchemaChange change = schemaChanges.convert(envelope, progress, physicalSchemas);
+            if (change == null) {
+                return new BinlogEvent(List.of(), progress);
+            }
+            physicalSchemas.put(change.tableId(), change.after());
+            schemas.put(change.tableId(), change.after().toTableSchema());
+            return new BinlogEvent(List.of(), progress, change);
         }
         if (envelope.schema().field("op") == null) {
             throw new IllegalArgumentException("Unexpected MySQL CDC event without a row operation");

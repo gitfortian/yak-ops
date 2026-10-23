@@ -18,6 +18,7 @@ public final class MySqlHybridRecordEmitter
         implements RecordEmitter<MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplitState> {
 
     private final SourceReaderContext context;
+    private final MySqlSchemaChangeGate schemaGate;
     private final MySqlHybridSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
@@ -28,6 +29,15 @@ public final class MySqlHybridRecordEmitter
 
     /** Creates the mailbox emitter with phase-aware, generation-fenced record measurements. */
     public MySqlHybridRecordEmitter(SourceReaderContext context, MySqlHybridSplitReader splits, TableMetrics metrics) {
+        this(context, splits, metrics, new MySqlSchemaChangeGate(context));
+    }
+
+    public MySqlHybridRecordEmitter(
+            SourceReaderContext context,
+            MySqlHybridSplitReader splits,
+            TableMetrics metrics,
+            MySqlSchemaChangeGate schemaGate) {
+        this.schemaGate = Objects.requireNonNull(schemaGate, "schemaGate");
         this.metrics = metrics;
         generation = metrics.generation();
         this.context = Objects.requireNonNull(context, "context");
@@ -38,6 +48,10 @@ public final class MySqlHybridRecordEmitter
     public void emitRecord(
             MySqlHybridFetchedRecord event, ReaderOutput<TableRecord> output, MySqlHybridSplitState state)
             throws Exception {
+        if (event.schemaChange() != null) {
+            schemaGate.begin(event.schemaChange(), () -> state.emitBinlog(event.binlogOffset()));
+            return;
+        }
         if (event.preparedSnapshot() != null) {
             state.prepareSnapshot(event.preparedSnapshot());
             return;

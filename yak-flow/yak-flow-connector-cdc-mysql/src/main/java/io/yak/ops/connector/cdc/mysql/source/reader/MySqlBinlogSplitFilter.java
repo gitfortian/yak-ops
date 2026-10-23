@@ -103,6 +103,28 @@ public final class MySqlBinlogSplitFilter {
     public BinlogEvent filter(BinlogEvent event) {
         Objects.requireNonNull(event, "event");
         List<TableRecord> rows = event.records();
+        if (event.schemaChange() != null) {
+            var source = event.schemaChange();
+            if (!completed.containsKey(source.tableId())
+                    || !source.before().primaryKeys().equals(source.after().primaryKeys())
+                    || source.after().primaryKeys().size() != 1) {
+                throw new UnsupportedOperationException("MySQL CDC cannot change Binlog filter primary keys");
+            }
+            String key = source.after().primaryKeys().getFirst();
+            int keyPosition = -1;
+            for (int index = 0; index < source.after().columns().size(); index++) {
+                if (source.after().columns().get(index).name().equals(key)) {
+                    keyPosition = index;
+                    break;
+                }
+            }
+            if (keyPosition < 0) {
+                throw new UnsupportedOperationException("MySQL CDC schema change removed the Binlog primary key");
+            }
+            keyPositions.put(source.tableId(), keyPosition);
+            columnCounts.put(source.tableId(), source.after().columns().size());
+            return event;
+        }
         if (rows.isEmpty()) {
             return event;
         }

@@ -50,7 +50,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         if (serverId < 1) throw new IllegalArgumentException("Replication server ID must be positive");
         this.serverId = serverId;
         this.config = Objects.requireNonNull(config, "config");
-        converter = new MySqlDebeziumRecordConverter(config.schemas());
+        converter = new MySqlDebeziumRecordConverter(
+                config.schemas(), config.physicalSchemas(), config.schemaEvolutionEnabled());
         queue = new ArrayBlockingQueue<>(config.queueCapacity());
     }
 
@@ -150,7 +151,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     /**
      * Copies the local Schema History for the Reader's completed-checkpoint candidate.
      *
-     * <p>SQL Schema Evolution is unsupported. The history is essential for
+     * <p>Debezium Schema History is essential for
      * resuming Debezium at a saved Binlog offset without rebuilding an unrelated schema.
      */
     public byte[] snapshotHistory() throws IOException {

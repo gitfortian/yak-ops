@@ -133,7 +133,7 @@ class SchemaManagerTest {
                         after,
                         before,
                         mismatched,
-                        java.util.List.of(AddColumnEvent.last(new PhysicalColumn("note", new VarCharType(64))))));
+                        java.util.List.of(new AddColumnEvent(TARGET, List.of(AddColumnEvent.last(new PhysicalColumn("note", new VarCharType(64))))))));
     }
 
     private static SchemaChangeRequest request(String eventId, Schema before, Schema after, String addedColumn) {
@@ -155,7 +155,7 @@ class SchemaManagerTest {
                 sourceAfter,
                 targetBefore,
                 targetAfter,
-                java.util.List.of(AddColumnEvent.last(new PhysicalColumn(addedColumn, new VarCharType(64)))));
+                java.util.List.of(new AddColumnEvent(TARGET, List.of(AddColumnEvent.last(new PhysicalColumn(addedColumn, new VarCharType(64)))))));
     }
 
     private static Schema schema(boolean includeNote) {

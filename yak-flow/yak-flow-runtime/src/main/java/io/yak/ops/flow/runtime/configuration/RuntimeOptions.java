@@ -16,7 +16,7 @@ public final class RuntimeOptions {
 
     /** Enables the explicit runtime SchemaManager protocol; disabled for existing pipelines. */
     public static final Option<Boolean> SCHEMA_EVOLUTION_ENABLED =
-            Options.key("execution.schema-evolution.enabled").booleanType().defaultValue(false);
+            io.yak.ops.core.configuration.SchemaEvolutionOptions.ENABLED;
 
     private RuntimeOptions() {}
 }

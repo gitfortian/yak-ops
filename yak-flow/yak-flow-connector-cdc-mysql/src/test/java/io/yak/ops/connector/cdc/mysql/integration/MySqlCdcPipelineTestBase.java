@@ -15,6 +15,7 @@ import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.configuration.CheckpointingOptions;
+import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.execution.JobClient;
@@ -189,6 +190,126 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_items");
                 sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_orders");
             }
+        }
+    }
+
+    @Test
+    void evolvesExistingTableAndRecoversSchemaWithBinlogCheckpoint() throws Exception {
+        JdbcConnectionOptions sourceOptions =
+                new JdbcConnectionOptions(SOURCE.metadata().url(), "root", SOURCE.metadata().password());
+        JdbcConnectionOptions targetOptions = targetOptions();
+        JdbcDialect targetDialect = JdbcDialects.forUrl(targetOptions.url());
+        TableId from = new TableId(DATABASE, null, "cdc_rt_schema_orders");
+        TableSchema initialSchema = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.BIGINT.copy(false)),
+                        new Column("NAME", LogicalTypes.varchar(64).copy(false))),
+                List.of("ID"));
+
+        try (Connection sourceConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(sourceOptions)
+                                .getConnection();
+                Connection targetConnection =
+                        new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(targetOptions)
+                                .getConnection()) {
+            TableId to = targetTable(targetConnection, targetOptions.url(), "YF_CDC_RT_SCHEMA_ORDERS");
+            try {
+                drop(targetConnection, targetDialect, to);
+                sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_schema_orders");
+                sql(sourceConnection,
+                        "CREATE TABLE cdc_rt_schema_orders (ID BIGINT NOT NULL PRIMARY KEY, NAME VARCHAR(64) NOT NULL)");
+                sql(targetConnection, targetDialect.createTableSql(to, initialSchema));
+                sql(sourceConnection, "INSERT INTO cdc_rt_schema_orders VALUES (1,'before')");
+
+                MySqlHybridCdcSource source = MySqlCdcSource.builder()
+                        .hostname(SOURCE.metadata().host())
+                        .port(SOURCE.metadata().port())
+                        .username("root")
+                        .password(SOURCE.metadata().password())
+                        .serverId(5581)
+                        .topicPrefix("yak_cdc_runtime_schema_evolution")
+                        .table(from, initialSchema)
+                        .buildHybrid(1);
+                JdbcSink sink = JdbcSink.builder()
+                        .withConnectionOptions(targetOptions)
+                        .withTablePlans(List.of(new JdbcTableWritePlan(from, to, initialSchema, JdbcWriteMode.UPSERT)))
+                        .withBatchFlushPolicy(new BatchFlushPolicy(1, Duration.ZERO))
+                        .build();
+                Configuration initial = configuration(false).set(SchemaEvolutionOptions.ENABLED, true);
+                StreamGraph graph = graph(source, sink, initial);
+                EmbeddedPipelineExecutor executor = new EmbeddedPipelineExecutor();
+
+                JobClient first = executor.execute(graph, initial).get(30, TimeUnit.SECONDS);
+                try {
+                    awaitBaseSchemaRow(first, targetConnection, targetDialect, to, "before");
+                    sql(sourceConnection, "ALTER TABLE cdc_rt_schema_orders ADD COLUMN NOTE VARCHAR(128) NULL");
+                    sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='after', NOTE='added' WHERE ID=1");
+                    awaitEvolvedRows(first, targetConnection, targetDialect, to, Map.of(1L, "added"));
+                    assertTrue(((EmbeddedJobClient) first)
+                                    .checkpoint()
+                                    .get(30, TimeUnit.SECONDS)
+                                    .checkpointId()
+                            > 0);
+                } finally {
+                    first.cancel().get(30, TimeUnit.SECONDS);
+                }
+
+                Configuration restore = configuration(true).set(SchemaEvolutionOptions.ENABLED, true);
+                JobClient second = executor.execute(graph, restore).get(30, TimeUnit.SECONDS);
+                try {
+                    sql(sourceConnection,
+                            "INSERT INTO cdc_rt_schema_orders (ID,NAME,NOTE) VALUES (2,'new','restored')");
+                    awaitEvolvedRows(
+                            second, targetConnection, targetDialect, to, Map.of(1L, "added", 2L, "restored"));
+                    assertEquals(JobStatus.RUNNING, second.getJobStatus().get(10, TimeUnit.SECONDS));
+                } finally {
+                    second.cancel().get(30, TimeUnit.SECONDS);
+                }
+            } finally {
+                drop(targetConnection, targetDialect, to);
+                sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_schema_orders");
+            }
+        }
+    }
+
+    private static void awaitBaseSchemaRow(
+            JobClient job, Connection connection, JdbcDialect dialect, TableId table, String expected)
+            throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            Map<Long, String> rows = orderRows(connection, dialect, table);
+            if (expected.equals(rows.get(1L))) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC initial table did not converge before schema evolution");
+    }
+
+    private static void awaitEvolvedRows(
+            JobClient job, Connection connection, JdbcDialect dialect, TableId table, Map<Long, String> expected)
+            throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            try (Statement sql = connection.createStatement();
+                    ResultSet rows = sql.executeQuery("SELECT "
+                            + dialect.quoteIdentifier("ID") + ", " + dialect.quoteIdentifier("NOTE")
+                            + " FROM " + dialect.qualifiedTable(table))) {
+                Map<Long, String> actual = new LinkedHashMap<>();
+                while (rows.next()) actual.put(rows.getLong(1), rows.getString(2));
+                if (expected.equals(actual)) return;
+            } catch (SQLException notMigratedYet) {
+                // The target column may not exist until MetadataApplier completes its DDL.
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC schema evolution did not converge before deadline");
+    }
+
+    private static void ensureRunning(JobClient job) throws Exception {
+        JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
+        if (status != JobStatus.RUNNING) {
+            throw new AssertionError("CDC pipeline stopped during schema evolution: " + status);
         }
     }
 

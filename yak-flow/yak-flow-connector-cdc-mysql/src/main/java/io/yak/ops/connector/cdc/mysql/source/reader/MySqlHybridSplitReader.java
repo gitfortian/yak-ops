@@ -158,10 +158,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
             BinlogEvent event = binlog.poll();
             if (event != null) {
                 BinlogEvent filtered = filter.filter(event);
-                return records(
-                        MySqlHybridBinlogSplit.ID,
-                        new MySqlHybridFetchedRecord(filtered.records(), null, filtered.offset(), false),
-                        false);
+                return records(MySqlHybridBinlogSplit.ID, MySqlHybridFetchedRecord.binlog(filtered), false);
             }
         } else Thread.sleep(20);
         return empty();

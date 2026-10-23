@@ -129,7 +129,7 @@ class SchemaCoordinatorTest {
                 after,
                 before,
                 after,
-                List.of(AddColumnEvent.last(new PhysicalColumn("note", new VarCharType(64)))));
+                List.of(new AddColumnEvent(TARGET, List.of(AddColumnEvent.last(new PhysicalColumn("note", new VarCharType(64)))))));
     }
 
     private static final class FakeSource implements SchemaSourceParticipant {

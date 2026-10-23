@@ -1,7 +1,11 @@
 package io.yak.ops.core.api.connector.source;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SchemaChangeRequest;
+import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.Schema;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -49,5 +53,16 @@ public interface SourceReaderContext {
     default CompletionStage<Long> sendSchemaChangeRequestToCoordinator(SchemaChangeRequest request) {
         return CompletableFuture.failedFuture(
                 new UnsupportedOperationException("This context does not support schema change coordination"));
+    }
+
+    /** Requests a source DDL transition; the runtime Sink selects and validates the target route. */
+    default CompletionStage<Long> sendSourceSchemaChange(SourceSchemaChange change) {
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException("Source schema evolution is not enabled"));
+    }
+
+    /** Returns the Source schema committed alongside the recovered Binlog position, if any. */
+    default Optional<Schema> restoredSourceSchema(TableId sourceTable) {
+        return Optional.empty();
     }
 }
