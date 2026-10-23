@@ -225,3 +225,40 @@ CREATE TABLE yak_ops_modeling_subject (
     CONSTRAINT fk_modeling_subject_parent FOREIGN KEY (workspace_id, datamart_id)
         REFERENCES yak_ops_modeling_datamart (workspace_id, id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace-owned subject area inside one data mart';
+
+-- Concept dimensions: the analysis perspective a dimension table belongs to.
+-- Ownership is exactly one of a data domain (public layer) or a data mart (application layer),
+-- and the abbreviation is unique per owning scope rather than globally.
+
+CREATE TABLE yak_ops_modeling_dimension (
+    id VARCHAR(64) NOT NULL COMMENT 'Application-generated immutable dimension identity',
+    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the dimension and its scope reference',
+    scope VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'PUBLIC binds a data domain, APPLICATION binds a data mart',
+    domain_id VARCHAR(64) NULL COMMENT 'Owning data domain; set only for PUBLIC',
+    datamart_id VARCHAR(64) NULL COMMENT 'Owning data mart; set only for APPLICATION',
+    owner_scope_id VARCHAR(64) GENERATED ALWAYS AS (IFNULL(domain_id, datamart_id)) STORED COMMENT 'Generated scope key backing the per-scope unique abbreviation',
+    name VARCHAR(128) NOT NULL COMMENT 'Business display name',
+    en_name VARCHAR(128) NOT NULL COMMENT 'Business English name',
+    code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'Case-sensitive abbreviation unique inside its scope',
+    description VARCHAR(500) NULL COMMENT 'Optional business description; null when absent',
+    revision BIGINT NOT NULL DEFAULT 1 COMMENT 'Optimistic version incremented after every update',
+    create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
+    update_time DATETIME(3) NOT NULL COMMENT 'Most recent field update timestamp',
+    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
+    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_modeling_dimension_workspace (workspace_id, id),
+    UNIQUE KEY uk_modeling_dimension_scope_code (workspace_id, owner_scope_id, code),
+    KEY idx_modeling_dimension_domain (workspace_id, domain_id),
+    KEY idx_modeling_dimension_datamart (workspace_id, datamart_id),
+    CONSTRAINT ck_modeling_dimension_scope CHECK (scope IN ('PUBLIC', 'APPLICATION')),
+    CONSTRAINT ck_modeling_dimension_owner CHECK (
+        (scope = 'PUBLIC' AND domain_id IS NOT NULL AND datamart_id IS NULL)
+        OR (scope = 'APPLICATION' AND datamart_id IS NOT NULL AND domain_id IS NULL)),
+    CONSTRAINT ck_modeling_dimension_code CHECK (code REGEXP '^[a-z][a-z0-9_]*$'),
+    CONSTRAINT ck_modeling_dimension_revision CHECK (revision > 0),
+    CONSTRAINT fk_modeling_dimension_domain FOREIGN KEY (workspace_id, domain_id)
+        REFERENCES yak_ops_modeling_domain (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_dimension_datamart FOREIGN KEY (workspace_id, datamart_id)
+        REFERENCES yak_ops_modeling_datamart (workspace_id, id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace-owned concept dimension bound to one domain or data mart';
