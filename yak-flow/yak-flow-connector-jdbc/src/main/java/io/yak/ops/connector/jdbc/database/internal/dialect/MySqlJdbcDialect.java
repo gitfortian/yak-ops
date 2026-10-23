@@ -7,6 +7,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
@@ -67,6 +68,30 @@ public final class MySqlJdbcDialect extends AbstractDialect {
             case TIMESTAMP_WITH_TIME_ZONE ->
                 throw new UnsupportedOperationException("MySQL cannot preserve TIMESTAMP_WITH_TIME_ZONE semantics");
         };
+    }
+
+    @Override
+    public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        Column target = new Column(column.name(), column.type());
+        String definition = quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
+        String comment = column.comment();
+        if (comment != null && !comment.isBlank()) {
+            definition += " COMMENT " + stringLiteral(comment);
+        }
+        return List.of("ALTER TABLE " + qualifiedTable(table) + " ADD COLUMN " + definition);
+    }
+
+    @Override
+    public String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
+        if (!previous.name().equals(updated.name()) || previous.nullable() != updated.nullable()) {
+            throw new IllegalArgumentException("Column identity and nullability must remain unchanged");
+        }
+        String suffix = updated.nullable() ? " NULL" : " NOT NULL";
+        if (comment != null && !comment.isBlank()) {
+            suffix += " COMMENT " + stringLiteral(comment);
+        }
+        return "ALTER TABLE " + qualifiedTable(table) + " MODIFY COLUMN " + quoteIdentifier(updated.name()) + " "
+                + nativeType(updated).ddl() + suffix;
     }
 
     @Override
