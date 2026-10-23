@@ -55,9 +55,7 @@ export function ExecutionTabs({
             realtime={selectedInstance.syncType === "REALTIME"}
             controls={
               <>
-                <label
-                  className="flex items-center gap-2 text-xs text-[var(--yak-components-collapse-section-icon)]"
-                >
+                <label className="flex items-center gap-2 text-xs text-[var(--yak-components-collapse-section-icon)]">
                   自动刷新
                   <Switch size="small" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                 </label>
