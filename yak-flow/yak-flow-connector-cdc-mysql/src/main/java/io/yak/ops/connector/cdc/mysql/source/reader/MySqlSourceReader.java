@@ -3,13 +3,13 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableRecord;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Receives unbounded MySQL Binlog changes on the mailbox and checkpoints delivered offsets.
