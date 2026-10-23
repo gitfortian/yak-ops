@@ -17,6 +17,8 @@ import {
 } from "../execution-detail";
 import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
+const PAGE_SIZE = 20;
+
 export const INSTANCE_STATUS_ITEMS: Record<DataSyncInstanceStatus | "ALL", string> = {
   ALL: "全部状态",
   SUBMITTED: "等待",
@@ -59,7 +61,7 @@ export function ExecutionSidebar({
   onRefresh,
 }: Props) {
   const statusItems = { ...INSTANCE_STATUS_ITEMS, CANCELED: realtime ? "已停止" : "已取消" };
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const executionId = selectedId;
   const selectInstance = onSelect;
   const changePage = onPageChange;
