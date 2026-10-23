@@ -45,6 +45,7 @@ Related FLIPs: N/A
 - 逆向建模实现（当前数据源只有 MySQL / Oracle / PostgreSQL 的 JDBC 接入，没有 MaxCompute / EMR Hive；Paimon 是湖格式，`DataSourceCatalogService` 的 JDBC Catalog 覆盖不到）。
 - FML 代码模式（DataWorks 私有标准，不复刻）。
 - 可配置的表名检查器（正则 / 命名词典）、模型版本、审批流、导入导出、模型移动。本期只做强制分层前缀，见 3 节。
+- 概念维度跨域复用（一个维度同时挂在多个数据域 / 数据集市、或维度表跨域引用他人维度）。本期归属单一，见 Proposed Changes 第 2 节；多对多归属属于公共契约变更，P1 单独评审。
 
 ## Public Interfaces
 
@@ -213,6 +214,10 @@ export interface ReverseModelingProvider {
 
 编码唯一性限定在「所属数据域或集市」内，用生成列做唯一索引。被维度表引用后禁止删除。
 
+**本期归属单一，不支持跨域共享**：一个维度只能属于一个数据域或一个数据集市，`owner_scope_id = IFNULL(domain_id, datamart_id)` 的生成列与 `(workspace_id, owner_scope_id, code)` 唯一索引都建立在这个前提上。同一缩写在不同域下允许并存（唯一性按域计算），因此两个域都需要「商品」时是各建一份、各自维护字段，而不是共享一条记录。
+
+不做的原因不是省事：多对多需要额外的 `dimension_scope` 关联表，`code` 的唯一性语义会从「域内唯一」变成「Workspace 内唯一 + 共享」两种并存模式，而「被引用即禁删」的检查也要改为跨多个归属方校验。这属于公共契约变更，应按流程单独出 YOIP，不在本期夹带。
+
 ### 3. 明细表（DWD）与维度表（DIM）
 
 | 字段 | DWD | DIM |
@@ -243,7 +248,28 @@ export interface ReverseModelingProvider {
 
 ### 5. 从表/视图导入
 
-前端三级选择：数据源 → 库/模式 → 表（支持模糊搜索）→ 字段勾选。字段按标准逻辑类型映射：`VARCHAR/CHAR/TEXT → STRING`、整数族 `→ BIGINT`、`DECIMAL/NUMERIC → DECIMAL`、`DATE → DATE`、`DATETIME/TIMESTAMP → TIMESTAMP`。
+前端三级选择：数据源 → 库/模式 → 表（支持模糊搜索）→ 字段勾选。
+
+字段类型映射遵循「只自动映射无损或语义明确的类型，其余显式标红」的原则。逻辑类型只有五个（`DataType`：`STRING` / `BIGINT` / `DECIMAL` / `DATE` / `TIMESTAMP`，与数据标准同一套），因此任何物理类型都要么落到这五个之一，要么被判为待处理：
+
+| 物理类型 | 逻辑类型 | 说明 |
+| --- | --- | --- |
+| `VARCHAR` / `CHAR` / `TEXT` / `STRING` / `CLOB` | `STRING` | 长度写入 `length_precision` |
+| `TINYINT` / `SMALLINT` / `INT` / `INTEGER` / `BIGINT` | `BIGINT` | 整数族统一收敛 |
+| `DECIMAL` / `NUMERIC` | `DECIMAL` | 保留 `(p,s)` |
+| `DATE` | `DATE` | |
+| `DATETIME` / `TIMESTAMP` | `TIMESTAMP` | |
+| `JSON` / `JSONB` | `STRING` | 文本保真落库，不解析 JSON 语义，行内提示 |
+| `BOOLEAN` / `BOOL` | **不自动映射** | 五个逻辑类型里没有布尔，默认建议 `STRING` 存 `true`/`false`，必须由用户确认 |
+| `FLOAT` / `DOUBLE` / `REAL` | **不自动映射** | 收敛到 `DECIMAL` 需要用户指定精度，不替用户猜 |
+| `BLOB` / `BINARY` / `VARBINARY` / `TINYBLOB` / `BYTEA` | **不支持** | 无二进制逻辑类型，必须移除该字段或改为受支持类型 |
+| `TIME` / `YEAR` / `INTERVAL` / `ENUM` / `SET` / `GEOMETRY` / `ARRAY<...>` / `STRUCT<...>` / `MAP<...>` | **不支持** | 同上 |
+
+未映射与不支持的行**保留在字段列表**里、标红、`dataType` 留空并给出原因，`length_precision` 不猜。导入动作本身不阻断（与批量录入一致），但**保存模型前必须为每一行选定类型或删除该行**，否则返回 400。
+
+这里刻意不做静默降级：把 `BLOB` 塞成 `STRING`、把 `DOUBLE` 塞成 `DECIMAL(10,2)` 都能让导入「成功」，但会在物理发布和装载阶段变成真正的事故，而且用户在导入页看不出来。
+
+导入时的可空性与主键不做推断式收紧：`is_not_null` 按源表可空性预填，物理主键自动勾选为主键，二者都允许用户修改（与字段标准继承的取舍一致）。
 
 **数据源范围**：只有**当前 Workspace** 内的数据源可选。`DataSourceCatalogService` 的入参是 `datasourceId`，因此必须由服务端按 Workspace 重新校验归属，跨 Workspace 的 id 返回 403 而不是 404/500，避免越权探测。
 
@@ -252,8 +278,6 @@ export interface ReverseModelingProvider {
 - 下拉列表按 `PROD > TEST > DEVELOP` 排序，每项显示环境徽标；
 - 选中非 `PROD` 时，插入前弹一次确认「即将从『开发』环境读取字段，请确认连接的是目标库」，用户确认即继续；
 - 不在服务端拦截，也不隐藏非生产数据源。
-
-**物理主键自动勾选为主键**；`is_not_null` 按源表的可空性预填，但仍可修改（与字段标准继承的取舍一致）。
 
 ### 6. 批量录入
 
@@ -296,6 +320,8 @@ export interface ReverseModelingProvider {
 ## Test Plan
 
 - 单元测试（`DimensionModelingServiceTest`、`PlanningServiceTest` 扩展）：编码唯一性、维度归属互斥、DWD 必须挂业务过程、DIM 归属二选一、生命周期边界、分区字段唯一且为 `STRING`、revision 冲突。
+- 维度归属（单测 + 真库）：同一缩写可在两个数据域并存；同一数据域内重复被拒；不存在跨域共享入口，多对多关联表不在本期迁移里（有测试断言库里只有 `domain_id` / `datamart_id` 两列）。
+- 类型映射（单测 + 前端表驱动）：五种自动映射；`JSON` → `STRING` 并带提示；`BOOLEAN` / `FLOAT` 留空待确认；`BLOB` / `STRUCT<...>` 标记不支持；含未决行的模型保存返回 400，而导入动作本身不报错、也不丢弃这些行。
 - 标准继承（单测）：绑定标准后 `en_code` / `data_type` / `length_precision` 被后端按 `standard_id` 覆盖（即使前端传了不同值）；`is_not_null` **保留**前端传值，不被覆盖；解绑后三项恢复可编辑。
 - 表名前缀（单测 + 前端）：前缀恒为 `lower(layer.en_code) + "_"`，切换分层时重算；后缀非法字符被拒；全名超 64 字符被拒；两个不同分层下的同名后缀不冲突。
 - 数据类型（单测）：`type` 未知值在列表展示为「未知类型」且不可编辑；写入非枚举值被拒（应用层校验，非 DB `CHECK`）。
@@ -313,3 +339,5 @@ export interface ReverseModelingProvider {
 5. **物理发布一并实现**：发布涉及引擎方言、库实例解析与幂等，属于独立风险面，单独 YOIP 评审。
 6. **`model.type` 用数据库 `CHECK` 枚举**：P1 扩 `DWS/ADS` 必须 `DROP CHECK / ADD CONSTRAINT`。改为 `VARCHAR` + 应用层枚举，代价是手工 SQL 可以写入未知 `type`，用读路径的「未知类型」兜底覆盖。
 7. **「从表/视图导入」按 `PROD` 环境硬过滤**：`environment` 是 `NOT NULL DEFAULT 0`，硬过滤等价于关掉该功能，见 Proposed Changes 第 5 节。
+8. **概念维度多对多归属（本期即支持跨域共享）**：需要 `dimension_scope` 关联表，且编码唯一性要同时支持「域内唯一」和「共享维度」两种语义，引用检查也要跨多个归属方。属于公共契约变更，按流程另开 YOIP，不夹带进本期。
+9. **把 `BOOLEAN` / `BLOB` 等类型静默降级为 `STRING`**：能让导入「成功」，但把类型事故推迟到物理发布与装载阶段，用户在导入页看不出来。改为标红待确认、保存前强制解决。
