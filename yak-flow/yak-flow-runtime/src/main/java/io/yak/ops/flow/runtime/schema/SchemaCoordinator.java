@@ -2,12 +2,12 @@ package io.yak.ops.flow.runtime.schema;
 
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.event.SourceSchemaChange;
 import io.yak.ops.core.schema.Schema;
-import io.yak.ops.core.data.TableId;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.SchemaManagerSnapshotSerializer;
 import java.io.IOException;
@@ -137,8 +137,8 @@ public final class SchemaCoordinator implements AutoCloseable {
     public CompletionStage<Long> applySourceSchemaChange(SourceSchemaChange change, int sourceSubtask) {
         Objects.requireNonNull(change, "change");
         if (schemaSink == null) {
-            return CompletableFuture.failedFuture(new UnsupportedOperationException(
-                    "Runtime schema evolution requires a Sink schema planner"));
+            return CompletableFuture.failedFuture(
+                    new UnsupportedOperationException("Runtime schema evolution requires a Sink schema planner"));
         }
         try {
             return applySchemaChange(schemaSink.planSchemaChange(change), sourceSubtask);
