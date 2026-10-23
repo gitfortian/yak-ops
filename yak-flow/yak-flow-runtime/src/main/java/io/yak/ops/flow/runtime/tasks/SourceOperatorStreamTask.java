@@ -15,6 +15,7 @@ import io.yak.ops.flow.runtime.operators.coordination.OperatorEvent;
 import io.yak.ops.flow.runtime.operators.coordination.SubtaskGateway;
 import io.yak.ops.flow.runtime.source.coordinator.SourceCoordinator;
 import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
+import io.yak.ops.flow.runtime.schema.SchemaSourceParticipant;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -31,7 +32,7 @@ import java.util.function.IntConsumer;
  * <p>Output is sent through ReaderOutput, RecordWriterOutput or an inline OperatorChain.
  * Global checkpoint coordination belongs to the runtime checkpoint coordinator.
  */
-public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> extends StreamTask
+public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> extends StreamTask implements SchemaSourceParticipant
         implements SubtaskGateway {
 
     private final SourceCoordinator<SplitT, ?> coordinator;
@@ -160,6 +161,11 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
             outputFinished = true;
             recordWriter.finish();
         }
+    }
+
+    @Override
+    public int subtaskIndex() {
+        return taskInfo().subtaskIndex();
     }
 
     /** Pauses further Reader polling at a mailbox boundary while a schema transition is applied. */
