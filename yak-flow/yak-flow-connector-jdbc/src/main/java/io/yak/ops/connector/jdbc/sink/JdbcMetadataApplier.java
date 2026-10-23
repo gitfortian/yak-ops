@@ -1,9 +1,9 @@
 package io.yak.ops.connector.jdbc.sink;
 
+import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcColumnInfo;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcTableInfo;
-import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
@@ -20,9 +20,9 @@ import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
 import io.yak.ops.core.schema.PhysicalColumn;
+import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypeRoot;
-import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.io.IOException;
 import java.io.NotSerializableException;
@@ -30,9 +30,9 @@ import java.io.ObjectOutputStream;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -191,7 +191,9 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             if (addition.position() != AddColumnEvent.ColumnPosition.LAST) {
                 throw new IllegalArgumentException("JDBC ADD_COLUMN supports LAST position only");
             }
-            if (!names.add(column.name()) || !column.type().isNullable() || !column.type().isResolved()) {
+            if (!names.add(column.name())
+                    || !column.type().isNullable()
+                    || !column.type().isResolved()) {
                 throw new IllegalArgumentException("Invalid nullable column addition: " + column.name());
             }
             requirePlainColumn(column);
