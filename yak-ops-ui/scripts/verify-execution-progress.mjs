@@ -52,7 +52,7 @@ assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(css, /animation: none/);
 assert.match(history, /refetchInterval:/);
 assert.match(history, /autoRefresh &&/);
-assert.match(history, /Boolean\(activeInstance\) \|\| hasEnabledSchedule/);
+assert.match(history, /Boolean\(activeInstance\)\s*\|\|\s*hasEnabledSchedule/);
 assert.match(history, /hasEnabledSchedule/);
 assert.match(history, /detailQueryKeys\.instancePage\(scope/);
 assert.match(history, /selectedQuery\.data\?\.taskId === taskId/);
