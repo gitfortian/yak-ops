@@ -27,6 +27,7 @@ const sidebar = read("../apps/web/app/data-sync/detail/execution-sidebar.tsx");
 const tabs = read("../apps/web/app/data-sync/detail/execution-tabs.tsx");
 const css = read("../apps/web/app/data-sync/execution/execution-detail.css");
 const logPanel = read("../apps/web/app/data-sync/detail/log/task-instance-log-panel.tsx");
+const logCss = read("../apps/web/app/data-sync/detail/log/task-instance-log.css");
 
 for (const source of [detail, page]) {
   assert.doesNotMatch(source, /DataSyncExecutionConfigContent|本次运行配置|配置快照/);
@@ -83,8 +84,10 @@ assert.ok(logPanel.includes("onScroll={(event) => {"));
 assert.ok(logPanel.includes("scrollHeight - element.scrollTop - element.clientHeight <= 32"));
 assert.ok(logPanel.includes("[content, fullscreen]"));
 assert.ok(logPanel.includes('border: "none"'));
-assert.ok(logPanel.includes('backgroundColor: "#0b0f19"'));
+assert.ok(logPanel.includes('backgroundColor: "var(--yak-log-tooltip-bg)"'));
 assert.ok(logPanel.includes("hover:text-white"));
+assert.match(logCss, /--yak-log-tooltip-bg: #0b0f19/);
+assert.match(logCss, /--yak-log-panel-bg: #151b2d/);
 assert.ok(logPanel.includes("cursor-pointer items-center"));
 assert.ok(logPanel.includes('translate: "none"'));
 assert.ok(logPanel.includes("inset: 12"));
