@@ -247,7 +247,7 @@ export interface ReverseModelingProvider {
 
 **数据源范围**：只有**当前 Workspace** 内的数据源可选。`DataSourceCatalogService` 的入参是 `datasourceId`，因此必须由服务端按 Workspace 重新校验归属，跨 Workspace 的 id 返回 403 而不是 404/500，避免越权探测。
 
-**环境不作过滤条件，只作提示**。原 r1 版本的「只允许生产环境数据源」在私有化部署下会直接废掉导入功能：`yak_ops_data_source.environment` 是 `NOT NULL DEFAULT 0`，即所有未显式改过的数据源都是「开发」；单实例部署的团队根本没有生产/预览之分。改为：
+**环境不作过滤条件，只作提示**。「只允许生产环境数据源」在私有化部署下会直接废掉导入功能：`yak_ops_data_source.environment` 是 `NOT NULL DEFAULT 0`，即所有未显式改过的数据源都是「开发」；单实例部署的团队根本没有生产/预览之分。改为：
 
 - 下拉列表按 `PROD > TEST > DEVELOP` 排序，每项显示环境徽标；
 - 选中非 `PROD` 时，插入前弹一次确认「即将从『开发』环境读取字段，请确认连接的是目标库」，用户确认即继续；
