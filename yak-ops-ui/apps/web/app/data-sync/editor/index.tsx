@@ -10,8 +10,8 @@ import {
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "./incremental-fields";
-import { findStepCombination } from "../solution-presentation";
-import { useSolutions } from "../use-solutions";
+import { findStepCombination } from "../solution/presentation";
+import { useSolutions } from "../solution/use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import type { DataSyncTableMapping, DataSyncTaskStatus } from "@/service/data-sync";

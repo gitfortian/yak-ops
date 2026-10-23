@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import DatabaseIcons from "@/app/datasource/icons/DatabaseIcons";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { DataSyncTaskRecord } from "@/service/data-sync";
-import { solutionSummary } from "../solution-presentation";
+import { solutionSummary } from "../solution/presentation";
 
 function BasicInfoField({ label, children }: { label: string; children: ReactNode }) {
   return (

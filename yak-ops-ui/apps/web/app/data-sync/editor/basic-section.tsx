@@ -1,5 +1,5 @@
 import { CollapseSection, Field, FieldLabel, Input, Switch, Textarea } from "@yak-ops/yak-ui";
-import { solutionSummary } from "../solution-presentation";
+import { solutionSummary } from "../solution/presentation";
 import type { DataSyncDraft } from "@/service/data-sync";
 import type { EditorForm } from "./types";
 
