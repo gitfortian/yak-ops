@@ -77,7 +77,7 @@ test("Data Sync surfaces cannot import each other's private implementation", () 
   const list = "apps/web/app/data-sync/list/task-table.tsx";
   const editor = "apps/web/app/data-sync/editor/index.tsx";
   const reexport = 'export { TaskSummary } from "../detail/task-summary";';
-  const required = 'const log = require("../log/use-instance-logs");';
+  const required = 'const log = require("../detail/log/use-instance-logs");';
 
   assert.match(check(list, reexport).join("\n"), /crosses Data Sync feature boundaries/);
   assert.match(check(editor, required).join("\n"), /crosses Data Sync feature boundaries/);

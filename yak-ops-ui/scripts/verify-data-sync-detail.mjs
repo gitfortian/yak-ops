@@ -119,7 +119,7 @@ await finalized.actions.cancel();
 assert.equal(finalized.called.length, 0, "finished executions cannot be canceled");
 
 const logSource = readFileSync(
-  new URL("../apps/web/app/data-sync/log/use-instance-logs.ts", import.meta.url),
+  new URL("../apps/web/app/data-sync/detail/log/use-instance-logs.ts", import.meta.url),
   "utf8",
 );
 assert.match(logSource, /activeRef\.current = active/);

@@ -17,7 +17,7 @@ This document defines durable frontend engineering constraints. Current source c
 ## Feature Ownership and Components
 
 - Feature directories own their behavior. Route entrypoints should connect routing to the owning feature, rather than forwarding exports through one-line compatibility files.
-- In Data Sync, `list/`, `create/`, `editor/`, `detail/`, `execution/`, `log/`, and `solution/` describe responsibilities. `components/` is reserved for genuinely reused domain controls. Keep a module at the lowest level that owns every actual consumer.
+- In Data Sync, `list/`, `create/`, `editor/`, `detail/`, `execution/`, `detail/log/`, and `solution/` describe responsibilities. `components/` is reserved for genuinely reused domain controls. Keep a module at the lowest level that owns every actual consumer.
 - Route composition may import a feature page entrypoint. Other domains may not deep-import another feature implementation; do not create permanent forwarding modules simply to preserve an obsolete internal import path.
 - The smallest behavior owner handles its loading, empty/error states, actions, and lifecycle. Parent components coordinate only genuinely shared selection, navigation, or submission state.
 - Split components based on behavior and rendering boundaries, not merely line count. Review responsibility when a file exceeds 400 lines; justify files above 600 lines during review. These are review signals, not automatic failure thresholds.
@@ -48,7 +48,7 @@ This document defines durable frontend engineering constraints. Current source c
 - Keep pure functions and transformations under focused unit tests. Test component input, async states, focus, and error behavior at the component boundary; use existing Playwright flows for cross-page behavior.
 - Protect Data Sync draft restoration, dependent field resets, validation, saving, Schedule partial failure, publish failure, Workspace switching, and instance polling during refactors. Never weaken assertions merely to complete a move.
 - `scripts/check-architecture.mjs` enforces real dependency direction: services cannot import App code, pages cannot bypass domain services for HTTP, and Yak UI cannot import product code. Validate aliases, relative imports, re-exports, and dynamic imports.
-- Data Sync page entrypoints can be imported by `app/router`. Private `list/`, `editor/`, `detail/`, and `log/` implementation paths cannot be deep-imported from other domains or each other. Share stable behavior through a deliberately owned module, not by opening arbitrary private imports.
+- Data Sync page entrypoints can be imported by `app/router`. Private `list/`, `editor/`, and `detail/` implementation paths cannot be deep-imported from other domains or each other. Share stable behavior through a deliberately owned module, not by opening arbitrary private imports.
 - New architecture checks require positive and negative regression tests. Track genuine historical dependencies explicitly; do not silence failures through permissive ignore lists, deleting tests, or fabricated passing results.
 - Report formatting, lint, typing, contracts, builds, and actual browser validation separately. A TypeScript build is not a substitute for interaction testing.
 

@@ -6,7 +6,7 @@ import {
   DataSyncExecutionDetailContent,
   isActiveDataSyncInstance,
 } from "../execution/execution-detail";
-import { TaskInstanceLogPanel } from "../log/task-instance-log-panel";
+import { TaskInstanceLogPanel } from "./log/task-instance-log-panel";
 
 interface Props {
   activeTab: string;
