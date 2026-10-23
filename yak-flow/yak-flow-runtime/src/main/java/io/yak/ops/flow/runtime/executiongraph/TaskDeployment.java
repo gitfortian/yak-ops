@@ -4,6 +4,7 @@ import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
@@ -172,6 +173,13 @@ final class TaskDeployment {
             }
         }
 
+        if (restoredCheckpoint != null
+                && restoredCheckpoint.schemaManagerState() != null
+                && !jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            throw new IllegalStateException(
+                    "Cannot restore a schema-evolved checkpoint with runtime schema evolution disabled");
+        }
+
         List<JobVertex> vertices = jobGraph.getVertices();
         List<JobEdge> edges = jobGraph.getEdges();
         List<List<InputGate<Object>>> inputs = new ArrayList<>();
@@ -237,6 +245,16 @@ final class TaskDeployment {
                     schemaSink.createMetadataApplier(), "Sink returned a null MetadataApplier");
             SchemaManager manager = SchemaCoordinator.restoreManager(
                     restoredCheckpoint == null ? null : restoredCheckpoint.schemaManagerState());
+            List<SchemaVersionedTableState> restoredSchemaStates = manager.snapshot().tables().stream()
+                    .filter(state -> state.version() > 0)
+                    .map(state -> new SchemaVersionedTableState(
+                            state.sourceTable(),
+                            state.targetTable(),
+                            state.sourceSchema(),
+                            state.targetSchema(),
+                            state.version()))
+                    .toList();
+            schemaSink.restoreSchemaState(restoredSchemaStates);
             Map<Integer, Integer> topologicalOrder = new java.util.HashMap<>();
             for (int index = 0; index < vertices.size(); index++) {
                 topologicalOrder.put(vertices.get(index).getHeadOperator().getId(), index);
