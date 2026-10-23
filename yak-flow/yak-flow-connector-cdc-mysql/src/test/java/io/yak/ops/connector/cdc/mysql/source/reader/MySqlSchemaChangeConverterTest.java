@@ -123,7 +123,9 @@ class MySqlSchemaChangeConverterTest {
                 .put("length", 128)
                 .put("optional", true);
         var tableMetadata = SchemaBuilder.struct()
-                .field("primaryKeyColumnNames", SchemaBuilder.array(org.apache.kafka.connect.data.Schema.STRING_SCHEMA).build())
+                .field(
+                        "primaryKeyColumnNames",
+                        SchemaBuilder.array(org.apache.kafka.connect.data.Schema.STRING_SCHEMA).build())
                 .field("columns", SchemaBuilder.array(columnMetadata).build())
                 .build();
         var table = new Struct(tableMetadata)
