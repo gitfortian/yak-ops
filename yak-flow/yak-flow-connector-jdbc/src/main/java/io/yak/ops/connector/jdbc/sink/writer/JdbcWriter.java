@@ -3,11 +3,11 @@ package io.yak.ops.connector.jdbc.sink.writer;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
 import io.yak.ops.connector.base.sink.writer.BatchingSinkWriterBase;
 import io.yak.ops.connector.jdbc.internal.JdbcOutputFormat;
-import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.api.connector.sink.SchemaChangeAwareSinkWriter;
+import io.yak.ops.core.api.connector.sink.WriterInitContext;
+import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import java.sql.SQLException;
-import io.yak.ops.core.data.TableRecord;
 
 /**
  * Bridges the shared mailbox-owned batch lifecycle to JDBC output and cancellation.
