@@ -5,10 +5,12 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Localized failures owned by concept dimensions.
+ * Localized failures owned by dimension modeling: concept dimensions and the DWD/DIM models built on
+ * them.
  *
- * <p>{@link #HAS_DEPENDENCIES} is reserved for the dimension-table reference check: dimensions are
- * deletable today because nothing references them yet, and the check activates with logical models.
+ * <p>{@link #HAS_DEPENDENCIES} covers both directions of the reference graph: a concept dimension
+ * referenced by a dimension table cannot be deleted, and a data domain, data mart, business process
+ * or field standard referenced by a model is likewise protected.
  */
 @Getter
 @RequiredArgsConstructor
@@ -17,7 +19,14 @@ public enum DimensionModelingErrorCode implements ErrorCode {
     DUPLICATE_CODE(19502, "英文缩写已存在于该归属下"),
     HAS_DEPENDENCIES(19503, "存在关联对象，无法删除，请先清空"),
     REVISION_CONFLICT(19504, "数据已变更，请刷新后重试"),
-    INVALID_SCOPE(19505, "维度归属必须且只能选择数据域或数据集市之一");
+    INVALID_SCOPE(19505, "维度归属必须且只能选择数据域或数据集市之一"),
+    INVALID_FIELD(19506, "字段校验失败：请为每一行补齐英文编码、中文名与类型，并保证编码不重复"),
+    INVALID_MODEL(19507, "模型校验失败：明细表必须挂业务过程，维度表必须且只能归属数据域或数据集市之一"),
+    INVALID_TABLE_NAME(19508, "表名须以当前分层的英文缩写加下划线开头，总长不超过64个字符"),
+    LAYER_NOT_SELECTABLE(19509, "所选分层未启用或未绑定物理数据源"),
+    UNKNOWN_MODEL_TYPE(19510, "模型类型无法识别，不允许编辑"),
+    PARTITION_RULE(19511, "分区字段只能有一个，且类型必须为 STRING"),
+    DUPLICATE_TABLE_NAME(19512, "表名在当前工作空间已存在");
 
     private final Integer code;
     private final String message;

@@ -128,6 +128,7 @@ CREATE TABLE yak_ops_standard_field (
     update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
     PRIMARY KEY (id),
     UNIQUE KEY uk_standard_field_code (en_code),
+    UNIQUE KEY uk_standard_field_workspace (workspace_id, id),
     KEY idx_standard_field_category (workspace_id,category_id,update_time,id),
     KEY idx_standard_field_workspace_update (workspace_id,update_time,id),
     CONSTRAINT fk_standard_field_category FOREIGN KEY (workspace_id,category_id)
@@ -159,6 +160,7 @@ CREATE TABLE yak_ops_modeling_layer (
     update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
     PRIMARY KEY (id),
     UNIQUE KEY uk_modeling_layer_code (workspace_id, en_code),
+    UNIQUE KEY uk_modeling_layer_workspace (workspace_id, id),
     KEY idx_modeling_layer_datasource (data_source_id),
     KEY idx_modeling_layer_order (workspace_id, builtin, sort_no, id),
     CONSTRAINT fk_modeling_layer_workspace FOREIGN KEY (workspace_id)
@@ -262,3 +264,90 @@ CREATE TABLE yak_ops_modeling_dimension (
     CONSTRAINT fk_modeling_dimension_datamart FOREIGN KEY (workspace_id, datamart_id)
         REFERENCES yak_ops_modeling_datamart (workspace_id, id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace-owned concept dimension bound to one domain or data mart';
+
+CREATE TABLE yak_ops_modeling_model (
+    id VARCHAR(64) NOT NULL COMMENT 'Application-generated immutable logical model identity',
+    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the model and every reference it carries',
+    type VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'DWD or DIM validated by the application so DWS/ADS need no DDL',
+    layer_id VARCHAR(64) NOT NULL COMMENT 'Selected data warehouse layer supplying the table name prefix',
+    category_id VARCHAR(64) NOT NULL COMMENT 'Owning planning category in the same Workspace',
+    process_id VARCHAR(64) NULL COMMENT 'Owning business process; required for DWD, absent for DIM',
+    domain_id VARCHAR(64) NULL COMMENT 'Public-layer owner: exactly one of domain or data mart is set',
+    datamart_id VARCHAR(64) NULL COMMENT 'Application-layer owner: exactly one of domain or data mart is set',
+    dimension_id VARCHAR(64) NULL COMMENT 'Concept dimension a DIM table describes; required for a public-layer DIM',
+    name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'Full table name: layer prefix plus user suffix, unique per Workspace',
+    cn_name VARCHAR(128) NOT NULL COMMENT 'Business display name',
+    storage_policy VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'DAILY_INCREMENTAL or DAILY_FULL',
+    lifecycle_days INT NOT NULL COMMENT 'Data retention in days, 1 to 36000',
+    owner_id VARCHAR(64) NOT NULL COMMENT 'Assigned user identity; retained after membership ends',
+    description VARCHAR(500) NULL COMMENT 'Optional business description; null when absent',
+    revision BIGINT NOT NULL DEFAULT 1 COMMENT 'Optimistic version incremented after every update',
+    create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
+    update_time DATETIME(3) NOT NULL COMMENT 'Most recent field update timestamp',
+    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
+    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_modeling_model_workspace (workspace_id, id),
+    UNIQUE KEY uk_modeling_model_name (workspace_id, name),
+    KEY idx_modeling_model_layer (workspace_id, layer_id),
+    KEY idx_modeling_model_process (workspace_id, process_id),
+    KEY idx_modeling_model_domain (workspace_id, domain_id),
+    KEY idx_modeling_model_datamart (workspace_id, datamart_id),
+    KEY idx_modeling_model_dimension (workspace_id, dimension_id),
+    CONSTRAINT ck_modeling_model_revision CHECK (revision > 0),
+    CONSTRAINT ck_modeling_model_name CHECK (name REGEXP '^[a-z][a-z0-9_]*$'),
+    CONSTRAINT ck_modeling_model_storage CHECK (storage_policy IN ('DAILY_INCREMENTAL', 'DAILY_FULL')),
+    CONSTRAINT ck_modeling_model_lifecycle CHECK (lifecycle_days BETWEEN 1 AND 36000),
+    CONSTRAINT ck_modeling_model_owner CHECK ((domain_id IS NULL) <> (datamart_id IS NULL)),
+    CONSTRAINT ck_modeling_model_dwd CHECK (
+        type <> 'DWD'
+        OR (process_id IS NOT NULL AND domain_id IS NOT NULL AND datamart_id IS NULL AND dimension_id IS NULL)),
+    CONSTRAINT ck_modeling_model_dim CHECK (type <> 'DIM' OR process_id IS NULL),
+    CONSTRAINT ck_modeling_model_public_dim CHECK (type <> 'DIM' OR domain_id IS NULL OR dimension_id IS NOT NULL),
+    CONSTRAINT fk_modeling_model_layer FOREIGN KEY (workspace_id, layer_id)
+        REFERENCES yak_ops_modeling_layer (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_model_category FOREIGN KEY (workspace_id, category_id)
+        REFERENCES yak_ops_modeling_category (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_model_process FOREIGN KEY (workspace_id, process_id)
+        REFERENCES yak_ops_modeling_process (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_model_domain FOREIGN KEY (workspace_id, domain_id)
+        REFERENCES yak_ops_modeling_domain (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_model_datamart FOREIGN KEY (workspace_id, datamart_id)
+        REFERENCES yak_ops_modeling_datamart (workspace_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_modeling_model_dimension FOREIGN KEY (workspace_id, dimension_id)
+        REFERENCES yak_ops_modeling_dimension (workspace_id, id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Workspace-owned DWD or DIM logical model';
+
+CREATE TABLE yak_ops_modeling_model_field (
+    id VARCHAR(64) NOT NULL COMMENT 'Application-generated immutable field identity',
+    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the field and its model reference',
+    model_id VARCHAR(64) NOT NULL COMMENT 'Owning model; fields follow the model lifecycle',
+    ordinal INT NOT NULL COMMENT 'One-based display order inside the model',
+    en_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'Field code unique inside the model',
+    cn_name VARCHAR(128) NOT NULL COMMENT 'Business field display name',
+    data_type VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'One of the five logical types shared with data standards',
+    length_precision VARCHAR(32) NULL COMMENT 'Optional logical length or decimal precision and scale',
+    is_primary_key TINYINT NOT NULL DEFAULT 0 COMMENT 'Whether the user marked the field as part of the primary key',
+    is_not_null TINYINT NOT NULL DEFAULT 0 COMMENT 'Whether the layer requires a non-null value; never inherited forcibly',
+    is_partition TINYINT NOT NULL DEFAULT 0 COMMENT 'Partition flag; at most one field per model is enforced by the application',
+    standard_id VARCHAR(64) NULL COMMENT 'Bound field standard supplying code, type and precision',
+    description VARCHAR(500) NULL COMMENT 'Optional business description; null when absent',
+    create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
+    update_time DATETIME(3) NOT NULL COMMENT 'Most recent field update timestamp',
+    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
+    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_modeling_model_field_ordinal (model_id, ordinal),
+    UNIQUE KEY uk_modeling_model_field_code (model_id, en_code),
+    KEY idx_modeling_model_field_standard (workspace_id, standard_id),
+    CONSTRAINT ck_modeling_model_field_ordinal CHECK (ordinal > 0),
+    CONSTRAINT ck_modeling_model_field_code CHECK (en_code REGEXP '^[a-z][a-z0-9_]*$'),
+    CONSTRAINT ck_modeling_model_field_type CHECK (
+        data_type IN ('STRING', 'BIGINT', 'DECIMAL', 'DATE', 'TIMESTAMP')),
+    CONSTRAINT ck_modeling_model_field_flags CHECK (
+        is_primary_key IN (0, 1) AND is_not_null IN (0, 1) AND is_partition IN (0, 1)),
+    CONSTRAINT fk_modeling_model_field_model FOREIGN KEY (workspace_id, model_id)
+        REFERENCES yak_ops_modeling_model (workspace_id, id) ON DELETE CASCADE,
+    CONSTRAINT fk_modeling_model_field_standard FOREIGN KEY (workspace_id, standard_id)
+        REFERENCES yak_ops_standard_field (workspace_id, id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Ordered logical fields of a DWD or DIM model';
