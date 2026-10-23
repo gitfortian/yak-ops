@@ -3,6 +3,8 @@ package io.yak.ops.flow.runtime.operators.sink;
 import io.yak.ops.core.api.connector.sink.CancellableSinkWriter;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.SinkWriter;
+import io.yak.ops.core.api.connector.sink.SchemaChangeAwareSinkWriter;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.api.connector.sink.StatefulSinkWriter;
 import io.yak.ops.core.api.connector.sink.SupportsWriterState;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
@@ -186,6 +188,32 @@ public final class SinkWriterOperator<T> implements OneInputStreamOperator<T, Vo
         // A failed final flush can have committed externally. Never attempt it again in this Writer.
         finished = true;
         writer.flush(true);
+    }
+
+    /** Validates the Writer's schema-adoption capability before any target DDL is executed. */
+    @SuppressWarnings("unchecked")
+    public void validateSchemaChange(SchemaChangeRequest request) throws Exception {
+        requireOpen();
+        if (!(writer instanceof SchemaChangeAwareSinkWriter<?> aware)) {
+            throw new UnsupportedOperationException("Sink Writer does not support runtime schema changes");
+        }
+        ((SchemaChangeAwareSinkWriter<T>) aware).validateSchemaChange(request);
+    }
+
+    /** Flushes every buffered row on the Writer's owning mailbox before target DDL. */
+    public void prepareSchemaChange(SchemaChangeRequest request) throws Exception {
+        validateSchemaChange(request);
+        writer.flush(false);
+    }
+
+    /** Rebuilds the immutable write plan only after the MetadataApplier completed the target change. */
+    @SuppressWarnings("unchecked")
+    public void commitSchemaChange(SchemaChangeRequest request, long schemaVersion) throws Exception {
+        requireOpen();
+        if (!(writer instanceof SchemaChangeAwareSinkWriter<?> aware)) {
+            throw new UnsupportedOperationException("Sink Writer does not support runtime schema changes");
+        }
+        ((SchemaChangeAwareSinkWriter<T>) aware).onSchemaChange(request, schemaVersion);
     }
 
     private void requireOpen() {
