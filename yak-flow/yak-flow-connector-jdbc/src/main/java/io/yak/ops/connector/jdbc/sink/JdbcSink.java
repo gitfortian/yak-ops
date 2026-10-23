@@ -12,6 +12,7 @@ import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -32,7 +33,7 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
 
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
-    private final List<JdbcTableWritePlan> plans;
+    private volatile List<JdbcTableWritePlan> plans;
     private final BatchFlushPolicy batchPolicy;
     private final TableMetrics metrics;
     private final JdbcBatchOrder batchOrder;
@@ -149,6 +150,35 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
             throw new UnsupportedOperationException("This JDBC Sink was built without a schema applier factory");
         }
         return Objects.requireNonNull(metadataApplierFactory.get(), "MetadataApplier factory returned null");
+    }
+
+    @Override
+    public synchronized void restoreSchemaState(List<SchemaVersionedTableState> states) {
+        Objects.requireNonNull(states, "states");
+        List<JdbcTableWritePlan> restored = new java.util.ArrayList<>(plans);
+        Set<TableId> seen = new HashSet<>();
+        for (SchemaVersionedTableState state : states) {
+            if (!seen.add(state.targetTable())) {
+                throw new IllegalArgumentException("Duplicate restored JDBC target schema state");
+            }
+            int matched = -1;
+            for (int index = 0; index < restored.size(); index++) {
+                JdbcTableWritePlan plan = restored.get(index);
+                if (plan.sourceTable().equals(state.sourceTable())
+                        && plan.targetTable().equals(state.targetTable())) {
+                    matched = index;
+                    break;
+                }
+            }
+            if (matched < 0) {
+                throw new IllegalStateException("Checkpoint schema state does not match a configured JDBC route");
+            }
+            JdbcTableWritePlan plan = restored.get(matched);
+            restored.set(
+                    matched,
+                    plan.withSchemas(state.sourceSchema().toTableSchema(), state.targetSchema().toTableSchema()));
+        }
+        plans = List.copyOf(restored);
     }
 
     @Override
