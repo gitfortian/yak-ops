@@ -83,6 +83,11 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     }
 
     @Override
+    public String dropColumnSql(TableId table, String column) {
+        return "ALTER TABLE " + qualifiedTable(table) + " DROP COLUMN " + quoteIdentifier(column);
+    }
+
+    @Override
     public String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
         if (!previous.name().equals(updated.name()) || previous.nullable() != updated.nullable()) {
             throw new IllegalArgumentException("Column identity and nullability must remain unchanged");

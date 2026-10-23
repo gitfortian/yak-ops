@@ -16,6 +16,7 @@ import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.DropColumnEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
@@ -59,7 +60,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
     private static final Set<SchemaChangeEventType> JDBC_EVOLUTION = Set.of(
             SchemaChangeEventType.CREATE_TABLE,
             SchemaChangeEventType.ADD_COLUMN,
-            SchemaChangeEventType.ALTER_COLUMN_TYPE);
+            SchemaChangeEventType.ALTER_COLUMN_TYPE,
+            SchemaChangeEventType.DROP_COLUMN);
 
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
@@ -188,6 +190,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             applyAddColumns(add);
         } else if (event instanceof AlterColumnTypeEvent alter) {
             applyAlterColumnTypes(alter);
+        } else if (event instanceof DropColumnEvent drop) {
+            applyDropColumns(drop);
         } else {
             throw new SchemaEvolveException(event, "Unsupported JDBC schema change event");
         }
@@ -298,6 +302,33 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 throw new IllegalArgumentException("Target column type did not match the applied DDL: " + name);
             }
             requirePlainColumn(findColumnInfo(event.tableId(), name));
+        }
+    }
+
+    /**
+     * Completes a replayed drop if the field is already absent, but never drops a column
+     * whose current type or key membership differs from the approved source transition.
+     */
+    private void applyDropColumns(DropColumnEvent event) throws SQLException {
+        requirePhysicalTable(event);
+        TableSchema current = catalog.getTable(event.tableId());
+        List<String> pending = new ArrayList<>();
+        for (String name : event.droppedColumnNames()) {
+            Column actual = findColumn(current, name);
+            if (actual == null) continue; // Auto-committed before the last checkpoint.
+            if (current.primaryKeys().contains(name)
+                    || !sameType(actual.dataType(), event.expectedColumnTypes().get(name))) {
+                throw new IllegalArgumentException("DROP COLUMN source and target schema preconditions differ: " + name);
+            }
+            requirePlainColumn(findColumnInfo(event.tableId(), name));
+            pending.add(name);
+        }
+        for (String name : pending) {
+            checkCanceled(event);
+            executeStatements(event, List.of(dialect.dropColumnSql(event.tableId(), name)));
+            if (findColumn(catalog.getTable(event.tableId()), name) != null) {
+                throw new IllegalArgumentException("DROP COLUMN did not remove the target column: " + name);
+            }
         }
     }
 
