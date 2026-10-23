@@ -114,10 +114,25 @@ assert.equal(
     .schemaChangesEnabled,
   false,
 );
-assert.equal(readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: false })).schemaChangesEnabled, false);
-assert.equal(readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: undefined })).schemaChangesEnabled, undefined);
-assert.throws(() => readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: "false" })));
-assert.throws(() => readSyncParameters(3, JSON.stringify({ ...buildSyncParameters(offline), schemaChangesEnabled: true })));
+assert.equal(
+  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: false }))
+    .schemaChangesEnabled,
+  false,
+);
+assert.equal(
+  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: undefined }))
+    .schemaChangesEnabled,
+  undefined,
+);
+assert.throws(() =>
+  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: "false" })),
+);
+assert.throws(() =>
+  readSyncParameters(
+    3,
+    JSON.stringify({ ...buildSyncParameters(offline), schemaChangesEnabled: true }),
+  ),
+);
 assert.equal(buildSyncParameters(offline).schemaChangesEnabled, undefined);
 assert.equal(oldDefinition.parameters, oldParameters);
 assert.throws(() => readSyncParameters(1, oldParameters));

@@ -480,8 +480,7 @@ function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorIn
       name: draft.name,
       remark: value?.remark || "",
       debug: value?.debug ?? false,
-      schemaChangesEnabled:
-        value?.schemaChangesEnabled ?? (draft.targetType !== "ORACLE"),
+      schemaChangesEnabled: value?.schemaChangesEnabled ?? (draft.targetType !== "ORACLE"),
       writeMode:
         value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
       incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,

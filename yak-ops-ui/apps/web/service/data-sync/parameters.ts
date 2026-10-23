@@ -100,8 +100,10 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
     throw new Error("不支持的同步任务参数版本");
   }
   const realtime = value && solutionSyncType(value.solutionType) === "REALTIME";
-  if (value?.schemaChangesEnabled !== undefined &&
-      (typeof value.schemaChangesEnabled !== "boolean" || !realtime)) {
+  if (
+    value?.schemaChangesEnabled !== undefined &&
+    (typeof value.schemaChangesEnabled !== "boolean" || !realtime)
+  ) {
     throw new Error("结构变更配置只适用于实时任务");
   }
   const steps = value?.steps || [];
