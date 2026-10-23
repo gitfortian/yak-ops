@@ -184,6 +184,10 @@ class DimensionModelingIT extends BackendTestBase {
         assertEquals("20,2", inherited.path("lengthPrecision").asText());
         assertFalse(inherited.path("isNotNull").asBoolean());
         assertTrue(inherited.path("isPrimaryKey").asBoolean());
+        // The flags come back from the same read path the UI uses, not only from the write payload.
+        var partition = created.path("fields").get(1);
+        assertEquals("ds", partition.path("enCode").asText());
+        assertTrue(partition.path("isPartition").asBoolean());
 
         assertFalse(api.call(
                         "GET", API + "/models/name-availability?layerId=" + layerId + "&nameSuffix=" + suffix)

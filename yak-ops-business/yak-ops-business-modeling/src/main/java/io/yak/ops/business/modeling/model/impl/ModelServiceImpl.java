@@ -337,9 +337,9 @@ public class ModelServiceImpl implements ModelService {
             row.setCnName(cnName);
             row.setDataType(dataType);
             row.setLengthPrecision(length);
-            row.setPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
-            row.setNotNull(Boolean.TRUE.equals(field.getIsNotNull()));
-            row.setPartition(partition);
+            row.setIsPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
+            row.setIsNotNull(Boolean.TRUE.equals(field.getIsNotNull()));
+            row.setIsPartition(partition);
             row.setStandardId(standardId);
             row.setDescription(optionalText(field.getDescription(), 500, DimensionModelingErrorCode.INVALID_FIELD));
             rows.add(row);
@@ -449,9 +449,9 @@ public class ModelServiceImpl implements ModelService {
                 row.getCnName(),
                 row.getDataType(),
                 row.getLengthPrecision(),
-                row.isPrimaryKey(),
-                row.isNotNull(),
-                row.isPartition(),
+                Boolean.TRUE.equals(row.getIsPrimaryKey()),
+                Boolean.TRUE.equals(row.getIsNotNull()),
+                Boolean.TRUE.equals(row.getIsPartition()),
                 row.getStandardId(),
                 row.getStandardEnCode(),
                 row.getDescription());

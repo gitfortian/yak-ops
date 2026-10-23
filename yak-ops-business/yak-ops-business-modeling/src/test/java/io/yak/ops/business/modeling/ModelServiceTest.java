@@ -247,8 +247,8 @@ class ModelServiceTest {
         assertEquals("order_id", row.getEnCode());
         assertEquals(DataType.BIGINT, row.getDataType());
         assertEquals("20", row.getLengthPrecision());
-        assertTrue(row.isPrimaryKey());
-        assertTrue(row.isNotNull());
+        assertTrue(Boolean.TRUE.equals(row.getIsPrimaryKey()));
+        assertTrue(Boolean.TRUE.equals(row.getIsNotNull()));
         assertEquals("std", row.getStandardId());
     }
 
@@ -268,8 +268,8 @@ class ModelServiceTest {
         service.create("ws", "actor", detailInput("order_detail", List.of(field)));
 
         verify(models).addField(captor.capture());
-        assertFalse(captor.getValue().isNotNull());
-        assertFalse(captor.getValue().isPrimaryKey());
+        assertFalse(Boolean.TRUE.equals(captor.getValue().getIsNotNull()));
+        assertFalse(Boolean.TRUE.equals(captor.getValue().getIsPrimaryKey()));
     }
 
     @Test

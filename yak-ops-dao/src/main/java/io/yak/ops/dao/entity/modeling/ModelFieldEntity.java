@@ -23,12 +23,17 @@ public class ModelFieldEntity extends BaseEntity {
     private DataType dataType;
     /** Optional logical length or decimal precision and scale. */
     private String lengthPrecision;
-    /** Whether the user marked the field as part of the primary key. */
-    private boolean primaryKey;
-    /** Whether the layer requires a non-null value. */
-    private boolean notNull;
-    /** Whether the field is the model partition column. */
-    private boolean partition;
+    /**
+     * Whether the user marked the field as part of the primary key.
+     *
+     * <p>The name keeps the {@code is_} prefix of the column so the camel-case mapping of {@code
+     * is_primary_key} lands on this property; a {@code primaryKey} field would silently stay false.
+     */
+    private Boolean isPrimaryKey;
+    /** Whether the layer requires a non-null value; same naming rule as {@link #isPrimaryKey}. */
+    private Boolean isNotNull;
+    /** Whether the field is the model partition column; same naming rule as {@link #isPrimaryKey}. */
+    private Boolean isPartition;
     /** Bound field standard; null when the field is maintained by hand. */
     private String standardId;
     /** Optional business description. */

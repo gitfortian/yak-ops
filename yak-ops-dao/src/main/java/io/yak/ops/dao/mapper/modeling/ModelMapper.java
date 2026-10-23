@@ -114,7 +114,7 @@ public interface ModelMapper {
     @Insert("INSERT INTO yak_ops_modeling_model_field(id,workspace_id,model_id,ordinal,en_code,cn_name,data_type,"
             + "length_precision,is_primary_key,is_not_null,is_partition,standard_id,description,create_time,"
             + "update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{modelId},#{ordinal},#{enCode},"
-            + "#{cnName},#{dataType},#{lengthPrecision},#{primaryKey},#{notNull},#{partition},#{standardId},"
+            + "#{cnName},#{dataType},#{lengthPrecision},#{isPrimaryKey},#{isNotNull},#{isPartition},#{standardId},"
             + "#{description},#{createTime},#{updateTime},#{createBy},#{updateBy})")
     int insertField(ModelFieldEntity row);
 
