@@ -67,7 +67,9 @@ for (const [component, color] of Object.entries({
 
 const sidebar = read("apps/web/app/layout/ProductSidebar.tsx");
 const topBar = read("apps/web/app/layout/TopBar.tsx");
-const detail = read("apps/web/app/data-sync/task-detail.tsx");
+const detail = read("apps/web/app/data-sync/detail/execution-sidebar.tsx");
+const detailPage = read("apps/web/app/data-sync/detail/index.tsx");
+const detailTabs = read("apps/web/app/data-sync/detail/execution-tabs.tsx");
 const execution = read("apps/web/app/data-sync/execution-detail.css");
 const cron = read("packages/yak-ui/src/cron-scheduler/CronSchedulerPicker.tsx");
 
@@ -83,13 +85,17 @@ assert.match(
 assert.match(cron, /bg-\[var\(--yak-color-primary-subtle\)\]/);
 assert.doesNotMatch(execution, /--yak-components-tab-active:/);
 assert.doesNotMatch(detail, /sync-execution-tabs/);
+assert.doesNotMatch(detailPage, /sync-execution-tabs/);
+assert.doesNotMatch(detailTabs, /sync-execution-tabs/);
 
 // Brand accents derive from the theme; status, vendor, and illustration colors remain independent.
 const legacyAccent = /#(?:1544d1|1645d1|dbe3fb|f2f5ff|335dff|2548d6|8798ff|38bde0)\b/i;
 for (const [path, content] of [
   ["ProductSidebar.tsx", sidebar],
   ["TopBar.tsx", topBar],
-  ["task-detail.tsx", detail],
+  ["execution-sidebar.tsx", detail],
+  ["detail/index.tsx", detailPage],
+  ["detail/execution-tabs.tsx", detailTabs],
   ["execution-detail.css", execution],
 ]) {
   assert.doesNotMatch(content, legacyAccent, path + " retains a fixed brand blue");
