@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { readTaskDraft, taskDraftKey } from "@/service/data-sync/draft";
 import { getDataSource } from "@/service/datasource";
-import { getDataSyncTask } from "@/service/data-sync";
+import { getDataSyncTask, type DataSyncDraft } from "@/service/data-sync";
 import { TaskEditor } from "./editor";
 import type { TaskEditorInput } from "./editor/types";
 
