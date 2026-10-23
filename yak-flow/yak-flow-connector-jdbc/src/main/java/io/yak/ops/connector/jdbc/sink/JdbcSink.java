@@ -12,21 +12,21 @@ import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
-import io.yak.ops.core.event.SchemaChangeRequest;
-import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
-import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.data.TableRecord;
-import io.yak.ops.core.schema.SchemaVersionedTableState;
-import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.event.SchemaChangeRequest;
+import io.yak.ops.core.event.SourceSchemaChange;
 import io.yak.ops.core.schema.PhysicalColumn;
+import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import java.util.ArrayList;
-import java.util.Optional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -180,7 +180,9 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
             throw new IllegalStateException("MySQL CDC DDL is stale relative to the configured write route");
         }
         for (int index = 0; index < plan.schema().columnCount(); index++) {
-            String source = plan.sourceSchema().column(plan.sourcePositions().get(index)).name();
+            String source = plan.sourceSchema()
+                    .column(plan.sourcePositions().get(index))
+                    .name();
             if (!plan.schema().column(index).name().equals(source)) {
                 throw new UnsupportedOperationException(
                         "Automatic CDC DDL requires identity-mapped source and target columns");
@@ -188,16 +190,15 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
         }
 
         Schema currentTarget = Schema.from(plan.schema(), null, java.util.Map.of(), java.util.Map.of());
-        SchemaChangePlan diff = JdbcSchemaDerivator.derive(
-                plan.targetTable(), change.after(), Optional.of(currentTarget), dialect);
+        SchemaChangePlan diff =
+                JdbcSchemaDerivator.derive(plan.targetTable(), change.after(), Optional.of(currentTarget), dialect);
         if (diff.blocked()) {
-            throw new UnsupportedOperationException(
-                    "MySQL CDC schema change is incompatible with the target: "
-                            + diff.differences().stream()
-                                    .filter(d -> d.kind() == SchemaChangePlan.Kind.INCOMPATIBLE)
-                                    .map(SchemaChangePlan.Difference::reason)
-                                    .distinct()
-                                    .toList());
+            throw new UnsupportedOperationException("MySQL CDC schema change is incompatible with the target: "
+                    + diff.differences().stream()
+                            .filter(d -> d.kind() == SchemaChangePlan.Kind.INCOMPATIBLE)
+                            .map(SchemaChangePlan.Difference::reason)
+                            .distinct()
+                            .toList());
         }
         List<PhysicalColumn> columns = new ArrayList<>(currentTarget.columns());
         for (SchemaChangeEvent event : diff.changes()) {
