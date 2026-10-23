@@ -2,8 +2,11 @@
 """One source of truth for PR quality, Maven modules and database-test impact."""
 from __future__ import annotations
 
+import ast
 from functools import lru_cache
+import os
 from pathlib import Path
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
@@ -136,16 +139,75 @@ def test_suites(path: str) -> set[str]:
     return set()
 
 
+
+def compare_suite_registry(before: str, after: str) -> set[str] | None:
+    """Return only modified suite entries when runner logic is unchanged.
+
+    None means an unrecognized/unsafe change and requires the full test matrix.
+    """
+    try:
+        previous, current = ast.parse(before), ast.parse(after)
+
+        def entries(module: ast.Module) -> dict[str, str]:
+            assignments = [
+                node for node in module.body
+                if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == "SUITES" for target in node.targets)
+            ]
+            if len(assignments) != 1 or not isinstance(assignments[0].value, ast.Dict):
+                raise ValueError("Expected one literal suite registry")
+            registry = assignments[0]
+            suites = {}
+            for key, value in zip(registry.value.keys, registry.value.values):
+                if not isinstance(key, ast.Constant) or not isinstance(key.value, str) or key.value in suites:
+                    raise ValueError("Non-literal or duplicate suite name")
+                if key.value not in SUITES:
+                    raise ValueError("Unknown suite")
+                suites[key.value] = ast.dump(value, include_attributes=False)
+            module.body.remove(registry)
+            return suites
+
+        old_suites, new_suites = entries(previous), entries(current)
+        if ast.dump(previous, include_attributes=False) != ast.dump(current, include_attributes=False):
+            return None
+        return {
+            suite for suite in old_suites.keys() | new_suites.keys()
+            if old_suites.get(suite) != new_suites.get(suite)
+        }
+    except (SyntaxError, ValueError, TypeError):
+        return None
+
+
+def suite_registration_changes() -> set[str] | None:
+    """Inspect the PR endpoints, not checkout's synthetic merge commit."""
+    base = os.environ.get("CI_PR_BASE_SHA")
+    head = os.environ.get("CI_PR_HEAD_SHA")
+    if not base or not head or os.environ.get("CI_EVENT_NAME") != "pull_request":
+        return None
+    path = "scripts/tests/backend_tests.py"
+    try:
+        before = subprocess.check_output(["git", "show", f"{base}:{path}"], cwd=ROOT, text=True)
+        after = subprocess.check_output(["git", "show", f"{head}:{path}"], cwd=ROOT, text=True)
+    except (OSError, subprocess.CalledProcessError, UnicodeError):
+        return None
+    return compare_suite_registry(before, after)
+
+
 def analyze(paths: list[str], *, full: bool = False) -> dict:
     result = dict(backend=False, frontend=False, distribution=False, release=False,
-                  modules=set(), suites=set(), full=False)
+                  modules=set(), suites=set(), suite_reasons={}, full=False)
 
-    def all_checks() -> None:
+    def add_suites(suites: set[str] | tuple[str, ...], reason: str) -> None:
+        result["suites"].update(suites)
+        for suite in suites:
+            result["suite_reasons"].setdefault(suite, set()).add(reason)
+
+    def all_checks(reason: str) -> None:
         result.update(backend=True, frontend=True, distribution=True, release=True, full=True)
-        result["suites"].update(SUITES)
+        add_suites(SUITES, reason)
 
     if full:
-        all_checks()
+        all_checks("Release Gate: full verification")
     for path in paths:
         if path.startswith("docs/") or path.endswith(".md") or path in {".gitignore", ".asf.yaml", "LICENSE"}:
             continue
@@ -159,11 +221,18 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
         if path.startswith("scripts/ci/") or path.startswith("scripts/tests/test_") or path == "scripts/tests/__init__.py":
             # Scope unit tests are always run in the cheap select job.
             continue
+        if path == "scripts/tests/backend_tests.py":
+            changed = suite_registration_changes()
+            if changed is None:
+                add_suites(SUITES, f"{path}: runner logic changed or diff unavailable")
+            else:
+                add_suites(changed, f"{path}: suite registration only")
+            continue
         if path.startswith("scripts/tests/") or path == ".github/workflows/backend-tests.yml":
-            result["suites"].update(SUITES)
+            add_suites(SUITES, f"{path}: test execution infrastructure")
             continue
         if path in {".github/workflows/quality-check.yml"}:
-            all_checks()
+            all_checks(f"{path}: workflow definition")
             continue
         if path.startswith(".github/workflows/") or path.startswith("scripts/release/") or path == "release.env":
             result["release"] = True
@@ -172,7 +241,7 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
             result["distribution"] = True
             continue
         if path == "pom.xml" or path in {"mvnw", "mvnw.cmd"} or path.startswith((".mvn/", "tools/maven/")):
-            all_checks()
+            all_checks(f"{path}: build infrastructure")
             continue
         if path.startswith("yak-ops-dao/") and "/db/migration/" in path:
             result["release"] = True
@@ -180,11 +249,29 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
         if owners:
             result["backend"] = True
             result["modules"].update(affected_modules(owners))
-            result["suites"].update(test_suites(path))
+            add_suites(test_suites(path), path)
             continue
         # An unknown path might change a build or generated contract: fail closed.
-        all_checks()
+        all_checks(f"{path}: unknown impact")
     return result
+
+
+
+def summary(paths: list[str], *, full: bool = False) -> str:
+    """Human-readable selection evidence in the Detect Changes job."""
+    result = analyze(paths, full=full)
+    lines = ["### Selected CI checks", "", "| Check | Run |", "| --- | --- |"]
+    for key, label in (("backend", "Backend Quality"), ("frontend", "Frontend Quality"),
+                       ("distribution", "Distribution Quality"), ("release", "Release Checks")):
+        lines.append(f"| {label} | {'Yes' if result[key] else 'No'} |")
+    lines.extend(["", "### Selected database suites", "", "| Suite | Reason |", "| --- | --- |"])
+    if not result["suites"]:
+        lines.append("| None | No relevant database changes |")
+    for suite in SUITES:
+        if suite in result["suites"]:
+            reasons = ", ".join(sorted(result["suite_reasons"].get(suite, {"Full verification"})))
+            lines.append(f"| {suite} | {reasons.replace('|', '/').replace(chr(10), ' ')} |")
+    return "\n".join(lines) + "\n"
 
 
 def select_suites(paths: list[str]) -> list[str]:

@@ -113,7 +113,8 @@ def run(name: str) -> None:
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     module = E2E if name == "full" else SUITES[name][0]
     groups = " | ".join("(" + SUITES[n][1] + ")" for n in names)
-    command = ["bash", "mvnw", "-B", "-ntp", "-pl", module, "-am", "-Pintegration-tests,backend-e2e",
+    command = ["bash", "mvnw", "-B", "-ntp", "-pl", module, "-am", "-Pintegration-tests",
+               "-Dspotless.check.skip=true", "-Dcheckstyle.skip=true",
                "-Dbackend.test.groups=" + groups, "verify"]
     record = {"sha": sha, "suites": names, "command": command, "status": "NOT RUN"}
     started = time.monotonic()

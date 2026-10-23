@@ -202,6 +202,9 @@ jobs:
   # On main pushes and Release Gate quality calls Backend Tests is deliberately skipped.
   pr-required-checks:
     name: PR Required Checks
+    permissions:
+      contents: read
+      actions: read
     if: ${{ always() }}
     needs:
       - scope
@@ -213,6 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v5
       - name: Verify quality and selected backend tests
         shell: bash
         env:
@@ -257,3 +261,9 @@ jobs:
             fi
           done
           exit "${failed}"
+      - name: CI Timing Report
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/report_timing.py
