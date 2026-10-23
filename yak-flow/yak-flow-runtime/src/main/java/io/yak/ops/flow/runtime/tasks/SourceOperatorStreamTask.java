@@ -32,8 +32,7 @@ import java.util.function.IntConsumer;
  * <p>Output is sent through ReaderOutput, RecordWriterOutput or an inline OperatorChain.
  * Global checkpoint coordination belongs to the runtime checkpoint coordinator.
  */
-public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> extends StreamTask implements SchemaSourceParticipant
-        implements SubtaskGateway {
+public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> extends StreamTask implements SchemaSourceParticipant, SubtaskGateway {
 
     private final SourceCoordinator<SplitT, ?> coordinator;
     private final SourceOperator<T, SplitT> operator;
