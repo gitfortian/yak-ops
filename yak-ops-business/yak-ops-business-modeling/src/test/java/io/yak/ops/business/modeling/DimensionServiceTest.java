@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,8 +65,11 @@ class DimensionServiceTest {
     @Test
     void bindsAPublicDimensionToItsDomainAndDropsTheDataMart() {
         var captor = ArgumentCaptor.forClass(DimensionEntity.class);
+        var stored = row("dimension", "domain", "order");
+        stored.setDomainName("交易域");
+        when(dimensions.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
 
-        service.create("ws", "actor", input(DimensionScope.PUBLIC, "domain", "mart", "order"));
+        var saved = service.create("ws", "actor", input(DimensionScope.PUBLIC, "domain", "mart", "order"));
 
         verify(dimensions).add(captor.capture());
         var row = captor.getValue();
@@ -74,6 +78,7 @@ class DimensionServiceTest {
         assertNull(row.getDatamartId());
         assertEquals("order", row.getCode());
         assertEquals(1, row.getRevision());
+        assertEquals("交易域", saved.domainName());
     }
 
     @Test
@@ -110,10 +115,16 @@ class DimensionServiceTest {
     @Test
     void allowsTheSameAbbreviationInAnotherScope() {
         when(dimensions.countCode("ws", "mart", "order", null)).thenReturn(0L);
+        var stored = row("dimension", null, "order");
+        stored.setScope(DimensionScope.APPLICATION);
+        stored.setDatamartId("mart");
+        stored.setDatamartName("运营集市");
+        when(dimensions.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
 
         var saved = service.create("ws", "actor", input(DimensionScope.APPLICATION, null, "mart", "order"));
 
         assertEquals(DimensionScope.APPLICATION, saved.scope());
+        assertEquals("运营集市", saved.datamartName());
         verify(dimensions).countCode("ws", "mart", "order", null);
     }
 
@@ -149,7 +160,10 @@ class DimensionServiceTest {
 
     @Test
     void updatesFieldsAndAdvancesTheRevision() {
-        when(dimensions.lock("ws", "dimension")).thenReturn(Optional.of(row("dimension", "domain", "order")));
+        var locked = row("dimension", "domain", "order");
+        locked.setDomainName("交易域");
+        when(dimensions.lock("ws", "dimension")).thenReturn(Optional.of(locked));
+        when(dimensions.find("ws", "dimension")).thenReturn(Optional.of(locked));
         when(dimensions.update(any())).thenReturn(true);
 
         var saved = service.update(
@@ -157,6 +171,7 @@ class DimensionServiceTest {
 
         assertEquals(4, saved.revision());
         assertEquals("orders", saved.code());
+        assertEquals("交易域", saved.domainName());
         verify(dimensions).countCode("ws", "domain", "orders", "dimension");
     }
 

@@ -39,7 +39,7 @@ public class DimensionServiceImpl implements DimensionService {
         if (datamartId != null && !dimensions.datamartExists(workspaceId, datamartId))
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         return dimensions.dimensions(workspaceId, scope, domainId, datamartId).stream()
-                .map(DimensionServiceImpl::project)
+                .map(this::project)
                 .toList();
     }
 
@@ -59,7 +59,7 @@ public class DimensionServiceImpl implements DimensionService {
         } catch (org.springframework.dao.DuplicateKeyException conflict) {
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_CODE, conflict);
         }
-        return project(row);
+        return reload(workspaceId, row);
     }
 
     @Override
@@ -80,7 +80,7 @@ public class DimensionServiceImpl implements DimensionService {
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_CODE, conflict);
         }
         row.setRevision(Math.addExact(input.getRevision(), 1));
-        return project(row);
+        return reload(workspaceId, row);
     }
 
     @Override
@@ -183,7 +183,7 @@ public class DimensionServiceImpl implements DimensionService {
         return stripped;
     }
 
-    private static DimensionVO project(DimensionEntity row) {
+    private DimensionVO project(DimensionEntity row) {
         return new DimensionVO(
                 row.getId(),
                 row.getScope(),
@@ -196,6 +196,15 @@ public class DimensionServiceImpl implements DimensionService {
                 row.getCode(),
                 row.getDescription(),
                 row.getRevision());
+    }
+
+    /**
+     * Re-reads the mutated row through the joined projection so the response carries the owning
+     * scope name; insert and row locking never populate those columns.
+     */
+    private DimensionVO reload(String workspaceId, DimensionEntity row) {
+        var stored = dimensions.find(workspaceId, row.getId());
+        return project(stored.orElse(row));
     }
 
     private static BusinessException invalid() {

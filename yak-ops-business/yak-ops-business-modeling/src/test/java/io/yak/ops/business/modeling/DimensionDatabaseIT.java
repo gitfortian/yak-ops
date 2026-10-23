@@ -142,6 +142,7 @@ class DimensionDatabaseIT {
                 "ws", "actor", created.id(), update("product_sk", 1));
         assertEquals(2, updated.revision());
         assertEquals("product_sk", updated.code());
+        assertEquals("交易域", updated.domainName());
 
         var stale = assertThrows(BusinessException.class,
                 () -> service.update("ws", "actor", created.id(), update("product_sk", 1)));
