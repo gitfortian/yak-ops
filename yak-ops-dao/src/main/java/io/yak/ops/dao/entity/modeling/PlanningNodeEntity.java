@@ -5,7 +5,7 @@ import io.yak.ops.dao.entity.BaseEntity;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Shared row projection for the three fixed planning tables, without payload diagnostics. */
+/** Shared row projection for the fixed planning tables, without payload diagnostics. */
 @Getter
 @Setter
 public class PlanningNodeEntity extends BaseEntity {
@@ -13,13 +13,15 @@ public class PlanningNodeEntity extends BaseEntity {
     private String workspaceId;
     /** Immutable level projected from the owning table, not accepted from editable fields. */
     private NodeKind kind;
-    /** Immutable parent identity; null only for a category. */
+    /** Immutable parent identity; null only for a root level. */
     private String parentId;
     /** Business display name owned by the Workspace. */
     private String name;
+    /** Business English name; populated only for data marts and subjects. */
+    private String enName;
     /** Globally reserved ASCII code, updated atomically with its registry entry. */
     private String code;
-    /** Assigned user identity, retained when membership later ends. */
+    /** Assigned user identity, retained when membership later ends; null for subjects. */
     private String ownerId;
     /** Optional business description, null when absent. */
     private String description;
