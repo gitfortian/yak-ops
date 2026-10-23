@@ -56,9 +56,9 @@ export function useListDataSources(scope: string) {
   const dataSourceMap = useMemo(
     () =>
       new Map(
-        (query.data?.bizData ?? [])
-          .filter((item) => Boolean(item.id))
-          .map((item) => [item.id, item] as const),
+        (query.data?.bizData ?? []).flatMap((item) =>
+          item.id ? [[item.id, item] as const] : [],
+        ),
       ),
     [query.data],
   );
