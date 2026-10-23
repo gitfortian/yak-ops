@@ -5,6 +5,7 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.util.ArrayList;
@@ -96,6 +97,30 @@ public record JdbcTableWritePlan(
             case APPEND -> dialect.insertSql(targetTable, schema);
             case UPSERT -> dialect.upsertSql(targetTable, schema);
         };
+    }
+
+    /**
+     * Builds a replacement route while retaining existing field mappings by name.
+     * Newly introduced target fields use the same-named source field and are rejected before DDL
+     * if that source field is not present or its logical type cannot be written.
+     */
+    public JdbcTableWritePlan withSchemas(TableSchema nextSourceSchema, TableSchema nextTargetSchema) {
+        Objects.requireNonNull(nextSourceSchema, "nextSourceSchema");
+        Objects.requireNonNull(nextTargetSchema, "nextTargetSchema");
+        Map<String, String> mappings = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < schema.columnCount(); index++) {
+            Column target = schema.column(index);
+            Column source = sourceSchema.column(sourcePositions.get(index));
+            mappings.put(target.name(), source.name());
+        }
+        for (Column target : nextTargetSchema.columns()) {
+            if (!mappings.containsKey(target.name())
+                    && nextSourceSchema.columns().stream().anyMatch(column -> column.name().equals(target.name()))) {
+                mappings.put(target.name(), target.name());
+            }
+        }
+        return new JdbcTableWritePlan(
+                sourceTable, targetTable, nextTargetSchema, writeMode, nextSourceSchema, mappings);
     }
 
     /**
