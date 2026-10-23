@@ -8,6 +8,7 @@ import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.event.ColumnProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
