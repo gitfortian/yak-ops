@@ -52,6 +52,7 @@ public final class JdbcSchemaDerivator {
         List<SchemaChangeEvent> changes = new ArrayList<>();
 
         if (target.isEmpty()) {
+            checkIdentifiers(source, source, differences);
             List<PhysicalColumn> columns = new ArrayList<>();
             for (PhysicalColumn column : source.columns()) {
                 LogicalType normalized = normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
