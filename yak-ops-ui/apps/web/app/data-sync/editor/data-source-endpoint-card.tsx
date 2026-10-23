@@ -43,12 +43,12 @@ export function DataSourceEndpointCard({
     [dataSources],
   );
   return (
-    <div className="rounded-lg border border-[#e6e8eb] bg-white p-4">
-      <div className="text-sm font-semibold text-[#344054]">{title}</div>
+    <div className="rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
+      <div className="text-sm font-semibold text-[var(--yak-components-field-label)]">{title}</div>
       <div className="mt-4 space-y-3">
         <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel>类型</FieldLabel>
-          <div className="flex items-center gap-2 text-[13px] text-[#344054]">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--yak-components-field-label)]">
             <DatabaseIcons dbType={dataSourceType} width="16px" height="16px" />
             <span>{getDataSourceTypeLabel(dataSourceType)}</span>
           </div>
