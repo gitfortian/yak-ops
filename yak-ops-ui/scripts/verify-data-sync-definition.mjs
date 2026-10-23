@@ -106,7 +106,10 @@ const oldDefinition = { ...definition, parameterSchemaVersion: 2, parameters: ol
 const oldRecord = toSyncTaskRecord(oldDefinition);
 assert.equal(oldRecord.schemaChangesEnabled, false);
 assert.equal(result.schemaChangesEnabled, true);
-const disabledJson = createDefinitionRequest({ ...realtime, schemaChangesEnabled: false }).parameters;
+const disabledJson = createDefinitionRequest({
+  ...realtime,
+  schemaChangesEnabled: false,
+}).parameters;
 assert.equal(readSyncParameters(3, disabledJson).schemaChangesEnabled, false);
 const missingPolicy = { ...json };
 delete missingPolicy.schemaChangesEnabled;

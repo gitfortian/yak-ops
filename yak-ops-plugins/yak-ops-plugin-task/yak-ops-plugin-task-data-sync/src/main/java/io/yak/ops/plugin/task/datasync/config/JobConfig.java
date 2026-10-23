@@ -47,7 +47,8 @@ public final class JobConfig {
         validate(parameters, SolutionOptions.RULE, "DATA_SYNC");
         SolutionType type = parameters.get(SolutionOptions.SOLUTION_TYPE);
         Object rawSchemaChanges = parameters.getSourceMap().get(SolutionOptions.SCHEMA_CHANGES_ENABLED.key());
-        if (rawSchemaChanges != null && !(rawSchemaChanges instanceof Boolean)) {
+        if (parameters.getSourceMap().containsKey(SolutionOptions.SCHEMA_CHANGES_ENABLED.key())
+                && !(rawSchemaChanges instanceof Boolean)) {
             throw new IllegalArgumentException("schemaChangesEnabled must be a boolean");
         }
         if (type.supportsScheduling()
