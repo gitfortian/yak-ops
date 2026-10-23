@@ -59,7 +59,7 @@ class SchemaTest {
         assertThrows(UnsupportedOperationException.class, () -> schema.primaryKeys().clear());
         assertEquals("name", schema.column("name").orElseThrow().name());
         assertTrue(schema.column("absent").isEmpty());
-        assertNotEquals(schema, schema.withColumns(List.of(new PhysicalColumn("other", LogicalTypes.INTEGER))));
+        assertNotEquals(schema, schema.withColumns(List.of(new PhysicalColumn("id", LogicalTypes.BIGINT.copy(false)))));
     }
 
     @Test
