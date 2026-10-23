@@ -6,9 +6,9 @@ import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.internal.JdbcOutputFormat;
 import io.yak.ops.connector.jdbc.sink.writer.JdbcWriter;
-import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
+import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -176,7 +176,9 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
             JdbcTableWritePlan plan = restored.get(matched);
             restored.set(
                     matched,
-                    plan.withSchemas(state.sourceSchema().toTableSchema(), state.targetSchema().toTableSchema()));
+                    plan.withSchemas(
+                            state.sourceSchema().toTableSchema(),
+                            state.targetSchema().toTableSchema()));
         }
         plans = List.copyOf(restored);
     }
