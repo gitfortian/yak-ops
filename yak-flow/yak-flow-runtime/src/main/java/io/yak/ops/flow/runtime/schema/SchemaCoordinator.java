@@ -93,7 +93,9 @@ public final class SchemaCoordinator implements AutoCloseable {
      */
     public CompletionStage<Long> applySchemaChange(SchemaChangeRequest request, int sourceSubtask) {
         Objects.requireNonNull(request, "request");
-        if (sourceSubtask < 0 || sourceSubtask >= sourceTasks.size()) {
+        if (sourceSubtask < 0
+                || sourceSubtask >= sourceTasks.size()
+                || sourceTasks.get(sourceSubtask).subtaskIndex() != sourceSubtask) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid Source subtask"));
         }
         CompletableFuture<Long> result = new CompletableFuture<>();
