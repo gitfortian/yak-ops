@@ -60,8 +60,25 @@ public final class SchemaValidator {
                 throw new IllegalArgumentException(
                         "Physical column expressions require a verified same-database dialect");
             }
+            var properties = source.columnProperties();
+            if (!source.datasourceType().equals(target.type())) {
+                // MySQL COLUMN_TYPE belongs to its source dialect; other targets use logical types.
+                properties = properties.entrySet().stream()
+                        .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                                java.util.Map.Entry::getKey,
+                                entry -> {
+                                    ColumnProperties sourceProperties = entry.getValue();
+                                    return new ColumnProperties(
+                                            sourceProperties.defaultExpression(),
+                                            sourceProperties.autoIncrement(),
+                                            sourceProperties.generated(),
+                                            sourceProperties.onUpdateExpression(),
+                                            sourceProperties.defaultGenerated(),
+                                            null);
+                                }));
+            }
             CreateTableEvent event = new CreateTableEvent(
-                    table, source.schema(), source.tableComment(), source.columnComments(), source.columnProperties());
+                    table, source.schema(), source.tableComment(), source.columnComments(), properties);
             ddl(target.type(), event);
             return event;
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
