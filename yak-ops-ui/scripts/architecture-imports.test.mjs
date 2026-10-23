@@ -66,8 +66,7 @@ test("strings and comments are not treated as module imports", () => {
 
 test("outside domains cannot deep import Data Sync private features", () => {
   const operations = "apps/web/app/operations/index.tsx";
-  const direct =
-    'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";';
+  const direct = 'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";';
   const dynamic = 'const editor = import("../data-sync/editor/index");';
 
   assert.match(check(operations, direct).join("\n"), /imports a private Data Sync feature/);
