@@ -1,14 +1,14 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
-import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
-import java.util.List;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
+import java.util.List;
 import java.util.Objects;
 
 /**
