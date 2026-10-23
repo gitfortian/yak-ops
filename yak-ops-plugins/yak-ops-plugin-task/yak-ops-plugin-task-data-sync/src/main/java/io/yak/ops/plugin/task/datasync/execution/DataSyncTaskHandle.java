@@ -118,7 +118,8 @@ final class DataSyncTaskHandle implements TaskHandle {
                         identity,
                         debug,
                         progress,
-                        config.schemaChangesEnabled());
+                        config.schemaChangesEnabled(),
+                        config.allowDropColumns());
                 synchronized (this) {
                     checkCanceled();
                     submissionInvoked = true;
