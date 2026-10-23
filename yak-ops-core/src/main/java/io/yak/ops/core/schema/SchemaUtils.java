@@ -67,8 +67,7 @@ public final class SchemaUtils {
                     throw new IllegalArgumentException("Cannot drop primary-key column: " + name);
                 }
                 PhysicalColumn current = schema.column(name)
-                        .orElseThrow(
-                                () -> new IllegalArgumentException("Unknown column for DROP COLUMN: " + name));
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown column for DROP COLUMN: " + name));
                 if (!current.type().equals(drop.expectedColumnTypes().get(name))) {
                     throw new IllegalArgumentException("Column type changed before DROP COLUMN: " + name);
                 }

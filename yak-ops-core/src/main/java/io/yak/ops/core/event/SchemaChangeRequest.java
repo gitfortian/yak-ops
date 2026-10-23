@@ -68,8 +68,7 @@ public record SchemaChangeRequest(
                 }
                 expectedTarget = SchemaUtils.applySchemaChangeEvent(expectedTarget, drop);
             } else {
-                throw new UnsupportedOperationException(
-                        "Unsupported runtime target schema event: " + change.getType());
+                throw new UnsupportedOperationException("Unsupported runtime target schema event: " + change.getType());
             }
         }
         if (!expectedTarget.equals(targetSchemaAfter)) {
