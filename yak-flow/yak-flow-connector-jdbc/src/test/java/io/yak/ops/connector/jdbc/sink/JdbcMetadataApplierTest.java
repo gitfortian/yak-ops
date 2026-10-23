@@ -46,6 +46,41 @@ class JdbcMetadataApplierTest {
             List.of("id"));
 
     @Test
+    void mysqlNativeTypeAndDateDefaultWhitelistsRejectUntrustedMetadata() {
+        JdbcDialect dialect = JdbcFactoryLoader.loadDialect("jdbc:mysql:");
+        TableSchema schema = new TableSchema(
+                List.of(new Column("created_at", LogicalTypes.DATE)), List.of());
+        ColumnProperties safe = new ColumnProperties("curdate()", false, false, null, true, "date");
+        CreateTableEvent event = new CreateTableEvent(
+                TABLE, schema, null, Map.of(), Map.of("created_at", safe));
+        String sql = JdbcMetadataApplier.plan(event, dialect).createTableSql();
+        assertTrue(sql.contains("DEFAULT (CURDATE())"));
+        JdbcMetadataApplier.validateColumnProperties(
+                "created_at", safe,
+                new ColumnProperties("(curdate())", false, false, null, true, "date"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcMetadataApplier.validateColumnProperties(
+                        "created_at", safe,
+                        new ColumnProperties("(curdate())", false, false, null, true, null)));
+        ColumnProperties interval = new ColumnProperties(
+                "((curdate() + interval 1 day))", false, false, null, true, "date");
+        assertTrue(JdbcMetadataApplier.plan(
+                        new CreateTableEvent(TABLE, schema, null, Map.of(), Map.of("created_at", interval)),
+                        dialect).createTableSql().contains("INTERVAL 1 DAY"));
+        ColumnProperties unsafeType = new ColumnProperties(
+                null, false, false, null, false, "DATE); DROP TABLE users; --");
+        assertThrows(IllegalArgumentException.class, () -> JdbcMetadataApplier.plan(
+                new CreateTableEvent(TABLE, schema, null, Map.of(), Map.of("created_at", unsafeType)),
+                dialect));
+        ColumnProperties unsafeExpression = new ColumnProperties(
+                "(select secret from users)", false, false, null, true, "date");
+        assertThrows(IllegalArgumentException.class, () -> JdbcMetadataApplier.plan(
+                new CreateTableEvent(TABLE, schema, null, Map.of(), Map.of("created_at", unsafeExpression)),
+                dialect));
+    }
+
+    @Test
     void factoryCreatesMetadataApplierWithoutOpeningConnectionsOrLoadingDriver() {
         for (String url : List.of("jdbc:mysql://127.0.0.1/target", "jdbc:postgresql://127.0.0.1/target")) {
             var configuration = new Configuration()

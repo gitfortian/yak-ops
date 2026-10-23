@@ -196,7 +196,8 @@ public final class JdbcTableMetadata {
         Map<String, Boolean> generatedDefaults = new HashMap<>();
         Map<String, Boolean> generatedColumns = new HashMap<>();
         Map<String, String> defaults = new HashMap<>();
-        String sql = "SELECT COLUMN_NAME, EXTRA, COLUMN_DEFAULT FROM information_schema.COLUMNS "
+        Map<String, String> nativeTypes = new HashMap<>();
+        String sql = "SELECT COLUMN_NAME, EXTRA, COLUMN_DEFAULT, COLUMN_TYPE FROM information_schema.COLUMNS "
                 + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, catalog == null ? connection.getCatalog() : catalog);
@@ -213,6 +214,7 @@ public final class JdbcTableMetadata {
                     generatedColumns.put(
                             name, flags.contains("virtual generated") || flags.contains("stored generated"));
                     defaults.put(name, rows.getString("COLUMN_DEFAULT"));
+                    nativeTypes.put(name, rows.getString("COLUMN_TYPE"));
                     if (!flags.contains("on update")) continue;
                     var matcher = java.util.regex.Pattern.compile(
                                     "(?i)on update\\s+(current_timestamp(?:\\([0-6]?\\))?)")
@@ -242,7 +244,8 @@ public final class JdbcTableMetadata {
                     generatedColumns.get(column.name()),
                     defaults.get(column.name()),
                     updates.get(column.name()),
-                    generatedDefaults.get(column.name())));
+                    generatedDefaults.get(column.name()),
+                    nativeTypes.get(column.name())));
         }
         return List.copyOf(enriched);
     }

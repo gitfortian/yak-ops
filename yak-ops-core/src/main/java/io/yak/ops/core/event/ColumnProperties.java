@@ -13,17 +13,28 @@ public record ColumnProperties(
         Boolean autoIncrement,
         Boolean generated,
         String onUpdateExpression,
-        Boolean defaultGenerated)
+        Boolean defaultGenerated,
+        String nativeType)
         implements Serializable {
     private static final long serialVersionUID = 1L;
 
     public ColumnProperties(String defaultExpression, Boolean autoIncrement, Boolean generated) {
-        this(defaultExpression, autoIncrement, generated, null, null);
+        this(defaultExpression, autoIncrement, generated, null, null, null);
     }
 
     public ColumnProperties(
             String defaultExpression, Boolean autoIncrement, Boolean generated, String onUpdateExpression) {
-        this(defaultExpression, autoIncrement, generated, onUpdateExpression, null);
+        this(defaultExpression, autoIncrement, generated, onUpdateExpression, null, null);
+    }
+
+    /** Compatibility constructor for metadata without a native SQL type. */
+    public ColumnProperties(
+            String defaultExpression,
+            Boolean autoIncrement,
+            Boolean generated,
+            String onUpdateExpression,
+            Boolean defaultGenerated) {
+        this(defaultExpression, autoIncrement, generated, onUpdateExpression, defaultGenerated, null);
     }
 
     public boolean hasFeatures() {

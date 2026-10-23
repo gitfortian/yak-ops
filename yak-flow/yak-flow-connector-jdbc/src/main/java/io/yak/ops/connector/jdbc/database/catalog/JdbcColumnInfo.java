@@ -24,6 +24,7 @@ import java.util.Objects;
  * @param defaultExpression raw JDBC default metadata, never directly executable SQL
  * @param onUpdateExpression native automatic update expression, null when absent
  * @param defaultGenerated MySQL DEFAULT_GENERATED marker, null when not available
+ * @param nativeType native MySQL COLUMN_TYPE; never execute before vendor validation
  */
 public record JdbcColumnInfo(
         String name,
@@ -41,7 +42,46 @@ public record JdbcColumnInfo(
         Boolean generated,
         String defaultExpression,
         String onUpdateExpression,
-        Boolean defaultGenerated) {
+        Boolean defaultGenerated,
+        String nativeType) {
+
+    /** Compatibility constructor for callers without native type metadata. */
+    public JdbcColumnInfo(
+            String name,
+            String typeName,
+            int jdbcType,
+            Integer size,
+            Integer scale,
+            boolean nullable,
+            int ordinalPosition,
+            boolean primaryKey,
+            Integer primaryKeyPosition,
+            String remarks,
+            boolean hasDefaultValue,
+            Boolean autoIncrement,
+            Boolean generated,
+            String defaultExpression,
+            String onUpdateExpression,
+            Boolean defaultGenerated) {
+        this(
+                name,
+                typeName,
+                jdbcType,
+                size,
+                scale,
+                nullable,
+                ordinalPosition,
+                primaryKey,
+                primaryKeyPosition,
+                remarks,
+                hasDefaultValue,
+                autoIncrement,
+                generated,
+                defaultExpression,
+                onUpdateExpression,
+                defaultGenerated,
+                null);
+    }
 
     public JdbcColumnInfo(
             String name,

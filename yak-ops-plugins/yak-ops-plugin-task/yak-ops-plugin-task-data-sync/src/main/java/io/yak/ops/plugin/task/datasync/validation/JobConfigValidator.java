@@ -78,26 +78,27 @@ public final class JobConfigValidator {
                 }
                 if (prepareSchema) SchemaValidator.validateNamespace(to, target);
                 if (schemas && prepareSchema) {
-                    var sourceTable = context.tableMetadata(sourceId, source);
-                    sourceFactory.validateSchema(sourceTable.schema());
+                    var sourceTable = SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
+                    SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceTable.schema()));
                     var event = SchemaValidator.createEvent(sourceTable, to, target);
-                    sinkFactory.validateSchema(
-                            table.sink(), sourceTable.schema(), event.getSchema(), sourceFactory.producesChangelog());
+                    SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
+                            table.sink(), sourceTable.schema(), event.getSchema(), sourceFactory.producesChangelog()));
                     context.findTable(sinkId, target).ifPresent(actual -> {
                         if (actual.revision() != to.revision())
                             throw new IllegalStateException("Target datasource revision changed during validation");
                         SchemaValidator.validateTarget(event, actual);
-                        sinkFactory.validateSchema(
-                                table.sink(), sourceTable.schema(), actual.schema(), sourceFactory.producesChangelog());
+                        SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
+                                table.sink(),
+                                sourceTable.schema(),
+                                actual.schema(),
+                                sourceFactory.producesChangelog()));
                     });
                 } else if (schemas) {
                     var sourceSchema = context.tableSchema(sourceId, source);
-                    sourceFactory.validateSchema(sourceSchema);
-                    sinkFactory.validateSchema(
-                            table.sink(),
-                            sourceSchema,
-                            context.tableSchema(sinkId, target),
-                            sourceFactory.producesChangelog());
+                    SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceSchema));
+                    var targetSchema = context.tableSchema(sinkId, target);
+                    SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
+                            table.sink(), sourceSchema, targetSchema, sourceFactory.producesChangelog()));
                 }
             }
             if (sourceId.equals(sinkId) && sources.stream().anyMatch(targets::contains)) {
@@ -116,11 +117,16 @@ public final class JobConfigValidator {
      * Only fixed diagnostic prefixes and simple column identifiers may reach the client.
      * Native driver exceptions, raw DDL, credentials and configuration values are excluded.
      */
-    private static String safeSchemaMessage(RuntimeException failure) {
+    public static String safeSchemaMessage(RuntimeException failure) {
         String message = failure.getMessage();
         if (message != null) {
             String[][] reasons = {
                 {"Unsupported default expression for column: ", "不支持的默认值表达式"},
+                {"Unsupported MySQL native type for column: ", "暂不支持该 MySQL 原生字段类型"},
+                {"Unsupported source JDBC type for column: ", "当前 JDBC 读取不支持该字段类型"},
+                {"DATA_SYNC source and target column types are incompatible: ", "来源与目标字段类型不兼容"},
+                {"DATA_SYNC target column has no source mapping: ", "目标字段没有对应的来源字段"},
+                {"Target column comment does not match: ", "目标字段注释不一致"},
                 {"Unknown default expression kind for column: ", "无法识别默认值是否为表达式"},
                 {"Unsupported default literal escaping for column: ", "默认值含有暂不支持的转义字符"},
                 {"Target column properties unavailable: ", "目标字段物理属性缺失"},

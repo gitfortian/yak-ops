@@ -14,6 +14,27 @@ public final class SchemaValidator {
     private SchemaValidator() {}
 
     /**
+     * WRITE validation checks only the JDBC write contract. It must never demand
+     * identical defaults, comments, indexes, or a source-derived target DDL.
+     */
+    public static void validateWrite(Runnable validation) {
+        try {
+            validation.run();
+        } catch (IllegalArgumentException | UnsupportedOperationException failure) {
+            throw new SchemaValidationException(failure);
+        }
+    }
+
+    /** Classifies schema source-metadata failures separately from connection failures. */
+    public static DataSourceTable sourceMetadata(java.util.function.Supplier<DataSourceTable> lookup) {
+        try {
+            return lookup.get();
+        } catch (IllegalArgumentException failure) {
+            throw new SchemaValidationException(failure);
+        }
+    }
+
+    /**
      * Builds a complete desired target event from an authorized source table.
      *
      * @param source physical source metadata
@@ -33,19 +54,41 @@ public final class SchemaValidator {
             if (!source.columnFeatures().isEmpty() && source.columnProperties().isEmpty()) {
                 throw new IllegalArgumentException("Source physical column properties are unavailable");
             }
-            boolean hasNativeFeatures =
-                    source.columnProperties().values().stream().anyMatch(ColumnProperties::hasFeatures);
+            boolean hasNativeFeatures = source.columnProperties().values().stream()
+                    .anyMatch(properties -> properties.hasFeatures() || requiresSameVendor(properties.nativeType()));
             if (hasNativeFeatures && !source.datasourceType().equals(target.type())) {
                 throw new IllegalArgumentException(
                         "Physical column expressions require a verified same-database dialect");
             }
+            var properties = source.columnProperties();
+            if (!source.datasourceType().equals(target.type())) {
+                // MySQL COLUMN_TYPE belongs to its source dialect; other targets use logical types.
+                properties = properties.entrySet().stream()
+                        .collect(java.util.stream.Collectors.toUnmodifiableMap(java.util.Map.Entry::getKey, entry -> {
+                            ColumnProperties sourceProperties = entry.getValue();
+                            return new ColumnProperties(
+                                    sourceProperties.defaultExpression(),
+                                    sourceProperties.autoIncrement(),
+                                    sourceProperties.generated(),
+                                    sourceProperties.onUpdateExpression(),
+                                    sourceProperties.defaultGenerated(),
+                                    null);
+                        }));
+            }
             CreateTableEvent event = new CreateTableEvent(
-                    table, source.schema(), source.tableComment(), source.columnComments(), source.columnProperties());
+                    table, source.schema(), source.tableComment(), source.columnComments(), properties);
             ddl(target.type(), event);
             return event;
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
             throw new SchemaValidationException(failure);
         }
+    }
+
+    private static boolean requiresSameVendor(String nativeType) {
+        return nativeType != null
+                && nativeType
+                        .toLowerCase(java.util.Locale.ROOT)
+                        .matches(".*\\b(enum|set|json|unsigned|zerofill|year)\\b.*");
     }
 
     /**
