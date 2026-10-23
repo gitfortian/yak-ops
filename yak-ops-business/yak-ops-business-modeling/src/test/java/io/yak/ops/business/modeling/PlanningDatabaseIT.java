@@ -68,7 +68,8 @@ class PlanningDatabaseIT {
     @BeforeEach void isolate() {
         reset(WORKSPACES);
         when(WORKSPACES.isActiveMember(anyString(), anyString())).thenReturn(true);
-        for (String table : List.of("process", "domain", "category", "code")) jdbc.update("DELETE FROM yak_ops_modeling_" + table);
+        for (String table : List.of("subject", "datamart", "process", "domain", "category", "code"))
+            jdbc.update("DELETE FROM yak_ops_modeling_" + table);
     }
 
     @Test void globalCodeRaceHasOneWinnerAcrossWorkspaces() throws Exception {
@@ -154,6 +155,58 @@ class PlanningDatabaseIT {
             assertNotEquals(deletion.get(20, TimeUnit.SECONDS), creation.get(20, TimeUnit.SECONDS));
         }
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yak_ops_modeling_domain d LEFT JOIN yak_ops_modeling_category c ON d.workspace_id=c.workspace_id AND d.category_id=c.id WHERE c.id IS NULL", Integer.class));
+    }
+
+    @Test void applicationLayerNodesShareTheGlobalCodeNamespace() {
+        var datamart = service.createDatamart("ws", "actor", PlanningServiceTest.datamart("operating", "Operating Mart"));
+        var subject = service.createSubject("ws", "actor", datamart.id(), PlanningServiceTest.subject("realtime"));
+
+        assertEquals(2, count("code"));
+        assertEquals(
+                "Operating Mart",
+                jdbc.queryForObject(
+                        "SELECT en_name FROM yak_ops_modeling_datamart WHERE id=?", String.class, datamart.id()));
+        assertEquals(
+                datamart.id(),
+                jdbc.queryForObject(
+                        "SELECT datamart_id FROM yak_ops_modeling_subject WHERE id=?", String.class, subject.id()));
+        assertEquals(
+                "DATASET",
+                jdbc.queryForObject(
+                        "SELECT node_kind FROM yak_ops_modeling_code WHERE node_id=?", String.class, datamart.id()));
+        assertEquals(
+                "SUBJECT",
+                jdbc.queryForObject(
+                        "SELECT node_kind FROM yak_ops_modeling_code WHERE node_id=?", String.class, subject.id()));
+
+        var duplicate = assertThrows(BusinessException.class,
+                () -> service.create("ws", "actor", NodeKind.CATEGORY, null, PlanningServiceTest.input("realtime")));
+        assertEquals(ModelingErrorCode.DUPLICATE_CODE, duplicate.getErrorCode());
+    }
+
+    @Test void dataMartDeletionWaitsForItsSubjects() {
+        var datamart = service.createDatamart("ws", "actor", PlanningServiceTest.datamart("operating", "Operating Mart"));
+        var subject = service.createSubject("ws", "actor", datamart.id(), PlanningServiceTest.subject("realtime"));
+
+        var blocked = assertThrows(BusinessException.class,
+                () -> service.delete("ws", "actor", NodeKind.DATASET, datamart.id(), 1));
+        assertEquals(ModelingErrorCode.HAS_DEPENDENCIES, blocked.getErrorCode());
+        assertEquals(1, count("datamart"));
+
+        service.delete("ws", "actor", NodeKind.SUBJECT, subject.id(), 1);
+        service.delete("ws", "actor", NodeKind.DATASET, datamart.id(), 1);
+        assertEquals(0, count("datamart"));
+        assertEquals(0, count("code"));
+    }
+
+    @Test void subjectCannotCrossTheWorkspaceOfItsDataMart() {
+        var datamart = service.createDatamart("ws", "actor", PlanningServiceTest.datamart("operating", "Operating Mart"));
+
+        assertThrows(BusinessException.class,
+                () -> service.createSubject("other", "actor", datamart.id(), PlanningServiceTest.subject("realtime")));
+
+        assertEquals(0, count("subject"));
+        assertEquals(1, count("code"));
     }
 
     private static int createAfter(CountDownLatch start, String workspace) throws InterruptedException {

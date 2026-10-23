@@ -26,8 +26,8 @@ SUITES = {
     "cdc": (CDC, "cdc", {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2}),
     "cdc-pipeline": (CDC, "cdc-pipeline", {name: 1 for name in ("MySqlCdcToMySqlIT", "MySqlCdcToPostgresIT", "MySqlCdcToOracleIT")}),
     "business": (BUSINESS, "business", {"TaskCursorIT": 5, "ScheduleAdmissionIT": 13}),
-    "modeling": ("yak-ops-business/yak-ops-business-modeling", "modeling", {"PlanningDatabaseIT": 6, "StandardDatabaseIT": 8, "LayerDatabaseIT": 9}),
-    "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1, "WarehousePlanningIT": 1, "DataStandardsIT": 1, "WarehouseLayersIT": 1}),
+    "modeling": ("yak-ops-business/yak-ops-business-modeling", "modeling", {"PlanningDatabaseIT": 9, "StandardDatabaseIT": 8, "LayerDatabaseIT": 9}),
+    "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1, "WarehousePlanningIT": 2, "DataStandardsIT": 1, "WarehouseLayersIT": 1}),
     "recovery-e2e": (E2E, "recovery-e2e", {"ProcessRecoveryIT": 2}),
 }
 

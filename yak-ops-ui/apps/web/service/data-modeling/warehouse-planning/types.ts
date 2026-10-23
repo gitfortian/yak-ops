@@ -1,11 +1,12 @@
-export type NodeKind = "CATEGORY" | "DOMAIN" | "PROCESS";
+export type NodeKind = "CATEGORY" | "DOMAIN" | "PROCESS" | "DATASET" | "SUBJECT";
 export type NodeKey = `${NodeKind}:${string}`;
 
 interface NodeFields {
   id: string;
   name: string;
+  enName: string | null;
   code: string;
-  ownerId: string;
+  ownerId: string | null;
   ownerName: string | null;
   ownerActive: boolean;
   description: string | null;
@@ -30,10 +31,34 @@ export interface ProcessNode extends NodeFields {
   children: [];
 }
 
-export type PlanningNode = CategoryNode | DomainNode | ProcessNode;
+export interface DatamartNode extends NodeFields {
+  kind: "DATASET";
+  parentId: null;
+  children: SubjectNode[];
+}
+
+export interface SubjectNode extends NodeFields {
+  kind: "SUBJECT";
+  parentId: string;
+  children: [];
+}
+
+/** Public-layer business tree node. */
+export type BusinessNode = CategoryNode | DomainNode | ProcessNode;
+/** Application-layer data mart tree node. */
+export type ApplicationNode = DatamartNode | SubjectNode;
+export type RootNode = CategoryNode | DatamartNode;
+export type PlanningNode = BusinessNode | ApplicationNode;
+
+/** Both trees reserve abbreviations in one namespace; the split is presentational. */
+export interface PlanningTree {
+  categories: CategoryNode[];
+  datamarts: DatamartNode[];
+}
 
 export interface NodeInput {
   name: string;
+  enName: string;
   code: string;
   ownerId: string;
   description: string | null;
@@ -42,14 +67,16 @@ export interface NodeInput {
 export type CreateDraft =
   | { mode: "create"; kind: "CATEGORY"; parent: null }
   | { mode: "create"; kind: "DOMAIN"; parent: CategoryNode }
-  | { mode: "create"; kind: "PROCESS"; parent: DomainNode };
+  | { mode: "create"; kind: "PROCESS"; parent: DomainNode }
+  | { mode: "create"; kind: "DATASET"; parent: null }
+  | { mode: "create"; kind: "SUBJECT"; parent: DatamartNode };
 
 export type EditorDraft =
   | CreateDraft
   | {
       mode: "edit";
       node: PlanningNode;
-      parent: CategoryNode | DomainNode | null;
+      parent: PlanningNode | null;
     };
 
 export interface SavedNode {

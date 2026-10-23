@@ -11,6 +11,7 @@ public class PlanningNodeVO {
     private final NodeKind kind;
     private final String parentId;
     private final String name;
+    private final String enName;
     private final String code;
     private final String ownerId;
     private final String ownerName;
@@ -24,6 +25,7 @@ public class PlanningNodeVO {
             NodeKind kind,
             String parentId,
             String name,
+            String enName,
             String code,
             String ownerId,
             String ownerName,
@@ -35,6 +37,7 @@ public class PlanningNodeVO {
         this.kind = kind;
         this.parentId = parentId;
         this.name = name;
+        this.enName = enName;
         this.code = code;
         this.ownerId = ownerId;
         this.ownerName = ownerName;

@@ -8,7 +8,11 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useRef, useState } from "react";
-import { deleteNode, planningFailureField } from "@/service/data-modeling/warehouse-planning";
+import {
+  deleteNode,
+  planningFailureField,
+  planningFailureMessage,
+} from "@/service/data-modeling/warehouse-planning";
 import type { PlanningNode } from "@/service/data-modeling/warehouse-planning/types";
 
 interface Props {
@@ -20,6 +24,7 @@ interface Props {
 export default function DeleteDialog({ node, onClose, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [failure, setFailure] = useState("");
   const busy = useRef(false);
   const active = useRef(true);
   useEffect(() => {
@@ -32,6 +37,7 @@ export default function DeleteDialog({ node, onClose, onDeleted }: Props) {
     if (busy.current || conflict) return;
     busy.current = true;
     setDeleting(true);
+    setFailure("");
     try {
       await deleteNode(node);
       if (active.current) {
@@ -39,7 +45,9 @@ export default function DeleteDialog({ node, onClose, onDeleted }: Props) {
         onDeleted();
       }
     } catch (error) {
-      if (active.current && planningFailureField(error) === "revision") setConflict(true);
+      if (!active.current) return;
+      if (planningFailureField(error) === "revision") setConflict(true);
+      else setFailure(planningFailureMessage(error));
     } finally {
       busy.current = false;
       if (active.current) setDeleting(false);
@@ -57,6 +65,7 @@ export default function DeleteDialog({ node, onClose, onDeleted }: Props) {
         <DialogTitle className="text-sm font-medium">删除{node.name}</DialogTitle>
         <DialogDescription className="my-4 text-sm">删除后无法恢复。</DialogDescription>
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
+        {failure && <Alert>{failure}</Alert>}
         <div className="mt-5 flex justify-end gap-2">
           <Button size="small" disabled={deleting} onClick={onClose}>
             取消

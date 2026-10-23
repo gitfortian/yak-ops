@@ -312,7 +312,7 @@ export interface ReverseModelingProvider {
 
 ## Compatibility, Deprecation, and Migration Plan
 
-- **迁移**：新增 `V3__v1_5_0.sql`，只做前向变更（建 5 张表 + 扩 `yak_ops_modeling_code` 的 `CHECK`），不改动 V1 / V2。选择 1.5.0 而不是继续往 `V2__v1_4_0.sql` 追加，原因有二：V2 已随数据标准进入 master，且当前 PR #8 正在改它，继续追加会让两个 PR 争抢同一文件；本功能体量也足以独立成版。若维护者希望 1.4.0 一并发布，替代方案是把 DDL 并入 V2 并把版本回落 1.4.0——但需等 #8 合并后再改，避免同文件冲突。
+- **迁移**：并入 `V2__v1_4_0.sql`（追加在既有表之后），只做前向变更（建 5 张表 + 扩 `yak_ops_modeling_code` 的 `CHECK`），不改动 V1，不新增 `V3`。1.4.0 尚未发布，且分发版本需要贴近上游，因此不为本功能单独起一个 minor 版本；实施顺序上等 #8 合并后再追加，避免两个 PR 同时改同一文件。
 - **兼容性**：`tree` 响应新增字段，`categories` 结构与既有语义不变；前端旧版本忽略新字段即可。`codes/availability` 的 `kind` 增加取值，既有调用不受影响。`model.type` 为 `VARCHAR` 且无 `CHECK`，P1 增加 `DWS/ADS` 时只改应用层枚举，不产生 DDL 变更，私有化部署无需为新类型跑迁移。
 - **数据迁移**：无。不写业务行，不做回填，不使用 `flyway repair`。
 - **降级**：数据集市、维度、模型均可在未被引用时删除；被引用时 409，不级联删除。

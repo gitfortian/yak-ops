@@ -2,6 +2,7 @@ package io.yak.ops.business.modeling;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,8 +18,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.modeling.impl.PlanningServiceImpl;
+import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
+import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateNodeDTO;
+import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.exception.BusinessException;
@@ -31,6 +35,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -79,7 +84,9 @@ class PlanningServiceTest {
         when(nodes.tree("ws")).thenReturn(List.of(domain, category));
         when(workspaces.queryWorkspaceMembers("ws", "actor")).thenReturn(List.of(member));
         when(users.queryByIds(List.of("owner"))).thenReturn(List.of(owner));
-        var roots = service.tree("ws", "actor");
+        var tree = service.tree("ws", "actor");
+        var roots = tree.categories();
+        assertTrue(tree.datamarts().isEmpty());
         assertEquals("domain", roots.getFirst().getChildren().getFirst().getId());
         assertTrue(roots.getFirst().isOwnerActive());
         assertThrows(UnsupportedOperationException.class, () -> roots.getFirst().getChildren().clear());
@@ -166,11 +173,101 @@ class PlanningServiceTest {
         verify(nodes, never()).update(any(), anyLong(), anyBoolean());
     }
 
+    @Test void createsADatamartRootWithAnEnglishName() {
+        var captor = ArgumentCaptor.forClass(PlanningNodeEntity.class);
+
+        var saved = service.createDatamart("ws", "actor", datamart("operating", "Operating Mart"));
+
+        verify(nodes).add(captor.capture());
+        var row = captor.getValue();
+        assertEquals(NodeKind.DATASET, saved.kind());
+        assertEquals(NodeKind.DATASET, row.getKind());
+        assertNull(row.getParentId());
+        assertEquals("Operating Mart", row.getEnName());
+        assertEquals("owner", row.getOwnerId());
+    }
+
+    @Test void createsASubjectUnderItsDatamartWithoutAnOwner() {
+        var datamart = node(NodeKind.DATASET, "datamart", null);
+        when(nodes.find("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        when(nodes.lock("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        var captor = ArgumentCaptor.forClass(PlanningNodeEntity.class);
+
+        var saved = service.createSubject("ws", "actor", "datamart", subject("realtime"));
+
+        verify(nodes).add(captor.capture());
+        var row = captor.getValue();
+        assertEquals(NodeKind.SUBJECT, saved.kind());
+        assertEquals("datamart", row.getParentId());
+        assertEquals("Realtime Report", row.getEnName());
+        assertNull(row.getOwnerId());
+    }
+
+    @Test void requiresAnEnglishNameForApplicationLayerNodes() {
+        var datamart = node(NodeKind.DATASET, "datamart", null);
+        when(nodes.find("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        when(nodes.lock("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        var blank = subject("realtime");
+        blank.setEnName("  ");
+
+        var error = assertThrows(BusinessException.class,
+                () -> service.createSubject("ws", "actor", "datamart", blank));
+
+        assertEquals(CommonErrorCode.PARAM_NOT_VALID, error.getErrorCode());
+        verify(nodes, never()).add(any());
+    }
+
+    @Test void refusesToDeleteADatamartThatStillHasSubjects() {
+        var datamart = node(NodeKind.DATASET, "datamart", null);
+        when(nodes.find("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        when(nodes.lock("ws", NodeKind.DATASET, "datamart")).thenReturn(Optional.of(datamart));
+        when(nodes.hasChildren("ws", NodeKind.DATASET, "datamart")).thenReturn(true);
+
+        var error = assertThrows(BusinessException.class,
+                () -> service.delete("ws", "actor", NodeKind.DATASET, "datamart", 7));
+
+        assertEquals(ModelingErrorCode.HAS_DEPENDENCIES, error.getErrorCode());
+        verify(nodes, never()).delete(any(), any(), any(), anyLong());
+    }
+
+    @Test void splitsCategoryAndDatamartRootsIntoSeparateTrees() {
+        var category = node(NodeKind.CATEGORY, "category", null);
+        var domain = node(NodeKind.DOMAIN, "domain", "category");
+        var datamart = node(NodeKind.DATASET, "datamart", null);
+        var subject = node(NodeKind.SUBJECT, "subject", "datamart");
+        when(nodes.tree("ws")).thenReturn(List.of(subject, domain, datamart, category));
+        when(workspaces.queryWorkspaceMembers("ws", "actor")).thenReturn(List.of());
+
+        var tree = service.tree("ws", "actor");
+
+        assertEquals(1, tree.categories().size());
+        assertEquals("domain", tree.categories().getFirst().getChildren().getFirst().getId());
+        assertEquals(1, tree.datamarts().size());
+        assertEquals("subject", tree.datamarts().getFirst().getChildren().getFirst().getId());
+    }
+
     static NodeInputDTO input(String code) {
         var input = new NodeInputDTO();
         input.setName("订单");
         input.setCode(code);
         input.setOwnerId("owner");
+        return input;
+    }
+
+    static DatamartInputDTO datamart(String code, String enName) {
+        var input = new DatamartInputDTO();
+        input.setName("运营集市");
+        input.setEnName(enName);
+        input.setCode(code);
+        input.setOwnerId("owner");
+        return input;
+    }
+
+    static SubjectInputDTO subject(String code) {
+        var input = new SubjectInputDTO();
+        input.setName("实时战报");
+        input.setEnName("Realtime Report");
+        input.setCode(code);
         return input;
     }
 

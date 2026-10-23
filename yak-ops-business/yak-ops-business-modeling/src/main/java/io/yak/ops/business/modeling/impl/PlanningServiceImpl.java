@@ -1,11 +1,16 @@
 package io.yak.ops.business.modeling.impl;
 
 import io.yak.ops.business.modeling.PlanningService;
+import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
+import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;
+import io.yak.ops.common.bean.dto.modeling.UpdateDatamartDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateNodeDTO;
+import io.yak.ops.common.bean.dto.modeling.UpdateSubjectDTO;
 import io.yak.ops.common.bean.vo.modeling.AssociatedModelsVO;
 import io.yak.ops.common.bean.vo.modeling.OwnerOptionVO;
 import io.yak.ops.common.bean.vo.modeling.PlanningNodeVO;
+import io.yak.ops.common.bean.vo.modeling.PlanningTreeVO;
 import io.yak.ops.common.bean.vo.modeling.SavedNodeVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
@@ -49,27 +54,33 @@ public class PlanningServiceImpl implements PlanningService {
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public List<PlanningNodeVO> tree(String workspaceId, String actor) {
+    public PlanningTreeVO tree(String workspaceId, String actor) {
         requireActor(workspaceId, actor);
         var rows = nodes.tree(workspaceId);
         var members = members(workspaceId, actor);
-        var ownerIds =
-                rows.stream().map(PlanningNodeEntity::getOwnerId).distinct().toList();
+        var ownerIds = rows.stream()
+                .map(PlanningNodeEntity::getOwnerId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
         Map<String, UserEntity> people = ownerIds.isEmpty()
                 ? Map.of()
                 : users.queryByIds(ownerIds).stream().collect(Collectors.toMap(UserEntity::getId, Function.identity()));
         Map<String, List<PlanningNodeEntity>> children = new HashMap<>();
         for (var row : rows) {
-            if (row.getKind() != NodeKind.CATEGORY) {
-                children.computeIfAbsent(
-                                key(row.getKind().parentKind(), row.getParentId()), ignored -> new ArrayList<>())
+            NodeKind parentKind = row.getKind().parentKind();
+            if (parentKind != null) {
+                children.computeIfAbsent(key(parentKind, row.getParentId()), ignored -> new ArrayList<>())
                         .add(row);
             }
         }
-        return rows.stream()
-                .filter(row -> row.getKind() == NodeKind.CATEGORY)
-                .map(row -> project(row, children, people, members))
-                .toList();
+        return new PlanningTreeVO(
+                roots(rows, NodeKind.CATEGORY).stream()
+                        .map(row -> project(row, children, people, members))
+                        .toList(),
+                roots(rows, NodeKind.DATASET).stream()
+                        .map(row -> project(row, children, people, members))
+                        .toList());
     }
 
     private PlanningNodeVO project(
@@ -77,7 +88,7 @@ public class PlanningServiceImpl implements PlanningService {
             Map<String, List<PlanningNodeEntity>> children,
             Map<String, UserEntity> people,
             Set<String> members) {
-        var owner = people.get(row.getOwnerId());
+        var owner = row.getOwnerId() == null ? null : people.get(row.getOwnerId());
         boolean active = owner != null && owner.getStatus() == UserStatus.ACTIVE && members.contains(row.getOwnerId());
         var nested = children.getOrDefault(key(row.getKind(), row.getId()), List.of()).stream()
                 .map(child -> project(child, children, people, members))
@@ -87,6 +98,7 @@ public class PlanningServiceImpl implements PlanningService {
                 row.getKind(),
                 row.getParentId(),
                 row.getName(),
+                row.getEnName(),
                 row.getCode(),
                 row.getOwnerId(),
                 owner == null ? null : displayName(owner),
@@ -94,6 +106,10 @@ public class PlanningServiceImpl implements PlanningService {
                 row.getDescription(),
                 row.getRevision(),
                 nested);
+    }
+
+    private static List<PlanningNodeEntity> roots(List<PlanningNodeEntity> rows, NodeKind kind) {
+        return rows.stream().filter(row -> row.getKind() == kind).toList();
     }
 
     @Override
@@ -124,42 +140,45 @@ public class PlanningServiceImpl implements PlanningService {
     @Transactional(rollbackFor = Exception.class)
     public SavedNodeVO create(String workspaceId, String actor, NodeKind kind, String parentId, NodeInputDTO input) {
         requireActor(workspaceId, actor);
-        if (kind == null || (kind == NodeKind.CATEGORY) != (parentId == null)) throw invalid();
-        if (parentId != null) lockPath(workspaceId, kind.parentKind(), parentId);
-        validateInput(workspaceId, input);
-        var node = new PlanningNodeEntity();
-        node.setWorkspaceId(workspaceId);
-        node.setKind(kind);
-        node.setParentId(parentId);
-        copyInput(node, input);
-        node.setRevision(1);
-        node.initCreate(actor);
-        try {
-            nodes.add(node);
-        } catch (DuplicateKeyException conflict) {
-            throw new BusinessException(ModelingErrorCode.DUPLICATE_CODE, conflict);
-        }
-        return new SavedNodeVO(node.getId(), kind, 1);
+        return insert(workspaceId, actor, kind, parentId, fields(input));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SavedNodeVO update(String workspaceId, String actor, NodeKind kind, String id, UpdateNodeDTO input) {
         requireActor(workspaceId, actor);
-        var node = lockPath(workspaceId, kind, id);
         if (input == null || input.getRevision() == null || input.getRevision() < 1) throw invalid();
-        requireRevision(node, input.getRevision());
-        validateInput(workspaceId, input);
-        boolean codeChanged = !input.getCode().equals(node.getCode());
-        copyInput(node, input);
-        node.initUpdate(actor);
-        try {
-            if (!nodes.update(node, input.getRevision(), codeChanged))
-                throw new BusinessException(ModelingErrorCode.REVISION_CONFLICT);
-        } catch (DuplicateKeyException conflict) {
-            throw new BusinessException(ModelingErrorCode.DUPLICATE_CODE, conflict);
-        }
-        return new SavedNodeVO(id, kind, Math.addExact(input.getRevision(), 1));
+        return replace(workspaceId, actor, kind, id, input.getRevision(), fields(input));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SavedNodeVO createDatamart(String workspaceId, String actor, DatamartInputDTO input) {
+        requireActor(workspaceId, actor);
+        return insert(workspaceId, actor, NodeKind.DATASET, null, fields(input));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SavedNodeVO updateDatamart(String workspaceId, String actor, String id, UpdateDatamartDTO input) {
+        requireActor(workspaceId, actor);
+        if (input == null || input.getRevision() == null || input.getRevision() < 1) throw invalid();
+        return replace(workspaceId, actor, NodeKind.DATASET, id, input.getRevision(), fields(input));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SavedNodeVO createSubject(String workspaceId, String actor, String datamartId, SubjectInputDTO input) {
+        requireActor(workspaceId, actor);
+        return insert(workspaceId, actor, NodeKind.SUBJECT, datamartId, fields(input));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SavedNodeVO updateSubject(String workspaceId, String actor, String id, UpdateSubjectDTO input) {
+        requireActor(workspaceId, actor);
+        if (input == null || input.getRevision() == null || input.getRevision() < 1) throw invalid();
+        return replace(workspaceId, actor, NodeKind.SUBJECT, id, input.getRevision(), fields(input));
     }
 
     @Override
@@ -186,6 +205,44 @@ public class PlanningServiceImpl implements PlanningService {
         return AssociatedModelsVO.notEnabled();
     }
 
+    /** Inserts one node and its code reservation after locking every ancestor. */
+    private SavedNodeVO insert(String workspaceId, String actor, NodeKind kind, String parentId, NodeFields fields) {
+        if (kind == null || (kind.parentKind() == null) != (parentId == null)) throw invalid();
+        if (parentId != null) lockPath(workspaceId, kind.parentKind(), parentId);
+        validateInput(workspaceId, kind, fields);
+        var node = new PlanningNodeEntity();
+        node.setWorkspaceId(workspaceId);
+        node.setKind(kind);
+        node.setParentId(parentId);
+        copyFields(node, fields);
+        node.setRevision(1);
+        node.initCreate(actor);
+        try {
+            nodes.add(node);
+        } catch (DuplicateKeyException conflict) {
+            throw new BusinessException(ModelingErrorCode.DUPLICATE_CODE, conflict);
+        }
+        return new SavedNodeVO(node.getId(), kind, 1);
+    }
+
+    /** Replaces editable fields and the code of an already locked node under its revision guard. */
+    private SavedNodeVO replace(
+            String workspaceId, String actor, NodeKind kind, String id, long revision, NodeFields fields) {
+        var node = lockPath(workspaceId, kind, id);
+        requireRevision(node, revision);
+        validateInput(workspaceId, kind, fields);
+        boolean codeChanged = !fields.code().equals(node.getCode());
+        copyFields(node, fields);
+        node.initUpdate(actor);
+        try {
+            if (!nodes.update(node, revision, codeChanged))
+                throw new BusinessException(ModelingErrorCode.REVISION_CONFLICT);
+        } catch (DuplicateKeyException conflict) {
+            throw new BusinessException(ModelingErrorCode.DUPLICATE_CODE, conflict);
+        }
+        return new SavedNodeVO(id, kind, Math.addExact(revision, 1));
+    }
+
     private PlanningNodeEntity lockPath(String workspaceId, NodeKind kind, String id) {
         var observed = requireNode(workspaceId, kind, id);
         if (kind.parentKind() != null) lockPath(workspaceId, kind.parentKind(), observed.getParentId());
@@ -210,17 +267,21 @@ public class PlanningServiceImpl implements PlanningService {
                 .collect(Collectors.toSet());
     }
 
-    private void validateInput(String workspaceId, NodeInputDTO input) {
-        if (input == null
-                || input.getName() == null
-                || input.getName().strip().isEmpty()
-                || input.getName().strip().length() > 128
-                || input.getOwnerId() == null
-                || input.getOwnerId().isBlank()
-                || input.getOwnerId().length() > 64
-                || (input.getDescription() != null && input.getDescription().length() > 500)) throw invalid();
-        validateCode(input.getCode());
-        if (!workspaces.isActiveMember(workspaceId, input.getOwnerId()))
+    private void validateInput(String workspaceId, NodeKind kind, NodeFields fields) {
+        if (fields.name() == null
+                || fields.name().strip().isEmpty()
+                || fields.name().strip().length() > 128) throw invalid();
+        if (kind.hasEnglishName()) {
+            if (fields.enName() == null
+                    || fields.enName().strip().isEmpty()
+                    || fields.enName().strip().length() > 128) throw invalid();
+        }
+        if (fields.description() != null && fields.description().length() > 500) throw invalid();
+        validateCode(fields.code());
+        if (!kind.hasOwner()) return;
+        var ownerId = fields.ownerId();
+        if (ownerId == null || ownerId.isBlank() || ownerId.length() > 64) throw invalid();
+        if (!workspaces.isActiveMember(workspaceId, ownerId))
             throw new BusinessException(ModelingErrorCode.INVALID_OWNER);
     }
 
@@ -228,18 +289,38 @@ public class PlanningServiceImpl implements PlanningService {
         if (code == null || !CODE.matcher(code).matches()) throw new BusinessException(ModelingErrorCode.INVALID_CODE);
     }
 
-    private static void copyInput(PlanningNodeEntity node, NodeInputDTO input) {
-        node.setName(input.getName().strip());
-        node.setCode(input.getCode());
-        node.setOwnerId(input.getOwnerId());
-        node.setDescription(
-                input.getDescription() == null || input.getDescription().isBlank()
+    private static void copyFields(PlanningNodeEntity node, NodeFields fields) {
+        node.setName(fields.name().strip());
+        node.setEnName(
+                fields.enName() == null || fields.enName().isBlank()
                         ? null
-                        : input.getDescription().strip());
+                        : fields.enName().strip());
+        node.setCode(fields.code());
+        node.setOwnerId(fields.ownerId());
+        node.setDescription(
+                fields.description() == null || fields.description().isBlank()
+                        ? null
+                        : fields.description().strip());
     }
 
     private static void requireRevision(PlanningNodeEntity node, long revision) {
         if (node.getRevision() != revision) throw new BusinessException(ModelingErrorCode.REVISION_CONFLICT);
+    }
+
+    private static NodeFields fields(NodeInputDTO input) {
+        if (input == null) throw invalid();
+        return new NodeFields(input.getName(), null, input.getCode(), input.getOwnerId(), input.getDescription());
+    }
+
+    private static NodeFields fields(DatamartInputDTO input) {
+        if (input == null) throw invalid();
+        return new NodeFields(
+                input.getName(), input.getEnName(), input.getCode(), input.getOwnerId(), input.getDescription());
+    }
+
+    private static NodeFields fields(SubjectInputDTO input) {
+        if (input == null) throw invalid();
+        return new NodeFields(input.getName(), input.getEnName(), input.getCode(), null, input.getDescription());
     }
 
     private static String displayName(UserEntity user) {
@@ -253,4 +334,7 @@ public class PlanningServiceImpl implements PlanningService {
     private static BusinessException invalid() {
         return new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
     }
+
+    /** Editable planning fields after DTO-specific projection; owner is null for subjects. */
+    private record NodeFields(String name, String enName, String code, String ownerId, String description) {}
 }

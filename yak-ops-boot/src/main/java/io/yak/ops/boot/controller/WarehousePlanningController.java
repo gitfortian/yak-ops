@@ -1,11 +1,15 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.modeling.PlanningService;
+import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
+import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;
+import io.yak.ops.common.bean.dto.modeling.UpdateDatamartDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateNodeDTO;
+import io.yak.ops.common.bean.dto.modeling.UpdateSubjectDTO;
 import io.yak.ops.common.bean.vo.modeling.AssociatedModelsVO;
 import io.yak.ops.common.bean.vo.modeling.OwnerOptionVO;
-import io.yak.ops.common.bean.vo.modeling.PlanningNodeVO;
+import io.yak.ops.common.bean.vo.modeling.PlanningTreeVO;
 import io.yak.ops.common.bean.vo.modeling.SavedNodeVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.modeling.NodeKind;
@@ -40,7 +44,7 @@ public class WarehousePlanningController {
     private AuthenticationManager authentication;
 
     @GetMapping("/tree")
-    public Result<List<PlanningNodeVO>> tree() {
+    public Result<PlanningTreeVO> tree() {
         return Result.success(service.tree(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId()));
     }
 
@@ -77,6 +81,44 @@ public class WarehousePlanningController {
     @PostMapping("/domains/{id}/processes")
     public Result<SavedNodeVO> process(@PathVariable String id, @Valid @RequestBody NodeInputDTO input) {
         return create(NodeKind.PROCESS, id, input);
+    }
+
+    @PostMapping("/datamarts")
+    public Result<SavedNodeVO> datamart(@Valid @RequestBody DatamartInputDTO input) {
+        return Result.success(
+                service.createDatamart(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), input));
+    }
+
+    @PutMapping("/datamarts/{id}")
+    public Result<SavedNodeVO> updateDatamart(@PathVariable String id, @Valid @RequestBody UpdateDatamartDTO input) {
+        return Result.success(service.updateDatamart(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, input));
+    }
+
+    @DeleteMapping("/datamarts/{id}")
+    public Result<Boolean> deleteDatamart(@PathVariable String id, @RequestParam @Min(1) long revision) {
+        service.delete(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), NodeKind.DATASET, id, revision);
+        return Result.success(true);
+    }
+
+    @PostMapping("/datamarts/{id}/subjects")
+    public Result<SavedNodeVO> subject(@PathVariable String id, @Valid @RequestBody SubjectInputDTO input) {
+        return Result.success(service.createSubject(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, input));
+    }
+
+    @PutMapping("/subjects/{id}")
+    public Result<SavedNodeVO> updateSubject(@PathVariable String id, @Valid @RequestBody UpdateSubjectDTO input) {
+        return Result.success(service.updateSubject(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, input));
+    }
+
+    @DeleteMapping("/subjects/{id}")
+    public Result<Boolean> deleteSubject(@PathVariable String id, @RequestParam @Min(1) long revision) {
+        service.delete(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), NodeKind.SUBJECT, id, revision);
+        return Result.success(true);
     }
 
     @PutMapping("/{level:categories|domains|processes}/{id}")
