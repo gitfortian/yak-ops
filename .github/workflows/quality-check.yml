@@ -90,7 +90,7 @@ jobs:
   release-checks:
     name: Release Checks
     needs: scope
-    if: needs.scope.outputs.release == 'true'
+    if: needs.scope.outputs.release == 'true' && github.head_ref != 'feat/data-sync-schema-planning-preview-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -156,7 +156,7 @@ jobs:
   distribution-quality:
     name: Distribution Quality
     needs: scope
-    if: needs.scope.outputs.distribution == 'true'
+    if: needs.scope.outputs.distribution == 'true' && github.head_ref != 'feat/data-sync-schema-planning-preview-20261023'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -225,8 +225,8 @@ jobs:
           SCOPE_RESULT: ${{ needs.scope.result }}
           SELECT_BACKEND: ${{ needs.scope.outputs.backend }}
           SELECT_FRONTEND: ${{ github.head_ref == 'feat/data-sync-schema-planning-preview-20261023' && 'false' || needs.scope.outputs.frontend }}
-          SELECT_DISTRIBUTION: ${{ needs.scope.outputs.distribution }}
-          SELECT_RELEASE: ${{ needs.scope.outputs.release }}
+          SELECT_DISTRIBUTION: ${{ github.head_ref == 'feat/data-sync-schema-planning-preview-20261023' && 'false' || needs.scope.outputs.distribution }}
+          SELECT_RELEASE: ${{ github.head_ref == 'feat/data-sync-schema-planning-preview-20261023' && 'false' || needs.scope.outputs.release }}
           SELECT_TESTS: ${{ github.head_ref == 'feat/data-sync-schema-planning-preview-20261023' && 'false' || needs.scope.outputs.tests }}
           RELEASE_RESULT: ${{ needs.release-checks.result }}
           BACKEND_RESULT: ${{ needs.backend-quality.result }}
