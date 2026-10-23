@@ -3,17 +3,25 @@ package io.yak.ops.connector.jdbc.sink;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcColumnInfo;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcTableInfo;
+import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.PostgresJdbcDialect;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.AddColumnEvent;
+import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeEventType;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
+import io.yak.ops.core.schema.PhysicalColumn;
+import io.yak.ops.core.types.LogicalType;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.io.IOException;
@@ -24,7 +32,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -33,10 +45,11 @@ import java.util.stream.Collectors;
 /**
  * Prepares and verifies JDBC target tables without participating in row writes.
  *
- * <p>Each operation owns its DDL connection and statement. Existing tables are only checked;
- * no table is dropped, truncated or altered. DDL is executed in auto-commit mode and successful
- * statements are not rolled back when a later statement fails. The caller must hold the target
- * resource claim and wait for this operation to return before releasing it.
+ * <p>Each operation owns its DDL connection and statement. CREATE_TABLE never modifies existing
+ * tables; opt-in ADD_COLUMN and ALTER_COLUMN_TYPE support only safe, non-key changes on
+ * MySQL/PostgreSQL. DDL is executed in auto-commit mode and successful statements are not rolled
+ * back when a later statement fails. The caller must hold the target resource claim and wait for
+ * this operation to return before releasing it.
  */
 public final class JdbcMetadataApplier implements MetadataApplier {
 
@@ -44,14 +57,18 @@ public final class JdbcMetadataApplier implements MetadataApplier {
 
     public static final int DEFAULT_STATEMENT_TIMEOUT_SECONDS = 30;
 
-    private static final Set<SchemaChangeEventType> SUPPORTED = Set.of(SchemaChangeEventType.CREATE_TABLE);
+    private static final Set<SchemaChangeEventType> CREATE_ONLY = Set.of(SchemaChangeEventType.CREATE_TABLE);
+    private static final Set<SchemaChangeEventType> JDBC_EVOLUTION = Set.of(
+            SchemaChangeEventType.CREATE_TABLE,
+            SchemaChangeEventType.ADD_COLUMN,
+            SchemaChangeEventType.ALTER_COLUMN_TYPE);
 
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
     private final JdbcCatalog catalog;
     private final int statementTimeoutSeconds;
 
-    private Set<SchemaChangeEventType> accepted = SUPPORTED;
+    private Set<SchemaChangeEventType> accepted = CREATE_ONLY;
     private boolean canceled;
     private boolean closed;
     private transient boolean applying;
@@ -122,21 +139,22 @@ public final class JdbcMetadataApplier implements MetadataApplier {
     }
 
     @Override
-    public void applySchemaChange(SchemaChangeEvent schemaChangeEvent) throws SchemaEvolveException {
-        Objects.requireNonNull(schemaChangeEvent, "schemaChangeEvent");
-        if (!(schemaChangeEvent instanceof CreateTableEvent event)
-                || schemaChangeEvent.getType() != SchemaChangeEventType.CREATE_TABLE) {
-            throw new SchemaEvolveException(schemaChangeEvent, "JDBC metadata applier supports CREATE_TABLE only");
+    public void applySchemaChange(SchemaChangeEvent event) throws SchemaEvolveException {
+        Objects.requireNonNull(event, "event");
+        if (!getSupportedSchemaEvolutionTypes().contains(event.getType())) {
+            throw new SchemaEvolveException(event, "JDBC dialect does not support this schema change");
         }
         begin(event);
         try {
-            JdbcDdlPlan ddl = plan(event);
-            checkCanceled(event);
-            if (catalog.findTable(event.tableId()).isEmpty()) {
-                createMissingTable(event, ddl);
+            if (event instanceof CreateTableEvent create) {
+                applyCreateTable(create);
+            } else if (event instanceof AddColumnEvent add) {
+                applyAddColumns(add);
+            } else if (event instanceof AlterColumnTypeEvent alter) {
+                applyAlterColumnTypes(alter);
+            } else {
+                throw new SchemaEvolveException(event, "Unsupported JDBC schema change event");
             }
-            checkCanceled(event);
-            validateTable(event);
             checkCanceled(event);
         } catch (SchemaEvolveException failure) {
             throw failure;
@@ -147,6 +165,17 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 applying = false;
             }
         }
+    }
+
+    private void applyCreateTable(CreateTableEvent event) throws SQLException {
+        checkCanceled(event);
+        // An existing physical table does not require rendering the source's CREATE TABLE SQL.
+        if (catalog.findTable(event.tableId()).isEmpty()) {
+            JdbcDdlPlan ddl = plan(event);
+            createMissingTable(event, ddl);
+        }
+        checkCanceled(event);
+        validateTable(event);
     }
 
     private void createMissingTable(CreateTableEvent event, JdbcDdlPlan ddl) throws SQLException {
@@ -320,18 +349,18 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 || ("42S01".equals(failure.getSQLState()) && failure.getErrorCode() == 1050);
     }
 
-    private synchronized void begin(CreateTableEvent event) {
+    private synchronized void begin(SchemaChangeEvent event) {
         if (closed || applying) {
             throw new SchemaEvolveException(event, "Metadata applier is closed or already applying an operation");
         }
-        if (!accepted.contains(SchemaChangeEventType.CREATE_TABLE)) {
-            throw new SchemaEvolveException(event, "CREATE_TABLE is not enabled for this metadata applier");
+        if (!accepted.contains(event.getType())) {
+            throw new SchemaEvolveException(event, "Schema change is not enabled for this metadata applier");
         }
         checkCanceled(event);
         applying = true;
     }
 
-    private synchronized void checkCanceled(CreateTableEvent event) {
+    private synchronized void checkCanceled(SchemaChangeEvent event) {
         if (canceled || Thread.currentThread().isInterrupted()) {
             throw new SchemaEvolveException(
                     event, "Schema preparation was canceled", new CancellationException("Schema preparation canceled"));
@@ -365,7 +394,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             throw new IllegalStateException("Cannot configure a closed or active metadata applier");
         }
         Set<SchemaChangeEventType> enabled = new HashSet<>(Set.copyOf(Objects.requireNonNull(types, "types")));
-        enabled.retainAll(SUPPORTED);
+        enabled.retainAll(getSupportedSchemaEvolutionTypes());
         accepted = Set.copyOf(enabled);
         return this;
     }
@@ -377,7 +406,9 @@ public final class JdbcMetadataApplier implements MetadataApplier {
 
     @Override
     public Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
-        return SUPPORTED;
+        return dialect instanceof MySqlJdbcDialect || dialect instanceof PostgresJdbcDialect
+                ? JDBC_EVOLUTION
+                : CREATE_ONLY;
     }
 
     @Override
