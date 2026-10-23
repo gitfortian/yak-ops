@@ -30,7 +30,8 @@ public record SchemaManagerSnapshot(List<TableState> tables) implements Serializ
             Schema sourceSchema,
             Schema targetSchema,
             long version,
-            Map<String, String> appliedEventFingerprints) implements Serializable {
+            Map<String, String> appliedEventFingerprints)
+            implements Serializable {
 
         private static final long serialVersionUID = 1L;
 
@@ -39,14 +40,14 @@ public record SchemaManagerSnapshot(List<TableState> tables) implements Serializ
             targetTable = Objects.requireNonNull(targetTable, "targetTable");
             sourceSchema = Objects.requireNonNull(sourceSchema, "sourceSchema");
             targetSchema = Objects.requireNonNull(targetSchema, "targetSchema");
-            appliedEventFingerprints = java.util.Collections.unmodifiableMap(
-                    new java.util.LinkedHashMap<>(Objects.requireNonNull(
-                            appliedEventFingerprints, "appliedEventFingerprints")));
+            appliedEventFingerprints = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(
+                    Objects.requireNonNull(appliedEventFingerprints, "appliedEventFingerprints")));
             if (version < 0 || appliedEventFingerprints.size() > 256) {
                 throw new IllegalArgumentException("Invalid schema version or replay history");
             }
             if (appliedEventFingerprints.entrySet().stream()
-                    .anyMatch(entry -> entry.getKey().isBlank() || entry.getValue().isBlank())) {
+                    .anyMatch(entry ->
+                            entry.getKey().isBlank() || entry.getValue().isBlank())) {
                 throw new IllegalArgumentException("Invalid schema replay identity");
             }
         }
