@@ -241,7 +241,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
   if (published) {
     return (
-      <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
+      <div className="min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
         <PageHeader
           title={pageTitle}
           bordered
@@ -263,8 +263,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     <div
       className={
         localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#f6f6f6] text-[#242731]"
-          : "min-h-full bg-[#f6f6f6] text-[#242731]"
+          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
+          : "min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
       }
     >
       <PageHeader
