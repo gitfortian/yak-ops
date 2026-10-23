@@ -76,13 +76,9 @@ public final class MySqlJdbcDialect extends AbstractDialect {
         return switch (column.dataType().getTypeRoot()) {
             case BOOLEAN -> LogicalTypes.TINYINT.copy(nullable);
             case VARCHAR ->
-                "LONGTEXT".equals(targetType.ddl())
-                        ? LogicalTypes.STRING.copy(nullable)
-                        : column.dataType();
+                "LONGTEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
             case VARBINARY ->
-                "LONGBLOB".equals(targetType.ddl())
-                        ? LogicalTypes.BINARY.copy(nullable)
-                        : column.dataType();
+                "LONGBLOB".equals(targetType.ddl()) ? LogicalTypes.BINARY.copy(nullable) : column.dataType();
             default -> column.dataType();
         };
     }
