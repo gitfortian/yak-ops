@@ -369,7 +369,7 @@ export interface DataSyncInstancePageResult {
 export interface DataSyncSchemaPreview {
   mappingIndex: number;
   target: { catalog: string; schema: string | null; table: string };
-  action: "CREATE" | "ALTER" | "VERIFY";
+  action: "CREATE" | "ALTER" | "VERIFY" | "BLOCKED";
   statements: string[];
   differences: Array<{
     column: string | null;
