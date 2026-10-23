@@ -24,6 +24,7 @@ import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import io.yak.ops.dao.repository.task.DefinitionPageQuery;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.DefinitionVersionRepository;
+import io.yak.ops.dao.repository.task.InstanceRepository;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
@@ -54,6 +55,9 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Resource
     private ScheduleRepository schedules;
 
+    @Resource
+    private InstanceRepository instances;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO create(CreateDefinitionDTO dto, String operatorId) {
@@ -83,6 +87,7 @@ public class DefinitionServiceImpl implements DefinitionService {
         if (dto == null) throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         DefinitionEntity definition = requireDefinition(id, true);
         requireUnpublished(definition);
+        requireNoActiveInstance(definition);
         String name = requiredName(dto.getName());
         checkNameAvailable(definition.getWorkspaceId(), name, id);
         if (StringUtils.isNotBlank(dto.getParameters())) {
@@ -123,6 +128,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public DefinitionVO unpublish(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
+        requireNoActiveInstance(definition);
         definition.setStatus(DefinitionStatus.UNPUBLISHED);
         definition.initUpdate(operatorId);
         schedules.disableForTarget(
@@ -136,6 +142,7 @@ public class DefinitionServiceImpl implements DefinitionService {
     public void delete(String id, String operatorId) {
         DefinitionEntity definition = requireDefinition(id, true);
         requireUnpublished(definition);
+        requireNoActiveInstance(definition);
         String operator = operatorId;
         if (StringUtils.isBlank(operator)) {
             operator = "system";
@@ -212,6 +219,15 @@ public class DefinitionServiceImpl implements DefinitionService {
     private void requireUnpublished(DefinitionEntity entity) {
         if (entity.getStatus() != DefinitionStatus.UNPUBLISHED) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
+        }
+    }
+
+    /** Called while the Definition row is locked, just like execution admission. */
+    private void requireNoActiveInstance(DefinitionEntity definition) {
+        if (!instances
+                .latest(definition.getWorkspaceId(), List.of(definition.getId()), true)
+                .isEmpty()) {
+            throw new BusinessException(CommonErrorCode.TASK_INSTANCE_ACTIVE);
         }
     }
 

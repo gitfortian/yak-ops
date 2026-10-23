@@ -3,6 +3,7 @@ package io.yak.ops.plugin.task.datasync.plan;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.types.Column;
@@ -58,7 +59,7 @@ public final class JobPlanner {
      * @return immutable logical plan; missing targets require explicit SCHEMA preparation
      */
     public JobPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
-        return resolve(parameters, context.workspaceId(), context.instanceId());
+        return resolve(parameters, context.workspaceId(), context.instanceId(), false);
     }
 
     /**
@@ -72,16 +73,34 @@ public final class JobPlanner {
         if (!JobConfig.from(parameters).steps().contains(Step.SCHEMA)) {
             throw new IllegalArgumentException("DDL preview requires the SCHEMA step");
         }
-        JobPlan plan = resolve(parameters, workspaceId, null);
+        JobPlan plan = resolve(parameters, workspaceId, null, true);
         List<SchemaPreview> results = new ArrayList<>();
         for (int index = 0; index < plan.tables().size(); index++) {
             TablePlan table = plan.tables().get(index);
+            SchemaChangePlan schema = table.schemaPlan();
+            List<SchemaPreview.Difference> differences = schema.differences().stream()
+                    .map(difference -> new SchemaPreview.Difference(
+                            difference.columnName(),
+                            difference.kind().name(),
+                            difference.reason().name(),
+                            difference.sourceType() == null
+                                    ? null
+                                    : difference.sourceType().asSerializableString(),
+                            difference.targetType() == null
+                                    ? null
+                                    : difference.targetType().asSerializableString()))
+                    .toList();
             results.add(new SchemaPreview(
                     index,
                     table.targetTable(),
-                    table.targetSchema() == null ? "CREATE" : "VERIFY",
-                    SchemaValidator.ddl(table.targetDatasource().type(), table.schemaChange())
-                            .statements()));
+                    schema.blocked()
+                            ? "BLOCKED"
+                            : table.targetSchema() == null ? "CREATE" : schema.requiresDdl() ? "ALTER" : "VERIFY",
+                    schema.blocked()
+                            ? List.of()
+                            : SchemaValidator.statements(
+                                    table.targetDatasource().type(), schema, table.targetMetadata()),
+                    differences));
         }
         return List.copyOf(results);
     }
@@ -101,11 +120,12 @@ public final class JobPlanner {
                 table.catalog(),
                 table.schema(),
                 table.table());
-        SchemaValidator.validateTarget(plan.schemaChange(), actual);
+        SchemaValidator.validatePrepared(
+                plan.schemaChange(), plan.targetDatasource().type(), actual);
         return plan.withTarget(actual);
     }
 
-    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId) {
+    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId, boolean preview) {
         JobConfig job = JobConfigValidator.validateConfig(parameters, factories);
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
@@ -120,12 +140,13 @@ public final class JobPlanner {
             String sinkId = sink.get(JobOptions.DATASOURCE_ID);
             var sourceFactory = factories.source(source.get(JobOptions.TYPE));
             var sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
-            DataSourceTable from = resources.table(
+            java.util.function.Supplier<DataSourceTable> sourceLookup = () -> resources.table(
                     workspaceId,
                     sourceId,
                     source.get(JobOptions.DATABASE),
                     source.get(JobOptions.SCHEMA),
                     source.get(JobOptions.TABLE));
+            DataSourceTable from = prepareSchema ? SchemaValidator.sourceMetadata(sourceLookup) : sourceLookup.get();
             DataSourceInfo targetInfo;
             TableId targetTable;
             DataSourceTable actual;
@@ -157,6 +178,8 @@ public final class JobPlanner {
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(from.schema());
             SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
+            SolutionCatalog.validateSchemaChanges(
+                    job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
             SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
             if (job.solutionType().supportsScheduling()
                     && job.steps().contains(Step.INCREMENTAL)
@@ -174,10 +197,13 @@ public final class JobPlanner {
                 throw new IllegalStateException("Datasource revision changed while planning the table collection");
             }
             CreateTableEvent event = prepareSchema ? SchemaValidator.createEvent(from, targetInfo, targetTable) : null;
+            SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
+            if (schema != null && !preview) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
-            sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
-            if (actual != null) {
-                if (event != null) SchemaValidator.validateTarget(event, actual);
+            if (schema == null || !schema.blocked()) {
+                sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
+            }
+            if (actual != null && (schema == null || (!schema.blocked() && !schema.requiresDdl()))) {
                 sinkFactory.validateSchema(sink, from.schema(), actual.schema(), sourceFactory.producesChangelog());
             }
             String target = encodePart(sinkId) + encodeTable(targetTable);
@@ -186,12 +212,14 @@ public final class JobPlanner {
                     + encodePart(Long.toString(from.revision()))
                     + encodeTable(from.table())
                     + encodeSchema(from.schema())
+                    + encodeProperties(from.columnProperties())
                     + encodePart(sinkId)
                     + encodePart(Long.toString(targetInfo.revision()))
                     + encodeTable(targetTable)
                     + encodeSchema(expected);
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
+                binding += encodeProperties(event.getColumnProperties());
                 for (var comment : new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
                     binding += encodePart(comment.getKey()) + encodePart(comment.getValue());
                 }
@@ -214,7 +242,9 @@ public final class JobPlanner {
                     targetTable,
                     actual == null ? null : actual.schema(),
                     event,
-                    ReadonlyConfig.fromMap(prepared)));
+                    ReadonlyConfig.fromMap(prepared),
+                    schema,
+                    actual));
         }
         if (job.sourceDataSourceId().equals(job.targetDataSourceId())
                 && sources.stream().anyMatch(targets::contains)) {
@@ -225,6 +255,22 @@ public final class JobPlanner {
 
     private static String encodeTable(TableId table) {
         return encodePart(table.catalog()) + encodePart(table.schema()) + encodePart(table.table());
+    }
+
+    /** Physical metadata changes invalidate previously admitted schema plans. */
+    private static String encodeProperties(java.util.Map<String, io.yak.ops.core.event.ColumnProperties> properties) {
+        StringBuilder value = new StringBuilder();
+        for (var entry : new java.util.TreeMap<>(properties).entrySet()) {
+            var attribute = entry.getValue();
+            value.append(encodePart(entry.getKey()))
+                    .append(encodePart(attribute.defaultExpression()))
+                    .append(encodePart(attribute.onUpdateExpression()))
+                    .append(encodePart(attribute.nativeType()))
+                    .append(encodePart(String.valueOf(attribute.defaultGenerated())))
+                    .append(encodePart(String.valueOf(attribute.autoIncrement())))
+                    .append(encodePart(String.valueOf(attribute.generated())));
+        }
+        return value.toString();
     }
 
     private static String encodeSchema(TableSchema schema) {

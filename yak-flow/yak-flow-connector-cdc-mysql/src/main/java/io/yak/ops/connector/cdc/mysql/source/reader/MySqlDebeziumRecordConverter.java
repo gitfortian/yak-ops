@@ -5,9 +5,13 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.event.SourceSchemaChange;
+import io.yak.ops.core.schema.PhysicalColumn;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.core.types.VarCharType;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -17,6 +21,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,9 +39,25 @@ import org.apache.kafka.connect.source.SourceRecord;
 public final class MySqlDebeziumRecordConverter {
 
     private final Map<TableId, TableSchema> schemas;
+    private final Map<TableId, Schema> physicalSchemas;
+    private final MySqlSchemaChangeConverter schemaChanges;
+    private final boolean evolve;
 
     public MySqlDebeziumRecordConverter(Map<TableId, TableSchema> schemas) {
-        this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
+        this(schemas, Map.of(), false);
+    }
+
+    public MySqlDebeziumRecordConverter(
+            Map<TableId, TableSchema> schemas, Map<TableId, Schema> restored, boolean evolve) {
+        this.schemas = new LinkedHashMap<>(Objects.requireNonNull(schemas, "schemas"));
+        this.physicalSchemas = new LinkedHashMap<>();
+        this.schemas.forEach((table, model) -> this.physicalSchemas.put(
+                table,
+                Objects.requireNonNull(
+                        restored.getOrDefault(table, Schema.from(model, null, Map.of(), Map.of())),
+                        "physical schema")));
+        this.schemaChanges = new MySqlSchemaChangeConverter(this.schemas.keySet());
+        this.evolve = evolve;
     }
 
     /**
@@ -61,7 +82,16 @@ public final class MySqlDebeziumRecordConverter {
             throw new IllegalArgumentException("Unsupported Debezium MySQL event payload");
         }
         if (envelope.schema().field("ddl") != null) {
-            throw new UnsupportedOperationException("MySQL CDC schema evolution is not supported in PR1");
+            if (!evolve) {
+                throw new UnsupportedOperationException("MySQL CDC schema evolution is disabled");
+            }
+            SourceSchemaChange change = schemaChanges.convert(envelope, progress, physicalSchemas);
+            if (change == null) {
+                return new BinlogEvent(List.of(), progress);
+            }
+            physicalSchemas.put(change.tableId(), change.after());
+            schemas.put(change.tableId(), change.after().toTableSchema());
+            return new BinlogEvent(List.of(), progress, change);
         }
         if (envelope.schema().field("op") == null) {
             throw new IllegalArgumentException("Unexpected MySQL CDC event without a row operation");
@@ -90,6 +120,108 @@ public final class MySqlDebeziumRecordConverter {
             default -> throw new IllegalArgumentException("Unsupported Debezium MySQL row operation");
         }
         return new BinlogEvent(rows, progress);
+    }
+
+    /**
+     * Detects a row whose Debezium schema is ahead of the registered schema. Some
+     * MySQL DDL records have no structured table change; their rows must still
+     * cross a coordinated schema boundary before conversion.
+     */
+    public TableId schemaMismatch(SourceRecord source) {
+        if (!evolve
+                || !(source.value() instanceof Struct envelope)
+                || envelope.schema().field("op") == null) {
+            return null;
+        }
+        Struct origin = envelope.getStruct("source");
+        if (origin == null) {
+            return null;
+        }
+        TableId table = new TableId(origin.getString("db"), null, origin.getString("table"));
+        TableSchema registered = schemas.get(table);
+        if (registered == null) {
+            return null;
+        }
+        Struct row = envelope.schema().field("after") == null ? null : envelope.getStruct("after");
+        if (row == null && envelope.schema().field("before") != null) {
+            row = envelope.getStruct("before");
+        }
+        if (row == null) {
+            return null;
+        }
+        return matchesRowSchema(row, registered) ? null : table;
+    }
+
+    /**
+     * Compares the Debezium row shape and its explicitly propagated VARCHAR
+     * capacities against a YakFlow schema. Missing metadata keeps the previous
+     * column-name check; enabling Schema Evolution requests the length parameter.
+     */
+    public boolean matchesRowSchema(Struct row, TableSchema registered) {
+        List<org.apache.kafka.connect.data.Field> fields = row.schema().fields();
+        if (fields.size() != registered.columnCount()) {
+            return false;
+        }
+        for (int index = 0; index < fields.size(); index++) {
+            org.apache.kafka.connect.data.Field field = fields.get(index);
+            Column column = registered.column(index);
+            if (!field.name().equals(column.name())) {
+                return false;
+            }
+            if (column.dataType() instanceof VarCharType varchar) {
+                Map<String, String> parameters = field.schema().parameters();
+                String capacity = parameters == null ? null : parameters.get("__debezium.source.column.length");
+                if (capacity != null) {
+                    int actualLength;
+                    try {
+                        actualLength = Integer.parseInt(capacity);
+                    } catch (NumberFormatException failure) {
+                        throw new IllegalArgumentException(
+                                "Invalid Debezium VARCHAR capacity metadata: " + field.name(), failure);
+                    }
+                    if (actualLength < 1) {
+                        throw new IllegalArgumentException(
+                                "Invalid Debezium VARCHAR capacity metadata: " + field.name());
+                    }
+                    if (actualLength != varchar.length()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Reconciles source metadata only if it describes the exact Debezium row shape.
+     * The caller emits this event with the preceding delivered offset, not the row
+     * offset, so checkpoints cannot skip the row that discovered the change.
+     */
+    public BinlogEvent reconcile(
+            TableId table, TableSchema catalogSchema, BinlogOffset preceding, BinlogOffset position) {
+        Objects.requireNonNull(preceding, "preceding CDC offset");
+        Schema previous = Objects.requireNonNull(physicalSchemas.get(table), "registered source schema");
+        if (!previous.primaryKeys().equals(catalogSchema.primaryKeys())) {
+            throw new UnsupportedOperationException("MySQL CDC cannot change primary keys during streaming");
+        }
+        List<PhysicalColumn> columns = new ArrayList<>();
+        for (Column column : catalogSchema.columns()) {
+            PhysicalColumn old = previous.column(column.name()).orElse(null);
+            columns.add(new PhysicalColumn(
+                    column.name(),
+                    column.dataType(),
+                    old == null ? null : old.comment(),
+                    old == null ? null : old.properties()));
+        }
+        Schema next = new Schema(columns, previous.primaryKeys(), previous.comment());
+        if (previous.equals(next)) {
+            throw new IllegalStateException("Debezium row changed without a distinct source table schema");
+        }
+        SourceSchemaChange change =
+                new SourceSchemaChange(MySqlSchemaChangeConverter.eventId(position, table), table, previous, next);
+        physicalSchemas.put(table, next);
+        schemas.put(table, next.toTableSchema());
+        return new BinlogEvent(List.of(), preceding, change);
     }
 
     private static Map<String, Object> asMap(Map<String, ?> source) {

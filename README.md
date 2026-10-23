@@ -38,6 +38,7 @@ docker compose up -d
 
 ## Releases
 
+- [发布历史与 Release Notes](docs/releases/README.md)
 - [历史 GitHub Releases](https://github.com/weifuwan/yak-ops/releases)
 - [发布操作](scripts/release/README.md)
 

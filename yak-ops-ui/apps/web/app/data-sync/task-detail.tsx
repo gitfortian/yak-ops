@@ -17,7 +17,7 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { ArrowRight, Copy, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
@@ -36,7 +36,8 @@ import {
   type DataSyncInstanceStatus,
   type DataSyncTaskRecord,
 } from "@/service/data-sync";
-import { canCancelTaskInstance } from "@/service/data-sync/execution";
+import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
+import { listLatestTaskInstances } from "@/service/task-execution";
 
 import {
   DataSyncExecutionDetailContent,
@@ -45,6 +46,7 @@ import {
   dataSyncTriggerText,
   isActiveDataSyncInstance,
 } from "./execution-detail";
+import { useActiveTaskInstances } from "./task-lifecycle";
 import { TaskInstanceLogPanel } from "./task-instance-log-panel";
 import { solutionSummary } from "./solution-presentation";
 
@@ -106,13 +108,23 @@ export function DataSyncTaskDetailPage() {
   const [historyScheduleId, setHistoryScheduleId] = useState<string>();
   const schedules = useTaskSchedules(!realtime && taskId ? [taskId] : []);
   const hasEnabledSchedule = Boolean(taskId && schedules.records.get(taskId)?.enabled);
+  const activeTaskIds = useMemo(() => (taskId ? [taskId] : []), [taskId]);
+  const {
+    activeByTask,
+    ready: instancesReady,
+    refresh: refreshActiveInstances,
+  } = useActiveTaskInstances(Boolean(taskId), activeTaskIds);
+  const activeInstance = taskId ? activeByTask.get(taskId) : undefined;
+  const canStart = canManageTaskDefinition(instancesReady, activeInstance);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
   const searchParamsSetter = useRef(setSearchParams);
   const selectedInstance =
     selected?.id === executionId && selected?.taskId === taskId ? selected : undefined;
   const hasActiveInstance =
-    instances.some(isActiveDataSyncInstance) || isActiveDataSyncInstance(selectedInstance);
+    Boolean(activeInstance) ||
+    instances.some(isActiveDataSyncInstance) ||
+    isActiveDataSyncInstance(selectedInstance);
 
   useEffect(() => {
     searchParamsSetter.current = setSearchParams;
@@ -357,11 +369,18 @@ export function DataSyncTaskDetailPage() {
   };
 
   const run = async () => {
-    if (!taskId || running) return;
+    if (!taskId || running || !canStart || task?.status !== "PUBLISHED") return;
     setRunning(true);
     try {
+      const active = await listLatestTaskInstances([taskId], true);
+      if (active.length > 0) {
+        toast.error("任务正在执行，请先停止");
+        await refreshActiveInstances();
+        return;
+      }
       const submitted = await runDataSyncTask(taskId);
       toast.success("运行请求已提交");
+      await refreshActiveInstances();
       setStatus("ALL");
       setPageNo(1);
       setInstances([]);
@@ -387,7 +406,7 @@ export function DataSyncTaskDetailPage() {
       toast.success("已发送停止请求");
       const value = await getDataSyncInstance(selectedInstance.id);
       if (request === detailRequest.current) setSelected(value);
-      await loadInstances();
+      await Promise.all([loadInstances(), refreshActiveInstances()]);
     } finally {
       setCanceling(false);
     }
@@ -548,11 +567,22 @@ export function DataSyncTaskDetailPage() {
                 </Button>
               ) : null}
               {task.status === "PUBLISHED" ? (
-                <Button size="small" loading={running} onClick={() => void run()}>
-                  运行
-                </Button>
+                !activeInstance ? (
+                  <Button
+                    size="small"
+                    loading={running}
+                    disabled={!canStart}
+                    onClick={() => void run()}
+                  >
+                    {realtime ? "启动" : "运行"}
+                  </Button>
+                ) : null
               ) : (
-                <Button size="small" onClick={() => navigate(basePath + "/" + task.id + "/edit")}>
+                <Button
+                  size="small"
+                  disabled={!canStart}
+                  onClick={() => navigate(basePath + "/" + task.id + "/edit")}
+                >
                   编辑
                 </Button>
               )}
@@ -563,7 +593,7 @@ export function DataSyncTaskDetailPage() {
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 max-md:px-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-5 max-md:px-4">
           <div className="space-y-8">
             <section aria-labelledby="task-basic-info">
               <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[#344054]">

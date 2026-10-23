@@ -9,6 +9,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -158,7 +159,8 @@ public final class JdbcTableMetadata {
                         result.getString("REMARKS"),
                         result.getString("COLUMN_DEF") != null,
                         metadataFlag(result.getString("IS_AUTOINCREMENT")),
-                        metadataFlag(result.getString("IS_GENERATEDCOLUMN")));
+                        metadataFlag(result.getString("IS_GENERATEDCOLUMN")),
+                        result.getString("COLUMN_DEF"));
                 if (columns.putIfAbsent(position, column) != null) {
                     throw new SQLException("Duplicate JDBC column ordinal");
                 }
@@ -178,7 +180,74 @@ public final class JdbcTableMetadata {
                 throw new SQLException("JDBC primary key refers to an unknown column");
             }
         }
+        if ("MySQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())) {
+            return readMySqlUpdates(connection, catalog, tableId.table(), ordered);
+        }
         return List.copyOf(ordered);
+    }
+
+    /**
+     * JDBC COLUMN_DEF does not contain MySQL's ON UPDATE clause. Read the server's
+     * canonical EXTRA metadata separately, using bound schema/table identifiers.
+     */
+    private static List<JdbcColumnInfo> readMySqlUpdates(
+            Connection connection, String catalog, String table, List<JdbcColumnInfo> columns) throws SQLException {
+        Map<String, String> updates = new HashMap<>();
+        Map<String, Boolean> generatedDefaults = new HashMap<>();
+        Map<String, Boolean> generatedColumns = new HashMap<>();
+        Map<String, String> defaults = new HashMap<>();
+        Map<String, String> nativeTypes = new HashMap<>();
+        String sql = "SELECT COLUMN_NAME, EXTRA, COLUMN_DEFAULT, COLUMN_TYPE FROM information_schema.COLUMNS "
+                + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, catalog == null ? connection.getCatalog() : catalog);
+            statement.setString(2, table);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    String extra = rows.getString("EXTRA");
+                    if (extra == null) throw new SQLException("MySQL column EXTRA metadata is unavailable");
+                    String flags = extra.toLowerCase(java.util.Locale.ROOT);
+                    String name = rows.getString("COLUMN_NAME");
+                    generatedDefaults.put(name, flags.contains("default_generated"));
+                    // MySQL JDBC may report DEFAULT_GENERATED as IS_GENERATEDCOLUMN. The physical
+                    // generated-column markers are distinct from generated DEFAULT expressions.
+                    generatedColumns.put(
+                            name, flags.contains("virtual generated") || flags.contains("stored generated"));
+                    defaults.put(name, rows.getString("COLUMN_DEFAULT"));
+                    nativeTypes.put(name, rows.getString("COLUMN_TYPE"));
+                    if (!flags.contains("on update")) continue;
+                    var matcher = java.util.regex.Pattern.compile(
+                                    "(?i)on update\\s+(current_timestamp(?:\\([0-6]?\\))?)")
+                            .matcher(extra);
+                    updates.put(name, matcher.find() ? matcher.group(1) : "UNSUPPORTED_ON_UPDATE");
+                }
+            }
+        }
+        List<JdbcColumnInfo> enriched = new ArrayList<>(columns.size());
+        for (JdbcColumnInfo column : columns) {
+            if (!generatedDefaults.containsKey(column.name())) {
+                throw new SQLException("MySQL physical default metadata is incomplete");
+            }
+            enriched.add(new JdbcColumnInfo(
+                    column.name(),
+                    column.typeName(),
+                    column.jdbcType(),
+                    column.size(),
+                    column.scale(),
+                    column.nullable(),
+                    column.ordinalPosition(),
+                    column.primaryKey(),
+                    column.primaryKeyPosition(),
+                    column.remarks(),
+                    defaults.get(column.name()) != null,
+                    column.autoIncrement(),
+                    generatedColumns.get(column.name()),
+                    defaults.get(column.name()),
+                    updates.get(column.name()),
+                    generatedDefaults.get(column.name()),
+                    nativeTypes.get(column.name())));
+        }
+        return List.copyOf(enriched);
     }
 
     private static TreeMap<Integer, String> readPrimaryKeys(

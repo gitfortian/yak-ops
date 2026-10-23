@@ -40,7 +40,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         this.config = Objects.requireNonNull(config, "config");
         this.afterSnapshot = Objects.requireNonNull(afterSnapshot, "afterSnapshot");
         snapshots = new MySqlSnapshotSplitReader(config);
-        binlog = new MySqlBinlogEngine(config, config.snapshotServerId(reader));
+        binlog = new MySqlBinlogEngine(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
     }
 
     /**

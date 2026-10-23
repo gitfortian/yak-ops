@@ -28,9 +28,9 @@ export function SchemaPreview({
       .then((rows) => {
         if (!controller.signal.aborted) setResult({ key, rows });
       })
-      .catch(() => {
-        if (!controller.signal.aborted)
-          setResult({ key, error: "结构预览失败，请检查字段类型、目标结构与权限" });
+      .catch((failure) => {
+        const reason = failure instanceof Error ? failure.message : "结构预览失败";
+        if (!controller.signal.aborted) setResult({ key, error: reason });
       });
     return () => controller.abort();
   }, [open, disabled, key]);
@@ -54,7 +54,7 @@ export function SchemaPreview({
           }
         >
           <div className="max-h-[60vh] space-y-3 overflow-auto">
-            <Alert>仅迁移字段、主键和注释；默认值、自增列、生成列不支持。预览不执行 DDL。</Alert>
+            <Alert>预览不执行 DDL。暂不支持的字段属性会在预览时提示。</Alert>
             {current?.error ? (
               <Alert>{current.error}</Alert>
             ) : !current?.rows ? (
@@ -66,9 +66,51 @@ export function SchemaPreview({
                     {[row.target.catalog, row.target.schema, row.target.table]
                       .filter(Boolean)
                       .join(".")}{" "}
-                    · {row.action === "CREATE" ? "创建并校验" : "已有结构校验通过"}
+                    ·{" "}
+                    {row.action === "CREATE"
+                      ? "创建"
+                      : row.action === "ALTER"
+                        ? "调整结构"
+                        : row.action === "BLOCKED"
+                          ? "结构不兼容"
+                          : "结构兼容"}
                   </div>
-                  {row.action === "CREATE" ? (
+                  {row.differences.filter((difference) => difference.action !== "COMPATIBLE")
+                    .length > 0 ? (
+                    <div className="overflow-auto rounded-lg border text-xs">
+                      {row.differences
+                        .filter((difference) => difference.action !== "COMPATIBLE")
+                        .map((difference, index) => (
+                          <div
+                            key={`${difference.column ?? "table"}-${difference.reason}-${index}`}
+                            className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2 last:border-b-0"
+                          >
+                            <span className="min-w-28 font-medium">
+                              {difference.column ?? "目标表"}
+                            </span>
+                            <span>
+                              {difference.action === "CREATE_TABLE"
+                                ? "创建表"
+                                : difference.action === "ADD_COLUMN"
+                                  ? "新增字段"
+                                  : difference.action === "ALTER_COLUMN_TYPE"
+                                    ? "调整字段类型"
+                                    : difference.action === "METADATA_DIFFERENCE"
+                                      ? "物理属性存在差异（不自动迁移）"
+                                      : `无法自动处理：${difference.reason}`}
+                            </span>
+                            {difference.sourceType || difference.targetType ? (
+                              <span className="text-slate-500">
+                                {[difference.targetType, difference.sourceType]
+                                  .filter(Boolean)
+                                  .join(" → ")}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  {row.statements.length > 0 ? (
                     <pre className="overflow-auto rounded-lg border p-3 text-xs">
                       <code>{row.statements.join(";\n\n")};</code>
                     </pre>

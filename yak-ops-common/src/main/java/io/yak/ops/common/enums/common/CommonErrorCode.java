@@ -17,7 +17,8 @@ public enum CommonErrorCode implements ErrorCode {
     COMMON_FAIL(999, "失败"),
     PARAM_NOT_VALID(1001, "参数无效"),
     RESOURCE_DUPLICATION(10004, "数据已存在"),
-    RESOURCE_NOT_EXISTS(10010, "资源不存在");
+    RESOURCE_NOT_EXISTS(10010, "资源不存在"),
+    TASK_INSTANCE_ACTIVE(10011, "任务正在执行，请先停止");
 
     private final Integer code;
     private final String message;

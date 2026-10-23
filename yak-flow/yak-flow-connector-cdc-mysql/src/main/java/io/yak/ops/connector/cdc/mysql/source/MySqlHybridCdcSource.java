@@ -83,7 +83,7 @@ public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybr
                 .isZero()) {
             throw new IllegalArgumentException("MySQL Hybrid Snapshot requires periodic durable checkpoints");
         }
-        return new MySqlHybridSourceReader(config, context, metrics);
+        return new MySqlHybridSourceReader(config.withRuntimeState(context), context, metrics);
     }
 
     @Override

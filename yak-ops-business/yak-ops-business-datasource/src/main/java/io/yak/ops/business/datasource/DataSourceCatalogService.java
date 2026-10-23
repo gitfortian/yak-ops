@@ -9,25 +9,53 @@ import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 
 /**
- * Provides Workspace-scoped physical metadata for registered datasources.
+ * Provides access to physical database metadata through datasources in the active Workspace.
  *
- * <p>Each operation resolves the saved connection under the active Workspace.
- * Credentials and JDBC connections remain inside the Datasource business boundary.
+ * <p>Metadata queries use the saved datasource connection without exposing its credentials to callers.
  */
 public interface DataSourceCatalogService {
 
-    /** Lists databases visible through the saved datasource. */
+    /**
+     * Lists databases accessible through the specified datasource.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @return names of accessible databases
+     */
     List<String> listDatabases(String datasourceId);
 
-    /** Lists schemas visible in the selected database. */
+    /**
+     * Lists schemas accessible within the specified database.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @param database database to query, or {@code null} if unspecified
+     * @return names of accessible schemas
+     */
     List<String> listSchemas(String datasourceId, String database);
 
-    /** Lists physical tables and views using the requested Catalog filters. */
+    /**
+     * Lists tables and views matching the requested metadata filters.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @param query database, schema, name filter and result limit
+     * @return metadata for matching tables and views
+     */
     List<DataSourceCatalogTableVO> listTables(String datasourceId, DataSourceCatalogQueryDTO query);
 
-    /** Lists columns and primary-key metadata for a physical table. */
+    /**
+     * Lists column metadata for a physical table.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @param path database, schema and table name identifying the table
+     * @return column metadata, including native types and primary-key information
+     */
     List<DataSourceCatalogColumnVO> listColumns(String datasourceId, DataSourceTablePathDTO path);
 
-    /** Resolves the dialect-normalized table schema for internal task validation. */
+    /**
+     * Retrieves the dialect-normalized schema of a physical table.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @param tableId physical table identifier containing catalog, schema and table name
+     * @return logical column types and primary-key metadata for the table
+     */
     TableSchema getTableSchema(String datasourceId, TableId tableId);
 }

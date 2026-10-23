@@ -100,6 +100,21 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
     throw new Error("不支持的同步任务参数版本");
   }
   const realtime = value && solutionSyncType(value.solutionType) === "REALTIME";
+  if (
+    value?.schemaChangesEnabled !== undefined &&
+    (typeof value.schemaChangesEnabled !== "boolean" || !realtime)
+  ) {
+    throw new Error("结构变更配置只适用于实时任务");
+  }
+  if (
+    value?.allowDropColumns !== undefined &&
+    (typeof value.allowDropColumns !== "boolean" || !realtime)
+  ) {
+    throw new Error("删除目标字段只能在实时任务中配置");
+  }
+  if (value?.allowDropColumns && !value.schemaChangesEnabled) {
+    throw new Error("删除目标字段需要开启同步结构变更");
+  }
   const steps = value?.steps || [];
   const expected: DataSyncStep[] = realtime
     ? ["FULL", "INCREMENTAL"]

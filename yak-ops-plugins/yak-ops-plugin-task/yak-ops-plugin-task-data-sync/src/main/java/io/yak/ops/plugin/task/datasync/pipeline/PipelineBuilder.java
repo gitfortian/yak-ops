@@ -93,6 +93,20 @@ public final class PipelineBuilder {
      * @return compiled topology and execution configuration
      */
     public CompiledPipeline build(JobPlan plan, TaskExecutionIdentity identity, boolean debug) {
+        return build(plan, identity, debug, false);
+    }
+
+    public CompiledPipeline build(
+            JobPlan plan, TaskExecutionIdentity identity, boolean debug, boolean schemaChangesEnabled) {
+        return build(plan, identity, debug, schemaChangesEnabled, false);
+    }
+
+    public CompiledPipeline build(
+            JobPlan plan,
+            TaskExecutionIdentity identity,
+            boolean debug,
+            boolean schemaChangesEnabled,
+            boolean allowDropColumns) {
         var sourceFactory =
                 factories.source(plan.tables().getFirst().sourceParameters().get(JobOptions.TYPE));
         return build(
@@ -102,7 +116,9 @@ public final class PipelineBuilder {
                 new TableExecutionProgress(
                         plan.tables(),
                         new TableMetrics(),
-                        sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED));
+                        sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED),
+                schemaChangesEnabled,
+                allowDropColumns);
     }
 
     /**
@@ -116,6 +132,25 @@ public final class PipelineBuilder {
      */
     public CompiledPipeline build(
             JobPlan plan, TaskExecutionIdentity identity, boolean debug, TableExecutionProgress progress) {
+        return build(plan, identity, debug, progress, false);
+    }
+
+    public CompiledPipeline build(
+            JobPlan plan,
+            TaskExecutionIdentity identity,
+            boolean debug,
+            TableExecutionProgress progress,
+            boolean schemaChangesEnabled) {
+        return build(plan, identity, debug, progress, schemaChangesEnabled, false);
+    }
+
+    public CompiledPipeline build(
+            JobPlan plan,
+            TaskExecutionIdentity identity,
+            boolean debug,
+            TableExecutionProgress progress,
+            boolean schemaChangesEnabled,
+            boolean allowDropColumns) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
         if (plan.tables().stream().anyMatch(table -> table.targetSchema() == null)) {
@@ -130,7 +165,8 @@ public final class PipelineBuilder {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
         }
-        Configuration configuration = configurationFactory.create(identity, sourceFactory.boundedness(), debug);
+        Configuration configuration = configurationFactory.create(
+                identity, sourceFactory.boundedness(), debug, schemaChangesEnabled, allowDropColumns);
         String sourceId = first.sourceParameters().get(JobOptions.DATASOURCE_ID);
         String sinkId = first.sinkParameters().get(JobOptions.DATASOURCE_ID);
         ReadonlyConfig sourceConnection = resources.connectionOptions(

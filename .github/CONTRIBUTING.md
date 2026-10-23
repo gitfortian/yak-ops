@@ -13,6 +13,8 @@ Yak Ops follows the Apache Flink [Contribute Code](https://flink.apache.org/how-
 
 Use the [official Flink FLIP process](https://cwiki.apache.org/confluence/spaces/FLINK/pages/65145551/Flink+Improvement+Proposals) and [official FLIP template](https://cwiki.apache.org/confluence/spaces/FLINK/pages/65145553/FLIP+Template) as the upstream model. Yak Ops records its own decisions as YOIPs using proposal PRs; the local [YOIP template](YOIP_TEMPLATE.md) retains all six original sections. Related Flink FLIPs may be linked as design references, not as claims of completed implementation or full compatibility.
 
+All YOIPs must be written in English, including titles, sections, tables, examples, and later updates. Follow the language rule in the [YOIP template](YOIP_TEMPLATE.md) without translating API identifiers or other literal technical values.
+
 A YOIP is appropriate for a significant new subsystem, externally supported API, plugin SPI, serialized state/checkpoint format, persisted task-definition format, user-facing configuration, monitoring interface, deployment contract or significant compatibility change. Small internal refactors, bug fixes and class/package reorganizations do **not** require a YOIP.
 
 ### Propose and Discuss
@@ -27,6 +29,8 @@ A YOIP is appropriate for a significant new subsystem, externally supported API,
 **Platform adaptation:** This repository currently has GitHub Issues and Discussions disabled. Therefore proposal PRs provide the discussion and decision record; this does not claim an Apache mailing-list vote or Apache committer consensus. If those GitHub features are enabled later, the discussion venue can be changed without changing the YOIP criteria or template.
 
 ## Documentation Policy
+
+Versioned user-facing release notes follow [docs/releases/README.md](../docs/releases/README.md). Ordinary internal refactors do not require a release-note entry; public behavior, compatibility and operational changes do.
 
 Code, types and tests describe the implemented behavior. Update JavaDoc for contracts that callers cannot infer; update user guides when visible behavior, compatibility or operations change. Do **not** require updates to Architecture, Capability or module Rules Markdown solely because a class, method or package changed. Do not create new descriptions of existing implementation just to satisfy a PR checklist.
 

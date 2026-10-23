@@ -1,7 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.cdc.mysql.source.debezium.CheckpointOffsetBackingStore;
+import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -34,6 +37,8 @@ public final class MySqlCdcSourceConfig {
     private final Map<TableId, TableSchema> schemas;
     private final int queueCapacity;
     private final Map<String, String> connectionProperties;
+    private final Map<TableId, Schema> physicalSchemas;
+    private final boolean schemaEvolutionEnabled;
 
     public MySqlCdcSourceConfig(
             String hostname,
@@ -57,6 +62,33 @@ public final class MySqlCdcSourceConfig {
             Map<TableId, TableSchema> schemas,
             int queueCapacity,
             Map<String, String> connectionProperties) {
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                null,
+                false);
+    }
+
+    private MySqlCdcSourceConfig(
+            String hostname,
+            int port,
+            String username,
+            String password,
+            int serverId,
+            String topicPrefix,
+            Map<TableId, TableSchema> schemas,
+            int queueCapacity,
+            Map<String, String> connectionProperties,
+            Map<TableId, Schema> physicalSchemas,
+            boolean schemaEvolutionEnabled) {
+        this.schemaEvolutionEnabled = schemaEvolutionEnabled;
         this.hostname = requireText(hostname, "hostname");
         this.username = requireText(username, "username");
         this.password = Objects.requireNonNull(password, "password");
@@ -93,6 +125,13 @@ public final class MySqlCdcSourceConfig {
             throw new IllegalArgumentException("MySQL CDC requires at least one table");
         }
         this.schemas = Collections.unmodifiableMap(resolved);
+        Map<TableId, Schema> shapes = new LinkedHashMap<>();
+        resolved.forEach((table, tableSchema) -> shapes.put(
+                table,
+                physicalSchemas == null
+                        ? Schema.from(tableSchema, null, Map.of(), Map.of())
+                        : Objects.requireNonNull(physicalSchemas.get(table), "Physical source schema is missing")));
+        this.physicalSchemas = Collections.unmodifiableMap(shapes);
     }
 
     private static String requireText(String value, String label) {
@@ -159,6 +198,63 @@ public final class MySqlCdcSourceConfig {
 
     public Map<TableId, TableSchema> schemas() {
         return schemas;
+    }
+
+    public Map<TableId, Schema> physicalSchemas() {
+        return physicalSchemas;
+    }
+
+    public boolean schemaEvolutionEnabled() {
+        return schemaEvolutionEnabled;
+    }
+
+    /**
+     * A checkpoint restores the same source schema and Debezium offset before the Reader starts.
+     * A disabled evolution job retains its original schemas unchanged.
+     */
+    public MySqlCdcSourceConfig withRuntimeState(SourceReaderContext context) {
+        Objects.requireNonNull(context, "context");
+        boolean enabled = context.getConfiguration().get(SchemaEvolutionOptions.ENABLED);
+        Map<TableId, Schema> models = new LinkedHashMap<>(physicalSchemas);
+        Map<TableId, TableSchema> shape = new LinkedHashMap<>(schemas);
+        for (TableId table : schemas.keySet()) {
+            var restored = context.restoredSourceSchema(table);
+            if (restored.isPresent()) {
+                if (!enabled) {
+                    throw new IllegalStateException("Cannot restore a CDC schema version with evolution disabled");
+                }
+                models.put(table, restored.get());
+                shape.put(table, restored.get().toTableSchema());
+            }
+        }
+        return new MySqlCdcSourceConfig(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                shape,
+                queueCapacity,
+                connectionProperties,
+                models,
+                enabled);
+    }
+
+    /** Disables DDL adoption in snapshot-backfill readers, where schema changes cannot be replayed safely. */
+    public MySqlCdcSourceConfig withoutSchemaEvolution() {
+        return new MySqlCdcSourceConfig(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                physicalSchemas,
+                false);
     }
 
     public int queueCapacity() {
@@ -241,7 +337,13 @@ public final class MySqlCdcSourceConfig {
                         .map(table -> Pattern.quote(table.catalog()) + "\\." + Pattern.quote(table.table()))
                         .collect(Collectors.joining(",")));
         properties.setProperty("snapshot.mode", "no_data");
-        properties.setProperty("include.schema.changes", "false");
+        properties.setProperty("include.schema.changes", Boolean.toString(schemaEvolutionEnabled));
+        // Debezium's row schemas normally omit VARCHAR capacity. Propagate the
+        // original column length so same-name ALTER TYPE changes can be fenced
+        // before any newly widened row reaches a JDBC Sink.
+        if (schemaEvolutionEnabled) {
+            properties.setProperty("column.propagate.source.type", ".*");
+        }
         properties.setProperty("tombstones.on.delete", "false");
         properties.setProperty("heartbeat.interval.ms", "1000");
         properties.setProperty("decimal.handling.mode", "precise");

@@ -115,11 +115,12 @@ export const deleteDataSyncTask = async (id: string): Promise<void> => {
 export const publishDataSyncTask = async (
   id: string,
   signal?: AbortSignal,
+  locallyHandled = false,
 ): Promise<DataSyncTaskRecord> => {
   const definition = await HttpUtils.postData<TaskDefinitionRecord>(
     `${TASK_DEFINITION_API_PREFIX}/${id}/publish`,
     undefined,
-    { signal },
+    { signal, skipErrorHandler: locallyHandled },
   );
   return toSyncTaskRecord(definition);
 };

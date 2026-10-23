@@ -1,10 +1,13 @@
 package io.yak.ops.flow.runtime.executiongraph;
 
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
+import io.yak.ops.core.schema.SchemaVersionedTableState;
 import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
@@ -20,6 +23,8 @@ import io.yak.ops.flow.runtime.jobgraph.JobGraph;
 import io.yak.ops.flow.runtime.jobgraph.JobVertex;
 import io.yak.ops.flow.runtime.operators.OperatorChain;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorCoordinatorContext;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
+import io.yak.ops.flow.runtime.schema.SchemaManager;
 import io.yak.ops.flow.runtime.source.coordinator.SourceCoordinator;
 import io.yak.ops.flow.runtime.tasks.FinishedOnRestoreStreamTask;
 import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
@@ -58,6 +63,7 @@ final class TaskDeployment {
     private CheckpointSnapshot restoredCheckpoint;
     private FileCheckpointStore checkpointStore;
     private AlignedCheckpointCoordinator checkpointCoordinator;
+    private SchemaCoordinator schemaCoordinator;
 
     TaskDeployment(ExecutionGraph executionGraph, boolean recoverFromLatestCheckpoint) {
         this.executionGraph = Objects.requireNonNull(executionGraph, "executionGraph");
@@ -144,6 +150,10 @@ final class TaskDeployment {
 
     private void assemble() throws Exception {
         if (jobGraph.isSingleChainedVertex()) {
+            if (jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+                throw new UnsupportedOperationException(
+                        "Runtime schema evolution requires an unchained, checkpointed pipeline");
+            }
             assembleChainedVertex();
             return;
         }
@@ -161,6 +171,13 @@ final class TaskDeployment {
                     validateFinishedRestore(restoredCheckpoint);
                 }
             }
+        }
+
+        if (restoredCheckpoint != null
+                && restoredCheckpoint.schemaManagerState() != null
+                && !jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            throw new IllegalStateException(
+                    "Cannot restore a schema-evolved checkpoint with runtime schema evolution disabled");
         }
 
         List<JobVertex> vertices = jobGraph.getVertices();
@@ -213,6 +230,54 @@ final class TaskDeployment {
             }
         }
 
+        if (jobGraph.configuration().get(RuntimeOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            if (restoredCheckpoint != null && restoredCheckpoint.schemaManagerState() == null) {
+                throw new IllegalStateException(
+                        "Cannot restore schema evolution without the matching schema manager checkpoint state");
+            }
+            JobVertex sinkVertex = vertices.getLast();
+            Object sinkDefinition = sinkVertex.getHeadOperator().getSink().orElseThrow();
+            if (!(sinkDefinition instanceof SchemaEvolutionSink schemaSink)) {
+                throw new UnsupportedOperationException(
+                        "The configured Sink does not declare runtime schema evolution support");
+            }
+            MetadataApplier applier =
+                    Objects.requireNonNull(schemaSink.createMetadataApplier(), "Sink returned a null MetadataApplier");
+            SchemaManager manager = SchemaCoordinator.restoreManager(
+                    restoredCheckpoint == null ? null : restoredCheckpoint.schemaManagerState());
+            List<SchemaVersionedTableState> restoredSchemaStates = manager.snapshot().tables().stream()
+                    .filter(state -> state.version() > 0)
+                    .map(state -> new SchemaVersionedTableState(
+                            state.sourceTable(),
+                            state.targetTable(),
+                            state.sourceSchema(),
+                            state.targetSchema(),
+                            state.version()))
+                    .toList();
+            schemaSink.restoreSchemaState(restoredSchemaStates);
+            Map<Integer, Integer> topologicalOrder = new java.util.HashMap<>();
+            for (int index = 0; index < vertices.size(); index++) {
+                topologicalOrder.put(vertices.get(index).getHeadOperator().getId(), index);
+            }
+            List<OneInputStreamTask> orderedInputs = inputTasks.stream()
+                    .sorted(java.util.Comparator.comparingInt(
+                            task -> topologicalOrder.get(task.taskInfo().operatorId())))
+                    .toList();
+            List<OneInputStreamTask> sinkTasks = orderedInputs.stream()
+                    .filter(OneInputStreamTask::isSinkTask)
+                    .toList();
+            schemaCoordinator = new SchemaCoordinator(
+                    manager,
+                    applier,
+                    List.of(),
+                    orderedInputs,
+                    sinkTasks,
+                    this::failJob,
+                    schemaSink,
+                    jobGraph.configuration()
+                            .get(io.yak.ops.core.configuration.SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
+        }
+
         JobVertex sourceVertex = vertices.getFirst();
         StreamNode sourceNode = sourceVertex.getHeadOperator();
         Source<Object, SourceSplit, Object> source = castSource(sourceNode);
@@ -252,9 +317,14 @@ final class TaskDeployment {
                     output,
                     null,
                     restoredReaderSplits.getOrDefault(subtask, List.of()),
-                    executionGraph::reportCompletedSplits);
+                    executionGraph::reportCompletedSplits,
+                    schemaCoordinator);
             sourceTasks.add(task);
             bind(execution, task);
+        }
+
+        if (schemaCoordinator != null) {
+            schemaCoordinator.bindSourceTasks(sourceTasks);
         }
 
         if (checkpointStore != null) {
@@ -267,7 +337,8 @@ final class TaskDeployment {
                     checkpointStore,
                     restoredCheckpoint,
                     executionGraph::isCancellationRequested,
-                    this::failJob);
+                    this::failJob,
+                    schemaCoordinator);
             if (checkpointCoordinator.requiresFinalCheckpoint()) {
                 CompletableFuture<Void> completed = checkpointCoordinator.finalCheckpointFuture();
                 for (SourceOperatorStreamTask<Object, SourceSplit> task : sourceTasks) {
@@ -386,11 +457,18 @@ final class TaskDeployment {
     }
 
     private void stopAll(Throwable cause) {
-        for (InputGate<Object> inputGate : inputGates) {
-            inputGate.abort(cause);
-        }
+        // Set the cancellation flag on each task before waking its InputGate. Otherwise a
+        // downstream task can observe the interrupted await as an asynchronous failure.
         for (Execution execution : executions) {
             execution.cancelAsync();
+        }
+        Throwable stopCause = executionGraph.isCancellationRequested()
+                        && (unwrap(cause) instanceof InterruptedException
+                                || unwrap(cause) instanceof CancellationException)
+                ? new CancellationException("Job cancellation requested")
+                : cause;
+        for (InputGate<Object> inputGate : inputGates) {
+            inputGate.abort(stopCause);
         }
     }
 
@@ -398,6 +476,9 @@ final class TaskDeployment {
         List<AutoCloseable> resources = new ArrayList<>();
         if (checkpointCoordinator != null) {
             resources.add(checkpointCoordinator);
+        }
+        if (schemaCoordinator != null) {
+            resources.add(schemaCoordinator);
         }
         resources.addAll(executions);
         if (coordinator != null) {

@@ -14,5 +14,9 @@ public final class RuntimeOptions {
     public static final Option<Integer> CHANNEL_CAPACITY =
             Options.key("execution.local-channel.capacity").intType().defaultValue(64);
 
+    /** Enables the explicit runtime SchemaManager protocol; disabled for existing pipelines. */
+    public static final Option<Boolean> SCHEMA_EVOLUTION_ENABLED =
+            io.yak.ops.core.configuration.SchemaEvolutionOptions.ENABLED;
+
     private RuntimeOptions() {}
 }

@@ -1,11 +1,14 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -22,7 +25,9 @@ public record TablePlan(
         TableId targetTable,
         TableSchema targetSchema,
         CreateTableEvent schemaChange,
-        ReadonlyConfig sourceOptions) {
+        ReadonlyConfig sourceOptions,
+        SchemaChangePlan schemaPlan,
+        DataSourceTable targetMetadata) {
     public TablePlan {
         Objects.requireNonNull(sourceParameters, "sourceParameters");
         Objects.requireNonNull(sinkParameters, "sinkParameters");
@@ -36,6 +41,66 @@ public record TablePlan(
         if (schemaChange != null && !targetTable.equals(schemaChange.tableId())) {
             throw new IllegalArgumentException("Schema event and target identities differ");
         }
+        if (schemaPlan != null && !targetTable.equals(schemaPlan.tableId())) {
+            throw new IllegalArgumentException("Schema plan and target identities differ");
+        }
+        if (targetMetadata != null
+                && (!targetTable.equals(targetMetadata.table())
+                        || targetMetadata.revision() != targetDatasource.revision())) {
+            throw new IllegalArgumentException("Target metadata does not match the admitted route");
+        }
+    }
+
+    /** Preserves established route constructors used by older tests and task integrations. */
+    public TablePlan(
+            ReadonlyConfig sourceParameters,
+            ReadonlyConfig sinkParameters,
+            DataSourceTable source,
+            DataSourceInfo targetDatasource,
+            TableId targetTable,
+            TableSchema targetSchema,
+            CreateTableEvent schemaChange,
+            ReadonlyConfig sourceOptions) {
+        this(
+                sourceParameters,
+                sinkParameters,
+                source,
+                targetDatasource,
+                targetTable,
+                targetSchema,
+                schemaChange,
+                sourceOptions,
+                null,
+                null);
+    }
+
+    /** Ordered physical changes; existing CREATE_TABLE-only routes remain compatible. */
+    public List<SchemaChangeEvent> schemaChanges() {
+        return schemaPlan == null ? schemaChange == null ? List.of() : List.of(schemaChange) : schemaPlan.changes();
+    }
+
+    /** Existing constructor with a schema plan but without a physical target snapshot. */
+    public TablePlan(
+            ReadonlyConfig sourceParameters,
+            ReadonlyConfig sinkParameters,
+            DataSourceTable source,
+            DataSourceInfo targetDatasource,
+            TableId targetTable,
+            TableSchema targetSchema,
+            CreateTableEvent schemaChange,
+            ReadonlyConfig sourceOptions,
+            SchemaChangePlan schemaPlan) {
+        this(
+                sourceParameters,
+                sinkParameters,
+                source,
+                targetDatasource,
+                targetTable,
+                targetSchema,
+                schemaChange,
+                sourceOptions,
+                schemaPlan,
+                null);
     }
 
     /** Creates a route to an existing target without initial schema preparation. */
@@ -57,7 +122,8 @@ public record TablePlan(
                 target.table(),
                 target.schema(),
                 null,
-                sourceOptions);
+                sourceOptions,
+                null);
     }
 
     /** Changes only physical Source settings; routing and target admission remain unchanged. */
@@ -70,7 +136,9 @@ public record TablePlan(
                 targetTable,
                 targetSchema,
                 schemaChange,
-                physical);
+                physical,
+                schemaPlan,
+                targetMetadata);
     }
 
     /** Returns the admitted desired schema; creating the target does not change this value. */
@@ -93,6 +161,8 @@ public record TablePlan(
                 targetTable,
                 target.schema(),
                 schemaChange,
-                sourceOptions);
+                sourceOptions,
+                schemaPlan,
+                target);
     }
 }

@@ -7,7 +7,11 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
+import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 import java.util.Map;
@@ -67,8 +71,62 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     }
 
     @Override
+    public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        Column target = new Column(column.name(), column.type());
+        String definition =
+                quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
+        String comment = column.comment();
+        if (comment != null && !comment.isBlank()) {
+            definition += " COMMENT " + stringLiteral(comment);
+        }
+        return List.of("ALTER TABLE " + qualifiedTable(table) + " ADD COLUMN " + definition);
+    }
+
+    @Override
+    public String dropColumnSql(TableId table, String column) {
+        return "ALTER TABLE " + qualifiedTable(table) + " DROP COLUMN " + quoteIdentifier(column);
+    }
+
+    @Override
+    public String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
+        if (!previous.name().equals(updated.name()) || previous.nullable() != updated.nullable()) {
+            throw new IllegalArgumentException("Column identity and nullability must remain unchanged");
+        }
+        String suffix = updated.nullable() ? " NULL" : " NOT NULL";
+        if (comment != null && !comment.isBlank()) {
+            suffix += " COMMENT " + stringLiteral(comment);
+        }
+        return "ALTER TABLE " + qualifiedTable(table) + " MODIFY COLUMN " + quoteIdentifier(updated.name()) + " "
+                + nativeType(updated).ddl() + suffix;
+    }
+
+    @Override
+    public LogicalType normalizeTargetType(Column column) {
+        JdbcNativeType targetType = nativeType(column);
+        boolean nullable = column.nullable();
+        return switch (column.dataType().getTypeRoot()) {
+            case BOOLEAN -> LogicalTypes.TINYINT.copy(nullable);
+            case VARCHAR ->
+                "LONGTEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
+            case VARBINARY ->
+                "LONGBLOB".equals(targetType.ddl()) ? LogicalTypes.BINARY.copy(nullable) : column.dataType();
+            default -> column.dataType();
+        };
+    }
+
+    @Override
     public JdbcDdlPlan createTablePlan(
             TableId table, TableSchema schema, String tableComment, Map<String, String> columnComments) {
+        return createTablePlan(table, schema, tableComment, columnComments, Map.of());
+    }
+
+    @Override
+    public JdbcDdlPlan createTablePlan(
+            TableId table,
+            TableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments,
+            Map<String, ColumnProperties> properties) {
         Map<String, String> comments = columnComments == null ? Map.of() : columnComments;
         String definitions = schema.columns().stream()
                 .map(column -> {
@@ -76,8 +134,10 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                     String comment = comments.get(column.name());
                     String commentClause =
                             comment == null || comment.isBlank() ? "" : " COMMENT " + stringLiteral(comment);
-                    return quoteIdentifier(column.name()) + " "
-                            + nativeType(column).ddl() + nullable + commentClause;
+                    ColumnProperties attribute = properties.get(column.name());
+                    String extras = renderProperties(column, schema, attribute);
+                    return quoteIdentifier(column.name()) + " " + validatedColumnType(column, attribute) + nullable
+                            + extras + commentClause;
                 })
                 .collect(Collectors.joining(", "));
 
@@ -91,6 +151,112 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                 tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
         String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
         return new JdbcDdlPlan(createTableSql, List.of(createTableSql));
+    }
+
+    /**
+     * Native MySQL types are preserved only when the server-reported COLUMN_TYPE
+     * matches an explicit SQL grammar. Never interpolate arbitrary metadata into DDL.
+     */
+    private String validatedColumnType(Column column, ColumnProperties properties) {
+        if (properties == null || properties.nativeType() == null) {
+            return nativeType(column).ddl();
+        }
+        String type = properties.nativeType().trim();
+        if (type.chars().anyMatch(character -> character < 32)
+                || type.indexOf('\\') >= 0
+                || type.contains(";")
+                || type.contains("--")
+                || type.contains("/*")) {
+            throw new IllegalArgumentException("Unsupported MySQL native type for column: " + column.name());
+        }
+        String standard = "(?i)(?:tinyint|smallint|mediumint|int|integer|bigint|decimal|numeric|float|double|real"
+                + "|char|varchar|binary|varbinary|bit|date|time|datetime|timestamp|year"
+                + "|tinytext|text|mediumtext|longtext|tinyblob|blob|mediumblob|longblob|json|point)"
+                + "(?:\\([0-9]{1,6}(?:\\s*,\\s*[0-9]{1,6})?\\))?"
+                + "(?:\\s+unsigned)?(?:\\s+zerofill)?";
+        String enumerated = "(?i)(?:enum|set)\\('(?:[^'\\\\]|'')*'(?:\\s*,\\s*'(?:[^'\\\\]|'')*')*\\)";
+        if (!type.matches(standard) && !type.matches(enumerated)) {
+            throw new IllegalArgumentException("Unsupported MySQL native type for column: " + column.name());
+        }
+        return type;
+    }
+
+    /**
+     * Preserve only metadata whose SQL semantics are known. A JDBC default is not trusted SQL:
+     * numeric values are parsed, strings are quoted, and time functions are whitelisted.
+     */
+    private String renderProperties(Column column, TableSchema schema, ColumnProperties properties) {
+        if (properties == null) return "";
+        if (!properties.isKnown()) {
+            throw new IllegalArgumentException("Unknown generation metadata for column: " + column.name());
+        }
+        if (Boolean.TRUE.equals(properties.generated())) {
+            throw new IllegalArgumentException(
+                    "Generated column requires a verified expression and write projection: " + column.name());
+        }
+        boolean identity = Boolean.TRUE.equals(properties.autoIncrement());
+        String defaultValue = properties.defaultExpression();
+        if (identity && defaultValue != null) {
+            throw new IllegalArgumentException("Identity column also declares a default: " + column.name());
+        }
+        if (identity) {
+            if (!schema.primaryKeys().contains(column.name())
+                    || !java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT")
+                            .contains(column.dataType().getTypeRoot().name())) {
+                throw new IllegalArgumentException("AUTO_INCREMENT requires an integer primary key: " + column.name());
+            }
+            return " AUTO_INCREMENT";
+        }
+        String update = properties.onUpdateExpression();
+        String onUpdate = "";
+        if (update != null) {
+            if (!column.dataType().getTypeRoot().name().startsWith("TIMESTAMP")
+                    || !update.trim().matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]?\\))?")) {
+                throw new IllegalArgumentException("Unsupported ON UPDATE expression for column: " + column.name());
+            }
+            onUpdate = " ON UPDATE " + update.trim().toUpperCase(java.util.Locale.ROOT);
+        }
+        if (defaultValue == null) return onUpdate;
+        if (properties.defaultGenerated() == null) {
+            throw new IllegalArgumentException("Unknown default expression kind for column: " + column.name());
+        }
+        String value = defaultValue.trim();
+        String root = column.dataType().getTypeRoot().name();
+        if (Boolean.TRUE.equals(properties.defaultGenerated())
+                && value.matches("(?i)CURRENT_TIMESTAMP(?:\\([0-6]?\\))?")
+                && root.startsWith("TIMESTAMP")) {
+            return " DEFAULT " + value.toUpperCase(java.util.Locale.ROOT) + onUpdate;
+        }
+        if (Boolean.TRUE.equals(properties.defaultGenerated())) {
+            if ("DATE".equals(root)) {
+                // MySQL 8 expression defaults: only deterministic, bounded grammar is allowed.
+                var dateExpression = java.util.regex.Pattern.compile(
+                                "(?i)^\\(*\\s*curdate\\(\\)\\s*(?:\\+\\s*interval\\s+([1-9][0-9]{0,2})\\s+day)?\\s*\\)*$")
+                        .matcher(value);
+                if (dateExpression.matches()) {
+                    String interval = dateExpression.group(1);
+                    return " DEFAULT (CURDATE()" + (interval == null ? "" : " + INTERVAL " + interval + " DAY") + ")"
+                            + onUpdate;
+                }
+            }
+            throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
+        }
+        if (java.util.Set.of("CHAR", "VARCHAR", "DATE", "TIME_WITHOUT_TIME_ZONE", "TIMESTAMP_WITHOUT_TIME_ZONE")
+                .contains(root)) {
+            // information_schema.COLUMN_DEFAULT is the unquoted literal for ordinary defaults.
+            String literal = defaultValue;
+            // SQL_MODE is connection-specific; do not guess how escaped literals will parse.
+            if (literal.indexOf('\\') >= 0 || literal.chars().anyMatch(character -> character < 32)) {
+                throw new IllegalArgumentException("Unsupported default literal escaping for column: " + column.name());
+            }
+            return " DEFAULT " + stringLiteral(literal) + onUpdate;
+        }
+        if (java.util.Set.of("TINYINT", "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "DECIMAL", "BOOLEAN")
+                        .contains(root)
+                && value.matches("[-+]?[0-9]+(?:\\.[0-9]+)?")) {
+            return " DEFAULT " + value + onUpdate;
+        }
+        throw new IllegalArgumentException("Unsupported default expression for column: " + column.name());
     }
 
     private JdbcNativeType stringType(Integer length) {

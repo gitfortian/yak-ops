@@ -46,6 +46,27 @@ public final class JobConfig {
     private static JobConfig solution(ReadonlyConfig parameters) {
         validate(parameters, SolutionOptions.RULE, "DATA_SYNC");
         SolutionType type = parameters.get(SolutionOptions.SOLUTION_TYPE);
+        Object rawSchemaChanges = parameters.getSourceMap().get(SolutionOptions.SCHEMA_CHANGES_ENABLED.key());
+        if (parameters.getSourceMap().containsKey(SolutionOptions.SCHEMA_CHANGES_ENABLED.key())
+                && !(rawSchemaChanges instanceof Boolean)) {
+            throw new IllegalArgumentException("schemaChangesEnabled must be a boolean");
+        }
+        if (type.supportsScheduling()
+                && parameters.getSourceMap().containsKey(SolutionOptions.SCHEMA_CHANGES_ENABLED.key())) {
+            throw new IllegalArgumentException("schemaChangesEnabled is available only for realtime tasks");
+        }
+        Object rawDrop = parameters.getSourceMap().get(SolutionOptions.ALLOW_DROP_COLUMNS.key());
+        if (parameters.getSourceMap().containsKey(SolutionOptions.ALLOW_DROP_COLUMNS.key())
+                && !(rawDrop instanceof Boolean)) {
+            throw new IllegalArgumentException("allowDropColumns must be a boolean");
+        }
+        if (type.supportsScheduling()
+                && parameters.getSourceMap().containsKey(SolutionOptions.ALLOW_DROP_COLUMNS.key())) {
+            throw new IllegalArgumentException("allowDropColumns is available only for realtime tasks");
+        }
+        if (Boolean.TRUE.equals(rawDrop) && !parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED)) {
+            throw new IllegalArgumentException("allowDropColumns requires schemaChangesEnabled=true");
+        }
         List<String> steps = parameters.get(SolutionOptions.STEPS);
         if (steps.size() != new HashSet<>(steps).size()) {
             throw new IllegalArgumentException("Duplicate synchronization step");
@@ -207,5 +228,17 @@ public final class JobConfig {
 
     public SolutionType solutionType() {
         return solutionType;
+    }
+
+    /** Explicit opt-in only; previously stored tasks without this property stay disabled. */
+    /** Previously saved jobs are non-destructive unless this property is explicitly true. */
+    public boolean allowDropColumns() {
+        return schemaChangesEnabled() && parameters.get(SolutionOptions.ALLOW_DROP_COLUMNS);
+    }
+
+    public boolean schemaChangesEnabled() {
+        return !solutionType.supportsScheduling()
+                && parameters.getSourceMap().containsKey(SolutionOptions.SOLUTION_TYPE.key())
+                && parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED);
     }
 }

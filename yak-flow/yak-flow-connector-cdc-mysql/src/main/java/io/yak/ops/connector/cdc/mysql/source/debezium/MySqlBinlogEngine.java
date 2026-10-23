@@ -5,18 +5,29 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlDebeziumRecordConverter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.jdbc.database.catalog.JdbcTableMetadata;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.TableSchema;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Owns one Debezium engine and bounded handover queue for a MySQL Binlog split.
@@ -26,6 +37,8 @@ import org.apache.kafka.connect.source.SourceRecord;
  * ahead of emission, but are never promoted to a completed YakFlow checkpoint.
  */
 public final class MySqlBinlogEngine implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogEngine.class);
 
     private final MySqlCdcSourceConfig config;
     private final int serverId;
@@ -40,6 +53,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private String sessionId;
     private volatile boolean stopped;
     private boolean started;
+    private BinlogOffset lastQueuedOffset;
 
     public MySqlBinlogEngine(MySqlCdcSourceConfig config) {
         this(config, config.serverId());
@@ -50,7 +64,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         if (serverId < 1) throw new IllegalArgumentException("Replication server ID must be positive");
         this.serverId = serverId;
         this.config = Objects.requireNonNull(config, "config");
-        converter = new MySqlDebeziumRecordConverter(config.schemas());
+        converter = new MySqlDebeziumRecordConverter(
+                config.schemas(), config.physicalSchemas(), config.schemaEvolutionEnabled());
         queue = new ArrayBlockingQueue<>(config.queueCapacity());
     }
 
@@ -60,6 +75,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             throw new IllegalStateException("MySQL Binlog engine cannot start twice");
         }
         started = true;
+        lastQueuedOffset = split.offset();
         directory = Files.createTempDirectory("yakflow-binlog-");
         historyPath = directory.resolve("schema-history.dat");
         byte[] history = split.schemaHistory();
@@ -112,26 +128,76 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             if (stopped) {
                 throw new InterruptedException("MySQL Binlog reader was stopped");
             }
-            BinlogEvent converted;
             try {
-                converted = converter.convert(event.record());
-            } catch (RuntimeException error) {
+                SourceRecord source = event.record();
+                TableId changed = converter.schemaMismatch(source);
+                if (changed != null) {
+                    // A Debezium DDL with empty tableChanges must not cause the next
+                    // row to bypass SchemaCoordinator. Read metadata, verify that it
+                    // describes THIS row, and emit the schema boundary before the row.
+                    // It uses the previous offset: acknowledging the boundary must
+                    // not checkpoint past the still-pending row.
+                    BinlogEvent transition = reconcile(source, changed);
+                    LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
+                    enqueue(transition);
+                }
+                BinlogEvent converted = converter.convert(source);
+                if (converted != null) {
+                    if (converted.schemaChange() != null) {
+                        LOG.info(
+                                "MySQL CDC independent DDL event: table={}",
+                                converted.schemaChange().tableId());
+                    }
+                    enqueue(converted);
+                    lastQueuedOffset = converted.offset();
+                }
+            } catch (InterruptedException interrupted) {
+                throw interrupted;
+            } catch (Exception error) {
                 failure.compareAndSet(null, error);
                 throw new IllegalStateException("MySQL CDC event conversion failed", error);
             }
-            if (converted != null) {
-                while (!stopped && !queue.offer(converted, 250, TimeUnit.MILLISECONDS)) {
-                    // Bounded handover: do not allow Debezium prefetch to grow without limit.
-                }
-                if (stopped) {
-                    throw new InterruptedException("MySQL Binlog reader was stopped");
-                }
-            }
-            // The engine may stage this offset, but the YakFlow checkpoint uses only the
-            // last event delivered by MySqlCdcRecordEmitter on the owning task mailbox.
+            // The engine may stage this offset, but the YakFlow checkpoint uses only
+            // the last event delivered by the owning Source mailbox.
             committer.markProcessed(event);
         }
         committer.markBatchFinished();
+    }
+
+    private BinlogEvent reconcile(SourceRecord source, TableId table) throws SQLException {
+        if (lastQueuedOffset == null) {
+            throw new IllegalStateException("Cannot reconcile CDC schema before an established binlog offset");
+        }
+        TableSchema live;
+        try (Connection connection = config.openSnapshotConnection()) {
+            live = JdbcTableMetadata.readTable(
+                    connection, JdbcDialects.forUrl(connection.getMetaData().getURL()), table);
+        }
+        Struct envelope = (Struct) source.value();
+        Struct row = envelope.schema().field("after") == null ? null : envelope.getStruct("after");
+        if (row == null && envelope.schema().field("before") != null) {
+            row = envelope.getStruct("before");
+        }
+        if (row == null) {
+            throw new IllegalStateException("CDC schema reconciliation requires a row image");
+        }
+        if (!converter.matchesRowSchema(row, live)) {
+            throw new IllegalStateException(
+                    "Current MySQL metadata does not match the binlog row; cannot safely recover schema");
+        }
+        BinlogOffset position = new BinlogOffset(
+                new LinkedHashMap<String, Object>(source.sourcePartition()),
+                new LinkedHashMap<String, Object>(source.sourceOffset()));
+        return converter.reconcile(table, live, lastQueuedOffset, position);
+    }
+
+    private void enqueue(BinlogEvent record) throws InterruptedException {
+        while (!stopped && !queue.offer(record, 250, TimeUnit.MILLISECONDS)) {
+            // Bounded handover: preserve strict schema-event / row order.
+        }
+        if (stopped) {
+            throw new InterruptedException("MySQL Binlog reader was stopped");
+        }
     }
 
     public BinlogEvent poll() throws InterruptedException {
@@ -150,7 +216,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     /**
      * Copies the local Schema History for the Reader's completed-checkpoint candidate.
      *
-     * <p>SQL Schema Evolution is unsupported. The history is essential for
+     * <p>Debezium Schema History is essential for
      * resuming Debezium at a saved Binlog offset without rebuilding an unrelated schema.
      */
     public byte[] snapshotHistory() throws IOException {

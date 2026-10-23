@@ -18,9 +18,15 @@ class SuiteSelectionTest(unittest.TestCase):
     def test_docs_and_frontend_do_not_run_databases(self):
         self.assertEqual([], subject.select(["README.md", "yak-ops-ui/src/App.tsx"]))
 
-    def test_shared_infrastructure_and_unknown_changes_run_all(self):
-        for path in ("pom.xml", "yak-ops-test-utils/src/main/java/X.java", "unknown/backend.java", "yak-ops-dao/Mapper.java"):
+    def test_unknown_build_changes_fail_closed_but_shared_modules_do_not(self):
+        for path in ("pom.xml", "unknown/backend.java", "scripts/tests/run.sh"):
             self.assertEqual(list(subject.SUITES), subject.select([path]))
+        for path in ("yak-ops-common/src/main/java/X.java", "yak-ops-spi/src/main/java/X.java"):
+            self.assertEqual([], subject.select([path]))
+        self.assertEqual(["business", "modeling", "backend-e2e"], subject.select(["yak-ops-dao/src/main/java/Mapper.java"]))
+
+    def test_unit_test_change_does_not_run_real_database(self):
+        self.assertEqual([], subject.select([subject.JDBC + "/src/test/java/JdbcBatchExecutionTest.java"]))
 
     def test_common_jdbc_includes_oracle(self):
         selected = subject.select([subject.JDBC + "/src/main/java/reader/JdbcReader.java"])
@@ -37,7 +43,7 @@ class SuiteSelectionTest(unittest.TestCase):
         selected = subject.select([subject.JDBC + "/src/main/java/MySqlDialect.java", subject.CDC + "/src/main/java/X.java"])
         self.assertIn("jdbc-mysql", selected)
         self.assertIn("cdc", selected)
-        self.assertIn("recovery-e2e", selected)
+        self.assertIn("cdc-pipeline", selected)
 
     def test_deleted_test_keeps_owner_selected(self):
         self.assertIn("pipeline", subject.select([subject.JDBC + "/src/test/java/integration/MySqlToMySqlIT.java"]))

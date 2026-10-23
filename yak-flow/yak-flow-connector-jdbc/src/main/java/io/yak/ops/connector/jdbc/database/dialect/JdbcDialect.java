@@ -1,11 +1,15 @@
 package io.yak.ops.connector.jdbc.database.dialect;
 
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -84,6 +88,16 @@ public interface JdbcDialect extends java.io.Serializable {
     JdbcNativeType nativeType(Column column);
 
     /**
+     * Returns the canonical logical representation of the native target type that this dialect
+     * will create for a source column. No database access or SQL execution is permitted here.
+     * Unsupported mappings must fail explicitly rather than assuming types are identical.
+     */
+    default LogicalType normalizeTargetType(Column column) {
+        nativeType(column);
+        return column.dataType();
+    }
+
+    /**
      * Builds a CREATE TABLE statement, preserving the specified column and primary-key order.
      *
      * @param table target table identifier
@@ -106,6 +120,50 @@ public interface JdbcDialect extends java.io.Serializable {
      */
     JdbcDdlPlan createTablePlan(
             TableId table, TableSchema schema, String tableComment, Map<String, String> columnComments);
+
+    /**
+     * Plans schema and physical column attributes with the same rules for preview and execution.
+     * Dialects without a tested attribute renderer reject nontrivial attributes explicitly.
+     */
+    default JdbcDdlPlan createTablePlan(
+            TableId table,
+            TableSchema schema,
+            String tableComment,
+            Map<String, String> columnComments,
+            Map<String, ColumnProperties> properties) {
+        for (var entry : properties.entrySet()) {
+            if (!entry.getValue().isKnown() || entry.getValue().hasFeatures()) {
+                throw new IllegalArgumentException(
+                        "Target dialect cannot preserve column properties: " + entry.getKey());
+            }
+        }
+        return createTablePlan(table, schema, tableComment, columnComments);
+    }
+
+    /**
+     * Renders a nullable, non-key column addition and any required comment statement.
+     *
+     * <p>Callers validate the complete physical table before invoking this method.
+     */
+    default List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        throw new UnsupportedOperationException("ADD_COLUMN is not supported by this JDBC dialect");
+    }
+
+    /**
+     * Renders removal of a single existing, non-key field. Never cascade dependencies.
+     * The metadata applier verifies the column's original identity and resulting absence.
+     */
+    default String dropColumnSql(TableId table, String column) {
+        throw new UnsupportedOperationException("DROP_COLUMN is not supported by this JDBC dialect");
+    }
+
+    /**
+     * Renders a non-key column type widening without silently changing nullability or comments.
+     * Defaults and computed column properties must be rejected by the metadata applier first.
+     */
+    default String alterColumnTypeSql(TableId table, Column previous, Column updated, String comment) {
+        throw new UnsupportedOperationException("ALTER_COLUMN_TYPE is not supported by this JDBC dialect");
+    }
 
     /**
      * Escapes a string literal for generated DDL comment statements.

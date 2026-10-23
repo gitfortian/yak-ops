@@ -7,7 +7,9 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
+import io.yak.ops.dao.repository.task.InstanceRepository;
 import jakarta.annotation.Resource;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,9 @@ public class PublicationServiceImpl implements PublicationService {
     @Resource
     private DefinitionRepository definitions;
 
+    @Resource
+    private InstanceRepository instances;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DefinitionEntity publish(String id, int expectedVersion, String operatorId) {
@@ -27,6 +32,9 @@ public class PublicationServiceImpl implements PublicationService {
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         if (!Integer.valueOf(expectedVersion).equals(definition.getCurrentVersion())) {
             throw new BusinessException(CommonErrorCode.RESOURCE_DUPLICATION);
+        }
+        if (!instances.latest(workspaceId, List.of(id), true).isEmpty()) {
+            throw new BusinessException(CommonErrorCode.TASK_INSTANCE_ACTIVE);
         }
         definition.setStatus(DefinitionStatus.PUBLISHED);
         definition.initUpdate(operatorId);

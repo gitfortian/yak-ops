@@ -13,6 +13,8 @@ import io.yak.ops.flow.runtime.operators.SourceOperator;
 import io.yak.ops.flow.runtime.operators.SourceReaderRuntimeContext;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorEvent;
 import io.yak.ops.flow.runtime.operators.coordination.SubtaskGateway;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
+import io.yak.ops.flow.runtime.schema.SchemaSourceParticipant;
 import io.yak.ops.flow.runtime.source.coordinator.SourceCoordinator;
 import java.util.List;
 import java.util.Objects;
@@ -31,7 +33,7 @@ import java.util.function.IntConsumer;
  * Global checkpoint coordination belongs to the runtime checkpoint coordinator.
  */
 public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> extends StreamTask
-        implements SubtaskGateway {
+        implements SchemaSourceParticipant, SubtaskGateway {
 
     private final SourceCoordinator<SplitT, ?> coordinator;
     private final SourceOperator<T, SplitT> operator;
@@ -44,6 +46,8 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
     private volatile boolean outputFinished;
     private boolean pausedForCheckpoint;
     private CompletableFuture<Void> resumeFuture = CompletableFuture.completedFuture(null);
+    private boolean pausedForSchemaChange;
+    private CompletableFuture<Void> schemaChangeResumeFuture = CompletableFuture.completedFuture(null);
 
     public SourceOperatorStreamTask(
             Source<T, SplitT, ?> source,
@@ -83,6 +87,19 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
             OperatorChain operatorChain,
             List<SplitT> restoredSplits,
             IntConsumer completedSplits) {
+        this(source, coordinator, environment, output, operatorChain, restoredSplits, completedSplits, null);
+    }
+
+    /** Binds the optional runtime SchemaCoordinator without changing connector Source implementations. */
+    public SourceOperatorStreamTask(
+            Source<T, SplitT, ?> source,
+            SourceCoordinator<SplitT, ?> coordinator,
+            TaskEnvironment environment,
+            ReaderOutput<T> output,
+            OperatorChain operatorChain,
+            List<SplitT> restoredSplits,
+            IntConsumer completedSplits,
+            SchemaCoordinator schemaCoordinator) {
         super(environment);
         this.restoredSplits = List.copyOf(Objects.requireNonNull(restoredSplits, "restoredSplits must not be null"));
         this.operatorChain = operatorChain;
@@ -94,7 +111,8 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
                 taskEnvironment(),
                 event -> coordinator.handleEventFromOperator(taskInfo(), event),
                 this::failAsync,
-                completedSplits);
+                completedSplits,
+                schemaCoordinator);
         this.operator = new SourceOperator<>(source, readerContext);
         this.input = new StreamTaskSourceInput<>(operator);
     }
@@ -113,11 +131,12 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
 
     @Override
     protected InputStatus processInput() throws Exception {
-        return pausedForCheckpoint ? InputStatus.NOTHING_AVAILABLE : input.emitNext(output);
+        return pausedForCheckpoint || pausedForSchemaChange ? InputStatus.NOTHING_AVAILABLE : input.emitNext(output);
     }
 
     @Override
     protected CompletableFuture<Void> getAvailableFuture() {
+        if (pausedForSchemaChange) return schemaChangeResumeFuture;
         return pausedForCheckpoint ? resumeFuture : input.getAvailableFuture();
     }
 
@@ -142,6 +161,36 @@ public final class SourceOperatorStreamTask<T, SplitT extends SourceSplit> exten
             outputFinished = true;
             recordWriter.finish();
         }
+    }
+
+    @Override
+    public int subtaskIndex() {
+        return taskInfo().subtaskIndex();
+    }
+
+    /** Pauses further Reader polling at a mailbox boundary while a schema transition is applied. */
+    public CompletableFuture<Void> pauseForSchemaChange() {
+        return submitMailbox(() -> {
+            if (pausedForCheckpoint || pausedForSchemaChange) {
+                throw new IllegalStateException("Source is already paused");
+            }
+            pausedForSchemaChange = true;
+            schemaChangeResumeFuture = new CompletableFuture<>();
+            return null;
+        });
+    }
+
+    /** Resumes Reader polling only after target DDL, Writer plans and schema version are committed. */
+    public CompletableFuture<Void> resumeAfterSchemaChange() {
+        return submitMailbox(() -> {
+            if (!pausedForSchemaChange) {
+                throw new IllegalStateException("Source is not paused for schema change");
+            }
+            pausedForSchemaChange = false;
+            schemaChangeResumeFuture.complete(null);
+            resumeInputProcessing();
+            return null;
+        });
     }
 
     /** Whether the physical output can no longer forward checkpoint-control events. */
