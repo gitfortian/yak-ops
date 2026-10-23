@@ -2,7 +2,7 @@ import { CollapseSection, Field, FieldLabel, Switch } from "@yak-ops/yak-ui";
 import { type Dispatch, type SetStateAction } from "react";
 import { TableMappingEditor } from "./table-mapping-editor";
 import { SchemaPreview } from "./schema-preview";
-import { DataSyncSearchableSelect } from "../searchable-select";
+import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { TableSection } from "./table-section";
 import type { DataSourceRecord } from "@/service/datasource";
 import type {

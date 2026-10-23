@@ -8,7 +8,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import type { DataSyncDraft, DataSyncSolutionType, DataSyncStep } from "@/service/data-sync";
 import { readTaskDraft, taskDraftKey, writeTaskDraft } from "@/service/data-sync/draft";
 
-import { DataSyncSearchableSelect } from "../searchable-select";
+import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { findStepCombination, STEP_LABELS } from "../solution/presentation";
 import { useSolutions } from "../solution/use-solutions";
 

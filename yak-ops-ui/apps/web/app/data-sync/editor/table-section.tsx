@@ -1,6 +1,6 @@
 import { Alert, Button, Field, FieldLabel, Input } from "@yak-ops/yak-ui";
 import { useMemo, type ReactNode } from "react";
-import { DataSyncSearchableSelect } from "../searchable-select";
+import { DataSyncSearchableSelect } from "../components/searchable-select";
 import type { DataSourceCatalogTable } from "@/service/datasource";
 import type { CatalogOptions } from "./types";
 

@@ -6,7 +6,7 @@ import type {
   DataSyncTablePath,
   DataSyncWriteMode,
 } from "@/service/data-sync";
-import { DataSyncSearchableSelect } from "../searchable-select";
+import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { IncrementalFields } from "./incremental-fields";
 
 export const tableKey = (table: DataSyncTablePath) =>
