@@ -1,12 +1,12 @@
 # YOIP-9: Data Modeling — Dimension Modeling
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/9
 
-Decision: Pending
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/9#issuecomment-6354864428
 
-Implementation: N/A until accepted
+Implementation: Planned — Dimension Modeling
 
 Release: N/A until released
 
