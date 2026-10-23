@@ -131,7 +131,10 @@ public final class MySqlSchemaChangeConverter {
             LogicalType type = logicalType(jdbcType, metadata, nullable);
             PhysicalColumn existing = previous.column(name).orElse(null);
             columns.add(new PhysicalColumn(
-                    name, type, existing == null ? null : existing.comment(), existing == null ? null : existing.properties()));
+                    name,
+                    type,
+                    existing == null ? null : existing.comment(),
+                    existing == null ? null : existing.properties()));
         }
         return new Schema(columns, keys, previous.comment());
     }
@@ -192,8 +195,8 @@ public final class MySqlSchemaChangeConverter {
         }
         data.append(table.catalog()).append('.').append(table.table());
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(data.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] digest =
+                    MessageDigest.getInstance("SHA-256").digest(data.toString().getBytes(StandardCharsets.UTF_8));
             return java.util.HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
