@@ -9,6 +9,8 @@ import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConve
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
+import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +66,20 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                 JdbcNativeType.of("DATETIME(" + JdbcTypeMappings.precision(column, 6, "MySQL DATETIME") + ")");
             case TIMESTAMP_WITH_TIME_ZONE ->
                 throw new UnsupportedOperationException("MySQL cannot preserve TIMESTAMP_WITH_TIME_ZONE semantics");
+        };
+    }
+
+    @Override
+    public LogicalType normalizeTargetType(Column column) {
+        JdbcNativeType targetType = nativeType(column);
+        boolean nullable = column.nullable();
+        return switch (column.dataType().getTypeRoot()) {
+            case BOOLEAN -> LogicalTypes.TINYINT.copy(nullable);
+            case VARCHAR ->
+                "LONGTEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
+            case VARBINARY ->
+                "LONGBLOB".equals(targetType.ddl()) ? LogicalTypes.BINARY.copy(nullable) : column.dataType();
+            default -> column.dataType();
         };
     }
 

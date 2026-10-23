@@ -3,6 +3,7 @@ package io.yak.ops.connector.jdbc.database.dialect;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.ResultSetMetaData;
@@ -83,6 +84,16 @@ public interface JdbcDialect extends java.io.Serializable {
      * @throws UnsupportedOperationException if the vendor cannot represent the logical type
      */
     JdbcNativeType nativeType(Column column);
+
+    /**
+     * Returns the canonical logical representation of the native target type that this dialect
+     * will create for a source column. No database access or SQL execution is permitted here.
+     * Unsupported mappings must fail explicitly rather than assuming types are identical.
+     */
+    default LogicalType normalizeTargetType(Column column) {
+        nativeType(column);
+        return column.dataType();
+    }
 
     /**
      * Builds a CREATE TABLE statement, preserving the specified column and primary-key order.

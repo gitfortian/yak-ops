@@ -7,6 +7,8 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
 import io.yak.ops.connector.jdbc.database.internal.convert.PostgresJdbcDialectConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
+import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -66,6 +68,18 @@ public final class PostgresJdbcDialect extends AbstractDialect {
             case TIME_WITHOUT_TIME_ZONE -> timeType(column);
             case TIMESTAMP_WITHOUT_TIME_ZONE -> timestampType(column, false);
             case TIMESTAMP_WITH_TIME_ZONE -> timestampType(column, true);
+        };
+    }
+
+    @Override
+    public LogicalType normalizeTargetType(Column column) {
+        JdbcNativeType targetType = nativeType(column);
+        boolean nullable = column.nullable();
+        return switch (column.dataType().getTypeRoot()) {
+            case TINYINT -> LogicalTypes.SMALLINT.copy(nullable);
+            case BINARY, VARBINARY -> LogicalTypes.BINARY.copy(nullable);
+            case VARCHAR -> "TEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
+            default -> column.dataType();
         };
     }
 
