@@ -65,9 +65,7 @@ public final class SchemaManagerSnapshotSerializer implements SimpleVersionedSer
                     throw new IOException("Schema replay history exceeds the limit");
                 }
                 out.writeInt(table.appliedEventFingerprints().size());
-                for (var entry : table.appliedEventFingerprints().entrySet().stream()
-                        .sorted(Map.Entry.comparingByKey())
-                        .toList()) {
+                for (var entry : table.appliedEventFingerprints().entrySet()) {
                     writeString(out, entry.getKey());
                     writeString(out, entry.getValue());
                 }
