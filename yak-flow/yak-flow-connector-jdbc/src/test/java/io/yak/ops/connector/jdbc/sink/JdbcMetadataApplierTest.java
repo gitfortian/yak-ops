@@ -393,7 +393,7 @@ class JdbcMetadataApplierTest {
                         TABLE,
                         List.of(
                                 AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32))),
-                                AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64))))));
+                                AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)))))));
                 assertEquals(3, database.catalog.getTable(TABLE).columnCount());
                 assertEquals(3, executed.get(), "the first successful column must not be added twice");
             }
