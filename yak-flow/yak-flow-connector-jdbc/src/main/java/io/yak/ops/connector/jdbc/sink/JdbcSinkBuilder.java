@@ -6,11 +6,14 @@ import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Collects one-table or multi-table JDBC Sink options without opening a database connection.
@@ -34,6 +37,7 @@ public final class JdbcSinkBuilder {
     private int statementCacheSize = JdbcSinkOptions.STATEMENT_CACHE_SIZE.defaultValue();
     private List<JdbcTableWritePlan> tablePlans;
     private BatchFlushPolicy batchPolicy = new BatchFlushPolicy(500, Duration.ZERO);
+    private Supplier<? extends MetadataApplier> metadataApplierFactory;
 
     /**
      * Uses DriverManager connections and resolves the dialect from the supplied JDBC URL.
@@ -128,6 +132,12 @@ public final class JdbcSinkBuilder {
         return this;
     }
 
+    /** Supplies the per-job metadata applier used only when runtime schema evolution is enabled. */
+    public JdbcSinkBuilder withMetadataApplierFactory(Supplier<? extends MetadataApplier> factory) {
+        metadataApplierFactory = Objects.requireNonNull(factory, "factory");
+        return this;
+    }
+
     public JdbcSinkBuilder withBatchFlushPolicy(BatchFlushPolicy policy) {
         batchPolicy = Objects.requireNonNull(policy, "policy");
         return this;
@@ -152,17 +162,28 @@ public final class JdbcSinkBuilder {
             }
             resolvedDialect = JdbcFactoryLoader.loadDialect(connectionOptions.url());
         }
+        Supplier<? extends MetadataApplier> applierFactory = metadataApplierFactory;
+        if (applierFactory == null && connectionOptions != null) {
+            String url = connectionOptions.url();
+            applierFactory = () -> new JdbcMetadataApplier(
+                    provider,
+                    resolvedDialect,
+                    JdbcFactoryLoader.loadCatalog(url, provider),
+                    JdbcMetadataApplier.DEFAULT_STATEMENT_TIMEOUT_SECONDS);
+        }
         if (tablePlans != null) {
             if (sourceTable != null || targetTable != null || schema != null || mode != JdbcWriteMode.APPEND) {
                 throw new IllegalArgumentException("Single-table and multi-table JDBC Sink settings cannot be mixed");
             }
             return new JdbcSink(
-                    provider, resolvedDialect, tablePlans, batchPolicy, metrics, batchOrder, statementCacheSize);
+                    provider, resolvedDialect, tablePlans, batchPolicy, metrics, batchOrder, statementCacheSize,
+                    applierFactory);
         }
         TableId target = Objects.requireNonNull(targetTable, "targetTable");
         JdbcTableWritePlan plan = new JdbcTableWritePlan(
                 sourceTable == null ? target : sourceTable, target, Objects.requireNonNull(schema, "schema"), mode);
         return new JdbcSink(
-                provider, resolvedDialect, List.of(plan), batchPolicy, metrics, batchOrder, statementCacheSize);
+                provider, resolvedDialect, List.of(plan), batchPolicy, metrics, batchOrder, statementCacheSize,
+                applierFactory);
     }
 }
