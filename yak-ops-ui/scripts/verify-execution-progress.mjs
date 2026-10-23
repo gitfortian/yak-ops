@@ -18,7 +18,7 @@ for (const status of ["CANCELLING", "RECONCILING", "CANCELED"]) {
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const detail = read("../apps/web/app/data-sync/execution-detail.tsx");
 const progressBar = read("../apps/web/app/data-sync/execution-progress-bar.tsx");
-const taskList = read("../apps/web/app/data-sync/index.tsx");
+const taskList = read("../apps/web/app/data-sync/list/task-table.tsx");
 const router = read("../apps/web/app/router/AppRouter.tsx");
 const page = read("../apps/web/app/data-sync/task-detail.tsx");
 const css = read("../apps/web/app/data-sync/execution-detail.css");
