@@ -22,6 +22,7 @@ import {
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import {
   checkLayerCode,
+  isDatasourceUnavailable,
   layerFailureField,
   layerFailureMessage,
   saveLayer,
@@ -58,6 +59,12 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
   const active = useRef(true);
+  const selectedSource = dataSources.find((item) => item.id === input.dataSourceId);
+  const selectedUnavailable = isDatasourceUnavailable(selectedSource);
+  const sourceLabel = (item: LayerDataSource) =>
+    isDatasourceUnavailable(item)
+      ? `${item.name}（${item.dbType}）· 连接不可用`
+      : `${item.name}（${item.dbType}）`;
 
   useEffect(() => {
     active.current = true;
@@ -193,7 +200,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
             </div>
           </Field>
           <Field className={FIELD_CLASS} invalid={Boolean(errors.dataSourceId)}>
-            <FieldLabel htmlFor={id + "-datasource"} required className="pt-1">
+            <FieldLabel htmlFor={id + "-datasource"} className="pt-1">
               物理数据源
             </FieldLabel>
             <div>
@@ -203,10 +210,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 disabled={saving}
                 items={[
                   { value: UNBOUND, label: "未绑定" },
-                  ...dataSources.map((item) => ({
-                    value: item.id,
-                    label: `${item.name}（${item.dbType}）`,
-                  })),
+                  ...dataSources.map((item) => ({ value: item.id, label: sourceLabel(item) })),
                 ]}
                 onValueChange={(value) =>
                   change("dataSourceId", value === UNBOUND ? null : (value ?? null))
@@ -215,7 +219,6 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 <SelectTrigger
                   id={id + "-datasource"}
                   variant="outlined"
-                  aria-required
                   aria-invalid={Boolean(errors.dataSourceId) || undefined}
                 >
                   <SelectValue placeholder="请选择物理数据源" />
@@ -226,12 +229,19 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                   </SelectItem>
                   {dataSources.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      <SelectItemText>{`${item.name}（${item.dbType}）`}</SelectItemText>
+                      <SelectItemText>{sourceLabel(item)}</SelectItemText>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <FieldError match={Boolean(errors.dataSourceId)}>{errors.dataSourceId}</FieldError>
+              {selectedUnavailable ? (
+                <p className="mt-1 text-xs text-[#b54708]">
+                  该数据源连接不可用，启用后发布将无法执行，请先到数据源页测试连接。
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-[#667085]">启用前必须绑定；停用状态可暂不绑定。</p>
+              )}
             </div>
           </Field>
           <Field className={FIELD_CLASS}>

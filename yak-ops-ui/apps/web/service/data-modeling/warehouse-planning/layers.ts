@@ -1,5 +1,5 @@
 import HttpUtils from "@/service/http/HttpUtils";
-import { BizError } from "@/service/http/request";
+import { BizError, handleAuthenticationFailure } from "@/service/http/request";
 
 const API = "/api/v1/data-modeling/warehouse-planning/layers";
 
@@ -34,6 +34,22 @@ export interface LayerDataSource {
 
 export type LayerFailureField = "enCode" | "revision" | "dataSourceId";
 
+/**
+ * Keeps the session-expiry redirect that the shared handler would otherwise perform, and leaves
+ * every other failure to the caller so one failure renders one message instead of a toast plus
+ * an inline alert.
+ */
+async function layerRequest<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof BizError && (error.code === 401 || error.code === 2001)) {
+      handleAuthenticationFailure();
+    }
+    throw error;
+  }
+}
+
 /** Maps stable layer error codes to the field the user must correct. */
 export function layerFailureField(error: unknown): LayerFailureField | null {
   if (!(error instanceof BizError)) return null;
@@ -55,10 +71,18 @@ export function layerFailureMessage(error: unknown) {
   return error instanceof BizError && error.message ? error.message : "操作失败，请稍后重试";
 }
 
-export const getLayers = (signal?: AbortSignal) => HttpUtils.getData<Layer[]>(API, { signal });
+/** Reports whether a resolved connection status means publishing through this datasource will fail. */
+export function isDatasourceUnavailable(source: LayerDataSource | undefined) {
+  return source?.connStatus === "DISCONNECTED";
+}
+
+export const getLayers = (signal?: AbortSignal) =>
+  layerRequest(HttpUtils.getData<Layer[]>(API, { signal, skipErrorHandler: true }));
 
 export const getLayerDataSources = (signal?: AbortSignal) =>
-  HttpUtils.getData<LayerDataSource[]>(`${API}/datasources`, { signal });
+  layerRequest(
+    HttpUtils.getData<LayerDataSource[]>(`${API}/datasources`, { signal, skipErrorHandler: true }),
+  );
 
 export function checkLayerCode(enCode: string, excludeId?: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ enCode });
@@ -71,14 +95,21 @@ export function checkLayerCode(enCode: string, excludeId?: string, signal?: Abor
 
 export function saveLayer(layer: Layer | null, input: LayerInput) {
   return layer
-    ? HttpUtils.putData<Layer>(`${API}/${encodeURIComponent(layer.id)}`, {
-        ...input,
-        revision: layer.revision,
-      })
-    : HttpUtils.postData<Layer>(API, input);
+    ? layerRequest(
+        HttpUtils.putData<Layer>(
+          `${API}/${encodeURIComponent(layer.id)}`,
+          { ...input, revision: layer.revision },
+          { skipErrorHandler: true },
+        ),
+      )
+    : layerRequest(HttpUtils.postData<Layer>(API, input, { skipErrorHandler: true }));
 }
 
 export const deleteLayer = (layer: Layer) =>
-  HttpUtils.deleteData<boolean>(
-    `${API}/${encodeURIComponent(layer.id)}?revision=${layer.revision}`,
+  layerRequest(
+    HttpUtils.deleteData<boolean>(
+      `${API}/${encodeURIComponent(layer.id)}?revision=${layer.revision}`,
+      undefined,
+      { skipErrorHandler: true },
+    ),
   );
