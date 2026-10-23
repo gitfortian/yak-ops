@@ -187,7 +187,8 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       render: (_value, record) => (
         <div className="min-w-0">
           <div
-            className="truncate text-xs font-medium text-[var(--yak-components-tab-text-hover)]" title={record.updateBy}
+            className="truncate text-xs font-medium text-[var(--yak-components-tab-text-hover)]"
+            title={record.updateBy}
           >
             {updateUsersLoading &&
             record.updateBy &&
