@@ -178,6 +178,213 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         validateTable(event);
     }
 
+    /**
+     * Adds ordinary nullable columns without mutating the existing key definition.
+     * A complete preflight prevents a later invalid column from leaving a partial batch.
+     */
+    private void applyAddColumns(AddColumnEvent event) throws SQLException {
+        requirePhysicalTable(event);
+        TableSchema current = catalog.getTable(event.tableId());
+        List<JdbcColumnInfo> metadata = catalog.getColumns(event.tableId());
+        List<AddColumnEvent.ColumnWithPosition> missing = new ArrayList<>();
+        List<List<String>> plans = new ArrayList<>();
+        Set<String> names = new HashSet<>();
+        for (AddColumnEvent.ColumnWithPosition addition : event.addedColumns()) {
+            PhysicalColumn column = addition.column();
+            if (addition.position() != AddColumnEvent.ColumnPosition.LAST) {
+                throw new IllegalArgumentException("JDBC ADD_COLUMN supports LAST position only");
+            }
+            if (!names.add(column.name()) || !column.type().isNullable() || !column.type().isResolved()) {
+                throw new IllegalArgumentException("Invalid nullable column addition: " + column.name());
+            }
+            requirePlainColumn(column);
+            Column actual = findColumn(current, column.name());
+            if (actual != null) {
+                verifyAddedColumn(event, column);
+            } else {
+                List<String> statements = dialect.addColumnStatements(event.tableId(), column);
+                if (statements.isEmpty()) {
+                    throw new IllegalArgumentException("JDBC column addition produced no DDL");
+                }
+                missing.add(addition);
+                plans.add(statements);
+            }
+        }
+        for (int index = 0; index < missing.size(); index++) {
+            checkCanceled(event);
+            PhysicalColumn column = missing.get(index).column();
+            try {
+                executeStatements(event, plans.get(index));
+            } catch (SQLException failure) {
+                if (!isColumnAlreadyExists(failure)) throw failure;
+                // The duplicate-column error is only acceptable when the actual column matches.
+            }
+            verifyAddedColumn(event, column);
+        }
+    }
+
+    /**
+     * Requires complete old-type preconditions and a non-key, same-family safe widening.
+     * Already-applied changes can be replayed after a successful DDL with a lost response.
+     */
+    private void applyAlterColumnTypes(AlterColumnTypeEvent event) throws SQLException {
+        requirePhysicalTable(event);
+        TableSchema schema = catalog.getTable(event.tableId());
+        if (!event.oldTypeMapping().keySet().equals(event.typeMapping().keySet())) {
+            throw new IllegalArgumentException("ALTER_COLUMN_TYPE requires every original column type");
+        }
+        List<String> columns = event.typeMapping().keySet().stream().sorted().toList();
+        List<String> pending = new ArrayList<>();
+        List<String> statements = new ArrayList<>();
+        for (String name : columns) {
+            Column actual = findColumn(schema, name);
+            if (actual == null || schema.primaryKeys().contains(name)) {
+                throw new IllegalArgumentException("Cannot alter a missing or primary-key column: " + name);
+            }
+            LogicalType next = event.typeMapping().get(name);
+            LogicalType previous = event.oldTypeMapping().get(name);
+            if (!next.isResolved() || !previous.isResolved() || next.isNullable() != actual.nullable()) {
+                throw new IllegalArgumentException("Invalid column type or nullability change: " + name);
+            }
+            JdbcColumnInfo metadata = findColumnInfo(event.tableId(), name);
+            requirePlainColumn(metadata);
+            if (sameType(actual.dataType(), next)) continue;
+            if (!sameType(actual.dataType(), previous) || !safeWidening(previous, next)) {
+                throw new IllegalArgumentException("Stale or unsafe column type change: " + name);
+            }
+            JdbcNativeType rendered = dialect.nativeType(new Column(name, next));
+            if (rendered.warning() != null) {
+                throw new IllegalArgumentException("Column widening requires explicit native type approval: " + name);
+            }
+            pending.add(name);
+            statements.add(dialect.alterColumnTypeSql(
+                    event.tableId(), actual, new Column(name, next), metadata.remarks()));
+        }
+        for (int index = 0; index < pending.size(); index++) {
+            checkCanceled(event);
+            executeStatements(event, List.of(statements.get(index)));
+            String name = pending.get(index);
+            Column column = findColumn(catalog.getTable(event.tableId()), name);
+            if (column == null || !sameType(column.dataType(), event.typeMapping().get(name))) {
+                throw new IllegalArgumentException("Target column type did not match the applied DDL: " + name);
+            }
+            requirePlainColumn(findColumnInfo(event.tableId(), name));
+        }
+    }
+
+    private void requirePhysicalTable(SchemaChangeEvent event) throws SQLException {
+        JdbcTableInfo table = catalog.findTable(event.tableId())
+                .orElseThrow(() -> new SQLException("Target table does not exist for schema evolution"));
+        if (!"TABLE".equalsIgnoreCase(table.type()) && !"BASE TABLE".equalsIgnoreCase(table.type())) {
+            throw new IllegalArgumentException("Schema evolution requires a physical target table");
+        }
+    }
+
+    private void verifyAddedColumn(AddColumnEvent event, PhysicalColumn expected) throws SQLException {
+        Column actual = findColumn(catalog.getTable(event.tableId()), expected.name());
+        if (actual == null || !sameType(actual.dataType(), expected.type())) {
+            throw new IllegalArgumentException("Target column does not match requested addition: " + expected.name());
+        }
+        JdbcColumnInfo physical = findColumnInfo(event.tableId(), expected.name());
+        requirePlainColumn(physical);
+        if (!physical.nullable() || (expected.comment() != null
+                && !expected.comment().equals(physical.remarks()))) {
+            throw new IllegalArgumentException("Target column properties do not match: " + expected.name());
+        }
+    }
+
+    private JdbcColumnInfo findColumnInfo(TableId table, String name) throws SQLException {
+        return catalog.getColumns(table).stream()
+                .filter(column -> column.name().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Target column is missing: " + name));
+    }
+
+    private static Column findColumn(TableSchema schema, String name) {
+        return schema.columns().stream().filter(column -> column.name().equals(name)).findFirst().orElse(null);
+    }
+
+    private static void requirePlainColumn(PhysicalColumn column) {
+        ColumnProperties properties = column.properties();
+        if (properties != null && (!properties.isKnown() || properties.hasFeatures()
+                || properties.nativeType() != null)) {
+            throw new IllegalArgumentException("Automatic column evolution cannot preserve native properties: "
+                    + column.name());
+        }
+    }
+
+    private static void requirePlainColumn(JdbcColumnInfo column) {
+        if (!Boolean.FALSE.equals(column.autoIncrement())
+                || !Boolean.FALSE.equals(column.generated())
+                || column.hasDefaultValue()
+                || column.defaultExpression() != null
+                || column.onUpdateExpression() != null
+                || (column.nativeType() != null
+                        && column.nativeType().toLowerCase(java.util.Locale.ROOT).contains("unsigned"))) {
+            throw new IllegalArgumentException("Column has native properties that must be preserved: " + column.name());
+        }
+    }
+
+    private static boolean sameType(LogicalType first, LogicalType second) {
+        return first.equals(second);
+    }
+
+    private static boolean safeWidening(LogicalType previous, LogicalType next) {
+        LogicalTypeRoot root = previous.getTypeRoot();
+        if (root != next.getTypeRoot() || previous.isNullable() != next.isNullable()) return false;
+        if (!Set.of(
+                        LogicalTypeRoot.VARCHAR,
+                        LogicalTypeRoot.VARBINARY,
+                        LogicalTypeRoot.DECIMAL,
+                        LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE,
+                        LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE)
+                .contains(root)) return false;
+        Column before = new Column("field", previous);
+        Column after = new Column("field", next);
+        if (before.length() == null && after.length() != null
+                && (root == LogicalTypeRoot.VARCHAR || root == LogicalTypeRoot.VARBINARY)) return false;
+        return JdbcSchemaCompatibility.isCompatible(before, after);
+    }
+
+    /** Executes auto-committed DDL while retaining cancellation and unknown-outcome semantics. */
+    private void executeStatements(SchemaChangeEvent event, List<String> statements) throws SQLException {
+        try (Connection connection = connections.getConnection()) {
+            checkCanceled(event);
+            connection.setAutoCommit(true);
+            try (Statement statement = connection.createStatement()) {
+                statement.setQueryTimeout(statementTimeoutSeconds);
+                synchronized (this) {
+                    checkCanceled(event);
+                    activeStatement = statement;
+                }
+                try {
+                    for (String sql : statements) {
+                        checkCanceled(event);
+                        try {
+                            statement.execute(sql);
+                        } catch (SQLException failure) {
+                            if (isOutcomeUnknown(failure)) {
+                                throw new SchemaEvolveException(event, "DDL completion cannot be confirmed", failure, true);
+                            }
+                            throw failure;
+                        } catch (RuntimeException failure) {
+                            throw new SchemaEvolveException(event, "DDL completion cannot be confirmed", failure, true);
+                        }
+                    }
+                } finally {
+                    synchronized (this) {
+                        activeStatement = null;
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isColumnAlreadyExists(SQLException failure) {
+        return "42701".equals(failure.getSQLState())
+                || ("42S21".equals(failure.getSQLState()) && failure.getErrorCode() == 1060);
+    }
+
     private void createMissingTable(CreateTableEvent event, JdbcDdlPlan ddl) throws SQLException {
         checkCanceled(event);
         try (Connection connection = connections.getConnection()) {
