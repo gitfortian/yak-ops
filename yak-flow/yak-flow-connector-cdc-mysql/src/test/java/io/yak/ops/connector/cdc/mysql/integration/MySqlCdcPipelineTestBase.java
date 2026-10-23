@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
 import io.yak.ops.connector.cdc.mysql.source.MySqlHybridCdcSource;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
@@ -221,6 +222,7 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(targetConnection, targetDialect.createTableSql(to, initialSchema));
                 sql(sourceConnection, "INSERT INTO cdc_rt_schema_orders VALUES (1,'before')");
 
+                TableMetrics sourceMetrics = new TableMetrics();
                 MySqlHybridCdcSource source = MySqlCdcSource.builder()
                         .hostname(SOURCE.metadata().host())
                         .port(SOURCE.metadata().port())
@@ -229,7 +231,7 @@ abstract class MySqlCdcPipelineTestBase {
                         .serverId(5581)
                         .topicPrefix("yak_cdc_runtime_schema_evolution")
                         .table(from, initialSchema)
-                        .buildHybrid(1);
+                        .buildHybrid(1, sourceMetrics);
                 JdbcSink sink = JdbcSink.builder()
                         .withConnectionOptions(targetOptions)
                         .withTablePlans(List.of(new JdbcTableWritePlan(from, to, initialSchema, JdbcWriteMode.UPSERT)))
@@ -242,6 +244,11 @@ abstract class MySqlCdcPipelineTestBase {
                 JobClient first = executor.execute(graph, initial).get(30, TimeUnit.SECONDS);
                 try {
                     awaitBaseSchemaRow(first, targetConnection, targetDialect, to, "before");
+                    // A delivered snapshot row does not imply that the CDC Binlog gate is open.
+                    // Verify one genuine incremental mutation before testing a runtime DDL.
+                    awaitStreamingPhase(first, sourceMetrics);
+                    sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='stream-ready' WHERE ID=1");
+                    awaitIncrementalRow(first, sourceMetrics, from, targetConnection, targetDialect, to, "stream-ready");
                     sql(sourceConnection, "ALTER TABLE cdc_rt_schema_orders ADD COLUMN NOTE VARCHAR(128) NULL");
                     sql(sourceConnection, "UPDATE cdc_rt_schema_orders SET NAME='after', NOTE='added' WHERE ID=1");
                     awaitEvolvedRows(first, targetConnection, targetDialect, to, Map.of(1L, "added"));
@@ -270,6 +277,38 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(sourceConnection, "DROP TABLE IF EXISTS cdc_rt_schema_orders");
             }
         }
+    }
+
+    private static void awaitStreamingPhase(JobClient job, TableMetrics metrics) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            if (metrics.continuousSnapshot().phase() == TableMetrics.Phase.STREAMING) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC snapshot handoff did not enter STREAMING");
+    }
+
+    private static void awaitIncrementalRow(
+            JobClient job,
+            TableMetrics metrics,
+            TableId sourceTable,
+            Connection connection,
+            JdbcDialect dialect,
+            TableId target,
+            String expected) throws Exception {
+        long deadline = System.nanoTime() + DELIVERY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            ensureRunning(job);
+            TableMetrics.Snapshot incremental = metrics.continuousSnapshot().incrementalTables().get(sourceTable);
+            if (incremental != null
+                    && incremental.readRows() > 0
+                    && expected.equals(orderRows(connection, dialect, target).get(1L))) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("CDC Binlog mutation was not delivered after snapshot handoff");
     }
 
     private static void awaitBaseSchemaRow(
