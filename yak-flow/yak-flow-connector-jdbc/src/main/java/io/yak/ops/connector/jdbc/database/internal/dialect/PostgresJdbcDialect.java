@@ -78,8 +78,7 @@ public final class PostgresJdbcDialect extends AbstractDialect {
         return switch (column.dataType().getTypeRoot()) {
             case TINYINT -> LogicalTypes.SMALLINT.copy(nullable);
             case BINARY, VARBINARY -> LogicalTypes.BINARY.copy(nullable);
-            case VARCHAR ->
-                "TEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
+            case VARCHAR -> "TEXT".equals(targetType.ddl()) ? LogicalTypes.STRING.copy(nullable) : column.dataType();
             default -> column.dataType();
         };
     }
