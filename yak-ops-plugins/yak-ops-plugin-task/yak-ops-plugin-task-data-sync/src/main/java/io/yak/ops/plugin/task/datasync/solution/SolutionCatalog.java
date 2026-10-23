@@ -60,9 +60,7 @@ public final class SolutionCatalog {
     public static void validateSchemaChanges(
             SolutionType solution, String sourceType, String targetType, boolean enabled) {
         if (!enabled) return;
-        if (solution.supportsScheduling()
-                || !"MYSQL".equals(sourceType)
-                || !SCHEMA_TYPES.contains(targetType)) {
+        if (solution.supportsScheduling() || !"MYSQL".equals(sourceType) || !SCHEMA_TYPES.contains(targetType)) {
             throw new IllegalArgumentException(
                     "Runtime schema changes require MySQL source and MySQL or PostgreSQL target");
         }
