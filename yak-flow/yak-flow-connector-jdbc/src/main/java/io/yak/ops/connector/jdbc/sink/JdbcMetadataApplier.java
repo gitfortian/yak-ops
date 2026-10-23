@@ -264,7 +264,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             executeStatements(event, List.of(statements.get(index)));
             String name = pending.get(index);
             Column column = findColumn(catalog.getTable(event.tableId()), name);
-            if (column == null || !sameType(column.dataType(), event.typeMapping().get(name))) {
+            if (column == null
+                    || !sameType(column.dataType(), event.typeMapping().get(name))) {
                 throw new IllegalArgumentException("Target column type did not match the applied DDL: " + name);
             }
             requirePlainColumn(findColumnInfo(event.tableId(), name));
@@ -300,7 +301,10 @@ public final class JdbcMetadataApplier implements MetadataApplier {
     }
 
     private static Column findColumn(TableSchema schema, String name) {
-        return schema.columns().stream().filter(column -> column.name().equals(name)).findFirst().orElse(null);
+        return schema.columns().stream()
+                .filter(column -> column.name().equals(name))
+                .findFirst()
+                .orElse(null);
     }
 
     private static void requirePlainColumn(PhysicalColumn column) {
@@ -327,7 +331,9 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 || column.defaultExpression() != null
                 || column.onUpdateExpression() != null
                 || (column.nativeType() != null
-                        && column.nativeType().toLowerCase(java.util.Locale.ROOT).contains("unsigned"))) {
+                        && column.nativeType()
+                                .toLowerCase(java.util.Locale.ROOT)
+                                .contains("unsigned"))) {
             throw new IllegalArgumentException("Column has native properties that must be preserved: " + column.name());
         }
     }
@@ -348,7 +354,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 .contains(root)) return false;
         Column before = new Column("field", previous);
         Column after = new Column("field", next);
-        if (before.length() == null && after.length() != null
+        if (before.length() == null
+                && after.length() != null
                 && (root == LogicalTypeRoot.VARCHAR || root == LogicalTypeRoot.VARBINARY)) return false;
         return JdbcSchemaCompatibility.isCompatible(before, after);
     }
@@ -371,7 +378,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                             statement.execute(sql);
                         } catch (SQLException failure) {
                             if (isOutcomeUnknown(failure)) {
-                                throw new SchemaEvolveException(event, "DDL completion cannot be confirmed", failure, true);
+                                throw new SchemaEvolveException(
+                                        event, "DDL completion cannot be confirmed", failure, true);
                             }
                             throw failure;
                         } catch (RuntimeException failure) {
