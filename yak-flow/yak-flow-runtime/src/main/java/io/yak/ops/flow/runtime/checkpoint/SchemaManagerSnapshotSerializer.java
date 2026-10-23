@@ -6,6 +6,7 @@ import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.BasicType;
+import io.yak.ops.core.types.BinaryType;
 import io.yak.ops.core.types.CharType;
 import io.yak.ops.core.types.DecimalType;
 import io.yak.ops.core.types.LogicalType;
@@ -15,7 +16,6 @@ import io.yak.ops.core.types.TimestampType;
 import io.yak.ops.core.types.UnresolvedDecimalType;
 import io.yak.ops.core.types.VarBinaryType;
 import io.yak.ops.core.types.VarCharType;
-import io.yak.ops.core.types.BinaryType;
 import io.yak.ops.core.types.ZonedTimestampType;
 import io.yak.ops.flow.runtime.schema.SchemaManagerSnapshot;
 import java.io.ByteArrayInputStream;
@@ -228,7 +228,8 @@ public final class SchemaManagerSnapshotSerializer implements SimpleVersionedSer
     private static LogicalType parseType(String serialized) throws IOException {
         String type = serialized.trim();
         boolean nullable = !type.endsWith(" NOT NULL");
-        if (!nullable) type = type.substring(0, type.length() - " NOT NULL".length()).trim();
+        if (!nullable)
+            type = type.substring(0, type.length() - " NOT NULL".length()).trim();
 
         Matcher unresolved = Pattern.compile("UNRESOLVED_DECIMAL\\((\\?|\\d+),\\s*(\\?|\\d+)\\)")
                 .matcher(type);
