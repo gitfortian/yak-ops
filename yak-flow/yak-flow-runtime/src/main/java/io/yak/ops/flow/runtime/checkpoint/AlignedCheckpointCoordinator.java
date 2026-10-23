@@ -7,6 +7,7 @@ import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.flow.runtime.jobgraph.JobGraph;
+import io.yak.ops.flow.runtime.schema.SchemaCoordinator;
 import io.yak.ops.flow.runtime.source.coordinator.PendingCheckpointDeliveriesException;
 import io.yak.ops.flow.runtime.source.coordinator.SourceCoordinator;
 import io.yak.ops.flow.runtime.tasks.OneInputStreamTask;
@@ -52,6 +53,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     private final JobGraph jobGraph;
     private final Source<?, SourceSplit, Object> source;
     private final SourceCoordinator<SourceSplit, Object> coordinator;
+    private final SchemaCoordinator schemaCoordinator;
     private final List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks;
     private final List<OneInputStreamTask> inputTasks;
     private final FileCheckpointStore storage;
@@ -79,6 +81,21 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             CheckpointSnapshot restored,
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure) {
+        this(plan, source, coordinator, sourceTasks, inputTasks, storage, restored, cancelled, onFailure, null);
+    }
+
+    /** Adds optional runtime schema state to the same durable checkpoint cut as Source offsets. */
+    public AlignedCheckpointCoordinator(
+            JobGraph plan,
+            Source<?, SourceSplit, Object> source,
+            SourceCoordinator<SourceSplit, Object> coordinator,
+            List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks,
+            List<OneInputStreamTask> inputTasks,
+            FileCheckpointStore storage,
+            CheckpointSnapshot restored,
+            BooleanSupplier cancelled,
+            Consumer<Throwable> onFailure,
+            SchemaCoordinator schemaCoordinator) {
         this.jobGraph = Objects.requireNonNull(plan, "plan must not be null");
         String logId = plan.configuration().get(ExecutionOptions.LOG_ID);
         boolean debug = plan.configuration().get(ExecutionOptions.DEBUG);
@@ -96,6 +113,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         }));
         this.source = Objects.requireNonNull(source, "source must not be null");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator must not be null");
+        this.schemaCoordinator = schemaCoordinator;
         this.sourceTasks = List.copyOf(sourceTasks);
         this.inputTasks = List.copyOf(inputTasks);
         this.storage = Objects.requireNonNull(storage, "storage must not be null");
@@ -306,6 +324,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             checkpointDeadlineNanos = Math.min(checkpointDeadlineNanos, finalCheckpointDeadlineNanos);
         }
         boolean coordinatorFrozen = false;
+        boolean schemaCoordinatorFrozen = false;
+        CheckpointSnapshot.SerializedState schemaManagerState = null;
         List<SourceOperatorStreamTask<Object, SourceSplit>> paused = new ArrayList<>();
         Map<CheckpointSnapshot.OperatorSubtask, CompletableFuture<OneInputStreamTask.CheckpointState>>
                 acknowledgements = new LinkedHashMap<>();
@@ -314,6 +334,11 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         // A decline in an upstream Operator must wake a checkpoint currently awaiting the Sink.
         CompletableFuture<Void> firstFailedAcknowledgement = new CompletableFuture<>();
         try {
+            if (schemaCoordinator != null) {
+                await(schemaCoordinator.pauseForCheckpoint());
+                schemaCoordinatorFrozen = true;
+                schemaManagerState = schemaCoordinator.snapshotState();
+            }
             await(coordinator.pauseForCheckpoint());
             coordinatorFrozen = true;
             waitForAssignments();
@@ -429,7 +454,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                     System.currentTimeMillis(),
                     operatorStates,
                     fullyFinished,
-                    finishedSubtasks);
+                    finishedSubtasks,
+                    schemaManagerState);
             if (snapshot.hasFinishedOperators() && !terminal) {
                 throw new CheckpointDeclinedException(checkpointId, "Finished state requires a terminal checkpoint");
             }
@@ -476,6 +502,15 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             if (coordinatorFrozen) {
                 try {
                     await(coordinator.resumeAfterCheckpoint());
+                } catch (Exception error) {
+                    if (!cancelled.getAsBoolean() && !closed.get()) {
+                        resumeFailure = accumulate(resumeFailure, error);
+                    }
+                }
+            }
+            if (schemaCoordinatorFrozen) {
+                try {
+                    await(schemaCoordinator.resumeAfterCheckpoint());
                 } catch (Exception error) {
                     if (!cancelled.getAsBoolean() && !closed.get()) {
                         resumeFailure = accumulate(resumeFailure, error);

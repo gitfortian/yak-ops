@@ -51,8 +51,26 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             throw new IllegalArgumentException("JDBC statement cache size must be positive");
         }
         this.statementCacheSize = statementCacheSize;
-        Objects.requireNonNull(dialect, "dialect");
-        if (Objects.requireNonNull(plans, "plans").isEmpty()) {
+        installPlans(Objects.requireNonNull(dialect, "dialect"), Objects.requireNonNull(plans, "plans"));
+    }
+
+    /** Replaces route SQL and converters only after the owning Writer has flushed all records. */
+    public void updatePlans(JdbcDialect dialect, List<JdbcTableWritePlan> plans) throws SQLException {
+        if (connection == null) {
+            throw new IllegalStateException("JDBC executor has no active connection");
+        }
+        if (active != null || awaitingUpdateAfter != null || beforeInExecution != null) {
+            throw new IllegalStateException("Cannot replace JDBC routes while a batch or update pair is active");
+        }
+        closePreparedStatements();
+        routes.clear();
+        writes.clear();
+        deletes.clear();
+        installPlans(Objects.requireNonNull(dialect, "dialect"), Objects.requireNonNull(plans, "plans"));
+    }
+
+    private void installPlans(JdbcDialect dialect, List<JdbcTableWritePlan> plans) {
+        if (plans.isEmpty()) {
             throw new IllegalArgumentException("JDBC Sink requires at least one table route");
         }
         for (JdbcTableWritePlan plan : plans) {
@@ -201,6 +219,10 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     @Override
     public void closeStatements() throws SQLException {
         connection = null;
+        closePreparedStatements();
+    }
+
+    private void closePreparedStatements() throws SQLException {
         prepared.clear();
         active = null;
         beforeInExecution = null;

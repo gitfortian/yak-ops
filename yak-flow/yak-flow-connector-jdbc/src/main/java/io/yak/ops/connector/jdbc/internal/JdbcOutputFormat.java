@@ -12,6 +12,7 @@ import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.event.SchemaChangeRequest;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
@@ -41,6 +42,8 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
     private static final long REPORT_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30);
 
     private final Connection connection;
+    private final JdbcDialect dialect;
+    private List<JdbcTableWritePlan> plans;
     private final TableMetrics metrics;
     private final long metricsGeneration;
     private final Map<TableId, Long> pendingTableRows = new LinkedHashMap<>();
@@ -104,6 +107,8 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             int statementCacheSize)
             throws SQLException {
         Objects.requireNonNull(batchOrder, "batchOrder");
+        this.dialect = Objects.requireNonNull(dialect, "dialect");
+        this.plans = List.copyOf(Objects.requireNonNull(plans, "plans"));
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         metricsGeneration = metrics.generation();
         Objects.requireNonNull(connections, "connections");
@@ -218,6 +223,51 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             }
             throw failure;
         }
+    }
+
+    /** Validates a replacement route before the runtime applies any target DDL. */
+    public void validateSchemaChange(SchemaChangeRequest request) {
+        ensureActive();
+        updatedPlans(request);
+    }
+
+    /**
+     * Rebuilds statement SQL and converters on the existing Writer connection after DDL succeeds.
+     * The coordinator guarantees that every Writer was flushed before this method is called.
+     */
+    public void updateSchema(SchemaChangeRequest request) throws SQLException {
+        ensureActive();
+        if (executor.bufferedRecords() != 0) {
+            throw new IllegalStateException("Cannot update JDBC schema with buffered records");
+        }
+        List<JdbcTableWritePlan> updated = updatedPlans(request);
+        statements.updatePlans(dialect, updated);
+        plans = updated;
+    }
+
+    private List<JdbcTableWritePlan> updatedPlans(SchemaChangeRequest request) {
+        Objects.requireNonNull(request, "request");
+        List<JdbcTableWritePlan> updated = new java.util.ArrayList<>(plans.size());
+        int matched = 0;
+        for (JdbcTableWritePlan plan : plans) {
+            if (plan.sourceTable().equals(request.sourceTable())
+                    && plan.targetTable().equals(request.targetTable())) {
+                if (!plan.sourceSchema().equals(request.sourceSchemaBefore().toTableSchema())
+                        || !plan.schema().equals(request.targetSchemaBefore().toTableSchema())) {
+                    throw new IllegalStateException("Schema request is stale relative to the JDBC write plan");
+                }
+                updated.add(plan.withSchemas(
+                        request.sourceSchemaAfter().toTableSchema(),
+                        request.targetSchemaAfter().toTableSchema()));
+                matched++;
+            } else {
+                updated.add(plan);
+            }
+        }
+        if (matched != 1) {
+            throw new IllegalArgumentException("Schema request does not identify exactly one JDBC write route");
+        }
+        return List.copyOf(updated);
     }
 
     @Override

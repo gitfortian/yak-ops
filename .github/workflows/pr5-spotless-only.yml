@@ -1,0 +1,30 @@
+name: PR5 Spotless Only
+
+on:
+  push:
+    branches:
+      - feat/yakflow-schema-manager-coordination-20261023
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr5-spotless-only
+  cancel-in-progress: true
+
+jobs:
+  spotless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Spotless only (no tests or compilation)
+        run: bash mvnw -B -ntp -pl yak-ops-core,yak-flow/yak-flow-runtime,yak-flow/yak-flow-connector-jdbc com.diffplug.spotless:spotless-maven-plugin:3.10.2:check

@@ -22,7 +22,8 @@ public record CheckpointSnapshot(
         long completedAtMillis,
         Map<OperatorSubtask, Map<String, SerializedState>> operatorStates,
         Set<String> fullyFinishedOperators,
-        Set<OperatorSubtask> finishedSubtasks) {
+        Set<OperatorSubtask> finishedSubtasks,
+        SerializedState schemaManagerState) {
 
     public CheckpointSnapshot {
         if (checkpointId <= 0 || completedAtMillis <= 0) {
@@ -98,7 +99,32 @@ public record CheckpointSnapshot(
                 completedAtMillis,
                 operatorStates,
                 Set.of(),
-                Set.of());
+                Set.of(),
+                null);
+    }
+
+    /** Compatibility constructor for format v3 checkpoints without runtime schema state. */
+    public CheckpointSnapshot(
+            long checkpointId,
+            String graphSignature,
+            SerializedState enumeratorState,
+            Map<Integer, List<SerializedState>> readerSplits,
+            Map<Integer, List<SerializedState>> assignments,
+            long completedAtMillis,
+            Map<OperatorSubtask, Map<String, SerializedState>> operatorStates,
+            Set<String> fullyFinishedOperators,
+            Set<OperatorSubtask> finishedSubtasks) {
+        this(
+                checkpointId,
+                graphSignature,
+                enumeratorState,
+                readerSplits,
+                assignments,
+                completedAtMillis,
+                operatorStates,
+                fullyFinishedOperators,
+                finishedSubtasks,
+                null);
     }
 
     public boolean hasFinishedOperators() {

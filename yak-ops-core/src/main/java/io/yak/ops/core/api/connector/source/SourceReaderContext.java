@@ -1,6 +1,9 @@
 package io.yak.ops.core.api.connector.source;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.core.event.SchemaChangeRequest;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Minimal runtime context for one SourceReader.
@@ -34,5 +37,17 @@ public interface SourceReaderContext {
      */
     default void sendSourceEventToCoordinator(SourceEvent event) {
         throw new UnsupportedOperationException("This context does not support SourceEvent transport");
+    }
+
+    /**
+     * Requests a planned schema transition and completes only after all target Writers adopt it.
+     *
+     * <p>Implementations must not block the Source mailbox while awaiting this stage. A connector
+     * must also stop emitting post-change rows until the stage completes, and must not advance its
+     * recoverable source offset past the event before that acknowledgment.
+     */
+    default CompletionStage<Long> sendSchemaChangeRequestToCoordinator(SchemaChangeRequest request) {
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException("This context does not support schema change coordination"));
     }
 }
