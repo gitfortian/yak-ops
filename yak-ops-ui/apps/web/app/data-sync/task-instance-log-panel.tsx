@@ -9,12 +9,12 @@ import {
   TooltipTrigger,
 } from "@yak-ops/yak-ui";
 import { Download, Maximize2, Minimize2, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { downloadTaskInstanceLogs, getTaskInstanceLogs } from "@/service/task-execution";
+import { downloadTaskInstanceLogs } from "@/service/task-execution";
 
 import { TaskInstanceLogLine } from "./task-instance-log-line";
-import { parseLogContent, trimLogContent, type ParsedLogLine } from "./task-instance-log-parser";
+import { useInstanceLogs } from "./log/use-instance-logs";
 
 import "./task-instance-log.css";
 
@@ -25,76 +25,13 @@ interface Props {
 }
 
 export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: Props) {
-  const [content, setContent] = useState("");
-  const [error, setError] = useState(false);
-  const [revision, setRevision] = useState(0);
+  const { content, error, logLines, setRevision } = useInstanceLogs(instanceId, active);
   const [downloading, setDownloading] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const bodyRef = useRef<HTMLPreElement>(null);
   const fullscreenBodyRef = useRef<HTMLPreElement>(null);
   const followRef = useRef(true);
   const fullscreenFollowRef = useRef(true);
-  const parsedCacheRef = useRef<{ text: string; lines: ParsedLogLine[] }>({ text: "", lines: [] });
-
-  // Reuse unchanged parsed lines while new pages arrive; reparse after older text is trimmed.
-  const logLines = useMemo(() => {
-    const previous = parsedCacheRef.current;
-    let lines: ParsedLogLine[];
-    if (previous.text && content.startsWith(previous.text)) {
-      const lastLine = previous.lines[previous.lines.length - 1]?.raw ?? "";
-      lines = [
-        ...previous.lines.slice(0, -1),
-        ...parseLogContent(lastLine + content.slice(previous.text.length)),
-      ];
-    } else {
-      lines = parseLogContent(content);
-    }
-    parsedCacheRef.current = { text: content, lines };
-    return lines;
-  }, [content]);
-
-  useEffect(() => {
-    let disposed = false;
-    let position: string | undefined;
-    let loading = false;
-    let more = true;
-
-    const load = async () => {
-      if (loading || disposed) return;
-      loading = true;
-      try {
-        let pages = 0;
-        let hasMore: boolean;
-        do {
-          const page = await getTaskInstanceLogs(instanceId, position);
-          if (disposed) return;
-          position = page.nextCursor;
-          if (page.content) {
-            setContent((previous) => trimLogContent(previous + page.content));
-          }
-          hasMore = page.hasMore;
-          pages += 1;
-        } while (hasMore && pages < 5);
-        more = hasMore;
-        setError(false);
-      } catch {
-        if (!disposed) setError(true);
-      } finally {
-        loading = false;
-      }
-    };
-
-    setContent("");
-    setError(false);
-    void load();
-    const refresh = window.setInterval(() => {
-      if (active || more) void load();
-    }, 2000);
-    return () => {
-      disposed = true;
-      window.clearInterval(refresh);
-    };
-  }, [instanceId, active, revision]);
 
   useEffect(() => {
     if (bodyRef.current && followRef.current) {
