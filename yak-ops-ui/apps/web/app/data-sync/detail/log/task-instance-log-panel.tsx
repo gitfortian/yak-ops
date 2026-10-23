@@ -59,16 +59,16 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
   };
 
   const actionClassName =
-    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-white/10 text-[#ecf0f8] transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-45";
+    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-white/10 text-[var(--yak-log-toolbar-text)] transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-45";
 
-  const tooltipStyle = { border: "none", backgroundColor: "#0b0f19", color: "#fff" };
+  const tooltipStyle = { border: "none", backgroundColor: "var(--yak-log-tooltip-bg)", color: "var(--yak-log-tooltip-text)" };
 
   const logViewer = (expanded: boolean) => (
     <div
       className={
         expanded
-          ? "relative flex h-full min-h-0 flex-col rounded-xl bg-[#151b2d]"
-          : "relative rounded-xl bg-[#151b2d]"
+          ? "relative flex h-full min-h-0 flex-col rounded-xl bg-[var(--yak-log-panel-bg)]"
+          : "relative rounded-xl bg-[var(--yak-log-panel-bg)]"
       }
     >
       <div className="absolute top-3 right-3 z-10 flex gap-1">
@@ -171,7 +171,7 @@ export function TaskInstanceLogPanel({ instanceId, active, embedded = false }: P
             padding: 0,
             border: "none",
             overflow: "hidden",
-            backgroundColor: "#151b2d",
+            backgroundColor: "var(--yak-log-panel-bg)",
           }}
         >
           <DialogTitle className="sr-only">运行日志</DialogTitle>
