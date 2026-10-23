@@ -67,8 +67,7 @@ public final class JdbcSchemaDerivator {
             if (differences.stream().noneMatch(d -> d.kind() == Kind.INCOMPATIBLE)) {
                 Schema targetSchema = new Schema(columns, source.primaryKeys(), source.comment());
                 changes.add(new CreateTableEvent(tableId, targetSchema));
-                add(differences, null, Kind.CREATE_TABLE,
-                        Reason.TABLE_MISSING, null, null);
+                add(differences, null, Kind.CREATE_TABLE, Reason.TABLE_MISSING, null, null);
             }
             return new SchemaChangePlan(tableId, differences, changes);
         }
@@ -97,8 +96,7 @@ public final class JdbcSchemaDerivator {
                             normalized, null);
                 } else {
                     additions.add(AddColumnEvent.last(incoming.copy(normalized)));
-                    add(differences, incoming.name(), Kind.ADD_COLUMN,
-                            Reason.COLUMN_MISSING, normalized, null);
+                    add(differences, incoming.name(), Kind.ADD_COLUMN, Reason.COLUMN_MISSING, normalized, null);
                 }
                 continue;
             }
@@ -122,8 +120,7 @@ public final class JdbcSchemaDerivator {
                     normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
             if (canContain(planned, actual.type())) {
-                add(differences, incoming.name(), Kind.COMPATIBLE,
-                        Reason.COMPATIBLE, planned, actual.type());
+                add(differences, incoming.name(), Kind.COMPATIBLE, Reason.COMPATIBLE, planned, actual.type());
             } else if (!source.primaryKeys().contains(incoming.name())
                     && !current.primaryKeys().contains(incoming.name())
                     && ordinaryColumn(incoming)
@@ -145,14 +142,12 @@ public final class JdbcSchemaDerivator {
         }
 
         if (!Objects.equals(source.comment(), current.comment())) {
-            add(differences, null, Kind.METADATA_DIFFERENCE,
-                    Reason.COLUMN_METADATA_DIFFERENCE, null, null);
+            add(differences, null, Kind.METADATA_DIFFERENCE, Reason.COLUMN_METADATA_DIFFERENCE, null, null);
         }
         Set<String> names = byName(source).keySet();
         for (PhysicalColumn extra : current.columns()) {
             if (!names.contains(extra.name())) {
-                add(differences, extra.name(), Kind.INCOMPATIBLE,
-                        Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
+                add(differences, extra.name(), Kind.INCOMPATIBLE, Reason.COLUMN_ONLY_IN_TARGET, null, extra.type());
             }
         }
         if (differences.stream().noneMatch(d -> d.kind() == Kind.INCOMPATIBLE)) {
@@ -202,29 +197,25 @@ public final class JdbcSchemaDerivator {
             List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
-                add(differences, column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNRESOLVED_TYPE, column.type(), null);
+                add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNRESOLVED_TYPE, column.type(), null);
                 return null;
             }
             ColumnProperties physical = column.properties();
             if (physical != null
                     && physical.nativeType() != null
                     && physical.nativeType().toLowerCase(Locale.ROOT).contains("unsigned")) {
-                add(differences, column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSUPPORTED_TYPE, column.type(), null);
+                add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
             Column logical = new Column(column.name(), column.type());
             var nativeType = dialect.nativeType(logical);
             if (key && !nativeType.primaryKeySupported()) {
-                add(differences, column.name(), Kind.INCOMPATIBLE,
-                        Reason.UNSUPPORTED_TYPE, column.type(), null);
+                add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
             return dialect.normalizeTargetType(logical);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
-            add(differences, column.name(), Kind.INCOMPATIBLE,
-                    Reason.UNSUPPORTED_TYPE, column.type(), null);
+            add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
             return null;
         }
     }
@@ -232,8 +223,7 @@ public final class JdbcSchemaDerivator {
     private static void checkKeys(
             Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
         if (!source.primaryKeys().equals(target.primaryKeys())) {
-            add(differences, null, Kind.INCOMPATIBLE,
-                    Reason.PRIMARY_KEY_MISMATCH, null, null);
+            add(differences, null, Kind.INCOMPATIBLE, Reason.PRIMARY_KEY_MISMATCH, null, null);
         }
     }
 
