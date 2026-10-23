@@ -37,7 +37,6 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     side: "source" | "target";
     value: string;
   }>();
-  const localScroll = true;
   const basePath = "/data-sync";
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
@@ -261,16 +260,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
   return (
     <div
-      className={
-        localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
-          : "min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
-      }
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]"
     >
       <PageHeader
         title={pageTitle}
         bordered
-        className={localScroll ? "shrink-0 bg-white px-6 max-md:px-4" : "bg-white px-6 max-md:px-4"}
+        className="shrink-0 bg-white px-6 max-md:px-4"
         extra={
           <>
             <Button size="small" disabled={saving} onClick={() => navigate(basePath)}>
@@ -293,19 +288,11 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
       />
 
       <div
-        className={
-          localScroll
-            ? "flex min-h-0 flex-1 gap-5 px-6 max-md:px-4"
-            : "flex gap-5 px-6 pb-8 pt-5 max-md:px-4"
-        }
+        className="flex min-h-0 flex-1 gap-5 px-6 max-md:px-4"
       >
         <main
           ref={editorScrollRef}
-          className={
-            localScroll
-              ? "min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
-              : "min-w-0 flex-1 space-y-4"
-          }
+          className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
         >
           {solutionsError ? (
             <Alert>
@@ -392,15 +379,11 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         </main>
 
         <aside
-          className={
-            localScroll
-              ? "hidden h-fit w-44 shrink-0 self-start pt-5 lg:block"
-              : "sticky top-4 hidden h-fit w-44 shrink-0 self-start lg:block"
-          }
+          className="hidden h-fit w-44 shrink-0 self-start pt-5 lg:block"
         >
           <EditorAnchorStepper
             items={anchorItems}
-            scrollRootRef={localScroll ? editorScrollRef : undefined}
+            scrollRootRef={editorScrollRef}
           />
         </aside>
       </div>
