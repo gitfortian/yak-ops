@@ -2,8 +2,8 @@ import { Skeleton, Table, type TableColumns } from "@yak-ops/yak-ui";
 import { useNavigate } from "react-router-dom";
 
 import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";
-import { ExecutionProgressBar } from "../execution-progress-bar";
-import { ExecutionStages } from "../execution-stages";
+import { ExecutionProgressBar } from "../execution/execution-progress-bar";
+import { ExecutionStages } from "../execution/execution-stages";
 import { TaskRoute } from "../task-route";
 import { DataSyncTaskLifecycleActions, DataSyncTaskStatusBadge } from "../task-lifecycle";
 import { readExecutionSummary } from "@/service/data-sync/report";

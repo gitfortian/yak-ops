@@ -14,7 +14,7 @@ import {
   ExecutionStatusIcon,
   dataSyncTriggerText,
   dataSyncDurationText,
-} from "../execution-detail";
+} from "../execution/execution-detail";
 import type { DataSyncInstanceRecord, DataSyncInstanceStatus } from "@/service/data-sync";
 
 const PAGE_SIZE = 20;

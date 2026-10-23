@@ -8,7 +8,7 @@ import {
   type DataSyncInstanceStatus,
 } from "@/service/data-sync";
 import type { TaskInstanceRecord } from "@/service/task-execution";
-import { isActiveDataSyncInstance } from "../execution-detail";
+import { isActiveDataSyncInstance } from "../execution/execution-detail";
 import { detailQueryKeys } from "./query-keys";
 
 const PAGE_SIZE = 20;

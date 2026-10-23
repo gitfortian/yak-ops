@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { getExecutionProgress } from "../apps/web/app/data-sync/execution-progress.ts";
+import { getExecutionProgress } from "../apps/web/app/data-sync/execution/execution-progress.ts";
 
 assert.deepEqual(getExecutionProgress("FINISHED"), { mode: "success", value: 100 });
 assert.deepEqual(getExecutionProgress("FAILED"), { mode: "failure", value: 0 });
@@ -16,8 +16,8 @@ for (const status of ["CANCELLING", "RECONCILING", "CANCELED"]) {
 }
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const detail = read("../apps/web/app/data-sync/execution-detail.tsx");
-const progressBar = read("../apps/web/app/data-sync/execution-progress-bar.tsx");
+const detail = read("../apps/web/app/data-sync/execution/execution-detail.tsx");
+const progressBar = read("../apps/web/app/data-sync/execution/execution-progress-bar.tsx");
 const taskList = read("../apps/web/app/data-sync/list/task-table.tsx");
 const router = read("../apps/web/app/router/AppRouter.tsx");
 const page = read("../apps/web/app/data-sync/detail/index.tsx");
@@ -25,7 +25,7 @@ const history = read("../apps/web/app/data-sync/detail/use-execution-history.ts"
 const actions = read("../apps/web/app/data-sync/detail/use-execution-actions.ts");
 const sidebar = read("../apps/web/app/data-sync/detail/execution-sidebar.tsx");
 const tabs = read("../apps/web/app/data-sync/detail/execution-tabs.tsx");
-const css = read("../apps/web/app/data-sync/execution-detail.css");
+const css = read("../apps/web/app/data-sync/execution/execution-detail.css");
 const logPanel = read("../apps/web/app/data-sync/task-instance-log-panel.tsx");
 
 for (const source of [detail, page]) {

@@ -70,7 +70,7 @@ const topBar = read("apps/web/app/layout/TopBar.tsx");
 const detail = read("apps/web/app/data-sync/detail/execution-sidebar.tsx");
 const detailPage = read("apps/web/app/data-sync/detail/index.tsx");
 const detailTabs = read("apps/web/app/data-sync/detail/execution-tabs.tsx");
-const execution = read("apps/web/app/data-sync/execution-detail.css");
+const execution = read("apps/web/app/data-sync/execution/execution-detail.css");
 const cron = read("packages/yak-ui/src/cron-scheduler/CronSchedulerPicker.tsx");
 
 assert.match(sidebar, /border-\[var\(--yak-color-primary\)\]/);
