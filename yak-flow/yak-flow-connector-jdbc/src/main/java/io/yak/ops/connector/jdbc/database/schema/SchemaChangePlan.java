@@ -18,8 +18,10 @@ public record SchemaChangePlan(TableId tableId, List<Difference> differences, Li
         tableId = Objects.requireNonNull(tableId, "tableId");
         differences = List.copyOf(Objects.requireNonNull(differences, "differences"));
         changes = List.copyOf(Objects.requireNonNull(changes, "changes"));
-        if (changes.stream().anyMatch(event -> !tableId.equals(event.tableId()))) {
-            throw new IllegalArgumentException("Schema change references a different target table");
+        for (SchemaChangeEvent event : changes) {
+            if (!tableId.equals(event.tableId())) {
+                throw new IllegalArgumentException("Schema change references a different target table");
+            }
         }
         if (hasBlockers(differences) && !changes.isEmpty()) {
             throw new IllegalArgumentException("Blocked schema plan must not propose executable events");
