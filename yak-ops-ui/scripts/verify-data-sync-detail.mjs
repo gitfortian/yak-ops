@@ -119,6 +119,8 @@ const logSource = readFileSync(
   "utf8",
 );
 assert.match(logSource, /activeRef\.current = active/);
+assert.match(logSource, /finalPollsRemainingRef\.current = 2/);
+assert.match(logSource, /finalPollsRemainingRef\.current -= 1/);
 assert.match(logSource, /\[instanceId, revision\]/);
 assert.doesNotMatch(logSource, /\[instanceId, active, revision\]/);
 assert.match(logSource, /trimLogContent\(previous \+ page\.content\)/);

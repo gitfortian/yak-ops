@@ -5,7 +5,11 @@ import { parseLogContent, trimLogContent, type ParsedLogLine } from "../task-ins
 /** Cursor and accumulated lines belong to the selected Instance, never to the viewer DOM. */
 export function useInstanceLogs(instanceId: string, active: boolean) {
   const activeRef = useRef(active);
-  activeRef.current = active;
+  const finalPollsRemainingRef = useRef(0);
+  useEffect(() => {
+    if (activeRef.current && !active) finalPollsRemainingRef.current = 2;
+    activeRef.current = active;
+  }, [active]);
   const [content, setContent] = useState("");
   const [error, setError] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -63,7 +67,10 @@ export function useInstanceLogs(instanceId: string, active: boolean) {
     setError(false);
     void load();
     const refresh = window.setInterval(() => {
-      if (activeRef.current || more) void load();
+      if (!activeRef.current && !more && finalPollsRemainingRef.current === 0) return;
+      // Read a final short tail window: terminal status can arrive before the last log write.
+      if (!activeRef.current && !more) finalPollsRemainingRef.current -= 1;
+      void load();
     }, 2000);
     return () => {
       disposed = true;
