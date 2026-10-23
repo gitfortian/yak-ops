@@ -24,4 +24,4 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Spotless (no tests or compilation)
-        run: bash mvnw -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync,yak-ops-boot -am com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
+        run: bash mvnw -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync,yak-ops-boot com.diffplug.spotless:spotless-maven-plugin:3.10.2:check
