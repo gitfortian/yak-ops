@@ -151,29 +151,31 @@ public final class SchemaManager {
 
     private static String fingerprint(SchemaChangeRequest request) {
         StringBuilder value = new StringBuilder();
-        value.append(request.sourceTable()).append('|').append(request.targetTable()).append('|');
+        appendTableId(value, request.sourceTable());
+        appendTableId(value, request.targetTable());
         appendSchema(value, request.sourceSchemaBefore());
         appendSchema(value, request.sourceSchemaAfter());
         appendSchema(value, request.targetSchemaBefore());
         appendSchema(value, request.targetSchemaAfter());
+        appendToken(value, Integer.toString(request.targetChanges().size()));
         for (SchemaChangeEvent event : request.targetChanges()) {
-            value.append(event.getType()).append('|').append(event.tableId()).append('|');
-            if (event instanceof CreateTableEvent create) {
-                appendSchema(value, create.getPhysicalSchema());
-            } else if (event instanceof AddColumnEvent add) {
+            appendToken(value, event.getType().name());
+            appendTableId(value, event.tableId());
+            if (event instanceof AddColumnEvent add) {
+                appendToken(value, Integer.toString(add.addedColumns().size()));
                 for (AddColumnEvent.ColumnWithPosition addition : add.addedColumns()) {
                     appendColumn(value, addition.column());
-                    value.append(addition.position()).append('|').append(addition.referenceColumn()).append('|');
+                    appendToken(value, addition.position().name());
+                    appendToken(value, addition.referenceColumn());
                 }
             } else if (event instanceof AlterColumnTypeEvent alter) {
-                alter.typeMapping().keySet().stream().sorted().forEach(name -> value
-                        .append(name).append(':')
-                        .append(alter.oldTypeMapping().get(name) == null
-                                ? ""
-                                : alter.oldTypeMapping().get(name).asSerializableString())
-                        .append("->")
-                        .append(alter.typeMapping().get(name).asSerializableString())
-                        .append('|'));
+                appendToken(value, Integer.toString(alter.typeMapping().size()));
+                alter.typeMapping().keySet().stream().sorted().forEach(name -> {
+                    appendToken(value, name);
+                    LogicalType oldType = alter.oldTypeMapping().get(name);
+                    appendToken(value, oldType == null ? null : oldType.asSerializableString());
+                    appendToken(value, alter.typeMapping().get(name).asSerializableString());
+                });
             }
         }
         try {
@@ -184,25 +186,46 @@ public final class SchemaManager {
         }
     }
 
+    private static void appendTableId(StringBuilder value, TableId table) {
+        appendToken(value, table.catalog());
+        appendToken(value, table.schema());
+        appendToken(value, table.table());
+    }
+
     private static void appendSchema(StringBuilder value, Schema schema) {
-        value.append("schema{").append(schema.comment()).append('|');
+        appendToken(value, schema.comment());
+        appendToken(value, Integer.toString(schema.columns().size()));
         schema.columns().forEach(column -> appendColumn(value, column));
-        value.append("keys=").append(schema.primaryKeys()).append('}');
+        appendToken(value, Integer.toString(schema.primaryKeys().size()));
+        schema.primaryKeys().forEach(key -> appendToken(value, key));
     }
 
     private static void appendColumn(StringBuilder value, PhysicalColumn column) {
-        value.append(column.name()).append(':').append(column.type().asSerializableString()).append(':')
-                .append(column.comment()).append(':');
+        appendToken(value, column.name());
+        appendToken(value, column.type().asSerializableString());
+        appendToken(value, column.comment());
         ColumnProperties properties = column.properties();
-        if (properties != null) {
-            value.append(properties.defaultExpression()).append('|')
-                    .append(properties.autoIncrement()).append('|')
-                    .append(properties.generated()).append('|')
-                    .append(properties.onUpdateExpression()).append('|')
-                    .append(properties.defaultGenerated()).append('|')
-                    .append(properties.nativeType());
+        appendToken(value, properties == null ? null : properties.defaultExpression());
+        appendToken(value, properties == null || properties.autoIncrement() == null
+                ? null
+                : properties.autoIncrement().toString());
+        appendToken(value, properties == null || properties.generated() == null
+                ? null
+                : properties.generated().toString());
+        appendToken(value, properties == null ? null : properties.onUpdateExpression());
+        appendToken(value, properties == null || properties.defaultGenerated() == null
+                ? null
+                : properties.defaultGenerated().toString());
+        appendToken(value, properties == null ? null : properties.nativeType());
+    }
+
+    /** Length-prefixes every value so arbitrary quoted identifiers cannot collide in the fingerprint. */
+    private static void appendToken(StringBuilder value, String token) {
+        if (token == null) {
+            value.append("-1:");
+        } else {
+            value.append(token.length()).append(':').append(token);
         }
-        value.append(';');
     }
 
     public record Change(boolean duplicate, long version) {
