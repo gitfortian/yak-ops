@@ -180,7 +180,8 @@ class DimensionModelingIT extends BackendTestBase {
         assertEquals(2, created.path("fields").size());
         var inherited = created.path("fields").get(0);
         assertEquals(prefix + "_order_id", inherited.path("enCode").asText());
-        assertEquals("BIGINT", inherited.path("dataType").asText());
+        assertEquals("DECIMAL", inherited.path("dataType").asText());
+        assertEquals("20,2", inherited.path("lengthPrecision").asText());
         assertFalse(inherited.path("isNotNull").asBoolean());
         assertTrue(inherited.path("isPrimaryKey").asBoolean());
 
@@ -311,8 +312,8 @@ class DimensionModelingIT extends BackendTestBase {
         return Map.of(
                 "cnName", "订单号",
                 "enCode", enCode,
-                "dataType", "BIGINT",
-                "lengthPrecision", "20",
+                "dataType", "DECIMAL",
+                "lengthPrecision", "20,2",
                 "isNotNull", true,
                 "securityLevel", "INTERNAL",
                 "ownerId", owner);
