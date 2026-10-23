@@ -422,6 +422,55 @@ class JdbcMetadataApplierTest {
     }
 
     @Test
+    void lostDdlResponseReplaysFromRealTargetStateWithoutReissuingSql() throws Exception {
+        try (Database database = new Database()) {
+            database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY)");
+            AtomicInteger executed = new AtomicInteger();
+            JdbcConnectionProvider responseLost = () -> loseResponseAfterExecute(
+                    database.connections.getConnection(), executed);
+            var event = new AddColumnEvent(
+                    TABLE,
+                    List.of(
+                            AddColumnEvent.last(new PhysicalColumn("name", LogicalTypes.varchar(32))),
+                            AddColumnEvent.last(new PhysicalColumn("note", LogicalTypes.varchar(64)))));
+            try (JdbcMetadataApplier first =
+                    new JdbcMetadataApplier(responseLost, database.dialect, database.catalog, 30)) {
+                first.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                SchemaEvolveException failure =
+                        assertThrows(SchemaEvolveException.class, () -> first.applySchemaChange(event));
+                assertTrue(failure.isOutcomeUnknown());
+                assertEquals(2, executed.get(), "an unconfirmed response must not trigger another DDL attempt");
+            }
+            assertEquals(3, database.catalog.getTable(TABLE).columnCount());
+            JdbcConnectionProvider noSecondDdl = () -> {
+                throw new AssertionError("recovery must compare the target before attempting SQL");
+            };
+            try (JdbcMetadataApplier recovered =
+                    new JdbcMetadataApplier(noSecondDdl, database.dialect, database.catalog, 30)) {
+                recovered.setAcceptedSchemaEvolutionTypes(Set.of(SchemaChangeEventType.ADD_COLUMN));
+                recovered.applySchemaChange(event);
+            }
+        }
+    }
+
+    private static Connection loseResponseAfterExecute(Connection connection, AtomicInteger executed) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+                    Object result = invoke(method, connection, args);
+                    if (!method.getName().equals("createStatement")) return result;
+                    Statement statement = (Statement) result;
+                    return Proxy.newProxyInstance(
+                            Statement.class.getClassLoader(), new Class<?>[] {Statement.class}, (ignored, operation, values) -> {
+                                Object applied = invoke(operation, statement, values);
+                                if (operation.getName().equals("execute") && executed.incrementAndGet() == 2) {
+                                    throw new java.sql.SQLTimeoutException("DDL response lost after commit");
+                                }
+                                return applied;
+                            });
+                });
+    }
+
+    @Test
     void persistentTransientFailureIsBoundedAndNeverCreatesPartialColumns() throws Exception {
         try (Database database = new Database()) {
             database.execute("CREATE TABLE \"PUBLIC\".\"orders.with.dot\" (\"id\" BIGINT PRIMARY KEY)");
