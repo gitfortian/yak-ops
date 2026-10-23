@@ -3,23 +3,20 @@ package io.yak.ops.flow.runtime.schema;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
-import io.yak.ops.core.event.CreateTableEvent;
+import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.SchemaChangeEvent;
 import io.yak.ops.core.event.SchemaChangeRequest;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.LogicalType;
-import io.yak.ops.core.event.ColumnProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.HexFormat;
 
 /**
  * Mailbox-independent state model for source and target schema versions.
@@ -63,7 +60,8 @@ public final class SchemaManager {
         }
         SchemaChangeRequest active = pending.get(target);
         if (active != null) {
-            if (active.eventId().equals(request.eventId()) && fingerprint(active).equals(fingerprint)) {
+            if (active.eventId().equals(request.eventId())
+                    && fingerprint(active).equals(fingerprint)) {
                 return new Change(false, pendingVersions.get(target));
             }
             throw new IllegalStateException("Another schema transition is already active for this target");
@@ -93,13 +91,15 @@ public final class SchemaManager {
         while (history.size() > MAX_REPLAY_HISTORY) {
             history.remove(history.keySet().iterator().next());
         }
-        tables.put(target, new SchemaManagerSnapshot.TableState(
-                request.sourceTable(),
+        tables.put(
                 target,
-                request.sourceSchemaAfter(),
-                request.targetSchemaAfter(),
-                nextVersion,
-                history));
+                new SchemaManagerSnapshot.TableState(
+                        request.sourceTable(),
+                        target,
+                        request.sourceSchemaAfter(),
+                        request.targetSchemaAfter(),
+                        nextVersion,
+                        history));
         pending.remove(target);
         pendingVersions.remove(target);
         return nextVersion;
@@ -130,7 +130,8 @@ public final class SchemaManager {
             throw new IllegalStateException("Cannot checkpoint while a schema change is in progress");
         }
         return new SchemaManagerSnapshot(tables.values().stream()
-                .sorted(java.util.Comparator.comparing(table -> table.targetTable().toString()))
+                .sorted(java.util.Comparator.comparing(
+                        table -> table.targetTable().toString()))
                 .toList());
     }
 
@@ -180,8 +181,9 @@ public final class SchemaManager {
             }
         }
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(value.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }
@@ -207,16 +209,22 @@ public final class SchemaManager {
         appendToken(value, column.comment());
         ColumnProperties properties = column.properties();
         appendToken(value, properties == null ? null : properties.defaultExpression());
-        appendToken(value, properties == null || properties.autoIncrement() == null
-                ? null
-                : properties.autoIncrement().toString());
-        appendToken(value, properties == null || properties.generated() == null
-                ? null
-                : properties.generated().toString());
+        appendToken(
+                value,
+                properties == null || properties.autoIncrement() == null
+                        ? null
+                        : properties.autoIncrement().toString());
+        appendToken(
+                value,
+                properties == null || properties.generated() == null
+                        ? null
+                        : properties.generated().toString());
         appendToken(value, properties == null ? null : properties.onUpdateExpression());
-        appendToken(value, properties == null || properties.defaultGenerated() == null
-                ? null
-                : properties.defaultGenerated().toString());
+        appendToken(
+                value,
+                properties == null || properties.defaultGenerated() == null
+                        ? null
+                        : properties.defaultGenerated().toString());
         appendToken(value, properties == null ? null : properties.nativeType());
     }
 
