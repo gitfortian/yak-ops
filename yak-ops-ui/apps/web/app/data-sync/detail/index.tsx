@@ -14,7 +14,6 @@ import { useExecutionActions } from "./use-execution-actions";
 
 export function DataSyncTaskDetailPage() {
   const basePath = "/data-sync";
-  const localScroll = true;
   const { id: taskId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const scope = useDetailScope();
@@ -73,11 +72,7 @@ export function DataSyncTaskDetailPage() {
 
   return (
     <div
-      className={
-        localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row"
-          : "flex min-h-full flex-col bg-white text-[var(--yak-components-panel-text)] md:flex-row"
-      }
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-[var(--yak-components-panel-text)] md:flex-row"
     >
       <ExecutionSidebar
         realtime={realtime}
