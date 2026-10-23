@@ -66,7 +66,7 @@ export function SchemaPreview({
                     {[row.target.catalog, row.target.schema, row.target.table]
                       .filter(Boolean)
                       .join(".")}{" "}
-                    · {row.action === "CREATE" ? "创建" : row.action === "ALTER" ? "调整结构" : "结构兼容"}
+                    · {row.action === "CREATE" ? "创建" : row.action === "ALTER" ? "调整结构" : row.action === "BLOCKED" ? "结构不兼容" : "结构兼容"}
                   </div>
                   {row.differences.filter((difference) => difference.action !== "COMPATIBLE").length > 0 ? (
                     <div className="overflow-auto rounded-lg border text-xs">
@@ -87,10 +87,10 @@ export function SchemaPreview({
                                     ? "调整字段类型"
                                     : difference.action === "METADATA_DIFFERENCE"
                                       ? "物理属性存在差异（不自动迁移）"
-                                      : "结构不兼容"}
+                                      : `无法自动处理：${difference.reason}`}
                             </span>
                             {difference.sourceType || difference.targetType ? (
-                              <span className="text-[var(--color-text-secondary)]">
+                              <span className="text-slate-500">
                                 {[difference.targetType, difference.sourceType].filter(Boolean).join(" → ")}
                               </span>
                             ) : null}
