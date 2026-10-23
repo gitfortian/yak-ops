@@ -2,8 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@yak-ops/yak-ui";
 
 import {
-  cancelDataSyncInstance, deleteDataSyncTask, publishDataSyncTask, runDataSyncTask,
-  unpublishDataSyncTask, type DataSyncTaskRecord,
+  cancelDataSyncInstance,
+  deleteDataSyncTask,
+  publishDataSyncTask,
+  runDataSyncTask,
+  unpublishDataSyncTask,
+  type DataSyncTaskRecord,
 } from "@/service/data-sync";
 import { scheduleErrorMessage, setScheduleEnabled, type ScheduleSummary } from "@/service/schedule";
 import type { TaskInstanceRecord } from "@/service/task-execution";
@@ -19,11 +23,21 @@ export function useTaskListActions(scope: string) {
   const mutation = useMutation({
     mutationFn: async (command: TaskCommand) => {
       switch (command.kind) {
-        case "run": await runDataSyncTask(command.task.id); break;
-        case "stop": await cancelDataSyncInstance(command.instance.id); break;
-        case "publish": await publishDataSyncTask(command.task.id); break;
-        case "unpublish": await unpublishDataSyncTask(command.task.id); break;
-        case "delete": await deleteDataSyncTask(command.task.id); break;
+        case "run":
+          await runDataSyncTask(command.task.id);
+          break;
+        case "stop":
+          await cancelDataSyncInstance(command.instance.id);
+          break;
+        case "publish":
+          await publishDataSyncTask(command.task.id);
+          break;
+        case "unpublish":
+          await unpublishDataSyncTask(command.task.id);
+          break;
+        case "delete":
+          await deleteDataSyncTask(command.task.id);
+          break;
         case "schedule":
           await setScheduleEnabled(command.schedule.id, command.schedule.revision, command.enabled);
           break;
@@ -49,8 +63,9 @@ export function useTaskListActions(scope: string) {
       if (command.kind === "schedule") toast.error(scheduleErrorMessage(error));
     },
   });
-  const actionKey = mutation.isPending && mutation.variables
-    ? mutation.variables.task.id + ":" + mutation.variables.kind
-    : undefined;
+  const actionKey =
+    mutation.isPending && mutation.variables
+      ? mutation.variables.task.id + ":" + mutation.variables.kind
+      : undefined;
   return { actionKey, pending: mutation.isPending, execute: mutation.mutate };
 }

@@ -15,14 +15,24 @@ const EMPTY_TASKS: DataSyncTaskRecord[] = [];
 
 export function useTaskPage(scope: string, filters: TaskListFilters) {
   const query = useQuery({
-    queryKey: [...listQueryKeys.tasks(scope), filters.pageNo, filters.keyword, filters.solutionType, filters.status],
-    queryFn: ({ signal }) => listDataSyncTasks({
-      pageNo: filters.pageNo,
-      pageSize: PAGE_SIZE,
-      keyword: filters.keyword || undefined,
-      solutionType: filters.solutionType === "ALL" ? undefined : filters.solutionType,
-      status: filters.status === "ALL" ? undefined : filters.status,
-    }, signal),
+    queryKey: [
+      ...listQueryKeys.tasks(scope),
+      filters.pageNo,
+      filters.keyword,
+      filters.solutionType,
+      filters.status,
+    ],
+    queryFn: ({ signal }) =>
+      listDataSyncTasks(
+        {
+          pageNo: filters.pageNo,
+          pageSize: PAGE_SIZE,
+          keyword: filters.keyword || undefined,
+          solutionType: filters.solutionType === "ALL" ? undefined : filters.solutionType,
+          status: filters.status === "ALL" ? undefined : filters.status,
+        },
+        signal,
+      ),
     enabled: Boolean(scope),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === scope ? previous : undefined,
@@ -44,14 +54,25 @@ export function useListDataSources(scope: string) {
     enabled: Boolean(scope),
   });
   const dataSourceMap = useMemo(
-    () => new Map((query.data?.bizData ?? []).filter((item) => Boolean(item.id)).map((item) => [item.id, item] as const)),
+    () =>
+      new Map(
+        (query.data?.bizData ?? [])
+          .filter((item) => Boolean(item.id))
+          .map((item) => [item.id, item] as const),
+      ),
     [query.data],
   );
   return { dataSourceMap, loading: query.isPending };
 }
 
 export function useListUpdateUsers(scope: string, records: DataSyncTaskRecord[]) {
-  const ids = [...new Set(records.map((item) => item.updateBy).filter((id): id is string => Boolean(id && id !== "system")))].sort();
+  const ids = [
+    ...new Set(
+      records
+        .map((item) => item.updateBy)
+        .filter((id): id is string => Boolean(id && id !== "system")),
+    ),
+  ].sort();
   const query = useQuery({
     queryKey: [...listQueryKeys.users(scope), ids],
     queryFn: () => getUsersByIds(ids),
@@ -65,7 +86,10 @@ export function useListUpdateUsers(scope: string, records: DataSyncTaskRecord[])
 }
 
 export function useListSchedules(scope: string, records: DataSyncTaskRecord[]) {
-  const ids = records.filter((item) => item.syncType === "OFFLINE").map((item) => item.id).sort();
+  const ids = records
+    .filter((item) => item.syncType === "OFFLINE")
+    .map((item) => item.id)
+    .sort();
   const query = useQuery({
     queryKey: [...listQueryKeys.schedules(scope), ids],
     queryFn: ({ signal }) => listTaskSchedules(ids, signal),
@@ -91,7 +115,7 @@ export function useListInstances(scope: string, records: DataSyncTaskRecord[], s
       return { latest, active };
     },
     enabled: Boolean(scope) && ids.length > 0,
-    refetchInterval: (result) => result.state.data?.active.length ? 2000 : 15000,
+    refetchInterval: (result) => (result.state.data?.active.length ? 2000 : 15000),
   });
   const latestByTask = useMemo(
     () => new Map((query.data?.latest ?? []).map((item) => [item.definitionId, item] as const)),

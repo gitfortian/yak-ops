@@ -7,7 +7,12 @@ export interface TaskListFilters {
   status: DataSyncTaskStatus | "ALL";
 }
 
-const SOLUTIONS = new Set(["SINGLE_TABLE_OFFLINE", "SINGLE_TABLE_REALTIME", "DATABASE_OFFLINE", "DATABASE_REALTIME"]);
+const SOLUTIONS = new Set([
+  "SINGLE_TABLE_OFFLINE",
+  "SINGLE_TABLE_REALTIME",
+  "DATABASE_OFFLINE",
+  "DATABASE_REALTIME",
+]);
 
 export function parseTaskListFilters(search: URLSearchParams): TaskListFilters {
   const rawPage = Number(search.get("page"));
@@ -21,7 +26,10 @@ export function parseTaskListFilters(search: URLSearchParams): TaskListFilters {
   };
 }
 
-export function updateTaskListFilters(current: URLSearchParams, patch: Partial<TaskListFilters>): URLSearchParams {
+export function updateTaskListFilters(
+  current: URLSearchParams,
+  patch: Partial<TaskListFilters>,
+): URLSearchParams {
   const next = new URLSearchParams(current);
   const state = { ...parseTaskListFilters(current), ...patch };
   if (state.pageNo > 1) next.set("page", String(state.pageNo));

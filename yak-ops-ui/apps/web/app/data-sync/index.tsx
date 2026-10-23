@@ -14,8 +14,11 @@ import { TaskFilters } from "./list/task-filters";
 import { TaskTable } from "./list/task-table";
 import { useTaskListFilters } from "./list/use-list-filters";
 import {
-  useTaskPage, useListDataSources, useListUpdateUsers,
-  useListSchedules, useListInstances,
+  useTaskPage,
+  useListDataSources,
+  useListUpdateUsers,
+  useListSchedules,
+  useListInstances,
 } from "./list/use-list-queries";
 import { useTaskListActions, type TaskCommand } from "./list/use-task-actions";
 import { listQueryKeys } from "./list/query-keys";
@@ -26,9 +29,8 @@ export function DataSyncPage() {
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
   const { currentWorkspace } = useWorkspace();
-  const scope = currentUser?.id && currentWorkspace?.id
-    ? currentUser.id + ":" + currentWorkspace.id
-    : "";
+  const scope =
+    currentUser?.id && currentWorkspace?.id ? currentUser.id + ":" + currentWorkspace.id : "";
 
   const filters = useTaskListFilters();
   const page = useTaskPage(scope, filters);
@@ -84,7 +86,9 @@ export function DataSyncPage() {
             {page.error ? (
               <div className="mt-3 flex items-center gap-2 text-sm text-[#d92d20]">
                 任务列表加载失败
-                <Button size="small" onClick={page.retry}>重试</Button>
+                <Button size="small" onClick={page.retry}>
+                  重试
+                </Button>
               </div>
             ) : null}
             <div className="mt-4 min-h-0 min-w-0 flex-1">
@@ -98,7 +102,11 @@ export function DataSyncPage() {
                   dataSourcesLoading: sources.loading,
                   updateUserMap: users.users,
                   updateUsersLoading: users.loading,
-                  schedules: { records: schedules.schedules, loading: schedules.loading, error: schedules.error },
+                  schedules: {
+                    records: schedules.schedules,
+                    loading: schedules.loading,
+                    error: schedules.error,
+                  },
                   latestByTask: instances.latestByTask,
                   activeByTask: instances.activeByTask,
                   instancesLoading: instances.loading,
@@ -112,7 +120,9 @@ export function DataSyncPage() {
                     if (schedule) command({ kind: "schedule", task, schedule, enabled });
                   },
                   command,
-                  delete: (task) => { if (canManage(task)) setPendingDelete(task); },
+                  delete: (task) => {
+                    if (canManage(task)) setPendingDelete(task);
+                  },
                   page: (pageNo) => filters.update({ pageNo }),
                 }}
               />
@@ -124,13 +134,16 @@ export function DataSyncPage() {
         <ScheduleDialog
           targetId={scheduleTask.id}
           published={
-            (page.records.find((task) => task.id === scheduleTask.id) || scheduleTask).status === "PUBLISHED"
+            (page.records.find((task) => task.id === scheduleTask.id) || scheduleTask).status ===
+            "PUBLISHED"
           }
           open
           onClose={() => setScheduleTask(undefined)}
           onChanged={refreshSchedules}
           onViewInstance={(id) =>
-            navigate("/data-sync/" + scheduleTask.id + "/detail?executionId=" + encodeURIComponent(id))
+            navigate(
+              "/data-sync/" + scheduleTask.id + "/detail?executionId=" + encodeURIComponent(id),
+            )
           }
         />
       ) : null}
@@ -156,7 +169,11 @@ export function DataSyncPage() {
         }}
         footer={
           <>
-            <Button size="small" disabled={commands.pending} onClick={() => setPendingDelete(undefined)}>
+            <Button
+              size="small"
+              disabled={commands.pending}
+              onClick={() => setPendingDelete(undefined)}
+            >
               取消
             </Button>
             <Button

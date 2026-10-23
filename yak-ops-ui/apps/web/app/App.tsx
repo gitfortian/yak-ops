@@ -14,11 +14,11 @@ export default function App() {
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-        <AuthProvider>
-          <WorkspaceProvider>
-            <AppRouter />
-          </WorkspaceProvider>
-        </AuthProvider>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <AppRouter />
+            </WorkspaceProvider>
+          </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </ToastProvider>

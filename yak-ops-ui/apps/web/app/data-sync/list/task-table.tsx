@@ -51,8 +51,16 @@ interface Props {
 export function TaskTable({ records, pageNo, total, loading, data, actions }: Props) {
   const navigate = useNavigate();
   const {
-    dataSourceMap, dataSourcesLoading, updateUserMap, updateUsersLoading,
-    schedules, latestByTask, activeByTask, instancesLoading, instancesReady, actionKey,
+    dataSourceMap,
+    dataSourcesLoading,
+    updateUserMap,
+    updateUsersLoading,
+    schedules,
+    latestByTask,
+    activeByTask,
+    instancesLoading,
+    instancesReady,
+    actionKey,
   } = data;
 
   const updateOperatorText = (record: DataSyncTaskRecord) => {
