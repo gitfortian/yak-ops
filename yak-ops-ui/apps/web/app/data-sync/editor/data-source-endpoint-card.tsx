@@ -17,7 +17,6 @@ interface DataSourceEndpointCardProps {
   onDataSourceChange: (value: string) => void;
 }
 
-
 export function DataSourceEndpointCard({
   title,
   dataSourceType,

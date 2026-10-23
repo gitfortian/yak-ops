@@ -1,5 +1,10 @@
 import type { DataSourceCatalogTable, DataSourceRecord } from "@/service/datasource";
-import type { DataSyncDraft, DataSyncTaskRecord, DataSyncIncrementalConfig, DataSyncWriteMode } from "@/service/data-sync";
+import type {
+  DataSyncDraft,
+  DataSyncTaskRecord,
+  DataSyncIncrementalConfig,
+  DataSyncWriteMode,
+} from "@/service/data-sync";
 
 export interface EditorForm {
   name: string;

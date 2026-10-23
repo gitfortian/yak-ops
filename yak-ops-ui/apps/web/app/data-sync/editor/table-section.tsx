@@ -10,7 +10,6 @@ const tableKey = (table: DataSourceCatalogTable) =>
 const tableLabel = (table: DataSourceCatalogTable) =>
   [table.schema, table.name].filter(Boolean).join(".") || table.name;
 
-
 export const selectedTableKey = (
   tables: DataSourceCatalogTable[],
   database: string,
@@ -39,7 +38,6 @@ interface TableSectionProps {
   onSchemaChange: (value: string) => void;
   onTableChange: (table: DataSourceCatalogTable) => void;
 }
-
 
 export function TableSection({
   prepareSchema = false,

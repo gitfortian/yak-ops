@@ -2,7 +2,16 @@ import { useEffect, type MutableRefObject } from "react";
 import { writeTaskDraft } from "@/service/data-sync/draft";
 import type { DataSyncDraft, DataSyncTaskRecord, DataSyncTableMapping } from "@/service/data-sync";
 import type { EditorForm } from "./types";
-export function useEditorDraft(id: string | undefined, draftKey: string, draft: DataSyncDraft, form: EditorForm, batch: boolean, mappings: DataSyncTableMapping[], useIncremental: boolean, savedTask: MutableRefObject<DataSyncTaskRecord | undefined>) {
+export function useEditorDraft(
+  id: string | undefined,
+  draftKey: string,
+  draft: DataSyncDraft,
+  form: EditorForm,
+  batch: boolean,
+  mappings: DataSyncTableMapping[],
+  useIncremental: boolean,
+  savedTask: MutableRefObject<DataSyncTaskRecord | undefined>,
+) {
   useEffect(() => {
     if (id || savedTask.current) return;
     writeTaskDraft(draftKey, {
@@ -30,6 +39,4 @@ export function useEditorDraft(id: string | undefined, draftKey: string, draft: 
     batch,
     mappings,
   ]);
-
-
 }

@@ -4,7 +4,11 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { taskDraftKey } from "@/service/data-sync/draft";
-import { offlineIncremental, solutionSyncType, supportsMultipleTables } from "@/service/data-sync/parameters";
+import {
+  offlineIncremental,
+  solutionSyncType,
+  supportsMultipleTables,
+} from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "../incremental-fields";
 import { findStepCombination } from "../solution-presentation";
 import { useSolutions } from "../use-solutions";
@@ -86,14 +90,28 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const [parametersDirty, setParametersDirty] = useState(false);
   const [taskDirty, setTaskDirty] = useState(!editing);
   const savedTask = useRef(initialTask);
-  const { dataSources, dataSourcesLoading, loadDataSources } = useEditorDataSources(connections, savedTask);
+  const { dataSources, dataSourcesLoading, loadDataSources } = useEditorDataSources(
+    connections,
+    savedTask,
+  );
   const pendingSchedule = location.state as {
     scheduleDraft?: ScheduleTimeRule;
     scheduleSaveError?: string;
   } | null;
-  const { schedule, scheduleForm, scheduleLoading, scheduleError, scheduleNeedsReload, scheduleDraft,
-    setSchedule, setScheduleForm, setScheduleError, setScheduleNeedsReload,
-    reloadSchedule, changeSchedule } = useEditorSchedule(id, supportsScheduling, initialTask, pendingSchedule);
+  const {
+    schedule,
+    scheduleForm,
+    scheduleLoading,
+    scheduleError,
+    scheduleNeedsReload,
+    scheduleDraft,
+    setSchedule,
+    setScheduleForm,
+    setScheduleError,
+    setScheduleNeedsReload,
+    reloadSchedule,
+    changeSchedule,
+  } = useEditorSchedule(id, supportsScheduling, initialTask, pendingSchedule);
 
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const anchorItems = useMemo<EditorAnchorItem[]>(
@@ -176,18 +194,48 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
   const published = editing && taskStatus === "PUBLISHED";
   const canSave = canSaveEditor({
-    published, combination: combination ?? undefined, solutionsLoading, solutionsError,
-    useIncremental, initialLoad, batch, mappings, selectedSourceDataSource,
-    selectedTargetDataSource, draft, supportsScheduling, scheduleLoading,
-    scheduleNeedsReload, schedule, scheduleForm, form, prepareSchema,
-    targetCatalog, sourceCatalog,
+    published,
+    combination: combination ?? undefined,
+    solutionsLoading,
+    solutionsError,
+    useIncremental,
+    initialLoad,
+    batch,
+    mappings,
+    selectedSourceDataSource,
+    selectedTargetDataSource,
+    draft,
+    supportsScheduling,
+    scheduleLoading,
+    scheduleNeedsReload,
+    schedule,
+    scheduleForm,
+    form,
+    prepareSchema,
+    targetCatalog,
+    sourceCatalog,
   });
 
   const { save, saving } = useEditorSubmission({
-    id, editing, draftKey, canSave, taskDirty, parametersDirty, supportsScheduling,
-    schedule, scheduleForm, savedTask, scheduleDraft, payload, setTaskDirty,
-    setParametersDirty, setSchedule, setScheduleForm, setScheduleError,
-    setScheduleNeedsReload, navigate,
+    id,
+    editing,
+    draftKey,
+    canSave,
+    taskDirty,
+    parametersDirty,
+    supportsScheduling,
+    schedule,
+    scheduleForm,
+    savedTask,
+    scheduleDraft,
+    payload,
+    setTaskDirty,
+    setParametersDirty,
+    setSchedule,
+    setScheduleForm,
+    setScheduleError,
+    setScheduleNeedsReload,
+    navigate,
   });
 
   const pageTitle = editing ? form.name || "编辑同步任务" : "新建同步任务";
@@ -275,61 +323,61 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             <Alert>重新提交会创建新的执行实例并重新全量初始化，不会续用上次实例的检查点。</Alert>
           ) : null}
 
-<BasicSection draft={draft} form={form} patch={patch} />
+          <BasicSection draft={draft} form={form} patch={patch} />
 
-<DataSourcesSection
-              id={id}
-              draft={draft}
-              form={form}
-              sourceDataSources={sourceDataSources}
-              targetDataSources={targetDataSources}
-              dataSourcesLoading={dataSourcesLoading}
-              loadDataSources={loadDataSources}
-              requestConnectionChange={requestConnectionChange}
-            />
+          <DataSourcesSection
+            id={id}
+            draft={draft}
+            form={form}
+            sourceDataSources={sourceDataSources}
+            targetDataSources={targetDataSources}
+            dataSourcesLoading={dataSourcesLoading}
+            loadDataSources={loadDataSources}
+            requestConnectionChange={requestConnectionChange}
+          />
 
-<SourceSection
-              batch={batch}
-              prepareSchema={prepareSchema}
-              form={form}
-              sourceCatalog={sourceCatalog}
-              targetCatalog={targetCatalog}
-              selectedSourceDataSource={selectedSourceDataSource}
-              mappings={mappings}
-              updateMappings={updateMappings}
-              writeMode={combination?.writeModes[0]}
-              usesChangelog={usesChangelog}
-              useIncremental={useIncremental}
-              initialLoad={initialLoad}
-              patch={patch}
-              setTaskDirty={setTaskDirty}
-              setParametersDirty={setParametersDirty}
-              setForm={setForm}
-            />
+          <SourceSection
+            batch={batch}
+            prepareSchema={prepareSchema}
+            form={form}
+            sourceCatalog={sourceCatalog}
+            targetCatalog={targetCatalog}
+            selectedSourceDataSource={selectedSourceDataSource}
+            mappings={mappings}
+            updateMappings={updateMappings}
+            writeMode={combination?.writeModes[0]}
+            usesChangelog={usesChangelog}
+            useIncremental={useIncremental}
+            initialLoad={initialLoad}
+            patch={patch}
+            setTaskDirty={setTaskDirty}
+            setParametersDirty={setParametersDirty}
+            setForm={setForm}
+          />
 
-<TargetSection
-              batch={batch}
-              prepareSchema={prepareSchema}
-              form={form}
-              targetCatalog={targetCatalog}
-              selectedTargetDataSource={selectedTargetDataSource}
-              mappings={mappings}
-              updateMappings={updateMappings}
-              writeModes={combination?.writeModes || []}
-              canSave={Boolean(canSave)}
-              payload={payload}
-              usesChangelog={usesChangelog}
-              useIncremental={useIncremental}
-              initialLoad={initialLoad}
-              targetType={draft.targetType}
-              published={published}
-              saving={saving}
-              patch={patch}
-              setTaskDirty={setTaskDirty}
-              setParametersDirty={setParametersDirty}
-              setForm={setForm}
-            />
-{supportsScheduling ? (
+          <TargetSection
+            batch={batch}
+            prepareSchema={prepareSchema}
+            form={form}
+            targetCatalog={targetCatalog}
+            selectedTargetDataSource={selectedTargetDataSource}
+            mappings={mappings}
+            updateMappings={updateMappings}
+            writeModes={combination?.writeModes || []}
+            canSave={Boolean(canSave)}
+            payload={payload}
+            usesChangelog={usesChangelog}
+            useIncremental={useIncremental}
+            initialLoad={initialLoad}
+            targetType={draft.targetType}
+            published={published}
+            saving={saving}
+            patch={patch}
+            setTaskDirty={setTaskDirty}
+            setParametersDirty={setParametersDirty}
+            setForm={setForm}
+          />
+          {supportsScheduling ? (
             <EditorScheduleSection
               schedule={schedule}
               scheduleForm={scheduleForm}

@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { getTaskSchedule, scheduleErrorMessage, type ScheduleRecord, type ScheduleTimeRule } from "@/service/schedule";
+import {
+  getTaskSchedule,
+  scheduleErrorMessage,
+  type ScheduleRecord,
+  type ScheduleTimeRule,
+} from "@/service/schedule";
 import { EMPTY_SCHEDULE } from "@/app/schedule/schedule-presentation";
 import type { DataSyncTaskRecord } from "@/service/data-sync";
 
-interface PendingSchedule { scheduleDraft?: ScheduleTimeRule; scheduleSaveError?: string }
-export function useEditorSchedule(id: string | undefined, supportsScheduling: boolean, initialTask: DataSyncTaskRecord | undefined, pendingSchedule: PendingSchedule | null) {
+interface PendingSchedule {
+  scheduleDraft?: ScheduleTimeRule;
+  scheduleSaveError?: string;
+}
+export function useEditorSchedule(
+  id: string | undefined,
+  supportsScheduling: boolean,
+  initialTask: DataSyncTaskRecord | undefined,
+  pendingSchedule: PendingSchedule | null,
+) {
   const [schedule, setSchedule] = useState<ScheduleRecord | null>(null);
   const [scheduleForm, setScheduleForm] = useState<ScheduleTimeRule>(
     pendingSchedule?.scheduleDraft || { ...EMPTY_SCHEDULE },
@@ -55,8 +68,17 @@ export function useEditorSchedule(id: string | undefined, supportsScheduling: bo
     setScheduleError("");
   };
   return {
-    schedule, scheduleForm, scheduleLoading, scheduleError, scheduleNeedsReload,
-    scheduleDraft, setSchedule, setScheduleForm, setScheduleError,
-    setScheduleNeedsReload, reloadSchedule, changeSchedule,
+    schedule,
+    scheduleForm,
+    scheduleLoading,
+    scheduleError,
+    scheduleNeedsReload,
+    scheduleDraft,
+    setSchedule,
+    setScheduleForm,
+    setScheduleError,
+    setScheduleNeedsReload,
+    reloadSchedule,
+    changeSchedule,
   };
 }

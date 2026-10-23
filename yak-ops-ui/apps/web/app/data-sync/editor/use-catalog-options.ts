@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { listDataSourceSchemas, listDataSourceTables, type DataSourceCatalogTable } from "@/service/datasource";
+import {
+  listDataSourceSchemas,
+  listDataSourceTables,
+  type DataSourceCatalogTable,
+} from "@/service/datasource";
 import type { CatalogOptions } from "./types";
 
-export function useCatalogOptions(dataSourceId: string, database: string, schema: string): CatalogOptions {
+export function useCatalogOptions(
+  dataSourceId: string,
+  database: string,
+  schema: string,
+): CatalogOptions {
   const key = JSON.stringify([dataSourceId, database, schema]);
   const [result, setResult] = useState<{
     key: string;

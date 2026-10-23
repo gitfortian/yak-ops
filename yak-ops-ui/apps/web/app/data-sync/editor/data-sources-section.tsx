@@ -15,42 +15,51 @@ interface Props {
   loadDataSources: () => Promise<void>;
   requestConnectionChange: (side: "source" | "target", value: string) => void;
 }
-export function DataSourcesSection({ id, draft, form, sourceDataSources, targetDataSources, dataSourcesLoading, loadDataSources, requestConnectionChange }: Props) {
+export function DataSourcesSection({
+  id,
+  draft,
+  form,
+  sourceDataSources,
+  targetDataSources,
+  dataSourcesLoading,
+  loadDataSources,
+  requestConnectionChange,
+}: Props) {
   const navigate = useNavigate();
   return (
-          <CollapseSection id="datasource" title="数据源">
-            <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
-              <DataSourceEndpointCard
-                title="来源"
-                dataSourceType={draft.sourceType}
-                dataSources={sourceDataSources}
-                dataSourceId={form.sourceDataSourceId}
-                refreshing={dataSourcesLoading}
-                onRefresh={loadDataSources}
-                onCreateDataSource={() =>
-                  navigate(
-                    "/data-source?create=1&returnTo=" +
-                      encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
-                  )
-                }
-                onDataSourceChange={(value) => requestConnectionChange("source", value)}
-              />
-              <DataSourceEndpointCard
-                title="去向"
-                dataSourceType={draft.targetType}
-                dataSources={targetDataSources}
-                dataSourceId={form.targetDataSourceId}
-                refreshing={dataSourcesLoading}
-                onRefresh={loadDataSources}
-                onCreateDataSource={() =>
-                  navigate(
-                    "/data-source?create=1&returnTo=" +
-                      encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
-                  )
-                }
-                onDataSourceChange={(value) => requestConnectionChange("target", value)}
-              />
-            </div>
-          </CollapseSection>
+    <CollapseSection id="datasource" title="数据源">
+      <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
+        <DataSourceEndpointCard
+          title="来源"
+          dataSourceType={draft.sourceType}
+          dataSources={sourceDataSources}
+          dataSourceId={form.sourceDataSourceId}
+          refreshing={dataSourcesLoading}
+          onRefresh={loadDataSources}
+          onCreateDataSource={() =>
+            navigate(
+              "/data-source?create=1&returnTo=" +
+                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+            )
+          }
+          onDataSourceChange={(value) => requestConnectionChange("source", value)}
+        />
+        <DataSourceEndpointCard
+          title="去向"
+          dataSourceType={draft.targetType}
+          dataSources={targetDataSources}
+          dataSourceId={form.targetDataSourceId}
+          refreshing={dataSourcesLoading}
+          onRefresh={loadDataSources}
+          onCreateDataSource={() =>
+            navigate(
+              "/data-source?create=1&returnTo=" +
+                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+            )
+          }
+          onDataSourceChange={(value) => requestConnectionChange("target", value)}
+        />
+      </div>
+    </CollapseSection>
   );
 }

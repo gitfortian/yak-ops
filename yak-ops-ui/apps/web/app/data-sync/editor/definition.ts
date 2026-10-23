@@ -2,39 +2,49 @@ import { validIncrementalConfig } from "@/service/data-sync/parameters";
 import { validTableMappings } from "../table-mapping-editor";
 import { sameScheduleRule } from "@/app/schedule/schedule-presentation";
 import { selectedTableKey } from "./table-section";
-import type { DataSyncDraft, DataSyncTaskSavePayload, DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-sync";
+import type {
+  DataSyncDraft,
+  DataSyncTaskSavePayload,
+  DataSyncTableMapping,
+  DataSyncWriteMode,
+} from "@/service/data-sync";
 import type { ScheduleRecord, ScheduleTimeRule } from "@/service/schedule";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { CatalogOptions, EditorForm } from "./types";
 
-export function buildEditorPayload(form: EditorForm, draft: DataSyncDraft, batch: boolean, mappings: DataSyncTableMapping[], usesChangelog: boolean): DataSyncTaskSavePayload {
-
-    const common = {
-      name: form.name.trim(),
-      debug: form.debug,
-      sourceDataSourceId: form.sourceDataSourceId,
-      sourceDatabase: form.sourceDatabase || undefined,
-      sourceSchema: form.sourceSchema || undefined,
-      sourceTable: form.sourceTable,
-      targetDataSourceId: form.targetDataSourceId,
-      targetDatabase: form.targetDatabase || undefined,
-      targetSchema: form.targetSchema || undefined,
-      targetTable: form.targetTable,
-      remark: form.remark.trim() || undefined,
-    };
-    return {
-      ...common,
-      solutionType: draft.solutionType,
-      steps: draft.steps,
-      writeMode: form.writeMode,
-      ...(usesChangelog
-        ? {
-            schemaChangesEnabled: form.schemaChangesEnabled,
-            allowDropColumns: form.schemaChangesEnabled && form.allowDropColumns,
-          }
-        : {}),
-      tableMappings: batch ? mappings : undefined,
-    };
+export function buildEditorPayload(
+  form: EditorForm,
+  draft: DataSyncDraft,
+  batch: boolean,
+  mappings: DataSyncTableMapping[],
+  usesChangelog: boolean,
+): DataSyncTaskSavePayload {
+  const common = {
+    name: form.name.trim(),
+    debug: form.debug,
+    sourceDataSourceId: form.sourceDataSourceId,
+    sourceDatabase: form.sourceDatabase || undefined,
+    sourceSchema: form.sourceSchema || undefined,
+    sourceTable: form.sourceTable,
+    targetDataSourceId: form.targetDataSourceId,
+    targetDatabase: form.targetDatabase || undefined,
+    targetSchema: form.targetSchema || undefined,
+    targetTable: form.targetTable,
+    remark: form.remark.trim() || undefined,
+  };
+  return {
+    ...common,
+    solutionType: draft.solutionType,
+    steps: draft.steps,
+    writeMode: form.writeMode,
+    ...(usesChangelog
+      ? {
+          schemaChangesEnabled: form.schemaChangesEnabled,
+          allowDropColumns: form.schemaChangesEnabled && form.allowDropColumns,
+        }
+      : {}),
+    tableMappings: batch ? mappings : undefined,
+  };
 }
 
 interface ValidationInput {
@@ -60,9 +70,29 @@ interface ValidationInput {
   sourceCatalog: CatalogOptions;
 }
 
-export function canSaveEditor({ published, combination, solutionsLoading, solutionsError, useIncremental, initialLoad, batch, mappings, selectedSourceDataSource, selectedTargetDataSource, draft, supportsScheduling, scheduleLoading, scheduleNeedsReload, schedule, scheduleForm, form, prepareSchema, targetCatalog, sourceCatalog }: ValidationInput): boolean {
+export function canSaveEditor({
+  published,
+  combination,
+  solutionsLoading,
+  solutionsError,
+  useIncremental,
+  initialLoad,
+  batch,
+  mappings,
+  selectedSourceDataSource,
+  selectedTargetDataSource,
+  draft,
+  supportsScheduling,
+  scheduleLoading,
+  scheduleNeedsReload,
+  schedule,
+  scheduleForm,
+  form,
+  prepareSchema,
+  targetCatalog,
+  sourceCatalog,
+}: ValidationInput): boolean {
   return Boolean(
-
     !published &&
     Boolean(combination) &&
     !solutionsLoading &&
@@ -103,6 +133,6 @@ export function canSaveEditor({ published, combination, solutionsLoading, soluti
     !sourceCatalog.loading &&
     !targetCatalog.loading &&
     !sourceCatalog.error &&
-    !targetCatalog.error
+    !targetCatalog.error,
   );
 }

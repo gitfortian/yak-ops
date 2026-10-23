@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { listDataSources, type DataSourceRecord } from "@/service/datasource";
 import type { DataSyncTaskRecord } from "@/service/data-sync";
 
-export function useEditorDataSources(connections: DataSourceRecord[], savedTask: MutableRefObject<DataSyncTaskRecord | undefined>) {
+export function useEditorDataSources(
+  connections: DataSourceRecord[],
+  savedTask: MutableRefObject<DataSyncTaskRecord | undefined>,
+) {
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>(connections);
   const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
 
@@ -36,7 +39,6 @@ export function useEditorDataSources(connections: DataSourceRecord[], savedTask:
     void loadDataSources();
     return () => datasourceRequest.current?.abort();
   }, [loadDataSources]);
-
 
   return { dataSources, dataSourcesLoading, loadDataSources };
 }

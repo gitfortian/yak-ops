@@ -1,9 +1,29 @@
-import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 import { toast } from "@yak-ops/yak-ui";
 import type { NavigateFunction } from "react-router-dom";
 import { clearTaskDraft } from "@/service/data-sync/draft";
-import { createDataSyncTask, updateDataSyncTask, publishDataSyncTask, type DataSyncTaskRecord, type DataSyncTaskSavePayload } from "@/service/data-sync";
-import { createSchedule, updateSchedule, previewSchedule, scheduleErrorMessage, type ScheduleRecord, type ScheduleTimeRule } from "@/service/schedule";
+import {
+  createDataSyncTask,
+  updateDataSyncTask,
+  publishDataSyncTask,
+  type DataSyncTaskRecord,
+  type DataSyncTaskSavePayload,
+} from "@/service/data-sync";
+import {
+  createSchedule,
+  updateSchedule,
+  previewSchedule,
+  scheduleErrorMessage,
+  type ScheduleRecord,
+  type ScheduleTimeRule,
+} from "@/service/schedule";
 import { EMPTY_SCHEDULE, sameScheduleRule } from "@/app/schedule/schedule-presentation";
 
 interface SaveInput {
@@ -29,10 +49,25 @@ interface SaveInput {
 }
 
 export function useEditorSubmission({
-  id, editing, draftKey, canSave, taskDirty, parametersDirty, supportsScheduling,
-  schedule, scheduleForm, savedTask, scheduleDraft, payload, setTaskDirty,
-  setParametersDirty, setSchedule, setScheduleForm, setScheduleError,
-  setScheduleNeedsReload, navigate,
+  id,
+  editing,
+  draftKey,
+  canSave,
+  taskDirty,
+  parametersDirty,
+  supportsScheduling,
+  schedule,
+  scheduleForm,
+  savedTask,
+  scheduleDraft,
+  payload,
+  setTaskDirty,
+  setParametersDirty,
+  setSchedule,
+  setScheduleForm,
+  setScheduleError,
+  setScheduleNeedsReload,
+  navigate,
 }: SaveInput) {
   const [saving, setSaving] = useState(false);
   const saveSession = useRef<AbortController>();
