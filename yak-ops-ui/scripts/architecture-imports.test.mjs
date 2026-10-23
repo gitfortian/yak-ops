@@ -63,3 +63,61 @@ test("strings and comments are not treated as module imports", () => {
     [],
   );
 });
+
+test("outside domains cannot deep import Data Sync private features", () => {
+  assert.match(
+    check(
+      "apps/web/app/operations/index.tsx",
+      'import { ExecutionSidebar } from "@/app/data-sync/detail/execution-sidebar";',
+    ).join("\n"),
+    /imports a private Data Sync feature/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/operations/index.tsx",
+      'const editor = import("../data-sync/editor/index");',
+    ).join("\n"),
+    /imports a private Data Sync feature/,
+  );
+});
+
+test("Data Sync surfaces cannot import each other's private implementation", () => {
+  assert.match(
+    check(
+      "apps/web/app/data-sync/list/task-table.tsx",
+      'export { TaskSummary } from "../detail/task-summary";',
+    ).join("\n"),
+    /crosses Data Sync feature boundaries/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/data-sync/editor/index.tsx",
+      'const log = require("../log/use-instance-logs");',
+    ).join("\n"),
+    /crosses Data Sync feature boundaries/,
+  );
+});
+
+test("Data Sync root composition and shared domain dependencies remain legal", () => {
+  assert.deepEqual(
+    check(
+      "apps/web/app/data-sync/index.tsx",
+      'import { DataSyncTaskDetailPage } from "./detail";',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    check(
+      "apps/web/app/data-sync/detail/index.tsx",
+      'import { ExecutionProgressBar } from "../execution-progress-bar";',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    check(
+      "apps/web/app/data-sync/list/task-table.tsx",
+      'import { listDataSyncTasks } from "@/service/data-sync";',
+    ),
+    [],
+  );
+});
