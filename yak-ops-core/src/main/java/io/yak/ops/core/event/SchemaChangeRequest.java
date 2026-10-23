@@ -4,8 +4,8 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.LogicalType;
-import java.util.ArrayList;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -25,7 +25,8 @@ public record SchemaChangeRequest(
         Schema sourceSchemaAfter,
         Schema targetSchemaBefore,
         Schema targetSchemaAfter,
-        List<SchemaChangeEvent> targetChanges) implements Serializable {
+        List<SchemaChangeEvent> targetChanges)
+        implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -63,8 +64,7 @@ public record SchemaChangeRequest(
             }
         }
         if (!expectedTarget.equals(targetSchemaAfter)) {
-            throw new IllegalArgumentException(
-                    "Target change events do not produce the declared target schema");
+            throw new IllegalArgumentException("Target change events do not produce the declared target schema");
         }
     }
 
@@ -76,23 +76,26 @@ public record SchemaChangeRequest(
             if (columns.stream().anyMatch(existing -> existing.name().equals(column.name()))) {
                 throw new IllegalArgumentException("Schema event adds an existing column");
             }
-            int index = switch (addition.position()) {
-                case FIRST -> firstOffset++;
-                case LAST -> columns.size();
-                case BEFORE, AFTER -> {
-                    int reference = -1;
-                    for (int candidate = 0; candidate < columns.size(); candidate++) {
-                        if (columns.get(candidate).name().equals(addition.referenceColumn())) {
-                            reference = candidate;
-                            break;
+            int index =
+                    switch (addition.position()) {
+                        case FIRST -> firstOffset++;
+                        case LAST -> columns.size();
+                        case BEFORE, AFTER -> {
+                            int reference = -1;
+                            for (int candidate = 0; candidate < columns.size(); candidate++) {
+                                if (columns.get(candidate).name().equals(addition.referenceColumn())) {
+                                    reference = candidate;
+                                    break;
+                                }
+                            }
+                            if (reference < 0) {
+                                throw new IllegalArgumentException("Schema event references an unknown column");
+                            }
+                            yield addition.position() == AddColumnEvent.ColumnPosition.BEFORE
+                                    ? reference
+                                    : reference + 1;
                         }
-                    }
-                    if (reference < 0) {
-                        throw new IllegalArgumentException("Schema event references an unknown column");
-                    }
-                    yield addition.position() == AddColumnEvent.ColumnPosition.BEFORE ? reference : reference + 1;
-                }
-            };
+                    };
             columns.add(index, column);
         }
         return new Schema(columns, schema.primaryKeys(), schema.comment());
@@ -124,7 +127,7 @@ public record SchemaChangeRequest(
     /** Diagnostics expose identity and operation count, never SQL or default expressions. */
     @Override
     public String toString() {
-        return "SchemaChangeRequest{eventId='" + eventId + "', sourceTable=" + sourceTable
-                + ", targetTable=" + targetTable + ", targetChangeCount=" + targetChanges.size() + "}";
+        return "SchemaChangeRequest{eventId='" + eventId + "', sourceTable=" + sourceTable + ", targetTable="
+                + targetTable + ", targetChangeCount=" + targetChanges.size() + "}";
     }
 }
