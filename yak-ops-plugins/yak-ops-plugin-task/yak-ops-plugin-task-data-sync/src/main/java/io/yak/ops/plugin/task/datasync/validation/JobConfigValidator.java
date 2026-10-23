@@ -81,18 +81,21 @@ public final class JobConfigValidator {
                     var sourceTable = SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
                     SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceTable.schema()));
                     var event = SchemaValidator.createEvent(sourceTable, to, target);
+                    var current = context.findTable(sinkId, target).orElse(null);
+                    if (current != null && current.revision() != to.revision()) {
+                        throw new IllegalStateException("Target datasource revision changed during validation");
+                    }
+                    var schemaPlan = SchemaValidator.plan(event, to.type(), current);
+                    SchemaValidator.requireCompatible(schemaPlan);
                     SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
                             table.sink(), sourceTable.schema(), event.getSchema(), sourceFactory.producesChangelog()));
-                    context.findTable(sinkId, target).ifPresent(actual -> {
-                        if (actual.revision() != to.revision())
-                            throw new IllegalStateException("Target datasource revision changed during validation");
-                        SchemaValidator.validateTarget(event, actual);
+                    if (current != null && !schemaPlan.requiresDdl()) {
                         SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
                                 table.sink(),
                                 sourceTable.schema(),
-                                actual.schema(),
+                                current.schema(),
                                 sourceFactory.producesChangelog()));
-                    });
+                    }
                 } else if (schemas) {
                     var sourceSchema = context.tableSchema(sourceId, source);
                     SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(sourceSchema));
