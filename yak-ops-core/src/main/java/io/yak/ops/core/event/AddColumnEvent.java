@@ -44,8 +44,8 @@ public record AddColumnEvent(TableId tableId, List<ColumnWithPosition> addedColu
 
         @Override
         public String toString() {
-            return "ColumnWithPosition{name=" + column.name() + ", position=" + position
-                    + ", referenceColumn=" + referenceColumn + "}";
+            return "ColumnWithPosition{name=" + column.name() + ", position=" + position + ", referenceColumn="
+                    + referenceColumn + "}";
         }
     }
 
