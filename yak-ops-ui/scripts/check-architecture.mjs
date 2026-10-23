@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
-import { checkArchitectureImports } from "./architecture-imports.mjs";
 import { fileURLToPath } from "node:url";
+import { checkArchitectureImports } from "./architecture-imports.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const violations = [];
@@ -22,8 +22,6 @@ const forbiddenDirectories = [
   "apps/web/shared",
   "packages/datasource",
 ];
-
-for (const path of forbiddenDirectories)];
 
 for (const path of forbiddenDirectories) {
   if (existsSync(join(root, path))) {
