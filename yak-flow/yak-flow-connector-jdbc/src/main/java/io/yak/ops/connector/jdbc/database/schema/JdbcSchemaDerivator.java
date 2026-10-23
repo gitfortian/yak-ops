@@ -57,7 +57,8 @@ public final class JdbcSchemaDerivator {
             checkIdentifiers(source, source, differences);
             List<PhysicalColumn> columns = new ArrayList<>();
             for (PhysicalColumn column : source.columns()) {
-                LogicalType normalized = normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
+                LogicalType normalized =
+                        normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
                 if (normalized != null) {
                     columns.add(column.copy(normalized));
                 }
@@ -84,7 +85,8 @@ public final class JdbcSchemaDerivator {
         for (PhysicalColumn incoming : source.columns()) {
             PhysicalColumn actual = existing.get(incoming.name());
             if (actual == null) {
-                LogicalType normalized = normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+                LogicalType normalized =
+                        normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
                 if (normalized == null) continue;
                 if (source.primaryKeys().contains(incoming.name()) || !normalized.isNullable()
                         || !ordinaryColumn(incoming)) {
@@ -116,9 +118,10 @@ public final class JdbcSchemaDerivator {
                         Reason.NULLABILITY_MISMATCH, incoming.type(), actual.type()));
                 continue;
             }
-            LogicalType planned = normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+            LogicalType planned =
+                    normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
-             if (canContain(planned, actual.type())) {
+            if (canContain(planned, actual.type())) {
                 differences.add(difference(incoming.name(), Kind.COMPATIBLE,
                         Reason.COMPATIBLE, planned, actual.type()));
             } else if (!source.primaryKeys().contains(incoming.name())
@@ -172,7 +175,7 @@ public final class JdbcSchemaDerivator {
                 .contains(from)) {
             return false;
         }
-         return canContain(current, proposed);
+        return canContain(current, proposed);
     }
 
     /**
