@@ -59,15 +59,15 @@ class SchemaCoordinatorTest {
     void checkpointSnapshotContainsOnlyCommittedSchemaAndCanBeRestored() throws Exception {
         List<String> order = new ArrayList<>();
         SchemaManager manager = new SchemaManager();
+        FakeWriter sink = new FakeWriter("sink", order);
         try (SchemaCoordinator coordinator = new SchemaCoordinator(
                 manager,
                 new RecordingApplier(order, false),
                 List.of(new FakeSource(0, order)),
-                List.of(new FakeWriter("sink", order)),
-                List.of(new FakeWriter("checkpoint-sink", order)),
+                List.of(sink),
+                List.of(sink),
                 ignored -> {})) {
-            // Use the same participant for the input pipeline and Sink participant in the actual protocol.
-            // The coordinator only snapshots after its checkpoint fence has drained all active changes.
+            // The coordinator snapshots only after its checkpoint fence has drained active changes.
             coordinator.pauseForCheckpoint().get();
             CheckpointSnapshot.SerializedState state = coordinator.snapshotState();
             SchemaManager restored = SchemaCoordinator.restoreManager(state);
