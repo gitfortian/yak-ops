@@ -94,6 +94,26 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
     }
 
     private void awaitString(String table, String column, long id, String expected) {
+        // Source DDL is applied asynchronously. Wait for the target column before
+        // querying it: PostgreSQL SQLSTATE 42703 is not an Awaitility assertion failure.
+        await()
+                .alias("Runtime target column " + table + "." + column)
+                .atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var statement = connection.prepareStatement(
+                                    "SELECT COUNT(*) FROM information_schema.columns "
+                                            + "WHERE table_schema = ? AND table_name = ? AND column_name = ?")) {
+                        statement.setString(1, fixture.targetSchema);
+                        statement.setString(2, table);
+                        statement.setString(3, column);
+                        try (var rows = statement.executeQuery()) {
+                            rows.next();
+                            assertEquals(1, rows.getLong(1));
+                        }
+                    }
+                });
         await()
                 .alias("Runtime DDL and CDC data " + table + "." + column)
                 .atMost(Duration.ofSeconds(120))
