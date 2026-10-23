@@ -256,8 +256,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 throw new IllegalArgumentException("Column widening requires explicit native type approval: " + name);
             }
             pending.add(name);
-            statements.add(dialect.alterColumnTypeSql(
-                    event.tableId(), actual, new Column(name, next), metadata.remarks()));
+            statements.add(
+                    dialect.alterColumnTypeSql(event.tableId(), actual, new Column(name, next), metadata.remarks()));
         }
         for (int index = 0; index < pending.size(); index++) {
             checkCanceled(event);
@@ -286,8 +286,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         }
         JdbcColumnInfo physical = findColumnInfo(event.tableId(), expected.name());
         requirePlainColumn(physical);
-        if (!physical.nullable() || (expected.comment() != null
-                && !expected.comment().equals(physical.remarks()))) {
+        if (!physical.nullable()
+                || (expected.comment() != null && !expected.comment().equals(physical.remarks()))) {
             throw new IllegalArgumentException("Target column properties do not match: " + expected.name());
         }
     }
