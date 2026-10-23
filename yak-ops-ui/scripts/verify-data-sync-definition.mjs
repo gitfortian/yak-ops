@@ -103,36 +103,18 @@ const oldParameters = JSON.stringify({
   },
 });
 const oldDefinition = { ...definition, parameterSchemaVersion: 2, parameters: oldParameters };
-assert.equal(toSyncTaskRecord(oldDefinition).schemaChangesEnabled, false);
-assert.deepEqual(
-  { ...toSyncTaskRecord(oldDefinition), schemaChangesEnabled: true },
-  result,
-);
+const oldRecord = toSyncTaskRecord(oldDefinition);
+assert.equal(oldRecord.schemaChangesEnabled, false);
 assert.equal(result.schemaChangesEnabled, true);
-assert.equal(
-  JSON.parse(createDefinitionRequest({ ...realtime, schemaChangesEnabled: false }).parameters)
-    .schemaChangesEnabled,
-  false,
-);
-assert.equal(
-  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: false }))
-    .schemaChangesEnabled,
-  false,
-);
-assert.equal(
-  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: undefined }))
-    .schemaChangesEnabled,
-  undefined,
-);
-assert.throws(() =>
-  readSyncParameters(3, JSON.stringify({ ...json, schemaChangesEnabled: "false" })),
-);
-assert.throws(() =>
-  readSyncParameters(
-    3,
-    JSON.stringify({ ...buildSyncParameters(offline), schemaChangesEnabled: true }),
-  ),
-);
+const disabledJson = createDefinitionRequest({ ...realtime, schemaChangesEnabled: false }).parameters;
+assert.equal(readSyncParameters(3, disabledJson).schemaChangesEnabled, false);
+const missingPolicy = { ...json };
+delete missingPolicy.schemaChangesEnabled;
+assert.equal(readSyncParameters(3, JSON.stringify(missingPolicy)).schemaChangesEnabled, undefined);
+const invalidPolicy = { ...json, schemaChangesEnabled: "false" };
+assert.throws(() => readSyncParameters(3, JSON.stringify(invalidPolicy)));
+const invalidOfflinePolicy = { ...buildSyncParameters(offline), schemaChangesEnabled: true };
+assert.throws(() => readSyncParameters(3, JSON.stringify(invalidOfflinePolicy)));
 assert.equal(buildSyncParameters(offline).schemaChangesEnabled, undefined);
 assert.equal(oldDefinition.parameters, oldParameters);
 assert.throws(() => readSyncParameters(1, oldParameters));

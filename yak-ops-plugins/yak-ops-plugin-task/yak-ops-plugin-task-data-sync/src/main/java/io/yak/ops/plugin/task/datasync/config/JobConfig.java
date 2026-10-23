@@ -50,7 +50,8 @@ public final class JobConfig {
         if (rawSchemaChanges != null && !(rawSchemaChanges instanceof Boolean)) {
             throw new IllegalArgumentException("schemaChangesEnabled must be a boolean");
         }
-        if (type.supportsScheduling() && parameters.getSourceMap().containsKey(SolutionOptions.SCHEMA_CHANGES_ENABLED.key())) {
+        if (type.supportsScheduling()
+                && parameters.getSourceMap().containsKey(SolutionOptions.SCHEMA_CHANGES_ENABLED.key())) {
             throw new IllegalArgumentException("schemaChangesEnabled is available only for realtime tasks");
         }
         List<String> steps = parameters.get(SolutionOptions.STEPS);

@@ -126,8 +126,11 @@ public final class PipelineBuilder {
     }
 
     public CompiledPipeline build(
-            JobPlan plan, TaskExecutionIdentity identity, boolean debug,
-            TableExecutionProgress progress, boolean schemaChangesEnabled) {
+            JobPlan plan,
+            TaskExecutionIdentity identity,
+            boolean debug,
+            TableExecutionProgress progress,
+            boolean schemaChangesEnabled) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(identity, "identity");
         if (plan.tables().stream().anyMatch(table -> table.targetSchema() == null)) {
@@ -142,8 +145,8 @@ public final class PipelineBuilder {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
         }
-        Configuration configuration = configurationFactory.create(
-                identity, sourceFactory.boundedness(), debug, schemaChangesEnabled);
+        Configuration configuration =
+                configurationFactory.create(identity, sourceFactory.boundedness(), debug, schemaChangesEnabled);
         String sourceId = first.sourceParameters().get(JobOptions.DATASOURCE_ID);
         String sinkId = first.sinkParameters().get(JobOptions.DATASOURCE_ID);
         ReadonlyConfig sourceConnection = resources.connectionOptions(
