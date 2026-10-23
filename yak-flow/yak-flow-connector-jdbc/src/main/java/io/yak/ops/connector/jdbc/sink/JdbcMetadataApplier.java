@@ -303,9 +303,18 @@ public final class JdbcMetadataApplier implements MetadataApplier {
 
     private static void requirePlainColumn(PhysicalColumn column) {
         ColumnProperties properties = column.properties();
-        if (properties != null && (!properties.isKnown() || properties.hasFeatures())) {
-            throw new IllegalArgumentException("Automatic column evolution cannot copy source column expressions: "
-                    + column.name());
+        if (properties != null) {
+            String nativeType = properties.nativeType() == null
+                    ? ""
+                    : properties.nativeType().toLowerCase(java.util.Locale.ROOT);
+            if (!properties.isKnown()
+                    || properties.hasFeatures()
+                    || nativeType.contains("unsigned")
+                    || nativeType.startsWith("enum(")
+                    || nativeType.startsWith("set(")) {
+                throw new IllegalArgumentException(
+                        "Automatic column evolution cannot preserve native properties: " + column.name());
+            }
         }
     }
 
