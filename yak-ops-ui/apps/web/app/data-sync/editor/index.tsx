@@ -363,6 +363,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             mappings={mappings}
             updateMappings={updateMappings}
             writeModes={combination?.writeModes || []}
+            hasCombination={Boolean(combination)}
             canSave={Boolean(canSave)}
             payload={payload}
             usesChangelog={usesChangelog}

@@ -21,6 +21,7 @@ interface Props {
   mappings: DataSyncTableMapping[];
   updateMappings: (value: DataSyncTableMapping[]) => void;
   writeModes: DataSyncWriteMode[];
+  hasCombination: boolean;
   canSave: boolean;
   payload: () => DataSyncTaskSavePayload;
   usesChangelog: boolean;
@@ -43,6 +44,7 @@ export function TargetSection({
   mappings,
   updateMappings,
   writeModes,
+  hasCombination,
   canSave,
   payload,
   usesChangelog,
@@ -56,7 +58,7 @@ export function TargetSection({
   setParametersDirty,
   setForm,
 }: Props) {
-  const combination = { writeModes };
+  const combination = hasCombination ? { writeModes } : undefined;
   return (
     <CollapseSection id="target" title="目标表映射">
       {prepareSchema ? (
