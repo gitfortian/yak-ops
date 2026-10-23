@@ -157,13 +157,7 @@ public final class JdbcSchemaDerivator {
                         planned,
                         actual.type());
             } else {
-                add(
-                        differences,
-                        incoming.name(),
-                        Kind.INCOMPATIBLE,
-                        Reason.UNSAFE_TYPE_CHANGE,
-                        planned,
-                        actual.type());
+                add(differences, incoming.name(), Kind.INCOMPATIBLE, Reason.UNSAFE_TYPE_CHANGE, planned, actual.type());
             }
             if (!Objects.equals(incoming.properties(), actual.properties())
                     || !Objects.equals(incoming.comment(), actual.comment())) {
@@ -227,10 +221,7 @@ public final class JdbcSchemaDerivator {
     }
 
     private static LogicalType normalize(
-            JdbcDialect dialect,
-            PhysicalColumn column,
-            boolean key,
-            List<SchemaChangePlan.Difference> differences) {
+            JdbcDialect dialect, PhysicalColumn column, boolean key, List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
                 add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNRESOLVED_TYPE, column.type(), null);
@@ -256,15 +247,13 @@ public final class JdbcSchemaDerivator {
         }
     }
 
-    private static void checkKeys(
-            Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
+    private static void checkKeys(Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
         if (!source.primaryKeys().equals(target.primaryKeys())) {
             add(differences, null, Kind.INCOMPATIBLE, Reason.PRIMARY_KEY_MISMATCH, null, null);
         }
     }
 
-    private static void checkIdentifiers(
-            Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
+    private static void checkIdentifiers(Schema source, Schema target, List<SchemaChangePlan.Difference> differences) {
         for (Schema schema : List.of(source, target)) {
             Set<String> unique = new HashSet<>();
             for (PhysicalColumn column : schema.columns()) {
