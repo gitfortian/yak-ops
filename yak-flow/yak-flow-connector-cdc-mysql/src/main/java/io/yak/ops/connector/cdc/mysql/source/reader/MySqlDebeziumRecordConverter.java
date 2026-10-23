@@ -19,9 +19,9 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
 import java.util.Objects;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Struct;
@@ -50,8 +50,10 @@ public final class MySqlDebeziumRecordConverter {
         this.schemas = new LinkedHashMap<>(Objects.requireNonNull(schemas, "schemas"));
         this.physicalSchemas = new LinkedHashMap<>();
         this.schemas.forEach((table, model) -> this.physicalSchemas.put(
-                table, Objects.requireNonNull(restored.getOrDefault(
-                        table, Schema.from(model, null, Map.of(), Map.of())), "physical schema")));
+                table,
+                Objects.requireNonNull(
+                        restored.getOrDefault(table, Schema.from(model, null, Map.of(), Map.of())),
+                        "physical schema")));
         this.schemaChanges = new MySqlSchemaChangeConverter(this.schemas.keySet());
         this.evolve = evolve;
     }
