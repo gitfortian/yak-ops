@@ -7,6 +7,8 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.internal.JdbcOutputFormat;
 import io.yak.ops.connector.jdbc.sink.writer.JdbcWriter;
 import io.yak.ops.core.api.connector.sink.Sink;
+import io.yak.ops.core.api.connector.sink.MetadataApplier;
+import io.yak.ops.core.api.connector.sink.SchemaEvolutionSink;
 import io.yak.ops.core.api.connector.sink.WriterInitContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -14,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Defines one or more JDBC source-to-target table routes for a reusable Sink.
@@ -25,7 +28,7 @@ import java.util.Set;
  * <p>Flushes are synchronous and at-least-once; there is no XA committer, exactly-once
  * guarantee, or global ordering across parallel Sink subtasks.
  */
-public final class JdbcSink implements Sink<TableRecord> {
+public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
 
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
@@ -34,6 +37,7 @@ public final class JdbcSink implements Sink<TableRecord> {
     private final TableMetrics metrics;
     private final JdbcBatchOrder batchOrder;
     private final int statementCacheSize;
+    private final Supplier<? extends MetadataApplier> metadataApplierFactory;
 
     public JdbcSink(
             JdbcConnectionProvider connections,
@@ -88,11 +92,25 @@ public final class JdbcSink implements Sink<TableRecord> {
             TableMetrics metrics,
             JdbcBatchOrder batchOrder,
             int statementCacheSize) {
+        this(connections, dialect, plans, batchPolicy, metrics, batchOrder, statementCacheSize, null);
+    }
+
+    /** Creates a reusable Sink with a factory for one job-attempt-owned MetadataApplier. */
+    public JdbcSink(
+            JdbcConnectionProvider connections,
+            JdbcDialect dialect,
+            List<JdbcTableWritePlan> plans,
+            BatchFlushPolicy batchPolicy,
+            TableMetrics metrics,
+            JdbcBatchOrder batchOrder,
+            int statementCacheSize,
+            Supplier<? extends MetadataApplier> metadataApplierFactory) {
         this.batchOrder = Objects.requireNonNull(batchOrder, "batchOrder");
         if (statementCacheSize < 1) {
             throw new IllegalArgumentException("JDBC statement cache size must be positive");
         }
         this.statementCacheSize = statementCacheSize;
+        this.metadataApplierFactory = metadataApplierFactory;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
@@ -125,6 +143,14 @@ public final class JdbcSink implements Sink<TableRecord> {
      * <p>The Runtime provides the mailbox timer and the actual Sink subtask identity.
      * This definition never caches the returned Writer across execution attempts.
      */
+    @Override
+    public MetadataApplier createMetadataApplier() {
+        if (metadataApplierFactory == null) {
+            throw new UnsupportedOperationException("This JDBC Sink was built without a schema applier factory");
+        }
+        return Objects.requireNonNull(metadataApplierFactory.get(), "MetadataApplier factory returned null");
+    }
+
     @Override
     public JdbcWriter createWriter(WriterInitContext context) throws Exception {
         Objects.requireNonNull(context, "context");
