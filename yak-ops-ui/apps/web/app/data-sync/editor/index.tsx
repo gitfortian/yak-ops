@@ -1,17 +1,16 @@
 import { Alert, Button, PageHeader, Modal } from "@yak-ops/yak-ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { taskDraftKey, writeTaskDraft } from "@/service/data-sync/draft";
+import { taskDraftKey } from "@/service/data-sync/draft";
 import { offlineIncremental, solutionSyncType, supportsMultipleTables } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "../incremental-fields";
 import { findStepCombination } from "../solution-presentation";
 import { useSolutions } from "../use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "../editor-anchor-stepper";
-import { EMPTY_SCHEDULE } from "@/app/schedule/schedule-presentation";
-import { getTaskSchedule, scheduleErrorMessage, type ScheduleRecord, type ScheduleTimeRule } from "@/service/schedule";
-import { listDataSources, type DataSourceRecord } from "@/service/datasource";
+import type { ScheduleTimeRule } from "@/service/schedule";
+import type { DataSourceRecord } from "@/service/datasource";
 import type { DataSyncTableMapping } from "@/service/data-sync";
 import { BasicSection } from "./basic-section";
 import { DataSourcesSection } from "./data-sources-section";
@@ -21,6 +20,9 @@ import { EditorScheduleSection } from "./schedule-section";
 import { useCatalogOptions } from "./use-catalog-options";
 import { buildEditorPayload, canSaveEditor } from "./definition";
 import { useEditorSubmission } from "./use-editor-submission";
+import { useEditorDataSources } from "./use-editor-data-sources";
+import { useEditorSchedule } from "./use-editor-schedule";
+import { useEditorDraft } from "./use-editor-draft";
 import { EMPTY_FORM, type TaskEditorInput, type EditorForm } from "./types";
 
 export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorInput) {
@@ -78,57 +80,21 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
       targetTable: value?.targetTable || "",
     };
   });
-  const [dataSources, setDataSources] = useState<DataSourceRecord[]>(connections);
-  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [taskStatus] = useState<DataSyncTaskStatus>(
     initialTask?.status === "PUBLISHED" ? "PUBLISHED" : "UNPUBLISHED",
   );
   const [parametersDirty, setParametersDirty] = useState(false);
   const [taskDirty, setTaskDirty] = useState(!editing);
   const savedTask = useRef(initialTask);
+  const { dataSources, dataSourcesLoading, loadDataSources } = useEditorDataSources(connections, savedTask);
   const pendingSchedule = location.state as {
     scheduleDraft?: ScheduleTimeRule;
     scheduleSaveError?: string;
   } | null;
-  const [schedule, setSchedule] = useState<ScheduleRecord | null>(null);
-  const [scheduleForm, setScheduleForm] = useState<ScheduleTimeRule>(
-    pendingSchedule?.scheduleDraft || { ...EMPTY_SCHEDULE },
-  );
-  const [scheduleLoading, setScheduleLoading] = useState(
-    Boolean(initialTask && initialTask.syncType === "OFFLINE"),
-  );
-  const [scheduleError, setScheduleError] = useState(pendingSchedule?.scheduleSaveError || "");
-  const [scheduleNeedsReload, setScheduleNeedsReload] = useState(
-    Boolean(pendingSchedule?.scheduleSaveError),
-  );
-  const [scheduleReload, setScheduleReload] = useState(0);
-  const scheduleDraft = useRef(pendingSchedule?.scheduleDraft);
+  const { schedule, scheduleForm, scheduleLoading, scheduleError, scheduleNeedsReload, scheduleDraft,
+    setSchedule, setScheduleForm, setScheduleError, setScheduleNeedsReload,
+    reloadSchedule, changeSchedule } = useEditorSchedule(id, supportsScheduling, initialTask, pendingSchedule);
 
-  useEffect(() => {
-    if (!supportsScheduling || !id) return;
-    const controller = new AbortController();
-    setScheduleLoading(true);
-    void getTaskSchedule(id, controller.signal)
-      .then((value) => {
-        if (controller.signal.aborted) return;
-        setSchedule(value);
-        if (!scheduleDraft.current) setScheduleForm(value || { ...EMPTY_SCHEDULE });
-        if (scheduleReload > 0) {
-          setScheduleError("");
-          setScheduleNeedsReload(false);
-        }
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) {
-          setScheduleError(scheduleErrorMessage(failure));
-          setScheduleNeedsReload(true);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setScheduleLoading(false);
-      });
-    return () => controller.abort();
-  }, [id, supportsScheduling, scheduleReload]);
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
@@ -162,64 +128,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   );
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
-  const datasourceRequest = useRef<AbortController>();
-  const loadDataSources = useCallback(async () => {
-    datasourceRequest.current?.abort();
-    const controller = new AbortController();
-    datasourceRequest.current = controller;
-    setDataSourcesLoading(true);
-    try {
-      const result = await listDataSources({ pageNo: 1, pageSize: 200 }, controller.signal);
-      if (controller.signal.aborted) return;
-      setDataSources((current) => {
-        const selected = current.filter(
-          (value) =>
-            value.id === savedTask.current?.sourceDataSourceId ||
-            value.id === savedTask.current?.targetDataSourceId,
-        );
-        return [
-          ...new Map([...selected, ...result.bizData].map((value) => [value.id, value])).values(),
-        ];
-      });
-    } catch {
-      // HTTP failures are reported by the shared transport; existing selections are retained.
-    } finally {
-      if (!controller.signal.aborted) setDataSourcesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDataSources();
-    return () => datasourceRequest.current?.abort();
-  }, [loadDataSources]);
-
-  useEffect(() => {
-    if (id || savedTask.current) return;
-    writeTaskDraft(draftKey, {
-      sourceType: draft.sourceType,
-      targetType: draft.targetType,
-      solutionType: draft.solutionType,
-      steps: draft.steps,
-      name: form.name,
-      form: {
-        ...form,
-        solutionType: draft.solutionType,
-        steps: draft.steps,
-        tableMappings: batch ? mappings : undefined,
-        incremental: !batch && useIncremental ? form.incremental : undefined,
-      },
-    });
-  }, [
-    id,
-    draftKey,
-    draft.sourceType,
-    draft.targetType,
-    draft.solutionType,
-    draft.steps,
-    form,
-    batch,
-    mappings,
-  ]);
+  useEditorDraft(id, draftKey, draft, form, batch, mappings, useIncremental, savedTask);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
     setTaskDirty(true);
@@ -428,15 +337,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
               scheduleNeedsReload={scheduleNeedsReload}
               scheduleLoading={scheduleLoading}
               saving={saving}
-              onReload={() => {
-                scheduleDraft.current = scheduleForm;
-                setScheduleReload((value) => value + 1);
-              }}
-              onChange={(value) => {
-                setScheduleForm(value);
-                scheduleDraft.current = value;
-                setScheduleError("");
-              }}
+              onReload={reloadSchedule}
+              onChange={changeSchedule}
             />
           ) : null}
         </main>
