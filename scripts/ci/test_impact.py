@@ -72,5 +72,28 @@ class ImpactTest(unittest.TestCase):
         self.assertNotIn("yak-ops-business", modules)
 
 
+    def test_registry_change_only_selects_affected_suite(self):
+        before = 'SUITES = {"cdc": (1, 2), "backend-e2e": (1, 2)}\n\ndef runner():\n    return True\n'
+        after = 'SUITES = {"cdc": (1, 2), "backend-e2e": (1, 3)}\n\ndef runner():\n    return True\n'
+        self.assertEqual({"backend-e2e"}, impact.compare_suite_registry(before, after))
+        self.assertEqual(set(), impact.compare_suite_registry(before, before + "# comment only\n"))
+
+    def test_registry_logic_change_fails_closed(self):
+        before = 'SUITES = {"cdc": 1}\ndef runner():\n    return 1\n'
+        after = 'SUITES = {"cdc": 2}\ndef runner():\n    return 2\n'
+        self.assertIsNone(impact.compare_suite_registry(before, after))
+        self.assertIsNone(impact.compare_suite_registry(before, "SUITES = dict(cdc=1)"))
+        self.assertIsNone(impact.compare_suite_registry(before, "SUITES = {'other': 1}"))
+
+    def test_registry_selection_and_reason_are_consistent(self):
+        from unittest.mock import patch
+        with patch.object(impact, "suite_registration_changes", return_value={"backend-e2e"}):
+            selected = impact.select_suites(["scripts/tests/backend_tests.py"])
+            self.assertEqual(["backend-e2e"], selected)
+            self.assertIn("suite registration only", impact.summary(["scripts/tests/backend_tests.py"]))
+        with patch.object(impact, "suite_registration_changes", return_value=None):
+            self.assertEqual(list(impact.SUITES), impact.select_suites(["scripts/tests/backend_tests.py"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -48,5 +48,11 @@ fi
 printf '%s\n' "${result}"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"; fi
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-    printf 'CI impact:\n\n```\n%s\n```\n' "${result}" >> "${GITHUB_STEP_SUMMARY}"
+    CI_FULL_SCOPE="${full}" python3 - "${changed[@]}" <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+import os
+import sys
+sys.path.insert(0, "scripts/ci")
+import impact
+print(impact.summary(sys.argv[1:], full=(os.environ["CI_FULL_SCOPE"] == "true")), end="")
+PY
 fi
