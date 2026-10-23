@@ -2,6 +2,9 @@ package io.yak.ops.plugin.task.datasync.execution;
 
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.exceptions.SchemaEvolveException;
+import io.yak.ops.core.event.SchemaChangeEventType;
+import java.util.HashSet;
+import java.util.Set;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
@@ -40,23 +43,33 @@ public final class SchemaPreparation {
             checkCanceled();
             progress.schemaStarted(index);
             try {
-                TablePlan physical;
-                try (MetadataApplier applier = builder.createMetadataApplier(table, identity)) {
-                    synchronized (this) {
-                        checkCanceled();
-                        active = applier;
-                    }
-                    applier.applySchemaChange(table.schemaChange());
-                    checkCanceled();
-                    physical = planner.preparedTarget(table, identity);
-                    checkCanceled();
-                } finally {
-                    synchronized (this) {
-                        active = null;
+                var changes = table.schemaChanges();
+                if (!changes.isEmpty()) {
+                    try (MetadataApplier applier = builder.createMetadataApplier(table, identity)) {
+                        synchronized (this) {
+                            checkCanceled();
+                            active = applier;
+                        }
+                        Set<SchemaChangeEventType> accepted = new HashSet<>();
+                        for (var change : changes) accepted.add(change.getType());
+                        if (!accepted.equals(Set.of(SchemaChangeEventType.CREATE_TABLE))) {
+                            applier.setAcceptedSchemaEvolutionTypes(Set.copyOf(accepted));
+                        }
+                        for (var change : changes) {
+                            checkCanceled();
+                            applier.applySchemaChange(change);
+                        }
+                    } finally {
+                        synchronized (this) {
+                            active = null;
+                        }
                     }
                 }
+                checkCanceled();
+                TablePlan physical = planner.preparedTarget(table, identity);
+                checkCanceled();
                 prepared.add(physical);
-                progress.schemaFinished(index, table.targetSchema() == null ? "PREPARED" : "VERIFIED");
+                progress.schemaFinished(index, changes.isEmpty() ? "VERIFIED" : "PREPARED");
             } catch (Exception failure) {
                 if (failure instanceof SchemaEvolveException schema && schema.isOutcomeUnknown()) {
                     progress.schemaUnknown(index);
