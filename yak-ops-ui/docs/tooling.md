@@ -6,7 +6,7 @@ Scope: `yak-ops-ui` 的工具、构建与验证。
 
 前端使用 Vite、React、React Router、Tailwind、TypeScript、Oxlint、Oxfmt 和 npm workspaces。Node 要求、依赖与脚本以 [package.json](../package.json)、workspace manifests 和 [package-lock.json](../package-lock.json) 为准。
 
-Vite 负责开发和生产构建；npm workspaces 负责依赖安装，CI 使用 `npm ci`。架构校验入口是 [check-architecture.mjs](../scripts/check-architecture.mjs)。
+Vite 负责开发和生产构建；npm workspaces 负责依赖安装，CI 使用 `npm ci`。架构校验入口是 [check-architecture.mjs](../scripts/check-architecture.mjs)，导入边界由 [architecture-imports.mjs](../scripts/architecture-imports.mjs) 检查，并使用 Node Test Runner 运行对应的回归测试。
 
 ## Local Verification
 

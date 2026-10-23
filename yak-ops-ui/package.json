@@ -10,7 +10,7 @@
     "dev": "vite --config apps/web/vite.config.ts --host 127.0.0.1",
     "build": "vite build --config apps/web/vite.config.ts",
     "preview": "vite preview --config apps/web/vite.config.ts",
-    "architecture:check": "node scripts/check-architecture.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs && node --test scripts/architecture-imports.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint apps packages scripts --deny-warnings",
     "lint:fix": "oxlint apps packages scripts --fix",
