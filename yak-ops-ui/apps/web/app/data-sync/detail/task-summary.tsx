@@ -25,7 +25,9 @@ export function TaskSummary({ task, updatedBy, dataSources, onCopyTaskId }: Prop
   const copyTaskId = onCopyTaskId;
   return (
     <section aria-labelledby="task-basic-info">
-      <h2 id="task-basic-info" className="mb-5 text-sm font-semibold text-[var(--yak-components-field-label)]">
+      <h2
+        id="task-basic-info" className="mb-5 text-sm font-semibold text-[var(--yak-components-field-label)]"
+      >
         基本信息
       </h2>
       <div className="grid grid-cols-2 gap-x-10 gap-y-5 max-lg:grid-cols-1">
