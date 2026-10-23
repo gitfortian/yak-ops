@@ -13,10 +13,19 @@ import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.BasicType;
 import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.VarCharType;
+import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
+import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
 import io.yak.ops.flow.runtime.checkpoint.SchemaManagerSnapshotSerializer;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 class SchemaManagerTest {
+
+    @TempDir
+    Path directory;
 
     private static final TableId SOURCE = new TableId("source", "sales", "orders");
     private static final TableId TARGET = new TableId("target", "warehouse", "orders");
@@ -77,6 +86,36 @@ class SchemaManagerTest {
         assertEquals(after, restored.state(TARGET).orElseThrow().targetSchema());
         assertTrue(restored.begin(request).duplicate());
         assertEquals(1, restored.currentVersion(TARGET));
+    }
+
+    @Test
+    void checkpointFormatPersistsSchemaStateAlongsideSourceOffsets() throws Exception {
+        Schema before = schema(false);
+        Schema after = schema(true);
+        SchemaChangeRequest request = request("binlog:0001:100", before, after, "note");
+        SchemaManager manager = new SchemaManager();
+        manager.begin(request);
+        manager.complete(request);
+        SchemaManagerSnapshotSerializer serializer = new SchemaManagerSnapshotSerializer();
+        CheckpointSnapshot.SerializedState schemaState =
+                new CheckpointSnapshot.SerializedState(serializer.getVersion(), serializer.serialize(manager.snapshot()));
+        CheckpointSnapshot checkpoint = new CheckpointSnapshot(
+                1,
+                "schema-test-graph",
+                new CheckpointSnapshot.SerializedState(0, new byte[] {1}),
+                Map.of(),
+                Map.of(),
+                System.currentTimeMillis(),
+                Map.of(),
+                Set.of(),
+                Set.of(),
+                schemaState);
+
+        try (FileCheckpointStore store = new FileCheckpointStore(directory)) {
+            store.save(checkpoint);
+            CheckpointSnapshot restored = store.loadLatest("schema-test-graph").orElseThrow();
+            assertEquals(schemaState, restored.schemaManagerState());
+        }
     }
 
     @Test
