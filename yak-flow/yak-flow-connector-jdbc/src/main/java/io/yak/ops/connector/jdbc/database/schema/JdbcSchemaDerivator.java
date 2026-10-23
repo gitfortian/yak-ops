@@ -52,8 +52,11 @@ public final class JdbcSchemaDerivator {
 
     /** Allows deleting only the columns explicitly removed by an authenticated source transition. */
     public static SchemaChangePlan derive(
-            TableId tableId, Schema source, Optional<Schema> target,
-            JdbcDialect dialect, Set<String> authorizedDroppedColumns) {
+            TableId tableId,
+            Schema source,
+            Optional<Schema> target,
+            JdbcDialect dialect,
+            Set<String> authorizedDroppedColumns) {
         Objects.requireNonNull(authorizedDroppedColumns, "authorizedDroppedColumns");
         Objects.requireNonNull(tableId, "tableId");
         Objects.requireNonNull(source, "source");

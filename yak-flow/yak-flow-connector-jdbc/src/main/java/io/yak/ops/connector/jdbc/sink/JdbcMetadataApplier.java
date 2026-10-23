@@ -318,7 +318,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             if (actual == null) continue; // Auto-committed before the last checkpoint.
             if (current.primaryKeys().contains(name)
                     || !sameType(actual.dataType(), event.expectedColumnTypes().get(name))) {
-                throw new IllegalArgumentException("DROP COLUMN source and target schema preconditions differ: " + name);
+                throw new IllegalArgumentException(
+                        "DROP COLUMN source and target schema preconditions differ: " + name);
             }
             requirePlainColumn(findColumnInfo(event.tableId(), name));
             pending.add(name);
