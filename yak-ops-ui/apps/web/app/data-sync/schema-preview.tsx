@@ -66,9 +66,17 @@ export function SchemaPreview({
                     {[row.target.catalog, row.target.schema, row.target.table]
                       .filter(Boolean)
                       .join(".")}{" "}
-                    · {row.action === "CREATE" ? "创建" : row.action === "ALTER" ? "调整结构" : row.action === "BLOCKED" ? "结构不兼容" : "结构兼容"}
+                    ·{" "}
+                    {row.action === "CREATE"
+                      ? "创建"
+                      : row.action === "ALTER"
+                        ? "调整结构"
+                        : row.action === "BLOCKED"
+                          ? "结构不兼容"
+                          : "结构兼容"}
                   </div>
-                  {row.differences.filter((difference) => difference.action !== "COMPATIBLE").length > 0 ? (
+                  {row.differences.filter((difference) => difference.action !== "COMPATIBLE")
+                    .length > 0 ? (
                     <div className="overflow-auto rounded-lg border text-xs">
                       {row.differences
                         .filter((difference) => difference.action !== "COMPATIBLE")
@@ -77,7 +85,9 @@ export function SchemaPreview({
                             key={`${difference.column ?? "table"}-${difference.reason}-${index}`}
                             className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2 last:border-b-0"
                           >
-                            <span className="min-w-28 font-medium">{difference.column ?? "目标表"}</span>
+                            <span className="min-w-28 font-medium">
+                              {difference.column ?? "目标表"}
+                            </span>
                             <span>
                               {difference.action === "CREATE_TABLE"
                                 ? "创建表"
@@ -91,7 +101,9 @@ export function SchemaPreview({
                             </span>
                             {difference.sourceType || difference.targetType ? (
                               <span className="text-slate-500">
-                                {[difference.targetType, difference.sourceType].filter(Boolean).join(" → ")}
+                                {[difference.targetType, difference.sourceType]
+                                  .filter(Boolean)
+                                  .join(" → ")}
                               </span>
                             ) : null}
                           </div>

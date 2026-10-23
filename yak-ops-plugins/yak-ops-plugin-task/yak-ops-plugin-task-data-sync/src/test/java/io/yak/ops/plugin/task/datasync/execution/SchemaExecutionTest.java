@@ -171,8 +171,8 @@ class SchemaExecutionTest {
     void allTargetsVerifyBeforeOneJobStartsAndLateJobIdentityIsPreserved() throws Exception {
         Fixture f = new Fixture();
         f.engine = (graph, config) -> {
-            assertEquals(2 * (f.submitted.get() + 1), f.applied.get());
-            assertEquals(2 * (f.submitted.get() + 1), f.closed.get());
+            assertEquals(2, f.applied.get());
+            assertEquals(2, f.closed.get());
             assertEquals(2, f.targets.size());
             f.submitted.incrementAndGet();
             return CompletableFuture.completedFuture(new Client(JobStatus.FINISHED));
