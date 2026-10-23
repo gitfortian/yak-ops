@@ -10,6 +10,9 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.api.connector.source.SourceEvent;
+import io.yak.ops.core.api.connector.source.InputStatus;
+import io.yak.ops.core.api.connector.source.ReaderOutput;
+import java.util.concurrent.CompletableFuture;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableRecord;
 import java.util.ArrayList;
@@ -30,6 +33,7 @@ public final class MySqlHybridSourceReader
                 MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplit, MySqlHybridSplitState> {
 
     private final MySqlHybridSplitReader splits;
+    private final MySqlSchemaChangeGate schemaGate;
     private final TableMetrics metrics;
     private final long generation;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
@@ -47,10 +51,30 @@ public final class MySqlHybridSourceReader
     }
 
     private MySqlHybridSourceReader(MySqlHybridSplitReader splits, SourceReaderContext context, TableMetrics metrics) {
-        super(() -> splits, new MySqlHybridRecordEmitter(context, splits, metrics), context);
+        this(splits, context, metrics, new MySqlSchemaChangeGate(context));
+    }
+
+    private MySqlHybridSourceReader(
+            MySqlHybridSplitReader splits,
+            SourceReaderContext context,
+            TableMetrics metrics,
+            MySqlSchemaChangeGate schemaGate) {
+        super(() -> splits, new MySqlHybridRecordEmitter(context, splits, metrics, schemaGate), context);
         this.metrics = metrics;
         generation = metrics.generation();
         this.splits = splits;
+        this.schemaGate = schemaGate;
+    }
+
+    @Override
+    public InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
+        return schemaGate.consumeAcknowledgment() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
+    }
+
+    @Override
+    public CompletableFuture<Void> isAvailable() {
+        CompletableFuture<Void> pending = schemaGate.availability();
+        return pending == null ? super.isAvailable() : pending;
     }
 
     @Override
@@ -88,6 +112,7 @@ public final class MySqlHybridSourceReader
 
     @Override
     public List<MySqlHybridSplit> snapshotState(long checkpointId) {
+        schemaGate.requireCheckpointReady();
         forEachActiveSplitState(state -> state.snapshotCheckpoint(checkpointId));
         acknowledged.forEach(id -> finishedCheckpoint.putIfAbsent(id, checkpointId));
         List<MySqlHybridSplit> active = new ArrayList<>(super.snapshotState(checkpointId));
