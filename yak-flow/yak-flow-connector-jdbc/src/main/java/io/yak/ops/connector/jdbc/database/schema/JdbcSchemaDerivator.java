@@ -99,6 +99,11 @@ public final class JdbcSchemaDerivator {
                 continue;
             }
 
+            if (actual.properties() != null && Boolean.TRUE.equals(actual.properties().generated())) {
+                differences.add(difference(incoming.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
+                        SchemaChangePlan.Reason.UNSAFE_COLUMN_PROPERTIES, incoming.type(), actual.type()));
+                continue;
+            }
             if (!incoming.type().isResolved() || !actual.type().isResolved()) {
                 differences.add(difference(incoming.name(), SchemaChangePlan.Kind.INCOMPATIBLE,
                         SchemaChangePlan.Reason.UNRESOLVED_TYPE, incoming.type(), actual.type()));
@@ -111,9 +116,7 @@ public final class JdbcSchemaDerivator {
             }
             LogicalType planned = normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
-            Column expected = new Column(incoming.name(), planned);
-            Column actualColumn = new Column(actual.name(), actual.type());
-            if (JdbcSchemaCompatibility.isCompatible(expected, actualColumn)) {
+             if (canContain(planned, actual.type())) {
                 differences.add(difference(incoming.name(), SchemaChangePlan.Kind.COMPATIBLE,
                         SchemaChangePlan.Reason.COMPATIBLE, planned, actual.type()));
             } else if (!source.primaryKeys().contains(incoming.name())
@@ -136,6 +139,10 @@ public final class JdbcSchemaDerivator {
             }
         }
 
+        if (!Objects.equals(source.comment(), current.comment())) {
+            differences.add(difference(null, SchemaChangePlan.Kind.METADATA_DIFFERENCE,
+                    SchemaChangePlan.Reason.COLUMN_METADATA_DIFFERENCE, null, null));
+        }
         Set<String> names = byName(source).keySet();
         for (PhysicalColumn extra : current.columns()) {
             if (!names.contains(extra.name())) {
@@ -163,9 +170,24 @@ public final class JdbcSchemaDerivator {
                 .contains(from)) {
             return false;
         }
-        Column old = new Column("column", current.copy(true));
-        Column candidate = new Column("column", proposed.copy(true));
-        return JdbcSchemaCompatibility.isCompatible(old, candidate);
+         return canContain(current, proposed);
+    }
+
+    /**
+     * Requires explicit containment for unbounded variable-length fields. The older preview
+     * compatibility rule tolerates unknown lengths, which is unsafe for automatic DDL planning.
+     */
+    private static boolean canContain(LogicalType source, LogicalType target) {
+        Column from = new Column("field", source);
+        Column to = new Column("field", target);
+        LogicalTypeRoot sourceRoot = source.getTypeRoot();
+        LogicalTypeRoot targetRoot = target.getTypeRoot();
+        boolean variable = (sourceRoot == LogicalTypeRoot.VARCHAR && targetRoot == LogicalTypeRoot.VARCHAR)
+                || (sourceRoot == LogicalTypeRoot.VARBINARY && targetRoot == LogicalTypeRoot.VARBINARY);
+        if (variable && from.length() == null && to.length() != null) {
+            return false;
+        }
+        return JdbcSchemaCompatibility.isCompatible(from, to);
     }
 
     private static LogicalType normalize(
