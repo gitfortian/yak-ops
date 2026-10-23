@@ -20,6 +20,7 @@
 package io.yak.ops.core.event;
 
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.TableSchema;
 import java.util.Map;
 import java.util.Objects;
@@ -85,6 +86,24 @@ public class CreateTableEvent implements SchemaChangeEvent {
         if (!columns.containsAll(this.columnComments.keySet())) {
             throw new IllegalArgumentException("Column comments must reference declared columns");
         }
+    }
+
+    /**
+     * Builds an event from the complete physical schema without changing the established
+     * event serialization format.
+     */
+    public CreateTableEvent(TableId tableId, Schema schema) {
+        this(
+                tableId,
+                Objects.requireNonNull(schema, "schema").toTableSchema(),
+                schema.comment(),
+                schema.columnComments(),
+                schema.columnProperties());
+    }
+
+    /** Returns the complete physical metadata model while preserving the original row schema. */
+    public Schema getPhysicalSchema() {
+        return Schema.from(schema, tableComment, columnComments, columnProperties);
     }
 
     /** Returns the complete expected target schema. */
