@@ -37,7 +37,11 @@ export function checkArchitectureImports(relativePath, content, root) {
   const ui = resolve(root, "packages/yak-ui");
   const dataSync = resolve(app, "data-sync");
   const dataSyncSurfaces = ["list", "editor", "detail", "log"];
-  const dataSyncRouteEntries = new Set([resolve(dataSync, "editor/page"), resolve(dataSync, "detail"), resolve(dataSync, "list/page")]);
+  const dataSyncRouteEntries = new Set([
+    resolve(dataSync, "editor/page"),
+    resolve(dataSync, "detail"),
+    resolve(dataSync, "list/page"),
+  ]);
   const surfaceOf = (path) =>
     dataSyncSurfaces.find((name) => inside(path, resolve(dataSync, name)));
 
@@ -55,7 +59,11 @@ export function checkArchitectureImports(relativePath, content, root) {
 
     const sourceSurface = surfaceOf(source);
     const targetSurface = surfaceOf(target);
-    if (targetSurface && !inside(source, dataSync) && !(inside(source, resolve(app, "router")) && dataSyncRouteEntries.has(target))) {
+    if (
+      targetSurface &&
+      !inside(source, dataSync) &&
+      !(inside(source, resolve(app, "router")) && dataSyncRouteEntries.has(target))
+    ) {
       violations.push(relativePath + " imports a private Data Sync feature: " + specifier);
     }
     if (sourceSurface && targetSurface && sourceSurface !== targetSurface) {
