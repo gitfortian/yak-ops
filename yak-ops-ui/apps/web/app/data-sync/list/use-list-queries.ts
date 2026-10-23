@@ -129,6 +129,6 @@ export function useListInstances(scope: string, records: DataSyncTaskRecord[], s
     latestByTask,
     activeByTask,
     loading: ids.length > 0 && query.isPending,
-    ready: safeToAct && (ids.length === 0 || (query.isSuccess && !query.isFetching)),
+    ready: safeToAct && (ids.length === 0 || query.isSuccess),
   };
 }
