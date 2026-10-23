@@ -11,8 +11,7 @@ import java.util.Objects;
  * <p>A Source never invents a target table ID. Events are admitted on its owning mailbox
  * before the corresponding Binlog offset may be checkpointed.
  */
-public record SourceSchemaChange(String eventId, TableId tableId, Schema before, Schema after)
-        implements Serializable {
+public record SourceSchemaChange(String eventId, TableId tableId, Schema before, Schema after) implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
