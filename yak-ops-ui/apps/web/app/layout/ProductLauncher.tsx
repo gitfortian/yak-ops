@@ -1,121 +1,27 @@
 import { ChevronRight, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-
-import {
-  listUserPreferences,
-  updateUserPreferenceFavorite,
-  type UserPreferenceRecord,
-} from "@/service/preference";
-
 import AllProductMenu from "./AllProductMenu";
-import { GLOBAL_PRODUCT_MENU } from "./navigation";
+import { useProductFavorites } from "./use-product-favorites";
 
 const FIRST_LEVEL_CLOSE_DELAY_MS = 36;
-const PRODUCT_MENU_SCENE = "PRODUCT_MENU" as const;
 
-type ProductLauncherProps = {
-  open: boolean;
-  onClose: () => void;
-};
-
-const upsertPreference = (
-  preferences: UserPreferenceRecord[],
-  nextPreference: UserPreferenceRecord,
-) => {
-  const exists = preferences.some((preference) => preference.itemKey === nextPreference.itemKey);
-  if (!exists) return [...preferences, nextPreference];
-  return preferences.map((preference) =>
-    preference.itemKey === nextPreference.itemKey ? nextPreference : preference,
-  );
-};
+type ProductLauncherProps = { open: boolean; onClose: () => void };
 
 export default function ProductLauncher({ open, onClose }: ProductLauncherProps) {
   const [allProductsOpen, setAllProductsOpen] = useState(false);
   const [firstLevelVisible, setFirstLevelVisible] = useState(open);
-  const [preferences, setPreferences] = useState<UserPreferenceRecord[]>([]);
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [favoriteMutatingIds, setFavoriteMutatingIds] = useState<Set<string>>(() => new Set());
+  const { favorites, favoriteProductIds, mutatingIds, loading, error, retry, toggleFavorite } = useProductFavorites(open);
 
   useEffect(() => {
     if (open) {
       setFirstLevelVisible(true);
       return;
     }
-
     setAllProductsOpen(false);
     const timer = window.setTimeout(() => setFirstLevelVisible(false), FIRST_LEVEL_CLOSE_DELAY_MS);
-
     return () => window.clearTimeout(timer);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    let active = true;
-    setFavoritesLoading(true);
-    void listUserPreferences(PRODUCT_MENU_SCENE)
-      .then((nextPreferences) => {
-        if (active) setPreferences(nextPreferences);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) setFavoritesLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [open]);
-
-  const favoritePreferences = preferences
-    .filter((preference) => preference.favorite)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
-  const favoriteProductIds = new Set(favoritePreferences.map((preference) => preference.itemKey));
-  const favoriteProducts = favoritePreferences.flatMap((preference) => {
-    const product = GLOBAL_PRODUCT_MENU.find((item) => item.id === preference.itemKey);
-    return product ? [product] : [];
-  });
-
-  const toggleFavorite = async (productId: string) => {
-    if (favoriteMutatingIds.has(productId)) return;
-
-    const previousPreference = preferences.find((preference) => preference.itemKey === productId);
-    const nextFavorite = !previousPreference?.favorite;
-    const nextSortOrder = nextFavorite
-      ? Math.max(0, ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder)) +
-        1
-      : 0;
-    const optimisticPreference: UserPreferenceRecord = {
-      scene: PRODUCT_MENU_SCENE,
-      itemKey: productId,
-      favorite: nextFavorite,
-      sortOrder: nextSortOrder,
-      useCount: previousPreference?.useCount ?? 0,
-      lastUsedTime: previousPreference?.lastUsedTime,
-    };
-
-    setPreferences((current) => upsertPreference(current, optimisticPreference));
-    setFavoriteMutatingIds((current) => new Set(current).add(productId));
-
-    try {
-      const saved = await updateUserPreferenceFavorite(PRODUCT_MENU_SCENE, productId, {
-        favorite: nextFavorite,
-      });
-      setPreferences((current) => upsertPreference(current, saved));
-    } catch {
-      setPreferences((current) => {
-        if (previousPreference) return upsertPreference(current, previousPreference);
-        return current.filter((preference) => preference.itemKey !== productId);
-      });
-    } finally {
-      setFavoriteMutatingIds((current) => {
-        const next = new Set(current);
-        next.delete(productId);
-        return next;
-      });
-    }
-  };
 
   const secondLevelOpen = open && allProductsOpen;
 
@@ -172,10 +78,10 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
           </button>
 
           <div className="item-list min-h-0 flex-1 overflow-y-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {favoriteProducts.length > 0 ? (
-              favoriteProducts.map((item) => {
+            {favorites.length > 0 ? (
+              favorites.map((item) => {
                 const Icon = item.icon;
-                const mutating = favoriteMutatingIds.has(item.id);
+                const mutating = mutatingIds.has(item.id);
 
                 return (
                   <div
@@ -208,7 +114,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
                         "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20",
                         "disabled:cursor-default disabled:opacity-45",
                       ].join(" ")}
-                      onClick={() => void toggleFavorite(item.id)}
+                      onClick={() => toggleFavorite(item.id)}
                     >
                       <X className="h-3.5 w-3.5" strokeWidth={1.8} />
                     </button>
@@ -217,7 +123,11 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
               })
             ) : (
               <div className="px-2 py-3 text-[11px] leading-5 text-white/35">
-                {favoritesLoading ? "正在加载常用产品…" : "暂无常用产品，可在全部产品中标星添加"}
+                {loading ? "正在加载常用产品…" : error ? (
+                  <button type="button" className="cursor-pointer text-white/80 hover:text-white" onClick={retry}>
+                    常用产品加载失败，重试
+                  </button>
+                ) : "暂无常用产品，可在全部产品中标星添加"}
               </div>
             )}
           </div>
@@ -226,9 +136,9 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
         <AllProductMenu
           open={secondLevelOpen}
           favoriteProductIds={favoriteProductIds}
-          favoriteMutatingIds={favoriteMutatingIds}
+          favoriteMutatingIds={mutatingIds}
           onNavigate={onClose}
-          onToggleFavorite={(productId) => void toggleFavorite(productId)}
+          onToggleFavorite={toggleFavorite}
         />
       </div>
     </>
