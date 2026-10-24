@@ -93,6 +93,39 @@ class MySqlHybridIT {
     }
 
     @Test
+    void identicalPayloadRowsRemainDistinctThroughKeyMovesAndStreamingRecovery() throws Exception {
+        try (Fixture fixture = new Fixture(1, 1)) {
+            fixture.execute("INSERT INTO " + fixture.source(0)
+                    + " VALUES(1,'same'),(2,'same'),(3,'other')");
+            Saved saved;
+            try (Harness first = new Harness(fixture, null)) {
+                first.start();
+                first.until(first::streaming, true);
+                assertEquals(Map.of(1L, "same", 2L, "same", 3L, "other"), fixture.values(0));
+
+                fixture.execute(
+                        "DELETE FROM " + fixture.source(0) + " WHERE id=1",
+                        "UPDATE " + fixture.source(0) + " SET id=30 WHERE id=3",
+                        "INSERT INTO " + fixture.source(0) + " VALUES(4,'same')");
+                first.until(() -> fixture.values(0).equals(
+                        Map.of(2L, "same", 4L, "same", 30L, "other")), true);
+                assertTrue(first.observed.stream().anyMatch(row -> row.rowKind() == RowKind.DELETE));
+                saved = first.checkpoint();
+            }
+            fixture.execute(
+                    "DELETE FROM " + fixture.source(0) + " WHERE id=4",
+                    "UPDATE " + fixture.source(0) + " SET name='retained' WHERE id=2");
+            try (Harness restored = new Harness(fixture, saved)) {
+                restored.start();
+                restored.until(() -> fixture.values(0).equals(
+                        Map.of(2L, "retained", 30L, "other")), true);
+                assertEquals(2, fixture.values(0).size());
+                assertFalse(fixture.values(0).containsKey(4L));
+            }
+        }
+    }
+
+    @Test
     void partialExternalWritesRecoverFrozenChunkAndApplyLaterSourceDeletion() throws Exception {
         try (Fixture fixture = new Fixture(1, 1000)) {
             StringBuilder values = new StringBuilder();

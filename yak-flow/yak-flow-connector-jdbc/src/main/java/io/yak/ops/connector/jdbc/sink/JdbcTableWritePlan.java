@@ -78,8 +78,37 @@ public record JdbcTableWritePlan(
                         "JDBC mapping cannot safely convert source to target field: " + target.name());
             }
         }
-        if (writeMode == JdbcWriteMode.UPSERT && schema.primaryKeys().isEmpty()) {
-            throw new IllegalArgumentException("JDBC UPSERT requires primary keys");
+        if (writeMode == JdbcWriteMode.UPSERT) {
+            // A snapshot Chunk Key chooses a read range; it is not a physical row identity.
+            // Every destination key must map bijectively to a declared source primary key,
+            // including when source and destination field names differ.
+            if (schema.primaryKeys().isEmpty() || sourceSchema.primaryKeys().isEmpty()
+                    || schema.primaryKeys().size() != sourceSchema.primaryKeys().size()) {
+                throw new IllegalArgumentException(
+                        "JDBC UPSERT requires physical primary keys on both source and target");
+            }
+            Set<String> sourceKeys = new HashSet<>();
+            for (String targetKey : schema.primaryKeys()) {
+                int targetPosition = -1;
+                for (int index = 0; index < schema.columnCount(); index++) {
+                    if (schema.column(index).name().equals(targetKey)) {
+                        targetPosition = index;
+                        break;
+                    }
+                }
+                if (targetPosition < 0) {
+                    throw new IllegalArgumentException("Missing destination primary-key column: " + targetKey);
+                }
+                String sourceKey = sourceSchema.column(sourcePositions.get(targetPosition)).name();
+                if (!sourceSchema.primaryKeys().contains(sourceKey) || !sourceKeys.add(sourceKey)) {
+                    throw new IllegalArgumentException(
+                            "JDBC UPSERT destination primary key must map to a source physical primary key: "
+                                    + targetKey);
+                }
+            }
+            if (!sourceKeys.equals(new HashSet<>(sourceSchema.primaryKeys()))) {
+                throw new IllegalArgumentException("JDBC UPSERT does not preserve the full source row identity");
+            }
         }
     }
 

@@ -163,6 +163,76 @@ class JdbcTableWritePlanTest {
                 () -> plan.project(GenericRowData.of(new java.math.BigDecimal("99999.99")), RowKind.INSERT));
     }
 
+    @Test
+    void upsertRequiresPhysicalSourceIdentityNotAnArbitraryChunkColumn() {
+        var sourceColumns = List.of(
+                new Column("id", LogicalTypes.BIGINT.copy(false)),
+                new Column("bucket", LogicalTypes.BIGINT.copy(false)),
+                new Column("value", LogicalTypes.varchar(40)));
+        var source = new TableSchema(sourceColumns, List.of("id"));
+        var keyless = new TableSchema(sourceColumns, List.of());
+        var target = new TableSchema(sourceColumns, List.of("bucket"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source, Map.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, keyless, Map.of()));
+        // APPEND has no DELETE or UPDATE semantics, so it does not need a source row identity.
+        var append = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, keyless, Map.of());
+        assertEquals(JdbcWriteMode.APPEND, append.writeMode());
+    }
+
+    @Test
+    void upsertAcceptsRenamedPhysicalKeysButRejectsKeyMappingToNonKeySourceColumns() {
+        var source = new TableSchema(
+                List.of(
+                        new Column("source_tenant", LogicalTypes.BIGINT.copy(false)),
+                        new Column("source_id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(40))),
+                List.of("source_tenant", "source_id"));
+        var target = new TableSchema(
+                List.of(
+                        new Column("name", LogicalTypes.varchar(40)),
+                        new Column("tenant", LogicalTypes.BIGINT.copy(false)),
+                        new Column("id", LogicalTypes.BIGINT.copy(false))),
+                List.of("tenant", "id"));
+        var valid = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source,
+                Map.of("tenant", "source_tenant", "id", "source_id"));
+        assertEquals(List.of(2, 0, 1), valid.sourcePositions());
+        assertEquals(List.of(15L, 21L), List.of(
+                valid.project(GenericRowData.of(15L, 21L, "same"), RowKind.DELETE).getLong(0),
+                valid.project(GenericRowData.of(15L, 21L, "same"), RowKind.DELETE).getLong(1)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source,
+                        Map.of("tenant", "source_tenant", "id", "name")));
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source,
+                        Map.of("tenant", "source_id", "id", "source_id")));
+    }
+
+    @Test
+    void nativeUpsertAndDeleteUseTheTargetsPrimaryKeyAcrossDialects() {
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(40))),
+                List.of("id"));
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, schema, JdbcWriteMode.UPSERT);
+        var dialects = List.of(
+                new io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect(),
+                new io.yak.ops.connector.jdbc.database.internal.dialect.PostgresJdbcDialect(),
+                new io.yak.ops.connector.jdbc.database.internal.dialect.OracleJdbcDialect());
+        for (var dialect : dialects) {
+            String insert = plan.sql(dialect);
+            String delete = dialect.deleteSql(TARGET, schema);
+            assertEquals(true, insert.contains("id") || insert.contains("ID"));
+            assertEquals(true, delete.contains("WHERE"));
+            assertEquals(true, delete.contains("id") || delete.contains("ID"));
+            assertEquals(1, plan.project(GenericRowData.of(9L, "same"), RowKind.DELETE).getArity());
+        }
+    }
+
     private static TableSchema sourceSchema() {
         return new TableSchema(
                 List.of(new Column("SOURCE_NAME", LogicalTypes.STRING),
