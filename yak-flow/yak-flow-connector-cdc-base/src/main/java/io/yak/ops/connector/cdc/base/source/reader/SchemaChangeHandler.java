@@ -7,12 +7,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
- * Handles a MySQL source schema change while the Reader mailbox is waiting for coordinator
- * acknowledgment.
+ * Coordinates source schema changes on the Reader mailbox without blocking on the acknowledgment.
  *
- * <p>Submitting a DDL never blocks the mailbox. The Source advances its Binlog offset only
- * when the completed acknowledgment is consumed by the mailbox. Checkpoints remain blocked
- * until that offset update succeeds, including when the coordinator future has completed.
+ * <p>The Source advances its own offset only after the coordinator acknowledgment is consumed
+ * by the mailbox. A checkpoint stays blocked until the offset update succeeds, even when the
+ * acknowledgment future has already completed.
  */
 public final class SchemaChangeHandler {
 
