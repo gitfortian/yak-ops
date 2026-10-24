@@ -2,7 +2,11 @@ package io.yak.ops.connector.jdbc.database.catalog;
 
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
+import io.yak.ops.core.types.TimeType;
+import io.yak.ops.core.types.TimestampType;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -73,7 +77,63 @@ public final class JdbcTableMetadata {
             projected = dialect.createRowConverter(rows.getMetaData()).schema();
         }
         TreeMap<Integer, String> keys = readPrimaryKeys(connection.getMetaData(), catalog, schema, tableId.table());
-        return new TableSchema(projected.columns(), List.copyOf(keys.values()));
+        return mySqlTemporalPrecision(connection, catalog, tableId.table(),
+                new TableSchema(projected.columns(), List.copyOf(keys.values())));
+    }
+
+    /**
+     * MySQL's native DATETIME_PRECISION is authoritative for TIME, DATETIME and TIMESTAMP.
+     * Some JDBC ResultSetMetaData implementations report a zero temporal scale, which
+     * would otherwise turn DATETIME(3) into target TIMESTAMP(0) during schema creation.
+     */
+    private static TableSchema mySqlTemporalPrecision(
+            Connection connection, String catalog, String table, TableSchema projected) throws SQLException {
+        if (!"MySQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())) {
+            return projected;
+        }
+        Map<String, Integer> fractions = new HashMap<>();
+        String sql = "SELECT COLUMN_NAME, DATA_TYPE, DATETIME_PRECISION FROM information_schema.COLUMNS "
+                + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, catalog == null ? connection.getCatalog() : catalog);
+            statement.setString(2, table);
+            try (ResultSet columns = statement.executeQuery()) {
+                while (columns.next()) {
+                    String name = columns.getString("COLUMN_NAME");
+                    String nativeType = columns.getString("DATA_TYPE");
+                    if (!"time".equalsIgnoreCase(nativeType)
+                            && !"datetime".equalsIgnoreCase(nativeType)
+                            && !"timestamp".equalsIgnoreCase(nativeType)) {
+                        continue;
+                    }
+                    int precision = columns.getInt("DATETIME_PRECISION");
+                    if (columns.wasNull() || precision < 0 || precision > 6) {
+                        throw new SQLException("Invalid MySQL fractional seconds precision for " + name);
+                    }
+                    fractions.put(name, precision);
+                }
+            }
+        }
+        List<Column> resolved = new ArrayList<>(projected.columnCount());
+        for (Column column : projected.columns()) {
+            LogicalType type = column.dataType();
+            Integer precision = fractions.get(column.name());
+            if (type instanceof TimeType timeType) {
+                if (precision == null) {
+                    throw new SQLException("Missing MySQL TIME precision for " + column.name());
+                }
+                type = new TimeType(timeType.isNullable(), precision);
+            } else if (type instanceof TimestampType timestampType) {
+                if (precision == null) {
+                    throw new SQLException("Missing MySQL DATETIME precision for " + column.name());
+                }
+                type = new TimestampType(timestampType.isNullable(), precision);
+            } else if (precision != null) {
+                throw new SQLException("MySQL native temporal type differs from JDBC type for " + column.name());
+            }
+            resolved.add(new Column(column.name(), type));
+        }
+        return new TableSchema(resolved, projected.primaryKeys());
     }
 
     /**
