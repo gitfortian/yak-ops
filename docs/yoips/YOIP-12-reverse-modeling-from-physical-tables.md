@@ -1,12 +1,12 @@
 # YOIP-12: Dimension Modeling — Reverse Modeling from Physical Tables
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/23
 
-Decision: Pending
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/23
 
-Implementation: N/A until accepted
+Implementation: In progress — reverse-modeling batch
 
 Release: N/A until released
 
