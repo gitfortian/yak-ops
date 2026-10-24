@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigner;
 
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
@@ -31,19 +32,31 @@ public final class MySqlChunkSplitter {
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
     private final Map<TableId, TableSchema> schemas;
+    private final Map<TableId, String> chunkKeyColumns;
     private final int chunkSize;
     private volatile PreparedStatement planningStatement;
     private volatile boolean cancelled;
 
     public MySqlChunkSplitter(MySqlCdcSourceConfig config, int chunkSize) {
-        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas(), chunkSize);
+        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas(),
+                config.chunkKeyColumns(), chunkSize);
     }
 
     public MySqlChunkSplitter(
             JdbcConnectionProvider connections, JdbcDialect dialect, Map<TableId, TableSchema> schemas, int chunkSize) {
+        this(connections, dialect, schemas, Map.of(), chunkSize);
+    }
+
+    private MySqlChunkSplitter(
+            JdbcConnectionProvider connections,
+            JdbcDialect dialect,
+            Map<TableId, TableSchema> schemas,
+            Map<TableId, String> chunkKeyColumns,
+            int chunkSize) {
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
         this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
+        this.chunkKeyColumns = Map.copyOf(Objects.requireNonNull(chunkKeyColumns, "chunkKeyColumns"));
         if (chunkSize < 1 || chunkSize > 100_000) {
             throw new IllegalArgumentException("MySQL snapshot chunk size must be between 1 and 100000");
         }
@@ -64,7 +77,7 @@ public final class MySqlChunkSplitter {
      */
     public List<MySqlSnapshotSplit> plan(TableId table, String fingerprint, int tableIndex) throws SQLException {
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
-        String key = splitKey(schema);
+        String key = splitKey(schema, chunkKeyColumns.get(table));
         if (tableIndex < 0) {
             throw new IllegalArgumentException("Table index must be nonnegative");
         }
@@ -111,7 +124,7 @@ public final class MySqlChunkSplitter {
         if (cancelled || tableIndex < 0 || chunkIndex < 0 || chunkIndex >= MAX_CHUNKS_PER_TABLE) {
             throw new SQLException("MySQL chunk discovery is cancelled or exceeds its range limit");
         }
-        String key = splitKey(Objects.requireNonNull(schemas.get(table), "table schema"));
+        String key = splitKey(Objects.requireNonNull(schemas.get(table), "table schema"), chunkKeyColumns.get(table));
         String quoted = dialect.quoteIdentifier(key);
         String sql = "SELECT " + quoted + " FROM " + dialect.qualifiedTable(table)
                 + (lower == null ? "" : " WHERE " + quoted + " >= ?")
@@ -155,18 +168,22 @@ public final class MySqlChunkSplitter {
     }
 
     public static String splitKey(TableSchema schema) {
-        Objects.requireNonNull(schema, "schema");
-        if (schema.primaryKeys().size() != 1) {
-            throw new IllegalArgumentException("Initial MySQL hybrid snapshot requires one primary key");
+        return splitKey(schema, null);
+    }
+
+    /**
+     * The selection contract is independent of primary-key discovery, but the current Long-based
+     * snapshot, backfill and checkpoint still require the selected column to be the sole primary key.
+     */
+    public static String splitKey(TableSchema schema, String configuredChunkKey) {
+        var column = ChunkUtils.getChunkKeyColumn(schema, configuredChunkKey);
+        if (schema.primaryKeys().size() != 1 || !schema.primaryKeys().getFirst().equals(column.name())) {
+            throw new IllegalArgumentException(
+                    "MySQL hybrid snapshot currently requires the chunk column to be its sole physical primary key");
         }
-        String key = schema.primaryKeys().getFirst();
-        var column = schema.columns().stream()
-                .filter(candidate -> candidate.name().equals(key))
-                .findFirst()
-                .orElseThrow();
         if (column.dataType().getTypeRoot() != LogicalTypeRoot.BIGINT || column.nullable()) {
             throw new IllegalArgumentException("Initial MySQL hybrid snapshot requires a non-null BIGINT key");
         }
-        return key;
+        return column.name();
     }
 }

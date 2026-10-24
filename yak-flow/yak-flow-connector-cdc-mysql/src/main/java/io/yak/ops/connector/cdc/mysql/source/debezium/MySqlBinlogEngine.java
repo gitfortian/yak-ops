@@ -68,6 +68,11 @@ public final class MySqlBinlogEngine implements AutoCloseable {
 
     /** Starts the engine, optionally seeding its offset and Schema History from a checkpoint. */
     public void start(MySqlBinlogSplit split) throws IOException {
+        try (var connection = config.openSnapshotConnection()) {
+            MySqlBinlogConfigurationValidator.validate(connection);
+        } catch (java.sql.SQLException | IllegalArgumentException error) {
+            throw new IOException("MySQL CDC Binlog settings validation failed: " + error.getMessage(), error);
+        }
         if (started || stopped) {
             throw new IllegalStateException("MySQL Binlog engine cannot start twice");
         }
