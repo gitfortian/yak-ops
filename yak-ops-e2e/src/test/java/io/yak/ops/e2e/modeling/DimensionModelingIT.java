@@ -198,10 +198,11 @@ class DimensionModelingIT extends BackendTestBase {
         // The process tab reads the same rows through its own endpoint instead of a placeholder.
         var attached = api.call("GET", PLANNING + "/processes/" + processId + "/logical-models");
         assertEquals("AVAILABLE", attached.path("availability").asText());
-        assertEquals(1, attached.path("pagination").path("total").asInt());
-        assertEquals(modelId, attached.path("bizData").get(0).path("id").asText());
-        assertEquals("订单明细", attached.path("bizData").get(0).path("name").asText());
-        assertEquals(name, attached.path("bizData").get(0).path("code").asText());
+        var attachedPage = attached.path("page");
+        assertEquals(1, attachedPage.path("pagination").path("total").asInt());
+        assertEquals(modelId, attachedPage.path("bizData").get(0).path("id").asText());
+        assertEquals("订单明细", attachedPage.path("bizData").get(0).path("name").asText());
+        assertEquals(name, attachedPage.path("bizData").get(0).path("code").asText());
 
         assertEquals(
                 1, modelsPage(api, "type=DWD&keyword=" + suffix).path("pagination").path("total").asInt());
