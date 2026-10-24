@@ -11,9 +11,17 @@ export type MemberRow = WorkspaceMemberRecord & {
   realName?: string | null;
 };
 
-export function canChangeMember(actorRole: WorkspaceRole, member: WorkspaceMemberRecord, ownerCount: number) {
+export function canChangeMember(
+  actorRole: WorkspaceRole,
+  member: WorkspaceMemberRecord,
+  ownerCount: number,
+) {
   const canManage = actorRole === "OWNER" || actorRole === "ADMIN";
-  return canManage && (actorRole === "OWNER" || member.role !== "OWNER") && !(member.role === "OWNER" && ownerCount <= 1);
+  return (
+    canManage &&
+    (actorRole === "OWNER" || member.role !== "OWNER") &&
+    !(member.role === "OWNER" && ownerCount <= 1)
+  );
 }
 
 export function allowedMemberRoles(actorRole: WorkspaceRole): WorkspaceRole[] {

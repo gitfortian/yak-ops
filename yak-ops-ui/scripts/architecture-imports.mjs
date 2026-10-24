@@ -47,8 +47,11 @@ export function checkArchitectureImports(relativePath, content, root) {
 
   const management = resolve(app, "management");
   const managementDomains = ["users", "workspaces"];
-  const managementPages = new Set(managementDomains.map(name => resolve(management, name, "page")));
-  const managementDomain = path => managementDomains.find(name => inside(path, resolve(management, name)));
+  const managementPages = new Set(
+    managementDomains.map((name) => resolve(management, name, "page")),
+  );
+  const managementDomain = (path) =>
+    managementDomains.find((name) => inside(path, resolve(management, name)));
   const violations = [];
 
   for (const specifier of moduleSpecifiers(relativePath, content)) {
@@ -75,12 +78,18 @@ export function checkArchitectureImports(relativePath, content, root) {
     }
     const targetManagementDomain = managementDomain(target);
     const sourceManagementDomain = managementDomain(source);
-    if (targetManagementDomain && !inside(source, management) &&
-        !(inside(source, resolve(app, "router")) && managementPages.has(target))) {
+    if (
+      targetManagementDomain &&
+      !inside(source, management) &&
+      !(inside(source, resolve(app, "router")) && managementPages.has(target))
+    ) {
       violations.push(relativePath + " imports a private Management feature: " + specifier);
     }
-    if (sourceManagementDomain && targetManagementDomain &&
-        sourceManagementDomain !== targetManagementDomain) {
+    if (
+      sourceManagementDomain &&
+      targetManagementDomain &&
+      sourceManagementDomain !== targetManagementDomain
+    ) {
       violations.push(relativePath + " crosses Management feature boundaries: " + specifier);
     }
     if (inside(source, service) && inside(target, app)) {

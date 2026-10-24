@@ -118,10 +118,34 @@ test("Data Sync root composition and shared domain dependencies remain legal", (
 
 test("router imports Management entrypoints but private implementations stay owned", () => {
   const router = "apps/web/app/router/AppRouter.tsx";
-  assert.deepEqual(check(router, 'import { UserManagementPage } from "@/app/management/users/page";'), []);
-  assert.deepEqual(check(router, 'import { WorkspaceManagementPage } from "@/app/management/workspaces/page";'), []);
-  assert.match(check(router, 'import { UserForm } from "@/app/management/users/user-form";').join("\\n"), /imports a private Management feature/);
-  assert.match(check("apps/web/app/data-sync/list/page.tsx", 'const member = import("@/app/management/workspaces/members/member-dialog");').join("\\n"), /imports a private Management feature/);
-  assert.match(check("apps/web/app/management/users/page.tsx", 'export * from "../workspaces/members/permissions";').join("\\n"), /crosses Management feature boundaries/);
-  assert.deepEqual(check("apps/web/app/management/users/page.tsx", 'import { userQueryKeys } from "./use-users";'), []);
+  assert.deepEqual(
+    check(router, 'import { UserManagementPage } from "@/app/management/users/page";'),
+    [],
+  );
+  assert.deepEqual(
+    check(router, 'import { WorkspaceManagementPage } from "@/app/management/workspaces/page";'),
+    [],
+  );
+  assert.match(
+    check(router, 'import { UserForm } from "@/app/management/users/user-form";').join("\\n"),
+    /imports a private Management feature/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/data-sync/list/page.tsx",
+      'const member = import("@/app/management/workspaces/members/member-dialog");',
+    ).join("\\n"),
+    /imports a private Management feature/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/management/users/page.tsx",
+      'export * from "../workspaces/members/permissions";',
+    ).join("\\n"),
+    /crosses Management feature boundaries/,
+  );
+  assert.deepEqual(
+    check("apps/web/app/management/users/page.tsx", 'import { userQueryKeys } from "./use-users";'),
+    [],
+  );
 });

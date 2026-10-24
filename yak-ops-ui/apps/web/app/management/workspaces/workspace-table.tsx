@@ -8,14 +8,16 @@ interface Props {
 }
 
 export function WorkspaceTable({ records, loading, onMembers }: Props) {
-    const columns: TableColumns<WorkspaceRecord> = [
+  const columns: TableColumns<WorkspaceRecord> = [
     {
       key: "name",
       title: "工作空间名称",
       dataIndex: "name",
       minWidth: 220,
       render: (_value, record) => (
-        <span className="font-medium text-[var(--yak-components-panel-text)]">{record.name || "-"}</span>
+        <span className="font-medium text-[var(--yak-components-panel-text)]">
+          {record.name || "-"}
+        </span>
       ),
     },
     {

@@ -7,7 +7,14 @@ import { listUsers, type UserPageParams } from "@/service/user";
 export const userQueryKeys = {
   all: ["management", "users"] as const,
   page: (userId: string, params: UserPageParams) =>
-    [...userQueryKeys.all, userId, params.pageNo, params.pageSize, params.userName ?? "", params.realName ?? ""] as const,
+    [
+      ...userQueryKeys.all,
+      userId,
+      params.pageNo,
+      params.pageSize,
+      params.userName ?? "",
+      params.realName ?? "",
+    ] as const,
 };
 
 export function useUsers(params: UserPageParams) {
@@ -18,7 +25,10 @@ export function useUsers(params: UserPageParams) {
   });
 
   useEffect(() => {
-    const next = { userName: params.userName?.trim() ?? "", realName: params.realName?.trim() ?? "" };
+    const next = {
+      userName: params.userName?.trim() ?? "",
+      realName: params.realName?.trim() ?? "",
+    };
     const delay = next.userName || next.realName ? 300 : 0;
     const timer = window.setTimeout(() => setSearch(next), delay);
     return () => window.clearTimeout(timer);

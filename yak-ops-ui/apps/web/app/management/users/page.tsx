@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Button, Dialog, DialogContent, DialogDescription, DialogTitle, PageHeader, toast } from "@yak-ops/yak-ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  PageHeader,
+  toast,
+} from "@yak-ops/yak-ui";
 
 import { useAuth } from "@/hooks/use-auth";
 import { deleteUser, type UserRecord } from "@/service/user";
@@ -36,14 +44,17 @@ export function UserManagementPage() {
   const filtered = Boolean(userName.trim() || realName.trim());
 
   const updateParams = (changes: Record<string, string | undefined>) => {
-    setSearchParams((previous) => {
-      const next = new URLSearchParams(previous);
-      for (const [key, value] of Object.entries(changes)) {
-        if (value) next.set(key, value);
-        else next.delete(key);
-      }
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        for (const [key, value] of Object.entries(changes)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   useEffect(() => {
@@ -76,48 +87,86 @@ export function UserManagementPage() {
         <PageHeader title="用户管理" bordered className="bg-white px-6 max-md:px-4" />
         <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
           <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
-            <UserFilters userName={userName} realName={realName} onCreate={openCreate}
+            <UserFilters
+              userName={userName}
+              realName={realName}
+              onCreate={openCreate}
               onUserNameChange={(value) => updateParams({ userName: value, page: undefined })}
               onRealNameChange={(value) => updateParams({ realName: value, page: undefined })}
             />
             <section className="mt-4 min-h-0 flex-1">
               {page.isError ? (
-                <div role="alert" className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]">
+                <div
+                  role="alert"
+                  className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]"
+                >
                   用户加载失败
-                  <Button size="small" onClick={() => void page.refetch()}>重试</Button>
+                  <Button size="small" onClick={() => void page.refetch()}>
+                    重试
+                  </Button>
                 </div>
               ) : null}
-              <UserTable records={records} loading={loading} pageNo={pageNo} pageSize={pageSize}
-                total={total} filtered={filtered} currentUserId={currentUser?.id}
-                deleting={remove.isPending} onEdit={openEdit} onDelete={setPendingDelete}
-                onPageChange={(nextPage, nextSize) => updateParams({
-                  page: String(nextPage), size: String(nextSize)
-                })}
+              <UserTable
+                records={records}
+                loading={loading}
+                pageNo={pageNo}
+                pageSize={pageSize}
+                total={total}
+                filtered={filtered}
+                currentUserId={currentUser?.id}
+                deleting={remove.isPending}
+                onEdit={openEdit}
+                onDelete={setPendingDelete}
+                onPageChange={(nextPage, nextSize) =>
+                  updateParams({
+                    page: String(nextPage),
+                    size: String(nextSize),
+                  })
+                }
               />
             </section>
           </div>
         </div>
       </div>
-      <UserForm open={formOpen} record={editingRecord}
+      <UserForm
+        open={formOpen}
+        record={editingRecord}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           toast.success(editingRecord ? "用户保存成功" : "用户创建成功");
           void queryClient.invalidateQueries({ queryKey: userQueryKeys.all });
         }}
       />
-      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => {
-        if (!open && !remove.isPending) setPendingDelete(undefined);
-      }}>
+      <Dialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open && !remove.isPending) setPendingDelete(undefined);
+        }}
+      >
         <DialogContent className="w-[420px]">
           <DialogTitle className="text-base font-semibold">删除用户</DialogTitle>
           <DialogDescription className="mt-2 text-sm leading-6 text-[var(--yak-components-muted-text)]">
             确定删除用户“{pendingDelete?.userName || "-"}”吗？删除后无法通过该账号登录。
           </DialogDescription>
           <div className="mt-6 flex justify-end gap-2">
-            <Button size="small" disabled={remove.isPending} onClick={() => setPendingDelete(undefined)}>取消</Button>
-            <Button size="small" variant="danger" loading={remove.isPending} onClick={() => {
-              if (pendingDelete && pendingDelete.id !== currentUser?.id) remove.mutate(pendingDelete.id);
-            }}>删除</Button>
+            <Button
+              size="small"
+              disabled={remove.isPending}
+              onClick={() => setPendingDelete(undefined)}
+            >
+              取消
+            </Button>
+            <Button
+              size="small"
+              variant="danger"
+              loading={remove.isPending}
+              onClick={() => {
+                if (pendingDelete && pendingDelete.id !== currentUser?.id)
+                  remove.mutate(pendingDelete.id);
+              }}
+            >
+              删除
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

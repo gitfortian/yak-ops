@@ -1,4 +1,15 @@
-import { Button, Select, SelectContent, SelectItem, SelectItemIndicator, SelectItemText, SelectTrigger, SelectValue, Table, type TableColumns } from "@yak-ops/yak-ui";
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  type TableColumns,
+} from "@yak-ops/yak-ui";
 import type { WorkspaceRole } from "@/service/workspace";
 import { ROLE_LABELS, allowedMemberRoles, canChangeMember, type MemberRow } from "./permissions";
 
@@ -11,9 +22,16 @@ interface Props {
   onRemove: (member: MemberRow) => void;
 }
 
-export function MemberTable({ members, loading, actorRole, busyUserId, onRoleChange, onRemove }: Props) {
-  const ownerCount = members.filter(member => member.role === "OWNER").length;
-    const columns: TableColumns<MemberRow> = [
+export function MemberTable({
+  members,
+  loading,
+  actorRole,
+  busyUserId,
+  onRoleChange,
+  onRemove,
+}: Props) {
+  const ownerCount = members.filter((member) => member.role === "OWNER").length;
+  const columns: TableColumns<MemberRow> = [
     {
       key: "user",
       title: "成员",

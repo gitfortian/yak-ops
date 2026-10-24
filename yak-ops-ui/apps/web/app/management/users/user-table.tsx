@@ -17,8 +17,20 @@ interface Props {
   onPageChange: (pageNo: number, pageSize: number) => void;
 }
 
-export function UserTable({ records, loading, pageNo, pageSize, total, filtered, currentUserId, deleting, onEdit, onDelete, onPageChange }: Props) {
-    const columns: TableColumns<UserRecord> = [
+export function UserTable({
+  records,
+  loading,
+  pageNo,
+  pageSize,
+  total,
+  filtered,
+  currentUserId,
+  deleting,
+  onEdit,
+  onDelete,
+  onPageChange,
+}: Props) {
+  const columns: TableColumns<UserRecord> = [
     {
       key: "sequence",
       title: "序号",
@@ -33,7 +45,9 @@ export function UserTable({ records, loading, pageNo, pageSize, total, filtered,
       dataIndex: "userName",
       minWidth: 160,
       render: (_value, record) => (
-        <span className="font-medium text-[var(--yak-components-panel-text)]">{record.userName || "-"}</span>
+        <span className="font-medium text-[var(--yak-components-panel-text)]">
+          {record.userName || "-"}
+        </span>
       ),
     },
     {
@@ -83,7 +97,10 @@ export function UserTable({ records, loading, pageNo, pageSize, total, filtered,
             >
               编辑
             </Button>
-            <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[var(--yak-components-panel-border)]" />
+            <span
+              aria-hidden="true"
+              className="h-3 w-px shrink-0 bg-[var(--yak-components-panel-border)]"
+            />
             <Button
               variant="ghost"
               size="small"
@@ -100,32 +117,32 @@ export function UserTable({ records, loading, pageNo, pageSize, total, filtered,
     },
   ];
   return (
-                  <Table<UserRecord>
-                className="min-h-full"
-                columns={columns}
-                dataSource={records}
-                rowKey="id"
-                loading={loading}
-                bordered
-                size="medium"
-                scroll={{ x: 1120 }}
-                emptyText={filtered ? "未找到匹配用户" : "暂无用户"}
-                pagination={
-                  total > 0
-                    ? {
-                        current: pageNo,
-                        pageSize,
-                        total,
-                        pageSizeOptions: PAGE_SIZE_OPTIONS,
-                        pageSizeLabel: "每页显示：",
-                        showSizeChanger: true,
-                        disabled: loading || deleting,
-                        onChange: (nextPage, nextPageSize) => {
-                          onPageChange(nextPage, nextPageSize);
-                        },
-                      }
-                    : false
-                }
-              />
+    <Table<UserRecord>
+      className="min-h-full"
+      columns={columns}
+      dataSource={records}
+      rowKey="id"
+      loading={loading}
+      bordered
+      size="medium"
+      scroll={{ x: 1120 }}
+      emptyText={filtered ? "未找到匹配用户" : "暂无用户"}
+      pagination={
+        total > 0
+          ? {
+              current: pageNo,
+              pageSize,
+              total,
+              pageSizeOptions: PAGE_SIZE_OPTIONS,
+              pageSizeLabel: "每页显示：",
+              showSizeChanger: true,
+              disabled: loading || deleting,
+              onChange: (nextPage, nextPageSize) => {
+                onPageChange(nextPage, nextPageSize);
+              },
+            }
+          : false
+      }
+    />
   );
 }

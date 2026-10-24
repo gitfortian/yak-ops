@@ -16,7 +16,7 @@ export function WorkspaceManagementPage() {
   const records = query.data ?? [];
   const [formOpen, setFormOpen] = useState(false);
   const [memberWorkspaceId, setMemberWorkspaceId] = useState<string>();
-  const memberWorkspace = records.find(workspace => workspace.id === memberWorkspaceId);
+  const memberWorkspace = records.find((workspace) => workspace.id === memberWorkspaceId);
   const refresh = () => queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.all });
 
   return (
@@ -27,29 +27,46 @@ export function WorkspaceManagementPage() {
           <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
             <section className="flex shrink-0 items-center">
               <Button size="small" variant="primary" onClick={() => setFormOpen(true)}>
-                <Plus size={14} />新建工作空间
+                <Plus size={14} />
+                新建工作空间
               </Button>
             </section>
             <section className="mt-4 min-h-0 flex-1">
               {query.isError ? (
-                <div role="alert" className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]">
-                  工作空间加载失败 <Button size="small" onClick={() => void query.refetch()}>重试</Button>
+                <div
+                  role="alert"
+                  className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]"
+                >
+                  工作空间加载失败{" "}
+                  <Button size="small" onClick={() => void query.refetch()}>
+                    重试
+                  </Button>
                 </div>
               ) : null}
-              <WorkspaceTable records={records} loading={query.isPending || query.isFetching} onMembers={workspace => setMemberWorkspaceId(workspace.id)} />
+              <WorkspaceTable
+                records={records}
+                loading={query.isPending || query.isFetching}
+                onMembers={(workspace) => setMemberWorkspaceId(workspace.id)}
+              />
             </section>
           </div>
         </div>
       </div>
-      <WorkspaceForm open={formOpen} onClose={() => setFormOpen(false)}
+      <WorkspaceForm
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
         onSaved={() => {
           toast.success("工作空间创建成功");
           void Promise.all([refresh(), refreshWorkspaces()]);
         }}
       />
       {memberWorkspace ? (
-        <MemberDialog key={memberWorkspace.id} workspace={memberWorkspace}
-          onClose={() => setMemberWorkspaceId(undefined)} onRefresh={refresh} />
+        <MemberDialog
+          key={memberWorkspace.id}
+          workspace={memberWorkspace}
+          onClose={() => setMemberWorkspaceId(undefined)}
+          onRefresh={refresh}
+        />
       ) : null}
     </>
   );
