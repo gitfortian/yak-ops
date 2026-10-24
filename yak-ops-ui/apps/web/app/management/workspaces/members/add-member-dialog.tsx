@@ -15,93 +15,63 @@ import {
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { useEffect, useMemo, useState } from "react";
-
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { searchUsers, type UserBriefRecord } from "@/service/user";
 import { addWorkspaceMember, type WorkspaceRole } from "@/service/workspace";
+import { ROLE_LABELS, allowedMemberRoles } from "./permissions";
 
-type WorkspaceMemberFormProps = {
-  open: boolean;
-  workspaceId?: string;
+interface Props {
+  workspaceId: string;
   existingUserIds: string[];
   canAssignOwner: boolean;
   onClose: () => void;
   onAdded: () => void;
-};
-
-const ROLE_LABELS: Record<WorkspaceRole, string> = {
-  OWNER: "所有者",
-  ADMIN: "管理员",
-  MEMBER: "成员",
-};
-
+}
 const HORIZONTAL_FIELD_CLASS = "grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3";
 
-export default function WorkspaceMemberForm({
-  open,
+export function AddMemberDialog({
   workspaceId,
   existingUserIds,
   canAssignOwner,
   onClose,
   onAdded,
-}: WorkspaceMemberFormProps) {
+}: Props) {
+  const { currentUser } = useAuth();
   const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [role, setRole] = useState<WorkspaceRole>("MEMBER");
-  const [records, setRecords] = useState<UserBriefRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [addingUserId, setAddingUserId] = useState("");
-
-  const existingUserIdSet = useMemo(() => new Set(existingUserIds), [existingUserIds]);
+  const existingSet = useMemo(() => new Set(existingUserIds), [existingUserIds]);
 
   useEffect(() => {
-    if (!open) return;
-    setKeyword("");
-    setRole("MEMBER");
-    setRecords([]);
-    setAddingUserId("");
-  }, [open]);
+    const timer = window.setTimeout(
+      () => setDebouncedKeyword(keyword.trim()),
+      keyword.trim() ? 250 : 0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
 
-  useEffect(() => {
-    if (!open) return;
-    const normalized = keyword.trim();
-    if (!normalized) {
-      setRecords([]);
-      setLoading(false);
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-    const timer = window.setTimeout(() => {
-      searchUsers(normalized)
-        .then((users) => {
-          if (active) setRecords(users.filter((user) => !existingUserIdSet.has(user.id)));
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 250);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [existingUserIdSet, keyword, open]);
-
-  const handleAdd = async (user: UserBriefRecord) => {
-    if (!workspaceId || addingUserId) return;
-    setAddingUserId(user.id);
-    try {
-      await addWorkspaceMember(workspaceId, {
-        userId: user.id,
-        role,
-      });
+  const users = useQuery({
+    queryKey: [
+      "management",
+      "member-user-search",
+      currentUser?.id ?? "",
+      workspaceId,
+      debouncedKeyword,
+    ],
+    enabled: Boolean(currentUser?.id && workspaceId && debouncedKeyword),
+    queryFn: () => searchUsers(debouncedKeyword),
+  });
+  const records = (
+    debouncedKeyword && keyword.trim() === debouncedKeyword ? (users.data ?? []) : []
+  ).filter((user) => !existingSet.has(user.id));
+  const add = useMutation({
+    mutationFn: (userId: string) => addWorkspaceMember(workspaceId, { userId, role }),
+    onSuccess: () => {
       onAdded();
       onClose();
-    } finally {
-      setAddingUserId("");
-    }
-  };
-
+    },
+  });
   const columns: TableColumns<UserBriefRecord> = [
     {
       key: "user",
@@ -109,10 +79,12 @@ export default function WorkspaceMemberForm({
       minWidth: 260,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-[#252832]">
+          <div className="truncate text-[13px] font-medium text-[var(--yak-components-panel-text)]">
             {record.realName || record.userName}
           </div>
-          <div className="mt-0.5 truncate text-xs text-[#667085]">{record.userName}</div>
+          <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
+            {record.userName}
+          </div>
         </div>
       ),
     },
@@ -133,22 +105,25 @@ export default function WorkspaceMemberForm({
         <Button
           size="small"
           variant="primary"
-          loading={addingUserId === record.id}
-          disabled={Boolean(addingUserId) && addingUserId !== record.id}
-          onClick={() => void handleAdd(record)}
+          loading={add.isPending && add.variables === record.id}
+          disabled={add.isPending}
+          onClick={() => add.mutate(record.id)}
         >
           添加
         </Button>
       ),
     },
   ];
-
-  const roleOptions = canAssignOwner
-    ? (["OWNER", "ADMIN", "MEMBER"] as WorkspaceRole[])
-    : (["ADMIN", "MEMBER"] as WorkspaceRole[]);
-
   return (
-    <Modal open={open} width={760} bodyClassName="py-3" title="添加成员" onClose={onClose}>
+    <Modal
+      open
+      width={760}
+      bodyClassName="py-3"
+      title="添加成员"
+      onClose={() => {
+        if (!add.isPending) onClose();
+      }}
+    >
       <div className="space-y-3">
         <div className="space-y-2.5">
           <Field className={HORIZONTAL_FIELD_CLASS}>
@@ -164,7 +139,6 @@ export default function WorkspaceMemberForm({
               onChange={(event) => setKeyword(event.target.value)}
             />
           </Field>
-
           <Field className={HORIZONTAL_FIELD_CLASS}>
             <FieldLabel className="pt-1.5 text-xs leading-4">加入角色</FieldLabel>
             <Select<WorkspaceRole>
@@ -179,7 +153,7 @@ export default function WorkspaceMemberForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {roleOptions.map((option) => (
+                {allowedMemberRoles(canAssignOwner ? "OWNER" : "ADMIN").map((option) => (
                   <SelectItem key={option} value={option}>
                     <SelectItemText>{ROLE_LABELS[option]}</SelectItemText>
                     <SelectItemIndicator />
@@ -189,12 +163,24 @@ export default function WorkspaceMemberForm({
             </Select>
           </Field>
         </div>
-
+        {users.isError && keyword.trim() === debouncedKeyword ? (
+          <div
+            role="alert"
+            className="flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]"
+          >
+            用户搜索失败{" "}
+            <Button size="small" onClick={() => void users.refetch()}>
+              重试
+            </Button>
+          </div>
+        ) : null}
         <Table<UserBriefRecord>
           columns={columns}
           dataSource={records}
           rowKey="id"
-          loading={loading}
+          loading={
+            Boolean(keyword.trim()) && (users.isFetching || keyword.trim() !== debouncedKeyword)
+          }
           bordered
           size="medium"
           scroll={{ x: 620 }}

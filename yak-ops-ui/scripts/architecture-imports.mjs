@@ -45,6 +45,13 @@ export function checkArchitectureImports(relativePath, content, root) {
   const surfaceOf = (path) =>
     dataSyncSurfaces.find((name) => inside(path, resolve(dataSync, name)));
 
+  const management = resolve(app, "management");
+  const managementDomains = ["users", "workspaces"];
+  const managementPages = new Set(
+    managementDomains.map((name) => resolve(management, name, "page")),
+  );
+  const managementDomain = (path) =>
+    managementDomains.find((name) => inside(path, resolve(management, name)));
   const violations = [];
 
   for (const specifier of moduleSpecifiers(relativePath, content)) {
@@ -68,6 +75,22 @@ export function checkArchitectureImports(relativePath, content, root) {
     }
     if (sourceSurface && targetSurface && sourceSurface !== targetSurface) {
       violations.push(relativePath + " crosses Data Sync feature boundaries: " + specifier);
+    }
+    const targetManagementDomain = managementDomain(target);
+    const sourceManagementDomain = managementDomain(source);
+    if (
+      targetManagementDomain &&
+      !inside(source, management) &&
+      !(inside(source, resolve(app, "router")) && managementPages.has(target))
+    ) {
+      violations.push(relativePath + " imports a private Management feature: " + specifier);
+    }
+    if (
+      sourceManagementDomain &&
+      targetManagementDomain &&
+      sourceManagementDomain !== targetManagementDomain
+    ) {
+      violations.push(relativePath + " crosses Management feature boundaries: " + specifier);
     }
     if (inside(source, service) && inside(target, app)) {
       violations.push(relativePath + " imports App code: " + specifier);

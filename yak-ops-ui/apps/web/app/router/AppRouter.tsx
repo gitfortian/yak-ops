@@ -2,7 +2,8 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 
 import { DataSourcePage } from "@/app/datasource/list/page";
 import LoginPage from "@/app/login";
-import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
+import { UserManagementPage } from "@/app/management/users/page";
+import { WorkspaceManagementPage } from "@/app/management/workspaces/page";
 import { DataSyncPage } from "@/app/data-sync/list/page";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";
