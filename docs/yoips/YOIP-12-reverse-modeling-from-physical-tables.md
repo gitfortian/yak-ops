@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: N/A until proposed
+Discussion: https://github.com/gitfortian/yak-ops/pull/23
 
 Decision: Pending
 
