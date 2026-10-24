@@ -111,11 +111,13 @@ public interface PlanningService {
      */
     void delete(String workspaceId, String actor, NodeKind kind, String id, long revision);
     /**
-     * Authorizes a process before reporting the unavailable logical-model capability.
+     * Reads one page of models hanging below a business process.
      * @param workspaceId current Workspace
      * @param actor authenticated user
      * @param processId process identity
-     * @return explicit NOT_ENABLED state, not an empty successful model query
+     * @param pageNo one-based page number
+     * @param pageSize page size
+     * @return available capability with one page of model summaries
      */
-    AssociatedModelsVO associatedModels(String workspaceId, String actor, String processId);
+    AssociatedModelsVO associatedModels(String workspaceId, String actor, String processId, int pageNo, int pageSize);
 }

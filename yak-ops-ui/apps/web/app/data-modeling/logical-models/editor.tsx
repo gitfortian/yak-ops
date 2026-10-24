@@ -9,7 +9,7 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import {
   checkModelName,
@@ -109,6 +109,7 @@ function Section({
 export default function LogicalModelEditorPage() {
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const options = useModelOptions();
@@ -139,6 +140,32 @@ export default function LogicalModelEditorPage() {
       active.current = false;
     };
   }, []);
+
+  // A tree node opens the editor with its ownership already decided; the flag also locks it.
+  const prefill = useMemo(
+    () => ({
+      type:
+        searchParams.get("type") === "DIM"
+          ? ("DIM" as const)
+          : searchParams.get("type") === "DWD"
+            ? ("DWD" as const)
+            : null,
+      scope:
+        searchParams.get("scope") === "APPLICATION"
+          ? ("APPLICATION" as const)
+          : searchParams.get("scope") === "PUBLIC"
+            ? ("PUBLIC" as const)
+            : null,
+      categoryId: searchParams.get("categoryId") ?? "",
+      domainId: searchParams.get("domainId") ?? "",
+      datamartId: searchParams.get("datamartId") ?? "",
+      processId: searchParams.get("processId") ?? "",
+      dimensionId: searchParams.get("dimensionId") ?? "",
+      locked: searchParams.get("locked") === "1",
+    }),
+    [searchParams],
+  );
+  const ownershipLocked = !editing && prefill.locked;
 
   useEffect(() => {
     if (!editing || options.status !== "ready") return;
@@ -190,11 +217,17 @@ export default function LogicalModelEditorPage() {
     if (editing || options.status !== "ready") return;
     setForm((previous) => ({
       ...previous,
+      type: prefill.type ?? previous.type,
+      scope: prefill.scope ?? previous.scope,
       layerId: previous.layerId || options.layers.find((layer) => layer.enabled)?.id || "",
-      categoryId: previous.categoryId || options.tree.categories[0]?.id || "",
+      categoryId: previous.categoryId || prefill.categoryId || options.tree.categories[0]?.id || "",
+      domainId: previous.domainId || prefill.domainId,
+      datamartId: previous.datamartId || prefill.datamartId,
+      processId: previous.processId || prefill.processId,
+      dimensionId: previous.dimensionId || prefill.dimensionId,
       ownerId: previous.ownerId || currentUser?.id || "",
     }));
-  }, [editing, options.status, options.layers, options.tree, currentUser?.id]);
+  }, [editing, options.status, options.layers, options.tree, currentUser?.id, prefill]);
 
   const dimensionScopeId =
     form.type === "DIM" ? (form.scope === "PUBLIC" ? form.domainId : form.datamartId) : "";
@@ -401,7 +434,7 @@ export default function LogicalModelEditorPage() {
         <div className="p-6">
           <Alert>
             模型加载失败，可能已被删除。
-            <Button size="small" onClick={() => navigate("/data-modeling/logical-models")}>
+            <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
               返回列表
             </Button>
           </Alert>
@@ -416,7 +449,7 @@ export default function LogicalModelEditorPage() {
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
-          <Button size="small" onClick={() => navigate("/data-modeling/logical-models")}>
+          <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
             返回列表
           </Button>
         }
@@ -467,8 +500,14 @@ export default function LogicalModelEditorPage() {
                   label="模型类型"
                   value={form.type}
                   required
-                  disabled={disabled || editing}
-                  hint={editing ? "类型创建后不可变更" : MODEL_TYPE_HINT[form.type]}
+                  disabled={disabled || editing || ownershipLocked}
+                  hint={
+                    editing
+                      ? "类型创建后不可变更"
+                      : ownershipLocked
+                        ? "从概念维度进入，类型与归属已锁定"
+                        : MODEL_TYPE_HINT[form.type]
+                  }
                   items={MODEL_TYPES.map((value) => ({ value, label: MODEL_TYPE_LABEL[value] }))}
                   onChange={(value) => changeType(value === "DIM" ? "DIM" : "DWD")}
                 />
@@ -503,7 +542,7 @@ export default function LogicalModelEditorPage() {
                     label="业务分类"
                     value={form.categoryId}
                     required
-                    disabled={disabled}
+                    disabled={disabled || ownershipLocked}
                     items={options.tree.categories.map((category) => ({
                       value: category.id,
                       label: category.name,
@@ -517,7 +556,7 @@ export default function LogicalModelEditorPage() {
                     label="数据域"
                     value={form.domainId}
                     required
-                    disabled={disabled}
+                    disabled={disabled || ownershipLocked}
                     items={domains.map((domain) => ({ value: domain.id, label: domain.name }))}
                     onChange={(value) => patch({ domainId: value, processId: "", dimensionId: "" })}
                   />
@@ -528,7 +567,7 @@ export default function LogicalModelEditorPage() {
                   label="数据集市"
                   value={form.datamartId}
                   required
-                  disabled={disabled}
+                  disabled={disabled || ownershipLocked}
                   items={datamarts.map((datamart) => ({
                     value: datamart.id,
                     label: datamart.name,
@@ -542,7 +581,7 @@ export default function LogicalModelEditorPage() {
                   label="业务过程"
                   value={form.processId}
                   required
-                  disabled={disabled}
+                  disabled={disabled || ownershipLocked}
                   items={processes.map((process) => ({ value: process.id, label: process.name }))}
                   onChange={(value) => patch({ processId: value })}
                 />
@@ -553,7 +592,7 @@ export default function LogicalModelEditorPage() {
                   label="概念维度"
                   value={form.dimensionId}
                   required={form.scope === "PUBLIC"}
-                  disabled={disabled || !dimensionScopeId}
+                  disabled={disabled || !dimensionScopeId || ownershipLocked}
                   hint={
                     dimensions.failed
                       ? "概念维度加载失败"
@@ -692,7 +731,7 @@ export default function LogicalModelEditorPage() {
         </div>
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-[#eaecf0] bg-white px-6 py-3">
-        <Button size="small" onClick={() => navigate("/data-modeling/logical-models")}>
+        <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
           取消
         </Button>
         <Button

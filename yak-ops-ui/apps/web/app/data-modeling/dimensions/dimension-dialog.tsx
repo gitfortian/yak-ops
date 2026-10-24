@@ -26,6 +26,8 @@ import { DimensionScopeRadio } from "../shared/scope-radio";
 interface Props {
   existing: ConceptDimension | null;
   tree: PlanningTree;
+  /** Preselected owner when the dialog is opened from a tree node. */
+  initial?: { scope: DimensionScope; scopeId: string };
   onClose: () => void;
   onSaved: () => void;
 }
@@ -34,10 +36,12 @@ type Errors = Partial<Record<"scopeId" | "name" | "enName" | "code", string>>;
 
 const CODE = /^[a-z][a-z0-9_]{0,63}$/;
 
-export default function DimensionDialog({ existing, tree, onClose, onSaved }: Props) {
+export default function DimensionDialog({ existing, tree, initial, onClose, onSaved }: Props) {
   const id = useId();
-  const [scope, setScope] = useState<DimensionScope>(existing?.scope ?? "PUBLIC");
-  const [scopeId, setScopeId] = useState(existing?.domainId ?? existing?.datamartId ?? "");
+  const [scope, setScope] = useState<DimensionScope>(existing?.scope ?? initial?.scope ?? "PUBLIC");
+  const [scopeId, setScopeId] = useState(
+    existing?.domainId ?? existing?.datamartId ?? initial?.scopeId ?? "",
+  );
   const [name, setName] = useState(existing?.name ?? "");
   const [enName, setEnName] = useState(existing?.enName ?? "");
   const [code, setCode] = useState(existing?.code ?? "");

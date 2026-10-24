@@ -50,6 +50,22 @@ public interface ModelRepository {
             String datamartId,
             String keyword);
     /**
+     * Reads one page of models hanging below a business process.
+     * @param workspaceId authorized Workspace
+     * @param processId owning business process
+     * @param limit page size
+     * @param offset zero-based offset
+     * @return matching rows in update order
+     */
+    List<ModelEntity> pageByProcess(String workspaceId, String processId, int limit, int offset);
+    /**
+     * Counts the models hanging below a business process.
+     * @param workspaceId authorized Workspace
+     * @param processId owning business process
+     * @return matching total
+     */
+    long countByProcess(String workspaceId, String processId);
+    /**
      * Finds a model with its joined display names.
      * @param workspaceId authorized Workspace
      * @param id model identity

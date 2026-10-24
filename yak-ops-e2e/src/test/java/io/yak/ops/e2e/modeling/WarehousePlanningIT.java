@@ -34,7 +34,9 @@ class WarehousePlanningIT extends BackendTestBase {
                 processId,
                 tree.path("categories").get(0).path("children").get(0).path("children").get(0).path("id").asText());
         assertEquals(0, tree.path("datamarts").size());
-        assertEquals("NOT_ENABLED", api.call("GET", API + "/processes/" + processId + "/logical-models").path("availability").asText());
+        var attached = api.call("GET", API + "/processes/" + processId + "/logical-models");
+        assertEquals("AVAILABLE", attached.path("availability").asText());
+        assertEquals(0, attached.path("page").path("pagination").path("total").asInt());
         api.expect("DELETE", API + "/categories/" + categoryId + "?revision=1", null, 409);
         api.expect("DELETE", API + "/domains/" + domainId + "?revision=1", null, 409);
         var replacement = new HashMap<String, Object>(input(prefix + "_renamed", owner));

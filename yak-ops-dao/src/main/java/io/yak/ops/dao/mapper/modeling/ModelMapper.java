@@ -69,6 +69,18 @@ public interface ModelMapper {
             @Param("datamartId") String datamartId,
             @Param("keyword") String keyword);
 
+    @Select(PROJECTION + "WHERE m.workspace_id=#{workspaceId} AND m.process_id=#{processId} "
+            + "ORDER BY m.update_time DESC, m.id DESC LIMIT #{limit} OFFSET #{offset}")
+    List<ModelEntity> pageByProcess(
+            @Param("workspaceId") String workspaceId,
+            @Param("processId") String processId,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    @Select("SELECT COUNT(*) FROM yak_ops_modeling_model WHERE workspace_id=#{workspaceId} "
+            + "AND process_id=#{processId}")
+    long countByProcess(@Param("workspaceId") String workspaceId, @Param("processId") String processId);
+
     @Select(PROJECTION + "WHERE m.workspace_id=#{workspaceId} AND m.id=#{id}")
     ModelEntity find(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

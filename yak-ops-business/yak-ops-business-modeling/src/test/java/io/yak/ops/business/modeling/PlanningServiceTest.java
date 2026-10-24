@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -22,11 +23,15 @@ import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateNodeDTO;
+import io.yak.ops.common.bean.vo.modeling.AssociatedModelsVO;
+import io.yak.ops.common.bean.vo.modeling.LogicalModelSummaryVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.dao.entity.modeling.ModelEntity;
 import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
+import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.workspace.WorkspaceService;
@@ -44,6 +49,7 @@ import org.springframework.dao.DuplicateKeyException;
 /** Planning authorization, hierarchy locking, revision and error contracts without external resources. */
 class PlanningServiceTest {
     @Mock PlanningRepository nodes;
+    @Mock ModelRepository models;
     @Mock WorkspaceService workspaces;
     @Mock UserRepository users;
     @InjectMocks PlanningServiceImpl service;
@@ -173,6 +179,44 @@ class PlanningServiceTest {
         verify(nodes, never()).update(any(), anyLong(), anyBoolean());
     }
 
+    @Test void reportsTheModelsHangingBelowAProcess() {
+        var process = node(NodeKind.PROCESS, "process", "domain");
+        when(nodes.find("ws", NodeKind.PROCESS, "process")).thenReturn(Optional.of(process));
+        when(models.countByProcess("ws", "process")).thenReturn(2L);
+        when(models.pageByProcess("ws", "process", 20, 20))
+                .thenReturn(List.of(model("model-1", "订单明细", "dwd_trade_order_detail"),
+                        model("model-2", "支付明细", "dwd_trade_payment_detail")));
+        var result = service.associatedModels("ws", "actor", "process", 2, 20);
+        assertEquals(AssociatedModelsVO.AVAILABLE, result.availability());
+        assertEquals(2L, result.page().getPagination().getTotal());
+        assertEquals(2L, result.page().getPagination().getPageNo());
+        assertEquals(1L, result.page().getPagination().getPages());
+        assertEquals(List.of("订单明细", "支付明细"), result.page().getBizData().stream()
+                .map(LogicalModelSummaryVO::name)
+                .toList());
+        assertEquals(List.of("dwd_trade_order_detail", "dwd_trade_payment_detail"), result.page().getBizData().stream()
+                .map(LogicalModelSummaryVO::code)
+                .toList());
+    }
+
+    @Test void skipsTheRowQueryWhenAProcessHasNoModels() {
+        var process = node(NodeKind.PROCESS, "process", "domain");
+        when(nodes.find("ws", NodeKind.PROCESS, "process")).thenReturn(Optional.of(process));
+        when(models.countByProcess("ws", "process")).thenReturn(0L);
+        var result = service.associatedModels("ws", "actor", "process", 1, 20);
+        assertTrue(result.page().getBizData().isEmpty());
+        assertEquals(0L, result.page().getPagination().getTotal());
+        verify(models, never()).pageByProcess(anyString(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test void rejectsAnUnknownProcessBeforeCountingModels() {
+        when(nodes.find("ws", NodeKind.PROCESS, "missing")).thenReturn(Optional.empty());
+        var error = assertThrows(BusinessException.class,
+                () -> service.associatedModels("ws", "actor", "missing", 1, 20));
+        assertEquals(CommonErrorCode.RESOURCE_NOT_EXISTS, error.getErrorCode());
+        verifyNoInteractions(models);
+    }
+
     @Test void createsADatamartRootWithAnEnglishName() {
         var captor = ArgumentCaptor.forClass(PlanningNodeEntity.class);
 
@@ -278,6 +322,14 @@ class PlanningServiceTest {
         input.setOwnerId("owner");
         input.setRevision(revision);
         return input;
+    }
+
+    static ModelEntity model(String id, String cnName, String name) {
+        var row = new ModelEntity();
+        row.setId(id);
+        row.setCnName(cnName);
+        row.setName(name);
+        return row;
     }
 
     static PlanningNodeEntity node(NodeKind kind, String id, String parent) {
