@@ -31,6 +31,8 @@ interface Props {
   disabled?: boolean;
   /** True for DWS and ADS: those kinds own the measure column, DWD and DIM never show it. */
   allowAggregate?: boolean;
+  /** True for DWS: the server rejects a save without any measure, so the last one is locked. */
+  requireMeasure?: boolean;
 }
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
@@ -43,6 +45,7 @@ export default function FieldEditor({
   issues,
   disabled = false,
   allowAggregate = false,
+  requireMeasure = false,
 }: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
@@ -91,6 +94,7 @@ export default function FieldEditor({
   };
   const partitionCount = rows.filter((row) => row.isPartition).length;
   const keyCount = rows.filter((row) => row.isPrimaryKey).length;
+  const measureCount = rows.filter((row) => row.aggregateType != null).length;
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -108,6 +112,7 @@ export default function FieldEditor({
         </Button>
         <span className="text-xs text-[#667475]">
           共 {rows.length} 个字段，主键 {keyCount} 个，分区 {partitionCount} 个
+          {allowAggregate && `，度量 ${measureCount} 个`}
         </span>
       </div>
       {issues.length > 0 && (
@@ -162,6 +167,9 @@ export default function FieldEditor({
           <tbody>
             {rows.map((row, index) => {
               const bound = Boolean(row.standardId);
+              // A DWS row without a measure is rejected on save, so the last measure cannot be
+              // dropped by deleting its row nor by clearing its aggregate.
+              const lastMeasure = requireMeasure && row.aggregateType != null && measureCount === 1;
               return (
                 <tr key={row.key} className="hover:bg-[#fcfcfd]">
                   <td className={`${cell} text-[#667475]`}>{index + 1}</td>
@@ -278,7 +286,9 @@ export default function FieldEditor({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">无</SelectItem>
+                          <SelectItem value="" disabled={lastMeasure}>
+                            无
+                          </SelectItem>
                           {AGGREGATE_TYPES.filter(
                             (aggregate) =>
                               !row.dataType || aggregateSupports(aggregate, row.dataType),
@@ -342,9 +352,10 @@ export default function FieldEditor({
                       <Button
                         size="small"
                         variant="ghost"
-                        disabled={disabled}
+                        disabled={disabled || lastMeasure}
                         className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
                         aria-label={`删除第 ${index + 1} 行`}
+                        title={lastMeasure ? "汇总表至少需要一个度量字段" : undefined}
                         onClick={() => onChange(rows.filter((_, position) => position !== index))}
                       >
                         删除
@@ -356,7 +367,10 @@ export default function FieldEditor({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-[#667475]">
+                <td
+                  colSpan={allowAggregate ? 11 : 10}
+                  className="px-3 py-8 text-center text-[#667475]"
+                >
                   暂无字段，先添加一行、批量录入或从数据标准导入
                 </td>
               </tr>

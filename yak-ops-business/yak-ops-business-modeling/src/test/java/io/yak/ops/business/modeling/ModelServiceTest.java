@@ -522,6 +522,27 @@ class ModelServiceTest {
     }
 
     @Test
+    void refusesToDropTheLastMeasureOnEdit() {
+        detailGraph();
+        var row = storedModel("dws_order_summary");
+        row.setId("m");
+        row.setRevision(3);
+        row.setType(ModelType.DWS.name());
+        when(models.lock("ws", "m")).thenReturn(Optional.of(row));
+        when(models.find("ws", "m")).thenReturn(Optional.of(row));
+        when(models.fields("m")).thenReturn(List.of());
+        var input = updateInput("order_summary", ModelType.DWS, 3);
+        input.setFields(List.of(field("order_id", DataType.BIGINT)));
+
+        var error = assertThrows(BusinessException.class, () -> service.update("ws", "actor", "m", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+        // The whole-list replacement must not run, so the stored measure survives a refused edit.
+        verify(models, never()).deleteFields("m");
+        verify(models, never()).addField(any());
+    }
+
+    @Test
     void reportsNameAvailabilityWithoutReservingIt() {
         when(models.occupied("ws", "dwd_order_detail", null)).thenReturn(true);
         when(models.occupied("ws", "dwd_free_name", null)).thenReturn(false);

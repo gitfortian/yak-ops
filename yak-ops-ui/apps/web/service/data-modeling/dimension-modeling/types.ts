@@ -14,7 +14,7 @@ export const MODEL_TYPE_HINT: Record<ModelType, string> = {
   DWD: "挂业务过程，沉淀该过程最细粒度的事实",
   DIM: "描述一个业务概念，归属数据域或数据集市",
   DWS: "挂业务过程，按维度聚合后的汇总结果，至少一个度量",
-  ADS: "挂数据集市，直接服务报表与应用，可不带度量",
+  ADS: "挂数据集市，直接服务报表与应用；允许只包含维度字段（用于看板筛选），但通常应至少包含一个度量",
 };
 
 export const AGGREGATE_TYPES = ["SUM", "COUNT", "AVG", "MAX", "MIN"] as const;

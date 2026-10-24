@@ -530,7 +530,12 @@ export default function LogicalModelEditorPage() {
                         : MODEL_TYPE_HINT[form.type]
                   }
                   items={MODEL_TYPES.map((value) => ({ value, label: MODEL_TYPE_LABEL[value] }))}
-                  onChange={(value) => changeType(value === "DIM" ? "DIM" : "DWD")}
+                  onChange={(value) => {
+                    // The items come from MODEL_TYPES, so an unknown value can only mean a
+                    // desynchronized option list; ignore it instead of coercing to DWD.
+                    const next = MODEL_TYPES.find((candidate) => candidate === value);
+                    if (next) changeType(next);
+                  }}
                 />
               )}
               <SelectField
@@ -748,6 +753,7 @@ export default function LogicalModelEditorPage() {
               issues={attempted ? issues : []}
               disabled={disabled}
               allowAggregate={AGGREGATE_MODEL_TYPES.has(form.type)}
+              requireMeasure={form.type === "DWS"}
             />
           </Section>
         </div>
