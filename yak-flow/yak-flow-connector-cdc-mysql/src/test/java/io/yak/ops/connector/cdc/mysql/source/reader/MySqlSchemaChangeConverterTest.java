@@ -220,32 +220,30 @@ class MySqlSchemaChangeConverterTest {
     }
 
     @Test
-    void rowSchemaMismatchReconcilesBeforeTheRowWithoutAdvancingItsOffset() {
+    void rowSchemaMismatchUsesDebeziumMetadataWithoutQueryingLiveCatalog() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         SourceRecord row = insertWithNote(101L);
         assertEquals(SOURCE, converter.schemaMismatch(row));
-
-        TableSchema evolved = new TableSchema(
-                List.of(
-                        new Column("id", LogicalTypes.BIGINT.copy(false)),
-                        new Column("name", LogicalTypes.varchar(64)),
-                        new Column("note", LogicalTypes.varchar(128))),
-                List.of("id"));
         var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        var current = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
-                new java.util.LinkedHashMap<String, Object>(row.sourcePartition()),
-                new java.util.LinkedHashMap<String, Object>(row.sourceOffset()));
-        BinlogEvent boundary = converter.reconcile(SOURCE, evolved, previous, current);
-        assertEquals(100L, boundary.offset().position().get("pos"));
-        assertTrue(boundary.records().isEmpty());
-        assertEquals(3, boundary.schemaChange().after().columns().size());
+        BinlogEvent transition = converter.reconcileRowSchema(row, previous);
+        assertEquals(previous, transition.offset());
+        assertTrue(transition.records().isEmpty());
+        assertEquals(3, transition.schemaChange().after().columns().size());
         assertEquals(null, converter.schemaMismatch(row));
-
         BinlogEvent delivered = converter.convert(row);
         assertEquals(101L, delivered.offset().position().get("pos"));
-        assertEquals(3, delivered.records().getFirst().row().getArity());
         assertEquals("hello", delivered.records().getFirst().row().getString(2));
+    }
+
+    @Test
+    void incompleteRowMetadataFailsClosedBeforeUpdatingSourceSchema() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        SourceRecord row = insertWithNote(101L, false);
+        var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        assertThrows(UnsupportedOperationException.class, () -> converter.reconcileRowSchema(row, previous));
+        assertEquals(SOURCE, converter.schemaMismatch(row));
     }
 
     @Test
@@ -327,10 +325,20 @@ class MySqlSchemaChangeConverterTest {
     }
 
     private static SourceRecord insertWithNote(long position) {
+        return insertWithNote(position, true);
+    }
+
+    private static SourceRecord insertWithNote(long position, boolean withMetadata) {
         org.apache.kafka.connect.data.Schema rowSchema = SchemaBuilder.struct()
                 .field("id", org.apache.kafka.connect.data.Schema.INT64_SCHEMA)
                 .field("name", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
-                .field("note", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("note", withMetadata
+                        ? SchemaBuilder.string()
+                                .optional()
+                                .parameter("__debezium.source.column.type", "VARCHAR(128)")
+                                .parameter("__debezium.source.column.length", "128")
+                                .build()
+                        : org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
                 .build();
         org.apache.kafka.connect.data.Schema sourceSchema = SchemaBuilder.struct()
                 .field("db", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
