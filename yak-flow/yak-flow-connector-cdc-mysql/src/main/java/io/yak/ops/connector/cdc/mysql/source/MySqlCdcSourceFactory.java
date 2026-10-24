@@ -31,7 +31,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
+                .optional(
+                        MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
+                        Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
                 .build();
     }
 

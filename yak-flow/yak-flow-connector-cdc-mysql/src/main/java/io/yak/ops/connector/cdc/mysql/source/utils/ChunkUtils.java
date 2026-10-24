@@ -25,14 +25,15 @@ public final class ChunkUtils {
         if (columnName.isBlank()) {
             throw new IllegalArgumentException("MySQL snapshot chunk key column must not be blank");
         }
-        String name = columnName;
-        Column selected = schema.columns().stream()
-                .filter(column -> column.name().equals(name))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown MySQL snapshot chunk key column: " + name));
-        if (!selected.dataType().isResolved() || selected.nullable()) {
-            throw new IllegalArgumentException("MySQL snapshot chunk key column must be resolved and non-null: " + name);
+        for (Column column : schema.columns()) {
+            if (column.name().equals(columnName)) {
+                if (!column.dataType().isResolved() || column.nullable()) {
+                    throw new IllegalArgumentException(
+                            "MySQL snapshot chunk key column must be resolved and non-null: " + columnName);
+                }
+                return column;
+            }
         }
-        return selected;
+        throw new IllegalArgumentException("Unknown MySQL snapshot chunk key column: " + columnName);
     }
 }

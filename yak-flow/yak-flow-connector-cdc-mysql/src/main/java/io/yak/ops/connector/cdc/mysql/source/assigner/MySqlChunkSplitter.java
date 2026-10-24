@@ -38,8 +38,12 @@ public final class MySqlChunkSplitter {
     private volatile boolean cancelled;
 
     public MySqlChunkSplitter(MySqlCdcSourceConfig config, int chunkSize) {
-        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas(),
-                config.chunkKeyColumns(), chunkSize);
+        this(
+                config::openSnapshotConnection,
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                config.schemas(),
+                config.chunkKeyColumns(),
+                chunkSize);
     }
 
     public MySqlChunkSplitter(

@@ -64,8 +64,17 @@ public final class MySqlCdcSourceConfig {
             Map<TableId, TableSchema> schemas,
             int queueCapacity,
             Map<String, String> connectionProperties) {
-        this(hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity,
-                connectionProperties, Map.of());
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                Map.of());
     }
 
     public MySqlCdcSourceConfig(
@@ -79,8 +88,19 @@ public final class MySqlCdcSourceConfig {
             int queueCapacity,
             Map<String, String> connectionProperties,
             Map<TableId, String> chunkKeyColumns) {
-        this(hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity,
-                connectionProperties, chunkKeyColumns, null, false);
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                chunkKeyColumns,
+                null,
+                false);
     }
 
     private MySqlCdcSourceConfig(

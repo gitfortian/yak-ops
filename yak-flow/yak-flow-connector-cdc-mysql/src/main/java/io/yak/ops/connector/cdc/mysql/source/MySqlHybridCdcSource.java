@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridSourceEnumerator;
@@ -55,8 +56,7 @@ public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybr
         fingerprint =
                 Objects.requireNonNull(sourceFingerprint, "sourceFingerprint") + "-hybrid-backfill-v2-" + chunkSize;
         config.schemas().forEach((table, schema) ->
-                io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter.splitKey(
-                        schema, config.chunkKeyColumns().get(table)));
+                MySqlChunkSplitter.splitKey(schema, config.chunkKeyColumns().get(table)));
     }
 
     @Override
