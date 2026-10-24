@@ -62,7 +62,8 @@ class MySqlSchemaChangeConverterTest {
 
         assertEquals(java.util.Set.of(SOURCE), converter.initialSchemaTables(initial));
         assertThrows(UnsupportedOperationException.class, () -> converter.convert(initial));
-        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(ddl("ALTER", NEW_TABLE, 61L)));
+        assertEquals(java.util.Set.of(SOURCE), converter.initialSchemaTables(ddl("ALTER", NEW_TABLE, 61L)));
+        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(ddl("DROP", NEW_TABLE, 62L)));
         assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(insertWithNote(62L)));
         // Initial CREATE metadata is consumed only by the engine before the completed
         // schema-snapshot heartbeat; it must not change the registered runtime schema.
