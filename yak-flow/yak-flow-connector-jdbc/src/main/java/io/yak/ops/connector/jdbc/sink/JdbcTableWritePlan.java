@@ -19,8 +19,8 @@ import java.util.stream.IntStream;
  * Defines an immutable source-to-target table mapping and its resolved JDBC write contract.
  *
  * <p>Target column order determines positional SQL binding. Source positions select fields
- * without implicit type coercion; logical type roots must match. UPDATE_BEFORE/DELETE carry
- * only the target's key values, whereas INSERT/UPDATE_AFTER carry the full target schema.
+ * with explicit lossless conversion to target logical types. UPDATE_BEFORE/DELETE carry
+ * only the converted target key values, whereas INSERT/UPDATE_AFTER carry the full target schema.
  * Planning and projection do not open JDBC connections.
  */
 public record JdbcTableWritePlan(
@@ -38,7 +38,7 @@ public record JdbcTableWritePlan(
 
     /**
      * Maps target column names to source column names; unmapped target columns use their own name.
-     * No implicit type coercion is performed.
+     * Only explicitly supported lossless type conversions are performed.
      */
     public JdbcTableWritePlan(
             TableId sourceTable,
@@ -73,10 +73,9 @@ public record JdbcTableWritePlan(
                 throw new IllegalArgumentException("JDBC source field position is outside the schema");
             }
             Column source = sourceSchema.column(position);
-            if (!target.dataType().isResolved()
-                    || !source.dataType().isResolved()
-                    || target.dataType().getTypeRoot() != source.dataType().getTypeRoot()) {
-                throw new IllegalArgumentException("JDBC mapping requires matching resolved logical types");
+            if (!JdbcColumnValueConverter.supports(source, target)) {
+                throw new IllegalArgumentException(
+                        "JDBC mapping cannot safely convert source to target field: " + target.name());
             }
         }
         if (writeMode == JdbcWriteMode.UPSERT && schema.primaryKeys().isEmpty()) {
@@ -194,14 +193,18 @@ public record JdbcTableWritePlan(
             int index = 0;
             for (String key : schema.primaryKeys()) {
                 int targetIndex = targetIndex(key);
-                Object value = row.getField(sourcePositions.get(targetIndex));
+                int sourcePosition = sourcePositions.get(targetIndex);
+                Object value = JdbcColumnValueConverter.convert(
+                        row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(targetIndex));
                 keys.setField(index++, Objects.requireNonNull(value, "JDBC retract primary key must not be null"));
             }
             return keys;
         }
         GenericRowData projected = new GenericRowData(schema.columnCount());
         for (int index = 0; index < projected.getArity(); index++) {
-            projected.setField(index, row.getField(sourcePositions.get(index)));
+            int sourcePosition = sourcePositions.get(index);
+            projected.setField(index, JdbcColumnValueConverter.convert(
+                    row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(index)));
         }
         if (writeMode == JdbcWriteMode.UPSERT) {
             for (String key : schema.primaryKeys()) {
