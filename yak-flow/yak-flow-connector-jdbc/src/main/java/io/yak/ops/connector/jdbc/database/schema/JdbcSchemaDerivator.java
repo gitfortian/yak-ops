@@ -140,10 +140,14 @@ public final class JdbcSchemaDerivator {
                         actual.type());
                 continue;
             }
-            if (dialect instanceof MySqlJdbcDialect
-                    && nativeTypeChanged(incoming.properties(), actual.properties())) {
-                add(differences, incoming.name(), Kind.INCOMPATIBLE, Reason.UNSAFE_TYPE_CHANGE,
-                        incoming.type(), actual.type());
+            if (dialect instanceof MySqlJdbcDialect && nativeTypeChanged(incoming.properties(), actual.properties())) {
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_TYPE_CHANGE,
+                        incoming.type(),
+                        actual.type());
                 continue;
             }
             if (incoming.type().isNullable() && !actual.type().isNullable()) {
