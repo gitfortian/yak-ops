@@ -45,9 +45,8 @@ public final class JdbcSinkFactory implements TableSinkFactory {
             throw new IllegalArgumentException("JDBC Sink requires a write mode");
         }
         if (mode == JdbcWriteMode.RETRACT) {
-            throw new UnsupportedOperationException(
-                    "JDBC RETRACT is reserved for keyless CDC; exact-row deletion and "
-                            + "transactional replay protection are not implemented");
+            throw new UnsupportedOperationException("JDBC RETRACT is reserved for keyless CDC; exact-row deletion and "
+                    + "transactional replay protection are not implemented");
         }
         if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT) {
             throw new IllegalArgumentException("Changelog Source requires UPSERT");
