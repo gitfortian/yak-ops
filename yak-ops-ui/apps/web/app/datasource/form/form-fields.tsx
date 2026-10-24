@@ -1,6 +1,7 @@
 import {
   Field,
   FieldLabel,
+  FieldRequiredMark,
   FieldError,
   Input,
   PasswordInput,
