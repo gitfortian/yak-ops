@@ -54,6 +54,22 @@ class MySqlHybridIT {
             new Column("name", LogicalTypes.varchar(100).copy(false))), List.of("id"));
 
     @Test
+    void emptyTableFinishesSchemaBootstrapBeforeItsFirstInsert() throws Exception {
+        try (Fixture fixture = new Fixture(1, 1000);
+                Harness pipeline = new Harness(fixture, null)) {
+            pipeline.start();
+            // No source row exists when the no_data schema snapshot and Hybrid handoff run.
+            pipeline.until(pipeline::streaming, true);
+            assertTrue(fixture.values(0).isEmpty());
+            fixture.execute("INSERT INTO " + fixture.source(0) + " VALUES(1,'first'),(2,'second'),(3,'third')");
+            pipeline.until(() -> fixture.values(0).equals(Map.of(
+                    1L, "first", 2L, "second", 3L, "third")), true);
+            assertEquals(3, pipeline.observed.stream()
+                    .filter(row -> row.rowKind() == RowKind.INSERT).count());
+        }
+    }
+
+    @Test
     void factoryPipelineSnapshotsMultipleTablesThenStreamsUpdatesDeletesAndKeyMoves() throws Exception {
         try (Fixture fixture = new Fixture(2, 1)) {
             fixture.execute("INSERT INTO " + fixture.source(0) + " VALUES(1,'first'),(50,'moving')",
