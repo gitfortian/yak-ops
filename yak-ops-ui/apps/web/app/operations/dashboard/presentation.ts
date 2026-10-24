@@ -41,15 +41,20 @@ export function operationsSummaryCards(summary: DataSyncOperationsSummary, syncT
       ];
 }
 
-export function operationsStatusDistribution(summary: DataSyncOperationsSummary, syncType: DataSyncType) {
-  const pending = Math.max(0,
-    summary.executionCount - summary.succeededCount - summary.failedCount - summary.canceledCount);
+export function operationsStatusDistribution(
+  summary: DataSyncOperationsSummary,
+  syncType: DataSyncType,
+) {
+  const pending = Math.max(
+    0,
+    summary.executionCount - summary.succeededCount - summary.failedCount - summary.canceledCount,
+  );
   return [
     { name: "成功", value: summary.succeededCount },
     { name: "失败", value: summary.failedCount },
     { name: syncType === "REALTIME" ? "已停止" : "已取消", value: summary.canceledCount },
     { name: "处理中", value: pending },
-  ].filter(item => item.value > 0);
+  ].filter((item) => item.value > 0);
 }
 
 export function operationsTrendOption(
@@ -65,7 +70,8 @@ export function operationsTrendOption(
     xAxis: {
       type: "category",
       data: trend.map((item) =>
-        range === "TODAY" ? item.bucket.slice(11, 16) : item.bucket.slice(5)),
+        range === "TODAY" ? item.bucket.slice(11, 16) : item.bucket.slice(5),
+      ),
       axisTick: { show: false },
       axisLabel: { color: "#98a2b3" },
     },
@@ -77,18 +83,33 @@ export function operationsTrendOption(
     },
     series: realtime
       ? [
-          { name: "启动次数", type: "line", smooth: true,
-            data: trend.map((item) => item.executionCount) },
-          { name: "失败", type: "bar",
-            data: trend.map((item) => item.failedCount) },
+          {
+            name: "启动次数",
+            type: "line",
+            smooth: true,
+            data: trend.map((item) => item.executionCount),
+          },
+          { name: "失败", type: "bar", data: trend.map((item) => item.failedCount) },
         ]
       : [
-          { name: "成功", type: "bar", stack: "outcome",
-            data: trend.map((item) => item.succeededCount) },
-          { name: "失败", type: "bar", stack: "outcome",
-            data: trend.map((item) => item.failedCount) },
-          { name: "取消", type: "bar", stack: "outcome",
-            data: trend.map((item) => item.canceledCount) },
+          {
+            name: "成功",
+            type: "bar",
+            stack: "outcome",
+            data: trend.map((item) => item.succeededCount),
+          },
+          {
+            name: "失败",
+            type: "bar",
+            stack: "outcome",
+            data: trend.map((item) => item.failedCount),
+          },
+          {
+            name: "取消",
+            type: "bar",
+            stack: "outcome",
+            data: trend.map((item) => item.canceledCount),
+          },
         ],
   };
 }

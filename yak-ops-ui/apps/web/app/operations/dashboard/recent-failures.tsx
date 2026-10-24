@@ -3,11 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { DataSyncOperationsFailure } from "@/service/data-sync/operations";
 
-export function OperationsRecentFailures({
-  failures,
-}: {
-  failures: DataSyncOperationsFailure[];
-}) {
+export function OperationsRecentFailures({ failures }: { failures: DataSyncOperationsFailure[] }) {
   return (
     <Card>
       <CardHeader title="最近失败任务" />
@@ -30,7 +26,10 @@ export function OperationsRecentFailures({
                     {failure.createTime.replace("T", " ")} · {failure.failureCode || "FAILED"}
                   </div>
                 </div>
-                <ArrowUpRight size={16} className="shrink-0 text-[var(--yak-components-muted-text)]" />
+                <ArrowUpRight
+                  size={16}
+                  className="shrink-0 text-[var(--yak-components-muted-text)]"
+                />
               </Link>
             ))}
           </div>

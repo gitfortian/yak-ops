@@ -1,6 +1,17 @@
 import {
-  Button, Card, CardContent, Empty, PageHeader, Select, SelectContent, SelectItem,
-  SelectItemIndicator, SelectItemText, SelectTrigger, SelectValue, Spinner,
+  Button,
+  Card,
+  CardContent,
+  Empty,
+  PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+  Spinner,
 } from "@yak-ops/yak-ui";
 import { useSearchParams } from "react-router-dom";
 import type { DataSyncType } from "@/service/data-sync";
@@ -18,11 +29,14 @@ export function OperationsDashboardPage({ syncType }: { syncType: DataSyncType }
   const snapshot = query.data;
 
   const selectRange = (value: DataSyncOperationsRange) => {
-    setParams(previous => {
-      const next = new URLSearchParams(previous);
-      next.set("range", value);
-      return next;
-    }, { replace: true });
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.set("range", value);
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   return (
@@ -36,9 +50,13 @@ export function OperationsDashboardPage({ syncType }: { syncType: DataSyncType }
             size="small"
             items={OPERATIONS_RANGES}
             value={range}
-            onValueChange={value => { if (value) selectRange(value); }}
+            onValueChange={(value) => {
+              if (value) selectRange(value);
+            }}
           >
-            <SelectTrigger variant="outlined" className="w-32"><SelectValue /></SelectTrigger>
+            <SelectTrigger variant="outlined" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {Object.entries(OPERATIONS_RANGES).map(([value, label]) => (
                 <SelectItem key={value} value={value as DataSyncOperationsRange}>
@@ -52,7 +70,10 @@ export function OperationsDashboardPage({ syncType }: { syncType: DataSyncType }
       />
       <div className="space-y-4 px-6 pb-8 pt-5 max-md:px-4">
         {query.isError ? (
-          <div role="alert" className="flex items-center gap-3 text-sm text-[var(--yak-color-danger)]">
+          <div
+            role="alert"
+            className="flex items-center gap-3 text-sm text-[var(--yak-color-danger)]"
+          >
             {snapshot ? "统计刷新失败" : "统计加载失败"}
             <Button size="small" onClick={() => void query.refetch()} disabled={query.isFetching}>
               重试
@@ -66,12 +87,21 @@ export function OperationsDashboardPage({ syncType }: { syncType: DataSyncType }
         ) : snapshot ? (
           <>
             <OperationsSummaryCards summary={snapshot.summary} syncType={syncType} />
-            <OperationsCharts summary={snapshot.summary} trend={snapshot.trend} range={range}
-              syncType={syncType} refreshing={query.isFetching} />
+            <OperationsCharts
+              summary={snapshot.summary}
+              trend={snapshot.trend}
+              range={range}
+              syncType={syncType}
+              refreshing={query.isFetching}
+            />
             <OperationsRecentFailures failures={snapshot.recentFailures} />
           </>
         ) : (
-          <Card><CardContent><Empty title="暂无运行统计" /></CardContent></Card>
+          <Card>
+            <CardContent>
+              <Empty title="暂无运行统计" />
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

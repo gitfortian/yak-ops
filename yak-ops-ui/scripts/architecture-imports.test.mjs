@@ -211,11 +211,17 @@ test("Operations exposes only its Dashboard page to the router", () => {
     /imports a private Operations feature/,
   );
   assert.match(
-    check("apps/web/app/data-sync/list/page.tsx", 'import { useOperationsDashboard } from "@/app/operations/dashboard/use-dashboard";').join("\n"),
+    check(
+      "apps/web/app/data-sync/list/page.tsx",
+      'import { useOperationsDashboard } from "@/app/operations/dashboard/use-dashboard";',
+    ).join("\n"),
     /imports a private Operations feature/,
   );
   assert.deepEqual(
-    check("apps/web/app/operations/dashboard/page.tsx", 'import { useOperationsDashboard } from "./use-dashboard";'),
+    check(
+      "apps/web/app/operations/dashboard/page.tsx",
+      'import { useOperationsDashboard } from "./use-dashboard";',
+    ),
     [],
   );
 });

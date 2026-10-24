@@ -20,22 +20,42 @@ function load(path, dependencies = {}) {
 }
 
 const presentation = load("../apps/web/app/operations/dashboard/presentation.ts");
-const { resolveOperationsRange, operationsSummaryCards, operationsStatusDistribution,
-  operationsTrendOption, operationsDistributionOption } = presentation;
+const {
+  resolveOperationsRange,
+  operationsSummaryCards,
+  operationsStatusDistribution,
+  operationsTrendOption,
+  operationsDistributionOption,
+} = presentation;
 
 assert.equal(resolveOperationsRange(null, "REALTIME"), "TODAY");
 assert.equal(resolveOperationsRange(null, "OFFLINE"), "LAST_7_DAYS");
 assert.equal(resolveOperationsRange("LAST_30_DAYS", "REALTIME"), "LAST_30_DAYS");
 assert.equal(resolveOperationsRange("wrong", "OFFLINE"), "LAST_7_DAYS");
-const summary = { executionCount: 12, succeededCount: 5, failedCount: 2,
-  canceledCount: 3, runningCount: 2 };
+const summary = {
+  executionCount: 12,
+  succeededCount: 5,
+  failedCount: 2,
+  canceledCount: 3,
+  runningCount: 2,
+};
 assert.equal(operationsSummaryCards(summary, "REALTIME")[0].label, "启动次数");
 assert.equal(operationsSummaryCards(summary, "OFFLINE")[0].label, "执行总数");
 assert.equal(operationsStatusDistribution(summary, "OFFLINE").at(-1).value, 2);
-assert.equal(operationsStatusDistribution({ ...summary, executionCount: 3 }, "OFFLINE").at(-1)?.name, "已取消");
-assert.ok(operationsStatusDistribution(summary, "REALTIME").some(row => row.name === "已停止"));
-const trend = [{ bucket: "2026-10-24 08:00", executionCount: 4, succeededCount: 2,
-  failedCount: 1, canceledCount: 1 }];
+assert.equal(
+  operationsStatusDistribution({ ...summary, executionCount: 3 }, "OFFLINE").at(-1)?.name,
+  "已取消",
+);
+assert.ok(operationsStatusDistribution(summary, "REALTIME").some((row) => row.name === "已停止"));
+const trend = [
+  {
+    bucket: "2026-10-24 08:00",
+    executionCount: 4,
+    succeededCount: 2,
+    failedCount: 1,
+    canceledCount: 1,
+  },
+];
 const offlineOption = operationsTrendOption(trend, "OFFLINE", "TODAY");
 const realtimeOption = operationsTrendOption(trend, "REALTIME", "LAST_7_DAYS");
 assert.equal(offlineOption.series.length, 3);
@@ -49,11 +69,16 @@ const getDataSyncOperationsCalls = [];
 const { useOperationsDashboard, operationsQueryKey } = load(
   "../apps/web/app/operations/dashboard/use-dashboard.ts",
   {
-    "@tanstack/react-query": { useQuery: options => options },
+    "@tanstack/react-query": { useQuery: (options) => options },
     "@/hooks/use-auth": { useAuth: () => ({ currentUser: { id: userId } }) },
-    "@/hooks/use-workspace": { useWorkspace: () => ({ currentWorkspace: workspaceId ? { id: workspaceId } : undefined }) },
+    "@/hooks/use-workspace": {
+      useWorkspace: () => ({ currentWorkspace: workspaceId ? { id: workspaceId } : undefined }),
+    },
     "@/service/data-sync/operations": {
-      getDataSyncOperations: (...args) => { getDataSyncOperationsCalls.push(args); return Promise.resolve({}); },
+      getDataSyncOperations: (...args) => {
+        getDataSyncOperationsCalls.push(args);
+        return Promise.resolve({});
+      },
     },
   },
 );

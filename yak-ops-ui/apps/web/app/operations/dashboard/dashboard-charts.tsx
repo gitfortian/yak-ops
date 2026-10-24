@@ -11,7 +11,11 @@ import { EChart } from "./echart";
 import { operationsDistributionOption, operationsTrendOption } from "./presentation";
 
 export function OperationsCharts({
-  summary, trend, range, syncType, refreshing,
+  summary,
+  trend,
+  range,
+  syncType,
+  refreshing,
 }: {
   summary: DataSyncOperationsSummary;
   trend: DataSyncOperationsTrendPoint[];
@@ -20,14 +24,24 @@ export function OperationsCharts({
   refreshing: boolean;
 }) {
   const hasExecutions = summary.executionCount > 0;
-  const trendOption = useMemo(() => operationsTrendOption(trend, syncType, range), [trend, syncType, range]);
-  const distributionOption = useMemo(() => operationsDistributionOption(summary, syncType), [summary, syncType]);
+  const trendOption = useMemo(
+    () => operationsTrendOption(trend, syncType, range),
+    [trend, syncType, range],
+  );
+  const distributionOption = useMemo(
+    () => operationsDistributionOption(summary, syncType),
+    [summary, syncType],
+  );
   return (
     <div className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
       <Card>
         <CardHeader
           title={syncType === "REALTIME" ? "启动与失败趋势" : "执行结果趋势"}
-          extra={refreshing ? <RefreshCw size={14} className="animate-spin" aria-label="正在刷新" /> : null}
+          extra={
+            refreshing ? (
+              <RefreshCw size={14} className="animate-spin" aria-label="正在刷新" />
+            ) : null
+          }
         />
         <CardContent>
           {hasExecutions ? (
