@@ -59,6 +59,23 @@ class JdbcTypeConverterTest {
                 () -> new PostgresTypeConverter().convert(metadata(field("unknown", Types.OTHER, "geometry", 0, 0))));
     }
 
+
+    @Test
+    void mysqlStructuredMetadataUsesTheSameMappingAsJdbcResults() throws Exception {
+        var converter = new MySqlTypeConverter();
+        assertEquals(LogicalTypes.varbinary(8), converter.convertColumn(Types.BIT, "BIT", 8, 0, true, "flags"));
+        assertEquals(LogicalTypes.decimal(14, 2),
+                converter.convertColumn(Types.DECIMAL, "DECIMAL", 14, 2, true, "amount"));
+        assertEquals(LogicalTypes.timestamp(3),
+                converter.convertColumn(Types.TIMESTAMP, "DATETIME", 0, 3, true, "updated_at"));
+        assertEquals(LogicalTypes.SMALLINT,
+                converter.convertColumn(Types.TINYINT, "TINYINT UNSIGNED", 3, 0, true, "qty"));
+        assertThrows(SQLDataException.class,
+                () -> converter.convertColumn(Types.DECIMAL, "DECIMAL", 50, 2, true, "amount"));
+        assertThrows(SQLFeatureNotSupportedException.class,
+                () -> converter.convertColumn(Types.BINARY, "POINT", 0, 0, true, "location"));
+    }
+
     @Test
     void oracleDateRetainsTimeOfDay() throws Exception {
         var schema = new OracleTypeConverter().convert(metadata(field("created_at", Types.DATE, "DATE", 0, 0)));
