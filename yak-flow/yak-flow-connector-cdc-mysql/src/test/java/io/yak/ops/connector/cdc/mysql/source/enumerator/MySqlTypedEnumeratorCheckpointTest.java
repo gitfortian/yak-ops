@@ -90,6 +90,49 @@ class MySqlTypedEnumeratorCheckpointTest {
         assertThrows(IOException.class, () -> SERIALIZER.deserialize(1, bytes.toByteArray()));
     }
 
+    @Test
+    void readsLegacyEnumeratorWithNestedVersionThreeSnapshotSplit() throws Exception {
+        var embedded = new ByteArrayOutputStream();
+        try (var split = new DataOutputStream(embedded)) {
+            split.writeByte(1);
+            split.writeUTF("legacy-chunk");
+            split.writeUTF("fp");
+            split.writeUTF("shop");
+            split.writeUTF("orders");
+            split.writeBoolean(false);
+            split.writeBoolean(false);
+            split.writeBoolean(false);
+            split.writeByte(0);
+        }
+        var bytes = new ByteArrayOutputStream();
+        try (var out = new DataOutputStream(bytes)) {
+            out.writeUTF("fp");
+            out.writeByte(MySqlHybridEnumeratorState.Phase.SNAPSHOT.ordinal());
+            out.writeBoolean(true);
+            out.writeBoolean(true);
+            offset(100).writeTo(out);
+            out.writeBoolean(false);
+            out.writeBoolean(false);
+            out.writeInt(1);
+            out.writeInt(1);
+            out.writeInt(embedded.size());
+            out.write(embedded.toByteArray());
+            out.writeInt(0);
+            out.writeInt(0);
+            out.writeInt(0);
+            out.writeInt(0);
+            out.writeInt(0);
+            out.writeBoolean(false);
+        }
+        MySqlHybridEnumeratorState old = SERIALIZER.deserialize(2, bytes.toByteArray());
+        assertEquals(1, old.pendingSnapshots().size());
+        assertEquals(
+                new MySqlSnapshotSplit("legacy-chunk", "fp", TABLE, null, null, null),
+                old.pendingSnapshots().getFirst());
+        assertEquals(old.pendingSnapshots(), SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize(old)).pendingSnapshots());
+    }
+
     private static FinishedSnapshotSplitInfo finished(MySqlSnapshotSplit split, long position) {
         return new FinishedSnapshotSplitInfo(
                 TABLE, split.splitId(), null, null, offset(position), split.chunkRange());
