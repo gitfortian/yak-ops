@@ -18,16 +18,8 @@ import {
   type TableColumns,
 } from "@yak-ops/yak-ui";
 import { useEffect, useMemo, useState } from "react";
-import {
-  listDataSourceColumns,
-  listDataSourceDatabases,
-  listDataSourceSchemas,
-  listDataSources,
-  listDataSourceTables,
-  type DataSourceCatalogColumn,
-  type DataSourceCatalogTable,
-  type DataSourceRecord,
-} from "@/service/datasource";
+import type { DataSourceCatalogColumn, DataSourceCatalogTable } from "@/service/datasource";
+import { useCatalogPicker } from "../use-catalog-picker";
 import {
   columnToField,
   findDuplicateFieldCodes,
@@ -43,25 +35,6 @@ interface Props {
   onImport: (rows: FieldDraft[]) => void;
 }
 
-type LoadArea = "datasources" | "databases" | "schemas" | "tables" | "columns";
-
-interface TableResult {
-  requestKey: string;
-  values: DataSourceCatalogTable[];
-}
-
-interface TableSelection {
-  requestKey: string;
-  selectionKey: string;
-  table: DataSourceCatalogTable;
-}
-
-interface ColumnResult {
-  selectionKey: string;
-  values: DataSourceCatalogColumn[];
-}
-
-const ENV_RANK: Record<string, number> = { PROD: 0, TEST: 1, DEVELOP: 2 };
 const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
 
 const columnNoteId = (index: number) => `import-column-note-${index}`;
@@ -74,260 +47,58 @@ const mappingBadge = (column: DataSourceCatalogColumn) => {
 };
 
 export default function ImportDialog({ existing, onClose, onImport }: Props) {
-  const [datasources, setDatasources] = useState<DataSourceRecord[]>([]);
-  const [datasourceId, setDatasourceId] = useState("");
-  const [databases, setDatabases] = useState<string[]>([]);
-  const [database, setDatabase] = useState("");
-  const [schemas, setSchemas] = useState<string[]>([]);
-  const [schema, setSchema] = useState("");
-  const [tableResult, setTableResult] = useState<TableResult | null>(null);
-  const [tableKeyword, setTableKeyword] = useState("");
-  const [tableSearch, setTableSearch] = useState("");
-  const [selectedTable, setSelectedTable] = useState<TableSelection | null>(null);
-  const [columnResult, setColumnResult] = useState<ColumnResult | null>(null);
+  const picker = useCatalogPicker();
   const [selected, setSelected] = useState<string[]>([]);
-  const [envConfirmed, setEnvConfirmed] = useState(false);
-  const [loading, setLoading] = useState<Record<LoadArea, boolean>>({
-    datasources: false,
-    databases: false,
-    schemas: false,
-    tables: false,
-    columns: false,
-  });
-  const [failures, setFailures] = useState<Partial<Record<LoadArea, string>>>({});
-  const [retry, setRetry] = useState(0);
 
-  const datasource = datasources.find((item) => item.id === datasourceId);
-  const nonProduction = Boolean(datasource && datasource.environment !== "PROD");
-  const blocked = nonProduction && !envConfirmed;
+  const {
+    datasources,
+    datasourceId,
+    selectDatasource,
+    databases,
+    database,
+    selectDatabase,
+    schemas,
+    schema,
+    selectSchema,
+    tableKeyword,
+    setTableKeyword,
+    searchTables,
+    tables,
+    selectedTable,
+    selectTable,
+    columns,
+    loading,
+    failures,
+    failureMessages,
+    retry,
+    nonProduction,
+    envConfirmed,
+    setEnvConfirmed,
+    blocked,
+  } = picker;
+
   const takenCodes = useMemo(() => new Set(existing.map((row) => row.enCode.trim())), [existing]);
-  const tableRequestKey = JSON.stringify([datasourceId, database, schema, tableSearch]);
-  const activeSelection =
-    !blocked && selectedTable?.requestKey === tableRequestKey ? selectedTable : null;
-  const tables = !blocked && tableResult?.requestKey === tableRequestKey ? tableResult.values : [];
-  const columns =
-    activeSelection && columnResult?.selectionKey === activeSelection.selectionKey
-      ? columnResult.values
-      : [];
   const conflictingCodes = useMemo(() => findDuplicateFieldCodes(columns), [columns]);
-  const failureMessages = Object.values(failures).filter((message): message is string =>
-    Boolean(message),
-  );
 
+  // Selecting a table preselects the columns that map cleanly and are free of conflicts; the same
+  // rule runs when a read completes, so a retry does not leave a stale selection behind.
   useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    setLoading((previous) => ({ ...previous, datasources: true }));
-    setFailures((previous) => ({ ...previous, datasources: "" }));
-    const load = async () => {
-      try {
-        const values: DataSourceRecord[] = [];
-        let pageNo = 1;
-        let total = Number.MAX_SAFE_INTEGER;
-        while (values.length < total) {
-          const page = await listDataSources({ pageNo, pageSize: 100 }, controller.signal);
-          if (!active) return;
-          values.push(...page.bizData);
-          total = page.pagination.total;
-          if (page.bizData.length < 100) break;
-          pageNo += 1;
-        }
-        const ordered = [...values].sort(
-          (left, right) =>
-            (ENV_RANK[left.environment ?? ""] ?? 9) - (ENV_RANK[right.environment ?? ""] ?? 9) ||
-            (left.name ?? "").localeCompare(right.name ?? ""),
-        );
-        setDatasources(ordered);
-      } catch {
-        if (active)
-          setFailures((previous) => ({
-            ...previous,
-            datasources: "数据源加载失败，请稍后重试",
-          }));
-      } finally {
-        if (active) setLoading((previous) => ({ ...previous, datasources: false }));
-      }
-    };
-    void load();
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [retry]);
+    setSelected(
+      columns
+        .filter((column) => {
+          const code = normalizeFieldCode(column.name);
+          return (
+            mapPhysicalColumn(column).kind === "MAPPED" &&
+            !takenCodes.has(code) &&
+            !conflictingCodes.has(code)
+          );
+        })
+        .map((column) => column.name),
+    );
+  }, [columns, takenCodes, conflictingCodes]);
 
-  useEffect(() => {
-    if (!datasourceId) {
-      setDatabases([]);
-      setDatabase("");
-      setLoading((previous) => ({ ...previous, databases: false }));
-      return;
-    }
-    let active = true;
-    setLoading((previous) => ({ ...previous, databases: true }));
-    setFailures((previous) => ({ ...previous, databases: "" }));
-    void listDataSourceDatabases(datasourceId)
-      .then((values) => {
-        if (!active) return;
-        setDatabases(values);
-        setDatabase((previous) =>
-          previous && values.includes(previous) ? previous : (values[0] ?? ""),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setDatabases([]);
-        setDatabase("");
-        setFailures((previous) => ({
-          ...previous,
-          databases: "数据库列表读取失败，请检查数据源连接",
-        }));
-      })
-      .finally(() => {
-        if (active) setLoading((previous) => ({ ...previous, databases: false }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [datasourceId, retry]);
-
-  useEffect(() => {
-    if (!datasourceId) {
-      setSchemas([]);
-      setSchema("");
-      setLoading((previous) => ({ ...previous, schemas: false }));
-      return;
-    }
-    let active = true;
-    setLoading((previous) => ({ ...previous, schemas: true }));
-    setFailures((previous) => ({ ...previous, schemas: "" }));
-    setSchemas([]);
-    void listDataSourceSchemas(datasourceId, database || undefined)
-      .then((values) => {
-        if (!active) return;
-        setSchemas(values);
-        setSchema((previous) =>
-          previous && values.includes(previous) ? previous : (values[0] ?? ""),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setSchemas([]);
-        setSchema("");
-        setFailures((previous) => ({
-          ...previous,
-          schemas: "Schema 列表读取失败，请检查数据源连接",
-        }));
-      })
-      .finally(() => {
-        if (active) setLoading((previous) => ({ ...previous, schemas: false }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [datasourceId, database, retry]);
-
-  useEffect(() => {
-    if (!datasourceId || blocked) {
-      setTableResult(null);
-      setLoading((previous) => ({ ...previous, tables: false }));
-      setFailures((previous) => ({ ...previous, tables: "" }));
-      return;
-    }
-    let active = true;
-    setLoading((previous) => ({ ...previous, tables: true }));
-    setFailures((previous) => ({ ...previous, tables: "" }));
-    void listDataSourceTables(datasourceId, {
-      database: database || undefined,
-      schema: schema || undefined,
-      keyword: tableSearch || undefined,
-      limit: 200,
-    })
-      .then((values) => {
-        if (active) setTableResult({ requestKey: tableRequestKey, values });
-      })
-      .catch(() => {
-        if (!active) return;
-        setTableResult({ requestKey: tableRequestKey, values: [] });
-        setFailures((previous) => ({
-          ...previous,
-          tables: "表列表读取失败，请检查数据源连接",
-        }));
-      })
-      .finally(() => {
-        if (active) setLoading((previous) => ({ ...previous, tables: false }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [datasourceId, database, schema, tableSearch, blocked, retry, tableRequestKey]);
-
-  useEffect(() => {
-    if (!activeSelection || !datasourceId) {
-      setSelectedTable(null);
-      setColumnResult(null);
-      setSelected([]);
-      setLoading((previous) => ({ ...previous, columns: false }));
-      setFailures((previous) => ({ ...previous, columns: "" }));
-      return;
-    }
-    let active = true;
-    const selection = activeSelection;
-    setLoading((previous) => ({ ...previous, columns: true }));
-    setFailures((previous) => ({ ...previous, columns: "" }));
-    void listDataSourceColumns(datasourceId, {
-      database: selection.table.database ?? (database || undefined),
-      schema: selection.table.schema ?? (schema || undefined),
-      table: selection.table.name,
-    })
-      .then((values) => {
-        if (!active) return;
-        const duplicates = findDuplicateFieldCodes(values);
-        setColumnResult({ selectionKey: selection.selectionKey, values });
-        setSelected(
-          values
-            .filter((column) => {
-              const code = normalizeFieldCode(column.name);
-              return (
-                mapPhysicalColumn(column).kind === "MAPPED" &&
-                !takenCodes.has(code) &&
-                !duplicates.has(code)
-              );
-            })
-            .map((column) => column.name),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setColumnResult({ selectionKey: selection.selectionKey, values: [] });
-        setSelected([]);
-        setFailures((previous) => ({
-          ...previous,
-          columns: "字段列表读取失败，请检查数据源连接",
-        }));
-      })
-      .finally(() => {
-        if (active) setLoading((previous) => ({ ...previous, columns: false }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [activeSelection, datasourceId, database, schema, retry, takenCodes]);
-
-  const resetTableSelection = () => {
-    setTableResult(null);
-    setSelectedTable(null);
-    setColumnResult(null);
-    setSelected([]);
-  };
-
-  const selectTable = (row: DataSourceCatalogTable) => {
-    const selectionKey = JSON.stringify([
-      tableRequestKey,
-      row.database ?? null,
-      row.schema ?? null,
-      row.name,
-    ]);
-    setSelectedTable({ requestKey: tableRequestKey, selectionKey, table: row });
+  const chooseTable = (row: DataSourceCatalogTable) => {
+    selectTable(row);
     setSelected([]);
   };
 
@@ -345,7 +116,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           size="small"
           variant="ghost"
           className="px-0.5 font-normal [color:var(--yak-color-primary)] hover:[color:var(--yak-color-primary)]"
-          onClick={() => selectTable(row)}
+          onClick={() => chooseTable(row)}
         >
           选择
         </Button>
@@ -472,18 +243,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                 value: item.id ?? "",
                 label: `${item.name ?? item.id}（${ENV_LABEL[item.environment ?? ""] ?? item.environment ?? "未知"}）`,
               }))}
-              onValueChange={(value) => {
-                setDatasourceId(value ?? "");
-                setEnvConfirmed(false);
-                setDatabases([]);
-                setDatabase("");
-                setSchemas([]);
-                setSchema("");
-                setTableKeyword("");
-                setTableSearch("");
-                resetTableSelection();
-                setFailures({});
-              }}
+              onValueChange={(value) => selectDatasource(value ?? "")}
             >
               <SelectTrigger variant="outlined" aria-label="选择数据源">
                 <SelectValue placeholder={loading.datasources ? "数据源加载中" : "请选择数据源"} />
@@ -507,11 +267,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                 value={database || null}
                 size="small"
                 items={databases.map((value) => ({ value, label: value }))}
-                onValueChange={(value) => {
-                  setDatabase(value ?? "");
-                  setSchema("");
-                  resetTableSelection();
-                }}
+                onValueChange={(value) => selectDatabase(value ?? "")}
               >
                 <SelectTrigger variant="outlined" aria-label="选择数据库">
                   <SelectValue placeholder="请选择数据库" />
@@ -533,10 +289,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                 value={schema || null}
                 size="small"
                 items={schemas.map((value) => ({ value, label: value }))}
-                onValueChange={(value) => {
-                  setSchema(value ?? "");
-                  resetTableSelection();
-                }}
+                onValueChange={(value) => selectSchema(value ?? "")}
               >
                 <SelectTrigger variant="outlined" aria-label="选择 Schema">
                   <SelectValue placeholder="请选择 Schema" />
@@ -560,7 +313,8 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
               onCheckedChange={(checked) => setEnvConfirmed(checked)}
             />
             <span>
-              即将从「{ENV_LABEL[datasource?.environment ?? ""] ?? datasource?.environment}
+              即将从「
+              {ENV_LABEL[picker.datasource?.environment ?? ""] ?? picker.datasource?.environment}
               」环境读取字段， 请确认连接的是目标库；环境只作提示，不做拦截。
             </span>
           </div>
@@ -573,7 +327,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                   <div key={message}>{message}</div>
                 ))}
               </div>
-              <Button size="small" onClick={() => setRetry((value) => value + 1)}>
+              <Button size="small" onClick={retry}>
                 重试
               </Button>
             </Alert>
@@ -587,7 +341,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                 className="ml-auto flex items-center gap-1"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  setTableSearch(tableKeyword.trim());
+                  searchTables();
                 }}
               >
                 <Input
@@ -633,7 +387,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           <section className="min-w-0">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-xs font-medium">
-                字段{activeSelection ? ` · ${activeSelection.table.name}` : ""}
+                字段{selectedTable ? ` · ${selectedTable.name}` : ""}
               </h3>
               <Button
                 size="small"
@@ -659,7 +413,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                   emptyText={
                     failures.columns
                       ? "字段列表读取失败，请重试"
-                      : activeSelection
+                      : selectedTable
                         ? "该表没有可读取的字段"
                         : "先在左侧选择一张表"
                   }

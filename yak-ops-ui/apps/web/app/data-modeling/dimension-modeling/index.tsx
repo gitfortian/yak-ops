@@ -423,9 +423,17 @@ export default function DimensionModelingPage() {
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
-          <Button size="small" disabled={catalog.status === "loading"} onClick={catalog.reload}>
-            刷新
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="small"
+              onClick={() => navigate("/data-modeling/dimension-modeling/reverse")}
+            >
+              逆向建模
+            </Button>
+            <Button size="small" disabled={catalog.status === "loading"} onClick={catalog.reload}>
+              刷新
+            </Button>
+          </div>
         }
       />
       {catalog.status === "failed" && (
