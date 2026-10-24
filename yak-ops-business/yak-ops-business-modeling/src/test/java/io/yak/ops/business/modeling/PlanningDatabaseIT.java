@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
@@ -15,7 +16,10 @@ import io.yak.ops.business.modeling.impl.PlanningServiceImpl;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.dao.entity.modeling.ModelEntity;
+import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
+import io.yak.ops.dao.repository.modeling.impl.ModelRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
 import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.testutils.MySqlDatabase;
@@ -54,6 +58,7 @@ class PlanningDatabaseIT {
     static AnnotationConfigApplicationContext context;
     static JdbcTemplate jdbc;
     static PlanningService service;
+    static ModelRepository models;
     static final WorkspaceService WORKSPACES = mock(WorkspaceService.class);
 
     @BeforeAll static void start() {
@@ -61,15 +66,23 @@ class PlanningDatabaseIT {
         source = new DriverManagerDataSource(metadata.url() + "&useAffectedRows=true", metadata.username(), metadata.password());
         jdbc = new JdbcTemplate(source);
         Flyway.configure().dataSource(source).locations("classpath:db/migration/yak-ops").load().migrate();
-        context = new AnnotationConfigApplicationContext(Beans.class, PlanningRepositoryImpl.class, PlanningServiceImpl.class);
+        context = new AnnotationConfigApplicationContext(
+                Beans.class, PlanningRepositoryImpl.class, ModelRepositoryImpl.class, PlanningServiceImpl.class);
         service = context.getBean(PlanningService.class);
+        models = context.getBean(ModelRepository.class);
     }
     @AfterAll static void close() { if (context != null) context.close(); }
     @BeforeEach void isolate() {
         reset(WORKSPACES);
         when(WORKSPACES.isActiveMember(anyString(), anyString())).thenReturn(true);
-        for (String table : List.of("subject", "datamart", "process", "domain", "category", "code"))
+        for (String table : List.of(
+                "model_field", "model", "layer", "subject", "datamart", "process", "domain", "category", "code"))
             jdbc.update("DELETE FROM yak_ops_modeling_" + table);
+        jdbc.update("INSERT IGNORE INTO yak_ops_workspace(id,name,create_time,update_time,create_by,update_by) "
+                + "VALUES('ws','ws',NOW(3),NOW(3),'it','it'),('other','other',NOW(3),NOW(3),'it','it')");
+        jdbc.update("INSERT INTO yak_ops_modeling_layer(id,workspace_id,en_code,cn_name,data_source_id,description,"
+                + "enabled,builtin,sort_no,revision,create_time,update_time,create_by,update_by) "
+                + "VALUES('layer','ws','DWD','明细层',NULL,NULL,0,0,1000,1,NOW(3),NOW(3),'it','it')");
     }
 
     @Test void globalCodeRaceHasOneWinnerAcrossWorkspaces() throws Exception {
@@ -135,6 +148,32 @@ class PlanningDatabaseIT {
         service.delete("ws", "actor", NodeKind.DOMAIN, domain.id(), 1);
         service.delete("ws", "actor", NodeKind.CATEGORY, category.id(), 1);
         assertEquals(0, count("code"));
+    }
+
+    @Test void pagesOnlyTheDetailModelsOfOneProcess() {
+        var category = service.create("ws", "actor", NodeKind.CATEGORY, null, PlanningServiceTest.input("commerce"));
+        var domain = service.create("ws", "actor", NodeKind.DOMAIN, category.id(), PlanningServiceTest.input("trade"));
+        var order = service.create("ws", "actor", NodeKind.PROCESS, domain.id(), PlanningServiceTest.input("order"));
+        var pay = service.create("ws", "actor", NodeKind.PROCESS, domain.id(), PlanningServiceTest.input("pay"));
+        for (var index = 1; index <= 3; index++)
+            addModel("订单明细-" + index, "dwd_trade_order_" + index, category.id(), domain.id(), order.id());
+        addModel("支付明细", "dwd_trade_pay_1", category.id(), domain.id(), pay.id());
+
+        var first = service.associatedModels("ws", "actor", order.id(), 1, 2);
+        assertEquals("AVAILABLE", first.availability());
+        assertEquals(3L, first.page().getPagination().getTotal());
+        assertEquals(2L, first.page().getPagination().getPages());
+        assertEquals(2, first.page().getBizData().size());
+        var second = service.associatedModels("ws", "actor", order.id(), 2, 2);
+        assertEquals(1, second.page().getBizData().size());
+        assertTrue(second.page().getBizData().stream().noneMatch(row -> row.code().startsWith("dwd_trade_pay")));
+        var payPage = service.associatedModels("ws", "actor", pay.id(), 1, 20);
+        assertEquals(1L, payPage.page().getPagination().getTotal());
+        assertEquals("dwd_trade_pay_1", payPage.page().getBizData().getFirst().code());
+        var empty = service.create("ws", "actor", NodeKind.PROCESS, domain.id(), PlanningServiceTest.input("refund"));
+        var emptyPage = service.associatedModels("ws", "actor", empty.id(), 1, 20);
+        assertEquals(0L, emptyPage.page().getPagination().getTotal());
+        assertTrue(emptyPage.page().getBizData().isEmpty());
     }
 
     @Test void deletingParentAndCreatingChildCannotLeaveAnOrphan() throws Exception {
@@ -214,6 +253,24 @@ class PlanningDatabaseIT {
         try { service.create(workspace, "actor", NodeKind.CATEGORY, null, PlanningServiceTest.input("same_code")); return 1; }
         catch (BusinessException conflict) { assertEquals(ModelingErrorCode.DUPLICATE_CODE, conflict.getErrorCode()); return 0; }
     }
+    private static void addModel(String cnName, String name, String categoryId, String domainId, String processId) {
+        var row = new ModelEntity();
+        row.setWorkspaceId("ws");
+        row.setType("DWD");
+        row.setLayerId("layer");
+        row.setCategoryId(categoryId);
+        row.setProcessId(processId);
+        row.setDomainId(domainId);
+        row.setName(name);
+        row.setCnName(cnName);
+        row.setStoragePolicy(io.yak.ops.common.enums.modeling.StoragePolicy.DAILY_INCREMENTAL);
+        row.setLifecycleDays(30);
+        row.setOwnerId("owner");
+        row.setRevision(1);
+        row.initCreate("actor");
+        models.add(row);
+    }
+
     private static int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM yak_ops_modeling_" + table, Integer.class); }
 
     @Configuration(proxyBeanMethods = false)

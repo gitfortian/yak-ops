@@ -141,8 +141,8 @@ public class WarehousePlanningController {
             @PathVariable String id,
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        return Result.success(
-                service.associatedModels(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id));
+        return Result.success(service.associatedModels(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, pageNo, pageSize));
     }
 
     private Result<SavedNodeVO> create(NodeKind kind, String parentId, NodeInputDTO input) {

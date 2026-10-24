@@ -7,8 +7,8 @@ import type {
 } from "@/service/data-modeling/warehouse-planning/types";
 
 const columns: TableColumns<LogicalModelSummary> = [
-  { title: "逻辑模型名称", dataIndex: "name" },
-  { title: "英文编码", dataIndex: "code" },
+  { title: "表中文名", dataIndex: "name" },
+  { title: "表名", dataIndex: "code" },
 ];
 export default function ProcessAssets({ processId }: { processId: string }) {
   const [data, setData] = useState<AssociatedModels | null>(null);

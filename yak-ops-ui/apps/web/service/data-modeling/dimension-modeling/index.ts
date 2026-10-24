@@ -95,6 +95,28 @@ export const getModel = (id: string, signal?: AbortSignal) =>
     }),
   );
 
+const CATALOG_PAGE_SIZE = 100;
+const CATALOG_PAGE_LIMIT = 10;
+
+export interface ModelCatalog {
+  items: LogicalModel[];
+  truncated: boolean;
+}
+
+/** Reads every model in pages so the tree can group them without a request per node. */
+export async function getModelCatalog(signal?: AbortSignal): Promise<ModelCatalog> {
+  const items: LogicalModel[] = [];
+  for (let pageNo = 1; pageNo <= CATALOG_PAGE_LIMIT; pageNo += 1) {
+    const page = await getModels(
+      { type: "ALL", layerId: "", keyword: "", pageNo, pageSize: CATALOG_PAGE_SIZE },
+      signal,
+    );
+    items.push(...page.bizData);
+    if (pageNo >= page.pagination.pages) return { items, truncated: false };
+  }
+  return { items, truncated: true };
+}
+
 export function checkModelName(
   layerId: string,
   nameSuffix: string,

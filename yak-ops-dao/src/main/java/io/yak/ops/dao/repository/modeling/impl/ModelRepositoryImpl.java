@@ -44,6 +44,16 @@ public class ModelRepositoryImpl implements ModelRepository {
     }
 
     @Override
+    public List<ModelEntity> pageByProcess(String workspaceId, String processId, int limit, int offset) {
+        return mapper.pageByProcess(workspaceId, processId, limit, offset);
+    }
+
+    @Override
+    public long countByProcess(String workspaceId, String processId) {
+        return mapper.countByProcess(workspaceId, processId);
+    }
+
+    @Override
     public Optional<ModelEntity> find(String workspaceId, String id) {
         return Optional.ofNullable(mapper.find(workspaceId, id));
     }

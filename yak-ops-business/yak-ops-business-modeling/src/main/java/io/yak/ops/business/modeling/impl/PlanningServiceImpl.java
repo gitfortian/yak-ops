@@ -8,6 +8,7 @@ import io.yak.ops.common.bean.dto.modeling.UpdateDatamartDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateNodeDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateSubjectDTO;
 import io.yak.ops.common.bean.vo.modeling.AssociatedModelsVO;
+import io.yak.ops.common.bean.vo.modeling.LogicalModelSummaryVO;
 import io.yak.ops.common.bean.vo.modeling.OwnerOptionVO;
 import io.yak.ops.common.bean.vo.modeling.PlanningNodeVO;
 import io.yak.ops.common.bean.vo.modeling.PlanningTreeVO;
@@ -17,8 +18,12 @@ import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.enums.security.user.UserStatus;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.common.page.PageData;
+import io.yak.ops.common.page.PagingData;
+import io.yak.ops.dao.entity.modeling.ModelEntity;
 import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.entity.security.UserEntity;
+import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.workspace.WorkspaceService;
@@ -45,6 +50,9 @@ public class PlanningServiceImpl implements PlanningService {
 
     @Resource
     private PlanningRepository nodes;
+
+    @Resource
+    private ModelRepository models;
 
     @Resource
     private WorkspaceService workspaces;
@@ -199,10 +207,23 @@ public class PlanningServiceImpl implements PlanningService {
 
     @Override
     @Transactional(readOnly = true)
-    public AssociatedModelsVO associatedModels(String workspaceId, String actor, String processId) {
+    public AssociatedModelsVO associatedModels(
+            String workspaceId, String actor, String processId, int pageNo, int pageSize) {
         requireActor(workspaceId, actor);
         requireNode(workspaceId, NodeKind.PROCESS, processId);
-        return AssociatedModelsVO.notEnabled();
+        long offset = (long) (pageNo - 1) * pageSize;
+        long total = models.countByProcess(workspaceId, processId);
+        List<ModelEntity> rows = total == 0 || offset > Integer.MAX_VALUE
+                ? List.of()
+                : models.pageByProcess(workspaceId, processId, pageSize, (int) offset);
+        var page = PageData.of(
+                rows.stream()
+                        .map(row -> new LogicalModelSummaryVO(row.getId(), row.getCnName(), row.getName()))
+                        .toList(),
+                total,
+                pageNo,
+                pageSize);
+        return AssociatedModelsVO.available(PagingData.from(page));
     }
 
     /** Inserts one node and its code reservation after locking every ancestor. */
