@@ -199,3 +199,23 @@ test("Schedule public contracts remain usable; private lifecycle imports are rej
     /imports a private Schedule feature/,
   );
 });
+
+test("Operations exposes only its Dashboard page to the router", () => {
+  const router = "apps/web/app/router/AppRouter.tsx";
+  assert.deepEqual(
+    check(router, 'import { OfflineTaskOperationsPage } from "@/app/operations/dashboard/page";'),
+    [],
+  );
+  assert.match(
+    check(router, 'import { EChart } from "@/app/operations/dashboard/echart";').join("\n"),
+    /imports a private Operations feature/,
+  );
+  assert.match(
+    check("apps/web/app/data-sync/list/page.tsx", 'import { useOperationsDashboard } from "@/app/operations/dashboard/use-dashboard";').join("\n"),
+    /imports a private Operations feature/,
+  );
+  assert.deepEqual(
+    check("apps/web/app/operations/dashboard/page.tsx", 'import { useOperationsDashboard } from "./use-dashboard";'),
+    [],
+  );
+});

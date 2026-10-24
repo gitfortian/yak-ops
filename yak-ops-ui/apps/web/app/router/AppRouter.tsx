@@ -9,11 +9,9 @@ import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";
 import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "./data-sync-redirects";
 import {
-  OfflineTaskOperationsInstanceDetailPage,
   OfflineTaskOperationsPage,
-  RealtimeTaskOperationsInstanceDetailPage,
   RealtimeTaskOperationsPage,
-} from "@/app/operations";
+} from "@/app/operations/dashboard/page";
 import { useAuth } from "@/hooks/use-auth";
 
 import AppLayout from "../layout/AppLayout";
@@ -158,12 +156,12 @@ export default function AppRouter() {
           <Route path="/operations/offline-tasks" element={<OfflineTaskOperationsPage />} />
           <Route
             path="/operations/offline-tasks/instances/:id"
-            element={<OfflineTaskOperationsInstanceDetailPage />}
+            element={<DataSyncInstanceRedirect />}
           />
           <Route path="/operations/realtime-tasks" element={<RealtimeTaskOperationsPage />} />
           <Route
             path="/operations/realtime-tasks/instances/:id"
-            element={<RealtimeTaskOperationsInstanceDetailPage />}
+            element={<DataSyncInstanceRedirect />}
           />
         </Route>
 

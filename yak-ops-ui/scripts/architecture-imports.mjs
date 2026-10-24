@@ -107,6 +107,15 @@ export function checkArchitectureImports(relativePath, content, root) {
     ) {
       violations.push(relativePath + " imports a private Schedule feature: " + specifier);
     }
+    const operations = resolve(app, "operations");
+    const operationsPage = resolve(operations, "dashboard/page");
+    if (
+      inside(target, operations) &&
+      !inside(source, operations) &&
+      !(inside(source, resolve(app, "router")) && target === operationsPage)
+    ) {
+      violations.push(relativePath + " imports a private Operations feature: " + specifier);
+    }
     if (inside(source, service) && inside(target, app)) {
       violations.push(relativePath + " imports App code: " + specifier);
     }
