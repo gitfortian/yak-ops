@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/23
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/23
 
-Implementation: In progress — reverse-modeling batch
+Implementation: #24
 
 Release: N/A until released
 
