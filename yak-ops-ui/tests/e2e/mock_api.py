@@ -161,6 +161,10 @@ async def mock(route):
                                               "table": item["target"]["table"]},
             "action": "CREATE",
             "statements": ["CREATE TABLE public." + item["target"]["table"] + " (id BIGINT PRIMARY KEY)"],
+            "differences": [{
+                "column": None, "action": "CREATE_TABLE", "reason": "TABLE_MISSING",
+                "sourceType": None, "targetType": None,
+            }],
         } for index, item in enumerate(details["tableMappings"])]
     elif p.startswith("/api/v1/data-source/"):
         data = next((x for x in sources if x["id"] == p.rsplit("/", 1)[-1]), {})
