@@ -56,6 +56,21 @@ class MySqlSchemaChangeConverterTest {
             """;
 
     @Test
+    void initialCreateIsSchemaBootstrapButRuntimeCreateRemainsRejected() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        SourceRecord initial = ddl("CREATE", NEW_TABLE, 60L);
+
+        assertEquals(java.util.Set.of(SOURCE), converter.initialSchemaTables(initial));
+        assertThrows(UnsupportedOperationException.class, () -> converter.convert(initial));
+        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(ddl("ALTER", NEW_TABLE, 61L)));
+        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(insertWithNote(62L)));
+        // Initial CREATE metadata is consumed only by the engine before the completed
+        // schema-snapshot heartbeat; it must not change the registered runtime schema.
+        assertEquals(2, converter.convert(ddl("ALTER", NEW_TABLE, 63L))
+                .schemaChange().before().columns().size());
+    }
+
+    @Test
     void ddlCarriesSchemaChangeAndFollowingRowsUseNewColumnPositions() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         BinlogEvent change = converter.convert(ddl("ALTER", NEW_TABLE, 100L));
