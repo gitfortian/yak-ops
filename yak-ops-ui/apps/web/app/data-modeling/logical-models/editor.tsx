@@ -21,6 +21,7 @@ import {
 import type {
   ConceptDimension,
   DimensionScope,
+  LogicalModel,
   ModelInput,
   ModelType,
   StoragePolicy,
@@ -47,6 +48,7 @@ import {
 } from "./fields";
 import { datamartsOf, domainsOf, processesOf } from "../shared/planning-tree";
 import { DimensionScopeRadio } from "../shared/scope-radio";
+import PublishDialog from "./publish-dialog";
 import { useModelOptions } from "./state";
 
 interface FormState {
@@ -126,6 +128,12 @@ export default function LogicalModelEditorPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(editing);
   const [loadFailed, setLoadFailed] = useState(false);
+  /**
+   * The saved model, kept apart from the form so the publish dialog can name the table the server
+   * will actually build instead of the name currently typed in the form.
+   */
+  const [savedModel, setSavedModel] = useState<LogicalModel | null>(null);
+  const [publishing, setPublishing] = useState(false);
   const [revision, setRevision] = useState<number | undefined>(undefined);
   const [unknownType, setUnknownType] = useState(false);
   const [stale, setStale] = useState(false);
@@ -184,6 +192,7 @@ export default function LogicalModelEditorPage() {
     void getModel(id!, controller.signal)
       .then((model) => {
         if (!current) return;
+        setSavedModel(model);
         const layer = options.layers.find((item) => item.id === model.layerId);
         const prefix = layer ? `${layer.enCode.toLowerCase()}_` : "";
         const suffix =
@@ -406,6 +415,7 @@ export default function LogicalModelEditorPage() {
       if (!active.current) return;
       toast.success(editing ? "保存成功" : "创建成功");
       if (editing) {
+        setSavedModel(saved);
         setRevision(saved.revision);
         setRows((saved.fields ?? []).map(fromModelField));
         setSuffixMismatch(false);
@@ -475,9 +485,16 @@ export default function LogicalModelEditorPage() {
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
-          <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
-            返回列表
-          </Button>
+          <div className="flex items-center gap-2">
+            {editing && savedModel && !unknownType && (
+              <Button size="small" disabled={saving} onClick={() => setPublishing(true)}>
+                发布
+              </Button>
+            )}
+            <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
+              返回列表
+            </Button>
+          </div>
         }
       />
       <div className="min-h-0 flex-1 overflow-auto px-6 pb-24 pt-5 max-md:px-4">
@@ -777,6 +794,9 @@ export default function LogicalModelEditorPage() {
           保存
         </Button>
       </div>
+      {publishing && savedModel && (
+        <PublishDialog model={savedModel} onClose={() => setPublishing(false)} />
+      )}
     </div>
   );
 }

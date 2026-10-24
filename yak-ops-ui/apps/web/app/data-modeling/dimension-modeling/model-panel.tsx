@@ -37,6 +37,7 @@ interface Props {
   emptyText?: string;
   onEdit: (model: LogicalModel) => void;
   onDelete: (model: LogicalModel) => void;
+  onPublish: (model: LogicalModel) => void;
 }
 
 export default function ModelPanel(props: Props) {
@@ -79,7 +80,7 @@ export default function ModelPanel(props: Props) {
     {
       title: "操作",
       key: "actions",
-      width: 108,
+      width: 152,
       align: "center",
       render: (_, row) => (
         <div className="flex items-center justify-center gap-2">
@@ -90,6 +91,14 @@ export default function ModelPanel(props: Props) {
             onClick={() => props.onEdit(row)}
           >
             编辑
+          </Button>
+          <Button
+            size="small"
+            variant="ghost"
+            className="px-0.5 font-normal [color:var(--yak-color-primary)] hover:[color:var(--yak-color-primary)]"
+            onClick={() => props.onPublish(row)}
+          >
+            发布
           </Button>
           <Button
             size="small"
@@ -133,7 +142,7 @@ export default function ModelPanel(props: Props) {
             dataSource={pageRows}
             size="small"
             bordered={false}
-            scroll={{ x: 890 }}
+            scroll={{ x: 940 }}
             emptyText="暂无逻辑模型"
             pagination={{
               current,

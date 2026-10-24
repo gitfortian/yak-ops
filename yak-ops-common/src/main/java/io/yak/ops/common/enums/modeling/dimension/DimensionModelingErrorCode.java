@@ -26,7 +26,12 @@ public enum DimensionModelingErrorCode implements ErrorCode {
     LAYER_NOT_SELECTABLE(19509, "所选分层未启用或未绑定物理数据源"),
     UNKNOWN_MODEL_TYPE(19510, "模型类型无法识别，不允许编辑"),
     PARTITION_RULE(19511, "分区字段只能有一个，且类型必须为 STRING"),
-    DUPLICATE_TABLE_NAME(19512, "表名在当前工作空间已存在");
+    DUPLICATE_TABLE_NAME(19512, "表名在当前工作空间已存在"),
+    /**
+     * A collection run failed. A failed publication is not an error code: it is a recorded terminal
+     * state that the publish endpoint returns, so the client can read which column differs.
+     */
+    METADATA_COLLECTION_FAILED(19514, "元数据采集失败，物理表可能已创建，请稍后重新采集");
 
     private final Integer code;
     private final String message;

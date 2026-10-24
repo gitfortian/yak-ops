@@ -64,6 +64,10 @@ export default function ModelDeleteDialog({ model, onClose, onDeleted }: Props) 
         <DialogDescription className="mt-3 text-sm text-[#475467]">
           确认删除「{model.cnName}（{model.name}）」？该表的字段定义会一并删除，且无法恢复。
         </DialogDescription>
+        <p className="mt-2 text-xs leading-5 text-[#b54708]">
+          已发布的物理表不会被删除，也不会被回滚；如果这张表已经被发布过，请在目标库中手工处理，
+          发布记录与元数据快照会保留。
+        </p>
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
         {failure && <Alert>{failure}</Alert>}
         <div className="mt-5 flex justify-end gap-2">
