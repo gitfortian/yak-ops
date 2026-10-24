@@ -27,6 +27,8 @@ export function useTaskSchedules(targetIds: string[]) {
     records,
     loading: enabled && query.isPending,
     error: query.isError,
-    refresh: () => { void queryClient.invalidateQueries({ queryKey: key }); },
+    refresh: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
   };
 }

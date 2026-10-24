@@ -99,7 +99,11 @@ export function checkArchitectureImports(relativePath, content, root) {
       resolve(schedule, "use-task-schedules"),
       resolve(schedule, "schedule-presentation"),
     ]);
-    if (inside(target, schedule) && !inside(source, schedule) && !schedulePublicEntries.has(target)) {
+    if (
+      inside(target, schedule) &&
+      !inside(source, schedule) &&
+      !schedulePublicEntries.has(target)
+    ) {
       violations.push(relativePath + " imports a private Schedule feature: " + specifier);
     }
     if (inside(source, service) && inside(target, app)) {

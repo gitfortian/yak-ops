@@ -1,9 +1,25 @@
 import {
-  Button, Field, FieldError, FieldLabel, Input, Select, SelectContent, SelectItem,
-  SelectItemIndicator, SelectItemText, SelectTrigger, SelectValue, Table, type TableColumns
+  Button,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  type TableColumns,
 } from "@yak-ops/yak-ui";
 import { useState } from "react";
-import { scheduleErrorMessage, type ScheduleFireOutcome, type ScheduleFireRecord } from "@/service/schedule";
+import {
+  scheduleErrorMessage,
+  type ScheduleFireOutcome,
+  type ScheduleFireRecord,
+} from "@/service/schedule";
 import { FIRE_OUTCOMES, formatScheduleTime, scheduleReasonText } from "../schedule-presentation";
 import { useFireHistory } from "./use-fire-history";
 

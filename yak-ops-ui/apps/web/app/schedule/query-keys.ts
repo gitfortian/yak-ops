@@ -10,8 +10,26 @@ export const scheduleQueryKeys = {
     [...scheduleQueryKeys.all, "detail", userId, workspaceId, targetId] as const,
   preview: (userId: string, workspaceId: string, cron: string, zone: string) =>
     [...scheduleQueryKeys.all, "preview", userId, workspaceId, cron, zone] as const,
-  fires: (userId: string, workspaceId: string, scheduleId: string, pageNo: number, outcome: string, from: string, until: string) =>
-    [...scheduleQueryKeys.all, "fires", userId, workspaceId, scheduleId, pageNo, outcome, from, until] as const,
+  fires: (
+    userId: string,
+    workspaceId: string,
+    scheduleId: string,
+    pageNo: number,
+    outcome: string,
+    from: string,
+    until: string,
+  ) =>
+    [
+      ...scheduleQueryKeys.all,
+      "fires",
+      userId,
+      workspaceId,
+      scheduleId,
+      pageNo,
+      outcome,
+      from,
+      until,
+    ] as const,
 };
 
 export function useScheduleScope() {
@@ -21,4 +39,4 @@ export function useScheduleScope() {
 }
 
 /** The tab is unmounted when hidden. Poll only while the document is visible. */
-export const visiblePollInterval = () => document.visibilityState === "visible" ? 5000 : false;
+export const visiblePollInterval = () => (document.visibilityState === "visible" ? 5000 : false);

@@ -15,21 +15,34 @@ export function useSchedulePreview(cronExpression: string, timeZone: string) {
   const hasRule = Boolean(cronExpression.trim() && timeZone);
   const settled = debounced.cronExpression === cronExpression && debounced.timeZone === timeZone;
   const query = useQuery({
-    queryKey: scheduleQueryKeys.preview(userId, workspaceId, debounced.cronExpression, debounced.timeZone),
+    queryKey: scheduleQueryKeys.preview(
+      userId,
+      workspaceId,
+      debounced.cronExpression,
+      debounced.timeZone,
+    ),
     queryFn: ({ signal }) => previewSchedule(debounced, signal),
     enabled: Boolean(userId && workspaceId && hasRule && settled),
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const status = !cronExpression.trim() ? "empty"
-    : !timeZone ? "invalid"
-    : !userId || !workspaceId || !settled || query.isPending ? "loading"
-    : query.isError ? (isInvalidScheduleRule(query.error) ? "invalid" : "error")
-    : "ready";
+  const status = !cronExpression.trim()
+    ? "empty"
+    : !timeZone
+      ? "invalid"
+      : !userId || !workspaceId || !settled || query.isPending
+        ? "loading"
+        : query.isError
+          ? isInvalidScheduleRule(query.error)
+            ? "invalid"
+            : "error"
+          : "ready";
 
   return {
     status,
-    times: status === "ready" ? query.data?.nextFireTimes ?? [] : [],
-    retry: () => { void query.refetch(); },
+    times: status === "ready" ? (query.data?.nextFireTimes ?? []) : [],
+    retry: () => {
+      void query.refetch();
+    },
   };
 }

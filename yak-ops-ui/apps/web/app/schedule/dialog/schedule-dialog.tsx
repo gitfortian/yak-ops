@@ -1,5 +1,13 @@
 import {
-  Alert, Button, Modal, Spinner, Switch, Tabs, TabsList, TabsPanel, TabsTab,
+  Alert,
+  Button,
+  Modal,
+  Spinner,
+  Switch,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
 } from "@yak-ops/yak-ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -13,15 +21,48 @@ export function ScheduleDialog(props: ScheduleDialogProps) {
   const { currentWorkspace } = useWorkspace();
   const { currentUser } = useAuth();
   return props.open ? (
-    <ScheduleDialogSession key={`${currentUser?.id}/${currentWorkspace?.id}/${props.targetId}/${props.historyScheduleId || "current"}`} {...props} />
+    <ScheduleDialogSession
+      key={`${currentUser?.id}/${currentWorkspace?.id}/${props.targetId}/${props.historyScheduleId || "current"}`}
+      {...props}
+    />
   ) : null;
 }
 
-function ScheduleDialogSession({ targetId, published, onClose, onChanged, onViewInstance, historyScheduleId }: ScheduleDialogProps) {
-  const session = useScheduleSession({ targetId, published, onClose, onChanged, historyScheduleId });
+function ScheduleDialogSession({
+  targetId,
+  published,
+  onClose,
+  onChanged,
+  onViewInstance,
+  historyScheduleId,
+}: ScheduleDialogProps) {
+  const session = useScheduleSession({
+    targetId,
+    published,
+    onClose,
+    onChanged,
+    historyScheduleId,
+  });
   const {
-    tab, setTab, schedule, form, setForm, dirty, loading, pending, error, needsReload,
-    historyOnly, blocked, confirmation, setConfirmation, save, toggle, remove, reload, close,
+    tab,
+    setTab,
+    schedule,
+    form,
+    setForm,
+    dirty,
+    loading,
+    pending,
+    error,
+    needsReload,
+    historyOnly,
+    blocked,
+    confirmation,
+    setConfirmation,
+    save,
+    toggle,
+    remove,
+    reload,
+    close,
   } = session;
   const observation = schedule ? registrationText(schedule) : null;
   const fireId = historyScheduleId || schedule?.id;
@@ -121,7 +162,11 @@ function ScheduleDialogSession({ targetId, published, onClose, onChanged, onView
                     {observation ? (
                       <span
                         role="status"
-                        className={schedule.registrationStatus === "ERROR" ? "text-[var(--yak-color-danger)]" : ""}
+                        className={
+                          schedule.registrationStatus === "ERROR"
+                            ? "text-[var(--yak-color-danger)]"
+                            : ""
+                        }
                       >
                         {observation}
                       </span>
@@ -136,7 +181,9 @@ function ScheduleDialogSession({ targetId, published, onClose, onChanged, onView
                   </div>
                 ) : null}
                 {schedule?.enabled ? (
-                  <div className="text-xs text-[var(--yak-components-muted-text)]">请先停止调度再修改配置</div>
+                  <div className="text-xs text-[var(--yak-components-muted-text)]">
+                    请先停止调度再修改配置
+                  </div>
                 ) : null}
                 <ScheduleForm
                   value={form}
@@ -209,5 +256,4 @@ function ScheduleDialogSession({ targetId, published, onClose, onChanged, onView
       </Modal>
     </>
   );
-
 }

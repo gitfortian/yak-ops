@@ -2,9 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@yak-ops/yak-ui";
 import {
-  createSchedule, deleteSchedule, getTaskSchedule, previewSchedule,
-  scheduleErrorMessage, setScheduleEnabled, updateSchedule,
-  type ScheduleRecord, type ScheduleTimeRule,
+  createSchedule,
+  deleteSchedule,
+  getTaskSchedule,
+  previewSchedule,
+  scheduleErrorMessage,
+  setScheduleEnabled,
+  updateSchedule,
+  type ScheduleRecord,
+  type ScheduleTimeRule,
 } from "@/service/schedule";
 import { EMPTY_SCHEDULE, sameScheduleRule } from "../schedule-presentation";
 import { scheduleQueryKeys, useScheduleScope } from "../query-keys";
@@ -17,12 +23,17 @@ const ruleOf = (schedule: ScheduleRecord | null) =>
 
 /** Schedule reads belong to Query; editable rules and unknown-write recovery belong to this session. */
 export function useScheduleSession({
-  targetId, published, onClose, onChanged, historyScheduleId,
+  targetId,
+  published,
+  onClose,
+  onChanged,
+  historyScheduleId,
 }: Omit<ScheduleDialogProps, "open" | "onViewInstance">) {
   const historyOnly = Boolean(historyScheduleId);
   const [tab, setTab] = useState(historyOnly ? "fires" : "config");
   const [draft, setDraft] = useState<RuleDraft>(() => ({
-    base: emptyRule(), value: emptyRule(),
+    base: emptyRule(),
+    value: emptyRule(),
   }));
   const [ready, setReady] = useState(historyOnly);
   const [pending, setPending] = useState(false);
@@ -51,8 +62,14 @@ export function useScheduleSession({
     retry: false,
     refetchOnWindowFocus: false,
     refetchInterval: () =>
-      ready && !dirtyRef.current && !pending && !needsReload && !reloading &&
-      document.visibilityState === "visible" ? 5000 : false,
+      ready &&
+      !dirtyRef.current &&
+      !pending &&
+      !needsReload &&
+      !reloading &&
+      document.visibilityState === "visible"
+        ? 5000
+        : false,
   });
 
   useEffect(() => {
@@ -67,7 +84,16 @@ export function useScheduleSession({
     setDraft({ base: value, value });
     setReady(true);
     setError("");
-  }, [query.dataUpdatedAt, query.isSuccess, query.isError, query.error, historyOnly, pending, reloading, needsReload]);
+  }, [
+    query.dataUpdatedAt,
+    query.isSuccess,
+    query.isError,
+    query.error,
+    historyOnly,
+    pending,
+    reloading,
+    needsReload,
+  ]);
 
   const schedule = query.data ?? null;
   const form = draft.value;
@@ -119,8 +145,18 @@ export function useScheduleSession({
 
   const save = async () => {
     const signal = session.current?.signal;
-    if (!signal || signal.aborted || pending || needsReload || loading || query.isError ||
-      schedule?.enabled || !form.cronExpression.trim() || !dirty) return;
+    if (
+      !signal ||
+      signal.aborted ||
+      pending ||
+      needsReload ||
+      loading ||
+      query.isError ||
+      schedule?.enabled ||
+      !form.cronExpression.trim() ||
+      !dirty
+    )
+      return;
     setPending(true);
     await queryClient.cancelQueries({ queryKey: key });
     if (signal.aborted) return;
@@ -151,7 +187,8 @@ export function useScheduleSession({
 
   const toggle = async (enabled: boolean) => {
     const signal = session.current?.signal;
-    if (!signal || !schedule || pending || needsReload || dirty || signal.aborted || query.isError) return;
+    if (!signal || !schedule || pending || needsReload || dirty || signal.aborted || query.isError)
+      return;
     setPending(true);
     await queryClient.cancelQueries({ queryKey: key });
     if (signal.aborted) return;
@@ -201,11 +238,27 @@ export function useScheduleSession({
   };
 
   return {
-    tab, setTab, schedule, form, setForm: (value: ScheduleTimeRule) => {
-      setDraft(previous => ({ ...previous, value }));
+    tab,
+    setTab,
+    schedule,
+    form,
+    setForm: (value: ScheduleTimeRule) => {
+      setDraft((previous) => ({ ...previous, value }));
       setError("");
     },
-    dirty, loading, pending, error, needsReload, historyOnly, blocked,
-    confirmation, setConfirmation, save, toggle, remove, reload, close,
+    dirty,
+    loading,
+    pending,
+    error,
+    needsReload,
+    historyOnly,
+    blocked,
+    confirmation,
+    setConfirmation,
+    save,
+    toggle,
+    remove,
+    reload,
+    close,
   };
 }

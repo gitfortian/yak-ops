@@ -152,10 +152,36 @@ test("router imports Management entrypoints but private implementations stay own
 
 test("Schedule public contracts remain usable; private lifecycle imports are rejected", () => {
   const consumer = "apps/web/app/data-sync/detail/index.tsx";
-  assert.deepEqual(check(consumer, 'import { ScheduleDialog } from "@/app/schedule/dialog/schedule-dialog";'), []);
-  assert.deepEqual(check(consumer, 'import { useTaskSchedules } from "@/app/schedule/use-task-schedules";'), []);
-  assert.deepEqual(check("apps/web/app/data-sync/list/task-table.tsx", 'import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";'), []);
-  assert.match(check(consumer, 'import { useFireHistory } from "@/app/schedule/history/use-fire-history";').join("\n"), /imports a private Schedule feature/);
-  assert.match(check(consumer, 'const editor = import("@/app/schedule/dialog/use-schedule-session");').join("\n"), /imports a private Schedule feature/);
-  assert.match(check(consumer, 'export * from "../../schedule/query-keys";').join("\n"), /imports a private Schedule feature/);
+  assert.deepEqual(
+    check(consumer, 'import { ScheduleDialog } from "@/app/schedule/dialog/schedule-dialog";'),
+    [],
+  );
+  assert.deepEqual(
+    check(consumer, 'import { useTaskSchedules } from "@/app/schedule/use-task-schedules";'),
+    [],
+  );
+  assert.deepEqual(
+    check(
+      "apps/web/app/data-sync/list/task-table.tsx",
+      'import { TaskScheduleCell } from "@/app/schedule/task-schedule-cell";',
+    ),
+    [],
+  );
+  assert.match(
+    check(
+      consumer,
+      'import { useFireHistory } from "@/app/schedule/history/use-fire-history";',
+    ).join("\n"),
+    /imports a private Schedule feature/,
+  );
+  assert.match(
+    check(consumer, 'const editor = import("@/app/schedule/dialog/use-schedule-session");').join(
+      "\n",
+    ),
+    /imports a private Schedule feature/,
+  );
+  assert.match(
+    check(consumer, 'export * from "../../schedule/query-keys";').join("\n"),
+    /imports a private Schedule feature/,
+  );
 });

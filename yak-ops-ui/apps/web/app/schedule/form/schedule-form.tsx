@@ -14,7 +14,6 @@ import { useId } from "react";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import { SchedulePreview } from "./schedule-preview";
 
-
 const TIME_ZONES = [
   "Asia/Shanghai",
   "Asia/Hong_Kong",

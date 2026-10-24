@@ -40,4 +40,3 @@ export function SchedulePreview({ rule }: { rule: ScheduleTimeRule }) {
     </div>
   );
 }
-
