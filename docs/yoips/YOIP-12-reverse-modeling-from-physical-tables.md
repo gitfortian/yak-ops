@@ -115,7 +115,7 @@ A created model is an ordinary model. The wizard leaves no reverse-modeling mark
 
 ### 5. Frontend surface
 
-The wizard has three steps: select the physical table, review and correct the draft, confirm ownership and save. Step one reuses the extracted picker. Step two reuses the existing field editor for correction instead of introducing a second field table. Step three shows the derived name, the duplicate check result and the ownership selectors.
+The wizard has three steps: select the physical table, review and correct the draft, confirm ownership and save. Step one reuses the extracted picker. Step two reuses the existing field editor for correction instead of introducing a second field table, with the import actions hidden: `批量录入`, `从表导入` and `从数据标准导入` all presuppose a draft that is being built elsewhere, and leaving them visible would let the wizard re-import a different physical table after the user already picked one. Step three shows the derived name, the duplicate check result and the ownership selectors.
 
 The entry is a page action on the dimension-modeling page, not a new navigation menu item. The navigation contract stays as YOIP-9 defined it, and the wizard remains reachable from the module it belongs to.
 
