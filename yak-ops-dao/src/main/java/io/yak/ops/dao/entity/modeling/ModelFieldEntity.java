@@ -1,5 +1,6 @@
 package io.yak.ops.dao.entity.modeling;
 
+import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.dao.entity.BaseEntity;
 import lombok.Getter;
@@ -34,6 +35,8 @@ public class ModelFieldEntity extends BaseEntity {
     private Boolean isNotNull;
     /** Whether the field is the model partition column; same naming rule as {@link #isPrimaryKey}. */
     private Boolean isPartition;
+    /** Measure function for a DWS / ADS field; null for a plain column and outside those kinds. */
+    private AggregateType aggregateType;
     /** Bound field standard; null when the field is maintained by hand. */
     private String standardId;
     /** Optional business description. */

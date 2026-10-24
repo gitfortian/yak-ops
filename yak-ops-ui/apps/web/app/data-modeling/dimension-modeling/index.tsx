@@ -228,7 +228,7 @@ export default function DimensionModelingPage() {
       case "DOMAIN":
         return {
           title: `${selected.category.name} / ${selected.domain.name}`,
-          description: "该数据域下的明细表与维度表",
+          description: "该数据域下的明细表、汇总表与维度表",
           models: all.filter((model) => model.domainId === selected.domain.id),
         };
       case "DIMENSION": {
@@ -242,13 +242,13 @@ export default function DimensionModelingPage() {
       case "PROCESS":
         return {
           title: `${selected.domain.name} / ${selected.process.name}`,
-          description: "该业务过程下的明细表",
+          description: "该业务过程下的明细表与汇总表",
           models: all.filter((model) => model.processId === selected.process.id),
         };
       case "DATAMART":
         return {
           title: selected.datamart.name,
-          description: "该数据集市下的维度表与概念维度",
+          description: "该数据集市下的维度表与应用表",
           models: all.filter((model) => model.datamartId === selected.datamart.id),
         };
     }
@@ -258,21 +258,37 @@ export default function DimensionModelingPage() {
     switch (selected.kind) {
       case "PROCESS":
         return (
-          <Button
-            size="small"
-            variant="primary"
-            onClick={() =>
-              openEditor({
-                type: "DWD",
-                categoryId: selected.category.id,
-                domainId: selected.domain.id,
-                processId: selected.process.id,
-              })
-            }
-          >
-            <Plus size={14} />
-            新建明细表
-          </Button>
+          <>
+            <Button
+              size="small"
+              variant="primary"
+              onClick={() =>
+                openEditor({
+                  type: "DWD",
+                  categoryId: selected.category.id,
+                  domainId: selected.domain.id,
+                  processId: selected.process.id,
+                })
+              }
+            >
+              <Plus size={14} />
+              新建明细表
+            </Button>
+            <Button
+              size="small"
+              onClick={() =>
+                openEditor({
+                  type: "DWS",
+                  categoryId: selected.category.id,
+                  domainId: selected.domain.id,
+                  processId: selected.process.id,
+                })
+              }
+            >
+              <Plus size={14} />
+              新建汇总表
+            </Button>
+          </>
         );
       case "DIMENSION":
         return (
@@ -333,6 +349,19 @@ export default function DimensionModelingPage() {
             >
               <Plus size={14} />
               新建维度表
+            </Button>
+            <Button
+              size="small"
+              onClick={() =>
+                openEditor({
+                  type: "ADS",
+                  categoryId: catalog.tree.categories[0]?.id ?? "",
+                  datamartId: selected.datamart.id,
+                })
+              }
+            >
+              <Plus size={14} />
+              新建应用表
             </Button>
             <Button
               size="small"

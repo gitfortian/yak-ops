@@ -1,9 +1,18 @@
 import { Alert, Badge, Button, Empty, Spinner, Table, type TableColumns } from "@yak-ops/yak-ui";
 import { useEffect, useState, type ReactNode } from "react";
-import type { LogicalModel, StoragePolicy } from "@/service/data-modeling/dimension-modeling/types";
+import {
+  MODEL_TYPE_LABEL,
+  type ModelType,
+  type LogicalModel,
+  type StoragePolicy,
+} from "@/service/data-modeling/dimension-modeling/types";
 
-const TYPE_LABEL = { DWD: "明细表", DIM: "维度表" } as const;
-const TYPE_TONE = { DWD: "info", DIM: "warning" } as const;
+const TYPE_TONE: Record<ModelType, "info" | "warning" | "success" | "neutral"> = {
+  DWD: "info",
+  DIM: "warning",
+  DWS: "success",
+  ADS: "neutral",
+};
 const STORAGE_LABEL: Record<StoragePolicy, string> = {
   DAILY_INCREMENTAL: "每日增量",
   DAILY_FULL: "每日全量",
@@ -54,7 +63,7 @@ export default function ModelPanel(props: Props) {
       width: 92,
       render: (_, row) =>
         row.type ? (
-          <Badge tone={TYPE_TONE[row.type]}>{TYPE_LABEL[row.type]}</Badge>
+          <Badge tone={TYPE_TONE[row.type]}>{MODEL_TYPE_LABEL[row.type]}</Badge>
         ) : (
           <Badge tone="danger">未知类型</Badge>
         ),

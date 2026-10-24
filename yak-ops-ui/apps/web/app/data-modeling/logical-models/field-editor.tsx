@@ -12,6 +12,12 @@ import {
 } from "@yak-ops/yak-ui";
 import { useState } from "react";
 import type { StandardField } from "@/service/data-modeling/data-standards/types";
+import {
+  AGGREGATE_LABEL,
+  AGGREGATE_TYPES,
+  aggregateSupports,
+  type AggregateType,
+} from "@/service/data-modeling/dimension-modeling/types";
 import BatchImportDialog from "./batch-import-dialog";
 import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
@@ -23,13 +29,24 @@ interface Props {
   onChange: (rows: FieldDraft[]) => void;
   issues: FieldIssue[];
   disabled?: boolean;
+  /** True for DWS and ADS: those kinds own the measure column, DWD and DIM never show it. */
+  allowAggregate?: boolean;
+  /** True for DWS: the server rejects a save without any measure, so the last one is locked. */
+  requireMeasure?: boolean;
 }
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
 
 const cell = "border-b border-[#eaecf0] px-2 py-1.5 align-middle";
 
-export default function FieldEditor({ rows, onChange, issues, disabled = false }: Props) {
+export default function FieldEditor({
+  rows,
+  onChange,
+  issues,
+  disabled = false,
+  allowAggregate = false,
+  requireMeasure = false,
+}: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
   const [importingSource, setImportingSource] = useState(false);
@@ -77,6 +94,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
   };
   const partitionCount = rows.filter((row) => row.isPartition).length;
   const keyCount = rows.filter((row) => row.isPrimaryKey).length;
+  const measureCount = rows.filter((row) => row.aggregateType != null).length;
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -94,6 +112,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
         </Button>
         <span className="text-xs text-[#667475]">
           共 {rows.length} 个字段，主键 {keyCount} 个，分区 {partitionCount} 个
+          {allowAggregate && `，度量 ${measureCount} 个`}
         </span>
       </div>
       {issues.length > 0 && (
@@ -107,7 +126,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
         </ul>
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
-        <table className="w-full min-w-[1180px] border-collapse text-xs">
+        <table
+          className={`w-full ${allowAggregate ? "min-w-[1290px]" : "min-w-[1180px]"} border-collapse text-xs`}
+        >
           <thead className="sticky top-0 z-10 bg-[#fafafa] text-left text-[#475467]">
             <tr>
               <th className="w-[52px] border-b border-[#eaecf0] px-2 py-2 font-medium">序号</th>
@@ -132,6 +153,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
               <th className="w-[56px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
                 分区
               </th>
+              {allowAggregate && (
+                <th className="w-[128px] border-b border-[#eaecf0] px-2 py-2 font-medium">聚合</th>
+              )}
               <th className="w-[176px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 数据标准
               </th>
@@ -143,6 +167,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
           <tbody>
             {rows.map((row, index) => {
               const bound = Boolean(row.standardId);
+              // A DWS row without a measure is rejected on save, so the last measure cannot be
+              // dropped by deleting its row nor by clearing its aggregate.
+              const lastMeasure = requireMeasure && row.aggregateType != null && measureCount === 1;
               return (
                 <tr key={row.key} className="hover:bg-[#fcfcfd]">
                   <td className={`${cell} text-[#667475]`}>{index + 1}</td>
@@ -241,6 +268,39 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                       onCheckedChange={(checked) => patch(index, { isPartition: checked })}
                     />
                   </td>
+                  {allowAggregate && (
+                    <td className={cell}>
+                      <Select
+                        value={row.aggregateType ?? ""}
+                        onValueChange={(value) =>
+                          patch(index, {
+                            aggregateType: (value || null) as AggregateType | null,
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-7 w-full text-xs"
+                          disabled={disabled}
+                          aria-label={`第 ${index + 1} 行聚合方式`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="" disabled={lastMeasure}>
+                            无
+                          </SelectItem>
+                          {AGGREGATE_TYPES.filter(
+                            (aggregate) =>
+                              !row.dataType || aggregateSupports(aggregate, row.dataType),
+                          ).map((aggregate) => (
+                            <SelectItem key={aggregate} value={aggregate}>
+                              <SelectItemText>{AGGREGATE_LABEL[aggregate]}</SelectItemText>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  )}
                   <td className={cell}>
                     {bound ? (
                       <div className="flex items-center gap-1">
@@ -292,9 +352,10 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                       <Button
                         size="small"
                         variant="ghost"
-                        disabled={disabled}
+                        disabled={disabled || lastMeasure}
                         className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
                         aria-label={`删除第 ${index + 1} 行`}
+                        title={lastMeasure ? "汇总表至少需要一个度量字段" : undefined}
                         onClick={() => onChange(rows.filter((_, position) => position !== index))}
                       >
                         删除
@@ -306,7 +367,10 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-[#667475]">
+                <td
+                  colSpan={allowAggregate ? 11 : 10}
+                  className="px-3 py-8 text-center text-[#667475]"
+                >
                   暂无字段，先添加一行、批量录入或从数据标准导入
                 </td>
               </tr>

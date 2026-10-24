@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.vo.modeling;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 
 /**
@@ -15,6 +16,7 @@ import io.yak.ops.common.enums.modeling.standard.DataType;
  * @param isPrimaryKey whether the user marked the field as part of the primary key
  * @param isNotNull whether the layer requires a non-null value
  * @param isPartition whether the field is the model partition column
+ * @param aggregateType measure function, null for a plain column and always null outside DWS / ADS
  * @param standardId bound field standard identity, null when maintained by hand
  * @param standardEnCode bound standard code for display, null when unbound
  * @param description optional business description
@@ -29,6 +31,7 @@ public record ModelFieldVO(
         @JsonProperty("isPrimaryKey") boolean isPrimaryKey,
         @JsonProperty("isNotNull") boolean isNotNull,
         @JsonProperty("isPartition") boolean isPartition,
+        AggregateType aggregateType,
         String standardId,
         String standardEnCode,
         String description) {}

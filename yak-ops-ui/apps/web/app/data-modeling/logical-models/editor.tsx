@@ -26,6 +26,8 @@ import type {
   StoragePolicy,
 } from "@/service/data-modeling/dimension-modeling/types";
 import {
+  AGGREGATE_MODEL_TYPES,
+  aggregateSupports,
   MODEL_TYPES,
   MODEL_TYPE_HINT,
   MODEL_TYPE_LABEL,
@@ -309,7 +311,8 @@ export default function LogicalModelEditorPage() {
       type,
       processId: "",
       dimensionId: "",
-      domainId: type === "DIM" && form.scope === "APPLICATION" ? "" : form.domainId,
+      datamartId: type === "ADS" || type === "DIM" ? form.datamartId : "",
+      domainId: type === "ADS" ? "" : form.domainId,
     });
   };
 
@@ -352,6 +355,19 @@ export default function LogicalModelEditorPage() {
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length || issues.length) return;
+    if (
+      rows.some(
+        (row) =>
+          row.aggregateType && row.dataType && !aggregateSupports(row.aggregateType, row.dataType),
+      )
+    ) {
+      setFailure("聚合方式与字段类型不匹配：SUM/AVG 只能用于 BIGINT 或 DECIMAL");
+      return;
+    }
+    if (form.type === "DWS" && !rows.some((row) => row.aggregateType)) {
+      setFailure("汇总表至少需要一个带聚合方式的度量字段");
+      return;
+    }
     if (nameState === "taken") {
       setErrors({ nameSuffix: "表名在当前工作空间已存在" });
       return;
@@ -360,10 +376,15 @@ export default function LogicalModelEditorPage() {
       type: form.type,
       layerId: form.layerId,
       categoryId: form.categoryId,
-      processId: form.type === "DWD" ? form.processId || null : null,
-      domainId: form.type === "DWD" || form.scope === "PUBLIC" ? form.domainId || null : null,
+      processId: form.type === "DWD" || form.type === "DWS" ? form.processId || null : null,
+      domainId:
+        form.type === "DWD" || form.type === "DWS" || form.scope === "PUBLIC"
+          ? form.domainId || null
+          : null,
       datamartId:
-        form.type === "DIM" && form.scope === "APPLICATION" ? form.datamartId || null : null,
+        form.type === "ADS" || (form.type === "DIM" && form.scope === "APPLICATION")
+          ? form.datamartId || null
+          : null,
       dimensionId: form.type === "DIM" ? form.dimensionId || null : null,
       nameSuffix: suffix,
       cnName: form.cnName.trim(),
@@ -509,7 +530,12 @@ export default function LogicalModelEditorPage() {
                         : MODEL_TYPE_HINT[form.type]
                   }
                   items={MODEL_TYPES.map((value) => ({ value, label: MODEL_TYPE_LABEL[value] }))}
-                  onChange={(value) => changeType(value === "DIM" ? "DIM" : "DWD")}
+                  onChange={(value) => {
+                    // The items come from MODEL_TYPES, so an unknown value can only mean a
+                    // desynchronized option list; ignore it instead of coercing to DWD.
+                    const next = MODEL_TYPES.find((candidate) => candidate === value);
+                    if (next) changeType(next);
+                  }}
                 />
               )}
               <SelectField
@@ -535,7 +561,7 @@ export default function LogicalModelEditorPage() {
                   />
                 </Field>
               )}
-              {form.type === "DWD" || form.scope === "PUBLIC" ? (
+              {form.type === "DWD" || form.type === "DWS" || form.scope === "PUBLIC" ? (
                 <>
                   <SelectField
                     id="model-category"
@@ -575,7 +601,7 @@ export default function LogicalModelEditorPage() {
                   onChange={(value) => patch({ datamartId: value, dimensionId: "" })}
                 />
               )}
-              {form.type === "DWD" && (
+              {(form.type === "DWD" || form.type === "DWS") && (
                 <SelectField
                   id="model-process"
                   label="业务过程"
@@ -606,7 +632,7 @@ export default function LogicalModelEditorPage() {
                   onChange={(value) => patch({ dimensionId: value })}
                 />
               )}
-              {form.type === "DIM" && form.scope === "APPLICATION" && (
+              {(form.type === "ADS" || (form.type === "DIM" && form.scope === "APPLICATION")) && (
                 <SelectField
                   id="model-archive-category"
                   label="归档分类"
@@ -726,6 +752,8 @@ export default function LogicalModelEditorPage() {
               onChange={setRows}
               issues={attempted ? issues : []}
               disabled={disabled}
+              allowAggregate={AGGREGATE_MODEL_TYPES.has(form.type)}
+              requireMeasure={form.type === "DWS"}
             />
           </Section>
         </div>
