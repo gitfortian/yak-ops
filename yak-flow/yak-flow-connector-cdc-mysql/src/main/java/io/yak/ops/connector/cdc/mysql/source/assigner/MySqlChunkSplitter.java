@@ -207,8 +207,7 @@ public final class MySqlChunkSplitter {
      * progress position. Non-unique key values stay within one half-open chunk.
      */
     public MySqlSnapshotSplit planNextTyped(
-            TableId table, String fingerprint, int tableIndex, int chunkIndex, ChunkRange cursor)
-            throws SQLException {
+            TableId table, String fingerprint, int tableIndex, int chunkIndex, ChunkRange cursor) throws SQLException {
         if (cancelled || tableIndex < 0 || chunkIndex < 0 || chunkIndex >= MAX_CHUNKS_PER_TABLE) {
             throw new SQLException("MySQL typed chunk discovery is cancelled or exceeds its range limit");
         }
@@ -226,8 +225,7 @@ public final class MySqlChunkSplitter {
             throw new IllegalArgumentException("Typed chunk index and restored discovery cursor differ");
         }
         ChunkRange range = nextChunk(table, cursor == null ? null : cursor.start());
-        return MySqlSnapshotSplit.typed(
-                "mysql-snapshot-" + tableIndex + "-" + chunkIndex, fingerprint, range);
+        return MySqlSnapshotSplit.typed("mysql-snapshot-" + tableIndex + "-" + chunkIndex, fingerprint, range);
     }
 
     /** Signals terminal discovery cancellation without blocking the coordinator. */

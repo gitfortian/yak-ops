@@ -80,7 +80,8 @@ public final class MySqlHybridSourceEnumerator
         tables = List.copyOf(config.schemas().keySet());
         typedTables = new LinkedHashSet<>();
         config.schemas().forEach((table, schema) -> {
-            var chunkColumn = ChunkUtils.getChunkKeyColumn(schema, config.chunkKeyColumns().get(table));
+            var chunkColumn = ChunkUtils.getChunkKeyColumn(
+                    schema, config.chunkKeyColumns().get(table));
             if (schema.primaryKeys().size() != 1
                     || !schema.primaryKeys().getFirst().equals(chunkColumn.name())
                     || chunkColumn.dataType().getTypeRoot() != LogicalTypeRoot.BIGINT) {
@@ -264,11 +265,7 @@ public final class MySqlHybridSourceEnumerator
                         assigner.appendTypedPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
                     } else {
                         assigner.appendPlan(
-                                split,
-                                nextTable,
-                                nextChunk,
-                                split.upperExclusive(),
-                                nextTable == tables.size());
+                                split, nextTable, nextChunk, split.upperExclusive(), nextTable == tables.size());
                     }
                     // A table's final split count is only known after the terminal range.
                     if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
