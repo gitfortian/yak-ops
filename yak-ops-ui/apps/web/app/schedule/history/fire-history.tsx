@@ -1,28 +1,11 @@
 import {
-  Button,
-  Field,
-  FieldError,
-  FieldLabel,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectTrigger,
-  SelectValue,
-  Table,
-  type TableColumns,
+  Button, Field, FieldError, FieldLabel, Input, Select, SelectContent, SelectItem,
+  SelectItemIndicator, SelectItemText, SelectTrigger, SelectValue, Table, type TableColumns
 } from "@yak-ops/yak-ui";
-import { useEffect, useState } from "react";
-import {
-  listScheduleFires,
-  scheduleErrorMessage,
-  type ScheduleFireOutcome,
-  type ScheduleFireRecord,
-  type SchedulePage,
-} from "@/service/schedule";
-import { FIRE_OUTCOMES, formatScheduleTime, scheduleReasonText } from "./schedule-presentation";
+import { useState } from "react";
+import { scheduleErrorMessage, type ScheduleFireOutcome, type ScheduleFireRecord } from "@/service/schedule";
+import { FIRE_OUTCOMES, formatScheduleTime, scheduleReasonText } from "../schedule-presentation";
+import { useFireHistory } from "./use-fire-history";
 
 export function ScheduleFireHistory({
   scheduleId,
@@ -35,56 +18,12 @@ export function ScheduleFireHistory({
   const [outcome, setOutcome] = useState<ScheduleFireOutcome | "ALL">("ALL");
   const [from, setFrom] = useState("");
   const [until, setUntil] = useState("");
-  const [page, setPage] = useState<SchedulePage<ScheduleFireRecord>>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [refresh, setRefresh] = useState(0);
   const invalidRange = Boolean(from && until && from >= until);
-  useEffect(() => {
-    setPage(undefined);
-    setError("");
-    if (invalidRange) {
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    let pending = false;
-    const load = async () => {
-      if (pending || controller.signal.aborted) return;
-      pending = true;
-      setLoading(true);
-      try {
-        const result = await listScheduleFires(
-          scheduleId,
-          {
-            pageNo,
-            pageSize: 20,
-            outcome: outcome === "ALL" ? undefined : outcome,
-            from: from ? new Date(from + "Z").toISOString() : undefined,
-            until: until ? new Date(until + "Z").toISOString() : undefined,
-          },
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setPage(result);
-          setError("");
-        }
-      } catch (failure) {
-        if (!controller.signal.aborted) setError(scheduleErrorMessage(failure));
-      } finally {
-        pending = false;
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, 5000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [scheduleId, pageNo, outcome, from, until, refresh, invalidRange]);
+  const query = useFireHistory(scheduleId, { pageNo, outcome, from, until });
+  const page = query.data;
+  const loading = !invalidRange && (query.isPending || query.isFetching);
+  const error = query.isError ? scheduleErrorMessage(query.error) : "";
+
   const columns: TableColumns<ScheduleFireRecord> = [
     {
       key: "scheduledTime",
@@ -181,7 +120,7 @@ export function ScheduleFireHistory({
         <Button
           size="small"
           disabled={loading || invalidRange}
-          onClick={() => setRefresh((value) => value + 1)}
+          onClick={() => void query.refetch()}
         >
           刷新
         </Button>

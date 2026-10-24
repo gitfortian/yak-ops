@@ -1,7 +1,7 @@
 import { Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
+import { ScheduleDialog } from "@/app/schedule/dialog/schedule-dialog";
 import { useTaskSchedules } from "@/app/schedule/use-task-schedules";
 import { canManageTaskDefinition } from "@/service/data-sync/execution";
 import { useActiveTaskInstance } from "./use-active-task-instance";

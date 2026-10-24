@@ -92,6 +92,16 @@ export function checkArchitectureImports(relativePath, content, root) {
     ) {
       violations.push(relativePath + " crosses Management feature boundaries: " + specifier);
     }
+    const schedule = resolve(app, "schedule");
+    const schedulePublicEntries = new Set([
+      resolve(schedule, "dialog/schedule-dialog"),
+      resolve(schedule, "task-schedule-cell"),
+      resolve(schedule, "use-task-schedules"),
+      resolve(schedule, "schedule-presentation"),
+    ]);
+    if (inside(target, schedule) && !inside(source, schedule) && !schedulePublicEntries.has(target)) {
+      violations.push(relativePath + " imports a private Schedule feature: " + specifier);
+    }
     if (inside(source, service) && inside(target, app)) {
       violations.push(relativePath + " imports App code: " + specifier);
     }
