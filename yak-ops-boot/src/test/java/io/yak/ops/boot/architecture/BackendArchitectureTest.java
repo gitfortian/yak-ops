@@ -22,7 +22,14 @@ class BackendArchitectureTest {
             .resideInAPackage("io.yak.ops.core..")
             .should()
             .dependOnClassesThat()
-            .resideInAnyPackage("io.yak.ops.flow.runtime..", "io.yak.ops.business..", "io.yak.ops.boot..");
+            .resideInAnyPackage(
+                    "io.yak.ops.flow.runtime..",
+                    "io.yak.ops.connector..",
+                    "io.yak.ops.business..",
+                    "io.yak.ops.task.execution..",
+                    "io.yak.ops.dao..",
+                    "io.yak.ops.plugin..",
+                    "io.yak.ops.boot..");
 
     @Test
     void checksAllExpectedModulePackages() {
@@ -40,7 +47,7 @@ class BackendArchitectureTest {
     }
 
     @Test
-    void coreCannotDependOnRuntimeOrProductCode() {
+    void coreCannotDependOnRuntimeConnectorsOrProductCode() {
         CORE_ISOLATION.check(PRODUCTION);
     }
 
