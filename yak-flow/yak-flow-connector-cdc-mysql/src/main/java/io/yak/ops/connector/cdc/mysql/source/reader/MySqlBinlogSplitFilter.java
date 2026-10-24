@@ -1,10 +1,15 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.TableSchema;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -15,118 +20,154 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Filters Binlog changes already contained in per-chunk normalized snapshot output.
+ * Filters changes already reflected in the normalized snapshot using the matched chunk's High
+ * watermark, independently for the before and after images of an UPDATE.
  *
- * <p>Each completed snapshot chunk contributes a High Watermark fence. A primary-key
- * move can have different fences for its old and new keys; if only one half survives,
- * convert that half to standalone
- * DELETE or INSERT so the downstream JDBC Sink never sees an incomplete UPDATE pair.
+ * <p>The legacy constructor reads BIGINT primary-key checkpoint metadata without changing its
+ * wire format. Typed chunk metadata is planning-only until versioned split/Enumerator checkpoints
+ * and Snapshot readers can persist and restore typed boundaries.
  */
 public final class MySqlBinlogSplitFilter {
 
-    private final Map<TableId, List<FinishedSnapshotSplitInfo>> completed = new LinkedHashMap<>();
-    private final Map<TableId, Integer> keyPositions = new LinkedHashMap<>();
-    private final Map<TableId, Integer> columnCounts = new LinkedHashMap<>();
+    /** Typed filtering fence; persisted transport will be introduced with checkpoint migration. */
+    public record FinishedChunk(String splitId, ChunkRange range, BinlogOffset highWatermark) {
+        public FinishedChunk {
+            if (splitId == null || splitId.isBlank()) {
+                throw new IllegalArgumentException("Finished chunk must have a stable split identity");
+            }
+            Objects.requireNonNull(range, "range");
+            Objects.requireNonNull(highWatermark, "highWatermark");
+        }
+    }
+
+    private record ChunkColumn(String name, LogicalTypeRoot type, int position, int columnCount) {}
+
+    private final Map<TableId, List<FinishedChunk>> completed = new LinkedHashMap<>();
+    private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
+    private final boolean legacyPrimaryKey;
+
+    /** Existing checkpoint-backed path; its BIGINT primary-key admission remains unchanged. */
+    public MySqlBinlogSplitFilter(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
+        this(schemas, legacyChunks(schemas, finished), true);
+    }
 
     /**
-     * Builds an immutable table-indexed filter using the completed initial snapshot.
+     * Filters using the explicitly chosen chunk column rather than a source physical primary key.
      *
-     * @param schemas frozen source table schemas
-     * @param finished fully normalized chunks and their completed High watermarks
+     * <p>Bounded strings remain unsupported because Java string comparison does not implement
+     * MySQL's collation. A single unbounded string chunk is valid without comparing strings.
      */
-    public MySqlBinlogSplitFilter(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
+    public static MySqlBinlogSplitFilter forChunks(
+            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
+        return new MySqlBinlogSplitFilter(schemas, finished, false);
+    }
+
+    private MySqlBinlogSplitFilter(
+            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished, boolean legacyPrimaryKey) {
         Objects.requireNonNull(schemas, "schemas");
         Objects.requireNonNull(finished, "finished");
         if (schemas.isEmpty() || finished.isEmpty()) {
             throw new IllegalArgumentException("Binlog filtering requires completed snapshot metadata");
         }
-        for (Map.Entry<TableId, TableSchema> entry : schemas.entrySet()) {
-            TableSchema schema = entry.getValue();
-            if (schema.primaryKeys().size() != 1) {
-                throw new IllegalArgumentException("Binlog filtering requires exactly one primary key");
+        this.legacyPrimaryKey = legacyPrimaryKey;
+        for (var entry : schemas.entrySet()) {
+            completed.put(entry.getKey(), new ArrayList<>());
+        }
+        Set<String> ids = new HashSet<>();
+        for (FinishedChunk chunk : finished) {
+            if (!ids.add(chunk.splitId())) {
+                throw new IllegalArgumentException("Duplicate completed snapshot chunk identity");
             }
-            String primaryKey = schema.primaryKeys().getFirst();
-            int index = -1;
+            TableId table = chunk.range().tableId();
+            List<FinishedChunk> chunks = completed.get(table);
+            if (chunks == null) throw new IllegalArgumentException("Unknown completed snapshot table");
+            TableSchema schema = schemas.get(table);
+            ChunkRange range = chunk.range();
+            Column column = schema.columns().stream()
+                    .filter(candidate -> candidate.name().equals(range.column()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown snapshot chunk column"));
+            if (column.nullable() || column.dataType().getTypeRoot() != range.type()) {
+                throw new IllegalArgumentException("Snapshot chunk column differs from the source schema");
+            }
+            int position = -1;
             for (int i = 0; i < schema.columnCount(); i++) {
-                if (schema.column(i).name().equals(primaryKey)) {
-                    index = i;
+                if (schema.column(i).name().equals(range.column())) {
+                    position = i;
                     break;
                 }
             }
-            if (index < 0) {
-                throw new IllegalArgumentException("Binlog primary key is not present in source schema");
+            if (legacyPrimaryKey && (schema.primaryKeys().size() != 1
+                    || !schema.primaryKeys().getFirst().equals(range.column())
+                    || range.type() != LogicalTypeRoot.BIGINT)) {
+                throw new IllegalArgumentException("Binlog filtering requires exactly one BIGINT primary key");
             }
-            completed.put(entry.getKey(), new ArrayList<>());
-            keyPositions.put(entry.getKey(), index);
-            columnCounts.put(entry.getKey(), schema.columnCount());
+            ChunkColumn previous = columns.putIfAbsent(
+                    table, new ChunkColumn(range.column(), range.type(), position, schema.columnCount()));
+            if (previous != null
+                    && (!previous.name().equals(range.column()) || previous.type() != range.type())) {
+                throw new IllegalArgumentException("Finished chunks use different snapshot chunk columns");
+            }
+            if ((range.type() == LogicalTypeRoot.CHAR || range.type() == LogicalTypeRoot.VARCHAR)
+                    && (range.start() != null || range.end() != null)) {
+                throw new IllegalArgumentException(
+                        "Bounded string chunks require MySQL collation-aware Binlog comparisons");
+            }
+            chunks.add(chunk);
         }
-        Set<String> splitIds = new HashSet<>();
-        for (FinishedSnapshotSplitInfo chunk : finished) {
-            if (!splitIds.add(chunk.splitId())) {
-                throw new IllegalArgumentException("Duplicate completed snapshot chunk identity");
-            }
-            List<FinishedSnapshotSplitInfo> table = completed.get(chunk.tableId());
-            if (table == null) {
-                throw new IllegalArgumentException("Unknown completed snapshot table");
-            }
-            table.add(chunk);
-        }
-        completed.replaceAll((table, infos) -> {
-            if (infos.isEmpty()) {
+        completed.replaceAll((table, chunks) -> {
+            if (chunks.isEmpty()) {
                 throw new IllegalArgumentException("Missing completed snapshot chunks for " + table);
             }
-            infos.sort(Comparator.comparing(
-                    FinishedSnapshotSplitInfo::lowerInclusive, Comparator.nullsFirst(Comparator.naturalOrder())));
-            if (infos.getFirst().lowerInclusive() != null || infos.getLast().upperExclusive() != null) {
+            chunks.sort(Comparator.comparing(
+                    (FinishedChunk chunk) -> chunk.range().start(),
+                    Comparator.nullsFirst((left, right) -> compare(columns.get(table).type(), left, right))));
+            if (chunks.getFirst().range().start() != null || chunks.getLast().range().end() != null) {
                 throw new IllegalArgumentException("Finished snapshot ranges do not cover the entire keyspace");
             }
-            for (int index = 1; index < infos.size(); index++) {
-                if (infos.get(index - 1).upperExclusive() == null
-                        || infos.get(index).lowerInclusive() == null
-                        || !Objects.equals(
-                                infos.get(index - 1).upperExclusive(),
-                                infos.get(index).lowerInclusive())) {
+            for (int index = 1; index < chunks.size(); index++) {
+                Object upper = chunks.get(index - 1).range().end();
+                Object lower = chunks.get(index).range().start();
+                if (upper == null
+                        || lower == null
+                        || compare(columns.get(table).type(), upper, lower) != 0) {
                     throw new IllegalArgumentException("Finished snapshot ranges have a gap or overlap");
                 }
             }
-            return List.copyOf(infos);
+            return List.copyOf(chunks);
         });
     }
 
-    /**
-     * Emits only events after the matching chunk's High watermark.
-     *
-     * <p>Empty results still carry their Binlog offset and may advance checkpoint progress.
-     * Callers must use this only after every chunk finished with bounded backfill.
-     */
+    private static List<FinishedChunk> legacyChunks(
+            Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
+        Objects.requireNonNull(schemas, "schemas");
+        Objects.requireNonNull(finished, "finished");
+        List<FinishedChunk> result = new ArrayList<>(finished.size());
+        for (FinishedSnapshotSplitInfo item : finished) {
+            TableSchema schema = schemas.get(item.tableId());
+            if (schema == null) throw new IllegalArgumentException("Unknown completed snapshot table");
+            if (schema.primaryKeys().size() != 1) {
+                throw new IllegalArgumentException("Binlog filtering requires exactly one primary key");
+            }
+            String key = schema.primaryKeys().getFirst();
+            result.add(new FinishedChunk(
+                    item.splitId(),
+                    new ChunkRange(
+                            item.tableId(), key, LogicalTypeRoot.BIGINT, item.lowerInclusive(), item.upperExclusive()),
+                    item.highWatermark()));
+        }
+        return result;
+    }
+
+    /** An empty result retains the original offset so the caller can advance progress. */
     public BinlogEvent filter(BinlogEvent event) {
         Objects.requireNonNull(event, "event");
-        List<TableRecord> rows = event.records();
         if (event.schemaChange() != null) {
-            var source = event.schemaChange();
-            if (!completed.containsKey(source.tableId())
-                    || !source.before().primaryKeys().equals(source.after().primaryKeys())
-                    || source.after().primaryKeys().size() != 1) {
-                throw new UnsupportedOperationException("MySQL CDC cannot change Binlog filter primary keys");
-            }
-            String key = source.after().primaryKeys().getFirst();
-            int keyPosition = -1;
-            for (int index = 0; index < source.after().columns().size(); index++) {
-                if (source.after().columns().get(index).name().equals(key)) {
-                    keyPosition = index;
-                    break;
-                }
-            }
-            if (keyPosition < 0) {
-                throw new UnsupportedOperationException("MySQL CDC schema change removed the Binlog primary key");
-            }
-            keyPositions.put(source.tableId(), keyPosition);
-            columnCounts.put(source.tableId(), source.after().columns().size());
+            validateSchemaChange(event);
             return event;
         }
-        if (rows.isEmpty()) {
-            return event;
-        }
+        List<TableRecord> rows = event.records();
+        if (rows.isEmpty()) return event;
         if (rows.size() == 2) {
             TableRecord before = rows.get(0);
             TableRecord after = rows.get(1);
@@ -135,11 +176,10 @@ public final class MySqlBinlogSplitFilter {
                     || !before.tableId().equals(after.tableId())) {
                 throw new IllegalArgumentException("Binlog filter requires complete adjacent UPDATE pairs");
             }
+            // Evaluate and validate both images before returning any partial change.
             boolean keepBefore = shouldEmit(before, event);
             boolean keepAfter = shouldEmit(after, event);
-            if (keepBefore && keepAfter) {
-                return event;
-            }
+            if (keepBefore && keepAfter) return event;
             if (keepBefore) {
                 return new BinlogEvent(
                         List.of(new TableRecord(before.tableId(), RowKind.DELETE, before.row())), event.offset());
@@ -158,36 +198,90 @@ public final class MySqlBinlogSplitFilter {
         return shouldEmit(rows.getFirst(), event) ? event : new BinlogEvent(List.of(), event.offset());
     }
 
+    private void validateSchemaChange(BinlogEvent event) {
+        var change = event.schemaChange();
+        ChunkColumn previous = columns.get(change.tableId());
+        if (previous == null
+                || !change.before().primaryKeys().equals(change.after().primaryKeys())
+                || (legacyPrimaryKey && change.after().primaryKeys().size() != 1)) {
+            throw new UnsupportedOperationException("MySQL CDC cannot change Binlog filter primary keys");
+        }
+        int position = -1;
+        for (int i = 0; i < change.after().columns().size(); i++) {
+            var column = change.after().columns().get(i);
+            if (column.name().equals(previous.name())) {
+                if (column.type().getTypeRoot() != previous.type() || column.type().isNullable()) {
+                    throw new UnsupportedOperationException("MySQL CDC cannot change the snapshot chunk column type");
+                }
+                position = i;
+                break;
+            }
+        }
+        if (position < 0) {
+            throw new UnsupportedOperationException("MySQL CDC schema change removed the snapshot chunk column");
+        }
+        columns.put(
+                change.tableId(),
+                new ChunkColumn(previous.name(), previous.type(), position, change.after().columns().size()));
+    }
+
     private boolean shouldEmit(TableRecord record, BinlogEvent event) {
-        List<FinishedSnapshotSplitInfo> infos = completed.get(record.tableId());
-        Integer position = keyPositions.get(record.tableId());
-        if (infos == null || position == null) {
+        List<FinishedChunk> chunks = completed.get(record.tableId());
+        ChunkColumn column = columns.get(record.tableId());
+        if (chunks == null || column == null) {
             throw new IllegalArgumentException("Binlog event references an unregistered source table");
         }
-        if (record.row().getArity() != columnCounts.get(record.tableId())
-                || record.row().isNullAt(position)) {
-            throw new IllegalArgumentException("Binlog row violates its frozen schema or primary key");
+        if (record.row().getArity() != column.columnCount() || record.row().isNullAt(column.position())) {
+            throw new IllegalArgumentException("Binlog row violates its frozen schema or chunk column");
         }
-        long key = record.row().getLong(position);
-        // Construction proves complete, non-overlapping coverage. Find the greatest
-        // inclusive lower bound without scanning every chunk for each Binlog mutation.
+        Object value = record.row().getField(column.position());
         int left = 0;
-        int right = infos.size() - 1;
-        int matched = 0;
+        int right = chunks.size() - 1;
+        int found = 0;
+        // Find the greatest inclusive lower bound using only supported scalar semantics.
         while (left <= right) {
             int middle = left + (right - left) / 2;
-            Long lower = infos.get(middle).lowerInclusive();
-            if (lower == null || lower <= key) {
-                matched = middle;
+            Object lower = chunks.get(middle).range().start();
+            if (lower == null || compare(column.type(), lower, value) <= 0) {
+                found = middle;
                 left = middle + 1;
             } else {
                 right = middle - 1;
             }
         }
-        FinishedSnapshotSplitInfo match = infos.get(matched);
-        if (!match.contains(key)) {
-            throw new IllegalStateException("Missing finished snapshot metadata for Binlog key");
+        FinishedChunk match = chunks.get(found);
+        Object upper = match.range().end();
+        if (upper != null && compare(column.type(), value, upper) >= 0) {
+            throw new IllegalStateException("Missing finished snapshot metadata for Binlog chunk key");
         }
         return event.offset().compareTo(match.highWatermark()) > 0;
+    }
+
+    private static int compare(LogicalTypeRoot type, Object left, Object right) {
+        return switch (type) {
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> Long.compare(toLong(left), toLong(right));
+            case DECIMAL -> toDecimal(left).compareTo(toDecimal(right));
+            default -> throw new IllegalArgumentException("Chunk key requires database-aware comparison: " + type);
+        };
+    }
+
+    private static long toLong(Object value) {
+        if (value instanceof Long number) return number;
+        if (value instanceof Integer number) return number.longValue();
+        if (value instanceof Short number) return number.longValue();
+        if (value instanceof Byte number) return number.longValue();
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("Binlog numeric chunk key has an unexpected type");
+        }
+        try {
+            return new BigDecimal(number.toString()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException error) {
+            throw new IllegalArgumentException("Binlog numeric chunk key exceeds signed BIGINT range", error);
+        }
+    }
+
+    private static BigDecimal toDecimal(Object value) {
+        if (value instanceof BigDecimal decimal) return decimal;
+        throw new IllegalArgumentException("Binlog decimal chunk key must be a BigDecimal");
     }
 }
