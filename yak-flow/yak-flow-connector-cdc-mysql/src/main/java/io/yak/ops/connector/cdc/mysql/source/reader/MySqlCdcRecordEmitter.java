@@ -1,8 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
-
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.data.TableRecord;
 
