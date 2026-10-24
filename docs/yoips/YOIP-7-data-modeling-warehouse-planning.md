@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/3
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/3#issuecomment-6332458363
 
-Implementation: Planned — Warehouse Planning
+Implementation: Implemented — https://github.com/gitfortian/yak-ops/pull/4
 
 Release: N/A until released
 

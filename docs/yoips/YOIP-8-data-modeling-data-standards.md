@@ -8,7 +8,7 @@ Decision: [VOTE] +1 Accepted — https://github.com/gitfortian/yak-ops/pull/5#is
 
 Implementation: Implemented — https://github.com/gitfortian/yak-ops/pull/6
 
-Release: 1.4.0, shipped with warehouse planning
+Release: N/A until released
 
 Related FLIPs: N/A
 
