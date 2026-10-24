@@ -24,7 +24,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 
-/** Exercises structured Debezium DDL, ordered row conversion and Source mailbox gating. */
+/** Exercises structured Debezium DDL, ordered row conversion and Source mailbox schema-change handling. */
 class MySqlSchemaChangeConverterTest {
 
     private static final TableId SOURCE = new TableId("shop", null, "orders");
@@ -254,7 +254,7 @@ class MySqlSchemaChangeConverterTest {
                 return acknowledgment;
             }
         };
-        var gate = new MySqlSchemaChangeGate(context);
+        var handler = new MySqlSchemaChangeHandler(context);
         Schema before = Schema.from(ORIGINAL, null, Map.of(), Map.of());
         Schema after = new Schema(
                 List.of(
@@ -262,13 +262,18 @@ class MySqlSchemaChangeConverterTest {
                         before.columns().get(1),
                         new io.yak.ops.core.schema.PhysicalColumn("note", LogicalTypes.varchar(128))),
                 List.of("id"));
-        gate.begin(new SourceSchemaChange("position-100", SOURCE, before, after), () -> progressed.set(true));
-        assertFalse(gate.consumeAcknowledgment());
-        assertThrows(IllegalStateException.class, gate::requireCheckpointReady);
+        handler.submitSchemaChange(
+                new SourceSchemaChange("position-100", SOURCE, before, after), () -> progressed.set(true));
+        assertFalse(handler.tryCompleteSchemaChange());
+        assertFalse(handler.getAvailableFuture().isDone());
+        assertThrows(IllegalStateException.class, handler::requireNoPendingSchemaChange);
         acknowledgment.complete(1L);
-        assertTrue(gate.consumeAcknowledgment());
+        assertTrue(handler.getAvailableFuture().isDone());
+        assertThrows(IllegalStateException.class, handler::requireNoPendingSchemaChange);
+        assertFalse(progressed.get());
+        assertTrue(handler.tryCompleteSchemaChange());
         assertTrue(progressed.get());
-        gate.requireCheckpointReady();
+        handler.requireNoPendingSchemaChange();
     }
 
     private static SourceRecord ddl(String type, String tableJson, long position) {

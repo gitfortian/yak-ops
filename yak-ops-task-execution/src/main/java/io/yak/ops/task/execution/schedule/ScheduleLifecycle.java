@@ -1,7 +1,7 @@
 package io.yak.ops.task.execution.schedule;
 
 import io.yak.ops.business.schedule.ScheduleRegistrationService;
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.plugin.scheduler.api.Scheduler;
 import io.yak.ops.task.execution.owner.EmbeddedExecutionOwner;
 import jakarta.annotation.PostConstruct;
@@ -28,7 +28,7 @@ public class ScheduleLifecycle implements AutoCloseable {
     private Scheduler scheduler;
 
     @Resource
-    private ScheduleAdmissionGate gate;
+    private ScheduleAdmissionController admissionController;
 
     @Resource
     private ScheduleRegistrationService registrations;
@@ -47,11 +47,11 @@ public class ScheduleLifecycle implements AutoCloseable {
         if (interval == null || interval.toMillis() < 1) {
             throw new IllegalArgumentException("Schedule reconciliation interval must be positive");
         }
-        gate.prepare(owner.incarnation(), () -> owner.incarnation());
+        admissionController.prepare(owner.incarnation(), () -> owner.incarnation());
         try {
             scheduler.initialize();
             registrations.reconcile();
-            gate.open();
+            admissionController.open();
             scheduler.start();
             poller.scheduleWithFixedDelay(
                     this::reconcile, interval.toMillis(), interval.toMillis(), TimeUnit.MILLISECONDS);
@@ -67,9 +67,9 @@ public class ScheduleLifecycle implements AutoCloseable {
 
     private void reconcile() {
         try {
-            gate.verifyOwnership();
+            admissionController.verifyOwnership();
         } catch (RuntimeException ownershipFailure) {
-            gate.stop();
+            admissionController.stop();
             scheduler.standby();
             return;
         }
@@ -86,12 +86,12 @@ public class ScheduleLifecycle implements AutoCloseable {
     @Override
     @PreDestroy
     public void close() {
-        gate.stop();
+        admissionController.stop();
         poller.shutdownNow();
         try {
             scheduler.standby();
         } finally {
-            gate.awaitQuiescence();
+            admissionController.awaitQuiescence();
             scheduler.close();
         }
     }

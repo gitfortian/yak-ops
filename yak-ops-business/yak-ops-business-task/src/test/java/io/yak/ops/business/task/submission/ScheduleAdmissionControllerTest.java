@@ -13,11 +13,12 @@ import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
-/** Checks lifecycle permits and logical identities without starting a time engine. */
-class ScheduleAdmissionGateTest {
+/** Checks scheduled admission lifecycle permits and logical identities without starting a time engine. */
+class ScheduleAdmissionControllerTest {
     @Test
     void occurrenceIdentityIgnoresActualTimeAndSeparatesAmbiguousTuples() {
         Instant time = Instant.parse("2026-10-13T00:01:00Z");
@@ -33,7 +34,7 @@ class ScheduleAdmissionGateTest {
     void preparedOwnershipDoesNotOpenAdmissionAndBackwardClockClosesIt() {
         AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-10-13T00:00:00Z"));
         Clock clock = clock(now);
-        ScheduleAdmissionGate gate = new ScheduleAdmissionGate(clock, Duration.ofSeconds(60));
+        ScheduleAdmissionController gate = new ScheduleAdmissionController(clock, Duration.ofSeconds(60));
         gate.prepare("owner", () -> {});
         assertThrows(IllegalStateException.class, gate::enter);
         gate.open();
@@ -48,7 +49,7 @@ class ScheduleAdmissionGateTest {
 
     @Test
     void shutdownWaitsForTheCallbackPermitWithoutAllowingAnotherAdmission() throws Exception {
-        ScheduleAdmissionGate gate = new ScheduleAdmissionGate(Clock.systemUTC(), Duration.ofSeconds(60));
+        ScheduleAdmissionController gate = new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
         gate.prepare("owner", () -> {});
         gate.open();
         CountDownLatch held = new CountDownLatch(1);
@@ -73,11 +74,71 @@ class ScheduleAdmissionGateTest {
     }
 
     @Test
+    void permitCannotBeClosedByAnotherThread() throws Exception {
+        ScheduleAdmissionController controller =
+                new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
+        controller.prepare("owner", () -> {});
+        controller.open();
+        try (var permit = controller.enter()) {
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread other = Thread.ofPlatform().start(() -> {
+                try {
+                    permit.close();
+                } catch (Throwable error) {
+                    failure.set(error);
+                }
+            });
+            other.join();
+            assertTrue(failure.get() instanceof IllegalStateException);
+            assertTrue(controller.isOpen());
+        }
+        controller.stop();
+        controller.awaitQuiescence();
+    }
+
+    @Test
+    void stoppingDuringAdmissionOpeningCannotReopenTheController() throws Exception {
+        ScheduleAdmissionController controller =
+                new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
+        AtomicInteger checks = new AtomicInteger();
+        CountDownLatch verifying = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        controller.prepare("owner", () -> {
+            if (checks.incrementAndGet() == 2) {
+                verifying.countDown();
+                try {
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
+        });
+
+        CompletableFuture<Void> opening = CompletableFuture.runAsync(controller::open);
+        assertTrue(verifying.await(5, TimeUnit.SECONDS));
+        CountDownLatch stopping = new CountDownLatch(1);
+        CompletableFuture<Void> shutdown = CompletableFuture.runAsync(() -> {
+            stopping.countDown();
+            controller.stop();
+        });
+        try {
+            assertTrue(stopping.await(5, TimeUnit.SECONDS));
+            assertFalse(shutdown.isDone());
+        } finally {
+            release.countDown();
+        }
+        opening.get(5, TimeUnit.SECONDS);
+        shutdown.get(5, TimeUnit.SECONDS);
+        assertFalse(controller.isOpen());
+    }
+
+    @Test
     void invalidLatenessIsRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new ScheduleAdmissionGate(Clock.systemUTC(), Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () -> new ScheduleAdmissionController(Clock.systemUTC(), Duration.ZERO));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new ScheduleAdmissionGate(Clock.systemUTC(), Duration.ofMillis(-1)));
+                () -> new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofMillis(-1)));
     }
 
     private static Clock clock(AtomicReference<Instant> now) {

@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /** Fences new scheduled admissions and drains transactions before process ownership is released. */
-public final class ScheduleAdmissionGate {
+public final class ScheduleAdmissionController {
     private final Clock clock;
     private final Duration maxLateness;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
@@ -24,7 +24,7 @@ public final class ScheduleAdmissionGate {
      * @param clock authoritative owner clock
      * @param maxLateness maximum permitted admission delay
      */
-    public ScheduleAdmissionGate(Clock clock, Duration maxLateness) {
+    public ScheduleAdmissionController(Clock clock, Duration maxLateness) {
         this.clock = Objects.requireNonNull(clock);
         this.maxLateness = Objects.requireNonNull(maxLateness);
         if (maxLateness.isNegative() || maxLateness.isZero() || maxLateness.toMillis() < 1) {
@@ -57,7 +57,7 @@ public final class ScheduleAdmissionGate {
     }
 
     /** Closes new registration/admission immediately; already-held permits still drain. */
-    public void stop() {
+    public synchronized void stop() {
         open = false;
         owned = false;
     }
@@ -138,17 +138,21 @@ public final class ScheduleAdmissionGate {
         return verifyOwnership();
     }
 
-    /** A thread-confined lifecycle permit; owns only the gate's read lock. */
+    /** A thread-confined lifecycle permit; owns only the controller's read lock. */
     public final class Permit implements AutoCloseable {
+        private final Thread ownerThread = Thread.currentThread();
         private boolean closed;
 
         private Permit() {}
 
         @Override
         public void close() {
+            if (Thread.currentThread() != ownerThread) {
+                throw new IllegalStateException("Schedule admission permit must be closed by its owning thread");
+            }
             if (!closed) {
-                closed = true;
                 lock.readLock().unlock();
+                closed = true;
             }
         }
     }
