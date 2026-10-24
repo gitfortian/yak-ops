@@ -55,7 +55,8 @@ public final class MySqlHybridSplitState {
                 || !snapshot.tableId().equals(prepared.tableId())
                 || !snapshot.fingerprint().equals(prepared.fingerprint())
                 || !Objects.equals(snapshot.lowerInclusive(), prepared.lowerInclusive())
-                || !Objects.equals(snapshot.upperExclusive(), prepared.upperExclusive())) {
+                || !Objects.equals(snapshot.upperExclusive(), prepared.upperExclusive())
+                || !Objects.equals(snapshot.chunkRange(), prepared.chunkRange())) {
             throw new IllegalStateException("Prepared snapshot differs from its assigned range");
         }
         snapshot = prepared;

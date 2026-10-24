@@ -61,6 +61,10 @@ public final class MySqlHybridSourceEnumerator
         this.context = Objects.requireNonNull(context, "context");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
+        if (restored != null && restored.nextChunkRange() != null) {
+            throw new UnsupportedOperationException(
+                    "Typed chunk discovery cannot resume in the BIGINT-only Source Enumerator");
+        }
         tables = List.copyOf(config.schemas().keySet());
         tables.forEach(metrics::register);
         generation = metrics.beginSnapshot(restored != null);

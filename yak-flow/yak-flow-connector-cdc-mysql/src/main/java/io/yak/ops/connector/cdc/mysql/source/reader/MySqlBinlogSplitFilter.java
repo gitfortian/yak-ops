@@ -143,6 +143,9 @@ public final class MySqlBinlogSplitFilter {
         Objects.requireNonNull(finished, "finished");
         List<FinishedChunk> result = new ArrayList<>(finished.size());
         for (FinishedSnapshotSplitInfo item : finished) {
+            if (item.chunkRange() != null) {
+                throw new IllegalArgumentException("Typed completed chunks require the typed Binlog filter");
+            }
             TableSchema schema = schemas.get(item.tableId());
             if (schema == null) throw new IllegalArgumentException("Unknown completed snapshot table");
             if (schema.primaryKeys().size() != 1) {

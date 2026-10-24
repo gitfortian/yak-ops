@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.data.TableId;
@@ -13,12 +14,12 @@ import java.util.Objects;
 /**
  * Versioned transport of snapshot ranges and paused/running Binlog checkpoint state.
  *
- * <p>Version 3 compresses prepared Snapshot output while retaining version 2 checkpoint reads.
- * The standalone Binlog serializer retains its independent versioned checkpoint format.
+ * <p>Version 4 records typed ranges without changing the legacy BIGINT fields.
+ * Version 3 added compact frozen output; versions 2 and 3 remain readable.
  */
 public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializer<MySqlHybridSplit> {
 
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlBinlogSplitSerializer binlogSerializer = new MySqlBinlogSplitSerializer();
 
@@ -51,6 +52,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                 } else if (snapshot.finished() != null) {
                     snapshot.finished().highWatermark().writeTo(out);
                 }
+                ChunkRangeStateSerializer.write(out, snapshot.chunkRange());
             } else if (split instanceof MySqlHybridBinlogSplit binlog) {
                 out.writeByte(2);
                 out.writeByte(binlog.phase().ordinal());
@@ -75,7 +77,9 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
 
     @Override
     public MySqlHybridSplit deserialize(int version, byte[] serialized) throws IOException {
-        if ((version != 2 && version != VERSION) || serialized == null || serialized.length > MAX_BYTES) {
+        if ((version != 2 && version != 3 && version != VERSION)
+                || serialized == null
+                || serialized.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL hybrid split state version");
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(serialized))) {
@@ -89,6 +93,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                             int stage = in.readUnsignedByte();
                             MySqlSnapshotOutput output = null;
                             FinishedSnapshotSplitInfo finished = null;
+                            BinlogOffset finishedHigh = null;
                             int position = 0;
                             if (stage == 1) {
                                 output = version == 2
@@ -96,11 +101,14 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                                         : MySqlSnapshotOutputSerializer.readCompact(in, table);
                                 position = in.readInt();
                             } else if (stage == 2) {
-                                finished = new FinishedSnapshotSplitInfo(
-                                        table, id, lower, upper, BinlogOffset.readFrom(in));
+                                finishedHigh = BinlogOffset.readFrom(in);
                             } else if (stage != 0) throw new IOException("Unknown snapshot output stage");
+                            ChunkRange typed = version >= 4 ? ChunkRangeStateSerializer.read(in) : null;
+                            if (finishedHigh != null) {
+                                finished = new FinishedSnapshotSplitInfo(table, id, lower, upper, finishedHigh, typed);
+                            }
                             yield new MySqlSnapshotSplit(
-                                    id, fingerprint, table, lower, upper, key, output, position, finished);
+                                    id, fingerprint, table, lower, upper, key, output, position, finished, typed);
                         }
                         case 2 -> {
                             int phase = in.readUnsignedByte();
@@ -116,7 +124,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                                     binlogSerializer.deserialize(binlogSerializer.getVersion(), in.readNBytes(length)),
                                     MySqlHybridBinlogSplit.Phase.values()[phase],
                                     high,
-                                    readFinishedSplits(in));
+                                    readFinishedSplits(in, version >= 4));
                         }
                         default -> throw new IOException("Unknown MySQL hybrid split marker");
                     };
@@ -140,10 +148,16 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
             writeLong(out, info.lowerInclusive());
             writeLong(out, info.upperExclusive());
             info.highWatermark().writeTo(out);
+            ChunkRangeStateSerializer.write(out, info.chunkRange());
         }
     }
 
     public static java.util.List<FinishedSnapshotSplitInfo> readFinishedSplits(DataInputStream in) throws IOException {
+        return readFinishedSplits(in, true);
+    }
+
+    public static java.util.List<FinishedSnapshotSplitInfo> readFinishedSplits(DataInputStream in, boolean typed)
+            throws IOException {
         int size = in.readInt();
         if (size < 0 || size > 10_000 || size > in.available())
             throw new IOException("Invalid finished snapshot count");
@@ -153,7 +167,11 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
             TableId table = new TableId(in.readUTF(), null, in.readUTF());
             String id = in.readUTF();
             if (!ids.add(id)) throw new IOException("Duplicate finished snapshot identity");
-            result.add(new FinishedSnapshotSplitInfo(table, id, readLong(in), readLong(in), BinlogOffset.readFrom(in)));
+            Long lower = readLong(in);
+            Long upper = readLong(in);
+            BinlogOffset high = BinlogOffset.readFrom(in);
+            ChunkRange range = typed ? ChunkRangeStateSerializer.read(in) : null;
+            result.add(new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range));
         }
         return java.util.List.copyOf(result);
     }

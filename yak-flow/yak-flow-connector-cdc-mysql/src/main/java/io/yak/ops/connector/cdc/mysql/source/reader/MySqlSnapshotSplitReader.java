@@ -69,6 +69,9 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
     /** Starts a split from its last mailbox-emitted key using ordered, exclusive cursor seek. */
     public void open(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
+        if (split.chunkRange() != null) {
+            throw new SQLException("Typed snapshot ranges require a chunk-aware JDBC Reader");
+        }
         if (active != null) {
             throw new IllegalStateException("Snapshot reader already has a running split");
         }

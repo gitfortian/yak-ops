@@ -50,6 +50,10 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
      */
     public MySqlSnapshotSplit read(MySqlSnapshotSplit split) throws Exception {
         checkCancelled();
+        if (split.chunkRange() != null) {
+            throw new UnsupportedOperationException(
+                    "Typed snapshot execution requires the chunk-aware Reader and durable handoff integration");
+        }
         if (split.prepared() || split.lastEmittedKey() != null) {
             throw new IllegalArgumentException("Backfill requires an unprepared complete chunk range");
         }

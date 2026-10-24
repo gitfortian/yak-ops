@@ -1,6 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
@@ -27,7 +29,7 @@ import java.util.Set;
 public final class MySqlHybridEnumeratorStateSerializer
         implements SimpleVersionedSerializer<MySqlHybridEnumeratorState> {
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     private final MySqlHybridSplitSerializer splitSerializer = new MySqlHybridSplitSerializer();
@@ -66,6 +68,7 @@ public final class MySqlHybridEnumeratorStateSerializer
             out.writeInt(state.nextChunkIndex());
             out.writeBoolean(state.nextChunkLower() != null);
             if (state.nextChunkLower() != null) out.writeLong(state.nextChunkLower());
+            ChunkRangeStateSerializer.write(out, state.nextChunkRange());
             out.flush();
             if (bytes.size() > MAX_BYTES) {
                 throw new IOException("MySQL hybrid enumerator checkpoint exceeds size limit");
@@ -76,7 +79,7 @@ public final class MySqlHybridEnumeratorStateSerializer
 
     @Override
     public MySqlHybridEnumeratorState deserialize(int version, byte[] bytes) throws IOException {
-        if (version != VERSION || bytes == null || bytes.length > MAX_BYTES) {
+        if ((version != 2 && version != VERSION) || bytes == null || bytes.length > MAX_BYTES) {
             throw new IOException(
                     "Unsupported MySQL hybrid enumerator checkpoint; version 1 requires explicit reinitialization");
         }
@@ -87,17 +90,17 @@ public final class MySqlHybridEnumeratorStateSerializer
                 throw new IOException("Unknown MySQL hybrid phase");
             }
             boolean binlogAssigned = in.readBoolean();
-            MySqlHybridBinlogSplit pending = binlogAssigned ? null : (MySqlHybridBinlogSplit) readSplit(in);
+            MySqlHybridBinlogSplit pending = binlogAssigned ? null : (MySqlHybridBinlogSplit) readSplit(in, version);
             BinlogOffset low = readOffset(in);
             BinlogOffset high = readOffset(in);
             boolean planned = in.readBoolean();
             int total = in.readInt();
-            List<MySqlSnapshotSplit> pendingSnapshots = readSplits(in);
+            List<MySqlSnapshotSplit> pendingSnapshots = readSplits(in, version);
             int assignedCount = boundedCount(in);
             Map<String, MySqlSnapshotSplit> assigned = new LinkedHashMap<>();
             for (int i = 0; i < assignedCount; i++) {
                 String id = in.readUTF();
-                MySqlSnapshotSplit split = (MySqlSnapshotSplit) readSplit(in);
+                MySqlSnapshotSplit split = (MySqlSnapshotSplit) readSplit(in, version);
                 if (!id.equals(split.splitId()) || assigned.putIfAbsent(id, split) != null) {
                     throw new IOException("Corrupt assigned MySQL snapshot split");
                 }
@@ -109,10 +112,11 @@ public final class MySqlHybridEnumeratorStateSerializer
                     throw new IOException("Duplicate finished MySQL snapshot split");
                 }
             }
-            var finishedInfos = MySqlHybridSplitSerializer.readFinishedSplits(in);
+            var finishedInfos = MySqlHybridSplitSerializer.readFinishedSplits(in, version >= 3);
             int nextTable = in.readInt();
             int nextChunk = in.readInt();
             Long nextLower = in.readBoolean() ? in.readLong() : null;
+            ChunkRange typedCursor = version >= 3 ? ChunkRangeStateSerializer.read(in) : null;
             if (in.available() != 0) {
                 throw new IOException("Unexpected bytes after MySQL hybrid enumerator state");
             }
@@ -131,7 +135,8 @@ public final class MySqlHybridEnumeratorStateSerializer
                     finishedInfos,
                     nextTable,
                     nextChunk,
-                    nextLower);
+                    nextLower,
+                    typedCursor);
         } catch (RuntimeException error) {
             throw new IOException("Corrupt MySQL hybrid enumerator state", error);
         }
@@ -147,11 +152,11 @@ public final class MySqlHybridEnumeratorStateSerializer
         }
     }
 
-    private List<MySqlSnapshotSplit> readSplits(DataInputStream in) throws IOException {
+    private List<MySqlSnapshotSplit> readSplits(DataInputStream in, int version) throws IOException {
         int count = boundedCount(in);
         List<MySqlSnapshotSplit> result = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            result.add((MySqlSnapshotSplit) readSplit(in));
+            result.add((MySqlSnapshotSplit) readSplit(in, version));
         }
         return result;
     }
@@ -162,12 +167,12 @@ public final class MySqlHybridEnumeratorStateSerializer
         out.write(bytes);
     }
 
-    private MySqlHybridSplit readSplit(DataInputStream in) throws IOException {
+    private MySqlHybridSplit readSplit(DataInputStream in, int version) throws IOException {
         int length = in.readInt();
         if (length <= 0 || length > MAX_BYTES || length > in.available()) {
             throw new IOException("Invalid MySQL split length");
         }
-        return splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
+        return splitSerializer.deserialize(version == 2 ? 3 : splitSerializer.getVersion(), in.readNBytes(length));
     }
 
     private static int boundedCount(DataInputStream in) throws IOException {
