@@ -60,6 +60,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
               isNotNull: replacement.isNotNull,
               standardId: replacement.standardId,
               standardEnCode: replacement.standardEnCode,
+              importNote: null,
             }
           : row,
       ),
@@ -183,6 +184,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                           dataType: next,
                           lengthPrecision:
                             next === "STRING" || next === "DECIMAL" ? row.lengthPrecision : "",
+                          importNote: null,
                         });
                       }}
                     >

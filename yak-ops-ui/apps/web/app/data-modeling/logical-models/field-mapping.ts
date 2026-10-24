@@ -26,6 +26,8 @@ const STRING_TYPES = new Set([
   "NCLOB",
 ]);
 const INTEGER_TYPES = new Set(["TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT"]);
+// java.sql.Types: TINYINT, SMALLINT, INTEGER and BIGINT. PostgreSQL reports int2/int4/int8 names.
+const INTEGER_JDBC_TYPES = new Set([-6, 5, 4, -5]);
 const DECIMAL_TYPES = new Set(["DECIMAL", "NUMERIC", "NUMBER"]);
 const TIMESTAMP_TYPES = new Set([
   "DATETIME",
@@ -70,16 +72,29 @@ export function mapPhysicalColumn(column: DataSourceCatalogColumn): PhysicalMapp
       note: null,
     };
   }
-  if (INTEGER_TYPES.has(type))
+  if (
+    INTEGER_TYPES.has(type) ||
+    (column.jdbcType != null && INTEGER_JDBC_TYPES.has(column.jdbcType))
+  )
     return { kind: "MAPPED", dataType: "BIGINT", lengthPrecision: null, note: null };
   if (DECIMAL_TYPES.has(type)) {
-    const precision =
-      column.size && column.scale != null
-        ? `${column.size},${column.scale}`
-        : column.size
-          ? String(column.size)
-          : null;
-    return { kind: "MAPPED", dataType: "DECIMAL", lengthPrecision: precision, note: null };
+    const precision = column.size;
+    const scale = column.scale;
+    if (precision == null || precision <= 0 || scale == null) {
+      return { kind: "REVIEW", note: "数据库未返回完整的 DECIMAL 精度与小数位，请手动确认" };
+    }
+    if (precision > 38 || scale < 0 || scale > precision) {
+      return {
+        kind: "REVIEW",
+        note: `物理精度 ${precision},${scale} 超出逻辑 DECIMAL 范围，请手动确认`,
+      };
+    }
+    return {
+      kind: "MAPPED",
+      dataType: "DECIMAL",
+      lengthPrecision: `${precision},${scale}`,
+      note: null,
+    };
   }
   if (type === "DATE")
     return { kind: "MAPPED", dataType: "DATE", lengthPrecision: null, note: null };
@@ -114,6 +129,16 @@ export function normalizeFieldCode(name: string) {
     .replace(/^_+|_+$/g, "");
   if (!snake) return "field";
   return /^[a-z]/.test(snake) ? snake.slice(0, 64) : `f_${snake}`.slice(0, 64);
+}
+
+/** Returns normalized codes produced by more than one column in the same import batch. */
+export function findDuplicateFieldCodes(columns: readonly Pick<DataSourceCatalogColumn, "name">[]) {
+  const counts = new Map<string, number>();
+  columns.forEach((column) => {
+    const code = normalizeFieldCode(column.name);
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  });
+  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([code]) => code));
 }
 
 /** Builds one editable row; unmapped columns keep an empty type and their reason. */

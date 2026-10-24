@@ -140,6 +140,9 @@ jobs:
       - name: Frontend architecture
         run: npm run architecture:check
 
+      - name: Frontend unit tests
+        run: npm run test:unit
+
       - name: Frontend contract
         run: npm run contract:check
 

@@ -115,6 +115,8 @@ export function validateFieldRows(rows: FieldDraft[]): FieldIssue[] {
   let partitionIndex = -1;
   rows.forEach((row, index) => {
     if (!row.cnName.trim()) issues.push({ index, field: "cnName", message: "请输入字段中文名" });
+    if (row.cnName.trim().length > 128)
+      issues.push({ index, field: "cnName", message: "字段中文名不能超过128个字符" });
     const code = row.enCode.trim();
     if (!row.standardId && !FIELD_CODE.test(code))
       issues.push({
