@@ -142,8 +142,8 @@ public final class MySqlSchemaChangeConverter {
         List<PhysicalColumn> columns = new ArrayList<>();
         for (io.debezium.relational.Column metadata : table.columns()) {
             String name = metadata.name();
-            String nativeType = Objects.requireNonNull(metadata.typeName(), "native type")
-                    .toLowerCase(java.util.Locale.ROOT);
+            String nativeType =
+                    Objects.requireNonNull(metadata.typeName(), "native type").toLowerCase(java.util.Locale.ROOT);
             if (nativeType.contains("unsigned") || nativeType.startsWith("enum") || nativeType.startsWith("set")) {
                 throw new UnsupportedOperationException("Unsupported MySQL native type in CDC DDL");
             }
@@ -152,8 +152,8 @@ public final class MySqlSchemaChangeConverter {
                     || metadata.defaultValueExpression().isPresent()) {
                 throw new UnsupportedOperationException("CDC schema evolution cannot change generated/default columns");
             }
-            LogicalType type = logicalType(metadata.jdbcType(), metadata.length(),
-                    metadata.scale().orElse(0), metadata.isOptional());
+            LogicalType type = logicalType(
+                    metadata.jdbcType(), metadata.length(), metadata.scale().orElse(0), metadata.isOptional());
             PhysicalColumn existing = previous.column(name).orElse(null);
             columns.add(new PhysicalColumn(
                     name,
@@ -179,7 +179,9 @@ public final class MySqlSchemaChangeConverter {
             if (change.schema().field("table") != null && change.get("table") != null) {
                 Object raw = change.get("table");
                 String json = raw instanceof String string ? string : JSON.writeValueAsString(connectJson(raw));
-                document.setDocument("table", io.debezium.document.DocumentReader.defaultReader().read(json));
+                document.setDocument(
+                        "table",
+                        io.debezium.document.DocumentReader.defaultReader().read(json));
             }
             return io.debezium.relational.history.JsonTableChangeSerializer.fromDocument(document, true);
         } catch (java.io.IOException failure) {
