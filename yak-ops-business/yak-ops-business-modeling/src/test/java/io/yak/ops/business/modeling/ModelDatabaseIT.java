@@ -181,6 +181,32 @@ class ModelDatabaseIT {
     }
 
     @Test
+    void databaseRejectsAnApplicationTableWithABusinessProcess() {
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "INSERT INTO yak_ops_modeling_model(id,workspace_id,type,layer_id,category_id,process_id,domain_id,"
+                        + "datamart_id,dimension_id,name,cn_name,storage_policy,lifecycle_days,owner_id,description,"
+                        + "revision,create_time,update_time,create_by,update_by) VALUES('raw','ws','ADS','layer','cat',"
+                        + "'process',NULL,'mart',NULL,'ads_raw','应用表','DAILY_FULL',30,'it',NULL,1,NOW(3),NOW(3),'it','it')"));
+        assertEquals(0, models());
+    }
+
+    @Test
+    void databaseKeepsTheMeasureFunctionInsideTheAllowedSet() {
+        String modelId = createDetailModel("dwd_order_detail", 30, List.of());
+        String insert = "INSERT INTO yak_ops_modeling_model_field(id,workspace_id,model_id,ordinal,en_code,cn_name,"
+                + "data_type,length_precision,is_primary_key,is_not_null,is_partition,aggregate_type,standard_id,"
+                + "description,create_time,update_time,create_by,update_by) VALUES(?, 'ws', ?, ?, ?, '金额',"
+                + " 'DECIMAL', NULL, 0, 0, 0, ?, NULL, NULL, NOW(3), NOW(3), 'it', 'it')";
+
+        jdbc.update(insert, "m1", modelId, 1, "amount", "SUM");
+        assertEquals("SUM", jdbc.queryForObject(
+                "SELECT aggregate_type FROM yak_ops_modeling_model_field WHERE id='m1'", String.class));
+
+        // The value check keeps a hand-written row from carrying a function the application cannot read.
+        assertThrows(DataAccessException.class, () -> jdbc.update(insert, "m2", modelId, 2, "median", "MEDIAN"));
+    }
+
+    @Test
     void keepsFieldOrdinalsAndCodesUniquePerModel() {
         String modelId = createDetailModel("dwd_order_detail", 30, List.of());
         insertField("f1", modelId, 1, "order_id");

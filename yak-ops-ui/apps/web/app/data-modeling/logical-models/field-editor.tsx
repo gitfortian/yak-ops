@@ -12,6 +12,12 @@ import {
 } from "@yak-ops/yak-ui";
 import { useState } from "react";
 import type { StandardField } from "@/service/data-modeling/data-standards/types";
+import {
+  AGGREGATE_LABEL,
+  AGGREGATE_TYPES,
+  aggregateSupports,
+  type AggregateType,
+} from "@/service/data-modeling/dimension-modeling/types";
 import BatchImportDialog from "./batch-import-dialog";
 import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
@@ -23,13 +29,21 @@ interface Props {
   onChange: (rows: FieldDraft[]) => void;
   issues: FieldIssue[];
   disabled?: boolean;
+  /** True for DWS and ADS: those kinds own the measure column, DWD and DIM never show it. */
+  allowAggregate?: boolean;
 }
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
 
 const cell = "border-b border-[#eaecf0] px-2 py-1.5 align-middle";
 
-export default function FieldEditor({ rows, onChange, issues, disabled = false }: Props) {
+export default function FieldEditor({
+  rows,
+  onChange,
+  issues,
+  disabled = false,
+  allowAggregate = false,
+}: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
   const [importingSource, setImportingSource] = useState(false);
@@ -107,7 +121,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
         </ul>
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
-        <table className="w-full min-w-[1180px] border-collapse text-xs">
+        <table
+          className={`w-full ${allowAggregate ? "min-w-[1290px]" : "min-w-[1180px]"} border-collapse text-xs`}
+        >
           <thead className="sticky top-0 z-10 bg-[#fafafa] text-left text-[#475467]">
             <tr>
               <th className="w-[52px] border-b border-[#eaecf0] px-2 py-2 font-medium">序号</th>
@@ -132,6 +148,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
               <th className="w-[56px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
                 分区
               </th>
+              {allowAggregate && (
+                <th className="w-[128px] border-b border-[#eaecf0] px-2 py-2 font-medium">聚合</th>
+              )}
               <th className="w-[176px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 数据标准
               </th>
@@ -241,6 +260,37 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                       onCheckedChange={(checked) => patch(index, { isPartition: checked })}
                     />
                   </td>
+                  {allowAggregate && (
+                    <td className={cell}>
+                      <Select
+                        value={row.aggregateType ?? ""}
+                        onValueChange={(value) =>
+                          patch(index, {
+                            aggregateType: (value || null) as AggregateType | null,
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-7 w-full text-xs"
+                          disabled={disabled}
+                          aria-label={`第 ${index + 1} 行聚合方式`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">无</SelectItem>
+                          {AGGREGATE_TYPES.filter(
+                            (aggregate) =>
+                              !row.dataType || aggregateSupports(aggregate, row.dataType),
+                          ).map((aggregate) => (
+                            <SelectItem key={aggregate} value={aggregate}>
+                              <SelectItemText>{AGGREGATE_LABEL[aggregate]}</SelectItemText>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  )}
                   <td className={cell}>
                     {bound ? (
                       <div className="flex items-center gap-1">

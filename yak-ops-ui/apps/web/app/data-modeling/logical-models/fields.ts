@@ -3,7 +3,11 @@ import {
   type DataType,
   type StandardField,
 } from "@/service/data-modeling/data-standards/types";
-import type { ModelField, ModelFieldInput } from "@/service/data-modeling/dimension-modeling/types";
+import type {
+  AggregateType,
+  ModelField,
+  ModelFieldInput,
+} from "@/service/data-modeling/dimension-modeling/types";
 import { parseCreateTable, type DdlField, typeSize } from "./ddl-parser";
 import { mapPhysicalColumn, normalizeFieldCode, type PhysicalMapping } from "./field-mapping";
 
@@ -17,6 +21,7 @@ export interface FieldDraft {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
   /**
@@ -55,6 +60,7 @@ export function emptyField(): FieldDraft {
     isPrimaryKey: false,
     isNotNull: false,
     isPartition: false,
+    aggregateType: null,
     standardId: null,
     standardEnCode: null,
     description: null,
@@ -72,6 +78,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     isPrimaryKey: field.isPrimaryKey,
     isNotNull: field.isNotNull,
     isPartition: field.isPartition,
+    aggregateType: field.aggregateType,
     standardId: field.standardId,
     standardEnCode: field.standardEnCode,
     description: field.description,
@@ -89,6 +96,7 @@ export function fromStandard(standard: StandardField): FieldDraft {
     isPrimaryKey: false,
     isNotNull: standard.isNotNull,
     isPartition: false,
+    aggregateType: null,
     standardId: standard.id,
     standardEnCode: standard.enCode,
     description: null,
@@ -105,6 +113,7 @@ export function toModelFieldInput(row: FieldDraft): ModelFieldInput {
     isPrimaryKey: row.isPrimaryKey,
     isNotNull: row.isNotNull,
     isPartition: row.isPartition,
+    aggregateType: row.aggregateType,
     standardId: row.standardId,
     description: row.description,
   };

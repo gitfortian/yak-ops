@@ -21,6 +21,7 @@ import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;
 import io.yak.ops.common.bean.vo.modeling.LayerOptionVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
+import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.ModelType;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.enums.modeling.StoragePolicy;
@@ -323,6 +324,134 @@ class ModelServiceTest {
     }
 
     @Test
+    void requiresABusinessProcessForASummaryTable() {
+        categoryAndDomain();
+        var input = summaryInput("order_summary",
+                List.of(measure("amount", DataType.DECIMAL, AggregateType.SUM)));
+        input.setProcessId(null);
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_MODEL, error.getErrorCode());
+        verify(models, never()).add(any());
+    }
+
+    @Test
+    void refusesADataMartOnASummaryTable() {
+        detailGraph();
+        var input = summaryInput("order_summary",
+                List.of(measure("amount", DataType.DECIMAL, AggregateType.SUM)));
+        input.setDatamartId("mart");
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_MODEL, error.getErrorCode());
+    }
+
+    @Test
+    void requiresADataMartForAnApplicationTable() {
+        node(NodeKind.CATEGORY, "cat", null);
+        var input = applicationInput("order_report", List.of());
+        input.setDatamartId(null);
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_MODEL, error.getErrorCode());
+        verify(models, never()).add(any());
+    }
+
+    @Test
+    void refusesABusinessProcessOnAnApplicationTable() {
+        node(NodeKind.CATEGORY, "cat", null);
+        node(NodeKind.DATASET, "mart", null);
+        var input = applicationInput("order_report", List.of());
+        input.setProcessId("process");
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_MODEL, error.getErrorCode());
+    }
+
+    @Test
+    void requiresAtLeastOneMeasureOnASummaryTable() {
+        detailGraph();
+        var input = summaryInput("order_summary", List.of(field("order_id", DataType.BIGINT)));
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+        verify(models, never()).add(any());
+    }
+
+    @Test
+    void refusesAMeasureOnADetailTable() {
+        detailGraph();
+        var input = detailInput("order_detail",
+                List.of(measure("amount", DataType.DECIMAL, AggregateType.SUM)));
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+    }
+
+    @Test
+    void refusesSumOnAStringField() {
+        detailGraph();
+        var input = summaryInput("order_summary",
+                List.of(measure("region", DataType.STRING, AggregateType.SUM)));
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+    }
+
+    @Test
+    void checksTheMeasureAgainstTheTypeInheritedFromTheStandard() {
+        detailGraph();
+        when(models.standard("ws", "std"))
+                .thenReturn(new StandardInheritance("region", DataType.STRING, null));
+        var bounded = measure("placeholder", DataType.DECIMAL, AggregateType.SUM);
+        bounded.setStandardId("std");
+        var input = summaryInput("order_summary", List.of(bounded));
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+    }
+
+    @Test
+    void acceptsCountOnAStringField() {
+        detailGraph();
+        var stored = storedModel("dws_order_summary");
+        stored.setType(ModelType.DWS.name());
+        when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
+        when(models.fields(anyString())).thenReturn(List.of());
+        var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
+
+        service.create("ws", "actor", summaryInput("order_summary",
+                List.of(measure("region", DataType.STRING, AggregateType.COUNT))));
+
+        verify(models).addField(captor.capture());
+        assertEquals(AggregateType.COUNT, captor.getValue().getAggregateType());
+    }
+
+    @Test
+    void acceptsAnApplicationTableWithoutAnyMeasure() {
+        node(NodeKind.CATEGORY, "cat", null);
+        node(NodeKind.DATASET, "mart", null);
+        var stored = storedModel("ads_order_report");
+        when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
+        when(models.fields(anyString())).thenReturn(List.of());
+        var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
+
+        service.create("ws", "actor", applicationInput("order_report",
+                List.of(field("order_id", DataType.BIGINT))));
+
+        verify(models).addField(captor.capture());
+        assertNull(captor.getValue().getAggregateType());
+    }
+
+    @Test
     void rejectsATableNameThatAlreadyExists() {
         detailGraph();
         when(models.occupied("ws", "dwd_order_detail", null)).thenReturn(true);
@@ -336,8 +465,8 @@ class ModelServiceTest {
 
     @Test
     void refusesToEditARowWithAnUnknownStoredType() {
-        var row = storedModel("dws_summary");
-        row.setType("DWS");
+        var row = storedModel("ods_order_snapshot");
+        row.setType("ODS");
         when(models.lock("ws", row.getId())).thenReturn(Optional.of(row));
         var input = updateInput("summary", ModelType.DWD, 1);
 
@@ -456,6 +585,21 @@ class ModelServiceTest {
         return input;
     }
 
+    static ModelInputDTO summaryInput(String suffix, List<ModelFieldInputDTO> fields) {
+        var input = baseInput(suffix, fields);
+        input.setType(ModelType.DWS);
+        input.setProcessId("process");
+        input.setDomainId("domain");
+        return input;
+    }
+
+    static ModelInputDTO applicationInput(String suffix, List<ModelFieldInputDTO> fields) {
+        var input = baseInput(suffix, fields);
+        input.setType(ModelType.ADS);
+        input.setDatamartId("mart");
+        return input;
+    }
+
     static ModelInputDTO baseInput(String suffix, List<ModelFieldInputDTO> fields) {
         var input = new ModelInputDTO();
         input.setLayerId("layer");
@@ -478,13 +622,21 @@ class ModelServiceTest {
         input.setStoragePolicy(StoragePolicy.DAILY_INCREMENTAL);
         input.setLifecycleDays(30);
         input.setRevision(revision);
-        if (type == ModelType.DWD) {
+        if (type.isPublicLayer()) {
             input.setDomainId("domain");
             input.setProcessId("process");
-        } else {
+        } else if (type == ModelType.DIM) {
             input.setDomainId("domain");
+        } else {
+            input.setDatamartId("mart");
         }
         return input;
+    }
+
+    static ModelFieldInputDTO measure(String enCode, DataType dataType, AggregateType aggregate) {
+        var field = field(enCode, dataType);
+        field.setAggregateType(aggregate);
+        return field;
     }
 
     static ModelFieldInputDTO field(String enCode, DataType dataType) {

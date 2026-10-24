@@ -113,7 +113,8 @@ public interface ModelMapper {
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id, @Param("revision") long revision);
 
     @Select("SELECT f.id,f.workspace_id,f.model_id,f.ordinal,f.en_code,f.cn_name,f.data_type,f.length_precision,"
-            + "f.is_primary_key,f.is_not_null,f.is_partition,f.standard_id,f.description,f.create_time,"
+            + "f.is_primary_key,f.is_not_null,f.is_partition,f.aggregate_type,f.standard_id,f.description,"
+            + "f.create_time,"
             + "f.update_time,f.create_by,f.update_by,s.en_code AS standard_en_code "
             + "FROM yak_ops_modeling_model_field f "
             + "LEFT JOIN yak_ops_standard_field s ON s.workspace_id=f.workspace_id AND s.id=f.standard_id "
@@ -124,10 +125,10 @@ public interface ModelMapper {
     int deleteFields(@Param("modelId") String modelId);
 
     @Insert("INSERT INTO yak_ops_modeling_model_field(id,workspace_id,model_id,ordinal,en_code,cn_name,data_type,"
-            + "length_precision,is_primary_key,is_not_null,is_partition,standard_id,description,create_time,"
-            + "update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{modelId},#{ordinal},#{enCode},"
-            + "#{cnName},#{dataType},#{lengthPrecision},#{isPrimaryKey},#{isNotNull},#{isPartition},#{standardId},"
-            + "#{description},#{createTime},#{updateTime},#{createBy},#{updateBy})")
+            + "length_precision,is_primary_key,is_not_null,is_partition,aggregate_type,standard_id,description,"
+            + "create_time,update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{modelId},#{ordinal},"
+            + "#{enCode},#{cnName},#{dataType},#{lengthPrecision},#{isPrimaryKey},#{isNotNull},#{isPartition},"
+            + "#{aggregateType},#{standardId},#{description},#{createTime},#{updateTime},#{createBy},#{updateBy})")
     int insertField(ModelFieldEntity row);
 
     @Select("SELECT s.en_code, s.data_type, s.length_precision FROM yak_ops_standard_field s "

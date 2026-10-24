@@ -122,7 +122,7 @@ public class ModelServiceImpl implements ModelService {
         row.setLayerId(layer.id());
         row.setName(fullName(layer, input.getNameSuffix()));
         applyModel(row, workspaceId, actor, input);
-        var fields = validateFields(workspaceId, actor, row.getId(), input.getFields());
+        var fields = validateFields(workspaceId, actor, row.getId(), input.getType(), input.getFields());
         if (models.occupied(workspaceId, row.getName(), null))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
         try {
@@ -152,7 +152,7 @@ public class ModelServiceImpl implements ModelService {
         row.setLayerId(layer.id());
         row.setName(fullName(layer, input.getNameSuffix()));
         applyModel(row, workspaceId, actor, input);
-        var fields = validateFields(workspaceId, actor, id, input.getFields());
+        var fields = validateFields(workspaceId, actor, id, stored, input.getFields());
         if (models.occupied(workspaceId, row.getName(), id))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
         row.initUpdate(actor);
@@ -219,8 +219,9 @@ public class ModelServiceImpl implements ModelService {
         var categoryId = requireIdentifier(input.getCategoryId());
         requireNode(workspaceId, NodeKind.CATEGORY, categoryId);
         row.setCategoryId(categoryId);
-        if (input.getType() == ModelType.DWD) applyDetailOwnership(row, workspaceId, categoryId, input);
-        else applyDimensionOwnership(row, workspaceId, categoryId, input);
+        if (input.getType().isPublicLayer()) applyProcessOwnership(row, workspaceId, categoryId, input);
+        else if (input.getType() == ModelType.DIM) applyDimensionOwnership(row, workspaceId, categoryId, input);
+        else applyApplicationOwnership(row, workspaceId, input);
         row.setCnName(requireText(input.getCnName(), 128));
         if (input.getStoragePolicy() == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         row.setStoragePolicy(input.getStoragePolicy());
@@ -232,8 +233,8 @@ public class ModelServiceImpl implements ModelService {
         row.setDescription(optionalText(input.getDescription(), 500));
     }
 
-    /** DWD hangs below a business process inside one data domain of the selected category. */
-    private void applyDetailOwnership(ModelEntity row, String workspaceId, String categoryId, ModelInputDTO input) {
+    /** DWD and DWS hang below a business process inside one data domain of the selected category. */
+    private void applyProcessOwnership(ModelEntity row, String workspaceId, String categoryId, ModelInputDTO input) {
         var domainId = requireIdentifier(input.getDomainId());
         var domain = requireNode(workspaceId, NodeKind.DOMAIN, domainId);
         if (!categoryId.equals(domain.getParentId()))
@@ -276,6 +277,20 @@ public class ModelServiceImpl implements ModelService {
         row.setDimensionId(dimensionId);
     }
 
+    /** ADS hangs below a data mart and never binds a concept dimension or a business process. */
+    private void applyApplicationOwnership(ModelEntity row, String workspaceId, ModelInputDTO input) {
+        if (trim(input.getProcessId()) != null
+                || trim(input.getDomainId()) != null
+                || trim(input.getDimensionId()) != null)
+            throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
+        var datamartId = requireIdentifier(input.getDatamartId());
+        requireNode(workspaceId, NodeKind.DATASET, datamartId);
+        row.setProcessId(null);
+        row.setDomainId(null);
+        row.setDatamartId(datamartId);
+        row.setDimensionId(null);
+    }
+
     /** Confirms the dimension exists in the Workspace and belongs to the scope the model claims. */
     private void requireDimension(String workspaceId, String dimensionId, DimensionScope scope, String scopeId) {
         var dimension = dimensions
@@ -295,14 +310,16 @@ public class ModelServiceImpl implements ModelService {
      *
      * <p>A bound standard overwrites the code, type and length before validation, so a client cannot
      * desynchronize a field from the standard it claims to follow. Nullability and the primary-key
-     * flag stay exactly as submitted.
+     * flag stay exactly as submitted. The aggregate is checked after that inheritance, so a standard
+     * that resolves to {@code STRING} cannot carry {@code SUM} either.
      */
     private List<ModelFieldEntity> validateFields(
-            String workspaceId, String actor, String modelId, List<ModelFieldInputDTO> input) {
+            String workspaceId, String actor, String modelId, ModelType type, List<ModelFieldInputDTO> input) {
         var submitted = input == null ? List.<ModelFieldInputDTO>of() : input;
         var rows = new ArrayList<ModelFieldEntity>(submitted.size());
         var codes = new HashSet<String>();
         var partitions = 0;
+        var measures = 0;
         for (var index = 0; index < submitted.size(); index++) {
             var field = submitted.get(index);
             if (field == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
@@ -328,6 +345,12 @@ public class ModelServiceImpl implements ModelService {
                 if (dataType != DataType.STRING) throw new BusinessException(DimensionModelingErrorCode.PARTITION_RULE);
                 if (++partitions > 1) throw new BusinessException(DimensionModelingErrorCode.PARTITION_RULE);
             }
+            var aggregate = field.getAggregateType();
+            if (aggregate != null) {
+                if (!type.allowsAggregate() || !aggregate.supports(dataType))
+                    throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
+                measures++;
+            }
             var row = new ModelFieldEntity();
             row.initCreate(actor);
             row.setWorkspaceId(workspaceId);
@@ -340,10 +363,13 @@ public class ModelServiceImpl implements ModelService {
             row.setIsPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
             row.setIsNotNull(Boolean.TRUE.equals(field.getIsNotNull()));
             row.setIsPartition(partition);
+            row.setAggregateType(aggregate);
             row.setStandardId(standardId);
             row.setDescription(optionalText(field.getDescription(), 500, DimensionModelingErrorCode.INVALID_FIELD));
             rows.add(row);
         }
+        if (type == ModelType.DWS && measures == 0)
+            throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
         return rows;
     }
 
@@ -452,6 +478,7 @@ public class ModelServiceImpl implements ModelService {
                 Boolean.TRUE.equals(row.getIsPrimaryKey()),
                 Boolean.TRUE.equals(row.getIsNotNull()),
                 Boolean.TRUE.equals(row.getIsPartition()),
+                row.getAggregateType(),
                 row.getStandardId(),
                 row.getStandardEnCode(),
                 row.getDescription());

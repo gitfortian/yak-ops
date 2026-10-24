@@ -1,17 +1,47 @@
 import type { DataType } from "@/service/data-modeling/data-standards/types";
 
-export const MODEL_TYPES = ["DWD", "DIM"] as const;
+export const MODEL_TYPES = ["DWD", "DIM", "DWS", "ADS"] as const;
 export type ModelType = (typeof MODEL_TYPES)[number];
 
 export const MODEL_TYPE_LABEL: Record<ModelType, string> = {
   DWD: "明细表",
   DIM: "维度表",
+  DWS: "汇总表",
+  ADS: "应用表",
 };
 
 export const MODEL_TYPE_HINT: Record<ModelType, string> = {
   DWD: "挂业务过程，沉淀该过程最细粒度的事实",
   DIM: "描述一个业务概念，归属数据域或数据集市",
+  DWS: "挂业务过程，按维度聚合后的汇总结果，至少一个度量",
+  ADS: "挂数据集市，直接服务报表与应用，可不带度量",
 };
+
+export const AGGREGATE_TYPES = ["SUM", "COUNT", "AVG", "MAX", "MIN"] as const;
+export type AggregateType = (typeof AGGREGATE_TYPES)[number];
+
+export const AGGREGATE_LABEL: Record<AggregateType, string> = {
+  SUM: "求和 SUM",
+  COUNT: "计数 COUNT",
+  AVG: "平均 AVG",
+  MAX: "最大 MAX",
+  MIN: "最小 MIN",
+};
+
+/**
+ * Whether an aggregate may be applied to a logical type.
+ *
+ * <p>Mirrors the server-side matrix so the editor never offers a pair the API rejects: `SUM` and
+ * `AVG` need arithmetic, while `COUNT` / `MAX` / `MIN` accept all five logical types.
+ */
+export function aggregateSupports(aggregate: AggregateType, dataType: DataType): boolean {
+  return aggregate === "SUM" || aggregate === "AVG"
+    ? dataType === "BIGINT" || dataType === "DECIMAL"
+    : true;
+}
+
+/** Types whose fields may carry a measure. */
+export const AGGREGATE_MODEL_TYPES: ReadonlySet<ModelType> = new Set<ModelType>(["DWS", "ADS"]);
 
 export const STORAGE_POLICIES = ["DAILY_INCREMENTAL", "DAILY_FULL"] as const;
 export type StoragePolicy = (typeof STORAGE_POLICIES)[number];
@@ -40,6 +70,7 @@ export interface ModelField {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
   description: string | null;
@@ -100,6 +131,7 @@ export interface ModelFieldInput {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  aggregateType: AggregateType | null;
   standardId: string | null;
   description: string | null;
 }

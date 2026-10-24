@@ -1,5 +1,6 @@
 package io.yak.ops.common.bean.dto.modeling;
 
+import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -32,6 +33,9 @@ public class ModelFieldInputDTO {
     private Boolean isNotNull;
 
     private Boolean isPartition;
+
+    /** Measure function; accepted for DWS and ADS only and validated against the resolved type. */
+    private AggregateType aggregateType;
 
     @Size(max = 64, message = "数据标准标识过长")
     private String standardId;
