@@ -296,6 +296,7 @@ async def verify_schema_preview(page):
         ddl = page.get_by_role("dialog", name="DDL 预览", exact=True)
         await expect(ddl.locator("code")).to_contain_text("CREATE TABLE")
         await expect(ddl.locator("code")).to_contain_text(table)
+        await expect(ddl.get_by_text("创建表", exact=True)).to_be_visible()
         await expect(ddl.get_by_role("textbox")).to_have_count(0)
         await ddl.get_by_role("button", name="关闭", exact=True).click()
     assert state.get("schema_previews") == 2
