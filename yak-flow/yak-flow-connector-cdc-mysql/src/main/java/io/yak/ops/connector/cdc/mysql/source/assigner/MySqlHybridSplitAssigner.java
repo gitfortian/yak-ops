@@ -118,7 +118,8 @@ public final class MySqlHybridSplitAssigner {
 
     /** Preserves a typed discovery boundary atomically with the planned split. */
     public void appendTypedPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
-        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT || split.chunkRange() == null
+        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT
+                || split.chunkRange() == null
                 || (next != null && (next.end() != null || next.start() == null))) {
             throw new IllegalStateException("Invalid typed snapshot discovery transition");
         }

@@ -30,15 +30,23 @@ public record MySqlSnapshotSplit(
             MySqlSnapshotOutput output,
             int outputPosition,
             FinishedSnapshotSplitInfo finished) {
-        this(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, lastEmittedKey,
-                output, outputPosition, finished, null);
+        this(
+                splitId,
+                fingerprint,
+                tableId,
+                lowerInclusive,
+                upperExclusive,
+                lastEmittedKey,
+                output,
+                outputPosition,
+                finished,
+                null);
     }
 
     /** Typed ranges are restorable but are not yet executable by the legacy BIGINT Reader. */
     public static MySqlSnapshotSplit typed(String splitId, String fingerprint, ChunkRange range) {
         Objects.requireNonNull(range, "range");
-        return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null,
-                null, 0, null, range);
+        return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null, null, 0, null, range);
     }
 
     /** Creates an unprepared range; numeric cursors are used only by the JDBC scan primitive. */
@@ -137,7 +145,16 @@ public record MySqlSnapshotSplit(
                     chunkRange);
         }
         return new MySqlSnapshotSplit(
-                splitId, fingerprint, tableId, lowerInclusive, upperExclusive, null, output, position, null, chunkRange);
+                splitId,
+                fingerprint,
+                tableId,
+                lowerInclusive,
+                upperExclusive,
+                null,
+                output,
+                position,
+                null,
+                chunkRange);
     }
 
     public MySqlSnapshotSplit withLastEmittedKey(long key) {

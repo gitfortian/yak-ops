@@ -40,9 +40,7 @@ public record FinishedSnapshotSplitInfo(
         }
         Objects.requireNonNull(highWatermark, "highWatermark");
         if (chunkRange != null
-                && (!tableId.equals(chunkRange.tableId())
-                        || lowerInclusive != null
-                        || upperExclusive != null)) {
+                && (!tableId.equals(chunkRange.tableId()) || lowerInclusive != null || upperExclusive != null)) {
             throw new IllegalArgumentException("Typed finished chunk cannot reuse BIGINT boundaries");
         }
         if (lowerInclusive != null && upperExclusive != null && lowerInclusive >= upperExclusive) {

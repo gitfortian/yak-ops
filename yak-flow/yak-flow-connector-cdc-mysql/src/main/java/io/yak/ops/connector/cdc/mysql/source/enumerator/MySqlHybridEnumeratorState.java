@@ -51,9 +51,23 @@ public record MySqlHybridEnumeratorState(
             int nextTableIndex,
             int nextChunkIndex,
             Long nextChunkLower) {
-        this(fingerprint, phase, pendingBinlog, binlogAssigned, lowWatermark, highWatermark,
-                snapshotPlanned, totalSnapshotSplits, pendingSnapshots, assignedSnapshots,
-                finishedSnapshots, finishedSplitInfos, nextTableIndex, nextChunkIndex, nextChunkLower, null);
+        this(
+                fingerprint,
+                phase,
+                pendingBinlog,
+                binlogAssigned,
+                lowWatermark,
+                highWatermark,
+                snapshotPlanned,
+                totalSnapshotSplits,
+                pendingSnapshots,
+                assignedSnapshots,
+                finishedSnapshots,
+                finishedSplitInfos,
+                nextTableIndex,
+                nextChunkIndex,
+                nextChunkLower,
+                null);
     }
 
     public enum Phase {
