@@ -13,11 +13,12 @@ import java.util.Objects;
 /**
  * Versioned transport of snapshot ranges and paused/running Binlog checkpoint state.
  *
- * <p>The standalone Binlog serializer retains its independent versioned checkpoint format.
+ * <p>Version 3 compresses prepared Snapshot output while retaining version 2 checkpoint reads.
+ * The standalone Binlog serializer retains its independent versioned checkpoint format.
  */
 public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializer<MySqlHybridSplit> {
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlBinlogSplitSerializer binlogSerializer = new MySqlBinlogSplitSerializer();
 
@@ -45,7 +46,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                 writeLong(out, snapshot.lastEmittedKey());
                 out.writeByte(snapshot.finished() != null ? 2 : snapshot.output() != null ? 1 : 0);
                 if (snapshot.output() != null) {
-                    MySqlSnapshotOutputSerializer.write(out, snapshot.output());
+                    MySqlSnapshotOutputSerializer.writeCompact(out, snapshot.output());
                     out.writeInt(snapshot.outputPosition());
                 } else if (snapshot.finished() != null) {
                     snapshot.finished().highWatermark().writeTo(out);
@@ -74,8 +75,8 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
 
     @Override
     public MySqlHybridSplit deserialize(int version, byte[] serialized) throws IOException {
-        if (version != VERSION || serialized == null || serialized.length > MAX_BYTES) {
-            throw new IOException("Unsupported MySQL hybrid split state; version 1 requires explicit reinitialization");
+        if ((version != 2 && version != VERSION) || serialized == null || serialized.length > MAX_BYTES) {
+            throw new IOException("Unsupported MySQL hybrid split state version");
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(serialized))) {
             MySqlHybridSplit split =
@@ -90,7 +91,9 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                             FinishedSnapshotSplitInfo finished = null;
                             int position = 0;
                             if (stage == 1) {
-                                output = MySqlSnapshotOutputSerializer.read(in, table);
+                                output = version == 2
+                                        ? MySqlSnapshotOutputSerializer.read(in, table)
+                                        : MySqlSnapshotOutputSerializer.readCompact(in, table);
                                 position = in.readInt();
                             } else if (stage == 2) {
                                 finished = new FinishedSnapshotSplitInfo(
