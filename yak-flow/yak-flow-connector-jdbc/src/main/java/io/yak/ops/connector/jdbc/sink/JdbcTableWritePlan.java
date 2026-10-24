@@ -204,8 +204,10 @@ public record JdbcTableWritePlan(
         GenericRowData projected = new GenericRowData(schema.columnCount());
         for (int index = 0; index < projected.getArity(); index++) {
             int sourcePosition = sourcePositions.get(index);
-            projected.setField(index, JdbcColumnValueConverter.convert(
-                    row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(index)));
+            projected.setField(
+                    index,
+                    JdbcColumnValueConverter.convert(
+                            row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(index)));
         }
         if (writeMode == JdbcWriteMode.UPSERT) {
             for (String key : schema.primaryKeys()) {
