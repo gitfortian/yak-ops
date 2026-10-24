@@ -9,10 +9,10 @@ import {
 import { CircleCheck, CircleMinus, CircleX } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { DATA_SOURCE_PAGE_SIZE_OPTIONS, getDataSourceTypeLabel } from "./constants";
-import DatabaseIcons from "./icons/DatabaseIcons";
-import { useIntl } from "./i18n";
-import type { DataSourceConnectionStatus, DataSourceRecord } from "./types";
+import { DATA_SOURCE_PAGE_SIZE_OPTIONS, getDataSourceTypeLabel } from "../constants";
+import DatabaseIcons from "../icons/DatabaseIcons";
+import { useIntl } from "../i18n";
+import type { DataSourceConnectionStatus, DataSourceRecord } from "@/service/datasource";
 
 interface DataSourceTableProps {
   records: DataSourceRecord[];
@@ -125,7 +125,7 @@ const DataSourceTable = ({
             <div className="truncate text-[13px] font-medium text-[#252832]" title={record.name}>
               {record.name || "-"}
             </div>
-            <div className="mt-0.5 truncate text-xs text-[#667085]">
+            <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
               {getDataSourceTypeLabel(record.dbType)}
             </div>
           </div>
@@ -140,7 +140,7 @@ const DataSourceTable = ({
         const jdbcUrl = record.displayJdbcUrl || record.jdbcUrl;
         return (
           <div className="min-w-0">
-            <div className="truncate text-[13px] text-[#4f5561]" title={jdbcUrl}>
+            <div className="truncate text-[13px] text-[var(--yak-components-muted-text)]" title={jdbcUrl}>
               {jdbcUrl || "-"}
             </div>
             <div className="mt-1.5">
@@ -185,7 +185,7 @@ const DataSourceTable = ({
             <Button
               variant="ghost"
               size="small"
-              className="px-0.5 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
+              className="px-0.5 text-xs font-normal text-[var(--yak-components-muted-text)] hover:text-[var(--yak-color-primary)]"
               disabled={batchBusy || (Boolean(editingId) && editingId !== id)}
               onClick={() => onEdit(record)}
             >
@@ -195,7 +195,7 @@ const DataSourceTable = ({
             <Button
               variant="ghost"
               size="small"
-              className="px-0.5 text-xs font-normal text-[#667085] hover:text-[#d92d20]"
+              className="px-0.5 text-xs font-normal text-[var(--yak-components-muted-text)] hover:text-[#d92d20]"
               disabled={batchBusy}
               onClick={() => onDelete(record)}
             >
