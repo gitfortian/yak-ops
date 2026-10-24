@@ -2,9 +2,9 @@ package io.yak.ops.connector.jdbc.database.internal.dialect;
 
 import io.yak.ops.connector.jdbc.database.dialect.AbstractDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
-import io.yak.ops.connector.jdbc.database.internal.convert.OracleJdbcDialectConverter;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcTypeConverter;
+import io.yak.ops.connector.jdbc.database.internal.convert.OracleTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
@@ -21,8 +21,8 @@ import java.util.stream.Collectors;
 public final class OracleJdbcDialect extends AbstractDialect {
 
     @Override
-    public JdbcDialectConverter createRowConverter(java.sql.ResultSetMetaData metadata) throws java.sql.SQLException {
-        return new OracleJdbcDialectConverter(metadata);
+    public JdbcTypeConverter typeConverter() {
+        return new OracleTypeConverter();
     }
 
     @Override

@@ -1,6 +1,5 @@
 package io.yak.ops.connector.jdbc.database.internal.convert;
 
-import io.yak.ops.connector.jdbc.database.dialect.AbstractDialectConverter;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypes;
 import java.sql.ResultSetMetaData;
@@ -8,8 +7,8 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Types;
 
-/** MySQL-specific BIT and unsigned numeric metadata normalization. */
-public final class MySqlJdbcDialectConverter extends AbstractDialectConverter {
+/** MySQL-specific BIT, unsigned numerics, and native type restrictions. */
+public final class MySqlTypeConverter extends StandardJdbcTypeConverter {
 
     private static final java.util.Set<String> SPATIAL_TYPES = java.util.Set.of(
             "POINT",
@@ -20,10 +19,6 @@ public final class MySqlJdbcDialectConverter extends AbstractDialectConverter {
             "MULTILINESTRING",
             "MULTIPOLYGON",
             "GEOMETRYCOLLECTION");
-
-    public MySqlJdbcDialectConverter(ResultSetMetaData metadata) throws SQLException {
-        super(metadata);
-    }
 
     @Override
     protected LogicalType resolveType(ResultSetMetaData metadata, int index) throws SQLException {

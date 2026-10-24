@@ -3,9 +3,9 @@ package io.yak.ops.connector.jdbc.database.internal.dialect;
 import io.yak.ops.connector.jdbc.database.dialect.AbstractDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
-import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcTypeConverter;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.schema.PhysicalColumn;
@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 public final class MySqlJdbcDialect extends AbstractDialect {
 
     @Override
-    public JdbcDialectConverter createRowConverter(java.sql.ResultSetMetaData metadata) throws java.sql.SQLException {
-        return new MySqlJdbcDialectConverter(metadata);
+    public JdbcTypeConverter typeConverter() {
+        return new MySqlTypeConverter();
     }
 
     @Override

@@ -45,7 +45,9 @@ class JdbcDialectConverterTest {
                 insert.executeUpdate();
             }
             try (var records = sql.executeQuery("SELECT * FROM DOCS")) {
-                JdbcDialectConverter converter = new AnsiJdbcDialect().createRowConverter(records.getMetaData());
+                AnsiJdbcDialect dialect = new AnsiJdbcDialect();
+                JdbcDialectConverter converter = dialect.createRowConverter(records.getMetaData());
+                assertEquals(dialect.typeConverter().convert(records.getMetaData()), converter.schema());
                 assertTrue(records.next());
                 RowData row = converter.toInternal(records);
                 assertInstanceOf(GenericRowData.class, row);

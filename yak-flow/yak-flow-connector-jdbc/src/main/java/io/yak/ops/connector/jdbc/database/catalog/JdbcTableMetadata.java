@@ -74,7 +74,7 @@ public final class JdbcTableMetadata {
         TableSchema projected;
         try (PreparedStatement statement = connection.prepareStatement(sql);
                 ResultSet rows = statement.executeQuery()) {
-            projected = dialect.createRowConverter(rows.getMetaData()).schema();
+            projected = dialect.typeConverter().convert(rows.getMetaData());
         }
         TreeMap<Integer, String> keys = readPrimaryKeys(connection.getMetaData(), catalog, schema, tableId.table());
         return mySqlTemporalPrecision(

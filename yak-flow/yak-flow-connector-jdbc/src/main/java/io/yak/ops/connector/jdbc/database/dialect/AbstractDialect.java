@@ -1,6 +1,7 @@
 package io.yak.ops.connector.jdbc.database.dialect;
 
 import io.yak.ops.connector.jdbc.database.internal.convert.StandardJdbcDialectConverter;
+import io.yak.ops.connector.jdbc.database.internal.convert.StandardJdbcTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
@@ -28,8 +29,13 @@ public abstract class AbstractDialect implements JdbcDialect {
     }
 
     @Override
+    public JdbcTypeConverter typeConverter() {
+        return new StandardJdbcTypeConverter();
+    }
+
+    @Override
     public JdbcDialectConverter createRowConverter(ResultSetMetaData metadata) throws SQLException {
-        return new StandardJdbcDialectConverter(metadata);
+        return new StandardJdbcDialectConverter(typeConverter().convert(metadata));
     }
 
     @Override
