@@ -189,8 +189,8 @@ class MySqlSinkIT extends JdbcSinkTestBase {
         try (Connection connection = database().connect();
                 var statement = connection.createStatement()) {
             String databaseName = connection.getCatalog();
-            TableId source = new TableId(databaseName, null, TestNames.unique("native_add_source"));
-            TableId target = new TableId(databaseName, null, TestNames.unique("native_add_target"));
+            TableId source = new TableId(databaseName, null, TestNames.unique("n_add_src"));
+            TableId target = new TableId(databaseName, null, TestNames.unique("n_add_tgt"));
             try {
                 statement.execute("CREATE TABLE " + dialect.qualifiedTable(source)
                         + " (id BIGINT PRIMARY KEY, status ENUM('active','inactive'),"
