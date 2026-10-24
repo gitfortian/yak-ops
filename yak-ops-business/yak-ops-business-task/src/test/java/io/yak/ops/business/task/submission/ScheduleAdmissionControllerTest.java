@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -93,6 +94,43 @@ class ScheduleAdmissionControllerTest {
         }
         controller.stop();
         controller.awaitQuiescence();
+    }
+
+    @Test
+    void stoppingDuringAdmissionOpeningCannotReopenTheController() throws Exception {
+        ScheduleAdmissionController controller =
+                new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
+        AtomicInteger checks = new AtomicInteger();
+        CountDownLatch verifying = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        controller.prepare("owner", () -> {
+            if (checks.incrementAndGet() == 2) {
+                verifying.countDown();
+                try {
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
+        });
+
+        CompletableFuture<Void> opening = CompletableFuture.runAsync(controller::open);
+        assertTrue(verifying.await(5, TimeUnit.SECONDS));
+        CountDownLatch stopping = new CountDownLatch(1);
+        CompletableFuture<Void> shutdown = CompletableFuture.runAsync(() -> {
+            stopping.countDown();
+            controller.stop();
+        });
+        try {
+            assertTrue(stopping.await(5, TimeUnit.SECONDS));
+            assertFalse(shutdown.isDone());
+        } finally {
+            release.countDown();
+        }
+        opening.get(5, TimeUnit.SECONDS);
+        shutdown.get(5, TimeUnit.SECONDS);
+        assertFalse(controller.isOpen());
     }
 
     @Test
