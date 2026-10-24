@@ -62,8 +62,8 @@ public final class MySqlSchemaChangeConverter {
                 continue;
             }
             if (!"CREATE".equalsIgnoreCase(text(change, "type"))) {
-                throw new IllegalStateException("Unexpected MySQL CDC table change during initial schema snapshot: "
-                        + table);
+                throw new IllegalStateException(
+                        "Unexpected MySQL CDC table change during initial schema snapshot: " + table);
             }
             if (change.schema().field("table") == null || change.get("table") == null) {
                 throw new IllegalStateException("MySQL CDC initial CREATE is missing table metadata: " + table);
