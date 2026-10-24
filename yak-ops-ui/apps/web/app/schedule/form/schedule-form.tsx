@@ -1,5 +1,4 @@
 import {
-  Button,
   CronSchedulerPicker,
   Field,
   FieldLabel,
@@ -13,8 +12,7 @@ import {
 } from "@yak-ops/yak-ui";
 import { useId } from "react";
 import type { ScheduleTimeRule } from "@/service/schedule";
-import { formatScheduleTime } from "./schedule-presentation";
-import { useSchedulePreview } from "./use-schedule-preview";
+import { SchedulePreview } from "./schedule-preview";
 
 const TIME_ZONES = [
   "Asia/Shanghai",
@@ -28,44 +26,6 @@ const TIME_ZONES = [
   "America/New_York",
   "America/Los_Angeles",
 ];
-
-function SchedulePreview({ rule }: { rule: ScheduleTimeRule }) {
-  const preview = useSchedulePreview(rule.cronExpression, rule.timeZone);
-  return (
-    <div aria-live="polite">
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-[#667085]">
-        <span className="font-medium">未来 5 次触发时间</span>
-        <span>{rule.timeZone}</span>
-      </div>
-      {preview.status === "ready" && preview.times.length > 0 ? (
-        <div className="mt-2 space-y-1.5 font-mono text-xs text-[#667085]">
-          {preview.times.map((time) => (
-            <div key={time}>{formatScheduleTime(time, rule.timeZone)}</div>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-2 flex items-center gap-2 text-xs text-[#667085]">
-          <span>
-            {preview.status === "loading"
-              ? "正在计算…"
-              : preview.status === "invalid"
-                ? "Cron 或时区无效"
-                : preview.status === "error"
-                  ? "预览请求失败"
-                  : preview.status === "empty"
-                    ? "请输入 Cron"
-                    : "暂无未来触发时间"}
-          </span>
-          {preview.status === "error" ? (
-            <Button size="small" variant="ghost" onClick={preview.retry}>
-              重试
-            </Button>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function ScheduleForm({
   value,

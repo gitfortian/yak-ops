@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, Modal, PageHeader } from "@yak-ops/yak-ui";
 
 import { CreateSyncTaskDialog } from "../create/dialog";
-import { ScheduleDialog } from "@/app/schedule/schedule-dialog";
+import { ScheduleDialog } from "@/app/schedule/dialog/schedule-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-sync/execution";
