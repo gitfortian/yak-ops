@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.base.source.meta.split.FinishedSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
@@ -18,7 +19,8 @@ import java.util.Objects;
  * @param highWatermark event boundary included in the normalized snapshot
  */
 public record FinishedSnapshotSplitInfo(
-        TableId tableId, String splitId, Long lowerInclusive, Long upperExclusive, BinlogOffset highWatermark) {
+        TableId tableId, String splitId, Long lowerInclusive, Long upperExclusive, BinlogOffset highWatermark)
+        implements FinishedSnapshotSplit<BinlogOffset> {
 
     public FinishedSnapshotSplitInfo {
         Objects.requireNonNull(tableId, "tableId");

@@ -60,6 +60,7 @@
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-core</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-runtime</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-base</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-cdc-base</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-jdbc</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-cdc-mysql</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-boot</artifactId><version>${project.version}</version></dependency>

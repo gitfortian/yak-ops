@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.base.source.meta.split.SnapshotSplit;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
@@ -14,7 +15,7 @@ public record MySqlSnapshotSplit(
         MySqlSnapshotOutput output,
         int outputPosition,
         FinishedSnapshotSplitInfo finished)
-        implements MySqlHybridSplit {
+        implements MySqlHybridSplit, SnapshotSplit {
 
     /** Creates an unprepared range; numeric cursors are used only by the JDBC scan primitive. */
     public MySqlSnapshotSplit(
