@@ -50,7 +50,8 @@ public final class MySqlTypeConverter extends StandardJdbcTypeConverter {
     protected LogicalType resolveType(int sqlType, int precision, int scale, String nativeType, String column)
             throws SQLException {
         String name = java.util.Objects.requireNonNull(nativeType, "nativeType")
-                .trim().toUpperCase(java.util.Locale.ROOT);
+                .trim()
+                .toUpperCase(java.util.Locale.ROOT);
         if (java.util.Set.of("ENUM", "SET", "JSON").contains(name)) {
             return LogicalTypes.STRING;
         }

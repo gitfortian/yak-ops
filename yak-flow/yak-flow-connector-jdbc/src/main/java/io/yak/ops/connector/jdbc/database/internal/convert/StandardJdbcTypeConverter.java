@@ -74,7 +74,8 @@ public class StandardJdbcTypeConverter implements JdbcTypeConverter {
             case Types.TIMESTAMP -> LogicalTypes.timestamp(temporalPrecision(scale));
             case Types.TIMESTAMP_WITH_TIMEZONE -> LogicalTypes.zonedTimestamp(temporalPrecision(scale));
             default ->
-                throw new SQLFeatureNotSupportedException("Unsupported JDBC type " + nativeType + " for field " + column);
+                throw new SQLFeatureNotSupportedException(
+                        "Unsupported JDBC type " + nativeType + " for field " + column);
         };
     }
 
