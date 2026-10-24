@@ -1,6 +1,6 @@
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { DataSourcePage } from "@/app/datasource";
+import { DataSourcePage } from "@/app/datasource/list/page";
 import LoginPage from "@/app/login";
 import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { DataSyncPage } from "@/app/data-sync/list/page";
