@@ -1,7 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
@@ -19,7 +18,7 @@ public final class MySqlSnapshotOutput {
     public MySqlSnapshotOutput(BinlogOffset low, BinlogOffset high, List<TableRecord> rows) {
         this.low = Objects.requireNonNull(low, "low");
         this.high = Objects.requireNonNull(high, "high");
-        if (BinlogOffsetOrder.compare(low, high) > 0) {
+        if (low.compareTo(high) > 0) {
             throw new IllegalArgumentException("Snapshot watermarks moved backwards");
         }
         if (Objects.requireNonNull(rows, "rows").size() > 100_000) {

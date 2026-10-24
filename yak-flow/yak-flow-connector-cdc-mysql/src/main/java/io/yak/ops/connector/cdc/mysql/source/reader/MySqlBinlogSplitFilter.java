@@ -1,6 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -189,6 +188,6 @@ public final class MySqlBinlogSplitFilter {
         if (!match.contains(key)) {
             throw new IllegalStateException("Missing finished snapshot metadata for Binlog key");
         }
-        return BinlogOffsetOrder.isAfter(event.offset(), match.highWatermark());
+        return event.offset().compareTo(match.highWatermark()) > 0;
     }
 }

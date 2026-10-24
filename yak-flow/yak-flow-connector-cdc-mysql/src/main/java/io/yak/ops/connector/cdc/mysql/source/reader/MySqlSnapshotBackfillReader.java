@@ -3,7 +3,6 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -78,17 +77,17 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
             }
             afterSnapshot.call();
             BinlogOffset high = watermark();
-            if (BinlogOffsetOrder.compare(low, high) > 0) {
+            if (low.compareTo(high) > 0) {
                 throw new IllegalStateException("MySQL snapshot watermarks moved backwards");
             }
-            if (BinlogOffsetOrder.compare(low, high) != 0) {
+            if (low.compareTo(high) != 0) {
                 long deadline = System.nanoTime() + BINLOG_TIMEOUT_NANOS;
                 while (true) {
                     checkDeadline(deadline);
                     BinlogEvent event = binlog.poll();
                     if (event == null) continue;
-                    int highOrder = BinlogOffsetOrder.compare(event.offset(), high);
-                    if (BinlogOffsetOrder.compare(event.offset(), low) > 0
+                    int highOrder = event.offset().compareTo(high);
+                    if (event.offset().compareTo(low) > 0
                             && highOrder <= 0
                             && !event.records().isEmpty()
                             && split.tableId().equals(event.records().getFirst().tableId())) {
