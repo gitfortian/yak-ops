@@ -17,12 +17,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.CRC32C;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
-import java.util.ArrayList;
-import java.util.List;
 
 /** Scalar-only snapshot state encoding; never enables Java or polymorphic object deserialization. */
 final class MySqlSnapshotOutputSerializer {
