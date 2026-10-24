@@ -55,8 +55,9 @@ public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybr
         this.chunkSize = chunkSize;
         fingerprint =
                 Objects.requireNonNull(sourceFingerprint, "sourceFingerprint") + "-hybrid-backfill-v2-" + chunkSize;
-        config.schemas().forEach((table, schema) ->
-                MySqlChunkSplitter.splitKey(schema, config.chunkKeyColumns().get(table)));
+        config.schemas()
+                .forEach((table, schema) -> MySqlChunkSplitter.splitKey(
+                        schema, config.chunkKeyColumns().get(table)));
     }
 
     @Override

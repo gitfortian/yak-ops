@@ -159,7 +159,8 @@ public final class MySqlCdcSourceConfig {
             if (schema == null) {
                 throw new IllegalArgumentException("Unknown MySQL CDC chunk-key table: " + table);
             }
-            requestedKeys.put(table, ChunkUtils.getChunkKeyColumn(schema, selected).name());
+            requestedKeys.put(
+                    table, ChunkUtils.getChunkKeyColumn(schema, selected).name());
         });
         this.chunkKeyColumns = Collections.unmodifiableMap(requestedKeys);
         Map<TableId, Schema> shapes = new LinkedHashMap<>();

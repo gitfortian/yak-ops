@@ -1,8 +1,10 @@
 package io.yak.ops.connector.base.factory;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.types.TableSchema;
 
 /** Creates a Source from effective configuration and table metadata. */
 public interface TableSourceFactory extends Factory {
@@ -17,10 +19,10 @@ public interface TableSourceFactory extends Factory {
     default void validateDatasource(String datasourceType) {}
 
     /** Validates source schema requirements before admission without opening a reader. */
-    default void validateSchema(io.yak.ops.core.types.TableSchema schema) {}
+    default void validateSchema(TableSchema schema) {}
 
     /** Validates table-specific source options and the resolved physical schema together. */
-    default void validateSchema(io.yak.ops.configuration.ReadonlyConfig options, io.yak.ops.core.types.TableSchema schema) {
+    default void validateSchema(ReadonlyConfig options, TableSchema schema) {
         validateSchema(schema);
     }
 
