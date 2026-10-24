@@ -194,6 +194,7 @@ public record JdbcTableWritePlan(
             for (String key : schema.primaryKeys()) {
                 int targetIndex = targetIndex(key);
                 int sourcePosition = sourcePositions.get(targetIndex);
+                Objects.requireNonNull(row.getField(sourcePosition), "JDBC retract primary key must not be null");
                 Object value = JdbcColumnValueConverter.convert(
                         row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(targetIndex));
                 keys.setField(index++, Objects.requireNonNull(value, "JDBC retract primary key must not be null"));
