@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.data.TableRecord;
@@ -12,13 +14,9 @@ import io.yak.ops.core.data.TableRecord;
  */
 public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, TableRecord, MySqlCdcSplitState> {
 
-    private final MySqlSchemaChangeHandler schemaChanges;
+    private final SchemaChangeHandler schemaChanges;
 
-    public MySqlCdcRecordEmitter() {
-        this.schemaChanges = null;
-    }
-
-    public MySqlCdcRecordEmitter(MySqlSchemaChangeHandler schemaChanges) {
+    public MySqlCdcRecordEmitter(SchemaChangeHandler schemaChanges) {
         this.schemaChanges = java.util.Objects.requireNonNull(schemaChanges, "schemaChanges");
     }
 
@@ -26,9 +24,6 @@ public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, T
     public void emitRecord(BinlogEvent event, ReaderOutput<TableRecord> output, MySqlCdcSplitState state)
             throws Exception {
         if (event.schemaChange() != null) {
-            if (schemaChanges == null) {
-                throw new UnsupportedOperationException("MySQL CDC DDL requires a schema coordinator");
-            }
             schemaChanges.submitSchemaChange(event.schemaChange(), () -> state.onEmitted(event.offset()));
             return;
         }

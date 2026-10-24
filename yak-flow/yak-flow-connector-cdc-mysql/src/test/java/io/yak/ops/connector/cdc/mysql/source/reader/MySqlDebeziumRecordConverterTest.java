@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -57,7 +60,25 @@ class MySqlDebeziumRecordConverterTest {
         var state = new MySqlCdcSplitState(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
                 "fingerprint", null, new byte[0]));
         var delivered = new ArrayList<TableRecord>();
-        var emitter = new MySqlCdcRecordEmitter();
+        var emitter = new MySqlCdcRecordEmitter(new SchemaChangeHandler(new SourceReaderContext() {
+            @Override
+            public Configuration getConfiguration() {
+                return new Configuration();
+            }
+
+            @Override
+            public int getIndexOfSubtask() {
+                return 0;
+            }
+
+            @Override
+            public int currentParallelism() {
+                return 1;
+            }
+
+            @Override
+            public void sendSplitRequest() {}
+        }));
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[] {1}));
         emitter.emitRecord(event, delivered::add, state);
         assertEquals(2, delivered.size());

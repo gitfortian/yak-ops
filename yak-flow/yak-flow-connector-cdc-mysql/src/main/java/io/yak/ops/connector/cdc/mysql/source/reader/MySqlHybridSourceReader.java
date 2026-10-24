@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
@@ -33,7 +35,7 @@ public final class MySqlHybridSourceReader
                 MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplit, MySqlHybridSplitState> {
 
     private final MySqlHybridSplitReader splits;
-    private final MySqlSchemaChangeHandler schemaChanges;
+    private final SchemaChangeHandler schemaChanges;
     private final TableMetrics metrics;
     private final long generation;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
@@ -51,14 +53,14 @@ public final class MySqlHybridSourceReader
     }
 
     private MySqlHybridSourceReader(MySqlHybridSplitReader splits, SourceReaderContext context, TableMetrics metrics) {
-        this(splits, context, metrics, new MySqlSchemaChangeHandler(context));
+        this(splits, context, metrics, new SchemaChangeHandler(context));
     }
 
     private MySqlHybridSourceReader(
             MySqlHybridSplitReader splits,
             SourceReaderContext context,
             TableMetrics metrics,
-            MySqlSchemaChangeHandler schemaChanges) {
+            SchemaChangeHandler schemaChanges) {
         super(() -> splits, new MySqlHybridRecordEmitter(context, splits, metrics, schemaChanges), context);
         this.metrics = metrics;
         generation = metrics.generation();

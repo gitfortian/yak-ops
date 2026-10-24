@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -288,7 +290,7 @@ class MySqlSchemaChangeConverterTest {
                 return acknowledgment;
             }
         };
-        var handler = new MySqlSchemaChangeHandler(context);
+        var handler = new SchemaChangeHandler(context);
         Schema before = Schema.from(ORIGINAL, null, Map.of(), Map.of());
         Schema after = new Schema(
                 List.of(
