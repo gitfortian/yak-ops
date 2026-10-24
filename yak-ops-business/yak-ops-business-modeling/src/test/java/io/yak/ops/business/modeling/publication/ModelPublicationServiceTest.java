@@ -14,7 +14,7 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.datasource.DataSourceCatalogService;
 import io.yak.ops.business.modeling.model.ModelService;
-import io.yak.ops.business.modeling.publication.impl.PublicationServiceImpl;
+import io.yak.ops.business.modeling.publication.impl.ModelPublicationServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.PublicationTargetDTO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
@@ -44,7 +44,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 /** Publication state machine, create-or-verify behaviour and target validation without a database. */
-class PublicationServiceTest {
+class ModelPublicationServiceTest {
 
     private static final String WORKSPACE = "ws1";
     private static final String ACTOR = "u1";
@@ -58,7 +58,7 @@ class PublicationServiceTest {
     @Mock PhysicalExecutor executor;
     @Mock PublicationRepository publications;
     @Mock MetadataCollector collector;
-    @InjectMocks PublicationServiceImpl service;
+    @InjectMocks ModelPublicationServiceImpl service;
 
     AutoCloseable mocks;
     private ModelPublicationEntity stored;

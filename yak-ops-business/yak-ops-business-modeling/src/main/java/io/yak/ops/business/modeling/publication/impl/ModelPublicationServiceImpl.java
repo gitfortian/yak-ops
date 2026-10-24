@@ -3,6 +3,7 @@ package io.yak.ops.business.modeling.publication.impl;
 import io.yak.ops.business.datasource.DataSourceCatalogService;
 import io.yak.ops.business.modeling.model.ModelService;
 import io.yak.ops.business.modeling.publication.MetadataCollector;
+import io.yak.ops.business.modeling.publication.ModelPublicationService;
 import io.yak.ops.business.modeling.publication.PhysicalAddress;
 import io.yak.ops.business.modeling.publication.PhysicalColumnSpec;
 import io.yak.ops.business.modeling.publication.PhysicalDdlGenerator;
@@ -12,7 +13,6 @@ import io.yak.ops.business.modeling.publication.PhysicalExecutor;
 import io.yak.ops.business.modeling.publication.PhysicalScript;
 import io.yak.ops.business.modeling.publication.PhysicalTableVerifier;
 import io.yak.ops.business.modeling.publication.PublicationFailures;
-import io.yak.ops.business.modeling.publication.PublicationService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceCatalogQueryDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
 import io.yak.ops.common.bean.dto.modeling.PublicationTargetDTO;
@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service;
  * {@code PENDING} or {@code UNKNOWN} row instead of no trace at all.
  */
 @Service
-public class PublicationServiceImpl implements PublicationService {
+public class ModelPublicationServiceImpl implements ModelPublicationService {
 
     /** Bounded history; the surface shows the newest records and does not page today. */
     private static final int HISTORY_LIMIT = 50;
@@ -117,7 +117,7 @@ public class PublicationServiceImpl implements PublicationService {
     @Override
     public List<PublicationVO> history(String workspaceId, String modelId) {
         return publications.listByModel(workspaceId, modelId, HISTORY_LIMIT).stream()
-                .map(PublicationServiceImpl::project)
+                .map(ModelPublicationServiceImpl::project)
                 .toList();
     }
 

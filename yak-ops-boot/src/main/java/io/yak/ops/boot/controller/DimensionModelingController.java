@@ -2,7 +2,7 @@ package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.modeling.dimension.DimensionService;
 import io.yak.ops.business.modeling.model.ModelService;
-import io.yak.ops.business.modeling.publication.PublicationService;
+import io.yak.ops.business.modeling.publication.ModelPublicationService;
 import io.yak.ops.common.bean.dto.modeling.DimensionInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.PublicationTargetDTO;
@@ -47,7 +47,7 @@ public class DimensionModelingController {
     private ModelService models;
 
     @Resource
-    private PublicationService publications;
+    private ModelPublicationService publications;
 
     @Resource
     private AuthenticationManager authentication;

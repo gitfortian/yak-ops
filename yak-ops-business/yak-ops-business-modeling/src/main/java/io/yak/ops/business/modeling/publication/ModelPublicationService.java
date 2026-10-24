@@ -12,8 +12,13 @@ import java.util.List;
  * <p>Publishing is create-or-verify: an absent table is created, and a present table is verified
  * against the model contract without being modified. The target address is always explicit — never
  * inferred from the datasource default, the table name or the layer code.
+ *
+ * <p>Named after the record it writes rather than after the action: {@code
+ * io.yak.ops.business.task.definition.PublicationService} already exists for task artifacts, and two
+ * component-scanned {@code PublicationServiceImpl} classes in one application context collide on the
+ * default bean name.
  */
-public interface PublicationService {
+public interface ModelPublicationService {
     /**
      * Generates the DDL for one explicit target without recording a publication.
      * @param workspaceId authorized Workspace
