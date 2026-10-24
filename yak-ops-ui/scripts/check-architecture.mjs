@@ -36,6 +36,16 @@ const requiredAppShellFiles = [
   "apps/web/app/layout/ProductSidebar.tsx",
   "apps/web/app/layout/ProductLauncher.tsx",
   "apps/web/app/layout/AllProductMenu.tsx",
+  "apps/web/app/layout/account-menu.tsx",
+  "apps/web/app/layout/workspace-switcher.tsx",
+  "apps/web/app/layout/workspace-create-dialog.tsx",
+  "apps/web/app/layout/use-product-favorites.ts",
+  "apps/web/app/layout/product-favorites.ts",
+  "apps/web/app/datasource/list/page.tsx",
+  "apps/web/app/data-sync/list/page.tsx",
+  "apps/web/app/data-sync/editor/page.tsx",
+  "apps/web/app/schedule/dialog/schedule-dialog.tsx",
+  "apps/web/app/operations/dashboard/page.tsx",
   "apps/web/app/layout/navigation.ts",
   "apps/web/app/management/users/page.tsx",
   "apps/web/app/management/users/user-form.tsx",
@@ -49,6 +59,21 @@ for (const path of requiredAppShellFiles) {
   if (!existsSync(join(root, path))) {
     fail(`required app shell file is missing: ${path}`);
   }
+}
+
+// Deleted forwarding files must not silently return as compatibility surfaces.
+const forbiddenFeatureForwarders = [
+  "apps/web/app/management/index.tsx",
+  "apps/web/app/management/users/index.tsx",
+  "apps/web/app/management/workspaces/index.tsx",
+  "apps/web/app/operations/index.tsx",
+  "apps/web/app/operations/dashboard.tsx",
+  "apps/web/app/schedule/schedule-dialog.tsx",
+  "apps/web/app/schedule/schedule-form.tsx",
+  "apps/web/app/schedule/schedule-fire-history.tsx",
+];
+for (const path of forbiddenFeatureForwarders) {
+  if (existsSync(join(root, path))) fail(`obsolete forwarding path exists: ${path}`);
 }
 
 const packageRoot = join(root, "packages");

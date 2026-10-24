@@ -116,6 +116,22 @@ export function checkArchitectureImports(relativePath, content, root) {
     ) {
       violations.push(relativePath + " imports a private Operations feature: " + specifier);
     }
+    const layout = resolve(app, "layout");
+    const shellEntries = new Set([resolve(layout, "AppLayout"), resolve(layout, "navigation")]);
+    if (
+      inside(target, layout) &&
+      !inside(source, layout) &&
+      !(inside(source, resolve(app, "router")) && shellEntries.has(target))
+    ) {
+      violations.push(relativePath + " imports a private App Shell module: " + specifier);
+    }
+    if (
+      inside(source, layout) &&
+      inside(target, app) &&
+      !inside(target, layout)
+    ) {
+      violations.push(relativePath + " imports a feature into App Shell: " + specifier);
+    }
     if (inside(source, service) && inside(target, app)) {
       violations.push(relativePath + " imports App code: " + specifier);
     }
