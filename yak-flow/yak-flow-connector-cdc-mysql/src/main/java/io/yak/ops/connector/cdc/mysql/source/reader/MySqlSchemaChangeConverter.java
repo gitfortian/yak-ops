@@ -42,17 +42,18 @@ public final class MySqlSchemaChangeConverter {
     }
 
     /**
-     * Reads table metadata emitted by Debezium's initial no_data schema snapshot.
-     * These are not runtime DDL operations: they establish the initial table history.
-     * Missing tables, malformed metadata and initial DROP fail before Hybrid handoff.
+     * Replays structured table metadata during the initial no_data schema snapshot.
+     * Debezium can emit DROP and CREATE for the same existing table while rebuilding
+     * history. The final registered set, not any individual operation, is authoritative.
+     * These events never enter the runtime SchemaCoordinator.
      */
-    public Set<TableId> initialTables(Struct envelope) {
+    public void applyInitialTables(Struct envelope, Set<TableId> registered) {
         Objects.requireNonNull(envelope, "envelope");
+        Objects.requireNonNull(registered, "registered");
         if (envelope.schema().field("tableChanges") == null
                 || !(envelope.get("tableChanges") instanceof List<?> changes)) {
             throw new IllegalStateException("MySQL CDC initial schema snapshot has no tableChanges");
         }
-        Set<TableId> created = new java.util.HashSet<>();
         for (Object item : changes) {
             if (!(item instanceof Struct change)) {
                 throw new IllegalStateException("Invalid MySQL CDC initial table metadata");
@@ -62,16 +63,18 @@ public final class MySqlSchemaChangeConverter {
                 continue;
             }
             String operation = text(change, "type");
-            if (!"CREATE".equalsIgnoreCase(operation) && !"ALTER".equalsIgnoreCase(operation)) {
+            if ("DROP".equalsIgnoreCase(operation)) {
+                registered.remove(table);
+            } else if ("CREATE".equalsIgnoreCase(operation) || "ALTER".equalsIgnoreCase(operation)) {
+                if (change.schema().field("table") == null || change.get("table") == null) {
+                    throw new IllegalStateException("MySQL CDC initial table metadata is missing: " + table);
+                }
+                registered.add(table);
+            } else {
                 throw new IllegalStateException(
-                        "Unexpected MySQL CDC table change during initial schema snapshot: " + table);
+                        "Unexpected MySQL CDC table change during initial schema snapshot: " + operation);
             }
-            if (change.schema().field("table") == null || change.get("table") == null) {
-                throw new IllegalStateException("MySQL CDC initial table change is missing metadata: " + table);
-            }
-            created.add(table);
         }
-        return Set.copyOf(created);
     }
 
     public SourceSchemaChange convert(Struct envelope, BinlogOffset offset, Map<TableId, Schema> current) {
