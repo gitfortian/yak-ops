@@ -31,8 +31,6 @@ export function useScheduleSession({
   const [needsReload, setNeedsReload] = useState(false);
   const [confirmation, setConfirmation] = useState<"delete" | "discard" | "reload">();
   const session = useRef<AbortController>();
-  const current = useRef(draft);
-  current.current = draft;
   const { userId, workspaceId } = useScheduleScope();
   const queryClient = useQueryClient();
   const key = scheduleQueryKeys.detail(userId, workspaceId, targetId);
@@ -124,6 +122,8 @@ export function useScheduleSession({
     if (!signal || signal.aborted || pending || needsReload || loading || query.isError ||
       schedule?.enabled || !form.cronExpression.trim() || !dirty) return;
     setPending(true);
+    await queryClient.cancelQueries({ queryKey: key });
+    if (signal.aborted) return;
     setError("");
     try {
       try {
@@ -153,6 +153,8 @@ export function useScheduleSession({
     const signal = session.current?.signal;
     if (!signal || !schedule || pending || needsReload || dirty || signal.aborted || query.isError) return;
     setPending(true);
+    await queryClient.cancelQueries({ queryKey: key });
+    if (signal.aborted) return;
     setError("");
     try {
       const saved = await setScheduleEnabled(schedule.id, schedule.revision, enabled, signal);
@@ -172,6 +174,8 @@ export function useScheduleSession({
     const signal = session.current?.signal;
     if (!signal || signal.aborted || !schedule || pending || needsReload || query.isError) return;
     setPending(true);
+    await queryClient.cancelQueries({ queryKey: key });
+    if (signal.aborted) return;
     setConfirmation(undefined);
     setError("");
     try {
