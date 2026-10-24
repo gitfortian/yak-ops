@@ -73,8 +73,13 @@ export function useScheduleSession({
 
   const schedule = query.data ?? null;
   const form = draft.value;
-  const loading = !historyOnly && (!ready || reloading);
+  const loading = !historyOnly && (reloading || (!ready && query.isPending));
   const blocked = Boolean(schedule && !schedule.enabled && (!published || !schedule.schedulable));
+
+  const notifyChanged = () => {
+    void queryClient.invalidateQueries({ queryKey: scheduleQueryKeys.tasks() });
+    onChanged();
+  };
 
   const recover = async (failure: unknown, signal: AbortSignal) => {
     if (signal.aborted) return;
@@ -87,7 +92,7 @@ export function useScheduleSession({
     } catch {
       // The persisted state is unknown until the user explicitly reloads.
     }
-    if (!signal.aborted) onChanged();
+    if (!signal.aborted) notifyChanged();
   };
 
   const reload = async () => {
@@ -136,7 +141,7 @@ export function useScheduleSession({
       setDraft({ base: rule, value: rule });
       queryClient.setQueryData(key, saved);
       toast.success("调度已保存，未启用");
-      onChanged();
+      notifyChanged();
     } catch (failure) {
       await recover(failure, signal);
     } finally {
@@ -154,7 +159,7 @@ export function useScheduleSession({
       if (!signal.aborted) {
         queryClient.setQueryData(key, saved);
         toast.success(enabled ? "调度已启用" : "调度已停止");
-        onChanged();
+        notifyChanged();
       }
     } catch (failure) {
       await recover(failure, signal);
@@ -176,7 +181,7 @@ export function useScheduleSession({
         const value = emptyRule();
         setDraft({ base: value, value });
         toast.success("调度已删除");
-        onChanged();
+        notifyChanged();
       }
     } catch (failure) {
       await recover(failure, signal);

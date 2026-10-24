@@ -126,7 +126,7 @@ export function ScheduleFireHistory({
         </Button>
       </div>
       {error ? (
-        <div role="alert" className="text-xs text-[#d92d20]">
+        <div role="alert" className="text-xs text-[var(--yak-color-danger)]">
           {error}
         </div>
       ) : null}

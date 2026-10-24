@@ -142,7 +142,6 @@ function ScheduleDialogSession({ targetId, published, onClose, onChanged, onView
                   value={form}
                   onChange={(value) => {
                     setForm(value);
-                    setError("");
                   }}
                   disabled={pending || needsReload || Boolean(schedule?.enabled)}
                   allowClear={!schedule}
