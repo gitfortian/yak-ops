@@ -72,14 +72,46 @@ public final class MySqlJdbcDialect extends AbstractDialect {
 
     @Override
     public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        if (!column.type().isResolved() || !column.type().isNullable()) {
+            throw new IllegalArgumentException("ADD COLUMN requires a resolved nullable type: " + column.name());
+        }
+        ColumnProperties properties = column.properties();
+        if (properties != null && (!properties.isKnown() || properties.hasFeatures())) {
+            throw new IllegalArgumentException("ADD COLUMN cannot preserve column expressions: " + column.name());
+        }
+        if (properties != null && !supportsNativeColumnAddition(properties.nativeType())) {
+            throw new IllegalArgumentException("ADD COLUMN cannot preserve native type: " + column.name());
+        }
         Column target = new Column(column.name(), column.type());
-        String definition =
-                quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
+        String definition = quoteIdentifier(column.name()) + " " + validatedColumnType(target, properties) + " NULL";
         String comment = column.comment();
         if (comment != null && !comment.isBlank()) {
             definition += " COMMENT " + stringLiteral(comment);
         }
         return List.of("ALTER TABLE " + qualifiedTable(table) + " ADD COLUMN " + definition);
+    }
+
+    /**
+     * Native types that carry semantics beyond their YakFlow logical type must not be
+     * silently replaced by a generic type during schema evolution.
+     */
+    public static boolean requiresExactNativeType(String nativeType) {
+        if (nativeType == null) return false;
+        String type = nativeType.trim().toLowerCase(java.util.Locale.ROOT);
+        return type.startsWith("enum(")
+                || type.startsWith("set(")
+                || type.equals("json")
+                || type.equals("year")
+                || type.startsWith("year(")
+                || type.equals("point")
+                || type.contains("unsigned")
+                || type.contains("zerofill");
+    }
+
+    private static boolean supportsNativeColumnAddition(String nativeType) {
+        if (!requiresExactNativeType(nativeType)) return true;
+        String type = nativeType.trim().toLowerCase(java.util.Locale.ROOT);
+        return type.startsWith("enum(") || type.startsWith("set(") || type.equals("json");
     }
 
     @Override

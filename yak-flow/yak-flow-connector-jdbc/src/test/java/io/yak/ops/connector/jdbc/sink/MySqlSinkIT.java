@@ -182,6 +182,46 @@ class MySqlSinkIT extends JdbcSinkTestBase {
         }
     }
 
+
+    @Test
+    void nativeEnumAndSetColumnAdditionsRetainTheirTypes() throws Exception {
+        JdbcDialect dialect = JdbcFactoryLoader.loadDialect(database().url());
+        try (Connection connection = database().connect();
+                var statement = connection.createStatement()) {
+            String databaseName = connection.getCatalog();
+            TableId source = new TableId(databaseName, null, TestNames.unique("native_add_source"));
+            TableId target = new TableId(databaseName, null, TestNames.unique("native_add_target"));
+            try {
+                statement.execute("CREATE TABLE " + dialect.qualifiedTable(source)
+                        + " (id BIGINT PRIMARY KEY, status ENUM('active','inactive'),"
+                        + " permission SET('read','write'), payload JSON)");
+                statement.execute("CREATE TABLE " + dialect.qualifiedTable(target) + " (id BIGINT PRIMARY KEY)");
+                var columns = JdbcTableMetadata.readColumns(connection, source, databaseName, null);
+                var schema = JdbcTableMetadata.readTable(connection, dialect, source, databaseName, null);
+                for (var column : columns) {
+                    if ("id".equals(column.name())) continue;
+                    var attributes = new ColumnProperties(
+                            column.defaultExpression(), column.autoIncrement(), column.generated(),
+                            column.onUpdateExpression(), column.defaultGenerated(), column.nativeType());
+                    var physical = new io.yak.ops.core.schema.PhysicalColumn(
+                            column.name(), schema.column(column.name()).dataType(), column.remarks(), attributes);
+                    statement.execute(dialect.addColumnStatements(target, physical).getFirst());
+                }
+                var actual = JdbcTableMetadata.readColumns(connection, target, databaseName, null);
+                for (var original : columns) {
+                    if ("id".equals(original.name())) continue;
+                    var added = actual.stream()
+                            .filter(column -> column.name().equals(original.name()))
+                            .findFirst().orElseThrow();
+                    assertEquals(original.nativeType(), added.nativeType());
+                }
+            } finally {
+                statement.execute("DROP TABLE IF EXISTS " + dialect.qualifiedTable(target));
+                statement.execute("DROP TABLE IF EXISTS " + dialect.qualifiedTable(source));
+            }
+        }
+    }
+
     @Test
     void spatialColumnFailsWithItsNameInsteadOfPretendingToSupportBinaryWrites() throws Exception {
         JdbcDialect dialect = JdbcFactoryLoader.loadDialect(database().url());
