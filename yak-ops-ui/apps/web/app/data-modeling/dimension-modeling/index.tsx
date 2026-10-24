@@ -1,21 +1,30 @@
 import { Alert, Button, Empty, PageHeader, Spinner } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { getModels } from "@/service/data-modeling/dimension-modeling";
 import type {
   ConceptDimension,
   LogicalModel,
 } from "@/service/data-modeling/dimension-modeling/types";
+import { getOwners } from "@/service/data-modeling/warehouse-planning";
+import { getLayers, type Layer } from "@/service/data-modeling/warehouse-planning/layers";
 import type {
   CategoryNode,
   DatamartNode,
   DomainNode,
+  OwnerOption,
   ProcessNode,
 } from "@/service/data-modeling/warehouse-planning/types";
 import DimensionDeleteDialog from "../dimensions/delete-dialog";
 import DimensionDialog from "../dimensions/dimension-dialog";
 import ModelDeleteDialog from "../logical-models/delete-dialog";
 import ModelPanel from "./model-panel";
+import ModelSearchBar, {
+  EMPTY_MODEL_SEARCH,
+  isModelSearching,
+  type ModelSearchFilters,
+} from "./search";
 import { useDimensionModelingCatalog } from "./state";
 
 type Selection =
@@ -95,6 +104,79 @@ export default function DimensionModelingPage() {
   const [dimensionDraft, setDimensionDraft] = useState<DimensionDraft | null>(null);
   const [deletingDimension, setDeletingDimension] = useState<ConceptDimension | null>(null);
   const [deletingModel, setDeletingModel] = useState<LogicalModel | null>(null);
+  const [filters, setFilters] = useState<ModelSearchFilters>(EMPTY_MODEL_SEARCH);
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchPageSize, setSearchPageSize] = useState(20);
+  const [searchResult, setSearchResult] = useState<{
+    items: LogicalModel[];
+    total: number;
+  } | null>(null);
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [searchVersion, setSearchVersion] = useState(0);
+  const [searchOptions, setSearchOptions] = useState<{
+    status: "loading" | "ready" | "failed";
+    layers: Layer[];
+    owners: OwnerOption[];
+  }>({ status: "loading", layers: [], owners: [] });
+  const searching = isModelSearching(filters);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void Promise.all([getLayers(controller.signal), getOwners(controller.signal)])
+      .then(([layers, owners]) => {
+        if (!controller.signal.aborted) setSearchOptions({ status: "ready", layers, owners });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setSearchOptions((previous) => ({ ...previous, status: "failed" }));
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!searching) {
+      setSearchResult(null);
+      setSearchStatus("idle");
+      return;
+    }
+    const controller = new AbortController();
+    setSearchStatus("loading");
+    void getModels(
+      {
+        type: filters.type,
+        layerId: filters.layerId,
+        keyword: filters.keyword.trim(),
+        ownerId: filters.ownerId,
+        domainId: filters.domainId,
+        datamartId: filters.datamartId,
+        pageNo: searchPage,
+        pageSize: searchPageSize,
+      },
+      controller.signal,
+    )
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        setSearchResult({ items: page.bizData, total: page.pagination.total });
+        setSearchStatus("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSearchStatus("failed");
+      });
+    return () => controller.abort();
+  }, [filters, searchPage, searchPageSize, searching, searchVersion]);
+
+  const changeFilters = (next: ModelSearchFilters) => {
+    setFilters(next);
+    setSearchPage(1);
+  };
+
+  // Deleting the last row of the last page leaves a page the server no longer has.
+  useEffect(() => {
+    if (!searchResult) return;
+    const last = Math.max(1, Math.ceil(searchResult.total / searchPageSize));
+    if (searchPage > last) setSearchPage(last);
+  }, [searchResult, searchPage, searchPageSize]);
 
   const dimensionsByOwner = useMemo(() => {
     const grouped = new Map<string, ConceptDimension[]>();
@@ -466,16 +548,57 @@ export default function DimensionModelingPage() {
             </nav>
           )}
         </aside>
-        <ModelPanel
-          title={panel.title}
-          description={panel.description}
-          models={panel.models}
-          loading={catalog.status === "loading"}
-          truncated={catalog.truncated}
-          actions={actions}
-          onEdit={editModel}
-          onDelete={setDeletingModel}
-        />
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
+          <ModelSearchBar
+            filters={filters}
+            layers={searchOptions.layers}
+            owners={searchOptions.owners}
+            tree={catalog.tree}
+            optionsFailed={searchOptions.status === "failed"}
+            onChange={changeFilters}
+          />
+          {searching ? (
+            <ModelPanel
+              title="检索结果"
+              description={`匹配 ${searchResult?.total ?? 0} 个逻辑模型`}
+              models={searchResult?.items ?? []}
+              loading={searchStatus === "loading"}
+              emptyText="没有匹配的逻辑模型"
+              error={
+                searchStatus === "failed" ? (
+                  <span className="flex items-center gap-2">
+                    检索失败
+                    <Button size="small" onClick={() => setSearchVersion((value) => value + 1)}>
+                      重试
+                    </Button>
+                  </span>
+                ) : undefined
+              }
+              paging={{
+                pageNo: searchPage,
+                pageSize: searchPageSize,
+                total: searchResult?.total ?? 0,
+                onChange: (page, size) => {
+                  setSearchPage(page);
+                  setSearchPageSize(size);
+                },
+              }}
+              onEdit={editModel}
+              onDelete={setDeletingModel}
+            />
+          ) : (
+            <ModelPanel
+              title={panel.title}
+              description={panel.description}
+              models={panel.models}
+              loading={catalog.status === "loading"}
+              truncated={catalog.truncated}
+              actions={actions}
+              onEdit={editModel}
+              onDelete={setDeletingModel}
+            />
+          )}
+        </div>
       </div>
       {dimensionDraft && (
         <DimensionDialog
@@ -511,6 +634,7 @@ export default function DimensionModelingPage() {
           onDeleted={() => {
             setDeletingModel(null);
             catalog.reload();
+            setSearchVersion((value) => value + 1);
           }}
         />
       )}

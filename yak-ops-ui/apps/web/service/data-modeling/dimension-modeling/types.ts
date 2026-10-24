@@ -86,6 +86,10 @@ export interface ModelQuery {
   keyword: string;
   pageNo: number;
   pageSize: number;
+  /** Optional attribute filters; omitted when the search bar leaves them at "all". */
+  ownerId?: string;
+  domainId?: string;
+  datamartId?: string;
 }
 
 export interface ModelFieldInput {

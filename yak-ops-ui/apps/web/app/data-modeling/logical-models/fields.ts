@@ -4,6 +4,8 @@ import {
   type StandardField,
 } from "@/service/data-modeling/data-standards/types";
 import type { ModelField, ModelFieldInput } from "@/service/data-modeling/dimension-modeling/types";
+import { parseCreateTable, type DdlField, typeSize } from "./ddl-parser";
+import { mapPhysicalColumn, normalizeFieldCode, type PhysicalMapping } from "./field-mapping";
 
 /** One editable field row; {@code key} keeps React identity stable across reorders. */
 export interface FieldDraft {
@@ -159,6 +161,77 @@ const TYPE_ALIASES: Record<string, DataType> = {
 export interface ParsedFields {
   rows: FieldDraft[];
   errors: string[];
+  /** Tells the dialog which syntax the paste was read as, so the hint matches the input. */
+  mode: "DDL" | "LINES";
+}
+
+/**
+ * Reads either a {@code CREATE TABLE} paste or the compact one-field-per-line format.
+ *
+ * <p>The DDL path is preferred whenever the text contains {@code CREATE TABLE}; the line format
+ * stays available because it is the fastest way to type a handful of fields by hand.
+ */
+export function parseFields(text: string, existing: FieldDraft[] = []): ParsedFields {
+  if (/\bcreate\s+(?:or\s+replace\s+|external\s+|temporary\s+)*table\b/i.test(text))
+    return parseDdl(text, existing);
+  return parseFieldLines(text, existing);
+}
+
+/**
+ * Turns parsed DDL fields into editable rows, reusing the physical type rules.
+ *
+ * <p>A field whose type cannot be mapped keeps its place with an empty logical type, exactly like
+ * an imported catalog column, so the user resolves it before saving instead of losing it here.
+ */
+function parseDdl(text: string, existing: FieldDraft[]): ParsedFields {
+  const parsed = parseCreateTable(text);
+  if (!parsed.found) return { rows: [], errors: parsed.errors, mode: "DDL" };
+  const rows: FieldDraft[] = [];
+  const errors = [...parsed.errors];
+  const taken = new Set(existing.map((row) => row.enCode.trim()));
+  for (const field of parsed.fields) {
+    const enCode = normalizeFieldCode(field.name);
+    if (taken.has(enCode)) {
+      errors.push(`第 ${field.line} 行：编码「${enCode}」在本模型中重复`);
+      continue;
+    }
+    taken.add(enCode);
+    const size = typeSize(field.typeArgs);
+    const mapping = mapPhysicalColumn({
+      name: field.name,
+      typeName: field.baseType,
+      size: size.size,
+      scale: size.scale,
+      nullable: !field.notNull,
+      primaryKey: field.primaryKey,
+      remarks: field.comment ?? undefined,
+    });
+    const comment = field.comment?.trim() ?? "";
+    const notes = [ddlNote(mapping, field)].filter((note): note is string => Boolean(note));
+    if (!comment) notes.push("缺少 COMMENT，中文名暂用字段名");
+    else if (comment.length > 128) notes.push("COMMENT 超过 128 字符，中文名已截断");
+    rows.push({
+      ...emptyField(),
+      enCode,
+      cnName: (comment || field.name).slice(0, 128),
+      dataType: mapping.kind === "MAPPED" ? mapping.dataType : null,
+      lengthPrecision: mapping.kind === "MAPPED" ? (mapping.lengthPrecision ?? "") : "",
+      isPrimaryKey: field.primaryKey,
+      isNotNull: field.notNull,
+      description: field.comment,
+      importNote: notes.length ? notes.join("；") : null,
+    });
+  }
+  return { rows, errors, mode: "DDL" };
+}
+
+/** Keeps the useful decision hint but drops wording that assumes a live catalog read. */
+function ddlNote(mapping: PhysicalMapping, field: DdlField) {
+  if (mapping.kind === "MAPPED") return mapping.note;
+  if (!field.baseType) return "未声明数据类型，请手动选择";
+  if (mapping.kind === "REVIEW" && mapping.note.includes("数据库未返回"))
+    return "未声明完整的 DECIMAL 精度与小数位，请手动确认";
+  return mapping.note;
 }
 
 /**
@@ -211,5 +284,5 @@ export function parseFieldLines(text: string, existing: FieldDraft[] = []): Pars
     taken.add(enCode);
     rows.push({ ...emptyField(), enCode, cnName, dataType, lengthPrecision: length });
   });
-  return { rows, errors };
+  return { rows, errors, mode: "LINES" };
 }
