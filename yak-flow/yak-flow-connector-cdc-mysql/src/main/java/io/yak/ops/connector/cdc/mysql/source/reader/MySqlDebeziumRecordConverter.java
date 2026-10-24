@@ -60,6 +60,18 @@ public final class MySqlDebeziumRecordConverter {
         this.evolve = evolve;
     }
 
+    /** Replays only the initial no_data table metadata, without modifying runtime schemas. */
+    public void applyInitialSchemaTables(SourceRecord source, java.util.Set<TableId> registered) {
+        if (!(source.value() instanceof Struct envelope) || envelope.schema().field("ddl") == null) {
+            throw new IllegalStateException("Unexpected MySQL CDC event before the initial schema snapshot completed");
+        }
+        if (!evolve) {
+            // include.schema.changes=false normally suppresses these records.
+            throw new IllegalStateException("Unexpected initial schema event with schema changes disabled");
+        }
+        schemaChanges.applyInitialTables(envelope, registered);
+    }
+
     /**
      * Converts an entire Debezium update into one event carrying both consecutive RowKinds.
      *
