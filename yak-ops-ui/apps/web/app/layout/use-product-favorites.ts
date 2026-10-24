@@ -2,10 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@yak-ops/yak-ui";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  listUserPreferences, updateUserPreferenceFavorite, type UserPreferenceRecord,
+  listUserPreferences,
+  updateUserPreferenceFavorite,
+  type UserPreferenceRecord,
 } from "@/service/preference";
 import { GLOBAL_PRODUCT_MENU } from "./navigation";
-import { PRODUCT_MENU_SCENE, favoriteProducts, updateFavoritePreference, upsertFavoritePreference } from "./product-favorites";
+import {
+  PRODUCT_MENU_SCENE,
+  favoriteProducts,
+  updateFavoritePreference,
+  upsertFavoritePreference,
+} from "./product-favorites";
 
 export const favoriteQueryKey = (userId: string) =>
   ["product-menu-favorites", userId, PRODUCT_MENU_SCENE] as const;
@@ -36,14 +43,17 @@ export function useProductFavorites(open: boolean) {
       return { previous };
     },
     onSuccess: (saved) => {
-      client.setQueryData<UserPreferenceRecord[]>(key, previous =>
-        upsertFavoritePreference(previous ?? [], saved));
+      client.setQueryData<UserPreferenceRecord[]>(key, (previous) =>
+        upsertFavoritePreference(previous ?? [], saved),
+      );
     },
     onError: (_error, _variables, context) => {
       if (context) client.setQueryData(key, context.previous);
       toast.error("收藏操作失败");
     },
-    onSettled: () => { void client.invalidateQueries({ queryKey: key }); },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: key });
+    },
   });
 
   const toggleFavorite = (productId: string) => {
@@ -53,13 +63,17 @@ export function useProductFavorites(open: boolean) {
   };
   return {
     favorites: favoriteProducts(preferences),
-    favoriteProductIds: new Set(preferences.filter(item => item.favorite).map(item => item.itemKey)),
+    favoriteProductIds: new Set(
+      preferences.filter((item) => item.favorite).map((item) => item.itemKey),
+    ),
     mutatingIds: mutation.isPending
-      ? new Set(GLOBAL_PRODUCT_MENU.map(item => item.id))
+      ? new Set(GLOBAL_PRODUCT_MENU.map((item) => item.id))
       : new Set<string>(),
     loading: query.isPending && open && Boolean(userId),
     error: query.isError,
-    retry: () => { void query.refetch(); },
+    retry: () => {
+      void query.refetch();
+    },
     toggleFavorite,
   };
 }

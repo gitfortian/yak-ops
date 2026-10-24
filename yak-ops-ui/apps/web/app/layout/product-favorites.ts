@@ -7,15 +7,15 @@ export function upsertFavoritePreference(
   preferences: UserPreferenceRecord[],
   next: UserPreferenceRecord,
 ) {
-  if (!preferences.some(item => item.itemKey === next.itemKey)) return [...preferences, next];
-  return preferences.map(item => item.itemKey === next.itemKey ? next : item);
+  if (!preferences.some((item) => item.itemKey === next.itemKey)) return [...preferences, next];
+  return preferences.map((item) => (item.itemKey === next.itemKey ? next : item));
 }
 
 export function updateFavoritePreference(preferences: UserPreferenceRecord[], productId: string) {
-  const previous = preferences.find(item => item.itemKey === productId);
+  const previous = preferences.find((item) => item.itemKey === productId);
   const favorite = !previous?.favorite;
   const sortOrder = favorite
-    ? Math.max(0, ...preferences.filter(item => item.favorite).map(item => item.sortOrder)) + 1
+    ? Math.max(0, ...preferences.filter((item) => item.favorite).map((item) => item.sortOrder)) + 1
     : 0;
   const next: UserPreferenceRecord = {
     scene: PRODUCT_MENU_SCENE,
@@ -30,10 +30,10 @@ export function updateFavoritePreference(preferences: UserPreferenceRecord[], pr
 
 export function favoriteProducts(preferences: UserPreferenceRecord[]) {
   return preferences
-    .filter(item => item.favorite)
+    .filter((item) => item.favorite)
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .flatMap(item => {
-      const product = GLOBAL_PRODUCT_MENU.find(p => p.id === item.itemKey);
+    .flatMap((item) => {
+      const product = GLOBAL_PRODUCT_MENU.find((p) => p.id === item.itemKey);
       return product ? [product] : [];
     });
 }

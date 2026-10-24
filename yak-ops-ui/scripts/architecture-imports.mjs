@@ -125,11 +125,7 @@ export function checkArchitectureImports(relativePath, content, root) {
     ) {
       violations.push(relativePath + " imports a private App Shell module: " + specifier);
     }
-    if (
-      inside(source, layout) &&
-      inside(target, app) &&
-      !inside(target, layout)
-    ) {
+    if (inside(source, layout) && inside(target, app) && !inside(target, layout)) {
       violations.push(relativePath + " imports a feature into App Shell: " + specifier);
     }
     if (inside(source, service) && inside(target, app)) {

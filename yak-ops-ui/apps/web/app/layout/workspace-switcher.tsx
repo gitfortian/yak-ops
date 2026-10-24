@@ -1,6 +1,11 @@
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@yak-ops/yak-ui";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import { useState } from "react";
@@ -10,7 +15,7 @@ import WorkspaceCreateDialog from "./workspace-create-dialog";
 export default function WorkspaceSwitcher() {
   const { workspaces, currentWorkspace, loading, selectWorkspace } = useWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
-  const workspaceLabel = loading ? "加载中…" : currentWorkspace?.name ?? "选择工作空间";
+  const workspaceLabel = loading ? "加载中…" : (currentWorkspace?.name ?? "选择工作空间");
 
   return (
     <>
@@ -25,19 +30,23 @@ export default function WorkspaceSwitcher() {
         <DropdownMenuContent side="bottom" align="start" className="w-64">
           <DropdownMenuGroup>
             <DropdownMenuLabel>工作空间</DropdownMenuLabel>
-            {workspaces.length ? workspaces.map(workspace => (
-              <DropdownMenuItem key={workspace.id} onClick={() => selectWorkspace(workspace.id)}>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{workspace.name}</span>
-                  {workspace.roleName ? (
-                    <span className="mt-0.5 block text-[11px] text-black/40">{workspace.roleName}</span>
+            {workspaces.length ? (
+              workspaces.map((workspace) => (
+                <DropdownMenuItem key={workspace.id} onClick={() => selectWorkspace(workspace.id)}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{workspace.name}</span>
+                    {workspace.roleName ? (
+                      <span className="mt-0.5 block text-[11px] text-black/40">
+                        {workspace.roleName}
+                      </span>
+                    ) : null}
+                  </span>
+                  {workspace.id === currentWorkspace?.id ? (
+                    <Check className="h-4 w-4 shrink-0 text-[var(--yak-color-primary)]" />
                   ) : null}
-                </span>
-                {workspace.id === currentWorkspace?.id ? (
-                  <Check className="h-4 w-4 shrink-0 text-[var(--yak-color-primary)]" />
-                ) : null}
-              </DropdownMenuItem>
-            )) : (
+                </DropdownMenuItem>
+              ))
+            ) : (
               <DropdownMenuItem disabled>暂无工作空间</DropdownMenuItem>
             )}
           </DropdownMenuGroup>

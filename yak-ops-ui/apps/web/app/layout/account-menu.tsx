@@ -1,5 +1,8 @@
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@yak-ops/yak-ui";
 import { ChevronDown, LogOut } from "lucide-react";
@@ -32,7 +35,9 @@ export default function AccountMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex h-8 max-w-52 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-white outline-none hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-white/20">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/12 text-[11px] font-semibold">{initial}</span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/12 text-[11px] font-semibold">
+          {initial}
+        </span>
         <span className="min-w-0 flex-1 truncate text-xs text-white/80">{displayName}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
       </DropdownMenuTrigger>

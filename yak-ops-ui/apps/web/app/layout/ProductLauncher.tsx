@@ -11,7 +11,8 @@ type ProductLauncherProps = { open: boolean; onClose: () => void };
 export default function ProductLauncher({ open, onClose }: ProductLauncherProps) {
   const [allProductsOpen, setAllProductsOpen] = useState(false);
   const [firstLevelVisible, setFirstLevelVisible] = useState(open);
-  const { favorites, favoriteProductIds, mutatingIds, loading, error, retry, toggleFavorite } = useProductFavorites(open);
+  const { favorites, favoriteProductIds, mutatingIds, loading, error, retry, toggleFavorite } =
+    useProductFavorites(open);
 
   useEffect(() => {
     if (open) {
@@ -123,11 +124,19 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
               })
             ) : (
               <div className="px-2 py-3 text-[11px] leading-5 text-white/35">
-                {loading ? "正在加载常用产品…" : error ? (
-                  <button type="button" className="cursor-pointer text-white/80 hover:text-white" onClick={retry}>
+                {loading ? (
+                  "正在加载常用产品…"
+                ) : error ? (
+                  <button
+                    type="button"
+                    className="cursor-pointer text-white/80 hover:text-white"
+                    onClick={retry}
+                  >
                     常用产品加载失败，重试
                   </button>
-                ) : "暂无常用产品，可在全部产品中标星添加"}
+                ) : (
+                  "暂无常用产品，可在全部产品中标星添加"
+                )}
               </div>
             )}
           </div>

@@ -37,7 +37,9 @@ export default function TopBar({
         <Link
           to={productPath}
           className="flex min-w-0 items-center"
-          onClick={() => { if (launcherOpen) onToggleLauncher(); }}
+          onClick={() => {
+            if (launcherOpen) onToggleLauncher();
+          }}
         >
           <img
             src="/logo.png"

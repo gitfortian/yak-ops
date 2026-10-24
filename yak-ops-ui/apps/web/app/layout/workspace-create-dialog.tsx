@@ -2,7 +2,13 @@ import { Button, Dialog, DialogContent, DialogTitle, Input, toast } from "@yak-o
 import { useState } from "react";
 import { useWorkspace } from "@/hooks/use-workspace";
 
-export default function WorkspaceCreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function WorkspaceCreateDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const { createWorkspace } = useWorkspace();
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -27,7 +33,12 @@ export default function WorkspaceCreateDialog({ open, onClose }: { open: boolean
   };
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!value) close(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) close();
+      }}
+    >
       <DialogContent className="w-[420px]">
         <DialogTitle className="text-base font-semibold">新建工作空间</DialogTitle>
         <div className="mt-5">
@@ -37,18 +48,24 @@ export default function WorkspaceCreateDialog({ open, onClose }: { open: boolean
             maxLength={128}
             value={name}
             placeholder="工作空间名称"
-            onChange={event => setName(event.target.value)}
-            onKeyDown={event => { if (event.key === "Enter") void create(); }}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void create();
+            }}
           />
         </div>
         <div className="mt-6 flex justify-end gap-2">
-          <Button disabled={creating} onClick={close}>取消</Button>
+          <Button disabled={creating} onClick={close}>
+            取消
+          </Button>
           <Button
             variant="primary"
             loading={creating}
             disabled={!name.trim()}
             onClick={() => void create()}
-          >创建</Button>
+          >
+            创建
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
