@@ -1,12 +1,12 @@
 # YOIP-10: Data Modeling — Summary and Application Models
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/19
 
-Decision: Pending
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/19#issuecomment-6382279985
 
-Implementation: N/A until accepted
+Implementation: Planned — 1.5.0 batch
 
 Release: N/A until released
 
