@@ -54,9 +54,8 @@ public final class JdbcSinkSchemaValidator {
         if (requireKeys) {
             Set<String> sourceKeys = new HashSet<>(source.primaryKeys());
             if (sourceKeys.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "JDBC changelog UPSERT requires a source physical primary key; "
-                                + "a snapshot Chunk Key does not identify a unique row");
+                throw new IllegalArgumentException("JDBC changelog UPSERT requires a source physical primary key; "
+                        + "a snapshot Chunk Key does not identify a unique row");
             }
             if (target.primaryKeys().isEmpty()) {
                 throw new IllegalArgumentException("JDBC changelog UPSERT requires a target physical primary key");

@@ -82,7 +82,8 @@ public record JdbcTableWritePlan(
             // A snapshot Chunk Key chooses a read range; it is not a physical row identity.
             // Every destination key must map bijectively to a declared source primary key,
             // including when source and destination field names differ.
-            if (schema.primaryKeys().isEmpty() || sourceSchema.primaryKeys().isEmpty()
+            if (schema.primaryKeys().isEmpty()
+                    || sourceSchema.primaryKeys().isEmpty()
                     || schema.primaryKeys().size() != sourceSchema.primaryKeys().size()) {
                 throw new IllegalArgumentException(
                         "JDBC UPSERT requires physical primary keys on both source and target");
@@ -99,7 +100,8 @@ public record JdbcTableWritePlan(
                 if (targetPosition < 0) {
                     throw new IllegalArgumentException("Missing destination primary-key column: " + targetKey);
                 }
-                String sourceKey = sourceSchema.column(sourcePositions.get(targetPosition)).name();
+                String sourceKey =
+                        sourceSchema.column(sourcePositions.get(targetPosition)).name();
                 if (!sourceSchema.primaryKeys().contains(sourceKey) || !sourceKeys.add(sourceKey)) {
                     throw new IllegalArgumentException(
                             "JDBC UPSERT destination primary key must map to a source physical primary key: "
