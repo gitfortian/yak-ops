@@ -42,9 +42,9 @@ public final class MySqlSchemaChangeConverter {
     }
 
     /**
-     * Reads CREATE metadata emitted by Debezium's initial no_data schema snapshot.
-     * This is not an executable runtime CREATE: it establishes the internal table history.
-     * A missing table, malformed metadata or non-CREATE transition fails before Hybrid handoff.
+     * Reads table metadata emitted by Debezium's initial no_data schema snapshot.
+     * These are not runtime DDL operations: they establish the initial table history.
+     * Missing tables, malformed metadata and initial DROP fail before Hybrid handoff.
      */
     public Set<TableId> initialTables(Struct envelope) {
         Objects.requireNonNull(envelope, "envelope");
@@ -61,12 +61,13 @@ public final class MySqlSchemaChangeConverter {
             if (!selected.contains(table)) {
                 continue;
             }
-            if (!"CREATE".equalsIgnoreCase(text(change, "type"))) {
+            String operation = text(change, "type");
+            if (!"CREATE".equalsIgnoreCase(operation) && !"ALTER".equalsIgnoreCase(operation)) {
                 throw new IllegalStateException(
                         "Unexpected MySQL CDC table change during initial schema snapshot: " + table);
             }
             if (change.schema().field("table") == null || change.get("table") == null) {
-                throw new IllegalStateException("MySQL CDC initial CREATE is missing table metadata: " + table);
+                throw new IllegalStateException("MySQL CDC initial table change is missing metadata: " + table);
             }
             created.add(table);
         }
