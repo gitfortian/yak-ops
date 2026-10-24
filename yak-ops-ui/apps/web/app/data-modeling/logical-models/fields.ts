@@ -22,6 +22,8 @@ export interface FieldDraft {
    * would erase a description written through another client.
    */
   description: string | null;
+  /** Why an imported column still has no logical type; shown beside the row and never submitted. */
+  importNote: string | null;
 }
 
 export type FieldIssueField = "cnName" | "enCode" | "dataType" | "partition";
@@ -38,6 +40,9 @@ export const TYPE_ITEMS = DATA_TYPES.map((value) => ({ value, label: value }));
 let fieldSequence = 0;
 const nextKey = () => `field-${(fieldSequence += 1)}`;
 
+/** Identity for a row created outside this module, such as an imported column. */
+export const newFieldKey = () => nextKey();
+
 export function emptyField(): FieldDraft {
   return {
     key: nextKey(),
@@ -51,6 +56,7 @@ export function emptyField(): FieldDraft {
     standardId: null,
     standardEnCode: null,
     description: null,
+    importNote: null,
   };
 }
 
@@ -67,6 +73,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     standardId: field.standardId,
     standardEnCode: field.standardEnCode,
     description: field.description,
+    importNote: null,
   };
 }
 
@@ -83,6 +90,7 @@ export function fromStandard(standard: StandardField): FieldDraft {
     standardId: standard.id,
     standardEnCode: standard.enCode,
     description: null,
+    importNote: null,
   };
 }
 
