@@ -90,6 +90,12 @@ test("does not coerce a stripped name that still violates the naming rule", () =
   assert.equal(draftTableName("dwd_", "dwd"), "");
 });
 
+test("passes an over-length suffix through instead of truncating it", () => {
+  const long = `${"dwd_"}${"a".repeat(60)}`;
+  // Truncation would silently rename the table; the wizard rejects it through the shared rule.
+  assert.equal(draftTableName(long, "dwd"), "a".repeat(60));
+});
+
 test("uses the table comment for the Chinese name and falls back to the name", () => {
   assert.equal(draftTableCnName({ name: "dwd_order", remarks: "订单明细" }), "订单明细");
   assert.equal(draftTableCnName({ name: "dwd_order", remarks: "  " }), "dwd_order");

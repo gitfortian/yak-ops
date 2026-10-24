@@ -30,16 +30,14 @@ import type { DataSourceCatalogTable } from "@/service/datasource";
 import { useCatalogPicker } from "../../use-catalog-picker";
 import FieldEditor from "../../logical-models/field-editor";
 import {
-  FIELD_CODE,
+  MODEL_SUFFIX_RULE,
+  isValidModelSuffix,
   toModelFieldInput,
   validateFieldRows,
   type FieldDraft,
 } from "../../logical-models/fields";
-import {
-  describeFieldDrafts,
-  draftTableCnName,
-  draftTableName,
-} from "../../logical-models/reverse-modeling-draft";
+import { draftTableCnName, draftTableName } from "../../logical-models/reverse-modeling-draft";
+import { reverseModelingProvider } from "../../logical-models/reverse-modeling-provider";
 import { useModelOptions } from "../../logical-models/state";
 import { datamartsOf, domainsOf, processesOf } from "../../shared/planning-tree";
 
@@ -126,7 +124,12 @@ export default function ReverseModelingPage() {
   const startDraft = () => {
     const table = picker.selectedTable;
     if (!table || picker.columns.length === 0) return;
-    setRows(describeFieldDrafts(picker.columns));
+    const provider = reverseModelingProvider(picker.datasource?.dbType);
+    if (!provider) {
+      setError("当前数据源类型不支持逆向建模，请选择 MySQL、Oracle 或 PostgreSQL 数据源");
+      return;
+    }
+    setRows(provider.describeDrafts(picker.columns));
     setNameSuffix(draftTableName(table.name, layerId));
     setCnName(draftTableCnName(table));
     setError(null);
@@ -155,20 +158,21 @@ export default function ReverseModelingPage() {
   };
 
   const submit = async () => {
-    if (!picker.selectedTable) return;
+    if (!picker.selectedTable) {
+      setError("物理表选择已失效，请返回第一步重新选择");
+      return;
+    }
+    const suffix = nameSuffix.trim();
     const problem =
       issues[0]?.message ??
       (layerId ? null : "请选择数仓分层") ??
-      (FIELD_CODE.test(nameSuffix.trim())
-        ? null
-        : "表名后缀须以小写字母开头，仅含小写字母、数字或下划线") ??
+      (!suffix ? "请输入表名后缀" : isValidModelSuffix(suffix) ? null : MODEL_SUFFIX_RULE) ??
       (cnName.trim() ? null : "请输入表中文名") ??
       ownership();
     if (problem) {
       setError(problem);
       return;
     }
-    const suffix = nameSuffix.trim();
     setSaving(true);
     setError(null);
     try {

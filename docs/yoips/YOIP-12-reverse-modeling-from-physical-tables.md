@@ -76,8 +76,9 @@ None. No migration, no new table, no column change. A reverse-modeled model is a
 
 The provider lives beside the declared seam in `service/data-modeling/dimension-modeling/reverse-modeling.ts` and implements the already-agreed signatures:
 
-- `discover({datasourceId, pattern, exact})` delegates to the Catalog table listing, scoping results to the chosen database, schema and keyword. `exact` filters the returned names client-side so the caller keeps one contract across providers.
-- `describe({datasourceId, schema, table})` reads the columns and returns logical fields. The physical-to-logical translation is the existing `mapPhysicalColumn` matrix, not a second copy; a `REVIEW` or `UNSUPPORTED` mapping becomes an empty `dataType` with the reason carried to the draft row.
+- `discover({datasourceId, pattern, exact})` delegates to the Catalog table listing, filtered by keyword. The agreed signature carries no database or schema, so address scoping stays with the caller and the wizard scopes through the picker. `exact` filters the returned names client-side so the caller keeps one contract across providers.
+- `describe({datasourceId, schema, table})` reads the columns and returns logical fields. The physical-to-logical translation is the existing `mapPhysicalColumn` matrix, not a second copy. The seam's `ModelField` has no empty type, so `describe` returns only complete fields; the wizard renders the provider's draft projection instead, which keeps a `REVIEW` or `UNSUPPORTED` column with an empty `dataType` and the reason carried to the row.
+- Provider selection is a rule of its own: only the three JDBC `dbType` values resolve to the provider, and any other engine is refused before a draft is attempted.
 - The provider is stateless and does not cache Catalog results. Credentials never leave the datasource boundary; the provider only sees identifiers.
 
 The provider interface does not change. Engine-specific behavior stays inside the provider, as YOIP-9 required.
@@ -136,8 +137,8 @@ The entry is a page action on the dimension-modeling page, not a new navigation 
 
 ## Test Plan
 
-- Unit tests, attached to the existing frontend contract check, cover: prefix stripping (matching prefix, non-matching prefix, uppercase physical name, over-length name), comment truncation for Chinese name and description, empty-comment fallback, primary-key and nullability propagation, partition and aggregate never inferred, and unsupported columns retained with a reason.
-- Provider selection is covered for the three JDBC database types through the datasource `dbType`.
+- Unit tests, attached to the existing frontend contract check, cover: prefix stripping (matching prefix, non-matching prefix, uppercase physical name, a name that exceeds the suffix bound being passed through rather than truncated), comment truncation for Chinese name and description, empty-comment fallback, primary-key and nullability propagation, partition and aggregate never inferred, and unsupported columns retained with a reason.
+- Provider selection is covered for the three JDBC database types and for a non-JDBC engine through the datasource `dbType`.
 - Frontend verification covers `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run architecture:check`, `npm run contract:check` and `npm run build`.
 - Manual acceptance must reverse-model at least one table per supported JDBC engine, plus a table without comments, a table containing an unsupported column type, and a table whose derived name collides with an existing model. The created model must open in the editor with the expected fields and descriptions.
 - Browser interaction is not covered by an automated per-feature Playwright script in this proposal; the repository has no such infrastructure.

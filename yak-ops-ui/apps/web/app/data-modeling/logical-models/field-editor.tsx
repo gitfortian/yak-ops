@@ -396,7 +396,8 @@ export default function FieldEditor({
                   colSpan={allowAggregate ? 12 : 11}
                   className="px-3 py-8 text-center text-[#667475]"
                 >
-                  暂无字段，先添加一行、批量录入或从数据标准导入
+                  暂无字段，
+                  {hideImportActions ? "先添加一行" : "先添加一行、批量录入或从数据标准导入"}
                 </td>
               </tr>
             )}
