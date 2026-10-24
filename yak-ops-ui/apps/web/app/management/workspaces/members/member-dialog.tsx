@@ -8,7 +8,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { removeWorkspaceMember, updateWorkspaceMemberRole, type WorkspaceRecord, type WorkspaceRole } from "@/service/workspace";
 import { workspaceQueryKeys } from "../use-workspaces";
 import { useMembers, memberQueryKeys } from "./use-members";
-import { ROLE_LABELS, canChangeMember, type MemberRow } from "./permissions";
+import { canChangeMember, type MemberRow } from "./permissions";
 import { MemberTable } from "./member-table";
 import { AddMemberDialog } from "./add-member-dialog";
 
