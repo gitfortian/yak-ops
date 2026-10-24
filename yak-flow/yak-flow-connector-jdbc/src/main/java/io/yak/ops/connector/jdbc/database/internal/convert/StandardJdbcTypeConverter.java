@@ -42,9 +42,17 @@ public class StandardJdbcTypeConverter implements JdbcTypeConverter {
      * explicitly in a vendor converter or rejected before creating rows.
      */
     protected LogicalType resolveType(ResultSetMetaData metadata, int index) throws SQLException {
-        int sqlType = metadata.getColumnType(index);
-        int precision = metadata.getPrecision(index);
-        int scale = metadata.getScale(index);
+        return resolveType(
+                metadata.getColumnType(index),
+                metadata.getPrecision(index),
+                metadata.getScale(index),
+                metadata.getColumnTypeName(index),
+                metadata.getColumnLabel(index));
+    }
+
+    /** Shared standard JDBC mapping for result metadata and structured CDC metadata. */
+    protected LogicalType resolveType(int sqlType, int precision, int scale, String nativeType, String column)
+            throws SQLException {
         return switch (sqlType) {
             case Types.BOOLEAN -> LogicalTypes.BOOLEAN;
             case Types.BIT -> precision <= 1 ? LogicalTypes.BOOLEAN : LogicalTypes.varbinary(precision);
@@ -54,7 +62,7 @@ public class StandardJdbcTypeConverter implements JdbcTypeConverter {
             case Types.BIGINT -> LogicalTypes.BIGINT;
             case Types.REAL, Types.FLOAT -> LogicalTypes.FLOAT;
             case Types.DOUBLE -> LogicalTypes.DOUBLE;
-            case Types.NUMERIC, Types.DECIMAL -> decimalType(precision, scale, metadata.getColumnLabel(index));
+            case Types.NUMERIC, Types.DECIMAL -> decimalType(precision, scale, column);
             case Types.CHAR, Types.NCHAR -> precision > 0 ? LogicalTypes.charType(precision) : LogicalTypes.STRING;
             case Types.VARCHAR, Types.NVARCHAR -> precision > 0 ? LogicalTypes.varchar(precision) : LogicalTypes.STRING;
             case Types.LONGVARCHAR, Types.LONGNVARCHAR, Types.CLOB, Types.NCLOB -> LogicalTypes.STRING;
@@ -66,8 +74,8 @@ public class StandardJdbcTypeConverter implements JdbcTypeConverter {
             case Types.TIMESTAMP -> LogicalTypes.timestamp(temporalPrecision(scale));
             case Types.TIMESTAMP_WITH_TIMEZONE -> LogicalTypes.zonedTimestamp(temporalPrecision(scale));
             default ->
-                throw new SQLFeatureNotSupportedException("Unsupported JDBC type " + metadata.getColumnTypeName(index)
-                        + " for field " + metadata.getColumnLabel(index));
+                throw new SQLFeatureNotSupportedException(
+                        "Unsupported JDBC type " + nativeType + " for field " + column);
         };
     }
 

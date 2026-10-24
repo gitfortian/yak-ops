@@ -3,22 +3,16 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SourceSchemaChange;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
-import io.yak.ops.core.types.BasicType;
-import io.yak.ops.core.types.DecimalType;
 import io.yak.ops.core.types.LogicalType;
-import io.yak.ops.core.types.LogicalTypeRoot;
-import io.yak.ops.core.types.TimeType;
-import io.yak.ops.core.types.TimestampType;
-import io.yak.ops.core.types.VarBinaryType;
-import io.yak.ops.core.types.VarCharType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Types;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +29,7 @@ import org.apache.kafka.connect.data.Struct;
 public final class MySqlSchemaChangeConverter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final MySqlTypeConverter TYPES = new MySqlTypeConverter();
     private final Set<TableId> selected;
 
     public MySqlSchemaChangeConverter(Set<TableId> selected) {
@@ -152,14 +147,26 @@ public final class MySqlSchemaChangeConverter {
                     || metadata.defaultValueExpression().isPresent()) {
                 throw new UnsupportedOperationException("CDC schema evolution cannot change generated/default columns");
             }
-            LogicalType type = logicalType(
-                    metadata.jdbcType(), metadata.length(), metadata.scale().orElse(0), metadata.isOptional());
+            LogicalType type;
+            try {
+                type = TYPES.convertColumn(
+                        metadata.jdbcType(),
+                        metadata.typeName(),
+                        metadata.length(),
+                        metadata.scale().orElse(0),
+                        metadata.isOptional(),
+                        name);
+            } catch (SQLException failure) {
+                throw new UnsupportedOperationException("Unsupported MySQL CDC column type: " + name, failure);
+            }
             PhysicalColumn existing = previous.column(name).orElse(null);
+            // Debezium may report only a SQL type family. Never retain a pre-DDL native
+            // definition when the logical field has changed.
             columns.add(new PhysicalColumn(
                     name,
                     type,
                     existing == null ? null : existing.comment(),
-                    existing == null ? null : existing.properties()));
+                    existing != null && existing.type().equals(type) ? existing.properties() : null));
         }
         return new Schema(columns, table.primaryKeyColumnNames(), previous.comment());
     }
@@ -216,29 +223,6 @@ public final class MySqlSchemaChangeConverter {
             return result;
         }
         return JSON.valueToTree(value);
-    }
-
-    private static LogicalType logicalType(int jdbc, int length, int scale, boolean nullable) {
-        return switch (jdbc) {
-            case Types.BOOLEAN, Types.BIT -> new BasicType(nullable, LogicalTypeRoot.BOOLEAN);
-            case Types.TINYINT -> new BasicType(nullable, LogicalTypeRoot.TINYINT);
-            case Types.SMALLINT -> new BasicType(nullable, LogicalTypeRoot.SMALLINT);
-            case Types.INTEGER -> new BasicType(nullable, LogicalTypeRoot.INTEGER);
-            case Types.BIGINT -> new BasicType(nullable, LogicalTypeRoot.BIGINT);
-            case Types.FLOAT, Types.REAL -> new BasicType(nullable, LogicalTypeRoot.FLOAT);
-            case Types.DOUBLE -> new BasicType(nullable, LogicalTypeRoot.DOUBLE);
-            case Types.DECIMAL, Types.NUMERIC -> new DecimalType(nullable, length, scale);
-            case Types.CHAR, Types.NCHAR -> new io.yak.ops.core.types.CharType(nullable, length);
-            case Types.VARCHAR, Types.NVARCHAR, Types.LONGVARCHAR, Types.LONGNVARCHAR ->
-                new VarCharType(nullable, length > 0 ? length : VarCharType.MAX_LENGTH);
-            case Types.BINARY -> new io.yak.ops.core.types.BinaryType(nullable, length);
-            case Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB ->
-                new VarBinaryType(nullable, length > 0 ? length : VarBinaryType.MAX_LENGTH);
-            case Types.DATE -> new BasicType(nullable, LogicalTypeRoot.DATE);
-            case Types.TIME, Types.TIME_WITH_TIMEZONE -> new TimeType(nullable, Math.min(6, Math.max(0, scale)));
-            case Types.TIMESTAMP -> new TimestampType(nullable, Math.min(6, Math.max(0, scale)));
-            default -> throw new UnsupportedOperationException("Unsupported MySQL CDC JDBC logical type: " + jdbc);
-        };
     }
 
     private static String text(Struct struct, String field) {

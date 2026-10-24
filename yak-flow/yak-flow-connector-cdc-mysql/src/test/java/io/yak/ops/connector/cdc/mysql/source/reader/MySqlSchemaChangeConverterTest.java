@@ -248,6 +248,51 @@ class MySqlSchemaChangeConverterTest {
         assertEquals(SOURCE, converter.schemaMismatch(row));
     }
 
+
+    @Test
+    void structuredDdlMatchesJdbcTypeMappingsAndPreservesFractions() throws Exception {
+        String table = """
+                {"primaryKeyColumnNames":["id"],"columns":[
+                  {"name":"id","jdbcType":-5,"typeName":"BIGINT","position":1,"optional":false,"autoIncremented":false,"generated":false},
+                  {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"position":2,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"bits","jdbcType":-7,"typeName":"BIT","length":8,"position":3,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"amount","jdbcType":3,"typeName":"DECIMAL","length":14,"scale":2,"position":4,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"updated_at","jdbcType":93,"typeName":"DATETIME","length":0,"scale":3,"position":5,"optional":true,"autoIncremented":false,"generated":false}
+                ]}
+                """;
+        var after = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true)
+                .convert(ddl("ALTER", table, 201L)).schemaChange().after();
+        assertEquals(LogicalTypes.varbinary(8), after.column("bits").orElseThrow().type());
+        assertEquals(LogicalTypes.decimal(14, 2), after.column("amount").orElseThrow().type());
+        assertEquals(LogicalTypes.timestamp(3), after.column("updated_at").orElseThrow().type());
+    }
+
+    @Test
+    void unsupportedStructuredDdlDoesNotAdvanceTheRegisteredSchema() {
+        String spatial = NEW_TABLE.replace(
+                "\"jdbcType\":12,\"typeName\":\"VARCHAR\",\"length\":128",
+                "\"jdbcType\":-2,\"typeName\":\"POINT\",\"length\":0");
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        assertThrows(UnsupportedOperationException.class, () -> converter.convert(ddl("ALTER", spatial, 202L)));
+        assertEquals(2, converter.convert(ddl("ALTER", NEW_TABLE, 203L))
+                .schemaChange().before().columns().size());
+    }
+
+    @Test
+    void changingCdcFieldTypeCannotKeepStalePhysicalMetadata() {
+        var before = Schema.from(
+                ORIGINAL, null, Map.of(), Map.of("name",
+                        new io.yak.ops.core.event.ColumnProperties(null, false, false, null, false, "varchar(64)")));
+        String altered = NEW_TABLE.replace(
+                "\"typeName\":\"VARCHAR\",\"length\":64",
+                "\"typeName\":\"VARCHAR\",\"length\":128");
+        var after = new MySqlDebeziumRecordConverter(
+                Map.of(SOURCE, ORIGINAL), Map.of(SOURCE, before), true)
+                .convert(ddl("ALTER", altered, 204L)).schemaChange().after();
+        assertEquals(null, after.column("name").orElseThrow().properties());
+        assertEquals(128, after.toTableSchema().column(1).length());
+    }
+
     @Test
     void disablingEvolutionRejectsDdlBeforeAdvancingTheOffset() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL));
