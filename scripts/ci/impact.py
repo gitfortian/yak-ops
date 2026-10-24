@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc", "cdc-pipeline", "business", "backend-e2e", "recovery-e2e")
 JDBC = "yak-flow/yak-flow-connector-jdbc/"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql/"
+CDC_BASE = "yak-flow/yak-flow-connector-cdc-base/"
 RUNTIME = "yak-flow/yak-flow-runtime/"
 E2E = "yak-ops-e2e/"
 BUSINESS = "yak-ops-business/"
@@ -109,6 +110,8 @@ def test_suites(path: str) -> set[str]:
         if vendor:
             return {"jdbc-" + vendor, "pipeline", "cdc-pipeline"}
         return {"jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc-pipeline"}
+    if path.startswith(CDC_BASE):
+        return {"cdc", "cdc-pipeline", "recovery-e2e"}
     if path.startswith(CDC):
         return {"cdc", "cdc-pipeline"} | ({"recovery-e2e"} if any(x in path.lower() for x in ("checkpoint", "split", "offset")) else set())
     if path.startswith(RUNTIME):

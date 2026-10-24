@@ -49,6 +49,7 @@
         <module>yak-ops-core</module>
         <module>yak-flow/yak-flow-runtime</module>
         <module>yak-flow/yak-flow-connector-base</module>
+        <module>yak-flow/yak-flow-connector-cdc-base</module>
         <module>yak-flow/yak-flow-connector-jdbc</module>
         <module>yak-flow/yak-flow-connector-cdc-mysql</module>
         <module>yak-ops-business</module>

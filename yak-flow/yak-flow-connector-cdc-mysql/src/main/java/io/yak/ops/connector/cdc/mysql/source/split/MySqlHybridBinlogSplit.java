@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.base.source.meta.split.StreamSplit;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.Objects;
  * serialized Schema History bytes and exposes them only through defensive copies.
  * An assigned split has execution identity, rather than implicit record value equality.
  */
-public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
+public final class MySqlHybridBinlogSplit implements MySqlHybridSplit, StreamSplit {
 
     public static final String ID = MySqlBinlogSplit.ID;
 

@@ -34,6 +34,10 @@
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
+            <artifactId>yak-flow-connector-cdc-base</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
             <artifactId>yak-flow-connector-jdbc</artifactId>
         </dependency>
         <dependency>
