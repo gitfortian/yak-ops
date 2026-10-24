@@ -60,8 +60,8 @@ public final class MySqlDebeziumRecordConverter {
         this.evolve = evolve;
     }
 
-    /** Only the first no_data snapshot may register CREATE metadata without changing runtime schemas. */
-    public java.util.Set<TableId> initialSchemaTables(SourceRecord source) {
+    /** Replays only the initial no_data table metadata, without modifying runtime schemas. */
+    public void applyInitialSchemaTables(SourceRecord source, java.util.Set<TableId> registered) {
         if (!(source.value() instanceof Struct envelope) || envelope.schema().field("ddl") == null) {
             throw new IllegalStateException("Unexpected MySQL CDC event before the initial schema snapshot completed");
         }
@@ -69,7 +69,7 @@ public final class MySqlDebeziumRecordConverter {
             // include.schema.changes=false normally suppresses these records.
             throw new IllegalStateException("Unexpected initial schema event with schema changes disabled");
         }
-        return schemaChanges.initialTables(envelope);
+        schemaChanges.applyInitialTables(envelope, registered);
     }
 
     /**
