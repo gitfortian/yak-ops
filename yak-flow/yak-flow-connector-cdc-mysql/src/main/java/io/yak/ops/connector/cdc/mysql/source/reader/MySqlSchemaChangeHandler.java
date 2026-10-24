@@ -29,8 +29,8 @@ public final class MySqlSchemaChangeHandler {
         }
         Objects.requireNonNull(change, "change");
         Objects.requireNonNull(advanceOffset, "advanceOffset");
-        CompletionStage<Long> acknowledgment = Objects.requireNonNull(
-                context.sendSourceSchemaChange(change), "schema change acknowledgment");
+        CompletionStage<Long> acknowledgment =
+                Objects.requireNonNull(context.sendSourceSchemaChange(change), "schema change acknowledgment");
         pending = new PendingSchemaChange(acknowledgment.toCompletableFuture(), advanceOffset);
     }
 
