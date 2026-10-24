@@ -24,10 +24,7 @@ export interface FieldDraft {
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
-  /**
-   * Carried through untouched: the table is replaced as a whole on save, so dropping the value here
-   * would erase a description written through another client.
-   */
+  /** Optional business description; loaded from and submitted with the model field. */
   description: string | null;
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
   importNote: string | null;

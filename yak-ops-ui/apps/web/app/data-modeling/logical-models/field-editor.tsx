@@ -127,7 +127,7 @@ export default function FieldEditor({
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
         <table
-          className={`w-full ${allowAggregate ? "min-w-[1290px]" : "min-w-[1180px]"} border-collapse text-xs`}
+          className={`w-full ${allowAggregate ? "min-w-[1530px]" : "min-w-[1420px]"} border-collapse text-xs`}
         >
           <thead className="sticky top-0 z-10 bg-[#fafafa] text-left text-[#475467]">
             <tr>
@@ -158,6 +158,9 @@ export default function FieldEditor({
               )}
               <th className="w-[176px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 数据标准
+              </th>
+              <th className="w-[240px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+                字段描述
               </th>
               <th className="w-[124px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
                 操作
@@ -327,6 +330,17 @@ export default function FieldEditor({
                       </Button>
                     )}
                   </td>
+                  <td className={cell}>
+                    <Input
+                      size="small"
+                      variant="outlined"
+                      value={row.description ?? ""}
+                      maxLength={500}
+                      disabled={disabled}
+                      aria-label={`第 ${index + 1} 行字段描述`}
+                      onChange={(event) => patch(index, { description: event.target.value })}
+                    />
+                  </td>
                   <td className={`${cell} text-center`}>
                     <div className="flex items-center justify-center gap-1">
                       <Button
@@ -368,7 +382,7 @@ export default function FieldEditor({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowAggregate ? 11 : 10}
+                  colSpan={allowAggregate ? 12 : 11}
                   className="px-3 py-8 text-center text-[#667475]"
                 >
                   暂无字段，先添加一行、批量录入或从数据标准导入
