@@ -60,6 +60,6 @@ for (const path of [
   "../apps/web/app/schedule/dialog/use-schedule-session.ts",
 ]) {
   const source = readFileSync(new URL(path, import.meta.url), "utf8");
-  assert.match(source, /refetchIntervalInBackground:\\s*false/);
+  assert.match(source, /refetchIntervalInBackground:\s*false/);
 }
 console.log("Schedule query scope and background polling contract passed");
