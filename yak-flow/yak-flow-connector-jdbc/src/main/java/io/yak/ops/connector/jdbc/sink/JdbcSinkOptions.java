@@ -8,7 +8,8 @@ import java.util.List;
 public final class JdbcSinkOptions {
 
     public static final Option<JdbcWriteMode> WRITE_MODE = Options.key("writeMode")
-            .singleChoice(JdbcWriteMode.class, List.of(JdbcWriteMode.APPEND, JdbcWriteMode.UPSERT))
+            .singleChoice(
+                    JdbcWriteMode.class, List.of(JdbcWriteMode.APPEND, JdbcWriteMode.UPSERT, JdbcWriteMode.RETRACT))
             .noDefaultValue();
 
     /** Physical opt-in; callers must establish that target tables can be reordered independently. */

@@ -42,7 +42,11 @@ public final class JdbcSinkFactory implements TableSinkFactory {
     public void validate(ReadonlyConfig options, boolean sourceProducesChangelog) {
         JdbcWriteMode mode = options.get(JdbcSinkOptions.WRITE_MODE);
         if (mode == null) {
-            throw new IllegalArgumentException("JDBC Sink supports APPEND or UPSERT only");
+            throw new IllegalArgumentException("JDBC Sink requires a write mode");
+        }
+        if (mode == JdbcWriteMode.RETRACT) {
+            throw new UnsupportedOperationException("JDBC RETRACT is reserved for keyless CDC; exact-row deletion and "
+                    + "transactional replay protection are not implemented");
         }
         if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT) {
             throw new IllegalArgumentException("Changelog Source requires UPSERT");
@@ -52,6 +56,9 @@ public final class JdbcSinkFactory implements TableSinkFactory {
     @Override
     public void validateSchema(
             ReadonlyConfig options, TableSchema source, TableSchema target, boolean sourceProducesChangelog) {
+        if (options.get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.RETRACT) {
+            JdbcKeylessRetractionContract.validate(source, target);
+        }
         validate(options, sourceProducesChangelog);
         JdbcSinkSchemaValidator.validate(
                 source,

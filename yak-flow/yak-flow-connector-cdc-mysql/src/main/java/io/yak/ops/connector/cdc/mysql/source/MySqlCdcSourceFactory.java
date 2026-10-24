@@ -31,6 +31,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
+                .optional(MySqlCdcSourceOptions.KEYLESS_ENABLED)
                 .optional(
                         MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
                         Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
@@ -73,6 +74,12 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
+        if (options.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
+            MySqlKeylessSourceContract.validate(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+            throw new UnsupportedOperationException(
+                    "MySQL keyless CDC is not executable yet; typed snapshot Reader, Binlog handoff "
+                            + "and transactional RETRACT Sink acceptance are required");
+        }
         MySqlChunkSplitter.splitKey(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
     }
 
@@ -93,11 +100,13 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         Map<String, Object> common = new LinkedHashMap<>(options.getSourceMap());
         common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
+        common.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
             validateSchema(context.options(), context.schema());
             Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
             selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
+            selected.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
             if (!common.equals(selected) || context.metrics() != first.metrics()) {
                 throw new IllegalArgumentException(
                         "MySQL CDC tables must share connection, replication and observation settings");

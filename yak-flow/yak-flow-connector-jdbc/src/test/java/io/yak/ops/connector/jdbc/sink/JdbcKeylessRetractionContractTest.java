@@ -1,0 +1,86 @@
+package io.yak.ops.connector.jdbc.sink;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
+import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypes;
+import io.yak.ops.core.types.TableSchema;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+/** Reserves RETRACT semantics without allowing an unsafe JDBC writer to be created. */
+class JdbcKeylessRetractionContractTest {
+    private static final TableId TABLE = new TableId(null, "public", "entries");
+    private static final TableSchema KEYLESS = new TableSchema(
+            List.of(
+                    new Column("bucket", LogicalTypes.BIGINT.copy(false)),
+                    new Column("amount", LogicalTypes.decimal(14, 2))),
+            List.of());
+
+    @Test
+    void admitsOnlyFullRowKeylessCompatibleMetadata() {
+        JdbcKeylessRetractionContract.validate(KEYLESS, KEYLESS);
+        var keyed = new TableSchema(KEYLESS.columns(), List.of("bucket"));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(keyed, KEYLESS));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(KEYLESS, keyed));
+        var incomplete = new TableSchema(List.of(KEYLESS.column(0)), List.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(KEYLESS, incomplete));
+        var renamed = new TableSchema(
+                List.of(new Column("different", LogicalTypes.BIGINT.copy(false)), KEYLESS.column(1)),
+                List.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(KEYLESS, renamed));
+        var coerced = new TableSchema(
+                List.of(new Column("bucket", LogicalTypes.decimal(20, 0).copy(false)), KEYLESS.column(1)),
+                List.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(KEYLESS, coerced));
+    }
+
+    @Test
+    void rejectsTextColumnsUntilTheirDatabaseCollationHasBeenVerified() {
+        var schema = new TableSchema(
+                List.of(new Column("name", LogicalTypes.varchar(64))), List.of());
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> JdbcKeylessRetractionContract.validate(schema, schema));
+        assertTrue(error.getMessage().contains("verified database semantics"));
+    }
+
+    @Test
+    void reservesRetractionModeButRejectsAllDirectSinkAndWritePlanCreation() {
+        var options = new Configuration()
+                .set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.RETRACT)
+                .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3306/test")
+                .set(JdbcConnectionOptions.USERNAME, "user")
+                .set(JdbcConnectionOptions.PASSWORD, "secret");
+        var factory = new JdbcSinkFactory();
+        assertThrows(UnsupportedOperationException.class,
+                () -> factory.validate(options.toReadonlyConfig(), true));
+        assertThrows(UnsupportedOperationException.class,
+                () -> factory.validateSchema(options.toReadonlyConfig(), KEYLESS, KEYLESS, true));
+        assertThrows(UnsupportedOperationException.class,
+                () -> factory.createSink(new TableSinkFactoryContext(
+                        options.toReadonlyConfig(), TABLE, KEYLESS, TABLE, KEYLESS)));
+        assertThrows(UnsupportedOperationException.class,
+                () -> new JdbcTableWritePlan(TABLE, TABLE, KEYLESS, JdbcWriteMode.RETRACT));
+        assertEquals(JdbcWriteMode.RETRACT, options.get(JdbcSinkOptions.WRITE_MODE));
+    }
+
+    @Test
+    void keepsAppendAndUpsertContractsIntact() {
+        var keyed = new TableSchema(KEYLESS.columns(), List.of("bucket"));
+        assertEquals(JdbcWriteMode.APPEND,
+                new JdbcTableWritePlan(TABLE, TABLE, KEYLESS, JdbcWriteMode.APPEND).writeMode());
+        assertEquals(JdbcWriteMode.UPSERT,
+                new JdbcTableWritePlan(TABLE, TABLE, keyed, JdbcWriteMode.UPSERT).writeMode());
+    }
+}

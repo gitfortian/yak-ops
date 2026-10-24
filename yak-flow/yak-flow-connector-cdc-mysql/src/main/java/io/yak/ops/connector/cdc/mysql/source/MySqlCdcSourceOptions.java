@@ -20,6 +20,10 @@ public final class MySqlCdcSourceOptions {
             .stringType()
             .noDefaultValue();
 
+    /** Explicit opt-in request; execution stays gated until the Reader and Sink are ready. */
+    public static final Option<Boolean> KEYLESS_ENABLED =
+            Options.key("data-sync.mysql-cdc.keyless.enabled").booleanType().defaultValue(false);
+
     public static final Option<Integer> QUEUE_CAPACITY =
             Options.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 
