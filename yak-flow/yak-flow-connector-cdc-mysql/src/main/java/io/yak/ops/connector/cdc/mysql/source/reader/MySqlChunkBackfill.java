@@ -125,7 +125,8 @@ public final class MySqlChunkBackfill {
         if ((range.type() == io.yak.ops.core.types.LogicalTypeRoot.CHAR
                         || range.type() == io.yak.ops.core.types.LogicalTypeRoot.VARCHAR)
                 && (range.start() != null || range.end() != null)) {
-            throw new IllegalArgumentException("Bounded string chunk backfill requires MySQL collation-aware filtering");
+            throw new IllegalArgumentException(
+                    "Bounded string chunk backfill requires MySQL collation-aware filtering");
         }
         if (maxRows < 1 || maxBytes < 1) throw new IllegalArgumentException("Invalid chunk backfill budget");
         this.split = null;
@@ -239,8 +240,8 @@ public final class MySqlChunkBackfill {
         return switch (range.type()) {
             case TINYINT, SMALLINT, INTEGER, BIGINT -> Long.compare(((Number) value).longValue(), (Long) boundary);
             case DECIMAL -> ((BigDecimal) value).compareTo((BigDecimal) boundary);
-            default -> throw new IllegalArgumentException(
-                    "Bounded keyless chunk values require database-aware comparisons");
+            default ->
+                throw new IllegalArgumentException("Bounded keyless chunk values require database-aware comparisons");
         };
     }
 
