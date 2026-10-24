@@ -22,6 +22,7 @@ public final class MySqlCdcSourceBuilder {
     private int serverId;
     private String topicPrefix;
     private final Map<TableId, TableSchema> tables = new LinkedHashMap<>();
+    private final Map<TableId, String> chunkKeyColumns = new LinkedHashMap<>();
     private int queueCapacity = 256;
 
     public MySqlCdcSourceBuilder hostname(String value) {
@@ -64,9 +65,17 @@ public final class MySqlCdcSourceBuilder {
 
     /** Adds a table and its exact, ordered source logical schema. */
     public MySqlCdcSourceBuilder table(TableId table, TableSchema schema) {
+        return table(table, schema, null);
+    }
+
+    /** Configures the snapshot chunk column for this table independently of its physical primary key. */
+    public MySqlCdcSourceBuilder table(TableId table, TableSchema schema, String chunkKeyColumn) {
         if (tables.putIfAbsent(Objects.requireNonNull(table, "table"), Objects.requireNonNull(schema, "schema"))
                 != null) {
             throw new IllegalArgumentException("Duplicate MySQL CDC table");
+        }
+        if (chunkKeyColumn != null) {
+            chunkKeyColumns.put(table, chunkKeyColumn);
         }
         return this;
     }
@@ -98,6 +107,7 @@ public final class MySqlCdcSourceBuilder {
                 topicPrefix,
                 tables,
                 queueCapacity,
-                connectionProperties));
+                connectionProperties,
+                chunkKeyColumns));
     }
 }

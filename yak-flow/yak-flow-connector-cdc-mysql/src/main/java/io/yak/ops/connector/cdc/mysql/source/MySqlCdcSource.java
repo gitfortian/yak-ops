@@ -126,6 +126,8 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
                         .append(column.dataType().asSerializableString());
             }
             definition.append("|pk=").append(String.join(",", schema.primaryKeys()));
+            String configured = config.chunkKeyColumns().get(table);
+            if (configured != null) definition.append("|chunk=").append(configured);
         }
         try {
             return HexFormat.of()

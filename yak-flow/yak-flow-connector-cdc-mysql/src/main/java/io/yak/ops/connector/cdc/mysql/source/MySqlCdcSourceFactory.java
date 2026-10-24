@@ -30,7 +30,11 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public OptionRule optionRule() {
-        return OptionRule.builder().build();
+        return OptionRule.builder()
+                .optional(
+                        MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
+                        Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
+                .build();
     }
 
     @Override
@@ -68,6 +72,11 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     }
 
     @Override
+    public void validateSchema(ReadonlyConfig options, TableSchema schema) {
+        MySqlChunkSplitter.splitKey(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+    }
+
+    @Override
     public Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context) {
         return createSource(List.of(context));
     }
@@ -82,10 +91,14 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
+        Map<String, Object> common = new LinkedHashMap<>(options.getSourceMap());
+        common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
-            validateSchema(context.schema());
-            if (!options.equals(context.options()) || context.metrics() != first.metrics()) {
+            validateSchema(context.options(), context.schema());
+            Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
+            selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
+            if (!common.equals(selected) || context.metrics() != first.metrics()) {
                 throw new IllegalArgumentException(
                         "MySQL CDC tables must share connection, replication and observation settings");
             }
@@ -107,7 +120,8 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                 .topicPrefix(options.get(MySqlCdcSourceOptions.TOPIC_PREFIX))
                 .queueCapacity(options.get(MySqlCdcSourceOptions.QUEUE_CAPACITY));
         for (var context : contexts) {
-            builder.table(context.table(), context.schema());
+            builder.table(
+                    context.table(), context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         }
         return builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
     }
