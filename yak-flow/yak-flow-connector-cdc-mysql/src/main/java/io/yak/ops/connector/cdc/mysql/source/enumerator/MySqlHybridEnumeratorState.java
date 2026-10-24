@@ -1,7 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -80,10 +79,9 @@ public record MySqlHybridEnumeratorState(
             }
             BinlogOffset maximum = finishedSplitInfos.stream()
                     .map(FinishedSnapshotSplitInfo::highWatermark)
-                    .max(BinlogOffsetOrder::compare)
+                    .max(BinlogOffset::compareTo)
                     .orElseThrow();
-            if (BinlogOffsetOrder.compare(highWatermark, maximum) != 0
-                    || BinlogOffsetOrder.compare(lowWatermark, highWatermark) > 0) {
+            if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
                 throw new IllegalArgumentException("Hybrid coordinator watermarks differ from completed chunks");
             }
         }

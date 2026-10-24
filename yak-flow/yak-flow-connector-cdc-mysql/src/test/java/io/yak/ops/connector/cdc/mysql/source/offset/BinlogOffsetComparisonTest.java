@@ -9,7 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Exercises finer-grained MySQL offsets before using them for snapshot fences. */
-class BinlogOffsetOrderTest {
+class BinlogOffsetComparisonTest {
 
     @Test
     void comparesFilePositionsAndEventRows() {
@@ -17,11 +17,11 @@ class BinlogOffsetOrderTest {
         BinlogOffset sameEvent = offset("mysql-bin.000001", 100L, 0, 1);
         BinlogOffset high = offset("mysql-bin.000001", 200L, 0, 0);
         BinlogOffset rotated = offset("mysql-bin.000002", 4L, 0, 0);
-        assertTrue(BinlogOffsetOrder.isAfter(sameEvent, low));
-        assertTrue(BinlogOffsetOrder.isAfter(high, sameEvent));
-        assertTrue(BinlogOffsetOrder.isAfter(rotated, high));
-        assertFalse(BinlogOffsetOrder.isAfter(low, high));
-        assertEquals(0, BinlogOffsetOrder.compare(high, high));
+        assertTrue(sameEvent.compareTo(low) > 0);
+        assertTrue(high.compareTo(sameEvent) > 0);
+        assertTrue(rotated.compareTo(high) > 0);
+        assertFalse(low.compareTo(high) > 0);
+        assertEquals(0, high.compareTo(high));
     }
 
     @Test
@@ -33,7 +33,7 @@ class BinlogOffsetOrderTest {
         BinlogOffset later = new BinlogOffset(
                 Map.of("server", "shop"),
                 Map.of("gtids", source + ":1-7", "file", "mysql-bin.000001", "pos", 120L, "row", 0));
-        assertTrue(BinlogOffsetOrder.isAfter(later, first));
+        assertTrue(later.compareTo(first) > 0);
     }
 
     @Test
@@ -41,10 +41,10 @@ class BinlogOffsetOrderTest {
         BinlogOffset regular = offset("mysql-bin.000001", 100L, 0, 0);
         BinlogOffset otherServer = new BinlogOffset(
                 Map.of("server", "another"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        assertThrows(IllegalArgumentException.class, () -> BinlogOffsetOrder.compare(regular, otherServer));
+        assertThrows(IllegalArgumentException.class, () -> regular.compareTo(otherServer));
         BinlogOffset missingFile = new BinlogOffset(
                 Map.of("server", "shop"), Map.of("pos", 100L));
-        assertThrows(IllegalArgumentException.class, () -> BinlogOffsetOrder.compare(regular, missingFile));
+        assertThrows(IllegalArgumentException.class, () -> regular.compareTo(missingFile));
     }
 
 
@@ -52,14 +52,14 @@ class BinlogOffsetOrderTest {
     void comparesUnpaddedFileRotationAndKeepsEventRowOrder() {
         BinlogOffset previous = offset("mysql-bin.9", 98765L, 0, 0);
         BinlogOffset rotated = offset("mysql-bin.10", 4L, 0, 0);
-        assertTrue(BinlogOffsetOrder.compare(previous, rotated) < 0);
-        assertTrue(BinlogOffsetOrder.compare(rotated, previous) > 0);
-        assertTrue(BinlogOffsetOrder.isAfter(rotated, previous));
+        assertTrue(previous.compareTo(rotated) < 0);
+        assertTrue(rotated.compareTo(previous) > 0);
+        assertTrue(rotated.compareTo(previous) > 0);
 
         BinlogOffset nextEvent = offset("mysql-bin.10", 4L, 1, 0);
         BinlogOffset nextRow = offset("mysql-bin.10", 4L, 1, 1);
-        assertTrue(BinlogOffsetOrder.compare(nextEvent, rotated) > 0);
-        assertTrue(BinlogOffsetOrder.compare(nextRow, nextEvent) > 0);
+        assertTrue(nextEvent.compareTo(rotated) > 0);
+        assertTrue(nextRow.compareTo(nextEvent) > 0);
         assertEquals(0, nextRow.compareTo(nextRow));
     }
 
@@ -125,7 +125,7 @@ class BinlogOffsetOrderTest {
         var partition = java.util.Map.<String,Object>of("server", "same");
         var left = new BinlogOffset(partition, java.util.Map.of("gtids", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5", "file", "mysql-bin.000001", "pos", 100L));
         var right = new BinlogOffset(partition, java.util.Map.of("gtids", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5", "file", "mysql-bin.000001", "pos", 200L));
-        org.junit.jupiter.api.Assertions.assertTrue(BinlogOffsetOrder.compare(left, right) < 0);
-        org.junit.jupiter.api.Assertions.assertTrue(BinlogOffsetOrder.compare(right, left) > 0);
+        org.junit.jupiter.api.Assertions.assertTrue(left.compareTo(right) < 0);
+        org.junit.jupiter.api.Assertions.assertTrue(right.compareTo(left) > 0);
     }
 }

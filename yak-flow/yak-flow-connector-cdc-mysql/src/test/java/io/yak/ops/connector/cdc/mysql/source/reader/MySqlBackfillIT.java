@@ -3,7 +3,6 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -57,7 +56,7 @@ class MySqlBackfillIT {
                     values.put(row.row().getLong(0), row.row().getString(1));
                 }
                 assertEquals(Map.of(1L,"final",5L,"new"), values);
-                assertTrue(BinlogOffsetOrder.compare(split.output().high(), split.output().low()) > 0);
+                assertTrue(split.output().high().compareTo(split.output().low()) > 0);
                 assertEquals(0, split.outputPosition());
             }
         } finally { execute("DROP TABLE " + table, "DROP TABLE " + other); }
@@ -71,7 +70,7 @@ class MySqlBackfillIT {
         try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), 6601, table), 0)) {
             var empty = reader.read(new MySqlSnapshotSplit("empty", "fp", id, null, 10L, null));
             assertTrue(empty.output().rows().isEmpty());
-            assertEquals(0, BinlogOffsetOrder.compare(empty.output().low(), empty.output().high()));
+            assertEquals(0, empty.output().low().compareTo(empty.output().high()));
             execute("INSERT INTO " + table + " VALUES(20,'present')");
             var second = reader.read(new MySqlSnapshotSplit("second", "fp", id, 10L, null, null));
             assertEquals(1, second.output().rows().size());

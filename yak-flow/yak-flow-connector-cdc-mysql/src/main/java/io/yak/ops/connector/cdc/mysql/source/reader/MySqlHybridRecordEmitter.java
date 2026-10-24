@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
@@ -18,25 +19,16 @@ public final class MySqlHybridRecordEmitter
         implements RecordEmitter<MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplitState> {
 
     private final SourceReaderContext context;
-    private final MySqlSchemaChangeHandler schemaChanges;
+    private final SchemaChangeHandler schemaChanges;
     private final MySqlHybridSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
-
-    public MySqlHybridRecordEmitter(SourceReaderContext context, MySqlHybridSplitReader splits) {
-        this(context, splits, new TableMetrics());
-    }
-
-    /** Creates the mailbox emitter with phase-aware, generation-fenced record measurements. */
-    public MySqlHybridRecordEmitter(SourceReaderContext context, MySqlHybridSplitReader splits, TableMetrics metrics) {
-        this(context, splits, metrics, new MySqlSchemaChangeHandler(context));
-    }
 
     public MySqlHybridRecordEmitter(
             SourceReaderContext context,
             MySqlHybridSplitReader splits,
             TableMetrics metrics,
-            MySqlSchemaChangeHandler schemaChanges) {
+            SchemaChangeHandler schemaChanges) {
         this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
         this.metrics = metrics;
         generation = metrics.generation();

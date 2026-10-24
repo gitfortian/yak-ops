@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.base.source.reader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -21,12 +21,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
-class MySqlSchemaChangeHandlerTest {
+class SchemaChangeHandlerTest {
 
     @Test
     void failedAcknowledgmentKeepsOffsetAndCheckpointBlocked() {
         CompletableFuture<Long> acknowledgment = new CompletableFuture<>();
-        MySqlSchemaChangeHandler handler = new MySqlSchemaChangeHandler(context(() -> acknowledgment));
+        SchemaChangeHandler handler = new SchemaChangeHandler(context(() -> acknowledgment));
         AtomicInteger advanced = new AtomicInteger();
 
         handler.submitSchemaChange(change(), advanced::incrementAndGet);
@@ -42,7 +42,7 @@ class MySqlSchemaChangeHandlerTest {
     @Test
     void transportFailureDoesNotLeaveAStalePendingChange() {
         AtomicInteger attempts = new AtomicInteger();
-        MySqlSchemaChangeHandler handler = new MySqlSchemaChangeHandler(context(() -> {
+        SchemaChangeHandler handler = new SchemaChangeHandler(context(() -> {
             if (attempts.getAndIncrement() == 0) {
                 throw new IllegalStateException("Schema coordinator unavailable");
             }
@@ -62,7 +62,7 @@ class MySqlSchemaChangeHandlerTest {
 
     @Test
     void failedOffsetUpdateCannotReleaseTheCheckpoint() {
-        MySqlSchemaChangeHandler handler = new MySqlSchemaChangeHandler(
+        SchemaChangeHandler handler = new SchemaChangeHandler(
                 context(() -> CompletableFuture.completedFuture(3L)));
         handler.submitSchemaChange(change(), () -> {
             throw new IllegalStateException("Offset could not be committed");

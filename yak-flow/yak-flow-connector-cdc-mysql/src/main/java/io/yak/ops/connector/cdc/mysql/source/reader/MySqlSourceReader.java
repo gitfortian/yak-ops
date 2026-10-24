@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.InputStatus;
@@ -21,14 +22,14 @@ public final class MySqlSourceReader
         extends SingleThreadMultiplexSourceReaderBase<BinlogEvent, TableRecord, MySqlBinlogSplit, MySqlCdcSplitState> {
 
     private final MySqlCdcSplitReader splitReader;
-    private final MySqlSchemaChangeHandler schemaChanges;
+    private final SchemaChangeHandler schemaChanges;
 
     public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context) {
-        this(new MySqlCdcSplitReader(config, fingerprint), context, new MySqlSchemaChangeHandler(context));
+        this(new MySqlCdcSplitReader(config, fingerprint), context, new SchemaChangeHandler(context));
     }
 
     private MySqlSourceReader(
-            MySqlCdcSplitReader splitReader, SourceReaderContext context, MySqlSchemaChangeHandler schemaChanges) {
+            MySqlCdcSplitReader splitReader, SourceReaderContext context, SchemaChangeHandler schemaChanges) {
         super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges), context);
         this.splitReader = splitReader;
         this.schemaChanges = schemaChanges;
