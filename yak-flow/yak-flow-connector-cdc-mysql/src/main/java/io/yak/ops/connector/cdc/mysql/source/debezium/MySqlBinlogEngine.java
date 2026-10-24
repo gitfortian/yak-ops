@@ -155,7 +155,9 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                         enqueue(anchor);
                         lastQueuedOffset = anchor.offset();
                         awaitingSchemaSnapshot = false;
-                        LOG.info("MySQL CDC initial schema snapshot completed, tables={}", config.schemas().size());
+                        LOG.info(
+                                "MySQL CDC initial schema snapshot completed, tables={}",
+                                config.schemas().size());
                     } else {
                         bootstrapTables.addAll(converter.initialSchemaTables(source));
                     }
