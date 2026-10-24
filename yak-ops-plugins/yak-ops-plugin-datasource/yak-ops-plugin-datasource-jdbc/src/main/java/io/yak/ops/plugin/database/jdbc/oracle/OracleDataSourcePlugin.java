@@ -75,7 +75,7 @@ public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     }
 
     @Override
-    protected Map<String, String> normalizeProperties(Map<String, String> properties) {
+    protected Map<String, String> prepareConnectionProperties(Map<String, String> properties) {
         Map<String, String> normalized = canonicalizeProperties(properties, PROPERTY_KEYS);
         String enabled = normalized.get("oracle.jdbc.fanEnabled");
         if (enabled != null) {

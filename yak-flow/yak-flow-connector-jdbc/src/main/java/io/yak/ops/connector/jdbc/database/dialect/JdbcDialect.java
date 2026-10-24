@@ -92,7 +92,7 @@ public interface JdbcDialect extends java.io.Serializable {
      * will create for a source column. No database access or SQL execution is permitted here.
      * Unsupported mappings must fail explicitly rather than assuming types are identical.
      */
-    default LogicalType normalizeTargetType(Column column) {
+    default LogicalType toTargetLogicalType(Column column) {
         nativeType(column);
         return column.dataType();
     }
