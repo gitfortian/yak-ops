@@ -8,8 +8,8 @@ import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -101,8 +101,8 @@ public final class MySqlChunkSplitter {
         // Validate scalar family and caller-supplied resume boundary before opening JDBC.
         new ChunkRange(table, column.name(), type, lower, null);
         try (Connection connection = connections.getConnection()) {
-            Object maximum = StatementUtils.queryNextChunkMax(
-                    connection, dialect, table, column.name(), type, chunkSize, lower);
+            Object maximum =
+                    StatementUtils.queryNextChunkMax(connection, dialect, table, column.name(), type, chunkSize, lower);
             Object upper = maximum == null
                     ? null
                     : StatementUtils.queryMin(connection, dialect, table, column.name(), type, maximum);
