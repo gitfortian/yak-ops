@@ -123,8 +123,12 @@ class MySqlSnapshotOutputTest {
         var serializer = new MySqlHybridSplitSerializer();
         byte[] encoded = serializer.serialize(prepared());
         byte[] corrupted = encoded.clone();
-        corrupted[corrupted.length - 1] ^= 0x01;
+        // The last four bytes are the output cursor, not the checksummed row payload.
+        corrupted[corrupted.length - 5] ^= 0x01;
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), corrupted));
+        byte[] invalidCursor = encoded.clone();
+        invalidCursor[invalidCursor.length - 1] = 3;
+        assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), invalidCursor));
         assertThrows(IOException.class, () -> serializer.deserialize(
                 serializer.getVersion(), Arrays.copyOf(encoded, encoded.length - 1)));
     }
