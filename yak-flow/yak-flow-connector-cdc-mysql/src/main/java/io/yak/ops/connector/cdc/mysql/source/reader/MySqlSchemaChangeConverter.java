@@ -41,6 +41,38 @@ public final class MySqlSchemaChangeConverter {
         this.selected = Set.copyOf(Objects.requireNonNull(selected, "selected"));
     }
 
+    /**
+     * Reads CREATE metadata emitted by Debezium's initial no_data schema snapshot.
+     * This is not an executable runtime CREATE: it establishes the internal table history.
+     * A missing table, malformed metadata or non-CREATE transition fails before Hybrid handoff.
+     */
+    public Set<TableId> initialTables(Struct envelope) {
+        Objects.requireNonNull(envelope, "envelope");
+        if (envelope.schema().field("tableChanges") == null
+                || !(envelope.get("tableChanges") instanceof List<?> changes)) {
+            throw new IllegalStateException("MySQL CDC initial schema snapshot has no tableChanges");
+        }
+        Set<TableId> created = new java.util.HashSet<>();
+        for (Object item : changes) {
+            if (!(item instanceof Struct change)) {
+                throw new IllegalStateException("Invalid MySQL CDC initial table metadata");
+            }
+            TableId table = resolveTable(text(change, "id"));
+            if (!selected.contains(table)) {
+                continue;
+            }
+            if (!"CREATE".equalsIgnoreCase(text(change, "type"))) {
+                throw new IllegalStateException("Unexpected MySQL CDC table change during initial schema snapshot: "
+                        + table);
+            }
+            if (change.schema().field("table") == null || change.get("table") == null) {
+                throw new IllegalStateException("MySQL CDC initial CREATE is missing table metadata: " + table);
+            }
+            created.add(table);
+        }
+        return Set.copyOf(created);
+    }
+
     public SourceSchemaChange convert(Struct envelope, BinlogOffset offset, Map<TableId, Schema> current) {
         Objects.requireNonNull(envelope, "envelope");
         if (envelope.schema().field("tableChanges") == null) {
