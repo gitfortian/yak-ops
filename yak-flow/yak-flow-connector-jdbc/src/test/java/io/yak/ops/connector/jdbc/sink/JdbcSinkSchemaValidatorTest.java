@@ -52,7 +52,7 @@ class JdbcSinkSchemaValidatorTest {
     }
 
     @Test
-    void rejectsImplicitNumericWideningBeforeJdbcSinkConstruction() {
+    void acceptsSafeNumericWideningBeforeJdbcSinkConstruction() {
         TableSchema source = table(
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.INTEGER));
@@ -60,7 +60,10 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.BIGINT));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        JdbcSinkSchemaValidator.validate(source, target, false);
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, Map.of());
+        assertEquals(42L, plan.project(io.yak.ops.core.data.GenericRowData.of(5L, 42), io.yak.ops.core.data.RowKind.INSERT)
+                .getLong(1));
     }
 
     @Test

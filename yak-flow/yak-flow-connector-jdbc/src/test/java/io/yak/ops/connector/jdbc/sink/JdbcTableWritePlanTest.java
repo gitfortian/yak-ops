@@ -87,6 +87,82 @@ class JdbcTableWritePlanTest {
         assertEquals(123L, projected.getLong(0));
     }
 
+
+    @Test
+    void convertsSourceValuesToExactTargetLogicalTypesAndKeys() {
+        var source = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.INTEGER.copy(false)),
+                        new Column("small", LogicalTypes.TINYINT),
+                        new Column("amount", LogicalTypes.decimal(6, 2)),
+                        new Column("qty", LogicalTypes.SMALLINT),
+                        new Column("enabled", LogicalTypes.BOOLEAN),
+                        new Column("weight", LogicalTypes.FLOAT),
+                        new Column("created", LogicalTypes.DATE)),
+                List.of("id"));
+        var target = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("small", LogicalTypes.SMALLINT),
+                        new Column("amount", LogicalTypes.decimal(8, 3)),
+                        new Column("qty", LogicalTypes.decimal(6, 0)),
+                        new Column("enabled", LogicalTypes.INTEGER),
+                        new Column("weight", LogicalTypes.DOUBLE),
+                        new Column("created", LogicalTypes.timestamp(0))),
+                List.of("id"));
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source, Map.of());
+        var row = GenericRowData.of(7, (byte) 12, new java.math.BigDecimal("12.50"), (short) 23,
+                true, 1.25f, java.time.LocalDate.of(2026, 10, 24));
+        RowData projected = plan.project(row, RowKind.INSERT);
+        assertEquals(7L, projected.getLong(0));
+        assertEquals((short) 12, projected.getShort(1));
+        assertEquals(new java.math.BigDecimal("12.500"), projected.getDecimal(2, 8, 3));
+        assertEquals(new java.math.BigDecimal("23"), projected.getDecimal(3, 6, 0));
+        assertEquals(1, projected.getInt(4));
+        assertEquals(1.25d, projected.getDouble(5));
+        assertEquals(java.time.LocalDateTime.of(2026, 10, 24, 0, 0), projected.getTimestamp(6, 0));
+        RowData keys = plan.project(row, RowKind.DELETE);
+        assertEquals(7L, keys.getLong(0));
+        assertEquals(1, keys.getArity());
+        assertEquals(7L, plan.project(row, RowKind.UPDATE_BEFORE).getLong(0));
+    }
+
+    @Test
+    void rejectsNarrowingAndNullsBeforeTheyReachJdbcBatch() {
+        TableSchema source = new TableSchema(
+                List.of(new Column("id", LogicalTypes.INTEGER.copy(false)),
+                        new Column("value", LogicalTypes.SMALLINT.copy(false))),
+                List.of("id"));
+        TableSchema unsafe = new TableSchema(
+                List.of(new Column("id", LogicalTypes.SMALLINT.copy(false)),
+                        new Column("value", LogicalTypes.TINYINT)),
+                List.of("id"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new JdbcTableWritePlan(SOURCE, TARGET, unsafe, JdbcWriteMode.APPEND, source, Map.of()));
+
+        TableSchema target = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("value", LogicalTypes.INTEGER.copy(false))),
+                List.of("id"));
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, Map.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> plan.project(GenericRowData.of(1, null), RowKind.INSERT));
+    }
+
+    @Test
+    void rejectsDecimalsThatDoNotFitTargetPrecisionWithoutRounding() {
+        TableSchema source = new TableSchema(
+                List.of(new Column("amount", LogicalTypes.decimal(6, 2))), List.of());
+        TableSchema target = new TableSchema(
+                List.of(new Column("amount", LogicalTypes.decimal(7, 3))), List.of());
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, Map.of());
+        assertEquals(new java.math.BigDecimal("10.250"),
+                plan.project(GenericRowData.of(new java.math.BigDecimal("10.25")), RowKind.INSERT)
+                        .getDecimal(0, 7, 3));
+        assertThrows(IllegalArgumentException.class,
+                () -> plan.project(GenericRowData.of(new java.math.BigDecimal("99999.99")), RowKind.INSERT));
+    }
+
     private static TableSchema sourceSchema() {
         return new TableSchema(
                 List.of(new Column("SOURCE_NAME", LogicalTypes.STRING),

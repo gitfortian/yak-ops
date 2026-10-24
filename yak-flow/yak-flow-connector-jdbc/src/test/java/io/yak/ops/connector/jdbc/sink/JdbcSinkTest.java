@@ -170,6 +170,42 @@ class JdbcSinkTest {
         assertTrue(opened.get().isClosed());
     }
 
+
+    @Test
+    void bindsSafelyWidenedTargetTypesThroughJdbcStatements() throws Exception {
+        String url = databaseUrl();
+        createTable(url, "CREATE TABLE TARGET_DOCS (ID BIGINT PRIMARY KEY, AMOUNT DECIMAL(10,3), FLAG SMALLINT)");
+        TableSchema source = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.INTEGER.copy(false)),
+                        new Column("AMOUNT", LogicalTypes.decimal(8, 2)),
+                        new Column("FLAG", LogicalTypes.TINYINT)),
+                List.of("ID"));
+        TableSchema target = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.BIGINT.copy(false)),
+                        new Column("AMOUNT", LogicalTypes.decimal(10, 3)),
+                        new Column("FLAG", LogicalTypes.SMALLINT)),
+                List.of("ID"));
+        JdbcSinkSchemaValidator.validate(source, target, false);
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, java.util.Map.of());
+        var sink = new JdbcSink(
+                () -> open(url), new AnsiJdbcDialect(), plan, new BatchFlushPolicy(10, Duration.ZERO));
+        try (JdbcWriter writer = sink.createWriter(context())) {
+            writer.write(new TableRecord(SOURCE, RowKind.INSERT,
+                    GenericRowData.of(3, new java.math.BigDecimal("123.45"), (byte) 7)), RECORD_CONTEXT);
+            writer.flush(true);
+        }
+        try (Connection connection = open(url);
+                Statement statement = connection.createStatement();
+                var result = statement.executeQuery("SELECT ID, AMOUNT, FLAG FROM TARGET_DOCS")) {
+            assertTrue(result.next());
+            assertEquals(3L, result.getLong(1));
+            assertEquals(new java.math.BigDecimal("123.450"), result.getBigDecimal(2));
+            assertEquals((short) 7, result.getShort(3));
+        }
+    }
+
     @Test
     void nativeUpsertUsesExistingDialectSqlWithoutEmulatedSelectUpdate() {
         JdbcTableWritePlan plan = new JdbcTableWritePlan(SOURCE, TARGET, basicSchema(), JdbcWriteMode.UPSERT);
