@@ -33,7 +33,9 @@ public class ScheduleConfiguration {
     }
 
     @Bean(destroyMethod = "")
-    Scheduler scheduleEngine(DataSource dataSource, SubmissionService submissions, ScheduleAdmissionController admissionController) {
-        return new QuartzScheduler(dataSource, trigger -> submissions.submitScheduled(trigger), admissionController.maxLateness());
+    Scheduler scheduleEngine(
+            DataSource dataSource, SubmissionService submissions, ScheduleAdmissionController admissionController) {
+        return new QuartzScheduler(
+                dataSource, trigger -> submissions.submitScheduled(trigger), admissionController.maxLateness());
     }
 }
