@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.offset;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import io.debezium.connector.mysql.GtidSet;
+import io.debezium.connector.mysql.gtid.MySqlGtidSet;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -46,8 +46,8 @@ public record BinlogOffset(Map<String, Object> partition, Map<String, Object> po
         String leftGtids = text(position, "gtids");
         String rightGtids = text(other.position, "gtids");
         if (leftGtids != null && rightGtids != null) {
-            GtidSet leftSet = new GtidSet(leftGtids);
-            GtidSet rightSet = new GtidSet(rightGtids);
+            MySqlGtidSet leftSet = new MySqlGtidSet(leftGtids);
+            MySqlGtidSet rightSet = new MySqlGtidSet(rightGtids);
             if (!leftSet.equals(rightSet)) {
                 boolean leftWithinRight = leftSet.isContainedWithin(rightSet);
                 boolean rightWithinLeft = rightSet.isContainedWithin(leftSet);
