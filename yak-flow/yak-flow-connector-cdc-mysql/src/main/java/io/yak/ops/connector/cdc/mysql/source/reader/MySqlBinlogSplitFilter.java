@@ -209,7 +209,8 @@ public final class MySqlBinlogSplitFilter {
         for (int i = 0; i < change.after().columns().size(); i++) {
             var column = change.after().columns().get(i);
             if (column.name().equals(previous.name())) {
-                if (column.type().getTypeRoot() != previous.type() || column.type().isNullable()) {
+                if (column.type().getTypeRoot() != previous.type()
+                        || column.type().isNullable()) {
                     throw new UnsupportedOperationException("MySQL CDC cannot change the snapshot chunk column type");
                 }
                 position = i;
@@ -221,7 +222,11 @@ public final class MySqlBinlogSplitFilter {
         }
         columns.put(
                 change.tableId(),
-                new ChunkColumn(previous.name(), previous.type(), position, change.after().columns().size()));
+                new ChunkColumn(
+                        previous.name(),
+                        previous.type(),
+                        position,
+                        change.after().columns().size()));
     }
 
     private boolean shouldEmit(TableRecord record, BinlogEvent event) {
