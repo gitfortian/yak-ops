@@ -1,11 +1,13 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.TableSchema;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,9 @@ public final class MySqlChunkBackfill {
 
     private static final long DEFAULT_MAX_BYTES = 64L * 1024 * 1024;
     private final MySqlSnapshotSplit split;
+    private final ChunkRange range;
+    private final MySqlKeylessRecords keyless;
+    private final int chunkColumn;
     private final TableSchema schema;
     private final long maxBytes;
     private long retainedBytes;
@@ -58,6 +63,9 @@ public final class MySqlChunkBackfill {
      */
     public MySqlChunkBackfill(MySqlSnapshotSplit split, TableSchema schema, int maxRows, long maxBytes) {
         this.split = Objects.requireNonNull(split, "split");
+        this.range = null;
+        this.keyless = null;
+        this.chunkColumn = -1;
         this.schema = Objects.requireNonNull(schema, "schema");
         if (maxBytes < 1) {
             throw new IllegalArgumentException("Chunk backfill must have a positive byte budget");
@@ -85,11 +93,62 @@ public final class MySqlChunkBackfill {
         this.maxRows = maxRows;
     }
 
+    /**
+     * Holds keyless row images for a typed chunk without permitting the legacy BIGINT
+     * Source or Checkpoint pipeline to consume them yet.
+     *
+     * <p>Bounded string ranges are intentionally rejected: MySQL collation comparisons
+     * cannot be reproduced reliably with Java String.compareTo.
+     */
+    public MySqlChunkBackfill(ChunkRange range, TableSchema schema, int maxRows) {
+        this(range, schema, maxRows, DEFAULT_MAX_BYTES);
+    }
+
+    public MySqlChunkBackfill(ChunkRange range, TableSchema schema, int maxRows, long maxBytes) {
+        this.range = Objects.requireNonNull(range, "range");
+        this.schema = Objects.requireNonNull(schema, "schema");
+        if (!schema.primaryKeys().isEmpty()) {
+            throw new IllegalArgumentException("Keyless chunk backfill requires a table without physical primary keys");
+        }
+        int position = -1;
+        for (int index = 0; index < schema.columnCount(); index++) {
+            if (schema.column(index).name().equals(range.column())) {
+                position = index;
+                if (schema.column(index).dataType().getTypeRoot() != range.type()
+                        || schema.column(index).nullable()) {
+                    throw new IllegalArgumentException("Keyless chunk column differs from the source schema");
+                }
+                break;
+            }
+        }
+        if (position < 0) throw new IllegalArgumentException("Unknown keyless chunk column");
+        if ((range.type() == io.yak.ops.core.types.LogicalTypeRoot.CHAR
+                        || range.type() == io.yak.ops.core.types.LogicalTypeRoot.VARCHAR)
+                && (range.start() != null || range.end() != null)) {
+            throw new IllegalArgumentException(
+                    "Bounded string chunk backfill requires MySQL collation-aware filtering");
+        }
+        if (maxRows < 1 || maxBytes < 1) throw new IllegalArgumentException("Invalid chunk backfill budget");
+        this.split = null;
+        this.keyPosition = -1;
+        this.chunkColumn = position;
+        this.columns = schema.columnCount();
+        this.maxRows = maxRows;
+        this.maxBytes = maxBytes;
+        this.keyless = new MySqlKeylessRecords(range.tableId(), schema, maxRows, maxBytes);
+    }
+
     /** Buffers initial INSERT rows without exposing intermediate snapshot contents. */
     public void addSnapshot(TableRecord record) {
         ensureOpen();
         if (record.rowKind() != RowKind.INSERT) {
             throw new IllegalArgumentException("Snapshot chunk contains a non-insert record");
+        }
+        if (keyless != null) {
+            keyless.check(record);
+            if (!contains(record)) throw new IllegalArgumentException("Snapshot row falls outside its chunk");
+            keyless.insert(record);
+            return;
         }
         long key = key(record);
         if (!contains(key)) {
@@ -118,15 +177,34 @@ public final class MySqlChunkBackfill {
                 throw new IllegalArgumentException("Backfill UPDATE images must be adjacent");
             }
             // Validate both images before mutating the accumulator.
-            key(before);
-            key(after);
-            retract(before);
-            upsert(after);
+            if (keyless != null) {
+                keyless.check(before);
+                keyless.check(after);
+                if (contains(before)) keyless.delete(before);
+                if (contains(after)) keyless.insert(after);
+            } else {
+                key(before);
+                key(after);
+                retract(before);
+                upsert(after);
+            }
         } else if (changes.size() == 1) {
             TableRecord change = changes.getFirst();
             switch (change.rowKind()) {
-                case INSERT -> upsert(change);
-                case DELETE -> retract(change);
+                case INSERT -> {
+                    if (keyless == null) upsert(change);
+                    else {
+                        keyless.check(change);
+                        if (contains(change)) keyless.insert(change);
+                    }
+                }
+                case DELETE -> {
+                    if (keyless == null) retract(change);
+                    else {
+                        keyless.check(change);
+                        if (contains(change)) keyless.delete(change);
+                    }
+                }
                 case UPDATE_BEFORE, UPDATE_AFTER ->
                     throw new IllegalArgumentException("Backfill UPDATE requires both before and after");
             }
@@ -143,10 +221,28 @@ public final class MySqlChunkBackfill {
     public List<TableRecord> finish() {
         ensureOpen();
         sealed = true;
-        List<TableRecord> result = List.copyOf(rows.values());
+        List<TableRecord> result = keyless == null ? List.copyOf(rows.values()) : keyless.finish();
         rows.clear();
         retainedBytes = 0;
         return result;
+    }
+
+    private boolean contains(TableRecord record) {
+        Object value = record.row().getField(chunkColumn);
+        if (value == null) throw new IllegalArgumentException("Keyless chunk column must not be null");
+        if (range.start() == null && range.end() == null) return true;
+        int aboveStart = range.start() == null ? 1 : compare(value, range.start());
+        int belowEnd = range.end() == null ? -1 : compare(value, range.end());
+        return aboveStart >= 0 && belowEnd < 0;
+    }
+
+    private int compare(Object value, Object boundary) {
+        return switch (range.type()) {
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> Long.compare(((Number) value).longValue(), (Long) boundary);
+            case DECIMAL -> ((BigDecimal) value).compareTo((BigDecimal) boundary);
+            default ->
+                throw new IllegalArgumentException("Bounded keyless chunk values require database-aware comparisons");
+        };
     }
 
     private void retract(TableRecord record) {
