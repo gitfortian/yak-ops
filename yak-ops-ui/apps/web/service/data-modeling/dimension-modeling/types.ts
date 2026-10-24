@@ -1,4 +1,5 @@
 import type { DataType } from "@/service/data-modeling/data-standards/types";
+import type { PublicationStatus } from "./publication";
 
 export const MODEL_TYPES = ["DWD", "DIM", "DWS", "ADS"] as const;
 export type ModelType = (typeof MODEL_TYPES)[number];
@@ -104,6 +105,11 @@ export interface LogicalModel {
   fieldCount: number;
   revision: number;
   fields: ModelField[] | null;
+  /**
+   * Status of the newest publication. Null means the model was never published, or the stored value
+   * is not one this build knows; the two are deliberately not distinguished here.
+   */
+  latestPublicationStatus: PublicationStatus | null;
 }
 
 export interface ModelPage {

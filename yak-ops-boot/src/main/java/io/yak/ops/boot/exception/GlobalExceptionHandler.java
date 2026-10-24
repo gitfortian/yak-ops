@@ -155,6 +155,8 @@ public class GlobalExceptionHandler {
                         PARTITION_RULE -> HttpStatus.BAD_REQUEST;
                 // A layer that is disabled or unbound is a state precondition, not a malformed request.
                 case LAYER_NOT_SELECTABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
+                // The physical table exists; only reading it back failed, so this is an upstream fault.
+                case METADATA_COLLECTION_FAILED -> HttpStatus.BAD_GATEWAY;
                 case DUPLICATE_CODE, DUPLICATE_TABLE_NAME, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }

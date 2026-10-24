@@ -19,6 +19,7 @@ import type {
 import DimensionDeleteDialog from "../dimensions/delete-dialog";
 import DimensionDialog from "../dimensions/dimension-dialog";
 import ModelDeleteDialog from "../logical-models/delete-dialog";
+import PublishDialog from "../logical-models/publish-dialog";
 import ModelPanel from "./model-panel";
 import ModelSearchBar, {
   EMPTY_MODEL_SEARCH,
@@ -104,6 +105,7 @@ export default function DimensionModelingPage() {
   const [dimensionDraft, setDimensionDraft] = useState<DimensionDraft | null>(null);
   const [deletingDimension, setDeletingDimension] = useState<ConceptDimension | null>(null);
   const [deletingModel, setDeletingModel] = useState<LogicalModel | null>(null);
+  const [publishingModel, setPublishingModel] = useState<LogicalModel | null>(null);
   const [filters, setFilters] = useState<ModelSearchFilters>(EMPTY_MODEL_SEARCH);
   const [searchPage, setSearchPage] = useState(1);
   const [searchPageSize, setSearchPageSize] = useState(20);
@@ -622,6 +624,7 @@ export default function DimensionModelingPage() {
               }}
               onEdit={editModel}
               onDelete={setDeletingModel}
+              onPublish={setPublishingModel}
             />
           ) : (
             <ModelPanel
@@ -633,6 +636,7 @@ export default function DimensionModelingPage() {
               actions={actions}
               onEdit={editModel}
               onDelete={setDeletingModel}
+              onPublish={setPublishingModel}
             />
           )}
         </div>
@@ -674,6 +678,9 @@ export default function DimensionModelingPage() {
             setSearchVersion((value) => value + 1);
           }}
         />
+      )}
+      {publishingModel && (
+        <PublishDialog model={publishingModel} onClose={() => setPublishingModel(null)} />
       )}
     </div>
   );

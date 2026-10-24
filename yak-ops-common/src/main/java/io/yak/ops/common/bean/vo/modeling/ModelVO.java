@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.vo.modeling;
 
 import io.yak.ops.common.enums.modeling.ModelType;
+import io.yak.ops.common.enums.modeling.PublicationStatus;
 import io.yak.ops.common.enums.modeling.StoragePolicy;
 import java.util.List;
 
@@ -34,6 +35,8 @@ import java.util.List;
  * @param fieldCount number of fields, zero on write paths
  * @param revision current optimistic version
  * @param fields ordered fields on detail reads, null in list projections
+ * @param latestPublicationStatus status of the newest publication, null when the model was never
+ *     published or the stored value is unknown to this build
  */
 public record ModelVO(
         String id,
@@ -58,4 +61,5 @@ public record ModelVO(
         String description,
         long fieldCount,
         long revision,
-        List<ModelFieldVO> fields) {}
+        List<ModelFieldVO> fields,
+        PublicationStatus latestPublicationStatus) {}

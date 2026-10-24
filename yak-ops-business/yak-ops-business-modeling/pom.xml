@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <parent><groupId>io.yak.ops</groupId><artifactId>yak-ops-business</artifactId><version>1.5.0</version><relativePath>../pom.xml</relativePath></parent>
+  <parent><groupId>io.yak.ops</groupId><artifactId>yak-ops-business</artifactId><version>1.6.0</version><relativePath>../pom.xml</relativePath></parent>
   <artifactId>yak-ops-business-modeling</artifactId>
   <name>Yak Ops Modeling Business</name>
   <dependencies>
     <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-platform</artifactId></dependency>
     <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-common</artifactId></dependency>
     <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-dao</artifactId></dependency>
+    <!-- Publication reaches the engine through the datasource boundary: connection settings and the
+         Catalog reads stay owned there, so no credentials or driver configuration enter this module. -->
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datasource</artifactId></dependency>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-api</artifactId></dependency>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-jdbc</artifactId></dependency>
     <dependency><groupId>org.springframework</groupId><artifactId>spring-tx</artifactId></dependency>
     <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>

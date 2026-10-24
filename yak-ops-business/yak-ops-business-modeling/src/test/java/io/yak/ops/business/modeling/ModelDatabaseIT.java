@@ -26,6 +26,7 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.repository.modeling.impl.DimensionRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.ModelRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.impl.PublicationRepositoryImpl;
 import io.yak.ops.testutils.MySqlDatabase;
 import io.yak.ops.workspace.WorkspaceService;
 import java.util.List;
@@ -76,7 +77,8 @@ class ModelDatabaseIT {
                 ModelRepositoryImpl.class,
                 ModelServiceImpl.class,
                 PlanningRepositoryImpl.class,
-                DimensionRepositoryImpl.class);
+                DimensionRepositoryImpl.class,
+                PublicationRepositoryImpl.class);
         service = context.getBean(ModelService.class);
     }
 

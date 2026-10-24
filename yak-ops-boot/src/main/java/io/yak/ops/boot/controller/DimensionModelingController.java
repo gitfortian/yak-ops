@@ -2,12 +2,17 @@ package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.modeling.dimension.DimensionService;
 import io.yak.ops.business.modeling.model.ModelService;
+import io.yak.ops.business.modeling.publication.ModelPublicationService;
 import io.yak.ops.common.bean.dto.modeling.DimensionInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
+import io.yak.ops.common.bean.dto.modeling.PublicationTargetDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateDimensionDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;
 import io.yak.ops.common.bean.vo.modeling.DimensionVO;
+import io.yak.ops.common.bean.vo.modeling.MetadataSnapshotVO;
 import io.yak.ops.common.bean.vo.modeling.ModelVO;
+import io.yak.ops.common.bean.vo.modeling.PublicationPreviewVO;
+import io.yak.ops.common.bean.vo.modeling.PublicationVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.modeling.ModelType;
 import io.yak.ops.common.enums.modeling.dimension.DimensionScope;
@@ -40,6 +45,9 @@ public class DimensionModelingController {
 
     @Resource
     private ModelService models;
+
+    @Resource
+    private ModelPublicationService publications;
 
     @Resource
     private AuthenticationManager authentication;
@@ -129,5 +137,46 @@ public class DimensionModelingController {
     public Result<Boolean> deleteModel(@PathVariable String id, @RequestParam @Min(1) long revision) {
         models.delete(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, revision);
         return Result.success(true);
+    }
+
+    @PostMapping("/models/{modelId}/publications/preview")
+    public Result<PublicationPreviewVO> previewPublication(
+            @PathVariable String modelId, @Valid @RequestBody PublicationTargetDTO target) {
+        return Result.success(publications.preview(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), modelId, target));
+    }
+
+    @PostMapping("/models/{modelId}/publications")
+    public Result<PublicationVO> publish(
+            @PathVariable String modelId, @Valid @RequestBody PublicationTargetDTO target) {
+        return Result.success(publications.publish(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), modelId, target));
+    }
+
+    @GetMapping("/models/{modelId}/publications")
+    public Result<List<PublicationVO>> publicationHistory(@PathVariable String modelId) {
+        return Result.success(publications.history(WorkspaceContext.requireWorkspaceId(), modelId));
+    }
+
+    @GetMapping("/publications/{publicationId}")
+    public Result<PublicationVO> publication(@PathVariable String publicationId) {
+        return Result.success(publications.detail(WorkspaceContext.requireWorkspaceId(), publicationId));
+    }
+
+    @PostMapping("/publications/{publicationId}/reconcile")
+    public Result<PublicationVO> reconcilePublication(@PathVariable String publicationId) {
+        return Result.success(publications.reconcile(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), publicationId));
+    }
+
+    @GetMapping("/publications/{publicationId}/metadata")
+    public Result<MetadataSnapshotVO> publicationMetadata(@PathVariable String publicationId) {
+        return Result.success(publications.metadata(WorkspaceContext.requireWorkspaceId(), publicationId));
+    }
+
+    @PostMapping("/publications/{publicationId}/metadata/refresh")
+    public Result<MetadataSnapshotVO> refreshPublicationMetadata(@PathVariable String publicationId) {
+        return Result.success(publications.refreshMetadata(
+                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), publicationId));
     }
 }
