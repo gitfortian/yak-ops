@@ -18,8 +18,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +56,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private volatile boolean stopped;
     private boolean started;
     private BinlogOffset lastQueuedOffset;
+    private boolean awaitingSchemaSnapshot;
+    private final Set<TableId> bootstrapTables = new HashSet<>();
 
     public MySqlBinlogEngine(MySqlCdcSourceConfig config) {
         this(config, config.serverId());
@@ -76,6 +80,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         }
         started = true;
         lastQueuedOffset = split.offset();
+        awaitingSchemaSnapshot = split.offset() == null;
         directory = Files.createTempDirectory("yakflow-binlog-");
         historyPath = directory.resolve("schema-history.dat");
         byte[] history = split.schemaHistory();
@@ -130,26 +135,52 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             }
             try {
                 SourceRecord source = event.record();
-                TableId changed = converter.schemaMismatch(source);
-                if (changed != null) {
-                    // A Debezium DDL with empty tableChanges must not cause the next
-                    // row to bypass SchemaCoordinator. Read metadata, verify that it
-                    // describes THIS row, and emit the schema boundary before the row.
-                    // It uses the previous offset: acknowledging the boundary must
-                    // not checkpoint past the still-pending row.
-                    BinlogEvent transition = reconcile(source, changed);
-                    LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
-                    enqueue(transition);
-                }
-                BinlogEvent converted = converter.convert(source);
-                if (converted != null) {
-                    if (converted.schemaChange() != null) {
-                        LOG.info(
-                                "MySQL CDC independent DDL event: table={}",
-                                converted.schemaChange().tableId());
+                if (awaitingSchemaSnapshot) {
+                    // Debezium's no_data snapshot emits CREATE table metadata before it completes.
+                    // The forced heartbeat is emitted only after postSnapshot(), with the
+                    // completed snapshot offset. Earlier records must never anchor Hybrid.
+                    if (isHeartbeat(source)) {
+                        if (config.schemaEvolutionEnabled()
+                                && !bootstrapTables.containsAll(config.schemas().keySet())) {
+                            throw new IllegalStateException(
+                                    "MySQL CDC initial schema snapshot did not register all selected tables: "
+                                            + config.schemas().keySet().stream()
+                                                    .filter(table -> !bootstrapTables.contains(table))
+                                                    .toList());
+                        }
+                        if (snapshotHistory().length == 0) {
+                            throw new IllegalStateException("MySQL CDC initial schema snapshot has no Schema History");
+                        }
+                        BinlogEvent anchor = Objects.requireNonNull(converter.convert(source), "snapshot heartbeat");
+                        enqueue(anchor);
+                        lastQueuedOffset = anchor.offset();
+                        awaitingSchemaSnapshot = false;
+                        LOG.info("MySQL CDC initial schema snapshot completed, tables={}", config.schemas().size());
+                    } else {
+                        bootstrapTables.addAll(converter.initialSchemaTables(source));
                     }
-                    enqueue(converted);
-                    lastQueuedOffset = converted.offset();
+                } else {
+                    TableId changed = converter.schemaMismatch(source);
+                    if (changed != null) {
+                        // A Debezium DDL with empty tableChanges must not cause the next
+                        // row to bypass SchemaCoordinator. Read metadata, verify that it
+                        // describes THIS row, and emit the schema boundary before the row.
+                        // It uses the previous offset: acknowledging the boundary must
+                        // not checkpoint past the still-pending row.
+                        BinlogEvent transition = reconcile(source, changed);
+                        LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
+                        enqueue(transition);
+                    }
+                    BinlogEvent converted = converter.convert(source);
+                    if (converted != null) {
+                        if (converted.schemaChange() != null) {
+                            LOG.info(
+                                    "MySQL CDC independent DDL event: table={}",
+                                    converted.schemaChange().tableId());
+                        }
+                        enqueue(converted);
+                        lastQueuedOffset = converted.offset();
+                    }
                 }
             } catch (InterruptedException interrupted) {
                 throw interrupted;
@@ -162,6 +193,10 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             committer.markProcessed(event);
         }
         committer.markBatchFinished();
+    }
+
+    private static boolean isHeartbeat(SourceRecord source) {
+        return source.topic() != null && source.topic().startsWith("__debezium-heartbeat.");
     }
 
     private BinlogEvent reconcile(SourceRecord source, TableId table) throws SQLException {
