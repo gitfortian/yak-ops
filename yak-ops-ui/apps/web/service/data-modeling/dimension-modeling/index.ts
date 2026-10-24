@@ -82,6 +82,9 @@ export function getModels(query: ModelQuery, signal?: AbortSignal) {
   if (query.type !== "ALL") params.set("type", query.type);
   if (query.layerId) params.set("layerId", query.layerId);
   if (query.keyword) params.set("keyword", query.keyword);
+  if (query.ownerId) params.set("ownerId", query.ownerId);
+  if (query.domainId) params.set("domainId", query.domainId);
+  if (query.datamartId) params.set("datamartId", query.datamartId);
   return modelingRequest(
     HttpUtils.getData<ModelPage>(`${API}/models?${params}`, { signal, skipErrorHandler: true }),
   );

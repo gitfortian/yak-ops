@@ -1,4 +1,4 @@
-import { Badge, Button, Empty, Spinner, Table, type TableColumns } from "@yak-ops/yak-ui";
+import { Alert, Badge, Button, Empty, Spinner, Table, type TableColumns } from "@yak-ops/yak-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import type { LogicalModel, StoragePolicy } from "@/service/data-modeling/dimension-modeling/types";
 
@@ -16,6 +16,16 @@ interface Props {
   loading: boolean;
   truncated?: boolean;
   actions?: ReactNode;
+  /** Set when the list is one server page, so paging is not applied twice. */
+  paging?: {
+    pageNo: number;
+    pageSize: number;
+    total: number;
+    onChange: (pageNo: number, pageSize: number) => void;
+  };
+  /** Shown instead of the table when the list request failed. */
+  error?: ReactNode;
+  emptyText?: string;
   onEdit: (model: LogicalModel) => void;
   onDelete: (model: LogicalModel) => void;
 }
@@ -23,11 +33,18 @@ interface Props {
 export default function ModelPanel(props: Props) {
   const [pageNo, setPageNo] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const paging = props.paging;
   useEffect(() => {
+    if (paging) return;
     const last = Math.max(1, Math.ceil(props.models.length / pageSize));
     if (pageNo > last) setPageNo(last);
-  }, [props.models.length, pageSize, pageNo]);
-  const pageRows = props.models.slice((pageNo - 1) * pageSize, pageNo * pageSize);
+  }, [props.models.length, pageSize, pageNo, paging]);
+  const pageRows = paging
+    ? props.models
+    : props.models.slice((pageNo - 1) * pageSize, pageNo * pageSize);
+  const current = paging ? paging.pageNo : pageNo;
+  const size = paging ? paging.pageSize : pageSize;
+  const total = paging ? paging.total : props.models.length;
   const columns: TableColumns<LogicalModel> = [
     { title: "表名", dataIndex: "name", width: 220, ellipsis: true },
     { title: "表中文名", dataIndex: "cnName", width: 180, ellipsis: true },
@@ -96,8 +113,10 @@ export default function ModelPanel(props: Props) {
           <div className="flex h-full items-center justify-center">
             <Spinner />
           </div>
+        ) : props.error ? (
+          <Alert>{props.error}</Alert>
         ) : props.models.length === 0 ? (
-          <Empty description="该节点下还没有逻辑模型" />
+          <Empty description={props.emptyText ?? "该节点下还没有逻辑模型"} />
         ) : (
           <Table<LogicalModel>
             rowKey="id"
@@ -108,14 +127,18 @@ export default function ModelPanel(props: Props) {
             scroll={{ x: 890 }}
             emptyText="暂无逻辑模型"
             pagination={{
-              current: pageNo,
-              pageSize,
-              total: props.models.length,
+              current,
+              pageSize: size,
+              total,
               showSizeChanger: true,
               pageSizeOptions: [20, 50, 100],
-              onChange: (page, size) => {
-                setPageSize(size);
-                setPageNo(size === pageSize ? page : 1);
+              onChange: (page, nextSize) => {
+                if (paging) {
+                  paging.onChange(page, nextSize);
+                  return;
+                }
+                setPageSize(nextSize);
+                setPageNo(nextSize === pageSize ? page : 1);
               },
             }}
           />
