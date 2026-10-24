@@ -237,7 +237,8 @@ public final class MySqlDebeziumRecordConverter {
                     throw new UnsupportedOperationException(
                             "MySQL CDC requires structured DDL metadata for non-null or non-VARCHAR columns");
                 }
-                columns.add(new PhysicalColumn(field.name(), new VarCharType(true, varcharLength(sourceType, field.name()))));
+                columns.add(new PhysicalColumn(
+                        field.name(), new VarCharType(true, varcharLength(sourceType, field.name()))));
             } else {
                 LogicalType type = existing.type();
                 if (type instanceof VarCharType varchar
@@ -276,8 +277,9 @@ public final class MySqlDebeziumRecordConverter {
 
     private static int varcharLength(org.apache.kafka.connect.data.Schema schema, String column) {
         String nativeType = parameter(schema, "__debezium.source.column.type");
-        if (nativeType == null || !(nativeType.equalsIgnoreCase("VARCHAR")
-                || nativeType.toUpperCase(java.util.Locale.ROOT).startsWith("VARCHAR("))) {
+        if (nativeType == null
+                || !(nativeType.equalsIgnoreCase("VARCHAR")
+                        || nativeType.toUpperCase(java.util.Locale.ROOT).startsWith("VARCHAR("))) {
             throw new UnsupportedOperationException(
                     "MySQL CDC requires an unambiguous Debezium VARCHAR source type: " + column);
         }
