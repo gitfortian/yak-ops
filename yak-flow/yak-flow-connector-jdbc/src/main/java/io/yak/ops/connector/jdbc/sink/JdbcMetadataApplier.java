@@ -1,10 +1,10 @@
 package io.yak.ops.connector.jdbc.sink;
 
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
-import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcCatalog;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcColumnInfo;
 import io.yak.ops.connector.jdbc.database.catalog.JdbcTableInfo;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
