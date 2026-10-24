@@ -64,6 +64,8 @@ interface ColumnResult {
 const ENV_RANK: Record<string, number> = { PROD: 0, TEST: 1, DEVELOP: 2 };
 const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
 
+const columnNoteId = (index: number) => `import-column-note-${index}`;
+
 const mappingBadge = (column: DataSourceCatalogColumn) => {
   const mapping = mapPhysicalColumn(column);
   if (mapping.kind === "MAPPED") return <Badge tone="success">→ {mapping.dataType}</Badge>;
@@ -357,12 +359,13 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
       key: "pick",
       width: 44,
       align: "center",
-      render: (_, row) => {
+      render: (_, row, index) => {
         const code = normalizeFieldCode(row.name);
         const duplicate = takenCodes.has(code) || conflictingCodes.has(code);
         return (
           <Checkbox
             aria-label={`选择字段 ${row.name}`}
+            aria-describedby={duplicate ? columnNoteId(index) : undefined}
             checked={selected.includes(row.name)}
             disabled={duplicate}
             onCheckedChange={(checked) =>
@@ -393,12 +396,17 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
       title: "说明",
       key: "note",
       ellipsis: true,
-      render: (_, row) => {
+      render: (_, row, index) => {
         const code = normalizeFieldCode(row.name);
-        if (takenCodes.has(code)) return "字段列表中已存在同名字段";
+        if (takenCodes.has(code))
+          return <span id={columnNoteId(index)}>字段列表中已存在同名字段</span>;
         if (conflictingCodes.has(code))
-          return `多个物理字段将生成编码 ${code}，请手工添加后调整编码`;
-        return mapPhysicalColumn(row).note ?? "—";
+          return (
+            <span id={columnNoteId(index)}>
+              多个物理字段将生成编码 {code}，请手工添加后调整编码
+            </span>
+          );
+        return <span id={columnNoteId(index)}>{mapPhysicalColumn(row).note ?? "—"}</span>;
       },
     },
   ];
