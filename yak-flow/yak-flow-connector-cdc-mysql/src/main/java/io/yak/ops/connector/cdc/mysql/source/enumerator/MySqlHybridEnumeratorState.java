@@ -81,8 +81,7 @@ public record MySqlHybridEnumeratorState(
                     .map(FinishedSnapshotSplitInfo::highWatermark)
                     .max(BinlogOffset::compareTo)
                     .orElseThrow();
-            if (highWatermark.compareTo(maximum) != 0
-                    || lowWatermark.compareTo(highWatermark) > 0) {
+            if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
                 throw new IllegalArgumentException("Hybrid coordinator watermarks differ from completed chunks");
             }
         }
