@@ -57,8 +57,7 @@ public final class MySqlBinlogSplitFilter {
      * <p>Bounded strings remain unsupported because Java string comparison does not implement
      * MySQL's collation. A single unbounded string chunk is valid without comparing strings.
      */
-    public static MySqlBinlogSplitFilter forChunks(
-            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
+    public static MySqlBinlogSplitFilter forChunks(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
         return new MySqlBinlogSplitFilter(schemas, finished, false);
     }
 
@@ -97,15 +96,15 @@ public final class MySqlBinlogSplitFilter {
                     break;
                 }
             }
-            if (legacyPrimaryKey && (schema.primaryKeys().size() != 1
-                    || !schema.primaryKeys().getFirst().equals(range.column())
-                    || range.type() != LogicalTypeRoot.BIGINT)) {
+            if (legacyPrimaryKey
+                    && (schema.primaryKeys().size() != 1
+                            || !schema.primaryKeys().getFirst().equals(range.column())
+                            || range.type() != LogicalTypeRoot.BIGINT)) {
                 throw new IllegalArgumentException("Binlog filtering requires exactly one BIGINT primary key");
             }
             ChunkColumn previous = columns.putIfAbsent(
                     table, new ChunkColumn(range.column(), range.type(), position, schema.columnCount()));
-            if (previous != null
-                    && (!previous.name().equals(range.column()) || previous.type() != range.type())) {
+            if (previous != null && (!previous.name().equals(range.column()) || previous.type() != range.type())) {
                 throw new IllegalArgumentException("Finished chunks use different snapshot chunk columns");
             }
             if ((range.type() == LogicalTypeRoot.CHAR || range.type() == LogicalTypeRoot.VARCHAR)
@@ -121,16 +120,16 @@ public final class MySqlBinlogSplitFilter {
             }
             chunks.sort(Comparator.comparing(
                     (FinishedChunk chunk) -> chunk.range().start(),
-                    Comparator.nullsFirst((left, right) -> compare(columns.get(table).type(), left, right))));
-            if (chunks.getFirst().range().start() != null || chunks.getLast().range().end() != null) {
+                    Comparator.nullsFirst(
+                            (left, right) -> compare(columns.get(table).type(), left, right))));
+            if (chunks.getFirst().range().start() != null
+                    || chunks.getLast().range().end() != null) {
                 throw new IllegalArgumentException("Finished snapshot ranges do not cover the entire keyspace");
             }
             for (int index = 1; index < chunks.size(); index++) {
                 Object upper = chunks.get(index - 1).range().end();
                 Object lower = chunks.get(index).range().start();
-                if (upper == null
-                        || lower == null
-                        || compare(columns.get(table).type(), upper, lower) != 0) {
+                if (upper == null || lower == null || compare(columns.get(table).type(), upper, lower) != 0) {
                     throw new IllegalArgumentException("Finished snapshot ranges have a gap or overlap");
                 }
             }
