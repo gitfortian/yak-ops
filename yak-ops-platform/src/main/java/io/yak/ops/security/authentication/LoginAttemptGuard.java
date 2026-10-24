@@ -49,8 +49,7 @@ public final class LoginAttemptGuard {
 
     public boolean isBlocked(String username, String ipAddress) {
         Instant now = clock.instant();
-        return isBlocked(key("user", usernameKey(username)), now)
-                || isBlocked(key("ip", ipKey(ipAddress)), now);
+        return isBlocked(key("user", usernameKey(username)), now) || isBlocked(key("ip", ipKey(ipAddress)), now);
     }
 
     public void recordFailure(String username, String ipAddress) {
