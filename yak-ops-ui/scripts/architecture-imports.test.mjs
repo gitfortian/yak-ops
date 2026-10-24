@@ -157,11 +157,17 @@ test("Schedule public contracts remain usable; private lifecycle imports are rej
     [],
   );
   assert.deepEqual(
-    check("apps/web/app/data-sync/editor/schedule-section.tsx", 'import { ScheduleForm } from "@/app/schedule/form/schedule-form";'),
+    check(
+      "apps/web/app/data-sync/editor/schedule-section.tsx",
+      'import { ScheduleForm } from "@/app/schedule/form/schedule-form";',
+    ),
     [],
   );
   assert.match(
-    check("apps/web/app/data-sync/editor/schedule-section.tsx", 'import { SchedulePreview } from "@/app/schedule/form/schedule-preview";').join("\n"),
+    check(
+      "apps/web/app/data-sync/editor/schedule-section.tsx",
+      'import { SchedulePreview } from "@/app/schedule/form/schedule-preview";',
+    ).join("\n"),
     /imports a private Schedule feature/,
   );
   assert.deepEqual(
