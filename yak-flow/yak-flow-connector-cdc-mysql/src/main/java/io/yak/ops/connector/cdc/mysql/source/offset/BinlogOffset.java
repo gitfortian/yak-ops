@@ -1,9 +1,9 @@
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
+import io.debezium.connector.mysql.gtid.MySqlGtidSet;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import io.debezium.connector.mysql.gtid.MySqlGtidSet;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,7 +25,6 @@ public record BinlogOffset(Map<String, Object> partition, Map<String, Object> po
             throw new IllegalArgumentException("MySQL Binlog offset requires a source partition and position");
         }
     }
-
 
     /**
      * Orders the offsets of the same Debezium source for snapshot backfill and binlog filtering.
