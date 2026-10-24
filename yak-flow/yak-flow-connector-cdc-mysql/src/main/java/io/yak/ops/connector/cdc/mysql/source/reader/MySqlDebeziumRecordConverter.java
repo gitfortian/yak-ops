@@ -239,7 +239,7 @@ public final class MySqlDebeziumRecordConverter {
                 }
                 columns.add(new PhysicalColumn(field.name(), new VarCharType(true, varcharLength(sourceType, field.name()))));
             } else {
-                LogicalType type = existing.dataType();
+                LogicalType type = existing.type();
                 if (type instanceof VarCharType varchar
                         && parameter(sourceType, "__debezium.source.column.length") != null) {
                     int length = varcharLength(sourceType, field.name());
