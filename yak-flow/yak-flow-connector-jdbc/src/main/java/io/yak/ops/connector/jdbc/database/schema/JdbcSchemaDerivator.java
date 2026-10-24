@@ -70,7 +70,7 @@ public final class JdbcSchemaDerivator {
             List<PhysicalColumn> columns = new ArrayList<>();
             for (PhysicalColumn column : source.columns()) {
                 LogicalType normalized =
-                        normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
+                        resolveTargetColumnType(dialect, column, source.primaryKeys().contains(column.name()), differences);
                 if (normalized != null) {
                     columns.add(column.copy(normalized));
                 }
@@ -97,7 +97,7 @@ public final class JdbcSchemaDerivator {
             PhysicalColumn actual = existing.get(incoming.name());
             if (actual == null) {
                 LogicalType normalized =
-                        normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+                        resolveTargetColumnType(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
                 if (normalized == null) continue;
                 if (source.primaryKeys().contains(incoming.name())
                         || !normalized.isNullable()
@@ -150,7 +150,7 @@ public final class JdbcSchemaDerivator {
                 continue;
             }
             LogicalType planned =
-                    normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+                    resolveTargetColumnType(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
             if (canContain(planned, actual.type())) {
                 add(differences, incoming.name(), Kind.COMPATIBLE, Reason.COMPATIBLE, planned, actual.type());
@@ -244,7 +244,7 @@ public final class JdbcSchemaDerivator {
         return JdbcSchemaCompatibility.isCompatible(from, to);
     }
 
-    private static LogicalType normalize(
+    private static LogicalType resolveTargetColumnType(
             JdbcDialect dialect, PhysicalColumn column, boolean key, List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
@@ -264,7 +264,7 @@ public final class JdbcSchemaDerivator {
                 add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
-            return dialect.normalizeTargetType(logical);
+            return dialect.toTargetLogicalType(logical);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
             add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
             return null;

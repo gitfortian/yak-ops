@@ -102,7 +102,7 @@ public final class MySqlCdcSourceConfig {
         this.port = port;
         this.serverId = serverId;
         this.queueCapacity = queueCapacity;
-        this.connectionProperties = normalizeConnectionProperties(connectionProperties);
+        this.connectionProperties = prepareConnectionProperties(connectionProperties);
         Map<TableId, TableSchema> resolved = new LinkedHashMap<>();
         Objects.requireNonNull(schemas, "schemas").forEach((table, schema) -> {
             Objects.requireNonNull(table, "table");
@@ -145,7 +145,7 @@ public final class MySqlCdcSourceConfig {
      * Use a numeric UTC offset for new JDBC sessions when no time zone was explicitly configured.
      * This avoids ambiguous OS names and does not require MySQL named time zone tables.
      */
-    private static Map<String, String> normalizeConnectionProperties(Map<String, String> supplied) {
+    private static Map<String, String> prepareConnectionProperties(Map<String, String> supplied) {
         Map<String, String> values = new LinkedHashMap<>();
         Objects.requireNonNull(supplied, "connectionProperties").forEach((key, value) -> {
             if (key == null || !key.matches("[A-Za-z][A-Za-z0-9_.-]*") || value == null) {

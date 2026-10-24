@@ -100,7 +100,7 @@ public final class PostgresJdbcDialect extends AbstractDialect {
     }
 
     @Override
-    public LogicalType normalizeTargetType(Column column) {
+    public LogicalType toTargetLogicalType(Column column) {
         JdbcNativeType targetType = nativeType(column);
         boolean nullable = column.nullable();
         return switch (column.dataType().getTypeRoot()) {

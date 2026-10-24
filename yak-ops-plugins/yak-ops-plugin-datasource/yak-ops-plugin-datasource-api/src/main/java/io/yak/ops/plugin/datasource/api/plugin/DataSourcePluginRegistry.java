@@ -33,7 +33,7 @@ public final class DataSourcePluginRegistry {
      * @throws NoSuchElementException if the type or alias is not registered
      */
     public static DataSourcePlugin get(String type) {
-        String key = DataSourcePluginDescriptor.normalizeType(type);
+        String key = DataSourcePluginDescriptor.canonicalTypeName(type);
         return PLUGINS.get(key);
     }
 
@@ -47,7 +47,7 @@ public final class DataSourcePluginRegistry {
         if (descriptor == null) {
             throw new IllegalStateException("Datasource plugin descriptor must not be null");
         }
-        String type = DataSourcePluginDescriptor.normalizeType(plugin.type());
+        String type = DataSourcePluginDescriptor.canonicalTypeName(plugin.type());
         if (!descriptor.type().equals(type)) {
             throw new IllegalStateException("Datasource plugin type does not match its descriptor: " + type);
         }

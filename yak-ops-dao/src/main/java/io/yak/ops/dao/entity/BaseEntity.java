@@ -52,7 +52,7 @@ public abstract class BaseEntity {
         }
         createTime = now;
         updateTime = now;
-        createBy = normalizeUser(userId);
+        createBy = resolveAuditUser(userId);
         updateBy = createBy;
     }
 
@@ -62,10 +62,10 @@ public abstract class BaseEntity {
 
     public void initUpdate(String userId) {
         updateTime = DateUtils.now();
-        updateBy = normalizeUser(userId);
+        updateBy = resolveAuditUser(userId);
     }
 
-    private static String normalizeUser(String userId) {
+    private static String resolveAuditUser(String userId) {
         return userId == null || userId.isBlank() ? CommonConstants.SYSTEM_USER : userId.strip();
     }
 }

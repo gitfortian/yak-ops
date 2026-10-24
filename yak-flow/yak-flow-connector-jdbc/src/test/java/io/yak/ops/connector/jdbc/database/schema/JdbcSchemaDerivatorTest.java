@@ -237,17 +237,17 @@ class JdbcSchemaDerivatorTest {
     }
 
     @Test
-    void normalizesNativeTargetTypeWithoutTouchingSourceDefinitions() {
+    void mapsNativeTargetTypeWithoutTouchingSourceDefinitions() {
         assertEquals(
                 LogicalTypes.TINYINT,
-                MYSQL.normalizeTargetType(new io.yak.ops.core.types.Column("flag", LogicalTypes.BOOLEAN)));
+                MYSQL.toTargetLogicalType(new io.yak.ops.core.types.Column("flag", LogicalTypes.BOOLEAN)));
         assertEquals(
                 LogicalTypes.BINARY,
-                POSTGRES.normalizeTargetType(
+                POSTGRES.toTargetLogicalType(
                         new io.yak.ops.core.types.Column("payload", LogicalTypes.fixedBinary(20))));
         assertEquals(
                 LogicalTypes.STRING,
-                MYSQL.normalizeTargetType(new io.yak.ops.core.types.Column("txt", LogicalTypes.varchar(20000))));
+                MYSQL.toTargetLogicalType(new io.yak.ops.core.types.Column("txt", LogicalTypes.varchar(20000))));
     }
 
     @Test

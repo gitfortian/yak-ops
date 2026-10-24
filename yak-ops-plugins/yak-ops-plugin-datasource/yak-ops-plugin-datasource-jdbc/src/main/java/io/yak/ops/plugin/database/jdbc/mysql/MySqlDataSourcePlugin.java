@@ -128,7 +128,7 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     }
 
     @Override
-    protected String normalizeDriverId(JsonNode connectionJson) {
+    protected String resolveDriverId(JsonNode connectionJson) {
         String value = JSONUtils.firstText(connectionJson, "driverId");
         try {
             return MySqlDriverId.parse(value).name();
@@ -138,12 +138,12 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
     }
 
     @Override
-    protected String normalizeDriverClassName(JsonNode connectionJson, String driverId) {
+    protected String resolveDriverClassName(JsonNode connectionJson, String driverId) {
         return MySqlDriverId.parse(driverId).driverClassName();
     }
 
     @Override
-    protected Map<String, String> normalizeProperties(Map<String, String> properties) {
+    protected Map<String, String> prepareConnectionProperties(Map<String, String> properties) {
         Map<String, String> normalized = canonicalizeProperties(properties, PROPERTY_KEYS);
         for (String key : java.util.List.of(
                 "useUnicode",
