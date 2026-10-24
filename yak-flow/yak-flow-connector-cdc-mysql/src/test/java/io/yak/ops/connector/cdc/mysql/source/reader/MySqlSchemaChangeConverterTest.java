@@ -60,11 +60,19 @@ class MySqlSchemaChangeConverterTest {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         SourceRecord initial = ddl("CREATE", NEW_TABLE, 60L);
 
-        assertEquals(java.util.Set.of(SOURCE), converter.initialSchemaTables(initial));
+        java.util.Set<TableId> registered = new java.util.HashSet<>();
+        converter.applyInitialSchemaTables(initial, registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
+        converter.applyInitialSchemaTables(ddl("ALTER", NEW_TABLE, 61L), registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
+        converter.applyInitialSchemaTables(ddl("DROP", NEW_TABLE, 62L), registered);
+        assertTrue(registered.isEmpty());
+        converter.applyInitialSchemaTables(ddl("CREATE", NEW_TABLE, 63L), registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
         assertThrows(UnsupportedOperationException.class, () -> converter.convert(initial));
-        assertEquals(java.util.Set.of(SOURCE), converter.initialSchemaTables(ddl("ALTER", NEW_TABLE, 61L)));
-        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(ddl("DROP", NEW_TABLE, 62L)));
-        assertThrows(IllegalStateException.class, () -> converter.initialSchemaTables(insertWithNote(62L)));
+        assertThrows(
+                IllegalStateException.class,
+                () -> converter.applyInitialSchemaTables(insertWithNote(64L), registered));
         // Initial CREATE metadata is consumed only by the engine before the completed
         // schema-snapshot heartbeat; it must not change the registered runtime schema.
         assertEquals(2, converter.convert(ddl("ALTER", NEW_TABLE, 63L))
