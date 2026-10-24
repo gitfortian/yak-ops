@@ -62,14 +62,10 @@ export function useScheduleSession({
     retry: false,
     refetchOnWindowFocus: false,
     refetchIntervalInBackground: false,
-    refetchInterval: () =>
-      ready &&
-      !dirtyRef.current &&
-      !pending &&
-      !needsReload &&
-      !reloading
-        ? 5000
-        : false,
+    refetchInterval: () => {
+      if (!ready || dirtyRef.current || pending || needsReload || reloading) return false;
+      return 5000;
+    },
   });
 
   useEffect(() => {
