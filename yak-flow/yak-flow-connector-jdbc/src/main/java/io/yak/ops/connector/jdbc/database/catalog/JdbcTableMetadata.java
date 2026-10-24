@@ -77,8 +77,8 @@ public final class JdbcTableMetadata {
             projected = dialect.createRowConverter(rows.getMetaData()).schema();
         }
         TreeMap<Integer, String> keys = readPrimaryKeys(connection.getMetaData(), catalog, schema, tableId.table());
-        return mySqlTemporalPrecision(connection, catalog, tableId.table(),
-                new TableSchema(projected.columns(), List.copyOf(keys.values())));
+        return mySqlTemporalPrecision(
+                connection, catalog, tableId.table(), new TableSchema(projected.columns(), List.copyOf(keys.values())));
     }
 
     /**
