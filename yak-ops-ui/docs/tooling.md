@@ -18,7 +18,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 依次验证 Oxfmt 格式、Oxlint 静态规则、TypeScript 类型及架构边界。生产构建由 Vite 独立完成。修改局部交互时另运行相应验证，不把静态检查视为浏览器验收。
+`npm run check` 依次验证 Oxfmt 格式、Oxlint 静态规则、TypeScript 类型、Node Test Runner 单元测试、架构边界及静态契约。生产构建由 Vite 独立完成。修改局部交互时另运行相应验证，不把静态检查视为浏览器验收。
 
 ## CI Quality
 

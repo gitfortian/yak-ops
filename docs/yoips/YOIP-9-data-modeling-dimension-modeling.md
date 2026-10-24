@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/9
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/9#issuecomment-6354864428
 
-Implementation: #10, #11, #12, #13 (merged), #14 — Dimension Modeling
+Implementation: In progress — #10–#14 (merged), #15 — Dimension Modeling
 
 Release: N/A until released
 

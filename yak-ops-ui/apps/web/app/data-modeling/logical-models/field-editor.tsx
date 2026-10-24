@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import type { StandardField } from "@/service/data-modeling/data-standards/types";
 import BatchImportDialog from "./batch-import-dialog";
+import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
 import { emptyField, fromStandard, TYPE_ITEMS } from "./fields";
 import StandardPicker from "./standard-picker";
@@ -31,6 +32,7 @@ const cell = "border-b border-[#eaecf0] px-2 py-1.5 align-middle";
 export default function FieldEditor({ rows, onChange, issues, disabled = false }: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importingSource, setImportingSource] = useState(false);
   const patch = (index: number, partial: Partial<FieldDraft>) => {
     onChange(rows.map((row, position) => (position === index ? { ...row, ...partial } : row)));
   };
@@ -58,6 +60,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
               isNotNull: replacement.isNotNull,
               standardId: replacement.standardId,
               standardEnCode: replacement.standardEnCode,
+              importNote: null,
             }
           : row,
       ),
@@ -82,6 +85,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
         </Button>
         <Button size="small" disabled={disabled} onClick={() => setImporting(true)}>
           批量录入
+        </Button>
+        <Button size="small" disabled={disabled} onClick={() => setImportingSource(true)}>
+          从表/视图导入
         </Button>
         <Button size="small" disabled={disabled} onClick={() => setPicker({ mode: "multiple" })}>
           从数据标准导入
@@ -178,6 +184,7 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                           dataType: next,
                           lengthPrecision:
                             next === "STRING" || next === "DECIMAL" ? row.lengthPrecision : "",
+                          importNote: null,
                         });
                       }}
                     >
@@ -192,6 +199,9 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
                         ))}
                       </SelectContent>
                     </Select>
+                    {row.importNote && (
+                      <p className="mt-1 text-[10px] leading-3 text-[#b42318]">{row.importNote}</p>
+                    )}
                   </td>
                   <td className={cell}>
                     <Input
@@ -320,6 +330,17 @@ export default function FieldEditor({ rows, onChange, issues, disabled = false }
           takenCodes={rows.map((row) => row.enCode.trim())}
           onClose={() => setPicker(null)}
           onPick={importStandards}
+        />
+      )}
+      {importingSource && (
+        <ImportDialog
+          existing={rows}
+          onClose={() => setImportingSource(false)}
+          onImport={(imported) => {
+            onChange([...rows, ...imported]);
+            setImportingSource(false);
+            toast.success(`已导入 ${imported.length} 个字段`);
+          }}
         />
       )}
       {importing && (
