@@ -204,7 +204,9 @@ class MySqlSinkIT extends JdbcSinkTestBase {
                             column.defaultExpression(), column.autoIncrement(), column.generated(),
                             column.onUpdateExpression(), column.defaultGenerated(), column.nativeType());
                     var physical = new io.yak.ops.core.schema.PhysicalColumn(
-                            column.name(), schema.column(column.name()).dataType(), column.remarks(), attributes);
+                            column.name(), schema.columns().stream()
+                                    .filter(field -> field.name().equals(column.name()))
+                                    .findFirst().orElseThrow().dataType(), column.remarks(), attributes);
                     statement.execute(dialect.addColumnStatements(target, physical).getFirst());
                 }
                 var actual = JdbcTableMetadata.readColumns(connection, target, databaseName, null);
