@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/9
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/9#issuecomment-6354864428
 
-Implementation: In progress — #10–#15 (merged); batch DDL parsing, model search and the reverse-modeling seam in https://github.com/gitfortian/yak-ops/pull/16
+Implementation: Implemented — https://github.com/gitfortian/yak-ops/pull/10 through https://github.com/gitfortian/yak-ops/pull/16 (merged)
 
 Release: N/A until released
 
