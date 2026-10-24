@@ -16,7 +16,6 @@ class PostgresSinkIT extends JdbcSinkTestBase {
         return DATABASE.metadata();
     }
 
-
     @Test
     void tinyintSourceWritesToNativeSmallintTarget() throws Exception {
         io.yak.ops.connector.jdbc.database.dialect.JdbcDialect dialect =
