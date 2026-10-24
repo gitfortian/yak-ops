@@ -54,7 +54,7 @@ export function MemberDialog({ workspace, onClose, onRefresh }: Props) {
   const updateRole = useMutation({
     mutationFn: ({ member, role }: { member: MemberRow; role: WorkspaceRole }) =>
       updateWorkspaceMemberRole(workspace.id, member.userId, { role }),
-    onSuccess: async (_updated, { member, role }) => {
+    onSuccess: async (_updated, { member }) => {
       toast.success("成员角色更新成功");
       if (member.userId === currentUser?.id) await refreshLists();
       await refreshMembers();
