@@ -57,6 +57,11 @@ class MySqlChunkKeySelectionTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "created_at"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new MySqlCdcSourceFactory().validateSchema(
+                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
+                        ORDERS_SCHEMA));
         var keyless = new TableSchema(ORDERS_SCHEMA.columns(), List.of());
         assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(keyless, "created_at"));
     }

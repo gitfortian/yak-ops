@@ -176,7 +176,7 @@ public final class JobPlanner {
                         actual.datasourceType(), targetTable.catalog(), targetTable.schema(), actual.revision());
             }
             sourceFactory.validateDatasource(from.datasourceType());
-            sourceFactory.validateSchema(from.schema());
+            sourceFactory.validateSchema(JobOptions.connectorOptions(source), from.schema());
             SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
             SolutionCatalog.validateSchemaChanges(
                     job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
@@ -217,6 +217,10 @@ public final class JobPlanner {
                     + encodePart(Long.toString(targetInfo.revision()))
                     + encodeTable(targetTable)
                     + encodeSchema(expected);
+            if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
+                String chunkKey = source.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+                if (chunkKey != null) binding += encodePart("chunkKey") + encodePart(chunkKey);
+            }
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
                 binding += encodeProperties(event.getColumnProperties());

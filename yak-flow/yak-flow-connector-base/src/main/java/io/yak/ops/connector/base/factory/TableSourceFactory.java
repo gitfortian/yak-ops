@@ -19,6 +19,11 @@ public interface TableSourceFactory extends Factory {
     /** Validates source schema requirements before admission without opening a reader. */
     default void validateSchema(io.yak.ops.core.types.TableSchema schema) {}
 
+    /** Validates table-specific source options and the resolved physical schema together. */
+    default void validateSchema(io.yak.ops.configuration.ReadonlyConfig options, io.yak.ops.core.types.TableSchema schema) {
+        validateSchema(schema);
+    }
+
     /** Constructs one reusable Source definition without starting its readers. */
     Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context);
 

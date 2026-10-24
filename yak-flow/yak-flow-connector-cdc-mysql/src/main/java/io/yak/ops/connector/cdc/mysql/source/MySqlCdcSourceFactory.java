@@ -72,6 +72,11 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     }
 
     @Override
+    public void validateSchema(ReadonlyConfig options, TableSchema schema) {
+        MySqlChunkSplitter.splitKey(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+    }
+
+    @Override
     public Source<TableRecord, ?, ?> createSource(TableSourceFactoryContext context) {
         return createSource(List.of(context));
     }
@@ -90,8 +95,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
-            MySqlChunkSplitter.splitKey(
-                    context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+            validateSchema(context.options(), context.schema());
             Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
             selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
             if (!common.equals(selected) || context.metrics() != first.metrics()) {
