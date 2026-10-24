@@ -23,7 +23,7 @@ METHOD = re.compile(
     r"(?:<[^;{}()]*>\s+)?"
     r"[\w.$<>?,\[\] ]+\s+(?P<name>[A-Za-z_$][\w$]*)\s*\("
 )
-CODEC = re.compile(r"codec", re.I)
+CODEC = re.compile(r"Codec|(?<![A-Za-z])codec")
 
 
 def code_only(source: str) -> str:
@@ -66,12 +66,16 @@ def verify_source(path: str, source: str) -> list[tuple[int, str]]:
                 f"Type '{name}' uses Gate outside Runtime network I/O; name its actual owner",
             ))
 
-    for match in METHOD.finditer(code):
-        name = match.group("name")
-        if CODEC.search(name):
+    # Limit declaration matching to symbol-bearing lines; scanning all Java lines
+    # with the method grammar is both slower and prone to accidental call matches.
+    for line, text in enumerate(code.splitlines(), start=1):
+        if not CODEC.search(text):
+            continue
+        match = METHOD.match(text)
+        if match and CODEC.search(match.group("name")):
             violations.append((
-                line_number(code, match.start("name")),
-                f"Method '{name}' uses Codec; describe the operation performed",
+                line,
+                f"Method '{match.group('name')}' uses Codec; describe the operation performed",
             ))
     return violations
 

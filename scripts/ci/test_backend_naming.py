@@ -38,6 +38,15 @@ class BackendNamingTest(unittest.TestCase):
         self.assertEqual(1, len(violations))
         self.assertIn("Method 'createCodec'", violations[0][1])
 
+    def test_cursor_methods_are_not_codecs(self):
+        self.assertEqual([], self.check(
+            CORE, "io.yak.ops.core",
+            "class TaskLogService {\n"
+            "    String decodeCursor(String cursor) { return cursor; }\n"
+            "    String encodeCursor(String cursor) { return cursor; }\n"
+            "}",
+        ))
+
     def test_codec_package_is_rejected(self):
         errors = self.check(
             "yak-ops-core/src/main/java/io/yak/ops/core/codec/Parser.java",
