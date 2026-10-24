@@ -3,6 +3,7 @@ package io.yak.ops.connector.jdbc.sink;
 import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.PostgresDatabase;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 @Tag("postgres")
