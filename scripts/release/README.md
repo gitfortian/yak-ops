@@ -18,7 +18,7 @@ After v1.3.0 is published, V1 is immutable. Every later release with schema chan
 
 ## Release Gate
 
-Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, JDBC source/sink real-database integration, versioned Playwright UI tests, distribution checks, Docker identity and Compose smoke. The Boot backend E2E suite is not configured while it is being redesigned, and release evidence explicitly reports it as **NOT RUN**, not PASS. This leaves Boot API/Task E2E coverage missing; the existing JDBC/CDC tests do not replace it. Required checks must actually run and succeed; UI evidence must match the candidate version and commit SHA.
+Run [Release Gate](../../.github/workflows/v1-release-gate.yml) manually from `main`, with a stable `release_version` matching repository metadata. The workflow requires full Quality Check, JDBC source/sink real-database integration, versioned Playwright UI tests, distribution checks, Docker identity and Compose smoke. The dedicated `yak-ops-e2e` module is registered in `scripts/tests/backend_tests.py` with `backend-e2e` and `recovery-e2e` suites, and the formal `full` backend test selection includes them. The old in-module `yak-ops-boot` E2E suite is still not used; do not confuse that with the dedicated product E2E suite. Only a completed test report from the exact candidate commit can be marked PASS; skipped, missing or failed tests block the Release Gate. Required checks must actually run and succeed; UI evidence must match the candidate version and commit SHA.
 
 Release Decision requires explicit confirmations and evidence:
 

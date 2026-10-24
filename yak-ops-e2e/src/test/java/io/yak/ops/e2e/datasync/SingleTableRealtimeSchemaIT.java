@@ -51,6 +51,23 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
                     }
                 });
 
+        // A successful row count cannot prove temporal correctness: a wrongly derived
+        // TIMESTAMP(0) accepts inserts but silently discards MySQL DATETIME(3) fractions.
+        try (Connection connection = fixture.target.connect();
+                var statement = connection.prepareStatement(
+                        "SELECT column_name, datetime_precision FROM information_schema.columns "
+                                + "WHERE table_schema=? AND table_name='bootstrap_orders' "
+                                + "AND column_name IN ('created_at', 'updated_at')")) {
+            statement.setString(1, fixture.targetSchema);
+            try (var columns = statement.executeQuery()) {
+                Map<String, Integer> precisions = new LinkedHashMap<>();
+                while (columns.next()) {
+                    precisions.put(columns.getString(1), columns.getInt(2));
+                }
+                assertEquals(Map.of("created_at", 3, "updated_at", 3), precisions);
+            }
+        }
+
         fixture.source.execute(
                 "INSERT INTO bootstrap_orders VALUES "
                         + "(1,'SO-1001','张三',125.50,2,'CREATED','2026-10-20',"
@@ -93,8 +110,21 @@ class SingleTableRealtimeSchemaIT extends BackendTestBase {
                         assertFalse(rows.next());
                     }
                 });
-        fixture.source.execute("UPDATE bootstrap_orders SET order_status='PAID' WHERE id=1");
+        fixture.source.execute(
+                "UPDATE bootstrap_orders SET order_status='PAID', updated_at='2026-10-20 12:34:56.654' WHERE id=1");
         awaitString("bootstrap_orders", "order_status", 1L, "PAID");
+        await().alias("Updated MySQL DATETIME(3) retains milliseconds")
+                .atMost(Duration.ofSeconds(120))
+                .untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var statement = connection.createStatement();
+                            var rows = statement.executeQuery(
+                                    "SELECT updated_at FROM " + fixture.table("bootstrap_orders") + " WHERE id=1")) {
+                        assertTrue(rows.next());
+                        assertEquals(LocalDateTime.parse("2026-10-20T12:34:56.654"),
+                                rows.getTimestamp(1).toLocalDateTime());
+                    }
+                });
         fixture.awaitState(instance, "RUNNING");
     }
 
