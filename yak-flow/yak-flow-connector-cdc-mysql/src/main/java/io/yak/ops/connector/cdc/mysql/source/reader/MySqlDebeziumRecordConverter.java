@@ -251,6 +251,12 @@ public final class MySqlDebeziumRecordConverter {
                 columns.add(new PhysicalColumn(field.name(), type, existing.comment(), existing.properties()));
             }
         }
+        for (PhysicalColumn original : previous.columns()) {
+            if (columns.stream().noneMatch(column -> original.name().equals(column.name()))) {
+                throw new UnsupportedOperationException(
+                        "MySQL CDC requires structured DDL metadata for removed or renamed columns");
+            }
+        }
         for (String key : previous.primaryKeys()) {
             if (columns.stream().noneMatch(column -> key.equals(column.name()))) {
                 throw new UnsupportedOperationException("MySQL CDC cannot change primary keys");
