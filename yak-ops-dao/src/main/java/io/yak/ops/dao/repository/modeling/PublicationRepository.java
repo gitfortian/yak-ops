@@ -2,7 +2,9 @@ package io.yak.ops.dao.repository.modeling;
 
 import io.yak.ops.dao.entity.modeling.ModelPublicationEntity;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Persistence of immutable physical publication records. */
@@ -51,4 +53,16 @@ public interface PublicationRepository {
      * @return true when the record was unknown and is now resolved
      */
     boolean reconcile(String workspaceId, String id, String status, String error, LocalDateTime finishedTime);
+
+    /**
+     * Reads the newest status of each requested model in one query.
+     *
+     * <p>A model with no publication is absent from the map rather than mapped to null, so the
+     * caller can tell "never published" from "published with a status this build does not know".
+     *
+     * @param workspaceId authorized Workspace
+     * @param modelIds model identities
+     * @return model identity to stored status text, newest record per model
+     */
+    Map<String, String> latestStatusByModel(String workspaceId, Collection<String> modelIds);
 }

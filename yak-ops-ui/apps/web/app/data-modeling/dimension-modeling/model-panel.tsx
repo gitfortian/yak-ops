@@ -1,6 +1,10 @@
 import { Alert, Badge, Button, Empty, Spinner, Table, type TableColumns } from "@yak-ops/yak-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  PUBLICATION_STATUS_LABEL,
+  type PublicationStatus,
+} from "@/service/data-modeling/dimension-modeling/publication";
+import {
   MODEL_TYPE_LABEL,
   type ModelType,
   type LogicalModel,
@@ -12,6 +16,12 @@ const TYPE_TONE: Record<ModelType, "info" | "warning" | "success" | "neutral"> =
   DIM: "warning",
   DWS: "success",
   ADS: "neutral",
+};
+const PUBLICATION_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
+  PENDING: "info",
+  SUCCEEDED: "success",
+  FAILED: "danger",
+  UNKNOWN: "warning",
 };
 const STORAGE_LABEL: Record<StoragePolicy, string> = {
   DAILY_INCREMENTAL: "每日增量",
@@ -78,6 +88,19 @@ export default function ModelPanel(props: Props) {
     },
     { title: "字段数", dataIndex: "fieldCount", width: 76, align: "right" },
     {
+      title: "发布状态",
+      key: "publication",
+      width: 96,
+      render: (_, row) =>
+        row.latestPublicationStatus ? (
+          <Badge tone={PUBLICATION_TONE[row.latestPublicationStatus]}>
+            {PUBLICATION_STATUS_LABEL[row.latestPublicationStatus]}
+          </Badge>
+        ) : (
+          <span className="text-xs text-[#98a2b3]">未发布</span>
+        ),
+    },
+    {
       title: "操作",
       key: "actions",
       width: 152,
@@ -142,7 +165,7 @@ export default function ModelPanel(props: Props) {
             dataSource={pageRows}
             size="small"
             bordered={false}
-            scroll={{ x: 940 }}
+            scroll={{ x: 1036 }}
             emptyText="暂无逻辑模型"
             pagination={{
               current,

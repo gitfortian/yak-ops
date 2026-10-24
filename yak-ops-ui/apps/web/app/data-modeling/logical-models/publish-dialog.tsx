@@ -48,6 +48,8 @@ const STATUS_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "wa
 interface Props {
   model: LogicalModel;
   onClose: () => void;
+  /** Called after a terminal record is stored, so the caller can refresh the model it renders. */
+  onPublished?: () => void;
 }
 
 /**
@@ -58,7 +60,7 @@ interface Props {
  * must be rendered before the publish button unlocks, and publishing itself needs a separate
  * confirmation, because a table created here outlives the model.
  */
-export default function PublishDialog({ model, onClose }: Props) {
+export default function PublishDialog({ model, onClose, onPublished }: Props) {
   const [layerName, setLayerName] = useState(model.layerName ?? "");
   const [datasourceId, setDatasourceId] = useState("");
   const [datasourceName, setDatasourceName] = useState("");
@@ -209,6 +211,7 @@ export default function PublishDialog({ model, onClose }: Props) {
       const record = await publishModel(model.id, toTargetPayload(target));
       setResult(record);
       setHistoryKey((value) => value + 1);
+      onPublished?.();
       if (record.status === "SUCCEEDED") {
         toast.success("发布成功");
         try {

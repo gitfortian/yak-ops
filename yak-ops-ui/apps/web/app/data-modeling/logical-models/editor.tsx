@@ -1,5 +1,6 @@
 import {
   Alert,
+  Badge,
   Button,
   Field,
   FieldError,
@@ -35,6 +36,10 @@ import {
   STORAGE_POLICIES,
   STORAGE_POLICY_LABEL,
 } from "@/service/data-modeling/dimension-modeling/types";
+import {
+  PUBLICATION_STATUS_LABEL,
+  type PublicationStatus,
+} from "@/service/data-modeling/dimension-modeling/publication";
 import type { Layer } from "@/service/data-modeling/warehouse-planning/layers";
 import { InputField, SelectField, TextareaField } from "../shared/form-fields";
 import FieldEditor from "./field-editor";
@@ -66,6 +71,22 @@ interface FormState {
   lifecycleDays: string;
   ownerId: string;
   description: string;
+}
+
+const PUBLICATION_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
+  PENDING: "info",
+  SUCCEEDED: "success",
+  FAILED: "danger",
+  UNKNOWN: "warning",
+};
+
+/** Latest publication status of the saved model; "未发布" until the first attempt is recorded. */
+function PublicationBadge({ status }: { status: PublicationStatus | null }) {
+  return status ? (
+    <Badge tone={PUBLICATION_TONE[status]}>{PUBLICATION_STATUS_LABEL[status]}</Badge>
+  ) : (
+    <Badge tone="neutral">未发布</Badge>
+  );
 }
 
 const INITIAL_FORM: FormState = {
@@ -463,6 +484,20 @@ export default function LogicalModelEditorPage() {
     dimensionItems.push({ value: form.dimensionId, label: "当前绑定（不在列表中）" });
   const disabled = saving || loading || unknownType || stale;
 
+  /**
+   * Re-reads the saved model after a publication. The model itself did not change, but its latest
+   * status did, and the header renders that status.
+   */
+  const refreshSavedModel = () => {
+    if (!savedModel) return;
+    void getModel(savedModel.id)
+      .then((model) => {
+        if (!active.current) return;
+        setSavedModel(model);
+      })
+      .catch(() => undefined);
+  };
+
   if (loadFailed)
     return (
       <div className="flex h-full flex-col">
@@ -487,9 +522,12 @@ export default function LogicalModelEditorPage() {
         extra={
           <div className="flex items-center gap-2">
             {editing && savedModel && !unknownType && (
-              <Button size="small" disabled={saving} onClick={() => setPublishing(true)}>
-                发布
-              </Button>
+              <>
+                <PublicationBadge status={savedModel.latestPublicationStatus} />
+                <Button size="small" disabled={saving} onClick={() => setPublishing(true)}>
+                  发布
+                </Button>
+              </>
             )}
             <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
               返回列表
@@ -795,7 +833,11 @@ export default function LogicalModelEditorPage() {
         </Button>
       </div>
       {publishing && savedModel && (
-        <PublishDialog model={savedModel} onClose={() => setPublishing(false)} />
+        <PublishDialog
+          model={savedModel}
+          onClose={() => setPublishing(false)}
+          onPublished={refreshSavedModel}
+        />
       )}
     </div>
   );

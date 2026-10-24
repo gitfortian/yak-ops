@@ -20,6 +20,7 @@ import io.yak.ops.dao.repository.modeling.impl.PublicationRepositoryImpl;
 import io.yak.ops.testutils.MySqlDatabase;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.flywaydb.core.Flyway;
@@ -218,6 +219,19 @@ class PublicationDatabaseIT {
         assertEquals(0, rows("metadata_collection"));
         assertEquals(0, rows("metadata_table"));
         assertEquals(0, rows("metadata_field"));
+    }
+
+    @Test
+    void readsTheNewestStatusPerModelInOneQuery() {
+        publications.add(pending("pub8"));
+        publications.finish("ws", "pub8", "SUCCEEDED", null, now());
+        var later = pending("pub9");
+        later.setCreatedTime(now().plusSeconds(1));
+        publications.add(later);
+
+        assertEquals(Map.of("model", "PENDING"), publications.latestStatusByModel("ws", List.of("model")));
+        assertTrue(publications.latestStatusByModel("ws", List.of("other-model")).isEmpty());
+        assertTrue(publications.latestStatusByModel("ws", List.of()).isEmpty());
     }
 
     @Test

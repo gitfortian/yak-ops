@@ -11,6 +11,7 @@ import io.yak.ops.common.bean.vo.modeling.ModelVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.ModelType;
 import io.yak.ops.common.enums.modeling.NodeKind;
+import io.yak.ops.common.enums.modeling.PublicationStatus;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.enums.modeling.dimension.DimensionScope;
 import io.yak.ops.common.enums.modeling.standard.DataType;
@@ -22,6 +23,7 @@ import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
+import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import jakarta.annotation.Resource;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -58,6 +61,10 @@ public class ModelServiceImpl implements ModelService {
 
     @Resource
     private LayerService layers;
+
+    /** Read-only here: the model surface shows the newest publication status but never writes one. */
+    @Resource
+    private PublicationRepository publications;
 
     @Resource
     private WorkspaceService workspaces;
@@ -96,7 +103,15 @@ public class ModelServiceImpl implements ModelService {
                         pattern,
                         pageSize,
                         (int) offset);
-        return PageData.of(rows.stream().map(ModelServiceImpl::project).toList(), total, pageNo, pageSize);
+        var statuses = publications.latestStatusByModel(
+                workspaceId, rows.stream().map(ModelEntity::getId).toList());
+        return PageData.of(
+                rows.stream()
+                        .map(row -> project(row, null, statusOf(statuses, row.getId())))
+                        .toList(),
+                total,
+                pageNo,
+                pageSize);
     }
 
     @Override
@@ -105,7 +120,8 @@ public class ModelServiceImpl implements ModelService {
         requireActor(workspaceId, actor);
         var row = models.find(workspaceId, id)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
-        return project(row, models.fields(row.getId()));
+        var statuses = publications.latestStatusByModel(workspaceId, List.of(row.getId()));
+        return project(row, models.fields(row.getId()), statusOf(statuses, row.getId()));
     }
 
     @Override
@@ -434,11 +450,7 @@ public class ModelServiceImpl implements ModelService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private static ModelVO project(ModelEntity row) {
-        return project(row, null);
-    }
-
-    private static ModelVO project(ModelEntity row, List<ModelFieldEntity> fields) {
+    private static ModelVO project(ModelEntity row, List<ModelFieldEntity> fields, PublicationStatus status) {
         return new ModelVO(
                 row.getId(),
                 ModelType.from(row.getType()),
@@ -464,7 +476,13 @@ public class ModelServiceImpl implements ModelService {
                 row.getRevision(),
                 fields == null
                         ? null
-                        : fields.stream().map(ModelServiceImpl::project).toList());
+                        : fields.stream().map(ModelServiceImpl::project).toList(),
+                status);
+    }
+
+    /** Reads a stored status without inventing one: a value this build does not know stays null. */
+    private static PublicationStatus statusOf(Map<String, String> statuses, String modelId) {
+        return PublicationStatus.from(statuses.get(modelId));
     }
 
     private static ModelFieldVO project(ModelFieldEntity row) {

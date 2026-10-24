@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,7 @@ import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.ModelType;
 import io.yak.ops.common.enums.modeling.NodeKind;
+import io.yak.ops.common.enums.modeling.PublicationStatus;
 import io.yak.ops.common.enums.modeling.StoragePolicy;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.enums.modeling.dimension.DimensionScope;
@@ -36,10 +38,12 @@ import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
+import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.StandardInheritance;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +60,7 @@ class ModelServiceTest {
     @Mock DimensionRepository dimensions;
     @Mock LayerService layers;
     @Mock WorkspaceService workspaces;
+    @Mock PublicationRepository publications;
     @InjectMocks ModelServiceImpl service;
     AutoCloseable mocks;
 
@@ -64,6 +69,7 @@ class ModelServiceTest {
         mocks = MockitoAnnotations.openMocks(this);
         when(workspaces.isActiveMember("ws", "actor")).thenReturn(true);
         when(layers.options("ws", "actor")).thenReturn(List.of(new LayerOptionVO("layer", "DWD", "明细层", "ds", "主库")));
+        when(publications.latestStatusByModel(anyString(), anyCollection())).thenReturn(Map.of());
     }
 
     @AfterEach
@@ -558,6 +564,45 @@ class ModelServiceTest {
         var error = assertThrows(BusinessException.class, () -> service.detail("ws", "actor", "missing"));
 
         assertEquals(CommonErrorCode.RESOURCE_NOT_EXISTS, error.getErrorCode());
+    }
+
+    @Test
+    void projectsTheLatestPublicationStatusOnDetail() {
+        var row = storedModel("dwd_order_detail");
+        row.setId("m");
+        when(models.find("ws", "m")).thenReturn(Optional.of(row));
+        when(models.fields("m")).thenReturn(List.of());
+        when(publications.latestStatusByModel("ws", List.of("m"))).thenReturn(Map.of("m", "FAILED"));
+
+        assertEquals(PublicationStatus.FAILED, service.detail("ws", "actor", "m").latestPublicationStatus());
+    }
+
+    @Test
+    void leavesTheStatusNullForAModelThatWasNeverPublished() {
+        var row = storedModel("dwd_order_detail");
+        row.setId("m");
+        when(models.find("ws", "m")).thenReturn(Optional.of(row));
+        when(models.fields("m")).thenReturn(List.of());
+
+        assertNull(service.detail("ws", "actor", "m").latestPublicationStatus());
+    }
+
+    @Test
+    void projectsTheLatestPublicationStatusOnAListPage() {
+        var first = storedModel("dwd_order_detail");
+        first.setId("m1");
+        var second = storedModel("dwd_order_wide");
+        second.setId("m2");
+        when(models.count("ws", null, null, null, null, null, null)).thenReturn(2L);
+        when(models.page("ws", null, null, null, null, null, null, 20, 0))
+                .thenReturn(List.of(first, second));
+        when(publications.latestStatusByModel("ws", List.of("m1", "m2")))
+                .thenReturn(Map.of("m1", "SUCCEEDED", "m2", "UNKNOWN"));
+
+        var page = service.page("ws", "actor", null, null, null, null, null, null, 1, 20);
+
+        assertEquals(PublicationStatus.SUCCEEDED, page.records().get(0).latestPublicationStatus());
+        assertEquals(PublicationStatus.UNKNOWN, page.records().get(1).latestPublicationStatus());
     }
 
     private void detailGraph() {

@@ -125,7 +125,8 @@ class PublicationServiceTest {
                 null,
                 1,
                 1,
-                List.of(field("order_no", "订单号")));
+                List.of(field("order_no", "订单号")),
+                null);
     }
 
     private static DataSourceCatalogTableVO observedTable() {

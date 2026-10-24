@@ -2,6 +2,7 @@ package io.yak.ops.dao.mapper.modeling;
 
 import io.yak.ops.dao.entity.modeling.ModelPublicationEntity;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -62,4 +63,27 @@ public interface ModelPublicationMapper {
     @Select("SELECT COUNT(*) FROM yak_ops_modeling_model_publication "
             + "WHERE workspace_id=#{workspaceId} AND id=#{id}")
     long count(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    /**
+     * Reads the newest record of each requested model in one round trip.
+     *
+     * <p>Only {@code model_id} and {@code status} are selected, so the returned rows carry every
+     * other field as null on purpose: this is a status projection for a model list, not a record
+     * read. Rows arrive newest first, so the caller keeps the first status it sees per model even
+     * when two publications share a timestamp.
+     *
+     * @param workspaceId authorized Workspace
+     * @param modelIds model identities, never empty
+     * @return one row per publication of those models, newest first
+     */
+    @Select({
+        "<script>",
+        "SELECT p.model_id, p.status FROM yak_ops_modeling_model_publication p ",
+        "WHERE p.workspace_id=#{workspaceId} AND p.model_id IN ",
+        "<foreach collection='modelIds' item='modelId' open='(' separator=',' close=')'>#{modelId}</foreach>",
+        " ORDER BY p.created_time DESC, p.id DESC",
+        "</script>"
+    })
+    List<ModelPublicationEntity> latestStatusByModel(
+            @Param("workspaceId") String workspaceId, @Param("modelIds") Collection<String> modelIds);
 }

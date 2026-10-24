@@ -5,7 +5,10 @@ import io.yak.ops.dao.mapper.modeling.ModelPublicationMapper;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -38,5 +41,18 @@ public class PublicationRepositoryImpl implements PublicationRepository {
     @Override
     public boolean reconcile(String workspaceId, String id, String status, String error, LocalDateTime finishedTime) {
         return mapper.reconcile(workspaceId, id, status, error, finishedTime) > 0;
+    }
+
+    @Override
+    public Map<String, String> latestStatusByModel(String workspaceId, Collection<String> modelIds) {
+        if (modelIds == null || modelIds.isEmpty()) return Map.of();
+        var statuses = new LinkedHashMap<String, String>();
+        // Rows arrive newest first, so the first status seen for a model is the one to keep.
+        for (var row : mapper.latestStatusByModel(workspaceId, modelIds)) {
+            if (row.getModelId() != null && row.getStatus() != null) {
+                statuses.putIfAbsent(row.getModelId(), row.getStatus());
+            }
+        }
+        return Map.copyOf(statuses);
     }
 }
