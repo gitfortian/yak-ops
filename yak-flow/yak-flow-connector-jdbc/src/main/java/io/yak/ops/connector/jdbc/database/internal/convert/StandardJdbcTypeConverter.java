@@ -84,5 +84,4 @@ public class StandardJdbcTypeConverter implements JdbcTypeConverter {
         }
         return precision;
     }
-
 }
