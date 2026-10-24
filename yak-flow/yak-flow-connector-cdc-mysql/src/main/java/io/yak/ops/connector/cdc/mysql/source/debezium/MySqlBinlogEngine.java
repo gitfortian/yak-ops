@@ -159,7 +159,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                                 "MySQL CDC initial schema snapshot completed, tables={}",
                                 config.schemas().size());
                     } else {
-                        bootstrapTables.addAll(converter.initialSchemaTables(source));
+                        converter.applyInitialSchemaTables(source, bootstrapTables);
                     }
                 } else {
                     TableId changed = converter.schemaMismatch(source);
