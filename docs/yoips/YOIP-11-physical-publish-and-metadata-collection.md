@@ -61,8 +61,9 @@ New error codes:
 
 | Code | Use |
 | --- | --- |
-| `PHYSICAL_PUBLISH_FAILED` | Engine failure, unresolvable DDL result, or existing-table verification mismatch. |
-| `METADATA_COLLECTION_FAILED` | Catalog collection failure after publication or refresh. |
+| `METADATA_COLLECTION_FAILED` | Catalog collection failure during a refresh. |
+
+A failed publication is deliberately not an error code. The publish endpoint returns the recorded publication for every outcome, including `FAILED`, because the observed difference between the model and the existing table is the answer the caller needs and a coded error would replace it with a fixed sentence. Failed publications are therefore read from the returned record and from the publication history.
 
 Ownership, field and standard conflicts continue to use `INVALID_MODEL` and `INVALID_FIELD`; unknown models, layers, data sources, publications or snapshots continue to use `RESOURCE_NOT_EXISTS`.
 
@@ -115,6 +116,8 @@ The generated DDL maps the five logical types as follows:
 | `DATE` | `date` |
 | `TIMESTAMP` | `timestamp` |
 
+Each dialect renders these types in its own vocabulary, because Oracle does not accept `varchar`, `decimal` or `bigint` at all: Oracle uses `varchar2(length)` and `number(precision,scale)`, publishes `BIGINT` as `number(19)` — the exact 64-bit integer range — and quotes identifiers in upper case. MySQL publishes `TIMESTAMP` as `datetime(3)` so millisecond precision survives, since `timestamp` ends in 2038. The string-length ceiling is the dialect's: 65535 for MySQL, 10485760 for PostgreSQL and 4000 for Oracle.
+
 Field order follows the model field ordinal. Primary-key order, nullability and column comments are preserved where the dialect supports comments; the comment is the field Chinese name. `isPartition`, `aggregateType`, `storagePolicy` and `lifecycleDays` remain logical attributes and do not generate physical partition, storage or lifecycle clauses in this proposal.
 
 ### 3. Controlled publication execution
@@ -124,7 +127,7 @@ The publisher resolves the bound data source through the existing datasource loo
 Execution is create-or-verify:
 
 - Absent table: create it with the generated DDL.
-- Present table: verify the physical columns, order, primary keys, nullability and comments. A mismatch fails with `PHYSICAL_PUBLISH_FAILED` and leaves the table unchanged.
+- Present table: verify the physical columns, order, primary keys, nullability and comments. A mismatch records the publication as `FAILED` with the observed difference and leaves the table unchanged.
 
 DDL execution is auto-commit at the engine boundary. The proposal does not claim a distributed transaction between the metadata database and the target engine. If the engine result is unknown, the publication is recorded as `UNKNOWN` with the attempted DDL and error context; automatic rollback is not attempted.
 
