@@ -1,5 +1,5 @@
 import { Alert, Button, CollapseSection } from "@yak-ops/yak-ui";
-import { ScheduleForm } from "@/app/schedule/schedule-form";
+import { ScheduleForm } from "@/app/schedule/form/schedule-form";
 import type { ScheduleRecord, ScheduleTimeRule } from "@/service/schedule";
 
 interface Props {

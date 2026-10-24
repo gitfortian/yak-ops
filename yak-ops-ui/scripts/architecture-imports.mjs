@@ -96,6 +96,7 @@ export function checkArchitectureImports(relativePath, content, root) {
     const schedulePublicEntries = new Set([
       resolve(schedule, "dialog/schedule-dialog"),
       resolve(schedule, "task-schedule-cell"),
+      resolve(schedule, "form/schedule-form"),
       resolve(schedule, "use-task-schedules"),
       resolve(schedule, "schedule-presentation"),
     ]);
