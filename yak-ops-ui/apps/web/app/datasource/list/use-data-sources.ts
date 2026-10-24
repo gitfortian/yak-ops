@@ -14,7 +14,15 @@ interface DataSourceListParams {
 export const dataSourceListKeys = {
   all: ["data-source", "list"] as const,
   page: (userId: string, workspaceId: string, params: DataSourceListParams) =>
-    [...dataSourceListKeys.all, userId, workspaceId, params.pageNo, params.pageSize, params.keyword, params.dbType ?? ""] as const,
+    [
+      ...dataSourceListKeys.all,
+      userId,
+      workspaceId,
+      params.pageNo,
+      params.pageSize,
+      params.keyword,
+      params.dbType ?? "",
+    ] as const,
 };
 
 export function useDataSources({ pageNo, pageSize, keyword, dbType }: DataSourceListParams) {
@@ -23,15 +31,24 @@ export function useDataSources({ pageNo, pageSize, keyword, dbType }: DataSource
   const [debouncedKeyword, setDebouncedKeyword] = useState(keyword.trim());
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedKeyword(keyword.trim()), keyword.trim() ? 300 : 0);
+    const timer = window.setTimeout(
+      () => setDebouncedKeyword(keyword.trim()),
+      keyword.trim() ? 300 : 0,
+    );
     return () => window.clearTimeout(timer);
   }, [keyword]);
 
   const userId = currentUser?.id ?? "";
   const workspaceId = currentWorkspace?.id ?? "";
   return useQuery({
-    queryKey: dataSourceListKeys.page(userId, workspaceId, { pageNo, pageSize, keyword: debouncedKeyword, dbType }),
-    queryFn: ({ signal }) => listDataSources({ pageNo, pageSize, keyword: debouncedKeyword || undefined, dbType }, signal),
+    queryKey: dataSourceListKeys.page(userId, workspaceId, {
+      pageNo,
+      pageSize,
+      keyword: debouncedKeyword,
+      dbType,
+    }),
+    queryFn: ({ signal }) =>
+      listDataSources({ pageNo, pageSize, keyword: debouncedKeyword || undefined, dbType }, signal),
     enabled: Boolean(userId && workspaceId),
   });
 }

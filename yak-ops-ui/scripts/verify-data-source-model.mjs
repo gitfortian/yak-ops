@@ -23,7 +23,9 @@ vm.runInNewContext(compiled.outputText, {
       ],
       JDBC_DEFAULT_PORTS: { MYSQL: 3306, ORACLE: 1521, POSTGRE_SQL: 5432 },
       normalizeDataSourceType: (value) => {
-        const normalized = String(value || "").trim().toUpperCase();
+        const normalized = String(value || "")
+          .trim()
+          .toUpperCase();
         return normalized === "POSTGRESQL" || normalized === "POSTGRES"
           ? "POSTGRE_SQL"
           : normalized;

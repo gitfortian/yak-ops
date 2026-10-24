@@ -2,15 +2,37 @@ import { useEffect, useState } from "react";
 import { toast } from "@yak-ops/yak-ui";
 import { useIntl } from "../i18n";
 import { normalizeDataSourceType } from "../constants";
-import { createDataSource, updateDataSource, testDataSourceConnectionWithParams,
-  datasourceValidationErrors, getDataSourceConnectionPropertyKeys, getDataSourceOptionRules,
-  type DataSourceConnectionParams, type DataSourceSavePayload, type DataSourceOptionRules
+import {
+  createDataSource,
+  updateDataSource,
+  testDataSourceConnectionWithParams,
+  datasourceValidationErrors,
+  getDataSourceConnectionPropertyKeys,
+  getDataSourceOptionRules,
+  type DataSourceConnectionParams,
+  type DataSourceSavePayload,
+  type DataSourceOptionRules,
 } from "@/service/datasource";
-import { listUserPreferences, recordUserPreferenceUsage, type UserPreferenceRecord } from "@/service/preference";
-import { DEFAULT_HOST, DATASOURCE_CREATE_TYPE_SCENE, EMPTY_FORM, defaultPort,
-  parseOriginalJson, upsertPreference, normalizePropertyKey,
-  type DataSourceFormProps, type FormValues, type FormErrors, type FormErrorKey,
-  type CreateStep, type CreateCategory, type JdbcProperty
+import {
+  listUserPreferences,
+  recordUserPreferenceUsage,
+  type UserPreferenceRecord,
+} from "@/service/preference";
+import {
+  DEFAULT_HOST,
+  DATASOURCE_CREATE_TYPE_SCENE,
+  EMPTY_FORM,
+  defaultPort,
+  parseOriginalJson,
+  upsertPreference,
+  normalizePropertyKey,
+  type DataSourceFormProps,
+  type FormValues,
+  type FormErrors,
+  type FormErrorKey,
+  type CreateStep,
+  type CreateCategory,
+  type JdbcProperty,
 } from "./model";
 
 export function useDataSourceForm({ open, record, onOpenChange, onSaved }: DataSourceFormProps) {
@@ -362,10 +384,33 @@ export function useDataSourceForm({ open, record, onOpenChange, onSaved }: DataS
     setCreateStep("config");
   };
   return {
-    intl, values, errors, editing, busy, isOracle, testing, submitting, createStep, setCreateStep,
-    createSearch, setCreateSearch, createCategory, setCreateCategory, frequentTypePreferences,
-    propertyKeyOptions, propertyKeysLoading, optionRules, propertyKeyMap, selectedSuggestedPropertyKeys,
-    syncSuggestedProperties, patchProperty, addProperty, removeProperty, patch, handleTest,
-    handleSubmit, handleSelectType,
+    intl,
+    values,
+    errors,
+    editing,
+    busy,
+    isOracle,
+    testing,
+    submitting,
+    createStep,
+    setCreateStep,
+    createSearch,
+    setCreateSearch,
+    createCategory,
+    setCreateCategory,
+    frequentTypePreferences,
+    propertyKeyOptions,
+    propertyKeysLoading,
+    optionRules,
+    propertyKeyMap,
+    selectedSuggestedPropertyKeys,
+    syncSuggestedProperties,
+    patchProperty,
+    addProperty,
+    removeProperty,
+    patch,
+    handleTest,
+    handleSubmit,
+    handleSelectType,
   };
 }

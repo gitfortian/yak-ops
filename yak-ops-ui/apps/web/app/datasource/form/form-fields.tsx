@@ -1,5 +1,18 @@
-import { Field, FieldLabel, FieldError, Input, PasswordInput, Select, SelectContent,
-  SelectItem, SelectItemIndicator, SelectItemText, SelectTrigger, SelectValue, Textarea } from "@yak-ops/yak-ui";
+import {
+  Field,
+  FieldLabel,
+  FieldError,
+  Input,
+  PasswordInput,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from "@yak-ops/yak-ui";
 import { normalizeDataSourceType } from "../constants";
 import { buildJdbcPreview, type MySqlDriverId } from "./model";
 import type { useDataSourceForm } from "./use-data-source-form";
@@ -274,7 +287,6 @@ export function DataSourceFormFields({ form }: { form: ReturnType<typeof useData
       </Select>
     </div>
   );
-
 
   const connectionFields = isOracle ? (
     <>

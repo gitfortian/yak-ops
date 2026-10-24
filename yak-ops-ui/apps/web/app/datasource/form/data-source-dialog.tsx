@@ -8,8 +8,18 @@ import { DataSourceFormFields } from "./form-fields";
 export function DataSourceForm(props: DataSourceFormProps) {
   const { open, onOpenChange } = props;
   const form = useDataSourceForm(props);
-  const { intl, values, editing, busy, testing, submitting, createStep, setCreateStep,
-    handleTest, handleSubmit } = form;
+  const {
+    intl,
+    values,
+    editing,
+    busy,
+    testing,
+    submitting,
+    createStep,
+    setCreateStep,
+    handleTest,
+    handleSubmit,
+  } = form;
   const selectedType = COMMON_DB_OPTIONS.find(
     (option) => option.value === normalizeDataSourceType(values.dbType),
   );

@@ -1,10 +1,31 @@
-import { Button, Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxItemIndicator, Field, FieldError, Input } from "@yak-ops/yak-ui";
+import {
+  Button,
+  Combobox,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxItemIndicator,
+  Field,
+  FieldError,
+  Input,
+} from "@yak-ops/yak-ui";
 import { normalizePropertyKey } from "./model";
 import type { useDataSourceForm } from "./use-data-source-form";
 
 export function AdvancedProperties({ form }: { form: ReturnType<typeof useDataSourceForm> }) {
-  const { intl, values, errors, propertyKeyOptions, propertyKeysLoading, propertyKeyMap,
-    selectedSuggestedPropertyKeys, syncSuggestedProperties, patchProperty, addProperty, removeProperty } = form;
+  const {
+    intl,
+    values,
+    errors,
+    propertyKeyOptions,
+    propertyKeysLoading,
+    propertyKeyMap,
+    selectedSuggestedPropertyKeys,
+    syncSuggestedProperties,
+    patchProperty,
+    addProperty,
+    removeProperty,
+  } = form;
 
   const selectedSuggestedPropertyKeySet = new Set(
     selectedSuggestedPropertyKeys.map(normalizePropertyKey),

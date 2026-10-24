@@ -1,8 +1,22 @@
-import { Button, Dialog, DialogContent, DialogDescription, DialogTitle, PageHeader, toast } from "@yak-ops/yak-ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  PageHeader,
+  toast,
+} from "@yak-ops/yak-ui";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { batchDeleteDataSources, batchTestDataSourceConnections, deleteDataSource, getDataSource, type DataSourceRecord } from "@/service/datasource";
+import {
+  batchDeleteDataSources,
+  batchTestDataSourceConnections,
+  deleteDataSource,
+  getDataSource,
+  type DataSourceRecord,
+} from "@/service/datasource";
 import { useIntl } from "../i18n";
 import { DataSourceForm } from "../form/data-source-dialog";
 import { DataSourceFilters } from "./data-source-filters";
@@ -178,14 +192,24 @@ export function DataSourcePage() {
 
         <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">
           <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
-            <DataSourceFilters keyword={keyword} dbType={dbType} onCreate={handleCreate}
-              onKeywordChange={setKeyword} onDbTypeChange={setDbType} />
+            <DataSourceFilters
+              keyword={keyword}
+              dbType={dbType}
+              onCreate={handleCreate}
+              onKeywordChange={setKeyword}
+              onDbTypeChange={setDbType}
+            />
 
             <section className="mt-4 min-h-0 flex-1">
               {pageQuery.isError ? (
-                <div role="alert" className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]">
+                <div
+                  role="alert"
+                  className="mb-3 flex items-center gap-3 text-sm text-[var(--yak-components-muted-text)]"
+                >
                   数据源加载失败
-                  <Button size="small" onClick={() => void pageQuery.refetch()}>重试</Button>
+                  <Button size="small" onClick={() => void pageQuery.refetch()}>
+                    重试
+                  </Button>
                 </div>
               ) : null}
               <DataSourceTable

@@ -1,4 +1,9 @@
-import { COMMON_DB_OPTIONS, JDBC_DEFAULT_PORTS, normalizeDataSourceType, type DataSourceCategory } from "../constants";
+import {
+  COMMON_DB_OPTIONS,
+  JDBC_DEFAULT_PORTS,
+  normalizeDataSourceType,
+  type DataSourceCategory,
+} from "../constants";
 import type { UserPreferenceRecord } from "@/service/preference";
 import type { DataSourceRecord } from "@/service/datasource";
 

@@ -140,7 +140,10 @@ const DataSourceTable = ({
         const jdbcUrl = record.displayJdbcUrl || record.jdbcUrl;
         return (
           <div className="min-w-0">
-            <div className="truncate text-[13px] text-[var(--yak-components-muted-text)]" title={jdbcUrl}>
+            <div
+              className="truncate text-[13px] text-[var(--yak-components-muted-text)]"
+              title={jdbcUrl}
+            >
               {jdbcUrl || "-"}
             </div>
             <div className="mt-1.5">
