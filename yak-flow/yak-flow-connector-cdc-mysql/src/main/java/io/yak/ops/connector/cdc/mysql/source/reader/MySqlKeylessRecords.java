@@ -101,6 +101,8 @@ final class MySqlKeylessRecords {
             copy.setNanos(timestamp.getNanos());
             return copy;
         }
+        if (value instanceof java.sql.Date date) return new java.sql.Date(date.getTime());
+        if (value instanceof java.sql.Time time) return new java.sql.Time(time.getTime());
         if (value instanceof java.util.Date date) return new java.util.Date(date.getTime());
         return value;
     }

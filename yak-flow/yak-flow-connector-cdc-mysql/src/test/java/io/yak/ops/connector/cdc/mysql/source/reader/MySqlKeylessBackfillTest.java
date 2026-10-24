@@ -69,8 +69,10 @@ class MySqlKeylessBackfillTest {
         first.apply(move);
         second.apply(move);
         assertEquals(0, first.finish().size());
-        assertEquals(1, second.finish().size());
-        assertEquals("moved", secondRecordsName(next));
+        List<TableRecord> moved = second.finish();
+        assertEquals(1, moved.size());
+        assertEquals(15L, moved.getFirst().row().getLong(0));
+        assertEquals("moved", moved.getFirst().row().getString(1));
     }
 
     @Test
@@ -129,10 +131,6 @@ class MySqlKeylessBackfillTest {
         assertEquals(2, restored.output().rows().size());
         assertEquals("same", restored.output().rows().getFirst().row().getString(1));
         assertEquals("same", restored.output().rows().getLast().row().getString(1));
-    }
-
-    private static String secondRecordsName(TableRecord row) {
-        return row.row().getString(1);
     }
 
     private static MySqlChunkBackfill keyless(Long lower, Long upper, int rows, long bytes) {
