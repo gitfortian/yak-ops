@@ -61,13 +61,13 @@ export function useScheduleSession({
     queryFn: ({ signal }) => getTaskSchedule(targetId, signal),
     retry: false,
     refetchOnWindowFocus: false,
+    refetchIntervalInBackground: false,
     refetchInterval: () =>
       ready &&
       !dirtyRef.current &&
       !pending &&
       !needsReload &&
-      !reloading &&
-      document.visibilityState === "visible"
+      !reloading
         ? 5000
         : false,
   });

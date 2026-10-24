@@ -38,5 +38,5 @@ export function useScheduleScope() {
   return { userId: currentUser?.id ?? "", workspaceId: currentWorkspace?.id ?? "" };
 }
 
-/** The tab is unmounted when hidden. Poll only while the document is visible. */
-export const visiblePollInterval = () => (document.visibilityState === "visible" ? 5000 : false);
+/** TanStack Query pauses hidden-tab requests while the polling timer stays active. */
+export const visiblePollInterval = () => 5000;

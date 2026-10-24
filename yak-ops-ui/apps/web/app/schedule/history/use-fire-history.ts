@@ -40,6 +40,7 @@ export function useFireHistory(
       ),
     retry: false,
     refetchInterval: visiblePollInterval,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
 }

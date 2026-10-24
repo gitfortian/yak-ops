@@ -53,5 +53,13 @@ assert.notEqual(
 );
 assert.equal(visiblePollInterval(), 5000);
 document.visibilityState = "hidden";
-assert.equal(visiblePollInterval(), false);
-console.log("Schedule query scope and visibility contract passed");
+assert.equal(visiblePollInterval(), 5000);
+for (const path of [
+  "../apps/web/app/schedule/use-task-schedules.ts",
+  "../apps/web/app/schedule/history/use-fire-history.ts",
+  "../apps/web/app/schedule/dialog/use-schedule-session.ts",
+]) {
+  const source = readFileSync(new URL(path, import.meta.url), "utf8");
+  assert.match(source, /refetchIntervalInBackground:\\s*false/);
+}
+console.log("Schedule query scope and background polling contract passed");

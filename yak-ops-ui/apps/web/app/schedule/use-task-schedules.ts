@@ -17,6 +17,7 @@ export function useTaskSchedules(targetIds: string[]) {
     enabled,
     retry: false,
     refetchInterval: visiblePollInterval,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
   const records = useMemo(
