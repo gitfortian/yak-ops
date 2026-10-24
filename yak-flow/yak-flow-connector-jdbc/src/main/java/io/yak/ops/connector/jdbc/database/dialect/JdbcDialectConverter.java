@@ -10,8 +10,8 @@ import java.sql.SQLException;
  * Converts JDBC driver values to canonical YakFlow {@link RowData} and binds them back to SQL.
  *
  * <p>The schema fixes the number, order, logical types, and nullability of fields. A source
- * converter derives this contract from ResultSet metadata; a sink converter receives a
- * resolved target schema. Unsupported driver values and unresolved types must fail instead
+ * converter receives a schema resolved by {@link JdbcTypeConverter}; a sink converter
+ * receives the resolved target schema. Unsupported driver values must fail instead
  * of being passed through as vendor-specific Java objects.
  */
 public interface JdbcDialectConverter {

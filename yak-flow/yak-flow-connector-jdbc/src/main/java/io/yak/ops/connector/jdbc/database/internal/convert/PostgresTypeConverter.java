@@ -1,6 +1,5 @@
 package io.yak.ops.connector.jdbc.database.internal.convert;
 
-import io.yak.ops.connector.jdbc.database.dialect.AbstractDialectConverter;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.LogicalTypes;
 import java.sql.ResultSetMetaData;
@@ -8,12 +7,8 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.Locale;
 
-/** PostgreSQL JSONB, JSON, UUID, and XML are normalized into STRING for bounded transfer. */
-public final class PostgresJdbcDialectConverter extends AbstractDialectConverter {
-
-    public PostgresJdbcDialectConverter(ResultSetMetaData metadata) throws SQLException {
-        super(metadata);
-    }
+/** PostgreSQL JSON, JSONB, and UUID source metadata. */
+public final class PostgresTypeConverter extends StandardJdbcTypeConverter {
 
     @Override
     protected LogicalType resolveType(ResultSetMetaData metadata, int index) throws SQLException {

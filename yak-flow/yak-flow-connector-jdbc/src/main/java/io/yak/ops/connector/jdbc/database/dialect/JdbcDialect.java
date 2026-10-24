@@ -54,6 +54,13 @@ public interface JdbcDialect extends java.io.Serializable {
      * @return a converter whose field order matches the result-set projection
      * @throws SQLException if metadata cannot be resolved safely
      */
+    /**
+     * Resolves source JDBC metadata without constructing a runtime row converter.
+     *
+     * <p>Catalog discovery, split planning and source readers share this mapping.
+     */
+    JdbcTypeConverter typeConverter();
+
     JdbcDialectConverter createRowConverter(ResultSetMetaData metadata) throws SQLException;
 
     /**
