@@ -131,7 +131,7 @@ class JdbcTableWritePlanTest {
     void rejectsNarrowingAndNullsBeforeTheyReachJdbcBatch() {
         TableSchema source = new TableSchema(
                 List.of(new Column("id", LogicalTypes.INTEGER.copy(false)),
-                        new Column("value", LogicalTypes.SMALLINT)),
+                        new Column("value", LogicalTypes.SMALLINT.copy(false))),
                 List.of("id"));
         TableSchema unsafe = new TableSchema(
                 List.of(new Column("id", LogicalTypes.SMALLINT.copy(false)),
