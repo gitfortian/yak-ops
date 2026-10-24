@@ -10,6 +10,20 @@
 --     they are written once and finished once, never updated in place.
 --   * `database_name` / `schema_name` rather than `database` / `schema`, which are keywords on the
 --     engines this metadata database may run on.
+--
+-- Two structural notes, also deliberate:
+--   * Every table repeats `ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+--     rather than relying on the schema default. `fk_modeling_publication_model` joins
+--     `yak_ops_modeling_model.id`, which V2 created with `utf8mb4_unicode_ci`; on a server whose
+--     default collation differs (MySQL 8 defaults to `utf8mb4_0900_ai_ci`) an inherited collation
+--     makes that foreign key uncreatable with error 3780.
+--   * `fk_modeling_publication_model` references `(id)` alone, not the `(workspace_id, id)` key the
+--     other modeling tables use. `ON DELETE SET NULL` would have to null every column of a composite
+--     key, and `workspace_id` is `NOT NULL`, so the delete would fail at runtime. Workspace scoping
+--     of the model reference is therefore enforced by the application, which resolves the model
+--     inside the caller's Workspace before recording a publication. Every single-column foreign key
+--     here also declares its own index, because InnoDB will not find one inside a composite index
+--     whose leftmost column is `workspace_id`, and would otherwise create one implicitly.
 
 CREATE TABLE yak_ops_modeling_model_publication (
     id VARCHAR(64) NOT NULL COMMENT 'Application-generated immutable publication identity',
@@ -30,12 +44,13 @@ CREATE TABLE yak_ops_modeling_model_publication (
     UNIQUE KEY uk_modeling_publication_workspace (workspace_id, id),
     KEY idx_modeling_publication_model (workspace_id, model_id, created_time),
     KEY idx_modeling_publication_target (workspace_id, datasource_id, physical_table),
+    KEY idx_modeling_publication_model_fk (model_id),
     CONSTRAINT fk_modeling_publication_model FOREIGN KEY (model_id)
         REFERENCES yak_ops_modeling_model (id) ON DELETE SET NULL,
     CONSTRAINT ck_modeling_publication_status CHECK (
         status IN ('PENDING', 'SUCCEEDED', 'FAILED', 'UNKNOWN')),
     CONSTRAINT ck_modeling_publication_revision CHECK (datasource_revision > 0)
-) COMMENT 'Immutable record of one physical publication attempt';
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT 'Immutable record of one physical publication attempt';
 
 CREATE TABLE yak_ops_modeling_metadata_collection (
     id VARCHAR(64) NOT NULL COMMENT 'Application-generated collection identity',
@@ -51,11 +66,12 @@ CREATE TABLE yak_ops_modeling_metadata_collection (
     PRIMARY KEY (id),
     UNIQUE KEY uk_modeling_collection_workspace (workspace_id, id),
     KEY idx_modeling_collection_publication (workspace_id, publication_id, created_time),
+    KEY idx_modeling_collection_publication_fk (publication_id),
     CONSTRAINT fk_modeling_collection_publication FOREIGN KEY (publication_id)
         REFERENCES yak_ops_modeling_model_publication (id) ON DELETE CASCADE,
     CONSTRAINT ck_modeling_collection_status CHECK (status IN ('SUCCEEDED', 'FAILED')),
     CONSTRAINT ck_modeling_collection_counts CHECK (table_count >= 0 AND field_count >= 0)
-) COMMENT 'One metadata collection run for a publication; refresh replaces it';
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT 'One metadata collection run for a publication; refresh replaces it';
 
 CREATE TABLE yak_ops_modeling_metadata_table (
     id VARCHAR(64) NOT NULL COMMENT 'Application-generated metadata table identity',
@@ -70,9 +86,10 @@ CREATE TABLE yak_ops_modeling_metadata_table (
     PRIMARY KEY (id),
     UNIQUE KEY uk_modeling_metadata_table_workspace (workspace_id, id),
     KEY idx_modeling_metadata_table_collection (workspace_id, collection_id),
+    KEY idx_modeling_metadata_table_collection_fk (collection_id),
     CONSTRAINT fk_modeling_metadata_table_collection FOREIGN KEY (collection_id)
         REFERENCES yak_ops_modeling_metadata_collection (id) ON DELETE CASCADE
-) COMMENT 'One collected physical table inside a metadata snapshot';
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT 'One collected physical table inside a metadata snapshot';
 
 CREATE TABLE yak_ops_modeling_metadata_field (
     id VARCHAR(64) NOT NULL COMMENT 'Application-generated metadata column identity',
@@ -91,7 +108,8 @@ CREATE TABLE yak_ops_modeling_metadata_field (
     PRIMARY KEY (id),
     UNIQUE KEY uk_modeling_metadata_field_workspace (workspace_id, id),
     KEY idx_modeling_metadata_field_table (workspace_id, table_id, ordinal),
+    KEY idx_modeling_metadata_field_table_fk (table_id),
     CONSTRAINT fk_modeling_metadata_field_table FOREIGN KEY (table_id)
         REFERENCES yak_ops_modeling_metadata_table (id) ON DELETE CASCADE,
     CONSTRAINT ck_modeling_metadata_field_ordinal CHECK (ordinal > 0)
-) COMMENT 'One collected physical column inside a metadata snapshot';
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT 'One collected physical column inside a metadata snapshot';
