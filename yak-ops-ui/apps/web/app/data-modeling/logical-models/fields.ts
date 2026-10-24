@@ -41,6 +41,19 @@ export interface FieldIssue {
 export const FIELD_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 export const TYPE_ITEMS = DATA_TYPES.map((value) => ({ value, label: value }));
 
+/**
+ * Bound the model editor enforces on the table-name suffix, before the layer prefix is added.
+ *
+ * <p>Shared so a second creation path cannot accept a suffix the editor would then refuse to save.
+ */
+export const MODEL_SUFFIX_MAX = 41;
+
+export const MODEL_SUFFIX_RULE = "表名后缀须以小写字母开头，仅含小写字母、数字或下划线，最多 41 位";
+
+export function isValidModelSuffix(value: string): boolean {
+  return FIELD_CODE.test(value) && value.length <= MODEL_SUFFIX_MAX;
+}
+
 let fieldSequence = 0;
 const nextKey = () => `field-${(fieldSequence += 1)}`;
 

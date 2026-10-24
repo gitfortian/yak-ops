@@ -38,7 +38,13 @@ import type { Layer } from "@/service/data-modeling/warehouse-planning/layers";
 import { InputField, SelectField, TextareaField } from "../shared/form-fields";
 import FieldEditor from "./field-editor";
 import type { FieldDraft } from "./fields";
-import { FIELD_CODE, fromModelField, toModelFieldInput, validateFieldRows } from "./fields";
+import {
+  MODEL_SUFFIX_RULE,
+  fromModelField,
+  isValidModelSuffix,
+  toModelFieldInput,
+  validateFieldRows,
+} from "./fields";
 import { datamartsOf, domainsOf, processesOf } from "../shared/planning-tree";
 import { DimensionScopeRadio } from "../shared/scope-radio";
 import { useModelOptions } from "./state";
@@ -258,7 +264,7 @@ export default function LogicalModelEditorPage() {
   const layerSelectable = Boolean(selectedLayer?.enabled);
   const prefix = selectedLayer ? selectedLayer.enCode.toLowerCase() : "";
   const suffix = form.nameSuffix.trim();
-  const suffixValid = FIELD_CODE.test(suffix) && suffix.length <= 41;
+  const suffixValid = isValidModelSuffix(suffix);
 
   useEffect(() => {
     if (!form.layerId || !suffixValid) {
@@ -330,8 +336,7 @@ export default function LogicalModelEditorPage() {
     if (!form.layerId) next.layerId = "请选择数仓分层";
     else if (!layerSelectable) next.layerId = "所选分层未启用或未绑定数据源";
     if (!suffix) next.nameSuffix = "请输入表名后缀";
-    else if (!suffixValid)
-      next.nameSuffix = "须以小写字母开头，仅含小写字母、数字或下划线，最多 41 位";
+    else if (!suffixValid) next.nameSuffix = MODEL_SUFFIX_RULE;
     if (!form.cnName.trim()) next.cnName = "请输入表中文名";
     const lifecycle = Number(form.lifecycleDays);
     if (!Number.isInteger(lifecycle) || lifecycle < 1 || lifecycle > 36000)

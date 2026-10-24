@@ -7,6 +7,7 @@ import { DataSyncPage } from "@/app/data-sync";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
 import DimensionModelingPage from "@/app/data-modeling/dimension-modeling";
+import ReverseModelingPage from "@/app/data-modeling/dimension-modeling/reverse";
 import LogicalModelEditorPage from "@/app/data-modeling/logical-models/editor";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/task-editor";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/task-detail";
@@ -37,6 +38,7 @@ const AUTHENTICATED_PATHS = new Set([
   "/data-modeling/warehouse-planning",
   "/data-modeling/data-standards",
   "/data-modeling/dimension-modeling",
+  "/data-modeling/dimension-modeling/reverse",
   "/data-modeling/dimensions",
   "/data-modeling/logical-models",
   "/data-modeling/logical-models/new",
@@ -136,6 +138,10 @@ export default function AppRouter() {
           <Route path="/data-modeling/warehouse-planning" element={<WarehousePlanningPage />} />
           <Route path="/data-modeling/data-standards" element={<DataStandardsPage />} />
           <Route path="/data-modeling/dimension-modeling" element={<DimensionModelingPage />} />
+          <Route
+            path="/data-modeling/dimension-modeling/reverse"
+            element={<ReverseModelingPage />}
+          />
           {/* The two list pages merged into the tree; stale links land on it instead of a blank route. */}
           <Route
             path="/data-modeling/dimensions"

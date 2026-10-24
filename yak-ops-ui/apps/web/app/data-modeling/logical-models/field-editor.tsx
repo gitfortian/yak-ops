@@ -33,6 +33,8 @@ interface Props {
   allowAggregate?: boolean;
   /** True for DWS: the server rejects a save without any measure, so the last one is locked. */
   requireMeasure?: boolean;
+  /** Reverse modeling already produced the draft, so the import actions would re-import elsewhere. */
+  hideImportActions?: boolean;
 }
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
@@ -46,6 +48,7 @@ export default function FieldEditor({
   disabled = false,
   allowAggregate = false,
   requireMeasure = false,
+  hideImportActions = false,
 }: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
@@ -101,15 +104,23 @@ export default function FieldEditor({
         <Button size="small" disabled={disabled} onClick={() => onChange([...rows, emptyField()])}>
           添加字段
         </Button>
-        <Button size="small" disabled={disabled} onClick={() => setImporting(true)}>
-          批量录入
-        </Button>
-        <Button size="small" disabled={disabled} onClick={() => setImportingSource(true)}>
-          从表/视图导入
-        </Button>
-        <Button size="small" disabled={disabled} onClick={() => setPicker({ mode: "multiple" })}>
-          从数据标准导入
-        </Button>
+        {!hideImportActions && (
+          <>
+            <Button size="small" disabled={disabled} onClick={() => setImporting(true)}>
+              批量录入
+            </Button>
+            <Button size="small" disabled={disabled} onClick={() => setImportingSource(true)}>
+              从表/视图导入
+            </Button>
+            <Button
+              size="small"
+              disabled={disabled}
+              onClick={() => setPicker({ mode: "multiple" })}
+            >
+              从数据标准导入
+            </Button>
+          </>
+        )}
         <span className="text-xs text-[#667475]">
           共 {rows.length} 个字段，主键 {keyCount} 个，分区 {partitionCount} 个
           {allowAggregate && `，度量 ${measureCount} 个`}
@@ -385,7 +396,8 @@ export default function FieldEditor({
                   colSpan={allowAggregate ? 12 : 11}
                   className="px-3 py-8 text-center text-[#667475]"
                 >
-                  暂无字段，先添加一行、批量录入或从数据标准导入
+                  暂无字段，
+                  {hideImportActions ? "先添加一行" : "先添加一行、批量录入或从数据标准导入"}
                 </td>
               </tr>
             )}
