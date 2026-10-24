@@ -49,9 +49,9 @@ class MySqlSchemaChangeConverterTest {
 
     private static final String NEW_TABLE = """
             {"primaryKeyColumnNames":["id"],"columns":[
-                {"name":"id","jdbcType":-5,"typeName":"BIGINT","optional":false},
-                {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"optional":true},
-                {"name":"note","jdbcType":12,"typeName":"VARCHAR","length":128,"optional":true}
+                {"name":"id","jdbcType":-5,"typeName":"BIGINT","position":1,"optional":false,"autoIncremented":false,"generated":false},
+                {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"position":2,"optional":true,"autoIncremented":false,"generated":false},
+                {"name":"note","jdbcType":12,"typeName":"VARCHAR","length":128,"position":3,"optional":true,"autoIncremented":false,"generated":false}
             ]}
             """;
 
@@ -127,24 +127,36 @@ class MySqlSchemaChangeConverterTest {
                 .field("jdbcType", org.apache.kafka.connect.data.Schema.INT32_SCHEMA)
                 .field("typeName", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
                 .field("length", org.apache.kafka.connect.data.Schema.OPTIONAL_INT32_SCHEMA)
+                .field("position", org.apache.kafka.connect.data.Schema.INT32_SCHEMA)
+                .field("autoIncremented", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
+                .field("generated", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
                 .field("optional", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
                 .build();
         var idColumn = new Struct(columnMetadata)
                 .put("name", "id")
                 .put("jdbcType", java.sql.Types.BIGINT)
                 .put("typeName", "BIGINT")
+                .put("position", 1)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", false);
         var nameColumn = new Struct(columnMetadata)
                 .put("name", "name")
                 .put("jdbcType", java.sql.Types.VARCHAR)
                 .put("typeName", "VARCHAR")
                 .put("length", 64)
+                .put("position", 2)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", true);
         var noteColumn = new Struct(columnMetadata)
                 .put("name", "note")
                 .put("jdbcType", java.sql.Types.VARCHAR)
                 .put("typeName", "VARCHAR")
                 .put("length", 128)
+                .put("position", 3)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", true);
         var tableMetadata = SchemaBuilder.struct()
                 .field(
