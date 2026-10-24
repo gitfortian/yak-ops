@@ -225,3 +225,50 @@ test("Operations exposes only its Dashboard page to the router", () => {
     [],
   );
 });
+
+test("router may compose App Shell while private header and favorites stay owned", () => {
+  const router = "apps/web/app/router/AppRouter.tsx";
+  assert.deepEqual(check(router, 'import AppLayout from "../layout/AppLayout";'), []);
+  assert.deepEqual(
+    check(router, 'import { DATA_INTEGRATION_NAVIGATION } from "../layout/navigation";'),
+    [],
+  );
+  assert.match(
+    check(router, 'import AccountMenu from "../layout/account-menu";').join("\n"),
+    /imports a private App Shell module/,
+  );
+  assert.match(
+    check("apps/web/app/data-sync/list/page.tsx", 'import TopBar from "@/app/layout/TopBar";').join(
+      "\n",
+    ),
+    /imports a private App Shell module/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/operations/dashboard/page.tsx",
+      'import { favoriteQueryKey } from "@/app/layout/use-product-favorites";',
+    ).join("\n"),
+    /imports a private App Shell module/,
+  );
+  assert.match(
+    check(
+      "apps/web/app/layout/TopBar.tsx",
+      'import { UserForm } from "@/app/management/users/user-form";',
+    ).join("\n"),
+    /imports a private Management feature|imports a feature into App Shell/,
+  );
+  assert.deepEqual(
+    check(
+      "apps/web/app/layout/ProductLauncher.tsx",
+      'import { useProductFavorites } from "./use-product-favorites";',
+    ),
+    [],
+  );
+  assert.match(
+    check(
+      "apps/web/service/preference/index.ts",
+      'import { PRODUCT_MENU_SCENE } from "@/app/layout/product-favorites";',
+    ).join("\n"),
+    /imports a private App Shell module|imports App code/,
+  );
+});

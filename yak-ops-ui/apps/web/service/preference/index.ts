@@ -19,10 +19,13 @@ const BACKGROUND_PREFERENCE_OPTIONS = {
   skipErrorHandler: true,
 };
 
-export const listUserPreferences = (scene: UserPreferenceScene): Promise<UserPreferenceRecord[]> =>
+export const listUserPreferences = (
+  scene: UserPreferenceScene,
+  signal?: AbortSignal,
+): Promise<UserPreferenceRecord[]> =>
   HttpUtils.getData<UserPreferenceRecord[]>(
     `${USER_PREFERENCE_API_PREFIX}?scene=${encodeURIComponent(scene)}`,
-    BACKGROUND_PREFERENCE_OPTIONS,
+    { ...BACKGROUND_PREFERENCE_OPTIONS, signal },
   );
 
 export const updateUserPreferenceFavorite = (
