@@ -1,7 +1,8 @@
 package io.yak.ops.connector.jdbc.sink;
 
-/** JDBC append-only and primary-key-aware changelog write modes. */
+/** JDBC write semantics. RETRACT is reserved until transactional keyless writing is implemented. */
 public enum JdbcWriteMode {
     APPEND,
-    UPSERT
+    UPSERT,
+    RETRACT
 }

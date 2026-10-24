@@ -78,6 +78,11 @@ public record JdbcTableWritePlan(
                         "JDBC mapping cannot safely convert source to target field: " + target.name());
             }
         }
+        if (writeMode == JdbcWriteMode.RETRACT) {
+            JdbcKeylessRetractionContract.validate(sourceSchema, schema);
+            throw new UnsupportedOperationException(
+                    "JDBC RETRACT requires an implemented exact-row writer and transactional replay protection");
+        }
         if (writeMode == JdbcWriteMode.UPSERT) {
             // A snapshot Chunk Key chooses a read range; it is not a physical row identity.
             // Every destination key must map bijectively to a declared source primary key,
@@ -125,6 +130,7 @@ public record JdbcTableWritePlan(
         return switch (writeMode) {
             case APPEND -> dialect.insertSql(targetTable, schema);
             case UPSERT -> dialect.upsertSql(targetTable, schema);
+            case RETRACT -> throw new UnsupportedOperationException("JDBC RETRACT writer is not implemented");
         };
     }
 
