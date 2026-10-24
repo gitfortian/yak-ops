@@ -22,6 +22,7 @@ class MySqlHybridSplitSerializerTest {
                 (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(original));
         assertEquals(original, restored);
         assertThrows(IOException.class, () -> serializer.deserialize(99, serializer.serialize(original)));
+        assertEquals(original, serializer.deserialize(2, serializer.serialize(original)));
         assertEquals(144L, restored.withLastEmittedKey(144L).lastEmittedKey());
         assertThrows(IllegalArgumentException.class, () -> restored.withLastEmittedKey(143L));
     }

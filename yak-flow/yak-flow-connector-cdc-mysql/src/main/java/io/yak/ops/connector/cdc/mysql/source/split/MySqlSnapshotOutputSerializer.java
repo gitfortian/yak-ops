@@ -5,6 +5,8 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -15,6 +17,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.zip.CRC32C;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,6 +55,82 @@ final class MySqlSnapshotOutputSerializer {
             rows.add(new TableRecord(table, RowKind.INSERT, row));
         }
         return new MySqlSnapshotOutput(low, high, rows);
+    }
+
+    /**
+     * Stores prepared rows in a bounded, checksummed frame.
+     *
+     * <p>These rows must remain durable until the Reader finishes emission: recreating a newer
+     * snapshot after partial external writes could leave deleted rows in a JDBC target. Compression
+     * reduces checkpoint size without changing that recovery contract.
+     */
+    static void writeCompact(DataOutputStream out, MySqlSnapshotOutput output) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream state = new DataOutputStream(bytes)) {
+            write(state, output);
+        }
+        byte[] uncompressed = bytes.toByteArray();
+        if (uncompressed.length > MAX_BYTES) {
+            throw new IOException("Snapshot output exceeds uncompressed state byte limit");
+        }
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (DeflaterOutputStream compressor =
+                new DeflaterOutputStream(compressed, new Deflater(Deflater.BEST_SPEED))) {
+            compressor.write(uncompressed);
+        }
+        byte[] zipped = compressed.toByteArray();
+        boolean useCompression = zipped.length < uncompressed.length;
+        byte[] stored = useCompression ? zipped : uncompressed;
+        CRC32C checksum = new CRC32C();
+        checksum.update(uncompressed);
+        out.writeInt(uncompressed.length);
+        out.writeBoolean(useCompression);
+        out.writeInt(stored.length);
+        out.writeInt((int) checksum.getValue());
+        out.write(stored);
+    }
+
+    /** Reads the version 3 frame, rejecting oversized, truncated or corrupted snapshot state. */
+    static MySqlSnapshotOutput readCompact(DataInputStream in, TableId table) throws IOException {
+        int originalSize = in.readInt();
+        boolean compressed = in.readBoolean();
+        int storedSize = in.readInt();
+        int checksum = in.readInt();
+        if (originalSize < 1
+                || originalSize > MAX_BYTES
+                || storedSize < 1
+                || storedSize > MAX_BYTES
+                || storedSize > in.available()) {
+            throw new IOException("Invalid snapshot output frame size");
+        }
+        byte[] stored = in.readNBytes(storedSize);
+        byte[] decoded;
+        if (compressed) {
+            decoded = new byte[originalSize];
+            try (InflaterInputStream stream = new InflaterInputStream(new ByteArrayInputStream(stored))) {
+                int copied = 0;
+                while (copied < decoded.length) {
+                    int read = stream.read(decoded, copied, decoded.length - copied);
+                    if (read < 0) throw new IOException("Truncated compressed snapshot output");
+                    if (read == 0) throw new IOException("Snapshot inflater did not advance");
+                    copied += read;
+                }
+                if (stream.read() != -1) {
+                    throw new IOException("Compressed snapshot exceeds declared size");
+                }
+            }
+        } else {
+            decoded = stored;
+        }
+        if (decoded.length != originalSize) throw new IOException("Snapshot output size differs from frame");
+        CRC32C actual = new CRC32C();
+        actual.update(decoded);
+        if ((int) actual.getValue() != checksum) throw new IOException("Snapshot output checksum mismatch");
+        try (DataInputStream source = new DataInputStream(new ByteArrayInputStream(decoded))) {
+            MySqlSnapshotOutput restored = read(source, table);
+            if (source.available() != 0) throw new IOException("Trailing bytes in snapshot output");
+            return restored;
+        }
     }
 
     private static void writeValue(DataOutputStream out, Object value) throws IOException {
