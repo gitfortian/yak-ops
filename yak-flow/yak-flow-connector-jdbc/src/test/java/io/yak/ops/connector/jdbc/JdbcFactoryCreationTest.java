@@ -41,6 +41,29 @@ class JdbcFactoryCreationTest {
     }
 
     @Test
+    void directSinkCreationChecksRealRowIdentityBeforeConnecting() {
+        Configuration configuration = new Configuration()
+                .set(JdbcConnectionOptions.URL, "jdbc:h2:mem:identity_contract")
+                .set(JdbcConnectionOptions.USERNAME, "sa")
+                .set(JdbcConnectionOptions.PASSWORD, "not-opened")
+                .set(JdbcConnectionOptions.DRIVER_CLASS, "driver.must.not.load")
+                .set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.UPSERT);
+        var keyless = new TableSchema(SCHEMA.columns(), List.of());
+        var keySource = new TableSchema(SCHEMA.columns(), List.of("ID"));
+        var keySink = new TableSchema(SCHEMA.columns(), List.of("ID"));
+        var noKeySink = new TableSchema(SCHEMA.columns(), List.of());
+
+        var factory = new JdbcSinkFactory();
+        assertThrows(IllegalArgumentException.class, () -> factory.createSink(new TableSinkFactoryContext(
+                configuration.toReadonlyConfig(), TABLE, keyless, TABLE, keySink)));
+        assertThrows(IllegalArgumentException.class, () -> factory.createSink(new TableSinkFactoryContext(
+                configuration.toReadonlyConfig(), TABLE, keySource, TABLE, noKeySink)));
+        configuration.set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.APPEND);
+        assertInstanceOf(JdbcSink.class, factory.createSink(new TableSinkFactoryContext(
+                configuration.toReadonlyConfig(), TABLE, keyless, TABLE, noKeySink)));
+    }
+
+    @Test
     void requiresResolvedConnectionInputsAndRejectsUnknownFields() {
         var missing = new TableSourceFactoryContext(io.yak.ops.configuration.ReadonlyConfig.fromMap(Map.of()), TABLE, SCHEMA);
         assertThrows(IllegalArgumentException.class, () -> new JdbcSourceFactory().createSource(missing));
