@@ -3,11 +3,13 @@ package io.yak.ops.connector.cdc.mysql.source.assigner;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.source.utils.StatementUtils;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.LogicalTypeRoot;
+import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -51,7 +53,7 @@ public final class MySqlChunkSplitter {
         this(connections, dialect, schemas, Map.of(), chunkSize);
     }
 
-    private MySqlChunkSplitter(
+    public MySqlChunkSplitter(
             JdbcConnectionProvider connections,
             JdbcDialect dialect,
             Map<TableId, TableSchema> schemas,
@@ -65,6 +67,47 @@ public final class MySqlChunkSplitter {
             throw new IllegalArgumentException("MySQL snapshot chunk size must be between 1 and 100000");
         }
         this.chunkSize = chunkSize;
+    }
+
+    /**
+     * Plans all snapshot ranges using database comparison semantics. This typed planner is
+     * available independently of the legacy BIGINT split transport and is not used to
+     * dispatch work until typed checkpoint, Backfill and Binlog filtering support arrives.
+     */
+    public List<ChunkRange> splitChunks(TableId table) throws SQLException {
+        List<ChunkRange> ranges = new ArrayList<>();
+        Object lower = null;
+        while (true) {
+            if (ranges.size() >= MAX_CHUNKS_PER_TABLE) {
+                throw new IllegalStateException("MySQL snapshot exceeds the maximum chunk count");
+            }
+            ChunkRange range = nextChunk(table, lower);
+            ranges.add(range);
+            if (range.last()) return List.copyOf(ranges);
+            lower = range.end();
+        }
+    }
+
+    /**
+     * Discovers one typed chunk from an optional database-ordered lower boundary.
+     * Equal keys stay together and the next boundary is strictly greater in MySQL,
+     * even when Java string comparisons disagree with the source collation.
+     */
+    public ChunkRange nextChunk(TableId table, Object lower) throws SQLException {
+        if (cancelled) throw new SQLException("MySQL snapshot chunk discovery was cancelled");
+        TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
+        Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
+        LogicalTypeRoot type = column.dataType().getTypeRoot();
+        // Validate scalar family and caller-supplied resume boundary before opening JDBC.
+        new ChunkRange(table, column.name(), type, lower, null);
+        try (Connection connection = connections.getConnection()) {
+            Object maximum = StatementUtils.queryNextChunkMax(
+                    connection, dialect, table, column.name(), type, chunkSize, lower);
+            Object upper = maximum == null
+                    ? null
+                    : StatementUtils.queryMin(connection, dialect, table, column.name(), type, maximum);
+            return new ChunkRange(table, column.name(), type, lower, upper);
+        }
     }
 
     /**
