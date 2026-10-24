@@ -3,6 +3,7 @@ package io.yak.ops.plugin.task.datasync.validation;
 import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
@@ -184,10 +185,7 @@ public final class SchemaValidator {
                             || !properties.isKnown()
                             || properties.hasFeatures()
                             || (properties.nativeType() != null
-                                    && properties
-                                            .nativeType()
-                                            .toLowerCase(java.util.Locale.ROOT)
-                                            .contains("unsigned"))) {
+                                    && MySqlJdbcDialect.requiresExactNativeType(properties.nativeType()))) {
                         issues.add(new SchemaChangePlan.Difference(
                                 name,
                                 SchemaChangePlan.Kind.INCOMPATIBLE,

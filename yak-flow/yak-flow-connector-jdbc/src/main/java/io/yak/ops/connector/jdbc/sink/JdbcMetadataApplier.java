@@ -230,6 +230,12 @@ public final class JdbcMetadataApplier implements MetadataApplier {
                 throw new IllegalArgumentException("Invalid nullable column addition: " + column.name());
             }
             requirePlainColumn(column);
+            ColumnProperties properties = column.properties();
+            if (properties != null
+                    && MySqlJdbcDialect.requiresExactNativeType(properties.nativeType())
+                    && !(dialect instanceof MySqlJdbcDialect)) {
+                throw new IllegalArgumentException("Target cannot preserve source native type: " + column.name());
+            }
             Column actual = findColumn(current, column.name());
             if (actual != null) {
                 verifyAddedColumn(event, column);
@@ -280,6 +286,10 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             }
             JdbcColumnInfo metadata = findColumnInfo(event.tableId(), name);
             requirePlainColumn(metadata);
+            if (dialect instanceof MySqlJdbcDialect
+                    && MySqlJdbcDialect.requiresExactNativeType(metadata.nativeType())) {
+                throw new IllegalArgumentException("Cannot alter native MySQL field type: " + name);
+            }
             if (sameType(actual.dataType(), next)) continue;
             if (!sameType(actual.dataType(), previous) || !safeWidening(previous, next)) {
                 throw new IllegalArgumentException("Stale or unsafe column type change: " + name);
@@ -348,6 +358,16 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         }
         JdbcColumnInfo physical = findColumnInfo(event.tableId(), expected.name());
         requirePlainColumn(physical);
+        validateColumnProperties(
+                expected.name(),
+                expected.properties(),
+                new ColumnProperties(
+                        physical.defaultExpression(),
+                        physical.autoIncrement(),
+                        physical.generated(),
+                        physical.onUpdateExpression(),
+                        physical.defaultGenerated(),
+                        physical.nativeType()));
         if (!physical.nullable()
                 || (expected.comment() != null && !expected.comment().equals(physical.remarks()))) {
             throw new IllegalArgumentException("Target column properties do not match: " + expected.name());
@@ -377,8 +397,9 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             if (!properties.isKnown()
                     || properties.hasFeatures()
                     || nativeType.contains("unsigned")
-                    || nativeType.startsWith("enum(")
-                    || nativeType.startsWith("set(")) {
+                    || nativeType.contains("zerofill")
+                    || nativeType.equals("point")
+                    || nativeType.equals("year")) {
                 throw new IllegalArgumentException(
                         "Automatic column evolution cannot preserve native properties: " + column.name());
             }

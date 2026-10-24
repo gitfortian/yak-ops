@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.core.event.ColumnProperties;
+import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.core.types.LogicalTypes;
@@ -101,6 +103,44 @@ class JdbcCreateTableDialectTest {
                 plan.statements().get(2));
     }
 
+
+    @Test
+    void mysqlAdditionPreservesNativeEnumSetAndJsonTypes() {
+        var mysql = JdbcDialects.forType("MYSQL");
+        var table = new TableId("yakflow", null, "orders");
+        for (String nativeType : List.of("enum('active','inactive')", "set('read','write')", "json")) {
+            var column = new PhysicalColumn(
+                    "native_value", LogicalTypes.STRING, "Native field",
+                    new ColumnProperties(null, false, false, null, false, nativeType));
+            var schema = new TableSchema(List.of(new Column("native_value", LogicalTypes.STRING)), List.of());
+            String created = mysql.createTablePlan(table, schema, null, Map.of("native_value", "Native field"),
+                    Map.of("native_value", column.properties())).createTableSql();
+            String added = mysql.addColumnStatements(table, column).getFirst();
+            assertTrue(created.contains("`native_value` " + nativeType));
+            assertTrue(added.contains("`native_value` " + nativeType + " NULL"));
+            assertTrue(added.contains("COMMENT 'Native field'"));
+        }
+    }
+
+    @Test
+    void mysqlAdditionRejectsUnsafeNativeTypesAndExpressions() {
+        var mysql = JdbcDialects.forType("MYSQL");
+        var table = new TableId("yakflow", null, "orders");
+        for (String nativeType : List.of("int unsigned", "point", "year", "smallint zerofill")) {
+            var column = new PhysicalColumn(
+                    "value", LogicalTypes.STRING, null,
+                    new ColumnProperties(null, false, false, null, false, nativeType));
+            assertThrows(IllegalArgumentException.class, () -> mysql.addColumnStatements(table, column));
+        }
+        var malicious = new PhysicalColumn(
+                "value", LogicalTypes.STRING, null,
+                new ColumnProperties(null, false, false, null, false, "varchar(10); DROP TABLE orders"));
+        assertThrows(IllegalArgumentException.class, () -> mysql.addColumnStatements(table, malicious));
+        var defaulted = new PhysicalColumn(
+                "value", LogicalTypes.STRING, null,
+                new ColumnProperties("hidden", false, false, null, false, "varchar(10)"));
+        assertThrows(IllegalArgumentException.class, () -> mysql.addColumnStatements(table, defaulted));
+    }
     @Test
     void shouldRejectMysqlTimestampWithTimeZone() {
         assertThrows(
