@@ -48,8 +48,10 @@ class MySqlTypedSnapshotSplitReaderTest {
                         new Column("payload", LogicalTypes.varchar(60))),
                 List.of());
         List<ChunkRange> ranges = planner(url, schema, "bucket", 2).splitChunks(TABLE);
-        assertEquals(2, ranges.size());
+        assertEquals(3, ranges.size());
         assertEquals(new BigDecimal("9223372036854775808.00000000"), ranges.getFirst().end());
+        assertEquals(ranges.getFirst().end(), ranges.get(1).start());
+        assertEquals(ranges.get(1).end(), ranges.get(2).start());
         List<TableRecord> all = new ArrayList<>();
         try (var reader = reader(url, schema)) {
             for (int i = 0; i < ranges.size(); i++) {
