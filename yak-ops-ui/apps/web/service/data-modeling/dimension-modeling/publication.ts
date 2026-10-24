@@ -14,7 +14,7 @@ export const PUBLICATION_STATUS_LABEL: Record<PublicationStatus, string> = {
 };
 
 export const PUBLICATION_STATUS_HINT: Record<PublicationStatus, string> = {
-  PENDING: "记录已落库，尚未收到引擎结果",
+  PENDING: "记录已落库但未收到引擎结果；长时间停留时可对账",
   SUCCEEDED: "表已创建或已与模型一致",
   FAILED: "引擎拒绝或表与模型不一致；目标表未被修改",
   UNKNOWN: "连接中断，无法确认表是否已创建；请对账",

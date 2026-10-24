@@ -56,7 +56,8 @@ public interface ModelPublicationService {
     PublicationVO detail(String workspaceId, String publicationId);
 
     /**
-     * Resolves an {@code UNKNOWN} publication by re-reading the target, without re-executing its DDL.
+     * Resolves a {@code PENDING} or {@code UNKNOWN} publication by re-reading the target, without
+     * re-executing its DDL. A terminal record is rejected.
      * @param workspaceId authorized Workspace
      * @param actor authenticated user
      * @param publicationId publication identity

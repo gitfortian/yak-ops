@@ -41,9 +41,10 @@ interface Props {
 /**
  * Publication history of one model.
  *
- * <p>Two states are actionable and nothing else is: an {@code UNKNOWN} record can be reconciled
- * against the real table, and a {@code SUCCEEDED} one can be re-collected. A {@code FAILED} record is
- * terminal — re-publishing is the way forward, so no retry button pretends otherwise.
+ * <p>Three states are actionable and nothing else is: a {@code PENDING} record left behind by a
+ * crashed process and an {@code UNKNOWN} record can both be reconciled against the real table, and
+ * a {@code SUCCEEDED} one can be re-collected. A {@code FAILED} record is terminal — re-publishing
+ * is the way forward, so no retry button pretends otherwise.
  */
 export default function PublicationHistory({ modelId, refreshKey }: Props) {
   const [items, setItems] = useState<PublicationRecord[]>([]);
@@ -144,7 +145,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
       width: 92,
       align: "center",
       render: (_, row) =>
-        row.status === "UNKNOWN" ? (
+        row.status === "UNKNOWN" || row.status === "PENDING" ? (
           <Button
             size="small"
             variant="ghost"

@@ -38,7 +38,7 @@ This proposal defines the smallest coherent chain from a logical model to a real
 | Execution | `POST .../publications` executes only after explicit confirmation. A successful execution creates one immutable publication record. A retry creates a new publication record. |
 | Existing table | Publishing is create-or-verify. If the table is absent, it is created. If it is present, the publication verifies the physical columns, order, primary keys, nullability and comments; any mismatch fails without modifying the table. |
 | Metadata | A successful publication immediately collects the published table and its columns into a metadata snapshot. A refresh endpoint recollects and replaces that snapshot for the same publication. |
-| Publication status | The model surface shows the latest publication status and publication history. Statuses are `PENDING`, `SUCCEEDED`, `FAILED` and `UNKNOWN`; `UNKNOWN` means the DDL result could not be determined. An `UNKNOWN` publication is never a dead end: the model surface provides a reconcile action that re-queries the target database through the Catalog seams and resolves the record to `SUCCEEDED` or `FAILED`. |
+| Publication status | The model surface shows the latest publication status and publication history. Statuses are `PENDING`, `SUCCEEDED`, `FAILED` and `UNKNOWN`; `UNKNOWN` means the DDL result could not be determined. Neither `UNKNOWN` nor `PENDING` is a dead end: the model surface provides a reconcile action that re-queries the target database through the Catalog seams and resolves the record to `SUCCEEDED` or `FAILED`. `PENDING` is eligible because a process that dies between recording the row and writing a terminal state leaves exactly that residue, and nothing else would ever converge it. |
 | Deletion | Deleting a logical model does not drop the physical table. The delete dialog must state explicitly that the physical table is retained and must be handled manually. The publication and its metadata snapshot are retained; the publication's model reference becomes null. |
 
 ### REST
@@ -51,7 +51,7 @@ New endpoints under the existing dimension-modeling controller namespace:
 | `POST /api/v1/data-modeling/dimension-modeling/models/{modelId}/publications` | Execute the publication for the submitted target and return the created publication record. |
 | `GET /api/v1/data-modeling/dimension-modeling/models/{modelId}/publications` | List publication records for one model, newest first. |
 | `GET /api/v1/data-modeling/dimension-modeling/publications/{publicationId}` | Return one publication record, including DDL, status and error. |
-| `POST /api/v1/data-modeling/dimension-modeling/publications/{publicationId}/reconcile` | Re-query the target database for an `UNKNOWN` publication and resolve it to `SUCCEEDED` or `FAILED` without re-executing the DDL. |
+| `POST /api/v1/data-modeling/dimension-modeling/publications/{publicationId}/reconcile` | Re-query the target database for a `PENDING` or `UNKNOWN` publication and resolve it to `SUCCEEDED` or `FAILED` without re-executing the DDL. |
 | `POST /api/v1/data-modeling/dimension-modeling/publications/{publicationId}/metadata/refresh` | Recollect the published table and replace its metadata snapshot. |
 | `GET /api/v1/data-modeling/dimension-modeling/publications/{publicationId}/metadata` | Return the persisted physical table and column snapshot for one publication. |
 
@@ -131,7 +131,9 @@ Execution is create-or-verify:
 
 DDL execution is auto-commit at the engine boundary. The proposal does not claim a distributed transaction between the metadata database and the target engine. If the engine result is unknown, the publication is recorded as `UNKNOWN` with the attempted DDL and error context; automatic rollback is not attempted.
 
-Reconciliation is the supported way out of `UNKNOWN`. The reconcile endpoint re-reads the target table through the Catalog seams and re-classifies the publication as `SUCCEEDED` when the observed table matches the verified contract, or `FAILED` with the observed difference otherwise. Reconciliation never re-executes the DDL and never mutates the logical model. `PENDING` and terminal statuses are not eligible for reconciliation.
+Reconciliation is the supported way out of `UNKNOWN` and of a stuck `PENDING`. The reconcile endpoint re-reads the target table through the Catalog seams and re-classifies the publication as `SUCCEEDED` when the observed table matches the verified contract, or `FAILED` with the observed difference otherwise. Reconciliation never re-executes the DDL and never mutates the logical model.
+
+`PENDING` is eligible because the terminal write is not transactional with the engine call: if the process dies after recording the row, no status will ever be written and the history would show that attempt as in-flight forever. When the logical model has been deleted, the stored contract is gone, so reconciliation can only verify that the table exists and classifies on that basis. Terminal statuses are not eligible, so a settled record cannot be rewritten by a late reconcile.
 
 ### 4. Metadata collection
 
@@ -157,7 +159,7 @@ The model list and editor gain a publish action. The publish dialog selects data
 
 ## Test Plan
 
-- Unit tests cover the logical-to-physical type matrix, required `STRING` length and `DECIMAL` precision, primary-key order and nullability, comment generation, target validation for MySQL/Oracle/PostgreSQL, existing-table mismatch classification, publication state transitions, `UNKNOWN` reconciliation to `SUCCEEDED` or `FAILED` without DDL re-execution, and metadata snapshot mapping.
+- Unit tests cover the logical-to-physical type matrix, required `STRING` length and `DECIMAL` precision, primary-key order and nullability, comment generation, target validation for MySQL/Oracle/PostgreSQL, existing-table mismatch classification, publication state transitions, `PENDING` and `UNKNOWN` reconciliation to `SUCCEEDED` or `FAILED` without DDL re-execution, and metadata snapshot mapping.
 - Database integration tests cover `V4` application on top of `V3`, publication success and failure records, metadata refresh replacing a snapshot, Workspace isolation for publications and metadata, cross-Workspace data source access returning `RESOURCE_NOT_EXISTS`, and model deletion retaining publication and metadata rows with a null model reference.
 - Frontend verification covers `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run architecture:check`, `npm run contract:check` and `npm run build`.
 - Manual acceptance must exercise a real JDBC publication for at least one supported database, including an absent-table create, an existing-table verify and an intentional mismatch rejection. Browser interaction is not covered by an automated per-feature Playwright script in this proposal.

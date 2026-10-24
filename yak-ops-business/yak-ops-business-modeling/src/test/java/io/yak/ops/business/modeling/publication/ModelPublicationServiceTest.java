@@ -291,6 +291,32 @@ class ModelPublicationServiceTest {
     }
 
     @Test
+    void reconcilesAPendingPublicationLeftByACrashedProcess() {
+        var record = new ModelPublicationEntity();
+        record.setId("p1");
+        record.setWorkspaceId(WORKSPACE);
+        record.setStatus(PublicationStatus.PENDING.name());
+        record.setDatasourceId("ds1");
+        record.setModelId(MODEL);
+        record.setPhysicalDatabase("warehouse");
+        record.setPhysicalTable("dwd_order");
+        when(publications.find(WORKSPACE, "p1")).thenReturn(Optional.of(record));
+        when(catalog.listTables(eq("ds1"), any())).thenReturn(List.of(observedTable()));
+        when(catalog.listColumns(eq("ds1"), any())).thenReturn(List.of(observedColumn("订单号")));
+        doAnswer(invocation -> {
+            record.setStatus(invocation.getArgument(2));
+            return true;
+        })
+                .when(publications)
+                .reconcile(eq(WORKSPACE), eq("p1"), anyString(), any(), any());
+
+        var result = service.reconcile(WORKSPACE, ACTOR, "p1");
+
+        assertEquals(PublicationStatus.SUCCEEDED, result.status());
+        verify(executor, never()).execute(anyString(), anyString(), any());
+    }
+
+    @Test
     void treatsAnAbsentSnapshotAsAMissingResource() {
         var record = new ModelPublicationEntity();
         record.setId("p1");

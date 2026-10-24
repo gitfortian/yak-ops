@@ -126,18 +126,21 @@ class PublicationDatabaseIT {
     }
 
     @Test
-    void reconcileMovesOnlyAnUnknownRecord() {
+    void reconcileMovesAnUnsettledRecordAndNeverATerminalOne() {
         publications.add(pending("pub2"));
 
-        // A pending record is still owned by the executor that wrote it.
-        assertFalse(publications.reconcile("ws", "pub2", "SUCCEEDED", null, now()));
-
-        publications.finish("ws", "pub2", "UNKNOWN", "connection reset", now());
+        // PENDING is the residue of a process that died before writing a terminal state, so
+        // reconciliation must be able to settle it; otherwise the row stays stuck forever.
         assertTrue(publications.reconcile("ws", "pub2", "SUCCEEDED", null, now()));
         assertEquals("SUCCEEDED", publications.find("ws", "pub2").orElseThrow().getStatus());
 
         // Reconciliation is not repeatable: the record is terminal now.
         assertFalse(publications.reconcile("ws", "pub2", "FAILED", "late", now()));
+
+        publications.add(pending("pub4"));
+        publications.finish("ws", "pub4", "UNKNOWN", "connection reset", now());
+        assertTrue(publications.reconcile("ws", "pub4", "FAILED", "table absent", now()));
+        assertEquals("FAILED", publications.find("ws", "pub4").orElseThrow().getStatus());
     }
 
     @Test

@@ -12,7 +12,13 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
-/** Executes publication statements inside the owning business transaction. */
+/**
+ * Publication storage.
+ *
+ * <p>These writes run outside a business transaction on purpose: the {@code PENDING} row must be
+ * committed before the engine is contacted, otherwise a crash would leave no trace of an attempt
+ * that may already have created a table.
+ */
 @Repository
 public class PublicationRepositoryImpl implements PublicationRepository {
     @Resource

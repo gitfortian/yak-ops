@@ -130,8 +130,10 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
     public PublicationVO reconcile(String workspaceId, String actor, String publicationId) {
         var record = require(workspaceId, publicationId);
         var status = PublicationStatus.from(record.getStatus());
-        if (status != PublicationStatus.UNKNOWN) {
-            throw new BusinessException("只有 UNKNOWN 状态的发布记录需要对账，当前状态为 " + record.getStatus());
+        // PENDING means the row was written but the terminal state never was: a process that died
+        // mid-execution leaves that residue, and re-reading the target is the only way to settle it.
+        if (status != PublicationStatus.UNKNOWN && status != PublicationStatus.PENDING) {
+            throw new BusinessException("只有 PENDING 或 UNKNOWN 状态的发布记录需要对账，当前状态为 " + record.getStatus());
         }
         var dialect = dialectOf(record);
         var observed = observedColumns(record.getDatasourceId(), addressOf(record), record.getPhysicalTable());

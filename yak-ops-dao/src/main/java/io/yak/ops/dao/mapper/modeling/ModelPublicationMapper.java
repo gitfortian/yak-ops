@@ -50,9 +50,16 @@ public interface ModelPublicationMapper {
             @Param("error") String error,
             @Param("finishedTime") LocalDateTime finishedTime);
 
+    /**
+     * Resolves a record whose engine outcome was never learned.
+     *
+     * <p>{@code PENDING} is eligible on purpose: a process that dies between writing the row and
+     * writing the terminal state leaves exactly that residue, and reconciliation is the only way to
+     * converge it. Terminal statuses stay excluded, so a settled record cannot be rewritten.
+     */
     @Update("UPDATE yak_ops_modeling_model_publication SET status=#{status},error=#{error},"
             + "finished_time=#{finishedTime} "
-            + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND status='UNKNOWN'")
+            + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND status IN ('PENDING','UNKNOWN')")
     int reconcile(
             @Param("workspaceId") String workspaceId,
             @Param("id") String id,
