@@ -1,6 +1,6 @@
 # YOIP-11: Dimension Modeling — Physical Publishing and Metadata Collection
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/22
 
