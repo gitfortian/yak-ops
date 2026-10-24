@@ -123,8 +123,8 @@ class BinlogOffsetOrderTest {
     @org.junit.jupiter.api.Test
     void equalGtidSetsStillCompareBinlogFileAndPosition() {
         var partition = java.util.Map.<String,Object>of("server", "same");
-        var left = new BinlogOffset(partition, java.util.Map.of("gtids", "uuid:1-5", "file", "mysql-bin.000001", "pos", 100L));
-        var right = new BinlogOffset(partition, java.util.Map.of("gtids", "uuid:1-5", "file", "mysql-bin.000001", "pos", 200L));
+        var left = new BinlogOffset(partition, java.util.Map.of("gtids", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5", "file", "mysql-bin.000001", "pos", 100L));
+        var right = new BinlogOffset(partition, java.util.Map.of("gtids", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5", "file", "mysql-bin.000001", "pos", 200L));
         org.junit.jupiter.api.Assertions.assertTrue(BinlogOffsetOrder.compare(left, right) < 0);
         org.junit.jupiter.api.Assertions.assertTrue(BinlogOffsetOrder.compare(right, left) > 0);
     }
