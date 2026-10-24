@@ -205,35 +205,102 @@ public final class MySqlDebeziumRecordConverter {
     }
 
     /**
-     * Reconciles source metadata only if it describes the exact Debezium row shape.
-     * The caller emits this event with the preceding delivered offset, not the row
-     * offset, so checkpoints cannot skip the row that discovered the change.
+     * Recovers a nullable VARCHAR addition or widening only from the Debezium row
+     * schema at this Binlog position when a DDL has no structured tableChanges.
+     *
+     * <p>Reading the current JDBC catalog here is unsafe: it may contain later DDL.
+     * The emitted schema event retains the preceding offset until its coordinator
+     * acknowledgment, protecting the row that revealed the transition.
      */
-    public BinlogEvent reconcile(
-            TableId table, TableSchema catalogSchema, BinlogOffset preceding, BinlogOffset position) {
+    public BinlogEvent reconcileRowSchema(SourceRecord source, BinlogOffset preceding) {
         Objects.requireNonNull(preceding, "preceding CDC offset");
+        if (!evolve || !(source.value() instanceof Struct envelope)) {
+            throw new IllegalStateException("CDC schema reconciliation requires a Debezium row");
+        }
+        Struct origin = Objects.requireNonNull(envelope.getStruct("source"), "Debezium source");
+        TableId table = new TableId(origin.getString("db"), null, origin.getString("table"));
         Schema previous = Objects.requireNonNull(physicalSchemas.get(table), "registered source schema");
-        if (!previous.primaryKeys().equals(catalogSchema.primaryKeys())) {
-            throw new UnsupportedOperationException("MySQL CDC cannot change primary keys during streaming");
+        Struct row = envelope.schema().field("after") == null ? null : envelope.getStruct("after");
+        if (row == null && envelope.schema().field("before") != null) {
+            row = envelope.getStruct("before");
+        }
+        if (row == null) throw new IllegalArgumentException("CDC schema reconciliation requires a row image");
+        if (row.schema().fields().size() < previous.columns().size()) {
+            throw new UnsupportedOperationException("MySQL CDC requires structured DDL metadata for dropped columns");
         }
         List<PhysicalColumn> columns = new ArrayList<>();
-        for (Column column : catalogSchema.columns()) {
-            PhysicalColumn old = previous.column(column.name()).orElse(null);
-            columns.add(new PhysicalColumn(
-                    column.name(),
-                    column.dataType(),
-                    old == null ? null : old.comment(),
-                    old == null ? null : old.properties()));
+        for (org.apache.kafka.connect.data.Field field : row.schema().fields()) {
+            PhysicalColumn existing = previous.column(field.name()).orElse(null);
+            org.apache.kafka.connect.data.Schema sourceType = field.schema();
+            if (existing == null) {
+                if (!sourceType.isOptional() || sourceType.type() != org.apache.kafka.connect.data.Schema.Type.STRING) {
+                    throw new UnsupportedOperationException(
+                            "MySQL CDC requires structured DDL metadata for non-null or non-VARCHAR columns");
+                }
+                columns.add(new PhysicalColumn(
+                        field.name(), new VarCharType(true, varcharLength(sourceType, field.name()))));
+            } else {
+                LogicalType type = existing.type();
+                if (type instanceof VarCharType varchar
+                        && parameter(sourceType, "__debezium.source.column.length") != null) {
+                    int length = varcharLength(sourceType, field.name());
+                    if (length < varchar.length()) {
+                        throw new UnsupportedOperationException("MySQL CDC cannot infer VARCHAR narrowing");
+                    }
+                    if (length > varchar.length()) type = new VarCharType(type.isNullable(), length);
+                }
+                columns.add(new PhysicalColumn(field.name(), type, existing.comment(), existing.properties()));
+            }
+        }
+        for (PhysicalColumn original : previous.columns()) {
+            if (columns.stream().noneMatch(column -> original.name().equals(column.name()))) {
+                throw new UnsupportedOperationException(
+                        "MySQL CDC requires structured DDL metadata for removed or renamed columns");
+            }
+        }
+        for (String key : previous.primaryKeys()) {
+            if (columns.stream().noneMatch(column -> key.equals(column.name()))) {
+                throw new UnsupportedOperationException("MySQL CDC cannot change primary keys");
+            }
         }
         Schema next = new Schema(columns, previous.primaryKeys(), previous.comment());
         if (previous.equals(next)) {
-            throw new IllegalStateException("Debezium row changed without a distinct source table schema");
+            throw new UnsupportedOperationException("MySQL CDC needs structured DDL metadata for this schema change");
         }
+        BinlogOffset position = new BinlogOffset(asMap(source.sourcePartition()), asMap(source.sourceOffset()));
         SourceSchemaChange change =
                 new SourceSchemaChange(MySqlSchemaChangeConverter.eventId(position, table), table, previous, next);
         physicalSchemas.put(table, next);
         schemas.put(table, next.toTableSchema());
         return new BinlogEvent(List.of(), preceding, change);
+    }
+
+    private static int varcharLength(org.apache.kafka.connect.data.Schema schema, String column) {
+        String nativeType = parameter(schema, "__debezium.source.column.type");
+        if (nativeType == null
+                || !(nativeType.equalsIgnoreCase("VARCHAR")
+                        || nativeType.toUpperCase(java.util.Locale.ROOT).startsWith("VARCHAR("))) {
+            throw new UnsupportedOperationException(
+                    "MySQL CDC requires an unambiguous Debezium VARCHAR source type: " + column);
+        }
+        String length = parameter(schema, "__debezium.source.column.length");
+        if (length == null) {
+            throw new UnsupportedOperationException("MySQL CDC requires Debezium column length: " + column);
+        }
+        try {
+            int value = Integer.parseInt(length);
+            if (value < 1 || value > VarCharType.MAX_LENGTH) {
+                throw new IllegalArgumentException("Invalid Debezium VARCHAR length: " + column);
+            }
+            return value;
+        } catch (NumberFormatException failure) {
+            throw new IllegalArgumentException("Invalid Debezium VARCHAR length: " + column, failure);
+        }
+    }
+
+    private static String parameter(org.apache.kafka.connect.data.Schema schema, String key) {
+        Map<String, String> params = schema.parameters();
+        return params == null ? null : params.get(key);
     }
 
     private static Map<String, Object> asMap(Map<String, ?> source) {

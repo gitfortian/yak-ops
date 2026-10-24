@@ -116,6 +116,7 @@ class MySqlDebeziumRecordConverterTest {
                 .optional()
                 .field("ID", Schema.INT64_SCHEMA)
                 .field("NAME", SchemaBuilder.string()
+                        .parameter("__debezium.source.column.type", "VARCHAR(" + length + ")")
                         .parameter("__debezium.source.column.length", Integer.toString(length))
                         .build())
                 .build();
