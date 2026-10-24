@@ -162,8 +162,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                         // Current JDBC catalog metadata could already describe later DDL.
                         // Hold the preceding offset until SchemaCoordinator accepts the
                         // transition, so recovery cannot skip the discovering row.
-                        BinlogEvent transition =
-                                converter.reconcileRowSchema(source, lastQueuedOffset);
+                        BinlogEvent transition = converter.reconcileRowSchema(source, lastQueuedOffset);
                         LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
                         enqueue(transition);
                     }
