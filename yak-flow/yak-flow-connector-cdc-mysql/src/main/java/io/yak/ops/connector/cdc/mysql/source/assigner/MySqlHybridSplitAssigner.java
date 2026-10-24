@@ -29,6 +29,7 @@ public final class MySqlHybridSplitAssigner {
     private int nextTableIndex;
     private int nextChunkIndex;
     private Long nextChunkLower;
+    private ChunkRange nextChunkRange;
 
     public MySqlHybridSplitAssigner(String fingerprint, MySqlHybridEnumeratorState restored) {
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
@@ -44,6 +45,7 @@ public final class MySqlHybridSplitAssigner {
             nextTableIndex = restored.nextTableIndex();
             nextChunkIndex = restored.nextChunkIndex();
             nextChunkLower = restored.nextChunkLower();
+            nextChunkRange = restored.nextChunkRange();
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
@@ -96,7 +98,8 @@ public final class MySqlHybridSplitAssigner {
         if (original == null
                 || !original.tableId().equals(info.tableId())
                 || !Objects.equals(original.lowerInclusive(), info.lowerInclusive())
-                || !Objects.equals(original.upperExclusive(), info.upperExclusive())) {
+                || !Objects.equals(original.upperExclusive(), info.upperExclusive())
+                || !Objects.equals(original.chunkRange(), info.chunkRange())) {
             throw new IllegalArgumentException("Completed chunk differs from its assigned range");
         }
         snapshots.complete(info.splitId());
@@ -110,6 +113,20 @@ public final class MySqlHybridSplitAssigner {
         nextTableIndex = table;
         nextChunkIndex = chunk;
         nextChunkLower = lower;
+        nextChunkRange = null;
+    }
+
+    /** Preserves a typed discovery boundary atomically with the planned split. */
+    public void appendTypedPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
+        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT || split.chunkRange() == null
+                || (next != null && (next.end() != null || next.start() == null))) {
+            throw new IllegalStateException("Invalid typed snapshot discovery transition");
+        }
+        snapshots.append(List.of(split), last);
+        nextTableIndex = table;
+        nextChunkIndex = chunk;
+        nextChunkLower = null;
+        nextChunkRange = next;
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {
@@ -126,6 +143,10 @@ public final class MySqlHybridSplitAssigner {
 
     public Long nextChunkLower() {
         return nextChunkLower;
+    }
+
+    public ChunkRange nextChunkRange() {
+        return nextChunkRange;
     }
 
     public int pendingSnapshotCount() {
@@ -193,7 +214,8 @@ public final class MySqlHybridSplitAssigner {
                 finishedSplits(),
                 nextTableIndex,
                 nextChunkIndex,
-                nextChunkLower);
+                nextChunkLower,
+                nextChunkRange);
     }
 
     public void addBack(MySqlHybridBinlogSplit split) {

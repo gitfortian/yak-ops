@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.base.source.meta.split.SnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
@@ -14,8 +15,31 @@ public record MySqlSnapshotSplit(
         Long lastEmittedKey,
         MySqlSnapshotOutput output,
         int outputPosition,
-        FinishedSnapshotSplitInfo finished)
+        FinishedSnapshotSplitInfo finished,
+        ChunkRange chunkRange)
         implements MySqlHybridSplit, SnapshotSplit {
+
+    /** Preserves every existing source and checkpoint caller using the BIGINT constructor. */
+    public MySqlSnapshotSplit(
+            String splitId,
+            String fingerprint,
+            TableId tableId,
+            Long lowerInclusive,
+            Long upperExclusive,
+            Long lastEmittedKey,
+            MySqlSnapshotOutput output,
+            int outputPosition,
+            FinishedSnapshotSplitInfo finished) {
+        this(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, lastEmittedKey,
+                output, outputPosition, finished, null);
+    }
+
+    /** Typed ranges are restorable but are not yet executable by the legacy BIGINT Reader. */
+    public static MySqlSnapshotSplit typed(String splitId, String fingerprint, ChunkRange range) {
+        Objects.requireNonNull(range, "range");
+        return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null,
+                null, 0, null, range);
+    }
 
     /** Creates an unprepared range; numeric cursors are used only by the JDBC scan primitive. */
     public MySqlSnapshotSplit(
@@ -33,6 +57,13 @@ public record MySqlSnapshotSplit(
             throw new IllegalArgumentException("Snapshot split requires a stable ID and fingerprint");
         }
         Objects.requireNonNull(tableId, "tableId");
+        if (chunkRange != null
+                && (!tableId.equals(chunkRange.tableId())
+                        || lowerInclusive != null
+                        || upperExclusive != null
+                        || lastEmittedKey != null)) {
+            throw new IllegalArgumentException("Typed snapshot cannot reuse legacy BIGINT boundaries or cursor");
+        }
         if (lowerInclusive != null && upperExclusive != null && lowerInclusive >= upperExclusive) {
             throw new IllegalArgumentException("Snapshot split bounds must be strictly increasing");
         }
@@ -57,6 +88,7 @@ public record MySqlSnapshotSplit(
                         || !tableId.equals(finished.tableId())
                         || !Objects.equals(lowerInclusive, finished.lowerInclusive())
                         || !Objects.equals(upperExclusive, finished.upperExclusive())
+                        || !Objects.equals(chunkRange, finished.chunkRange())
                         || lastEmittedKey != null)) {
             throw new IllegalArgumentException("Finished snapshot metadata differs from assigned range");
         }
@@ -78,7 +110,8 @@ public record MySqlSnapshotSplit(
                 null,
                 Objects.requireNonNull(normalized, "normalized"),
                 0,
-                null);
+                null,
+                chunkRange);
     }
 
     /** Advances only after all rows in the emitted batch were accepted by the downstream collector. */
@@ -99,13 +132,19 @@ public record MySqlSnapshotSplit(
                     null,
                     null,
                     0,
-                    new FinishedSnapshotSplitInfo(tableId, splitId, lowerInclusive, upperExclusive, output.high()));
+                    new FinishedSnapshotSplitInfo(
+                            tableId, splitId, lowerInclusive, upperExclusive, output.high(), chunkRange),
+                    chunkRange);
         }
         return new MySqlSnapshotSplit(
-                splitId, fingerprint, tableId, lowerInclusive, upperExclusive, null, output, position, null);
+                splitId, fingerprint, tableId, lowerInclusive, upperExclusive, null, output, position, null, chunkRange);
     }
 
     public MySqlSnapshotSplit withLastEmittedKey(long key) {
+        if (chunkRange != null) {
+            throw new IllegalStateException(
+                    "Non-unique typed chunk keys cannot use the legacy exclusive BIGINT resume cursor");
+        }
         if (prepared() || (lastEmittedKey != null && key <= lastEmittedKey)) {
             throw new IllegalArgumentException("Snapshot key must advance before normalization only");
         }
