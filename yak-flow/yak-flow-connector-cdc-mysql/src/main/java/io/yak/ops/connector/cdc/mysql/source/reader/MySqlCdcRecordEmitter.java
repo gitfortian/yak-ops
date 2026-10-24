@@ -12,24 +12,24 @@ import io.yak.ops.core.data.TableRecord;
  */
 public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, TableRecord, MySqlCdcSplitState> {
 
-    private final MySqlSchemaChangeGate schemaGate;
+    private final MySqlSchemaChangeHandler schemaChanges;
 
     public MySqlCdcRecordEmitter() {
-        this.schemaGate = null;
+        this.schemaChanges = null;
     }
 
-    public MySqlCdcRecordEmitter(MySqlSchemaChangeGate schemaGate) {
-        this.schemaGate = java.util.Objects.requireNonNull(schemaGate, "schemaGate");
+    public MySqlCdcRecordEmitter(MySqlSchemaChangeHandler schemaChanges) {
+        this.schemaChanges = java.util.Objects.requireNonNull(schemaChanges, "schemaChanges");
     }
 
     @Override
     public void emitRecord(BinlogEvent event, ReaderOutput<TableRecord> output, MySqlCdcSplitState state)
             throws Exception {
         if (event.schemaChange() != null) {
-            if (schemaGate == null) {
+            if (schemaChanges == null) {
                 throw new UnsupportedOperationException("MySQL CDC DDL requires a schema coordinator");
             }
-            schemaGate.begin(event.schemaChange(), () -> state.onEmitted(event.offset()));
+            schemaChanges.submitSchemaChange(event.schemaChange(), () -> state.onEmitted(event.offset()));
             return;
         }
         for (TableRecord record : event.records()) {

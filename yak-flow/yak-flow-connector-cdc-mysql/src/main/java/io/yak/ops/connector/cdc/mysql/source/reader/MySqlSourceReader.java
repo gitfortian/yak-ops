@@ -21,33 +21,33 @@ public final class MySqlSourceReader
         extends SingleThreadMultiplexSourceReaderBase<BinlogEvent, TableRecord, MySqlBinlogSplit, MySqlCdcSplitState> {
 
     private final MySqlCdcSplitReader splitReader;
-    private final MySqlSchemaChangeGate schemaGate;
+    private final MySqlSchemaChangeHandler schemaChanges;
 
     public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context) {
-        this(new MySqlCdcSplitReader(config, fingerprint), context, new MySqlSchemaChangeGate(context));
+        this(new MySqlCdcSplitReader(config, fingerprint), context, new MySqlSchemaChangeHandler(context));
     }
 
     private MySqlSourceReader(
-            MySqlCdcSplitReader splitReader, SourceReaderContext context, MySqlSchemaChangeGate schemaGate) {
-        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaGate), context);
+            MySqlCdcSplitReader splitReader, SourceReaderContext context, MySqlSchemaChangeHandler schemaChanges) {
+        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges), context);
         this.splitReader = splitReader;
-        this.schemaGate = schemaGate;
+        this.schemaChanges = schemaChanges;
     }
 
     @Override
     public InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
-        return schemaGate.consumeAcknowledgment() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
+        return schemaChanges.tryCompleteSchemaChange() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
     }
 
     @Override
     public CompletableFuture<Void> isAvailable() {
-        CompletableFuture<Void> pending = schemaGate.availability();
+        CompletableFuture<Void> pending = schemaChanges.getAvailableFuture();
         return pending == null ? super.isAvailable() : pending;
     }
 
     @Override
     public List<MySqlBinlogSplit> snapshotState(long checkpointId) {
-        schemaGate.requireCheckpointReady();
+        schemaChanges.requireNoPendingSchemaChange();
         return super.snapshotState(checkpointId);
     }
 
