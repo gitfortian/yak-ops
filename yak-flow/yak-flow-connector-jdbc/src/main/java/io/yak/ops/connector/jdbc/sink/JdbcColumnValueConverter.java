@@ -48,8 +48,12 @@ final class JdbcColumnValueConverter {
         try {
             if (from == to) {
                 if (to == LogicalTypeRoot.DECIMAL) {
-                    return decimal(row.getDecimal(position, ((DecimalType) source.dataType()).precision(),
-                            ((DecimalType) source.dataType()).scale()), (DecimalType) target.dataType());
+                    return decimal(
+                            row.getDecimal(
+                                    position,
+                                    ((DecimalType) source.dataType()).precision(),
+                                    ((DecimalType) source.dataType()).scale()),
+                            (DecimalType) target.dataType());
                 }
                 return row.getField(position);
             }
@@ -66,7 +70,8 @@ final class JdbcColumnValueConverter {
                 return row.getDate(position).atStartOfDay();
             }
             if (isInteger(from) || from == LogicalTypeRoot.BOOLEAN) {
-                long value = from == LogicalTypeRoot.BOOLEAN ? (row.getBoolean(position) ? 1L : 0L)
+                long value = from == LogicalTypeRoot.BOOLEAN
+                        ? (row.getBoolean(position) ? 1L : 0L)
                         : integer(row, position, from);
                 return switch (to) {
                     case TINYINT -> narrowByte(value, target);
