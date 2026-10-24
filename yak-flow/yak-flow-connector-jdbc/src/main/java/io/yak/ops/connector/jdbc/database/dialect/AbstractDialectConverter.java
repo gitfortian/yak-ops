@@ -2,6 +2,7 @@ package io.yak.ops.connector.jdbc.database.dialect;
 
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
+import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.DecimalType;
 import io.yak.ops.core.types.LogicalType;
 import io.yak.ops.core.types.TableSchema;
