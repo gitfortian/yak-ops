@@ -83,7 +83,11 @@ assert.equal(selectedSchema.sink.writeMode, "UPSERT");
 assert.deepEqual(selectedSchema.sink.targetPrimaryKeys, []);
 assert.equal(selectedSchema.sink.dataSourceId, "pg");
 
-const selectedTable = selection.selectSourceTable(keyed, { name: "invoices", schema: "public" }, true);
+const selectedTable = selection.selectSourceTable(
+  keyed,
+  { name: "invoices", schema: "public" },
+  true,
+);
 assert.equal(selectedTable.source.table, "invoices");
 assert.equal(selectedTable.source.keylessEnabled, false);
 assert.equal(selectedTable.sink.writeMode, "UPSERT");
@@ -147,16 +151,20 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      source: { ...form.source, keylessEnabled: true,
-      chunkKeyColumn: "bucket" },
-      sink: { ...form.sink, writeMode: "RETRACT",
-      schemaChangesEnabled: false },
+      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      sink: { ...form.sink, writeMode: "RETRACT", schemaChangesEnabled: false },
     },
     targetCatalog: { ...options.targetCatalog, tables: [{ name: "ods_orders" }] },
   }),
   true,
 );
-assert.equal(params.canSaveEditor({ ...options, form: { ...form, sink: { ...form.sink, writeMode: "RETRACT" } } }), false);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    form: { ...form, sink: { ...form.sink, writeMode: "RETRACT" } },
+  }),
+  false,
+);
 assert.equal(
   params.canSaveEditor({
     ...options,
