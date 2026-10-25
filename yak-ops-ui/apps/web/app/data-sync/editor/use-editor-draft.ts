@@ -2,6 +2,7 @@ import { useEffect, type MutableRefObject } from "react";
 import { writeTaskDraft } from "@/service/data-sync/draft";
 import type { DataSyncDraft, DataSyncTaskRecord, DataSyncTableMapping } from "@/service/data-sync";
 import type { EditorForm } from "./types";
+import { buildEditorPayload } from "./definition";
 export function useEditorDraft(
   id: string | undefined,
   draftKey: string,
@@ -21,11 +22,14 @@ export function useEditorDraft(
       steps: draft.steps,
       name: form.name,
       form: {
-        ...form,
-        solutionType: draft.solutionType,
-        steps: draft.steps,
-        tableMappings: batch ? mappings : undefined,
-        incremental: !batch && useIncremental ? form.incremental : undefined,
+        ...buildEditorPayload(
+          form,
+          draft,
+          batch,
+          mappings,
+          draft.solutionType.endsWith("_REALTIME") && draft.steps.includes("INCREMENTAL"),
+        ),
+        incremental: !batch && useIncremental ? form.source.incremental : undefined,
       },
     });
   }, [
