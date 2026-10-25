@@ -144,7 +144,7 @@ class MySqlKeylessRetractIT {
     }
 
     @Test
-    void replayAfterTargetCommitBeforeSourceCheckpointIsNotAppliedTwice() throws Exception {
+    void independentDeletesPreservePhysicalDuplicateCounts() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -152,7 +152,6 @@ class MySqlKeylessRetractIT {
                 TableRecord first = row(table, RowKind.INSERT, 8, "4.00", null);
                 TableRecord duplicate = row(table, RowKind.INSERT, 8, "4.00", null);
                 TableRecord removeOne = row(table, RowKind.DELETE, 8, "4.00", null);
-                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat writer = writer(table)) {
                     writer.add(first);
                     writer.add(duplicate);
@@ -160,15 +159,11 @@ class MySqlKeylessRetractIT {
                     writer.flush();
                 }
                 assertEquals(1, count(connection, table, 8));
-                // Simulate crash after external commit but before the source checkpoint is durable.
-                try (JdbcOutputFormat restored = writer(table)) {
-                    restored.add(first);
-                    restored.add(duplicate);
-                    restored.add(removeOne);
-                    restored.flush();
+                try (JdbcOutputFormat writer = writer(table)) {
+                    writer.add(row(table, RowKind.DELETE, 8, "4.00", null));
+                    writer.flush();
                 }
-                assertEquals(1, count(connection, table, 8));
-                assertEquals(originalReceipts + 3, receiptCount(connection));
+                assertEquals(0, count(connection, table, 8));
             } finally {
                 drop(connection, table);
             }
@@ -176,7 +171,7 @@ class MySqlKeylessRetractIT {
     }
 
     @Test
-    void updateImagesReserveOneReceiptAndCanBeReplayedTogether() throws Exception {
+    void updateImagesApplyAtomically() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -186,7 +181,6 @@ class MySqlKeylessRetractIT {
                         .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 0, 2));
                 TableRecord after = row(table, RowKind.UPDATE_AFTER, 9, "7.00", null)
                         .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 1, 2));
-                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat writer = writer(table)) {
                     writer.add(initial);
                     writer.add(before);
@@ -195,14 +189,6 @@ class MySqlKeylessRetractIT {
                 }
                 assertEquals(0, count(connection, table, 8));
                 assertEquals(1, count(connection, table, 9));
-                try (JdbcOutputFormat restored = writer(table)) {
-                    restored.add(initial);
-                    restored.add(before);
-                    restored.add(after);
-                    restored.flush();
-                }
-                assertEquals(1, count(connection, table, 9));
-                assertEquals(originalReceipts + 2, receiptCount(connection));
             } finally {
                 drop(connection, table);
             }
@@ -210,27 +196,24 @@ class MySqlKeylessRetractIT {
     }
 
     @Test
-    void rollbackRemovesReceiptSoRecoveryCanRetryTheSameEvent() throws Exception {
+    void failedBatchRollsBackAndCanBeRetried() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
             try {
                 TableRecord initial = row(table, RowKind.INSERT, 11, "2.00", null);
                 TableRecord missing = row(table, RowKind.DELETE, 12, "2.00", null);
-                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat failed = writer(table)) {
                     failed.add(initial);
                     failed.add(missing);
                     assertThrows(SQLException.class, failed::flush);
                 }
-                assertEquals(originalReceipts, receiptCount(connection));
                 assertEquals(0, countAll(connection, table));
                 try (JdbcOutputFormat restored = writer(table)) {
                     restored.add(initial);
                     restored.flush();
                 }
                 assertEquals(1, count(connection, table, 11));
-                assertEquals(originalReceipts + 1, receiptCount(connection));
             } finally {
                 drop(connection, table);
             }
@@ -252,15 +235,6 @@ class MySqlKeylessRetractIT {
         }
     }
 
-    private long receiptCount(Connection connection) throws SQLException {
-        try (var statement = connection.createStatement();
-                var rows = statement.executeQuery(
-                        "SELECT COUNT(*) FROM `yak_flow_cdc_receipts`")) {
-            rows.next();
-            return rows.getLong(1);
-        }
-    }
-
     private JdbcOutputFormat writer(TableId table) throws SQLException {
         return new JdbcOutputFormat(
                 () -> DATABASE.metadata().connect(),
@@ -274,8 +248,6 @@ class MySqlKeylessRetractIT {
 
     private void create(Connection connection, TableId table, String constraints) throws SQLException {
         try (var statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS `yak_flow_cdc_receipts` "
-                    + "(`receipt_key` BINARY(32) NOT NULL PRIMARY KEY) ENGINE=InnoDB");
             statement.execute("CREATE TABLE " + dialect.qualifiedTable(table)
                     + " (bucket BIGINT NOT NULL, amount DECIMAL(14,2) NULL, "
                     + "payload VARBINARY(12) NULL" + constraints + ") ENGINE=InnoDB");

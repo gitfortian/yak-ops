@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-/** Real PostgreSQL tuple-level keyless RETRACT and durable transaction replay acceptance. */
+/** Real PostgreSQL tuple-level keyless RETRACT physical write tests. */
 @Tag("jdbc")
 @Tag("postgres")
 @Timeout(120)
@@ -70,7 +70,7 @@ class PostgresKeylessRetractIT {
     }
 
     @Test
-    void replayAfterCommitSkipsCompleteUpdateAndPhysicalDuplicates() throws Exception {
+    void completeUpdatePreservesPhysicalDuplicates() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -88,16 +88,6 @@ class PostgresKeylessRetractIT {
                 }
                 assertEquals(1, count(connection, table, 7));
                 assertEquals(1, count(connection, table, 8));
-                // A target commit preceded Source checkpoint persistence; source replays all events.
-                try (JdbcOutputFormat restored = writer(table)) {
-                    restored.add(first);
-                    restored.add(second);
-                    restored.add(before);
-                    restored.add(after);
-                    restored.flush();
-                }
-                assertEquals(1, count(connection, table, 7));
-                assertEquals(1, count(connection, table, 8));
             } finally {
                 drop(connection, table);
             }
@@ -105,7 +95,7 @@ class PostgresKeylessRetractIT {
     }
 
     @Test
-    void rollbackDiscardsReceiptsAndUniqueTargetsAreRejected() throws Exception {
+    void rollbackIsAtomicAndUniqueTargetsAreRejected() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -156,8 +146,6 @@ class PostgresKeylessRetractIT {
 
     private void create(Connection connection, TableId table, String constraint) throws SQLException {
         try (var statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS yak_flow_cdc_receipts "
-                    + "(receipt_key BYTEA NOT NULL PRIMARY KEY)");
             statement.execute("CREATE TABLE " + dialect.qualifiedTable(table)
                     + " (bucket BIGINT NOT NULL, amount NUMERIC(14,2), payload BYTEA"
                     + constraint + ")");

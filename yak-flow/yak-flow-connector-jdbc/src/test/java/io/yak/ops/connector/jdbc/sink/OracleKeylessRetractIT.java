@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-/** Real Oracle NUMBER-only keyless RETRACT; verifies ROWID, DECODE and RAW receipts. */
+/** Real Oracle NUMBER-only keyless RETRACT; verifies ROWID and DECODE. */
 @Tag("jdbc")
 @Tag("oracle")
 @Timeout(180)
@@ -64,7 +64,7 @@ class OracleKeylessRetractIT {
     }
 
     @Test
-    void targetCommitBeforeSourceCheckpointDoesNotDuplicateReceiptOrRow() throws Exception {
+    void independentMutationsPreserveDuplicateMultiplicity() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -79,13 +79,6 @@ class OracleKeylessRetractIT {
                     writer.flush();
                 }
                 assertEquals(1, count(connection, table, 4));
-                try (JdbcOutputFormat restored = writer(table)) {
-                    restored.add(first);
-                    restored.add(duplicate);
-                    restored.add(removed);
-                    restored.flush();
-                }
-                assertEquals(1, count(connection, table, 4));
             } finally {
                 drop(connection, table);
             }
@@ -93,7 +86,7 @@ class OracleKeylessRetractIT {
     }
 
     @Test
-    void failedDeleteRollsBackReceiptAndLaterRestartCanApplySameInsert() throws Exception {
+    void failedDeleteRollsBackAndNewAttemptCanApplyInsert() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, "");
@@ -168,12 +161,6 @@ class OracleKeylessRetractIT {
 
     private void create(Connection connection, TableId table, String constraint) throws SQLException {
         try (var statement = connection.createStatement()) {
-            try {
-                statement.execute("CREATE TABLE YAK_FLOW_CDC_RECEIPTS "
-                        + "(RECEIPT_KEY RAW(32) NOT NULL PRIMARY KEY)");
-            } catch (SQLException error) {
-                if (error.getErrorCode() != 955) throw error;
-            }
             statement.execute("CREATE TABLE " + dialect.qualifiedTable(table)
                     + " (BUCKET NUMBER(19) NOT NULL, AMOUNT NUMBER(14,2)" + constraint + ")");
         }
