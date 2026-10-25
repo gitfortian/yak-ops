@@ -97,6 +97,7 @@ export function DataSyncTaskDetailPage() {
               {!realtime ? (
                 <Button
                   size="small"
+                  disabled={Boolean(task.configurationError)}
                   onClick={() => {
                     setHistoryScheduleId(undefined);
                     setScheduleOpen(true);
@@ -168,7 +169,7 @@ export function DataSyncTaskDetailPage() {
       {!realtime ? (
         <ScheduleDialog
           targetId={task.id}
-          published={task.status === "PUBLISHED"}
+          published={task.status === "PUBLISHED" && !task.configurationError}
           open={scheduleOpen}
           historyScheduleId={historyScheduleId}
           onClose={() => setScheduleOpen(false)}
