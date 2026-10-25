@@ -14,12 +14,12 @@ import java.util.Objects;
 /**
  * Versioned transport of snapshot ranges and paused/running Binlog checkpoint state.
  *
- * <p>Version 4 records typed ranges without changing the legacy BIGINT fields.
- * Version 3 added compact frozen output; versions 2 and 3 remain readable.
+ * <p>Version 5 adds counted full-row snapshot images for large duplicate groups.
+ * Version 4 records typed ranges; versions 2 through 4 remain readable.
  */
 public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializer<MySqlHybridSplit> {
 
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlBinlogSplitSerializer binlogSerializer = new MySqlBinlogSplitSerializer();
 
@@ -77,7 +77,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
 
     @Override
     public MySqlHybridSplit deserialize(int version, byte[] serialized) throws IOException {
-        if ((version != 2 && version != 3 && version != VERSION)
+        if ((version != 2 && version != 3 && version != 4 && version != VERSION)
                 || serialized == null
                 || serialized.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL hybrid split state version");
@@ -98,7 +98,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                             if (stage == 1) {
                                 output = version == 2
                                         ? MySqlSnapshotOutputSerializer.read(in, table)
-                                        : MySqlSnapshotOutputSerializer.readCompact(in, table);
+                                        : MySqlSnapshotOutputSerializer.readCompact(in, table, version >= 5);
                                 position = in.readInt();
                             } else if (stage == 2) {
                                 finishedHigh = BinlogOffset.readFrom(in);

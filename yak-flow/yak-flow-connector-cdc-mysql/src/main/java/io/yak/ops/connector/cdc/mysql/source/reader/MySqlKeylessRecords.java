@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotRows;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
@@ -7,7 +8,6 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.TableSchema;
 import java.math.BigDecimal;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -19,15 +19,17 @@ import java.util.Objects;
  * Retains the multiplicity of full-row values in a keyless MySQL snapshot chunk.
  *
  * <p>Flink CDC's RecordUtils stores lists for keyless rows because two identical row images
- * must not collapse into one map entry. A DELETE retracts exactly one image. No artificial
- * primary key is assigned, and no JDBC or checkpoint state is retained here.
+ * must not collapse into one map entry. A DELETE retracts exactly one image. Duplicate
+ * full-row images share one immutable representative and a multiplicity count; only
+ * distinct row images consume the retained-image budget. No artificial key is assigned.
  */
 final class MySqlKeylessRecords {
     private final TableId table;
     private final TableSchema schema;
     private final int maxRows;
     private final long maxBytes;
-    private final Map<RowValues, ArrayDeque<TableRecord>> rows = new LinkedHashMap<>();
+    private final Map<RowValues, Group> rows = new LinkedHashMap<>();
+    private static final int MAX_TOTAL_ROWS = 10_000_000;
     private int count;
     private long retainedBytes;
     private boolean failed;
@@ -44,37 +46,47 @@ final class MySqlKeylessRecords {
         requireOpen();
         TableRecord copy = copy(record);
         long size = payloadBytes(copy.row());
-        if (count >= maxRows || size > maxBytes - retainedBytes) {
+        RowValues key = values(copy.row());
+        Group existing = rows.get(key);
+        if (count >= MAX_TOTAL_ROWS
+                || (existing == null && (rows.size() >= maxRows || size > maxBytes - retainedBytes))) {
             failed = true;
             rows.clear();
             count = 0;
             retainedBytes = 0;
-            throw new IllegalStateException("Snapshot Backfill buffer limit exceeded; use smaller chunks");
+            throw new IllegalStateException(
+                    "Snapshot Backfill distinct-row or retained-memory limit exceeded; reducing Chunk Size may not split equal keys");
         }
-        rows.computeIfAbsent(values(copy.row()), ignored -> new ArrayDeque<>()).addLast(copy);
+        if (existing == null) {
+            rows.put(key, new Group(copy));
+            retainedBytes += size;
+        } else {
+            existing.copies++;
+        }
         count++;
-        retainedBytes += size;
     }
 
     void delete(TableRecord record) {
         requireOpen();
         check(record);
-        ArrayDeque<TableRecord> matches = rows.get(values(record.row()));
-        if (matches == null || matches.isEmpty()) return;
-        TableRecord removed = matches.removeFirst();
-        retainedBytes -= payloadBytes(removed.row());
+        RowValues key = values(record.row());
+        Group matches = rows.get(key);
+        if (matches == null) return;
         count--;
-        if (matches.isEmpty()) rows.remove(values(record.row()));
+        if (--matches.copies == 0) {
+            retainedBytes -= payloadBytes(matches.record.row());
+            rows.remove(key);
+        }
     }
 
     List<TableRecord> finish() {
         requireOpen();
-        List<TableRecord> result = new ArrayList<>(count);
-        for (var copies : rows.values()) result.addAll(copies);
+        List<MySqlSnapshotRows.Run> runs = new ArrayList<>(rows.size());
+        for (Group group : rows.values()) runs.add(new MySqlSnapshotRows.Run(group.record, group.copies));
         rows.clear();
         count = 0;
         retainedBytes = 0;
-        return List.copyOf(result);
+        return new MySqlSnapshotRows(runs);
     }
 
     void check(TableRecord record) {
@@ -135,6 +147,15 @@ final class MySqlKeylessRecords {
 
     private void requireOpen() {
         if (failed) throw new IllegalStateException("Snapshot Backfill has failed");
+    }
+
+    private static final class Group {
+        private final TableRecord record;
+        private int copies = 1;
+
+        private Group(TableRecord record) {
+            this.record = record;
+        }
     }
 
     private static final class RowValues {

@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotRows;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -78,10 +81,45 @@ class MySqlKeylessBackfillTest {
     @Test
     void failsClosedOnPayloadBudgetAndDoesNotExposePartialResults() {
         var buffer = new MySqlChunkBackfill(RANGE, SCHEMA, 2, 1200);
-        buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
-        buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
-        assertThrows(IllegalStateException.class, () -> buffer.addSnapshot(row(RowKind.INSERT, 1, "same")));
+        buffer.addSnapshot(row(RowKind.INSERT, 1, "one"));
+        buffer.addSnapshot(row(RowKind.INSERT, 1, "two"));
+        assertThrows(IllegalStateException.class, () -> buffer.addSnapshot(row(RowKind.INSERT, 1, "three")));
         assertThrows(IllegalStateException.class, buffer::finish);
+    }
+
+    @Test
+    void freezesMoreThanOneHundredThousandIdenticalImagesWithinTheBoundedCheckpoint() throws Exception {
+        var buffer = new MySqlChunkBackfill(RANGE, SCHEMA, 2, 4096);
+        for (int i = 0; i < 200_000; i++) {
+            buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
+        }
+        buffer.apply(event(row(RowKind.DELETE, 1, "same")));
+        buffer.apply(event(
+                row(RowKind.UPDATE_BEFORE, 1, "same"),
+                row(RowKind.UPDATE_AFTER, 1, "edited")));
+        buffer.apply(event(row(RowKind.INSERT, 1, "same")));
+
+        var output = new MySqlSnapshotOutput(offset(100), offset(200), buffer.finish());
+        assertEquals(200_000, output.rows().size());
+        assertTrue(output.rows() instanceof MySqlSnapshotRows);
+        assertEquals(2, ((MySqlSnapshotRows) output.rows()).runs().size());
+        assertEquals("same", output.rows().getFirst().row().getString(1));
+        assertEquals("edited", output.rows().getLast().row().getString(1));
+
+        var serializer = new MySqlHybridSplitSerializer();
+        var frozen = MySqlSnapshotSplit.typed("large-group", "fp", RANGE).withOutput(output);
+        byte[] bytes = serializer.serialize(frozen);
+        assertTrue(bytes.length < 4096, "Same-row multiplicity must not inflate the split checkpoint");
+        var restored = (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), bytes);
+        assertEquals(200_000, restored.output().rows().size());
+        assertEquals("edited", restored.output().rows().getLast().row().getString(1));
+
+        var partiallyEmitted = restored.withOutputPosition(120_000);
+        var resumed = (MySqlSnapshotSplit)
+                serializer.deserialize(serializer.getVersion(), serializer.serialize(partiallyEmitted));
+        assertEquals(120_000, resumed.outputPosition());
+        assertEquals("same", resumed.output().rows().get(120_000).row().getString(1));
+        assertEquals("edited", resumed.output().rows().getLast().row().getString(1));
     }
 
     @Test
@@ -92,6 +130,11 @@ class MySqlKeylessBackfillTest {
                 () -> buffer.apply(event(row(RowKind.UPDATE_BEFORE, 1, "partial"))));
         assertThrows(IllegalArgumentException.class,
                 () -> buffer.apply(event(row(RowKind.INSERT, 1, "a"), row(RowKind.INSERT, 1, "b"))));
+    }
+
+    private static BinlogOffset offset(long position) {
+        return new BinlogOffset(
+                Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 
     private static TableRecord row(RowKind kind, long bucket, String payload) {

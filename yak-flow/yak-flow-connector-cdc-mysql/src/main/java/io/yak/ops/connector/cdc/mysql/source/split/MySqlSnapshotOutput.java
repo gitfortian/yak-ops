@@ -21,17 +21,25 @@ public final class MySqlSnapshotOutput {
         if (low.compareTo(high) > 0) {
             throw new IllegalArgumentException("Snapshot watermarks moved backwards");
         }
-        if (Objects.requireNonNull(rows, "rows").size() > 100_000) {
-            throw new IllegalArgumentException("Normalized snapshot row limit exceeded");
-        }
-        List<TableRecord> detached = new ArrayList<>(rows.size());
-        for (TableRecord row : rows) {
-            if (row.rowKind() != RowKind.INSERT) {
-                throw new IllegalArgumentException("Normalized snapshot accepts INSERT rows only");
+        Objects.requireNonNull(rows, "rows");
+        if (rows instanceof MySqlSnapshotRows compact) {
+            // Copy each distinct image once, without expanding millions of equal physical rows.
+            this.rows = compact.mapRows(MySqlSnapshotOutput::detach);
+        } else {
+            if (rows.size() > 100_000) {
+                throw new IllegalArgumentException("Normalized snapshot row limit exceeded");
             }
-            detached.add(new TableRecord(row.tableId(), RowKind.INSERT, new SnapshotRow(row.row())));
+            List<TableRecord> detached = new ArrayList<>(rows.size());
+            for (TableRecord row : rows) detached.add(detach(row));
+            this.rows = List.copyOf(detached);
         }
-        this.rows = List.copyOf(detached);
+    }
+
+    private static TableRecord detach(TableRecord row) {
+        if (row.rowKind() != RowKind.INSERT) {
+            throw new IllegalArgumentException("Normalized snapshot accepts INSERT rows only");
+        }
+        return new TableRecord(row.tableId(), RowKind.INSERT, new SnapshotRow(row.row()));
     }
 
     public BinlogOffset low() {
