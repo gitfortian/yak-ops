@@ -7,11 +7,19 @@ import {
   FieldLabel,
   Input,
   PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
+import { getNamingEntries } from "@/service/data-modeling/data-standards";
+import type { StandardNamingEntry } from "@/service/data-modeling/data-standards/types";
 import {
   checkModelName,
   classifyModelFailure,
@@ -79,6 +87,13 @@ const PUBLICATION_TONE: Record<PublicationStatus, "info" | "success" | "danger" 
   FAILED: "danger",
   UNKNOWN: "warning",
 };
+
+/** Mirrors the backend qualifier tail: a lowercase-letter head, then letters, digits or underscores. */
+const sanitizeQualifier = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^[^a-z]+/, "");
 
 /** Latest publication status of the saved model; "未发布" until the first attempt is recorded. */
 function PublicationBadge({ status }: { status: PublicationStatus | null }) {
@@ -164,6 +179,13 @@ export default function LogicalModelEditorPage() {
   const [saving, setSaving] = useState(false);
   const [nameState, setNameState] = useState<NameState>("idle");
   const [suffixMismatch, setSuffixMismatch] = useState(false);
+  const [rootId, setRootId] = useState("");
+  const [qualifier, setQualifier] = useState("");
+  const [modelRootId, setModelRootId] = useState<string | null>(null);
+  const [rootOptions, setRootOptions] = useState<StandardNamingEntry[]>([]);
+  const [rootState, setRootState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [rootVersion, setRootVersion] = useState(0);
+  const decomposedFor = useRef<string | null>(null);
   const [dimensions, setDimensions] = useState<DimensionState>({
     items: [],
     loading: false,
@@ -171,6 +193,8 @@ export default function LogicalModelEditorPage() {
   });
   const busy = useRef(false);
   const active = useRef(true);
+  const formRef = useRef(form);
+  formRef.current = form;
   useEffect(() => {
     active.current = true;
     return () => {
@@ -221,6 +245,7 @@ export default function LogicalModelEditorPage() {
         setRevision(model.revision);
         setUnknownType(model.type === null);
         setSuffixMismatch(Boolean(prefix) && !suffix);
+        setModelRootId(model.namingRootWordId);
         setForm({
           type: model.type ?? "DWD",
           scope: model.datamartId ? "APPLICATION" : "PUBLIC",
@@ -325,6 +350,80 @@ export default function LogicalModelEditorPage() {
   const datamarts = useMemo(() => datamartsOf(options.tree), [options.tree]);
   const issues = useMemo(() => validateFieldRows(rows), [rows]);
 
+  // DIM and ADS are exempt from the layer naming rule; only a governed layer with a public-layer
+  // model switches the free-form suffix input into the composed control.
+  const composerActive =
+    Boolean(selectedLayer?.namingRuleEnabled) && (form.type === "DWD" || form.type === "DWS");
+  const processCode = processes.find((item) => item.id === form.processId)?.code ?? "";
+
+  useEffect(() => {
+    if (!composerActive && !modelRootId) return;
+    const controller = new AbortController();
+    let current = true;
+    setRootState("loading");
+    void getNamingEntries("", 1, 100, controller.signal)
+      .then(async (page) => {
+        if (!current) return;
+        let entries = page.bizData;
+        const savedSuffix = formRef.current.nameSuffix.trim();
+        // A saved root beyond the first page is resolved by searching its own leading segment,
+        // so reopening an old model still shows which word root it was composed from.
+        const segment = modelRootId && savedSuffix ? savedSuffix.split("_")[0] : "";
+        if (modelRootId && !entries.some((entry) => entry.id === modelRootId) && segment) {
+          try {
+            const found = await getNamingEntries(segment, 1, 100, controller.signal);
+            if (!current) return;
+            const known = new Set(entries.map((entry) => entry.id));
+            entries = entries.concat(found.bizData.filter((entry) => !known.has(entry.id)));
+          } catch {
+            // The primary list still stands; the composer simply starts unselected.
+          }
+        }
+        setRootOptions(entries);
+        setRootState("ready");
+      })
+      .catch(() => {
+        if (current) setRootState("error");
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [composerActive, modelRootId, rootVersion]);
+
+  // Recovers the saved composition once per model: the root is reselected and the saved suffix is
+  // split back into the qualifier tail. A model saved before the rule cannot be decomposed and
+  // simply starts unselected, which is also what the layer violation list already reports.
+  useEffect(() => {
+    if (!modelRootId || rootState !== "ready") return;
+    if (decomposedFor.current === modelRootId) return;
+    decomposedFor.current = modelRootId;
+    const entry = rootOptions.find((item) => item.id === modelRootId);
+    // An unresolvable root leaves the composer unselected instead of pretending a match.
+    if (!entry) return;
+    setRootId(modelRootId);
+    const savedSuffix = formRef.current.nameSuffix.trim();
+    const savedProcessCode =
+      processes.find((item) => item.id === formRef.current.processId)?.code ?? "";
+    const head = savedProcessCode ? `${entry.enCode}_${savedProcessCode}` : null;
+    setQualifier(
+      head && savedSuffix.startsWith(head) ? savedSuffix.slice(head.length).replace(/^_/, "") : "",
+    );
+  }, [modelRootId, rootState, rootOptions, processes]);
+
+  // The suffix is fully derived while the composer is active; switching the process or root
+  // re-composes it live, and the payload keeps carrying a single nameSuffix.
+  useEffect(() => {
+    if (!composerActive) return;
+    const entry = rootOptions.find((item) => item.id === rootId);
+    const head = entry && processCode ? `${entry.enCode}_${processCode}` : "";
+    const composed = head ? (qualifier ? `${head}_${qualifier}` : head) : "";
+    setForm((previous) =>
+      previous.nameSuffix === composed ? previous : { ...previous, nameSuffix: composed },
+    );
+    setSuffixMismatch(false);
+  }, [composerActive, rootId, qualifier, processCode, rootOptions]);
+
   const patch = (partial: Partial<FormState>) => {
     setForm((previous) => ({ ...previous, ...partial }));
     if ("nameSuffix" in partial) setSuffixMismatch(false);
@@ -365,7 +464,7 @@ export default function LogicalModelEditorPage() {
     const next: FormErrors = {};
     if (!form.layerId) next.layerId = "请选择数仓分层";
     else if (!layerSelectable) next.layerId = "所选分层未启用或未绑定数据源";
-    if (!suffix) next.nameSuffix = "请输入表名后缀";
+    if (!suffix) next.nameSuffix = composerActive && !rootId ? "请选择词根" : "请输入表名后缀";
     else if (!suffixValid) next.nameSuffix = MODEL_SUFFIX_RULE;
     if (!form.cnName.trim()) next.cnName = "请输入表中文名";
     const lifecycle = Number(form.lifecycleDays);
@@ -477,6 +576,10 @@ export default function LogicalModelEditorPage() {
   const dimensionItems = dimensions.items.map((item) => ({
     value: item.id,
     label: `${item.name}（${item.code}）`,
+  }));
+  const rootItems = rootOptions.map((entry) => ({
+    value: entry.id,
+    label: `${entry.enCode}（${entry.cnName}）`,
   }));
   if (form.type === "DIM" && form.scope === "APPLICATION")
     dimensionItems.unshift({ value: "", label: "不绑定概念维度" });
@@ -711,36 +814,129 @@ export default function LogicalModelEditorPage() {
                 className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3"
                 invalid={Boolean(errors.nameSuffix)}
               >
-                <FieldLabel htmlFor="model-suffix" className="pt-1" required>
+                <FieldLabel
+                  htmlFor={composerActive ? "model-qualifier" : "model-suffix"}
+                  className="pt-1"
+                  required
+                >
                   表名
                 </FieldLabel>
                 <div>
-                  <div className="flex items-center gap-1">
-                    <span className="shrink-0 font-mono text-xs text-[#667475]">
-                      {prefix ? `${prefix}_` : "—"}
-                    </span>
-                    <Input
-                      id="model-suffix"
-                      size="small"
-                      variant="outlined"
-                      value={form.nameSuffix}
-                      maxLength={41}
-                      disabled={disabled}
-                      placeholder="order_detail"
-                      aria-invalid={Boolean(errors.nameSuffix) || undefined}
-                      onChange={(event) => patch({ nameSuffix: event.target.value })}
-                    />
-                  </div>
-                  <FieldError match={Boolean(errors.nameSuffix)}>{errors.nameSuffix}</FieldError>
-                  <p className="mt-1 text-[11px] leading-4 text-[#667085]">
-                    {prefix && suffix
-                      ? `完整表名：${prefix}_${suffix}`
-                      : "表名由分层前缀与后缀拼成"}
-                    {nameState === "checking" && " · 校验中"}
-                    {nameState === "available" && " · 可用"}
-                    {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
-                    {nameState === "error" && " · 名称校验失败"}
-                  </p>
+                  {composerActive ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                          {prefix ? `${prefix}_` : "—"}
+                        </span>
+                        <Select
+                          size="small"
+                          value={rootId || ""}
+                          items={rootItems}
+                          disabled={disabled || rootState !== "ready"}
+                          onValueChange={(value) => setRootId(value ?? "")}
+                        >
+                          <SelectTrigger
+                            className="w-44"
+                            variant="outlined"
+                            aria-label="表名词根"
+                            aria-invalid={Boolean(errors.nameSuffix) || undefined}
+                          >
+                            <SelectValue
+                              placeholder={
+                                rootState === "loading"
+                                  ? "词根加载中"
+                                  : rootState === "error"
+                                    ? "词根加载失败"
+                                    : "选择词根"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {rootItems.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                <SelectItemText>{item.label}</SelectItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span
+                          className="shrink-0 font-mono text-xs text-[#667475]"
+                          title="业务过程编码"
+                        >
+                          _{processCode || "过程编码"}
+                        </span>
+                        <Input
+                          id="model-qualifier"
+                          size="small"
+                          variant="outlined"
+                          value={qualifier}
+                          maxLength={41}
+                          disabled={disabled}
+                          placeholder="限定词（可选）"
+                          aria-label="表名限定词"
+                          className="w-40"
+                          onChange={(event) => setQualifier(sanitizeQualifier(event.target.value))}
+                        />
+                        {rootState === "error" && (
+                          <Button
+                            size="small"
+                            variant="ghost"
+                            className="shrink-0 font-normal"
+                            onClick={() => setRootVersion((value) => value + 1)}
+                          >
+                            重试
+                          </Button>
+                        )}
+                      </div>
+                      <FieldError match={Boolean(errors.nameSuffix)}>
+                        {errors.nameSuffix}
+                      </FieldError>
+                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                        {prefix && suffix
+                          ? `完整表名：${prefix}_${suffix}`
+                          : "表名 = 分层前缀 + 词根 + 业务过程编码 + 可选限定词"}
+                        {nameState === "checking" && " · 校验中"}
+                        {nameState === "available" && " · 可用"}
+                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "error" && " · 名称校验失败"}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                        该分层已启用命名规则：后缀须以「词根_业务过程编码」开头，可再跟一个「_限定词」，
+                        总长不超过 41 个字符；词根在「数据标准 · 命名词典」维护
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                          {prefix ? `${prefix}_` : "—"}
+                        </span>
+                        <Input
+                          id="model-suffix"
+                          size="small"
+                          variant="outlined"
+                          value={form.nameSuffix}
+                          maxLength={41}
+                          disabled={disabled}
+                          placeholder="order_detail"
+                          aria-invalid={Boolean(errors.nameSuffix) || undefined}
+                          onChange={(event) => patch({ nameSuffix: event.target.value })}
+                        />
+                      </div>
+                      <FieldError match={Boolean(errors.nameSuffix)}>
+                        {errors.nameSuffix}
+                      </FieldError>
+                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                        {prefix && suffix
+                          ? `完整表名：${prefix}_${suffix}`
+                          : "表名由分层前缀与后缀拼成"}
+                        {nameState === "checking" && " · 校验中"}
+                        {nameState === "available" && " · 可用"}
+                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "error" && " · 名称校验失败"}
+                      </p>
+                    </>
+                  )}
                 </div>
               </Field>
               <InputField

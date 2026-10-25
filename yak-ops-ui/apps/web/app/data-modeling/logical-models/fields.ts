@@ -24,6 +24,10 @@ export interface FieldDraft {
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
+  lookupId: string | null;
+  lookupEnCode: string | null;
+  measureUnitId: string | null;
+  measureUnitEnCode: string | null;
   /** Optional business description; loaded from and submitted with the model field. */
   description: string | null;
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
@@ -73,6 +77,10 @@ export function emptyField(): FieldDraft {
     aggregateType: null,
     standardId: null,
     standardEnCode: null,
+    lookupId: null,
+    lookupEnCode: null,
+    measureUnitId: null,
+    measureUnitEnCode: null,
     description: null,
     importNote: null,
   };
@@ -91,6 +99,10 @@ export function fromModelField(field: ModelField): FieldDraft {
     aggregateType: field.aggregateType,
     standardId: field.standardId,
     standardEnCode: field.standardEnCode,
+    lookupId: field.lookupId,
+    lookupEnCode: field.lookupEnCode,
+    measureUnitId: field.measureUnitId,
+    measureUnitEnCode: field.measureUnitEnCode,
     description: field.description,
     importNote: null,
   };
@@ -109,6 +121,10 @@ export function fromStandard(standard: StandardField): FieldDraft {
     aggregateType: null,
     standardId: standard.id,
     standardEnCode: standard.enCode,
+    lookupId: null,
+    lookupEnCode: null,
+    measureUnitId: null,
+    measureUnitEnCode: null,
     description: null,
     importNote: null,
   };
@@ -125,6 +141,8 @@ export function toModelFieldInput(row: FieldDraft): ModelFieldInput {
     isPartition: row.isPartition,
     aggregateType: row.aggregateType,
     standardId: row.standardId,
+    lookupId: row.lookupId,
+    measureUnitId: row.measureUnitId,
     description: row.description,
   };
 }

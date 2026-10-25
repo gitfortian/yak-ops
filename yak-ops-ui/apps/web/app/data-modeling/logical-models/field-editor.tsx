@@ -11,13 +11,15 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useState } from "react";
-import type { StandardField } from "@/service/data-modeling/data-standards/types";
+import { getLookups, getMeasureUnits } from "@/service/data-modeling/data-standards";
+import type { StandardField, StandardLookup } from "@/service/data-modeling/data-standards/types";
 import {
   AGGREGATE_LABEL,
   AGGREGATE_TYPES,
   aggregateSupports,
   type AggregateType,
 } from "@/service/data-modeling/dimension-modeling/types";
+import { useOptions } from "../data-standards/state";
 import BatchImportDialog from "./batch-import-dialog";
 import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
@@ -53,6 +55,18 @@ export default function FieldEditor({
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
   const [importingSource, setImportingSource] = useState(false);
+  const [optionVersion, setOptionVersion] = useState(0);
+  const lookups = useOptions(
+    (signal) =>
+      getLookups({ scope: "KEYWORD", keyword: "", pageNo: 1, pageSize: 100 }, signal).then(
+        (page) => page.bizData,
+      ),
+    optionVersion,
+  );
+  const units = useOptions(
+    (signal) => getMeasureUnits(null, "", 1, 100, signal).then((page) => page.bizData),
+    optionVersion,
+  );
   const patch = (index: number, partial: Partial<FieldDraft>) => {
     onChange(rows.map((row, position) => (position === index ? { ...row, ...partial } : row)));
   };
@@ -95,9 +109,61 @@ export default function FieldEditor({
     onChange([...rows, ...added.map(fromStandard)]);
     setPicker(null);
   };
+  /**
+   * Binds a lookup table. The server overwrites the field's code and name from it whenever no
+   * field standard is bound, so the draft mirrors that immediately instead of promising one name
+   * and saving another.
+   */
+  const bindLookup = (index: number, lookup: StandardLookup | null) => {
+    onChange(
+      rows.map((row, position) => {
+        if (position !== index) return row;
+        if (!lookup) return { ...row, lookupId: null, lookupEnCode: null };
+        if (!row.standardId) toast.info("保存后以码表覆盖该字段的英文编码与中文名");
+        return {
+          ...row,
+          lookupId: lookup.id,
+          lookupEnCode: lookup.enCode,
+          enCode: row.standardId ? row.enCode : lookup.enCode,
+          cnName: row.standardId ? row.cnName : lookup.cnName,
+        };
+      }),
+    );
+  };
   const partitionCount = rows.filter((row) => row.isPartition).length;
   const keyCount = rows.filter((row) => row.isPrimaryKey).length;
   const measureCount = rows.filter((row) => row.aggregateType != null).length;
+  /** Shared option list plus a stand-in row for a bound id that the first page did not carry. */
+  const lookupItemsFor = (row: FieldDraft) => {
+    const items = [
+      { value: "", label: "无" },
+      ...(lookups.data ?? []).map((entry) => ({
+        value: entry.id,
+        label: `${entry.cnName}（${entry.enCode}）`,
+      })),
+    ];
+    if (row.lookupId && !items.some((item) => item.value === row.lookupId))
+      items.push({
+        value: row.lookupId,
+        label: `${row.lookupEnCode ?? row.lookupId}（不在列表中）`,
+      });
+    return items;
+  };
+  const unitItemsFor = (row: FieldDraft) => {
+    const items = [
+      { value: "", label: "无" },
+      ...(units.data ?? []).map((entry) => ({
+        value: entry.id,
+        label: `${entry.cnName}（${entry.enCode}）`,
+      })),
+    ];
+    if (row.measureUnitId && !items.some((item) => item.value === row.measureUnitId))
+      items.push({
+        value: row.measureUnitId,
+        label: `${row.measureUnitEnCode ?? row.measureUnitId}（不在列表中）`,
+      });
+    return items;
+  };
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +191,14 @@ export default function FieldEditor({
           共 {rows.length} 个字段，主键 {keyCount} 个，分区 {partitionCount} 个
           {allowAggregate && `，度量 ${measureCount} 个`}
         </span>
+        {(lookups.status === "error" || units.status === "error") && (
+          <>
+            <span className="text-xs text-[#b42318]">码表或单位加载失败</span>
+            <Button size="small" onClick={() => setOptionVersion((value) => value + 1)}>
+              重试
+            </Button>
+          </>
+        )}
       </div>
       {issues.length > 0 && (
         <ul className="space-y-1 rounded-lg border border-[#fecdca] bg-[#fef3f2] px-3 py-2 text-xs text-[#b42318]">
@@ -138,7 +212,7 @@ export default function FieldEditor({
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
         <table
-          className={`w-full ${allowAggregate ? "min-w-[1530px]" : "min-w-[1420px]"} border-collapse text-xs`}
+          className={`w-full ${allowAggregate ? "min-w-[1850px]" : "min-w-[1740px]"} border-collapse text-xs`}
         >
           <thead className="sticky top-0 z-10 bg-[#fafafa] text-left text-[#475467]">
             <tr>
@@ -169,6 +243,12 @@ export default function FieldEditor({
               )}
               <th className="w-[176px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 数据标准
+              </th>
+              <th className="w-[168px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+                引用码表
+              </th>
+              <th className="w-[152px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+                引用单位
               </th>
               <th className="w-[240px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 字段描述
@@ -342,6 +422,62 @@ export default function FieldEditor({
                     )}
                   </td>
                   <td className={cell}>
+                    <Select
+                      size="small"
+                      value={row.lookupId ?? ""}
+                      items={lookupItemsFor(row)}
+                      disabled={disabled || lookups.status !== "ready"}
+                      onValueChange={(value) => {
+                        const entry = lookups.data?.find((row) => row.id === value) ?? null;
+                        // A stand-in id that the first page did not carry keeps its binding.
+                        if (value && !entry) return;
+                        bindLookup(index, entry);
+                      }}
+                    >
+                      <SelectTrigger variant="outlined" aria-label={`第 ${index + 1} 行引用码表`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lookupItemsFor(row).map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            <SelectItemText>{item.label}</SelectItemText>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className={cell}>
+                    <Select
+                      size="small"
+                      value={row.measureUnitId ?? ""}
+                      items={unitItemsFor(row)}
+                      disabled={disabled || units.status !== "ready"}
+                      onValueChange={(value) => {
+                        const unit = units.data?.find((entry) => entry.id === value) ?? null;
+                        // A stand-in id that the first page did not carry keeps its binding.
+                        if (value && !unit) return;
+                        patch(index, {
+                          measureUnitId: unit?.id ?? null,
+                          measureUnitEnCode: unit?.enCode ?? null,
+                        });
+                      }}
+                    >
+                      <SelectTrigger
+                        variant="outlined"
+                        aria-label={`第 ${index + 1} 行引用度量单位`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {unitItemsFor(row).map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            <SelectItemText>{item.label}</SelectItemText>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className={cell}>
                     <Input
                       size="small"
                       variant="outlined"
@@ -393,7 +529,7 @@ export default function FieldEditor({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowAggregate ? 12 : 11}
+                  colSpan={allowAggregate ? 14 : 13}
                   className="px-3 py-8 text-center text-[#667475]"
                 >
                   暂无字段，
