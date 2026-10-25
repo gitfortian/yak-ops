@@ -129,6 +129,30 @@ public final class PostgresJdbcDialect extends AbstractDialect {
         return JdbcNativeType.of("TEXT", "STRING length 未知，目标使用 TEXT");
     }
 
+    /**
+     * ctid identifies one tuple only within this statement; the complete before-image
+     * chooses candidates and FOR UPDATE serializes the selected physical occurrence.
+     */
+    @Override
+    public String exactRowDeleteSql(TableId table, TableSchema schema) {
+        if (!schema.primaryKeys().isEmpty() || schema.columnCount() == 0) {
+            throw new IllegalArgumentException("PostgreSQL RETRACT requires a nonempty keyless schema");
+        }
+        String predicate = schema.columns().stream()
+                .map(column -> quoteIdentifier(column.name()) + " IS NOT DISTINCT FROM ?")
+                .collect(Collectors.joining(" AND "));
+        String target = qualifiedTable(table);
+        String select = "SELECT ctid FROM " + target + " WHERE " + predicate + " LIMIT 1 FOR UPDATE";
+        return "DELETE FROM " + target + " WHERE ctid = (" + select + ")";
+    }
+
+    @Override
+    public String replayReceiptSql(TableId table) {
+        String key = quoteIdentifier("receipt_key");
+        String target = qualifiedTable(table);
+        return "INSERT INTO " + target + " (" + key + ") VALUES (?) ON CONFLICT (" + key + ") DO NOTHING";
+    }
+
     @Override
     public String upsertSql(TableId table, TableSchema schema) {
         requirePrimaryKey(schema);

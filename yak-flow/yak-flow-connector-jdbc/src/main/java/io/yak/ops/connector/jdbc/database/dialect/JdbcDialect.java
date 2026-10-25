@@ -272,6 +272,16 @@ public interface JdbcDialect extends java.io.Serializable {
         throw new UnsupportedOperationException("Exact-row RETRACT is not supported by this JDBC dialect");
     }
 
+    /** Renders a vendor-native, conflict-tolerant receipt INSERT with exactly one binary parameter. */
+    default String replayReceiptSql(TableId table) {
+        throw new UnsupportedOperationException("Transactional RETRACT receipts are unsupported by this JDBC dialect");
+    }
+
+    /** Returns the case-sensitive physical receipt-table name in the target database namespace. */
+    default String replayReceiptTableName() {
+        return "yak_flow_cdc_receipts";
+    }
+
     /**
      * Rejects empty identifier parts before quoting or building SQL.
      *
