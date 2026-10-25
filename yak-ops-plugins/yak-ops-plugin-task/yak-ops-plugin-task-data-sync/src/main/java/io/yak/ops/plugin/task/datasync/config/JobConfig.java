@@ -138,7 +138,8 @@ public final class JobConfig {
             if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
                 throw new IllegalArgumentException("Source and target tables must be unique");
             }
-            tables.add(new TableConfig(source.options(), sink.options(), source.incremental(), sink.targetPrimaryKeys()));
+            tables.add(
+                    new TableConfig(source.options(), sink.options(), source.incremental(), sink.targetPrimaryKeys()));
         }
         Map<String, Object> canonical = new LinkedHashMap<>(parameters.getSourceMap());
         canonical.put("steps", expected);
