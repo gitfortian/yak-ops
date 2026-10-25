@@ -1,5 +1,7 @@
 import { CollapseSection, Field, FieldLabel, Input, Switch } from "@yak-ops/yak-ui";
 import { type Dispatch, type SetStateAction } from "react";
+import { useNavigate } from "react-router-dom";
+import { DataSourceEndpointCard } from "./data-source-endpoint-card";
 import { TableMappingEditor } from "./table-mapping-editor";
 import { SchemaPreview } from "./schema-preview";
 import { DataSyncSearchableSelect } from "../components/searchable-select";
@@ -10,9 +12,14 @@ import type {
   DataSyncWriteMode,
   DataSyncTaskSavePayload,
 } from "@/service/data-sync";
-import type { CatalogOptions, EditorForm } from "./types";
+import type { CatalogOptions, EditorForm, EditorSink } from "./types";
 
 interface Props {
+  id?: string;
+  targetDataSources: DataSourceRecord[];
+  dataSourcesLoading: boolean;
+  loadDataSources: () => Promise<void>;
+  onConnectionChange: (value: string) => void;
   batch: boolean;
   prepareSchema: boolean;
   form: EditorForm;
@@ -30,12 +37,17 @@ interface Props {
   targetType: string;
   published: boolean;
   saving: boolean;
-  patch: <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => void;
+  patchSink: <K extends keyof EditorSink>(key: K, value: EditorSink[K]) => void;
   setTaskDirty: Dispatch<SetStateAction<boolean>>;
   setParametersDirty: Dispatch<SetStateAction<boolean>>;
   setForm: Dispatch<SetStateAction<EditorForm>>;
 }
 export function TargetSection({
+  id,
+  targetDataSources,
+  dataSourcesLoading,
+  loadDataSources,
+  onConnectionChange,
   batch,
   prepareSchema,
   form,
@@ -53,25 +65,43 @@ export function TargetSection({
   targetType,
   published,
   saving,
-  patch,
+  patchSink,
   setTaskDirty,
   setParametersDirty,
   setForm,
 }: Props) {
+  const navigate = useNavigate();
   const combination = hasCombination ? { writeModes } : undefined;
   return (
-    <CollapseSection id="target" title="目标表映射">
+    <CollapseSection id="target" title="数据去向 Sink">
+      <div className="mb-4">
+        <DataSourceEndpointCard
+          title="目标数据源"
+          dataSourceType={targetType}
+          dataSources={targetDataSources}
+          dataSourceId={form.sink.dataSourceId}
+          refreshing={dataSourcesLoading}
+          onRefresh={loadDataSources}
+          onCreateDataSource={() =>
+            navigate(
+              "/data-source?create=1&returnTo=" +
+                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+            )
+          }
+          onDataSourceChange={onConnectionChange}
+        />
+      </div>
       {prepareSchema ? (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <SchemaPreview value={payload()} disabled={!canSave} />
           {batch && !selectedTargetDataSource?.schema && targetCatalog.schemas.length ? (
             <DataSyncSearchableSelect
               ariaLabel="去向 Schema"
-              value={form.targetSchema || null}
+              value={form.sink.schema || null}
               options={targetCatalog.schemas.map((value) => ({ value, label: value }))}
               placeholder="去向 Schema"
               onValueChange={(value) => {
-                patch("targetSchema", value);
+                patchSink("schema", value);
                 updateMappings(
                   mappings.map((mapping) => ({
                     ...mapping,
@@ -99,26 +129,32 @@ export function TargetSection({
       ) : (
         <TableSection
           prepareSchema={prepareSchema}
-          onTableNameChange={(value) => patch("targetTable", value)}
-          dataSourceId={form.targetDataSourceId}
+          onTableNameChange={(value) => patchSink("table", value)}
+          dataSourceId={form.sink.dataSourceId}
           boundSchema={selectedTargetDataSource?.schema}
-          database={form.targetDatabase}
-          schema={form.targetSchema}
-          table={form.targetTable}
+          database={form.sink.database}
+          schema={form.sink.schema}
+          table={form.sink.table}
           catalog={targetCatalog}
           onSchemaChange={(value) => {
             setTaskDirty(true);
             setParametersDirty(true);
-            setForm((current) => ({ ...current, targetSchema: value, targetTable: "" }));
+            setForm((current) => ({
+              ...current,
+              sink: { ...current.sink, schema: value, table: "" },
+            }));
           }}
           onTableChange={(table) => {
             setTaskDirty(true);
             setParametersDirty(true);
             setForm((current) => ({
               ...current,
-              targetDatabase: current.targetDatabase || table.database || "",
-              targetSchema: current.targetSchema || table.schema || "",
-              targetTable: table.name,
+              sink: {
+                ...current.sink,
+                database: current.sink.database || table.database || "",
+                schema: current.sink.schema || table.schema || "",
+                table: table.name,
+              },
             }));
           }}
         >
@@ -126,30 +162,30 @@ export function TargetSection({
             <FieldLabel required>写入方式</FieldLabel>
             <DataSyncSearchableSelect
               placeholder="请选择写入方式"
-              value={form.writeMode}
+              value={form.sink.writeMode}
               disabled={!combination || combination.writeModes.length === 1 || usesChangelog}
               options={(combination?.writeModes || []).map((mode) => ({
                 value: mode,
                 label:
                   mode === "UPSERT" ? "按主键更新" : mode === "RETRACT" ? "逐行更新" : "追加写入",
               }))}
-              onValueChange={(value) => patch("writeMode", value as DataSyncWriteMode)}
+              onValueChange={(value) => patchSink("writeMode", value as DataSyncWriteMode)}
             />
           </Field>
-          {usesChangelog && form.keylessEnabled ? (
+          {usesChangelog && form.source.keylessEnabled ? (
             <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
               <FieldLabel>目标主键</FieldLabel>
               <Input
                 size="small"
                 variant="outlined"
                 placeholder="字段名，多个字段用逗号分隔"
-                value={form.targetPrimaryKeys.join(", ")}
+                value={form.sink.targetPrimaryKeys.join(", ")}
                 onChange={(event) => {
                   const keys = event.target.value.trim()
                     ? event.target.value.split(",").map((key) => key.trim())
                     : [];
-                  patch("targetPrimaryKeys", keys);
-                  patch("writeMode", keys.some(Boolean) ? "UPSERT" : "RETRACT");
+                  patchSink("targetPrimaryKeys", keys);
+                  patchSink("writeMode", keys.some(Boolean) ? "UPSERT" : "RETRACT");
                 }}
               />
             </Field>
@@ -162,28 +198,28 @@ export function TargetSection({
           <Switch
             aria-label="同步结构变更"
             size="small"
-            checked={form.schemaChangesEnabled}
-            disabled={published || saving || targetType === "ORACLE" || form.keylessEnabled}
+            checked={form.sink.schemaChangesEnabled}
+            disabled={published || saving || targetType === "ORACLE" || form.source.keylessEnabled}
             onCheckedChange={(checked) => {
-              patch("schemaChangesEnabled", checked);
-              if (!checked) patch("allowDropColumns", false);
+              patchSink("schemaChangesEnabled", checked);
+              if (!checked) patchSink("allowDropColumns", false);
             }}
           />
         </Field>
       ) : null}
-      {usesChangelog && form.schemaChangesEnabled && targetType !== "ORACLE" ? (
+      {usesChangelog && form.sink.schemaChangesEnabled && targetType !== "ORACLE" ? (
         <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
           <div className="flex items-center justify-between">
             <FieldLabel>允许删除目标字段</FieldLabel>
             <Switch
               aria-label="允许删除目标字段"
               size="small"
-              checked={form.allowDropColumns}
+              checked={form.sink.allowDropColumns}
               disabled={published || saving}
-              onCheckedChange={(checked) => patch("allowDropColumns", checked)}
+              onCheckedChange={(checked) => patchSink("allowDropColumns", checked)}
             />
           </div>
-          {form.allowDropColumns ? (
+          {form.sink.allowDropColumns ? (
             <span className="text-xs text-red-600">
               来源字段删除后，目标端对应字段及数据也会删除。
             </span>
