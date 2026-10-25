@@ -165,7 +165,13 @@ const incrementalOnly = {
   ...offlineDraft,
   steps: ["INCREMENTAL"],
 };
-const incrementalOnlyPayload = params.buildEditorPayload(offlineForm, incrementalOnly, false, [], false);
+const incrementalOnlyPayload = params.buildEditorPayload(
+  offlineForm,
+  incrementalOnly,
+  false,
+  [],
+  false,
+);
 const incrementalOnlyParameters = JSON.parse(
   transport.createDefinitionRequest(incrementalOnlyPayload).parameters,
 );
