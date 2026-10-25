@@ -163,7 +163,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   );
   const selectedSourceDataSource = dataSources.find((item) => item.id === form.source.dataSourceId);
   const selectedTargetDataSource = dataSources.find((item) => item.id === form.sink.dataSourceId);
-  useEditorDraft(id, draftKey, draft, form, batch, mappings, useIncremental, savedTask);
+  useEditorDraft(id, draftKey, draft, form, batch, mappings, savedTask);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
     setTaskDirty(true);
