@@ -116,9 +116,15 @@ class MetricsIT extends BackendTestBase {
                 api.call("GET", API + "/derived-metrics/" + derivedId).path("enCode").asText());
         api.expect("PUT", API + "/derived-metrics/" + derivedId, replacement, 409);
 
+        // The composite that cites it follows in the same transaction: text and revision move together.
+        var rewritten = api.call("GET", API + "/composite-metrics/" + compositeId);
+        assertEquals("d1_pay_amt * 100", rewritten.path("expression").asText());
+        assertEquals(2, rewritten.path("revision").asInt());
+
         // A stale composite revision conflicts; deletion cascades and releases the derived metric.
         api.expect("DELETE", API + "/composite-metrics/" + compositeId + "?revision=9", null, 409);
-        api.call("DELETE", API + "/composite-metrics/" + compositeId + "?revision=1");
+        api.expect("DELETE", API + "/composite-metrics/" + compositeId + "?revision=1", null, 409);
+        api.call("DELETE", API + "/composite-metrics/" + compositeId + "?revision=2");
         api.call("DELETE", API + "/derived-metrics/" + derivedId + "?revision=2");
         api.expect("GET", API + "/derived-metrics/" + derivedId, null, 404);
         api.call("DELETE", API + "/modifiers/" + modifierId + "?revision=1");
