@@ -20,12 +20,7 @@ public interface MetricModifierService {
      * @return the current page
      */
     PageData<MetricModifierVO> page(
-            String workspaceId,
-            String actor,
-            String domainId,
-            String keyword,
-            int pageNo,
-            int pageSize);
+            String workspaceId, String actor, String domainId, String keyword, int pageNo, int pageSize);
     /**
      * Reads one modifier.
      * @param workspaceId authorized current Workspace

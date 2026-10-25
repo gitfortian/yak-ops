@@ -50,4 +50,28 @@ class MetricExpressionParserTest {
         assertThrows(IllegalArgumentException.class, () -> MetricExpressionParser.references("a".repeat(65)));
         assertEquals(List.of("a".repeat(64)), MetricExpressionParser.references("a".repeat(64)));
     }
+
+    @Test
+    void reportsTheOneBasedCharacterPositionOfEveryFailure() {
+        assertEquals("illegal character at position 1", parseError("金额 + 1"));
+        assertEquals("malformed number at position 3", parseError("1..2 + a"));
+        assertEquals("unexpected token at position 3", parseError("a b"));
+        assertEquals("illegal token at position 5", parseError("a * * b"));
+        assertEquals("expression ends at position 4", parseError("a +"));
+        assertEquals("unbalanced parenthesis at position 7", parseError("(a - b"));
+    }
+
+    @Test
+    void acceptsDivisionByZeroAsSyntax() {
+        // The expression is never evaluated, so division by zero is a runtime concern; banning the
+        // literal form would not catch `a / (b - b)` anyway. The grammar accepts it by design.
+        assertEquals(List.of("a"), MetricExpressionParser.references("a / 0"));
+        assertEquals(List.of("a", "b", "b"), MetricExpressionParser.references("a / (b - b)"));
+    }
+
+    private static String parseError(String expression) {
+        var failure =
+                assertThrows(IllegalArgumentException.class, () -> MetricExpressionParser.references(expression));
+        return failure.getMessage();
+    }
 }

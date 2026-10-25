@@ -115,7 +115,7 @@ function CompositeDialog(props: {
         setErrors({ enCode: "英文编码已存在或不符合规范" });
       else if (result.kind === "duplicate") setErrors({ enCode: "英文编码已存在" });
       else if (result.kind === "expression")
-        setErrors({ expression: "表达式无效或引用了不存在的派生指标" });
+        setErrors({ expression: result.message || "表达式无效或引用了不存在的派生指标" });
       else if (result.kind === "conflict") setConflict(true);
       else if (result.kind === "missing") setFailure("该复合指标已不存在，请刷新后重试。");
       else setFailure(result.kind === "unknown" ? result.message : "保存失败，请稍后重试");

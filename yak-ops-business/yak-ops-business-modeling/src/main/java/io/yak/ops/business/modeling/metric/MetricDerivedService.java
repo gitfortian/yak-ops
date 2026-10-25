@@ -21,12 +21,7 @@ public interface MetricDerivedService {
      * @return the current page
      */
     PageData<MetricDerivedVO> page(
-            String workspaceId,
-            String actor,
-            String processId,
-            String keyword,
-            int pageNo,
-            int pageSize);
+            String workspaceId, String actor, String processId, String keyword, int pageNo, int pageSize);
     /**
      * Reads one derived metric with its parts.
      * @param workspaceId authorized current Workspace

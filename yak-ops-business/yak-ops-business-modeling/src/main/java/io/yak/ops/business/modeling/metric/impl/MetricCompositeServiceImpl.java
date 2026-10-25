@@ -142,9 +142,7 @@ public class MetricCompositeServiceImpl implements MetricCompositeService {
         var codes = referencedCodes(input.getExpression());
         if (codes.isEmpty()) throw new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION);
         for (var code : codes) {
-            derived
-                    .byCode(workspaceId, code)
-                    .orElseThrow(() -> new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION));
+            derived.byCode(workspaceId, code).orElseThrow(() -> unknownReference(code));
         }
         if (input.getDescription() != null && input.getDescription().length() > 500) throw MetricCatalog.invalid();
     }
@@ -152,9 +150,7 @@ public class MetricCompositeServiceImpl implements MetricCompositeService {
     private List<MetricCompositeRefEntity> resolveReferences(String workspaceId, String expression) {
         var links = new ArrayList<MetricCompositeRefEntity>();
         for (var code : new LinkedHashSet<>(referencedCodes(expression))) {
-            MetricDerivedEntity row = derived
-                    .byCode(workspaceId, code)
-                    .orElseThrow(() -> new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION));
+            MetricDerivedEntity row = derived.byCode(workspaceId, code).orElseThrow(() -> unknownReference(code));
             var reference = new MetricCompositeRefEntity();
             reference.setDerivedMetricId(row.getId());
             links.add(reference);
@@ -166,8 +162,12 @@ public class MetricCompositeServiceImpl implements MetricCompositeService {
         try {
             return MetricExpressionParser.references(expression);
         } catch (IllegalArgumentException failure) {
-            throw new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION, failure);
+            throw new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION, failure.getMessage());
         }
+    }
+
+    private static BusinessException unknownReference(String code) {
+        return new BusinessException(MetricErrorCode.INVALID_METRIC_EXPRESSION, "unknown derived metric code " + code);
     }
 
     private static void copy(MetricCompositeEntity row, MetricCompositeInputDTO input) {

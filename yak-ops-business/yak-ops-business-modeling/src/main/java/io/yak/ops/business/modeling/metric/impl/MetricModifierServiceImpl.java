@@ -129,7 +129,8 @@ public class MetricModifierServiceImpl implements MetricModifierService {
 
     private MetricModifierEntity require(String workspaceId, String id) {
         if (id == null || id.isBlank()) throw MetricCatalog.invalid();
-        return modifiers.find(workspaceId, id)
+        return modifiers
+                .find(workspaceId, id)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
 

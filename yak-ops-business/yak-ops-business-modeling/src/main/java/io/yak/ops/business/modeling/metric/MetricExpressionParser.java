@@ -10,9 +10,26 @@ import java.util.List;
  * numeric literals, whitespace and derived-metric codes. The parser validates syntax and collects
  * the referenced codes in appearance order; it never evaluates and knows nothing about
  * Workspace membership, which the service resolves afterwards.
+ *
+ * <p>Every failure names the 1-based character position of the offending token instead of a
+ * generic parse failure, so the API response can point at the exact spot. Positions refer to the
+ * submitted text; when the input runs out, the position is one past the last character.
  */
 public final class MetricExpressionParser {
     private MetricExpressionParser() {}
+
+    private record Token(String text, int start) {}
+
+    private static final class State {
+        final List<Token> tokens;
+        final int end;
+        int cursor;
+
+        State(List<Token> tokens, int end) {
+            this.tokens = tokens;
+            this.end = end;
+        }
+    }
 
     /**
      * Parses one expression and returns the referenced codes in appearance order.
@@ -20,24 +37,23 @@ public final class MetricExpressionParser {
      * @param expression submitted expression text
      * @return referenced codes; duplicates preserved, the service deduplicates for storage
      * @throws IllegalArgumentException when the expression is blank, malformed, or carries a token
-     *         outside the grammar
+     *         outside the grammar; the message always names the 1-based character position
      */
     public static List<String> references(String expression) {
         if (expression == null || expression.isBlank()) {
             throw new IllegalArgumentException("expression is empty");
         }
-        var tokens = tokenize(expression);
-        var cursor = new int[] {0};
         var references = new ArrayList<String>();
-        parseExpression(tokens, cursor, references);
-        if (cursor[0] != tokens.size()) {
-            throw new IllegalArgumentException("unexpected token at position " + position(tokens, cursor[0]));
+        var state = new State(tokenize(expression), expression.length() + 1);
+        parseExpression(state, references);
+        if (state.cursor != state.tokens.size()) {
+            throw new IllegalArgumentException("unexpected token at position " + position(state, state.cursor));
         }
         return List.copyOf(references);
     }
 
-    private static List<String> tokenize(String expression) {
-        var tokens = new ArrayList<String>();
+    private static List<Token> tokenize(String expression) {
+        var tokens = new ArrayList<Token>();
         var index = 0;
         var length = expression.length();
         while (index < length) {
@@ -47,7 +63,7 @@ public final class MetricExpressionParser {
                 continue;
             }
             if (isOperator(current) || current == '(' || current == ')') {
-                tokens.add(String.valueOf(current));
+                tokens.add(new Token(String.valueOf(current), index));
                 index++;
                 continue;
             }
@@ -57,72 +73,78 @@ public final class MetricExpressionParser {
                 while (index < length
                         && (Character.isDigit(expression.charAt(index)) || expression.charAt(index) == '.')) {
                     if (expression.charAt(index) == '.' && ++dots > 1) {
-                        throw new IllegalArgumentException("malformed number at position " + index);
+                        throw new IllegalArgumentException("malformed number at position " + (index + 1));
                     }
                     index++;
                 }
                 var literal = expression.substring(start, index);
-                if (literal.equals(".")) throw new IllegalArgumentException("malformed number at position " + start);
-                tokens.add(literal);
+                if (literal.equals(".")) {
+                    throw new IllegalArgumentException("malformed number at position " + (start + 1));
+                }
+                tokens.add(new Token(literal, start));
                 continue;
             }
             if (isIdentifierHead(current)) {
                 var start = index;
                 while (index < length && isIdentifierPart(expression.charAt(index))) index++;
-                tokens.add(expression.substring(start, index));
+                tokens.add(new Token(expression.substring(start, index), start));
                 continue;
             }
-            throw new IllegalArgumentException("illegal character at position " + index);
+            throw new IllegalArgumentException("illegal character at position " + (index + 1));
         }
         if (tokens.isEmpty()) throw new IllegalArgumentException("expression is empty");
         return tokens;
     }
 
-    private static void parseExpression(List<String> tokens, int[] cursor, List<String> references) {
-        parseTerm(tokens, cursor, references);
-        while (cursor[0] < tokens.size() && isSign(tokens.get(cursor[0]))) {
-            cursor[0]++;
-            parseTerm(tokens, cursor, references);
+    private static void parseExpression(State state, List<String> references) {
+        parseTerm(state, references);
+        while (state.cursor < state.tokens.size()
+                && isSign(state.tokens.get(state.cursor).text())) {
+            state.cursor++;
+            parseTerm(state, references);
         }
     }
 
-    private static void parseTerm(List<String> tokens, int[] cursor, List<String> references) {
-        parseFactor(tokens, cursor, references);
-        while (cursor[0] < tokens.size() && isProduct(tokens.get(cursor[0]))) {
-            cursor[0]++;
-            parseFactor(tokens, cursor, references);
+    private static void parseTerm(State state, List<String> references) {
+        parseFactor(state, references);
+        while (state.cursor < state.tokens.size()
+                && isProduct(state.tokens.get(state.cursor).text())) {
+            state.cursor++;
+            parseFactor(state, references);
         }
     }
 
-    private static void parseFactor(List<String> tokens, int[] cursor, List<String> references) {
-        if (cursor[0] >= tokens.size()) {
-            throw new IllegalArgumentException("expression ends unexpectedly");
+    private static void parseFactor(State state, List<String> references) {
+        if (state.cursor >= state.tokens.size()) {
+            throw new IllegalArgumentException("expression ends at position " + state.end);
         }
-        var token = tokens.get(cursor[0]);
-        if (isSign(token) || token.equals("+")) {
-            cursor[0]++;
-            parseFactor(tokens, cursor, references);
+        var token = state.tokens.get(state.cursor);
+        if (isSign(token.text())) {
+            state.cursor++;
+            parseFactor(state, references);
             return;
         }
-        if (token.equals("(")) {
-            cursor[0]++;
-            parseExpression(tokens, cursor, references);
-            if (cursor[0] >= tokens.size() || !tokens.get(cursor[0]).equals(")")) {
-                throw new IllegalArgumentException("unbalanced parenthesis");
+        if (token.text().equals("(")) {
+            state.cursor++;
+            parseExpression(state, references);
+            if (state.cursor >= state.tokens.size()
+                    || !state.tokens.get(state.cursor).text().equals(")")) {
+                throw new IllegalArgumentException(
+                        "unbalanced parenthesis at position " + position(state, state.cursor));
             }
-            cursor[0]++;
+            state.cursor++;
             return;
         }
-        if (token.matches("\\d+(\\.\\d+)?")) {
-            cursor[0]++;
+        if (token.text().matches("\\d+(\\.\\d+)?")) {
+            state.cursor++;
             return;
         }
-        if (token.matches("[a-z][a-z0-9_]{0,63}")) {
-            references.add(token);
-            cursor[0]++;
+        if (token.text().matches("[a-z][a-z0-9_]{0,63}")) {
+            references.add(token.text());
+            state.cursor++;
             return;
         }
-        throw new IllegalArgumentException("illegal token at position " + position(tokens, cursor[0]));
+        throw new IllegalArgumentException("illegal token at position " + (token.start() + 1));
     }
 
     private static boolean isSign(String token) {
@@ -145,8 +167,9 @@ public final class MetricExpressionParser {
         return isIdentifierHead(value) || (value >= '0' && value <= '9') || value == '_';
     }
 
-    private static int position(List<String> tokens, int index) {
-        if (index >= tokens.size()) return -1;
-        return index;
+    /** 1-based character position of the token, or one past the end when the input ran out. */
+    private static int position(State state, int index) {
+        if (index >= state.tokens.size()) return state.end;
+        return state.tokens.get(index).start() + 1;
     }
 }

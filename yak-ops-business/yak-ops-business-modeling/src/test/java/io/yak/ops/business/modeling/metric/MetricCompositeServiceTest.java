@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import io.yak.ops.business.modeling.metric.impl.MetricCompositeServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricCompositeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricCompositeUpdateDTO;
+import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.modeling.metric.MetricCompositeEntity;
@@ -81,6 +82,41 @@ class MetricCompositeServiceTest {
         var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input));
 
         assertEquals(MetricErrorCode.INVALID_METRIC_EXPRESSION, error.getErrorCode());
+        verify(composites, never()).insert(any());
+    }
+
+    @Test
+    void namesTheUnknownDerivedCodeInTheErrorDetail() {
+        when(derived.byCode("ws", "ghost")).thenReturn(Optional.empty());
+
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("ghost * 100")));
+
+        assertEquals(MetricErrorCode.INVALID_METRIC_EXPRESSION, error.getErrorCode());
+        assertEquals("unknown derived metric code ghost", error.getDetail());
+    }
+
+    @Test
+    void carriesTheParsePositionInTheErrorDetail() {
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("pay_amt +")));
+
+        assertEquals(MetricErrorCode.INVALID_METRIC_EXPRESSION, error.getErrorCode());
+        assertEquals("expression ends at position 10", error.getDetail());
+    }
+
+    @Test
+    void acceptsAnExpressionAtTheColumnLimit() {
+        service.create("ws", "actor", input("pay_amt + ".repeat(204) + " pay_amt"));
+
+        var saved = ArgumentCaptor.forClass(MetricCompositeEntity.class);
+        verify(composites).insert(saved.capture());
+        assertEquals(1, saved.getValue().getReferences().size());
+    }
+
+    @Test
+    void refusesAnExpressionBeyondTheColumnLimit() {
+        var error = assertThrows(BusinessException.class, () -> service.create("ws", "actor", input("a".repeat(2049))));
+
+        assertEquals(CommonErrorCode.PARAM_NOT_VALID.getCode(), error.getErrorCode().getCode());
         verify(composites, never()).insert(any());
     }
 

@@ -63,8 +63,7 @@ public class MetricCatalog {
      * @return the code unchanged
      */
     public static String validCode(String value) {
-        if (value == null || !CODE.matcher(value).matches())
-            throw new BusinessException(MetricErrorCode.INVALID_CODE);
+        if (value == null || !CODE.matcher(value).matches()) throw new BusinessException(MetricErrorCode.INVALID_CODE);
         return value;
     }
 

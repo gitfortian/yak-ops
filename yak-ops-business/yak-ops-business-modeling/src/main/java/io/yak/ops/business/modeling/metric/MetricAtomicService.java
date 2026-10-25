@@ -20,12 +20,7 @@ public interface MetricAtomicService {
      * @return the current page
      */
     PageData<MetricAtomicVO> page(
-            String workspaceId,
-            String actor,
-            String processId,
-            String keyword,
-            int pageNo,
-            int pageSize);
+            String workspaceId, String actor, String processId, String keyword, int pageNo, int pageSize);
     /**
      * Reads one atomic metric.
      * @param workspaceId authorized current Workspace

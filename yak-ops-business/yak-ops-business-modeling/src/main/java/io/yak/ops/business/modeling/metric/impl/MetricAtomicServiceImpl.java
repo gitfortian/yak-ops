@@ -1,7 +1,7 @@
 package io.yak.ops.business.modeling.metric.impl;
 
-import io.yak.ops.business.modeling.metric.MetricCatalog;
 import io.yak.ops.business.modeling.metric.MetricAtomicService;
+import io.yak.ops.business.modeling.metric.MetricCatalog;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicUpdateDTO;
 import io.yak.ops.common.bean.vo.modeling.metric.MetricAtomicVO;

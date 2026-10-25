@@ -157,10 +157,9 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
             String excludeId) {
         catalog.authorize(workspaceId, actor);
         if (excludeId != null) require(workspaceId, excludeId);
-        var parts = resolveParts(
-                workspaceId,
-                partInput(atomicMetricId, periodId, modifierIds));
-        if (excludeId == null) return !derived.occupied(workspaceId, parts.composed().enCode(), null);
+        var parts = resolveParts(workspaceId, partInput(atomicMetricId, periodId, modifierIds));
+        if (excludeId == null)
+            return !derived.occupied(workspaceId, parts.composed().enCode(), null);
         return !derived.occupied(workspaceId, parts.composed().enCode(), excludeId);
     }
 
@@ -183,11 +182,9 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
         var atomicId = trim(input.getAtomicMetricId());
         var periodId = trim(input.getPeriodId());
         if (atomicId == null || periodId == null) throw MetricCatalog.invalid();
-        var atomic = atomics
-                .find(workspaceId, atomicId)
+        var atomic = atomics.find(workspaceId, atomicId)
                 .orElseThrow(() -> new BusinessException(MetricErrorCode.INVALID_DERIVED_METRIC));
-        var period = periods
-                .find(workspaceId, periodId)
+        var period = periods.find(workspaceId, periodId)
                 .orElseThrow(() -> new BusinessException(MetricErrorCode.INVALID_DERIVED_METRIC));
         var submitted = input.getModifierIds() == null ? List.<String>of() : input.getModifierIds();
         var seen = new HashSet<String>();
@@ -210,8 +207,7 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
                 period.getCnName(),
                 modifierNames,
                 atomic.getCnName());
-        if (!DerivedComposition.fits(composed))
-            throw new BusinessException(MetricErrorCode.INVALID_DERIVED_METRIC);
+        if (!DerivedComposition.fits(composed)) throw new BusinessException(MetricErrorCode.INVALID_DERIVED_METRIC);
         return new Parts(atomic, period, List.copyOf(links), composed);
     }
 
@@ -223,8 +219,7 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
 
     private MetricDerivedEntity require(String workspaceId, String id) {
         if (id == null || id.isBlank()) throw MetricCatalog.invalid();
-        return derived
-                .find(workspaceId, id)
+        return derived.find(workspaceId, id)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
 
@@ -257,9 +252,7 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
                         ? List.of()
                         : row.getModifiers().stream()
                                 .map(part -> new MetricDerivedVO.Part(
-                                        part.getModifierId(),
-                                        part.getModifierEnCode(),
-                                        part.getModifierCnName()))
+                                        part.getModifierId(), part.getModifierEnCode(), part.getModifierCnName()))
                                 .toList(),
                 row.getOwnerId(),
                 row.getDescription(),

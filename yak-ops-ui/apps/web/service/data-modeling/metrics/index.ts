@@ -39,7 +39,7 @@ export type MetricFailure =
   | { kind: "forbidden" }
   | { kind: "atomic" }
   | { kind: "derived" }
-  | { kind: "expression" }
+  | { kind: "expression"; message?: string }
   | { kind: "referenced" }
   | { kind: "unknown"; message: string };
 
@@ -60,7 +60,7 @@ export function classifyMetricFailure(error: unknown): MetricFailure {
     case 19306:
       return { kind: "derived" };
     case 19307:
-      return { kind: "expression" };
+      return { kind: "expression", message: error.message };
     case 19308:
       return { kind: "referenced" };
     case 10010:

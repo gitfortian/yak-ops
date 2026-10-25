@@ -74,9 +74,14 @@ public class GlobalExceptionHandler {
         HttpStatus status = businessStatus(errorCode);
         if (status.is5xxServerError())
             LOG.error("Business request failed, errorCode={}", errorCode.getCode(), exception);
-        Result<Object> body = exception instanceof DataSourceException dataSourceException
-                ? Result.fail(errorCode.getCode(), dataSourceException.getUserMessage())
-                : Result.fail(errorCode);
+        Result<Object> body;
+        if (exception instanceof DataSourceException dataSourceException) {
+            body = Result.fail(errorCode.getCode(), dataSourceException.getUserMessage());
+        } else if (exception.getDetail() != null) {
+            body = Result.fail(errorCode.getCode(), errorCode.getMessage() + ": " + exception.getDetail());
+        } else {
+            body = Result.fail(errorCode);
+        }
         if (exception instanceof DataSourceException datasource
                 && errorCode == DataSourceErrorCode.INVALID_CONNECTION_PARAMS
                 && !datasource.getValidationErrors().isEmpty()) {

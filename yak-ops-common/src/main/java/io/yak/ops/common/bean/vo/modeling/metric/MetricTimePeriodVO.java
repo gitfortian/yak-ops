@@ -13,12 +13,7 @@ import java.time.LocalDateTime;
  * @param revision optimistic revision
  */
 public record MetricTimePeriodVO(
-        String id,
-        String enCode,
-        String cnName,
-        String description,
-        LocalDateTime updateTime,
-        long revision) {
+        String id, String enCode, String cnName, String description, LocalDateTime updateTime, long revision) {
     @Override
     public String toString() {
         return "MetricTimePeriodVO[id=" + id + ", revision=" + revision + "]";
