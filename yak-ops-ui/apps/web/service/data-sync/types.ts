@@ -175,6 +175,8 @@ export interface DataSyncMappingConfig {
 
 export interface DataSyncTaskRecord {
   id: string;
+  /** Persisted definition can be displayed, but fails current static execution validation. */
+  configurationError?: string;
   keylessEnabled?: boolean;
   chunkKeyColumn?: string;
   targetPrimaryKeys?: string[];
