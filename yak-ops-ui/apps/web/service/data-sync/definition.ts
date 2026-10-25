@@ -9,7 +9,12 @@ import type {
   TaskDefinitionRecord,
   TaskDefinitionPageResult,
 } from "./types";
-import { parseSyncParameters, solutionSyncType, supportsMultipleTables, validateSyncParameters } from "./parameters.ts";
+import {
+  parseSyncParameters,
+  solutionSyncType,
+  supportsMultipleTables,
+  validateSyncParameters,
+} from "./parameters.ts";
 
 /** Writes the single public product configuration; connector identifiers are resolved by the backend. */
 export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncParameters {
