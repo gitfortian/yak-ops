@@ -10,7 +10,7 @@ import java.sql.SQLException;
 import java.util.Locale;
 
 /**
- * Verifies conservative Oracle heap and RAW receipt contracts before enabling internal RETRACT.
+ * Verifies conservative Oracle physical-column and heap contracts for full-row RETRACT.
  *
  * <p>Only NUMBER columns are admitted on the target while vendor-specific RAW
  * full-row matching remains unverified. A verified exact-row comparator must never
@@ -39,34 +39,8 @@ public final class OracleKeylessTargetValidator {
             throw new SQLException("Oracle RETRACT target cannot have unique indexes");
         }
         validateSideEffects(connection, owner, target);
-        validateColumns(connection, owner, target, plan.schema(), false);
+        validateColumns(connection, owner, target, plan.schema());
 
-        String receipts = "YAK_FLOW_CDC_RECEIPTS";
-        validateHeap(connection, owner, receipts);
-        validateSideEffects(connection, owner, receipts);
-        validateColumns(connection, owner, receipts, null, true);
-        if (count(
-                        connection,
-                        "SELECT COUNT(*) FROM ALL_CONSTRAINTS WHERE OWNER = ? AND TABLE_NAME = ? "
-                                + "AND CONSTRAINT_TYPE = 'P' AND STATUS = 'ENABLED'",
-                        owner,
-                        receipts)
-                != 1) {
-            throw new SQLException("Oracle receipts must have one enabled primary key");
-        }
-        try (PreparedStatement query = connection.prepareStatement("SELECT cc.COLUMN_NAME FROM ALL_CONS_COLUMNS cc "
-                + "JOIN ALL_CONSTRAINTS c ON c.OWNER = cc.OWNER "
-                + "AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME "
-                + "WHERE c.OWNER = ? AND c.TABLE_NAME = ? AND c.CONSTRAINT_TYPE = 'P' "
-                + "ORDER BY cc.POSITION")) {
-            query.setString(1, owner);
-            query.setString(2, receipts);
-            try (ResultSet rows = query.executeQuery()) {
-                if (!rows.next() || !"RECEIPT_KEY".equals(rows.getString(1)) || rows.next()) {
-                    throw new SQLException("Oracle receipts require only RECEIPT_KEY as primary key");
-                }
-            }
-        }
     }
 
     private static void validateHeap(Connection connection, String owner, String table) throws SQLException {
@@ -118,7 +92,7 @@ public final class OracleKeylessTargetValidator {
     }
 
     private static void validateColumns(
-            Connection connection, String owner, String table, TableSchema schema, boolean receipt)
+            Connection connection, String owner, String table, TableSchema schema)
             throws SQLException {
         try (PreparedStatement query =
                 connection.prepareStatement("SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, DATA_LENGTH, "
@@ -127,7 +101,7 @@ public final class OracleKeylessTargetValidator {
             query.setString(1, owner);
             query.setString(2, table);
             try (ResultSet rows = query.executeQuery()) {
-                int expected = receipt ? 1 : schema.columnCount();
+                int expected = schema.columnCount();
                 for (int index = 0; index < expected; index++) {
                     if (!rows.next()) throw new SQLException("Oracle RETRACT physical column projection is incomplete");
                     String name = rows.getString(1);
@@ -139,17 +113,11 @@ public final class OracleKeylessTargetValidator {
                     if (!"NO".equals(rows.getString(7)) || !"NO".equals(rows.getString(8))) {
                         throw new SQLException("Oracle RETRACT excludes identity and virtual columns");
                     }
-                    if (receipt) {
-                        if (!"RECEIPT_KEY".equals(name) || !"RAW".equals(nativeType) || length != 32 || nullable) {
-                            throw new SQLException("Oracle receipts require RECEIPT_KEY RAW(32) NOT NULL");
-                        }
-                    } else {
-                        Column column = schema.column(index);
-                        if (!column.name().equals(name)
-                                || column.nullable() != nullable
-                                || !matches(column, nativeType, precision, scale)) {
-                            throw new SQLException("Unsupported Oracle RETRACT physical column: " + name);
-                        }
+                    Column column = schema.column(index);
+                    if (!column.name().equals(name)
+                            || column.nullable() != nullable
+                            || !matches(column, nativeType, precision, scale)) {
+                        throw new SQLException("Unsupported Oracle RETRACT physical column: " + name);
                     }
                 }
                 if (rows.next()) {
