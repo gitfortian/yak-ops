@@ -32,14 +32,14 @@ public final class PostgresKeylessTargetValidator {
 
         long receipts = heap(connection, owner, "yak_flow_cdc_receipts");
         requireNoSideEffects(connection, receipts);
-        if (count(connection, "SELECT COUNT(*) FROM pg_catalog.pg_index WHERE indrelid = ? AND indisprimary",
-                receipts) != 1) {
+        if (count(connection, "SELECT COUNT(*) FROM pg_catalog.pg_index WHERE indrelid = ? AND indisprimary", receipts)
+                != 1) {
             throw new SQLException("PostgreSQL RETRACT receipts require a primary key");
         }
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT a.attname FROM pg_catalog.pg_index i "
-                        + "JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid "
-                        + "AND a.attnum = ANY(i.indkey) WHERE i.indrelid = ? AND i.indisprimary")) {
+        String primarySql = "SELECT a.attname FROM pg_catalog.pg_index i "
+                + "JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid "
+                + "AND a.attnum = ANY(i.indkey) WHERE i.indrelid = ? AND i.indisprimary";
+        try (PreparedStatement query = connection.prepareStatement(primarySql)) {
             query.setLong(1, receipts);
             try (ResultSet rows = query.executeQuery()) {
                 if (!rows.next() || !"receipt_key".equals(rows.getString(1)) || rows.next()) {
@@ -51,10 +51,10 @@ public final class PostgresKeylessTargetValidator {
     }
 
     private static long heap(Connection connection, String owner, String name) throws SQLException {
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT c.oid, c.relkind, c.relpersistence, c.relrowsecurity "
-                        + "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
-                        + "WHERE n.nspname = ? AND c.relname = ?")) {
+        String tableSql = "SELECT c.oid, c.relkind, c.relpersistence, c.relrowsecurity "
+                + "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+                + "WHERE n.nspname = ? AND c.relname = ?";
+        try (PreparedStatement query = connection.prepareStatement(tableSql)) {
             query.setString(1, owner);
             query.setString(2, name);
             try (ResultSet rows = query.executeQuery()) {
@@ -72,26 +72,24 @@ public final class PostgresKeylessTargetValidator {
     }
 
     private static void requireNoSideEffects(Connection connection, long oid) throws SQLException {
-        if (count(connection,
-                        "SELECT COUNT(*) FROM pg_catalog.pg_trigger "
-                                + "WHERE tgrelid = ? AND NOT tgisinternal", oid)
-                        != 0
-                || count(connection, "SELECT COUNT(*) FROM pg_catalog.pg_constraint "
-                                + "WHERE contype = 'f' AND (conrelid = ? OR confrelid = ?)", oid, oid)
-                        != 0
-                || count(connection, "SELECT COUNT(*) FROM pg_catalog.pg_rewrite "
-                                + "WHERE ev_class = ? AND rulename <> '_RETURN'", oid)
-                        != 0) {
+        String triggerSql = "SELECT COUNT(*) FROM pg_catalog.pg_trigger WHERE tgrelid = ? AND NOT tgisinternal";
+        String foreignKeySql =
+                "SELECT COUNT(*) FROM pg_catalog.pg_constraint WHERE contype = 'f' AND (conrelid = ? OR confrelid = ?)";
+        String ruleSql = "SELECT COUNT(*) FROM pg_catalog.pg_rewrite WHERE ev_class = ? AND rulename <> '_RETURN'";
+        boolean triggers = count(connection, triggerSql, oid) != 0;
+        boolean foreignKeys = count(connection, foreignKeySql, oid, oid) != 0;
+        boolean rules = count(connection, ruleSql, oid) != 0;
+        if (triggers || foreignKeys || rules) {
             throw new SQLException("PostgreSQL RETRACT table has triggers, rules or foreign-key side effects");
         }
     }
 
     private static void validateColumns(Connection connection, long oid, TableSchema schema, boolean receipt)
             throws SQLException {
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), "
-                        + "a.attnotnull, a.attgenerated, a.attidentity FROM pg_catalog.pg_attribute a "
-                        + "WHERE a.attrelid = ? AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum")) {
+        String columnSql = "SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), "
+                + "a.attnotnull, a.attgenerated, a.attidentity FROM pg_catalog.pg_attribute a "
+                + "WHERE a.attrelid = ? AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum";
+        try (PreparedStatement query = connection.prepareStatement(columnSql)) {
             query.setLong(1, oid);
             try (ResultSet rows = query.executeQuery()) {
                 int count = receipt ? 1 : schema.columnCount();
@@ -131,11 +129,15 @@ public final class PostgresKeylessTargetValidator {
             case SMALLINT -> nativeType.equals("smallint");
             case INTEGER -> nativeType.equals("integer");
             case BIGINT -> nativeType.equals("bigint");
-            case DECIMAL -> nativeType.equals("numeric(" + LogicalTypes.decimalPrecision(column.dataType())
-                    + "," + LogicalTypes.decimalScale(column.dataType()) + ")");
+            case DECIMAL -> nativeType.equals(decimalType(column));
             case BINARY, VARBINARY -> nativeType.equals("bytea");
             default -> false;
         };
+    }
+
+    private static String decimalType(Column column) {
+        return "numeric(" + LogicalTypes.decimalPrecision(column.dataType()) + ","
+                + LogicalTypes.decimalScale(column.dataType()) + ")";
     }
 
     private static long count(Connection connection, String sql, long... ids) throws SQLException {
