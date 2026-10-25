@@ -120,8 +120,6 @@ public final class JobConfig {
             validate(table, SolutionOptions.TABLE_MAPPING_RULE, "tableMappings");
             ReadonlyConfig sourceTable = ReadonlyConfig.fromMap(table.get(JobOptions.SOURCE));
             ReadonlyConfig targetTable = ReadonlyConfig.fromMap(table.get(SolutionOptions.TARGET));
-            validate(sourceTable, SolutionOptions.SOURCE_TABLE_RULE, "tableMappings.source");
-            validate(targetTable, SolutionOptions.TARGET_TABLE_RULE, "tableMappings.target");
             SourceConfig source = SourceConfig.from(
                     sourceTable,
                     from.get(JobOptions.DATASOURCE_ID),
