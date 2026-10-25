@@ -61,9 +61,7 @@ public final class MySqlHybridRecordEmitter
             TableRecord row = event.rows().get(index);
             ChangeEventId identity = firstSnapshotRow >= 0
                     ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
-                    : eventPosition == null
-                            ? null
-                            : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+                    : eventPosition == null ? null : new ChangeEventId(state.sourceId(), eventPosition, index, count);
             output.collect(identity == null ? row : row.withChangeEventId(identity));
             metrics.read(generation, row.tableId(), state.binlog());
         }

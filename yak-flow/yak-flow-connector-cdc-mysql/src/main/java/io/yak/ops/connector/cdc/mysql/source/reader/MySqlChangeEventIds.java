@@ -22,7 +22,8 @@ final class MySqlChangeEventIds {
      */
     static String fromBinlog(BinlogOffset offset) {
         Map<String, Object> position = offset.position();
-        if (!(position.get("file") instanceof String file) || file.isBlank()
+        if (!(position.get("file") instanceof String file)
+                || file.isBlank()
                 || !(position.get("pos") instanceof Number)
                 || !(position.get("row") instanceof Number)
                 || !(position.get("event") instanceof Number)) {
@@ -34,8 +35,9 @@ final class MySqlChangeEventIds {
                 write(out, offset.partition());
                 write(out, position);
             }
-            return "binlog:" + HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+            return "binlog:"
+                    + HexFormat.of()
+                            .formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
         } catch (IOException | NoSuchAlgorithmException exception) {
             throw new IllegalStateException("Cannot calculate MySQL change identity", exception);
         }
