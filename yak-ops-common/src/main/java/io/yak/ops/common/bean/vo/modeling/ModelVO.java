@@ -32,6 +32,8 @@ import java.util.List;
  * @param lifecycleDays data retention in days
  * @param ownerId assigned owner identity
  * @param description optional business description
+ * @param namingRootWordId naming-dictionary word root chosen when the layer rule was applied, null
+ *     when the model was created without a naming rule or before the rule existed
  * @param fieldCount number of fields, zero on write paths
  * @param revision current optimistic version
  * @param fields ordered fields on detail reads, null in list projections
@@ -59,6 +61,7 @@ public record ModelVO(
         int lifecycleDays,
         String ownerId,
         String description,
+        String namingRootWordId,
         long fieldCount,
         long revision,
         List<ModelFieldVO> fields,

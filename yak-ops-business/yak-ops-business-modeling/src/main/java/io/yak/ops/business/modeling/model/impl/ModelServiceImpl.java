@@ -536,6 +536,7 @@ public class ModelServiceImpl implements ModelService {
                 row.getLifecycleDays(),
                 row.getOwnerId(),
                 row.getDescription(),
+                row.getNamingRootWordId(),
                 fields == null ? row.getFieldCount() : fields.size(),
                 row.getRevision(),
                 fields == null

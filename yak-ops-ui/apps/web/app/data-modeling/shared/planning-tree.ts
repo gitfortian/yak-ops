@@ -15,6 +15,8 @@ export interface DomainChoice {
 export interface ProcessChoice {
   id: string;
   name: string;
+  /** Abbreviation the naming rule composes into the table-name suffix. */
+  code: string;
   domainId: string;
 }
 
@@ -44,6 +46,7 @@ export function processesOf(tree: PlanningTree, domainId: string): ProcessChoice
         return domain.children.map((process: ProcessNode) => ({
           id: process.id,
           name: process.name,
+          code: process.code,
           domainId,
         }));
   return [];
