@@ -29,7 +29,7 @@ public final class ExecutionConfigurationFactory {
     /** Creates an engine configuration factory with application-owned execution settings. */
     public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot) {
         this.options = Objects.requireNonNull(options, "options");
-        ConfigValidator.of(options).validate(EnvironmentOptions.RUNTIME_RULE);
+        ConfigValidator.of(options).validate(EnvironmentOptions.RULE);
         this.stateRoot =
                 Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
