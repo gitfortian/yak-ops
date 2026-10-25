@@ -30,7 +30,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void boundedSourceRunsWithoutPeriodicCheckpointsOrAutomaticRestarts() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         var configuration = factory.create(FIRST, Boundedness.BOUNDED, false);
         assertEquals(RuntimeExecutionMode.BATCH, configuration.get(ExecutionOptions.RUNTIME_MODE));
         assertEquals(false, configuration.get(ExecutionOptions.DEBUG));
@@ -52,12 +52,12 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(false, configuration.get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(false, configuration.contains(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE));
         assertEquals(false, configuration.contains(MySqlCdcSourceOptions.QUEUE_CAPACITY));
-        assertEquals(2, options.get(JobOptions.SOURCE_PARALLELISM));
-        assertEquals(1, options.get(JobOptions.SINK_PARALLELISM));
+        assertEquals(2, options.get(EnvironmentOptions.SOURCE_PARALLELISM));
+        assertEquals(1, options.get(EnvironmentOptions.SINK_PARALLELISM));
     }
     @Test
     void schemaChangesRequireExplicitRealtimeOptIn() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         assertEquals(
                 false,
                 factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false)
@@ -77,7 +77,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void dropColumnPermissionRequiresExplicitRuntimeOptIn() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         assertEquals(false, factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, true)
                 .get(SchemaEvolutionOptions.ALLOW_DROP_COLUMNS));
         assertEquals(true, factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false, true, true)
@@ -90,7 +90,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void isolatesDifferentInstancesAndKeepsStateDirectoryStable() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         TaskExecutionIdentity sameInstance =
                 new TaskExecutionIdentity("ws", "definition", 1, "instance-100");
         TaskExecutionIdentity nextInstance =
@@ -109,7 +109,7 @@ class ExecutionConfigurationFactoryTest {
     }
     @Test
     void resumedInstanceLoadsItsOwnCheckpointButNewInstancesDoNot() throws Exception {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         Path checkpoint = Files.createDirectories(stateRoot.resolve(FIRST.instanceId())).resolve("checkpoint.bin");
         Files.createFile(checkpoint);
         // The runtime validates the actual checkpoint bytes and rejects an invalid snapshot.
@@ -122,7 +122,7 @@ class ExecutionConfigurationFactoryTest {
 
     @Test
     void rejectsUnsafeInstanceIdentifiers() {
-        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot);
+        ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         TaskExecutionIdentity unsafe =
                 new TaskExecutionIdentity("ws", "definition", 1, "../outside");
 
@@ -134,10 +134,10 @@ class ExecutionConfigurationFactoryTest {
         assertThrows(IllegalArgumentException.class, () -> new ExecutionConfigurationFactory(runtimeOptions(1, 17, Duration.ofSeconds(10), 1), stateRoot));
         assertThrows(IllegalArgumentException.class, () -> new ExecutionConfigurationFactory(runtimeOptions(1, 1, Duration.ZERO, 1), stateRoot));
         assertThrows(IllegalArgumentException.class, () -> new ExecutionConfigurationFactory(runtimeOptions(1, 1, Duration.ofSeconds(10), -1), stateRoot));
-        assertTrue(JobOptions.defaults().get(JobOptions.MAX_RESTARTS) > 0);
+        assertTrue(EnvironmentOptions.defaults().get(EnvironmentOptions.MAX_RESTARTS) > 0);
     }
     private static ReadonlyConfig runtimeOptions(int sourceParallelism, int sinkParallelism, Duration interval, int maxRestarts) {
-        return new Configuration().set(JobOptions.SOURCE_PARALLELISM, sourceParallelism).set(JobOptions.SINK_PARALLELISM, sinkParallelism)
-                .set(JobOptions.CHECKPOINT_INTERVAL, interval).set(JobOptions.MAX_RESTARTS, maxRestarts).toReadonlyConfig();
+        return new Configuration().set(EnvironmentOptions.SOURCE_PARALLELISM, sourceParallelism).set(EnvironmentOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(EnvironmentOptions.CHECKPOINT_INTERVAL, interval).set(EnvironmentOptions.MAX_RESTARTS, maxRestarts).toReadonlyConfig();
     }
 }
