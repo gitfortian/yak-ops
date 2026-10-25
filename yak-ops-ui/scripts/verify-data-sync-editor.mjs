@@ -80,7 +80,7 @@ assert.equal(selectedSchema.source.schema, "new_schema");
 assert.equal(selectedSchema.source.table, "");
 assert.equal(selectedSchema.source.keylessEnabled, false);
 assert.equal(selectedSchema.sink.writeMode, "UPSERT");
-assert.deepEqual(selectedSchema.sink.targetPrimaryKeys, []);
+assert.equal(selectedSchema.sink.targetPrimaryKeys.length, 0);
 assert.equal(selectedSchema.sink.dataSourceId, "pg");
 
 const selectedTable = selection.selectSourceTable(
@@ -98,7 +98,7 @@ assert.equal(selectedKeyless.source.keylessEnabled, true);
 assert.equal(selectedKeyless.sink.writeMode, "RETRACT");
 assert.equal(selectedKeyless.sink.schemaChangesEnabled, false);
 assert.equal(selectedKeyless.sink.allowDropColumns, false);
-assert.deepEqual(selectedKeyless.sink.targetPrimaryKeys, []);
+assert.equal(selectedKeyless.sink.targetPrimaryKeys.length, 0);
 assert.equal(selection.setKeylessSource(selectedKeyless, false).source.chunkKeyColumn, "");
 
 const request = params.buildEditorPayload(form, draft, false, [], true);
