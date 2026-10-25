@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter.FinishedChunk;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -48,32 +51,18 @@ class MySqlTypedBinlogSplitFilterTest {
     }
 
     @Test
-    void evaluatesUpdateImagesIndependentlyWhenMovingAcrossChunks() {
+    void rejectsKeylessChunkKeyMovesAndKeepsSameKeyUpdatesAtomic() {
         var filter = numericFilter();
-        var move = event(
-                250,
-                row(RowKind.UPDATE_BEFORE, 5, "old"),
-                row(RowKind.UPDATE_AFTER, 15, "new"));
-        var onlyBefore = filter.filter(move);
-        assertEquals(List.of(RowKind.DELETE), onlyBefore.records().stream().map(TableRecord::rowKind).toList());
-        assertEquals(5L, onlyBefore.records().getFirst().row().getLong(0));
-        assertEquals(move.offset(), onlyBefore.offset());
-
-        var inverse = filter.filter(event(
-                250,
-                row(RowKind.UPDATE_BEFORE, 15, "old"),
-                row(RowKind.UPDATE_AFTER, 5, "new")));
-        assertEquals(List.of(RowKind.INSERT), inverse.records().stream().map(TableRecord::rowKind).toList());
-        assertEquals(5L, inverse.records().getFirst().row().getLong(0));
-
-        assertEquals(0, filter.filter(event(
-                150,
-                row(RowKind.UPDATE_BEFORE, 5, "old"),
-                row(RowKind.UPDATE_AFTER, 15, "new"))).records().size());
+        for (long position : List.of(150L, 250L, 350L)) {
+            assertThrows(UnsupportedOperationException.class, () -> filter.filter(event(
+                    position, row(RowKind.UPDATE_BEFORE, 5, "old"), row(RowKind.UPDATE_AFTER, 15, "new"))));
+        }
         assertEquals(List.of(RowKind.UPDATE_BEFORE, RowKind.UPDATE_AFTER), filter.filter(event(
-                350,
-                row(RowKind.UPDATE_BEFORE, 5, "old"),
-                row(RowKind.UPDATE_AFTER, 15, "new"))).records().stream().map(TableRecord::rowKind).toList());
+                250, row(RowKind.UPDATE_BEFORE, 5, "old"), row(RowKind.UPDATE_AFTER, 5, "new")))
+                .records().stream().map(TableRecord::rowKind).toList());
+        assertEquals(0, filter.filter(event(
+                150, row(RowKind.UPDATE_BEFORE, 5, "old"), row(RowKind.UPDATE_AFTER, 5, "new")))
+                .records().size());
     }
 
     @Test
@@ -160,7 +149,7 @@ class MySqlTypedBinlogSplitFilterTest {
     }
 
     @Test
-    void movesChunkColumnPositionAfterSafeSchemaChangeButRejectsItsRemoval() {
+    void rejectsKeylessSchemaChangesBeforeChangingItsActiveColumnMetadata() {
         var filter = numericFilter();
         Schema original = new Schema(
                 List.of(
@@ -174,9 +163,9 @@ class MySqlTypedBinlogSplitFilterTest {
                 List.of());
         var ddl = new BinlogEvent(
                 List.of(), offset(350), new SourceSchemaChange("ddl-1", TABLE, original, evolved));
-        assertEquals(ddl, filter.filter(ddl));
+        assertThrows(UnsupportedOperationException.class, () -> filter.filter(ddl));
         assertEquals(1, filter.filter(event(
-                        350, new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of("after", 5L))))
+                        350, new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(5L, "unchanged"))))
                 .records().size());
         Schema removed = new Schema(
                 List.of(new PhysicalColumn("name", LogicalTypes.varchar(100))), List.of());
@@ -184,8 +173,49 @@ class MySqlTypedBinlogSplitFilterTest {
                 () -> filter.filter(new BinlogEvent(
                         List.of(), offset(351), new SourceSchemaChange("ddl-2", TABLE, evolved, removed))));
         assertEquals(1, filter.filter(event(
-                        351, new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of("unchanged", 5L))))
+                        351, new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(5L, "unchanged"))))
                 .records().size());
+    }
+
+    @Test
+    void checkpointedTypedHandoffUsesEachChunkHighAndPreservesResumeOffsets() {
+        var finished = List.of(
+                new FinishedSnapshotSplitInfo(
+                        TABLE, "first", null, null, offset(200),
+                        new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, 10L)),
+                new FinishedSnapshotSplitInfo(
+                        TABLE, "second", null, null, offset(300),
+                        new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, 10L, null)));
+        var filter = MySqlBinlogSplitFilter.fromFinishedSplits(Map.of(TABLE, KEYLESS), finished);
+        assertEquals(0, filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).records().size());
+        assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 5, "new"))).records().size());
+        assertEquals(offset(250), filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).offset());
+
+        var anchored = new MySqlHybridBinlogSplit(
+                new MySqlBinlogSplit("binlog", offset(100), new byte[] {1}),
+                MySqlHybridBinlogSplit.Phase.PAUSED, null);
+        var streaming = anchored.startStreaming(offset(300), finished);
+        assertEquals(offset(200), streaming.binlog().offset());
+        assertEquals(offset(300), streaming.highWatermark());
+        assertEquals(finished, streaming.finishedSplits());
+    }
+
+    @Test
+    void mixedKeyedAndKeylessTablesUseCheckpointRangesWithoutLosingLegacyFences() {
+        var keyedTable = new TableId("shop", null, "keyed");
+        var keyedSchema = new TableSchema(KEYLESS.columns(), List.of("bucket"));
+        var finished = List.of(
+                new FinishedSnapshotSplitInfo(
+                        TABLE, "typed", null, null, offset(200),
+                        new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null)),
+                new FinishedSnapshotSplitInfo(keyedTable, "legacy", null, null, offset(300)));
+        var filter = MySqlBinlogSplitFilter.fromFinishedSplits(
+                Map.of(TABLE, KEYLESS, keyedTable, keyedSchema), finished);
+        assertEquals(0, filter.filter(event(200, row(RowKind.INSERT, 5, "duplicate"))).records().size());
+        assertEquals(1, filter.filter(event(201, row(RowKind.INSERT, 5, "duplicate"))).records().size());
+        var keyedRow = new TableRecord(keyedTable, RowKind.INSERT, GenericRowData.of(5L, "keyed"));
+        assertEquals(0, filter.filter(event(250, keyedRow)).records().size());
+        assertEquals(1, filter.filter(event(301, keyedRow)).records().size());
     }
 
     private static MySqlBinlogSplitFilter numericFilter() {

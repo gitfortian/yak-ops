@@ -24,12 +24,12 @@ import java.util.Set;
  * watermark, independently for the before and after images of an UPDATE.
  *
  * <p>The legacy constructor reads BIGINT primary-key checkpoint metadata without changing its
- * wire format. Typed chunk metadata is planning-only until versioned split/Enumerator checkpoints
- * and Snapshot readers can persist and restore typed boundaries.
+ * wire format. The typed factory consumes the same versioned FinishedSnapshotSplitInfo
+ * checkpoints and compares numeric or DECIMAL Chunk Keys without treating them as row identity.
  */
 public final class MySqlBinlogSplitFilter {
 
-    /** Typed filtering fence; persisted transport will be introduced with checkpoint migration. */
+    /** Completed chunk fence, derived from the versioned persisted Split metadata. */
     public record FinishedChunk(String splitId, ChunkRange range, BinlogOffset highWatermark) {
         public FinishedChunk {
             if (splitId == null || splitId.isBlank()) {
@@ -45,6 +45,7 @@ public final class MySqlBinlogSplitFilter {
     private final Map<TableId, List<FinishedChunk>> completed = new LinkedHashMap<>();
     private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
     private final boolean legacyPrimaryKey;
+    private final Set<TableId> schemasWithPrimaryKey = new HashSet<>();
 
     /** Existing checkpoint-backed path; its BIGINT primary-key admission remains unchanged. */
     public MySqlBinlogSplitFilter(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
@@ -61,6 +62,32 @@ public final class MySqlBinlogSplitFilter {
         return new MySqlBinlogSplitFilter(schemas, finished, false);
     }
 
+    /**
+     * Creates the checkpoint-backed handoff filter for legacy and typed chunks together.
+     * A mixed multi-table Source must retain every table's completed chunk fences.
+     */
+    public static MySqlBinlogSplitFilter fromFinishedSplits(
+            Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
+        if (finished.stream().noneMatch(info -> info.chunkRange() != null)) {
+            return new MySqlBinlogSplitFilter(schemas, finished);
+        }
+        List<FinishedChunk> converted = new ArrayList<>(finished.size());
+        for (FinishedSnapshotSplitInfo info : finished) {
+            ChunkRange range = info.chunkRange();
+            if (range == null) {
+                TableSchema schema = Objects.requireNonNull(schemas.get(info.tableId()), "finished table schema");
+                if (schema.primaryKeys().size() != 1) {
+                    throw new IllegalArgumentException("Legacy completed chunk requires one source primary key");
+                }
+                range = new ChunkRange(
+                        info.tableId(), schema.primaryKeys().getFirst(), LogicalTypeRoot.BIGINT,
+                        info.lowerInclusive(), info.upperExclusive());
+            }
+            converted.add(new FinishedChunk(info.splitId(), range, info.highWatermark()));
+        }
+        return forChunks(schemas, converted);
+    }
+
     private MySqlBinlogSplitFilter(
             Map<TableId, TableSchema> schemas, List<FinishedChunk> finished, boolean legacyPrimaryKey) {
         Objects.requireNonNull(schemas, "schemas");
@@ -71,6 +98,7 @@ public final class MySqlBinlogSplitFilter {
         this.legacyPrimaryKey = legacyPrimaryKey;
         for (var entry : schemas.entrySet()) {
             completed.put(entry.getKey(), new ArrayList<>());
+            if (!entry.getValue().primaryKeys().isEmpty()) schemasWithPrimaryKey.add(entry.getKey());
         }
         Set<String> ids = new HashSet<>();
         for (FinishedChunk chunk : finished) {
@@ -178,6 +206,15 @@ public final class MySqlBinlogSplitFilter {
                     || !before.tableId().equals(after.tableId())) {
                 throw new IllegalArgumentException("Binlog filter requires complete adjacent UPDATE pairs");
             }
+            // A keyless Chunk Key is not a stable row identity; moving it while
+            // different completed chunks have different High watermarks is unsafe.
+            ChunkColumn chunk = columns.get(before.tableId());
+            if (!legacyPrimaryKey && chunk != null
+                    && chunkValueDiffers(chunk, before, after)
+                    && !schemasWithPrimaryKey.contains(before.tableId())) {
+                throw new UnsupportedOperationException(
+                        "Keyless Binlog handoff cannot apply an UPDATE that changes its Chunk Key");
+            }
             // Evaluate and validate both images before returning any partial change.
             boolean keepBefore = shouldEmit(before, event);
             boolean keepAfter = shouldEmit(after, event);
@@ -200,8 +237,25 @@ public final class MySqlBinlogSplitFilter {
         return shouldEmit(rows.getFirst(), event) ? event : new BinlogEvent(List.of(), event.offset());
     }
 
+    private boolean chunkValueDiffers(ChunkColumn chunk, TableRecord before, TableRecord after) {
+        if (before.row().getArity() != chunk.columnCount()
+                || after.row().getArity() != chunk.columnCount()
+                || before.row().isNullAt(chunk.position())
+                || after.row().isNullAt(chunk.position())) {
+            throw new IllegalArgumentException("Binlog UPDATE violates the frozen chunk column");
+        }
+        return compare(
+                        chunk.type(),
+                        before.row().getField(chunk.position()),
+                        after.row().getField(chunk.position()))
+                != 0;
+    }
+
     private void validateSchemaChange(BinlogEvent event) {
         var change = event.schemaChange();
+        if (!legacyPrimaryKey && !schemasWithPrimaryKey.contains(change.tableId())) {
+            throw new UnsupportedOperationException("Keyless CDC schema change requires coordinated acceptance");
+        }
         ChunkColumn previous = columns.get(change.tableId());
         if (previous == null
                 || !change.before().primaryKeys().equals(change.after().primaryKeys())

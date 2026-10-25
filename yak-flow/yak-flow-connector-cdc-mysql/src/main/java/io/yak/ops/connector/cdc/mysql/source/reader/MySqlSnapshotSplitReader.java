@@ -71,7 +71,18 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
 
     /** Opens a half-open range; typed splits are only consumed by the backfill/freeze stage. */
     public void open(MySqlSnapshotSplit split) throws SQLException {
+        open(split, null);
+    }
+
+    /**
+     * Uses a caller-owned, already established consistent MySQL read view for typed chunks.
+     * This Reader takes over ownership and closes the connection on completion or failure.
+     */
+    void open(MySqlSnapshotSplit split, Connection consistentView) throws SQLException {
         checkCancelled();
+        if (consistentView != null && split.chunkRange() == null) {
+            throw new IllegalArgumentException("Consistent typed snapshot connection requires a typed split");
+        }
         if (split.chunkRange() != null && split.prepared()) {
             throw new IllegalArgumentException("Frozen typed snapshot output must be replayed, not rescanned");
         }
@@ -119,8 +130,8 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
                 + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
                 + " ORDER BY " + quoted;
         try {
-            connection = connections.getConnection();
-            connection.setReadOnly(true);
+            connection = consistentView == null ? connections.getConnection() : consistentView;
+            if (consistentView == null) connection.setReadOnly(true);
             statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
             checkCancelled();
             statement.setQueryTimeout(60);

@@ -138,6 +138,37 @@ class MySqlKeylessBackfillIT {
     }
 
     @Test
+    void consistentReadViewPreventsDoubleCountingWritesAfterLowBeforeTypedScan() throws Exception {
+        String table = name("concurrent_keyless_");
+        execute("CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
+                "INSERT INTO " + table + " VALUES (1,'same'),(1,'same'),(1,'before')");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        try (var reader = new MySqlSnapshotBackfillReader(
+                config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6781),
+                0,
+                () -> null,
+                () -> {
+                    // The database commits before the first typed JDBC row is consumed.
+                    execute("INSERT INTO " + table + " VALUES (1,'same')",
+                            "DELETE FROM " + table + " WHERE bucket=1 AND payload='same' LIMIT 1",
+                            "INSERT INTO " + table + " VALUES (1,'added')",
+                            "UPDATE " + table + " SET payload='after' WHERE payload='before'");
+                    return null;
+                })) {
+            var prepared = reader.read(MySqlSnapshotSplit.typed(
+                    "concurrent", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
+            var output = prepared.output().rows();
+            assertEquals(4, output.size());
+            assertEquals(2, output.stream().filter(row -> "same".equals(row.row().getString(1))).count());
+            assertEquals(1, output.stream().filter(row -> "added".equals(row.row().getString(1))).count());
+            assertEquals(1, output.stream().filter(row -> "after".equals(row.row().getString(1))).count());
+            assertTrue(prepared.output().high().compareTo(prepared.output().low()) > 0);
+        } finally {
+            execute("DROP TABLE " + table);
+        }
+    }
+
+    @Test
     void publicSourceStillCannotStartKeylessBinlogOrHybridExecution() {
         String table = name("closed_");
         TableId id = new TableId("yak_cdc_it", null, table);
