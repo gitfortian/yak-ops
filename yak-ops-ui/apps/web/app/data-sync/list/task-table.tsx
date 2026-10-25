@@ -237,42 +237,42 @@ export function TaskTable({ records, pageNo, total, loading, failed, data, actio
         isUnreadable(record) ? (
           <span className="text-xs text-[var(--yak-components-muted-text)]">不可操作</span>
         ) : (
-        <DataSyncTaskLifecycleActions
-          record={record}
-          activeInstance={activeByTask.get(record.id)}
-          instanceStateReady={instancesReady}
-          actionKey={actionKey}
-          runtimeAction={{
-            label: activeByTask.has(record.id)
-              ? "停止"
-              : record.syncType === "REALTIME"
-                ? "启动"
-                : "运行",
-            className: activeByTask.has(record.id)
-              ? "text-[var(--yak-components-danger-text)]"
-              : "text-[var(--yak-color-primary)]",
-            loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
-            disabled:
-              !instancesReady ||
-              (activeByTask.has(record.id)
-                ? !canCancelTaskInstance(activeByTask.get(record.id)!.status)
-                : record.status !== "PUBLISHED"),
-            onClick: () => {
-              const active = activeByTask.get(record.id);
-              if (active) stopTask(record, active);
-              else runTask(record);
-            },
-          }}
-          onPublish={(value) => publishTask(value)}
-          onUnpublish={(value) => unpublishTask(value)}
-          onEdit={(value) => {
-            if (canManageTask(value)) navigate(`/data-sync/${value.id}/edit`);
-          }}
-          onDetail={(value) => navigate(`/data-sync/${value.id}/detail`)}
-          onDelete={(value) => {
-            if (canManageTask(value)) actions.delete(value);
-          }}
-        />
+          <DataSyncTaskLifecycleActions
+            record={record}
+            activeInstance={activeByTask.get(record.id)}
+            instanceStateReady={instancesReady}
+            actionKey={actionKey}
+            runtimeAction={{
+              label: activeByTask.has(record.id)
+                ? "停止"
+                : record.syncType === "REALTIME"
+                  ? "启动"
+                  : "运行",
+              className: activeByTask.has(record.id)
+                ? "text-[var(--yak-components-danger-text)]"
+                : "text-[var(--yak-color-primary)]",
+              loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
+              disabled:
+                !instancesReady ||
+                (activeByTask.has(record.id)
+                  ? !canCancelTaskInstance(activeByTask.get(record.id)!.status)
+                  : record.status !== "PUBLISHED"),
+              onClick: () => {
+                const active = activeByTask.get(record.id);
+                if (active) stopTask(record, active);
+                else runTask(record);
+              },
+            }}
+            onPublish={(value) => publishTask(value)}
+            onUnpublish={(value) => unpublishTask(value)}
+            onEdit={(value) => {
+              if (canManageTask(value)) navigate(`/data-sync/${value.id}/edit`);
+            }}
+            onDetail={(value) => navigate(`/data-sync/${value.id}/detail`)}
+            onDelete={(value) => {
+              if (canManageTask(value)) actions.delete(value);
+            }}
+          />
         ),
     },
   ];
