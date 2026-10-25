@@ -24,7 +24,7 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
                     .and(Conditions.matches(JobOptions.TABLE, "(?s)^.{1,128}$")))
             .optional(JobOptions.DATABASE, Conditions.matches(JobOptions.DATABASE, "(?s)^.{0,128}$"))
             .optional(JobOptions.SCHEMA, Conditions.matches(JobOptions.SCHEMA, "(?s)^.{0,128}$"))
-            .optional( PRIMARY_KEYS)
+            .optional(PRIMARY_KEYS)
             .build();
 
     public static SinkConfig from(
