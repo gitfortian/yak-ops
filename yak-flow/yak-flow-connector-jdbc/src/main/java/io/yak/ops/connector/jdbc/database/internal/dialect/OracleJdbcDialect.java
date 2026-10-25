@@ -99,8 +99,8 @@ public final class OracleJdbcDialect extends AbstractDialect {
                 .map(column -> "DECODE(" + quoteIdentifier(column.name()) + ", ?, 1, 0) = 1")
                 .collect(Collectors.joining(" AND "));
         String target = qualifiedTable(table);
-        return "DELETE FROM " + target + " WHERE ROWID = (SELECT ROWID FROM " + target
-                + " WHERE " + predicate + " AND ROWNUM = 1)";
+        String select = "SELECT ROWID FROM " + target + " WHERE " + predicate + " AND ROWNUM = 1";
+        return "DELETE FROM " + target + " WHERE ROWID = (" + select + ")";
     }
 
     @Override
@@ -112,9 +112,11 @@ public final class OracleJdbcDialect extends AbstractDialect {
     @Override
     public String replayReceiptSql(TableId table) {
         String key = quoteIdentifier("RECEIPT_KEY");
-        return "MERGE INTO " + qualifiedTable(table) + " t USING (SELECT ? " + key + " FROM DUAL) s"
-                + " ON (t." + key + " = s." + key + ")"
-                + " WHEN NOT MATCHED THEN INSERT (" + key + ") VALUES (s." + key + ")";
+        String target = qualifiedTable(table);
+        String source = "USING (SELECT ? " + key + " FROM DUAL) s";
+        String match = "ON (t." + key + " = s." + key + ")";
+        String insert = "WHEN NOT MATCHED THEN INSERT (" + key + ") VALUES (s." + key + ")";
+        return "MERGE INTO " + target + " t " + source + " " + match + " " + insert;
     }
 
     @Override
