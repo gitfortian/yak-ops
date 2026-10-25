@@ -49,7 +49,8 @@ public final class JdbcSinkFactory implements TableSinkFactory {
             throw new IllegalArgumentException("JDBC Sink requires a write mode");
         }
         if (mode == JdbcWriteMode.RETRACT && !options.get(JdbcSinkOptions.XA_ENABLED)) {
-            throw new UnsupportedOperationException("Keyless realtime RETRACT requires checkpoint-coordinated MySQL XA");
+            throw new UnsupportedOperationException(
+                    "Keyless realtime RETRACT requires checkpoint-coordinated MySQL XA");
         }
         if (options.get(JdbcSinkOptions.XA_ENABLED) && mode != JdbcWriteMode.RETRACT) {
             throw new IllegalArgumentException("JDBC XA product admission currently requires RETRACT");

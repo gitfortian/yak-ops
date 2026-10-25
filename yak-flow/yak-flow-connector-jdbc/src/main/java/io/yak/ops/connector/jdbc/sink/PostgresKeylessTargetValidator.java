@@ -84,9 +84,7 @@ public final class PostgresKeylessTargetValidator {
                         throw new SQLException("PostgreSQL RETRACT cannot use generated or identity columns");
                     }
                     Column column = schema.column(index);
-                    if (!column.name().equals(name)
-                            || column.nullable() == notNull
-                            || !matches(column, nativeType)) {
+                    if (!column.name().equals(name) || column.nullable() == notNull || !matches(column, nativeType)) {
                         throw new SQLException("Unsupported PostgreSQL RETRACT column metadata: " + name);
                     }
                 }
