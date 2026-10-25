@@ -142,14 +142,15 @@ public final class PostgresJdbcDialect extends AbstractDialect {
                 .map(column -> quoteIdentifier(column.name()) + " IS NOT DISTINCT FROM ?")
                 .collect(Collectors.joining(" AND "));
         String target = qualifiedTable(table);
-        return "DELETE FROM " + target + " WHERE ctid = (SELECT ctid FROM " + target
-                + " WHERE " + predicate + " LIMIT 1 FOR UPDATE)";
+        String select = "SELECT ctid FROM " + target + " WHERE " + predicate + " LIMIT 1 FOR UPDATE";
+        return "DELETE FROM " + target + " WHERE ctid = (" + select + ")";
     }
 
     @Override
     public String replayReceiptSql(TableId table) {
-        return "INSERT INTO " + qualifiedTable(table) + " (" + quoteIdentifier("receipt_key")
-                + ") VALUES (?) ON CONFLICT (" + quoteIdentifier("receipt_key") + ") DO NOTHING";
+        String key = quoteIdentifier("receipt_key");
+        String target = qualifiedTable(table);
+        return "INSERT INTO " + target + " (" + key + ") VALUES (?) ON CONFLICT (" + key + ") DO NOTHING";
     }
 
     @Override
