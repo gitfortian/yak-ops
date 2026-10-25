@@ -1,4 +1,4 @@
-import { validIncrementalConfig } from "@/service/data-sync/parameters";
+import { offlineIncremental, validIncrementalConfig } from "@/service/data-sync/parameters";
 import { validTableMappings } from "./table-mapping-editor";
 import { sameScheduleRule } from "@/app/schedule/schedule-presentation";
 import { selectedTableKey } from "./table-section";
@@ -38,6 +38,9 @@ export function buildEditorPayload(
     steps: draft.steps,
     writeMode: form.sink.writeMode,
     targetPrimaryKeys: form.sink.targetPrimaryKeys?.filter(Boolean) ?? [],
+    ...(!batch && offlineIncremental(draft.solutionType, draft.steps) && form.source.incremental
+      ? { incremental: { ...form.source.incremental } }
+      : {}),
     ...(usesChangelog && form.source.keylessEnabled && !batch
       ? { keylessEnabled: true, chunkKeyColumn: form.source.chunkKeyColumn }
       : {}),
