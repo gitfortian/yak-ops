@@ -148,9 +148,7 @@ const offlineForm = {
 const offlinePayload = params.buildEditorPayload(offlineForm, offlineDraft, false, [], false);
 assert.equal(offlinePayload.incremental.column, "updated_at");
 assert.equal(offlinePayload.incremental.lookbackSeconds, 5);
-const offlineParameters = JSON.parse(
-  transport.createDefinitionRequest(offlinePayload).parameters,
-);
+const offlineParameters = JSON.parse(transport.createDefinitionRequest(offlinePayload).parameters);
 assert.equal(offlineParameters.solutionType, "SINGLE_TABLE_OFFLINE");
 assert.deepEqual(offlineParameters.steps, ["FULL", "INCREMENTAL"]);
 assert.equal(offlineParameters.tableMappings.length, 1);
@@ -227,9 +225,7 @@ const retractPayload = params.buildEditorPayload(
   [],
   true,
 );
-const retractParameters = JSON.parse(
-  transport.createDefinitionRequest(retractPayload).parameters,
-);
+const retractParameters = JSON.parse(transport.createDefinitionRequest(retractPayload).parameters);
 assert.equal(retractParameters.tableMappings[0].source.xa, true);
 assert.equal(retractParameters.tableMappings[0].source.chunkKeyColumn, "bucket");
 assert.equal(retractParameters.tableMappings[0].writeMode, "RETRACT");
