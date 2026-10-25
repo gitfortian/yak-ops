@@ -52,8 +52,8 @@ export const validIncrementalConfig = (
   return true;
 };
 
-/** Interprets the pinned parameter version; unrecognized formats are never guessed as offline. */
-export function readSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
+/** Reads the stored parameter shape for presentation; it does not admit a task for execution. */
+export function parseSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
   const parsed = JSON.parse(content);
   let value: DataSyncParameters;
   if (schemaVersion === 2) {
@@ -99,6 +99,41 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
   } else {
     throw new Error("不支持的同步任务参数版本");
   }
+
+  if (
+    !value ||
+    !SOLUTIONS.has(value.solutionType) ||
+    !Array.isArray(value.steps) ||
+    !value.steps.every((step) => ["SCHEMA", "FULL", "INCREMENTAL"].includes(step)) ||
+    !value.source?.datasourceId ||
+    typeof value.source.datasourceId !== "string" ||
+    !value.sink?.datasourceId ||
+    typeof value.sink.datasourceId !== "string" ||
+    value.tableSelection?.mode !== "EXPLICIT" ||
+    !Array.isArray(value.tableMappings) ||
+    value.tableMappings.length < 1 ||
+    value.tableMappings.length > 100
+  ) {
+    throw new Error("不支持的同步任务定义");
+  }
+  for (const mapping of value.tableMappings) {
+    if (
+      !mapping?.source ||
+      !mapping.target ||
+      typeof mapping.source.table !== "string" ||
+      !mapping.source.table.trim() ||
+      typeof mapping.target.table !== "string" ||
+      !mapping.target.table.trim() ||
+      !WRITES.has(mapping.writeMode)
+    ) {
+      throw new Error("不支持的同步任务表映射");
+    }
+  }
+  return value;
+}
+
+/** Enforces static job and write-protocol admission without reading external resources. */
+export function validateSyncParameters(value: DataSyncParameters): void {
   const realtime = value && solutionSyncType(value.solutionType) === "REALTIME";
   if (
     value?.schemaChangesEnabled !== undefined &&
@@ -206,5 +241,11 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
     sources.add(sourceKey);
     targets.add(targetKey);
   }
+}
+
+/** Interprets a pinned version with the complete current static execution contract. */
+export function readSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
+  const value = parseSyncParameters(schemaVersion, content);
+  validateSyncParameters(value);
   return value;
 }
