@@ -29,10 +29,13 @@ public final class OracleKeylessTargetValidator {
         }
         String target = plan.targetTable().table();
         validateHeap(connection, owner, target);
-        if (count(connection,
+        if (count(
+                        connection,
                         "SELECT COUNT(*) FROM ALL_INDEXES WHERE TABLE_OWNER = ? AND TABLE_NAME = ? "
-                                + "AND UNIQUENESS = 'UNIQUE'", owner, target)
-                        != 0) {
+                                + "AND UNIQUENESS = 'UNIQUE'",
+                        owner,
+                        target)
+                != 0) {
             throw new SQLException("Oracle RETRACT target cannot have unique indexes");
         }
         validateSideEffects(connection, owner, target);
@@ -42,18 +45,20 @@ public final class OracleKeylessTargetValidator {
         validateHeap(connection, owner, receipts);
         validateSideEffects(connection, owner, receipts);
         validateColumns(connection, owner, receipts, null, true);
-        if (count(connection,
+        if (count(
+                        connection,
                         "SELECT COUNT(*) FROM ALL_CONSTRAINTS WHERE OWNER = ? AND TABLE_NAME = ? "
-                                + "AND CONSTRAINT_TYPE = 'P' AND STATUS = 'ENABLED'", owner, receipts)
-                        != 1) {
+                                + "AND CONSTRAINT_TYPE = 'P' AND STATUS = 'ENABLED'",
+                        owner,
+                        receipts)
+                != 1) {
             throw new SQLException("Oracle receipts must have one enabled primary key");
         }
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT cc.COLUMN_NAME FROM ALL_CONS_COLUMNS cc "
-                        + "JOIN ALL_CONSTRAINTS c ON c.OWNER = cc.OWNER "
-                        + "AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME "
-                        + "WHERE c.OWNER = ? AND c.TABLE_NAME = ? AND c.CONSTRAINT_TYPE = 'P' "
-                        + "ORDER BY cc.POSITION")) {
+        try (PreparedStatement query = connection.prepareStatement("SELECT cc.COLUMN_NAME FROM ALL_CONS_COLUMNS cc "
+                + "JOIN ALL_CONSTRAINTS c ON c.OWNER = cc.OWNER "
+                + "AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME "
+                + "WHERE c.OWNER = ? AND c.TABLE_NAME = ? AND c.CONSTRAINT_TYPE = 'P' "
+                + "ORDER BY cc.POSITION")) {
             query.setString(1, owner);
             query.setString(2, receipts);
             try (ResultSet rows = query.executeQuery()) {
@@ -112,8 +117,8 @@ public final class OracleKeylessTargetValidator {
             throws SQLException {
         try (PreparedStatement query = connection.prepareStatement(
                 "SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, DATA_LENGTH, "
-                        + "NULLABLE, VIRTUAL_COLUMN, IDENTITY_COLUMN FROM ALL_TAB_COLUMNS "
-                        + "WHERE OWNER = ? AND TABLE_NAME = ? ORDER BY COLUMN_ID")) {
+                        + "NULLABLE, VIRTUAL_COLUMN, IDENTITY_COLUMN FROM ALL_TAB_COLS "
+                        + "WHERE OWNER = ? AND TABLE_NAME = ? AND HIDDEN_COLUMN = 'NO' ORDER BY COLUMN_ID")) {
             query.setString(1, owner);
             query.setString(2, table);
             try (ResultSet rows = query.executeQuery()) {
