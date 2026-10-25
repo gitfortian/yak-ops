@@ -39,29 +39,41 @@ public final class JdbcKeylessTargetValidator {
                 }
             }
         }
-        if (count(connection,
-                "SELECT COUNT(*) FROM information_schema.STATISTICS "
-                        + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND NON_UNIQUE = 0",
-                catalog, table.table()) != 0) {
+        if (count(
+                        connection,
+                        "SELECT COUNT(*) FROM information_schema.STATISTICS "
+                                + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND NON_UNIQUE = 0",
+                        catalog,
+                        table.table())
+                != 0) {
             throw new SQLException("MySQL RETRACT target cannot have a unique index or primary key");
         }
-        if (count(connection,
-                "SELECT COUNT(*) FROM information_schema.TRIGGERS "
-                        + "WHERE EVENT_OBJECT_SCHEMA = ? AND EVENT_OBJECT_TABLE = ?",
-                catalog, table.table()) != 0) {
+        if (count(
+                        connection,
+                        "SELECT COUNT(*) FROM information_schema.TRIGGERS "
+                                + "WHERE EVENT_OBJECT_SCHEMA = ? AND EVENT_OBJECT_TABLE = ?",
+                        catalog,
+                        table.table())
+                != 0) {
             throw new SQLException("MySQL RETRACT target cannot have triggers");
         }
-        if (count(connection,
-                "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
-                        + "WHERE (TABLE_SCHEMA = ? AND TABLE_NAME = ?) "
-                        + "AND REFERENCED_TABLE_NAME IS NOT NULL",
-                catalog, table.table()) != 0) {
+        if (count(
+                        connection,
+                        "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
+                                + "WHERE (TABLE_SCHEMA = ? AND TABLE_NAME = ?) "
+                                + "AND REFERENCED_TABLE_NAME IS NOT NULL",
+                        catalog,
+                        table.table())
+                != 0) {
             throw new SQLException("MySQL RETRACT target cannot participate in outgoing foreign keys");
         }
-        if (count(connection,
-                "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
-                        + "WHERE REFERENCED_TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME = ?",
-                catalog, table.table()) != 0) {
+        if (count(
+                        connection,
+                        "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
+                                + "WHERE REFERENCED_TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME = ?",
+                        catalog,
+                        table.table())
+                != 0) {
             throw new SQLException("MySQL RETRACT target cannot be referenced by foreign keys");
         }
         try (PreparedStatement query = connection.prepareStatement(
