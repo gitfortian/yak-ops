@@ -13,10 +13,10 @@ import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecut
 import io.yak.ops.connector.jdbc.sink.JdbcBatchOrder;
 import io.yak.ops.connector.jdbc.sink.JdbcKeylessTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
-import io.yak.ops.connector.jdbc.sink.OracleKeylessTargetValidator;
-import io.yak.ops.connector.jdbc.sink.PostgresKeylessTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
+import io.yak.ops.connector.jdbc.sink.OracleKeylessTargetValidator;
+import io.yak.ops.connector.jdbc.sink.PostgresKeylessTargetValidator;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SchemaChangeRequest;
