@@ -55,13 +55,12 @@ public interface MetricCompositeMapper {
     List<MetricCompositeRefEntity> references(
             @Param("workspaceId") String workspaceId, @Param("compositeId") String compositeId);
 
-    @Select(
-            "<script>SELECT r.*,d.en_code AS derived_en_code,d.cn_name AS derived_cn_name "
-                    + "FROM yak_ops_modeling_metric_composite_ref r "
-                    + "JOIN yak_ops_modeling_metric_derived d ON d.workspace_id=r.workspace_id AND d.id=r.derived_metric_id "
-                    + "WHERE r.workspace_id=#{workspaceId} AND r.composite_id IN "
-                    + "<foreach collection='compositeIds' item='compositeId' open='(' separator=',' close=')'>#{compositeId}</foreach> "
-                    + "ORDER BY r.composite_id,r.id</script>")
+    @Select("<script>SELECT r.*,d.en_code AS derived_en_code,d.cn_name AS derived_cn_name "
+            + "FROM yak_ops_modeling_metric_composite_ref r "
+            + "JOIN yak_ops_modeling_metric_derived d ON d.workspace_id=r.workspace_id AND d.id=r.derived_metric_id "
+            + "WHERE r.workspace_id=#{workspaceId} AND r.composite_id IN "
+            + "<foreach collection='compositeIds' item='compositeId' open='(' separator=',' close=')'>#{compositeId}</foreach> "
+            + "ORDER BY r.composite_id,r.id</script>")
     List<MetricCompositeRefEntity> referencesByComposite(
             @Param("workspaceId") String workspaceId, @Param("compositeIds") List<String> compositeIds);
 
@@ -69,6 +68,7 @@ public interface MetricCompositeMapper {
             "INSERT INTO yak_ops_modeling_metric_composite_ref(id,workspace_id,composite_id,derived_metric_id) VALUES(#{id},#{workspaceId},#{compositeId},#{derivedMetricId})")
     void insertReference(MetricCompositeRefEntity link);
 
-    @Delete("DELETE FROM yak_ops_modeling_metric_composite_ref WHERE workspace_id=#{workspaceId} AND composite_id=#{compositeId}")
+    @Delete(
+            "DELETE FROM yak_ops_modeling_metric_composite_ref WHERE workspace_id=#{workspaceId} AND composite_id=#{compositeId}")
     int deleteReferences(@Param("workspaceId") String workspaceId, @Param("compositeId") String compositeId);
 }

@@ -29,6 +29,7 @@ import io.yak.ops.dao.repository.modeling.impl.LayerRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.ModelRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PublicationRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.metric.impl.MetricDerivedRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.standard.impl.StandardLookupRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.standard.impl.StandardMeasureUnitRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.standard.impl.StandardNamingEntryRepositoryImpl;
@@ -88,6 +89,7 @@ class ModelDatabaseIT {
                 StandardLookupRepositoryImpl.class,
                 StandardMeasureUnitRepositoryImpl.class,
                 StandardNamingEntryRepositoryImpl.class,
+                MetricDerivedRepositoryImpl.class,
                 NamingRuleServiceImpl.class);
         service = context.getBean(ModelService.class);
     }

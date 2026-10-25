@@ -121,6 +121,13 @@ class MetricDatabaseIT {
         when(WORKSPACES.isActiveMember(anyString(), anyString())).thenReturn(true);
         // Model fields cite derived metrics with RESTRICT, so they go before the metric tables.
         jdbc.update("DELETE FROM yak_ops_modeling_model_field");
+        // Rows left by other ITs RESTRICT the planning tables below: models cite every planning
+        // parent, subjects cite datamarts, dimensions cite domain and datamart, and publications
+        // trail models.
+        jdbc.update("DELETE FROM yak_ops_modeling_publication");
+        jdbc.update("DELETE FROM yak_ops_modeling_model");
+        jdbc.update("DELETE FROM yak_ops_modeling_subject");
+        jdbc.update("DELETE FROM yak_ops_modeling_dimension");
         for (String table : List.of(
                 "metric_composite_ref",
                 "metric_composite",

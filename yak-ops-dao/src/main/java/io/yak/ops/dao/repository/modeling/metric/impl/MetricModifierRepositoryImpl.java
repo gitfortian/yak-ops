@@ -2,8 +2,8 @@ package io.yak.ops.dao.repository.modeling.metric.impl;
 
 import io.yak.ops.dao.entity.modeling.metric.MetricModifierEntity;
 import io.yak.ops.dao.mapper.modeling.metric.MetricModifierMapper;
-import io.yak.ops.dao.repository.modeling.metric.MetricQuery;
 import io.yak.ops.dao.repository.modeling.metric.MetricModifierRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricQuery;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Optional;

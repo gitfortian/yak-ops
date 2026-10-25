@@ -23,11 +23,12 @@ public class MetricCompositeRepositoryImpl implements MetricCompositeRepository 
     public List<MetricCompositeEntity> page(String workspaceId, MetricQuery query) {
         var rows = mapper.page(workspaceId, query);
         if (!rows.isEmpty()) {
-            Map<String, List<MetricCompositeRefEntity>> grouped =
-                    mapper.referencesByComposite(
-                                    workspaceId, rows.stream().map(MetricCompositeEntity::getId).toList())
-                            .stream()
-                            .collect(Collectors.groupingBy(MetricCompositeRefEntity::getCompositeId));
+            Map<String, List<MetricCompositeRefEntity>> grouped = mapper
+                    .referencesByComposite(
+                            workspaceId,
+                            rows.stream().map(MetricCompositeEntity::getId).toList())
+                    .stream()
+                    .collect(Collectors.groupingBy(MetricCompositeRefEntity::getCompositeId));
             for (var row : rows) {
                 row.setReferences(grouped.getOrDefault(row.getId(), List.of()));
             }

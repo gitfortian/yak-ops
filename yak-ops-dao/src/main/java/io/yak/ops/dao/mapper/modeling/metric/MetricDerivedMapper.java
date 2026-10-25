@@ -73,13 +73,12 @@ public interface MetricDerivedMapper {
     List<MetricDerivedModifierEntity> modifierLinks(
             @Param("workspaceId") String workspaceId, @Param("derivedId") String derivedId);
 
-    @Select(
-            "<script>SELECT l.*,m.en_code AS modifier_en_code,m.cn_name AS modifier_cn_name "
-                    + "FROM yak_ops_modeling_metric_derived_modifier l "
-                    + "JOIN yak_ops_modeling_metric_modifier m ON m.workspace_id=l.workspace_id AND m.id=l.modifier_id "
-                    + "WHERE l.workspace_id=#{workspaceId} AND l.derived_id IN "
-                    + "<foreach collection='derivedIds' item='derivedId' open='(' separator=',' close=')'>#{derivedId}</foreach> "
-                    + "ORDER BY l.derived_id,l.ordinal</script>")
+    @Select("<script>SELECT l.*,m.en_code AS modifier_en_code,m.cn_name AS modifier_cn_name "
+            + "FROM yak_ops_modeling_metric_derived_modifier l "
+            + "JOIN yak_ops_modeling_metric_modifier m ON m.workspace_id=l.workspace_id AND m.id=l.modifier_id "
+            + "WHERE l.workspace_id=#{workspaceId} AND l.derived_id IN "
+            + "<foreach collection='derivedIds' item='derivedId' open='(' separator=',' close=')'>#{derivedId}</foreach> "
+            + "ORDER BY l.derived_id,l.ordinal</script>")
     List<MetricDerivedModifierEntity> modifierLinksByDerived(
             @Param("workspaceId") String workspaceId, @Param("derivedIds") List<String> derivedIds);
 
@@ -87,6 +86,7 @@ public interface MetricDerivedMapper {
             "INSERT INTO yak_ops_modeling_metric_derived_modifier(id,workspace_id,derived_id,modifier_id,ordinal) VALUES(#{id},#{workspaceId},#{derivedId},#{modifierId},#{ordinal})")
     void insertModifierLink(MetricDerivedModifierEntity link);
 
-    @Delete("DELETE FROM yak_ops_modeling_metric_derived_modifier WHERE workspace_id=#{workspaceId} AND derived_id=#{derivedId}")
+    @Delete(
+            "DELETE FROM yak_ops_modeling_metric_derived_modifier WHERE workspace_id=#{workspaceId} AND derived_id=#{derivedId}")
     int deleteModifierLinks(@Param("workspaceId") String workspaceId, @Param("derivedId") String derivedId);
 }
