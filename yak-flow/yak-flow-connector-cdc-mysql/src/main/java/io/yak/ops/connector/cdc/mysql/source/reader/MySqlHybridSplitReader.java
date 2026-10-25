@@ -174,10 +174,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     }
 
     private void startStreaming(MySqlHybridBinlogSplit split) throws Exception {
-        if (split.finishedSplits().stream().anyMatch(info -> info.chunkRange() != null)) {
-            throw new UnsupportedOperationException("Typed Binlog handoff cannot use the legacy BIGINT Reader");
-        }
-        filter = new MySqlBinlogSplitFilter(config.schemas(), split.finishedSplits());
+        filter = MySqlBinlogSplitFilter.fromFinishedSplits(config.schemas(), split.finishedSplits());
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();
