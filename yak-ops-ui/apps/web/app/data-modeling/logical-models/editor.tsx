@@ -59,6 +59,13 @@ import {
   toModelFieldInput,
   validateFieldRows,
 } from "./fields";
+import {
+  composeSuffix,
+  decomposeSuffix,
+  qualifierMaxLength,
+  rootSearchSegment,
+  sanitizeQualifier,
+} from "./naming-composer";
 import { datamartsOf, domainsOf, processesOf } from "../shared/planning-tree";
 import { DimensionScopeRadio } from "../shared/scope-radio";
 import PublishDialog from "./publish-dialog";
@@ -87,13 +94,6 @@ const PUBLICATION_TONE: Record<PublicationStatus, "info" | "success" | "danger" 
   FAILED: "danger",
   UNKNOWN: "warning",
 };
-
-/** Mirrors the backend qualifier tail: a lowercase-letter head, then letters, digits or underscores. */
-const sanitizeQualifier = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, "")
-    .replace(/^[^a-z]+/, "");
 
 /** Latest publication status of the saved model; "未发布" until the first attempt is recorded. */
 function PublicationBadge({ status }: { status: PublicationStatus | null }) {
@@ -186,6 +186,12 @@ export default function LogicalModelEditorPage() {
   const [rootState, setRootState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [rootVersion, setRootVersion] = useState(0);
   const decomposedFor = useRef<string | null>(null);
+  /**
+   * The suffix exactly as loaded from the server. Composer recovery reads this snapshot instead
+   * of the live form so a slow word-root list can never read — and then blank — its own source
+   * of truth.
+   */
+  const savedSuffixRef = useRef("");
   const [dimensions, setDimensions] = useState<DimensionState>({
     items: [],
     loading: false,
@@ -228,6 +234,17 @@ export default function LogicalModelEditorPage() {
   );
   const ownershipLocked = !editing && prefill.locked;
 
+  // Navigating between models must not inherit the previous model's composer state.
+  useEffect(() => {
+    savedSuffixRef.current = "";
+    decomposedFor.current = null;
+    setRootId("");
+    setQualifier("");
+    setModelRootId(null);
+    setRootOptions([]);
+    setRootState("idle");
+  }, [id]);
+
   useEffect(() => {
     if (!editing || options.status !== "ready") return;
     const controller = new AbortController();
@@ -245,6 +262,7 @@ export default function LogicalModelEditorPage() {
         setRevision(model.revision);
         setUnknownType(model.type === null);
         setSuffixMismatch(Boolean(prefix) && !suffix);
+        savedSuffixRef.current = suffix;
         setModelRootId(model.namingRootWordId);
         setForm({
           type: model.type ?? "DWD",
@@ -355,9 +373,17 @@ export default function LogicalModelEditorPage() {
   const composerActive =
     Boolean(selectedLayer?.namingRuleEnabled) && (form.type === "DWD" || form.type === "DWS");
   const processCode = processes.find((item) => item.id === form.processId)?.code ?? "";
+  // The qualifier input cannot push the composed name past the backend's 41-character cap.
+  const qualifierCap = composerActive
+    ? qualifierMaxLength(
+        prefix,
+        rootOptions.find((item) => item.id === rootId)?.enCode ?? "",
+        processCode,
+      )
+    : 41;
 
   useEffect(() => {
-    if (!composerActive && !modelRootId) return;
+    if (!composerActive) return;
     const controller = new AbortController();
     let current = true;
     setRootState("loading");
@@ -365,10 +391,10 @@ export default function LogicalModelEditorPage() {
       .then(async (page) => {
         if (!current) return;
         let entries = page.bizData;
-        const savedSuffix = formRef.current.nameSuffix.trim();
+        const savedSuffix = savedSuffixRef.current;
         // A saved root beyond the first page is resolved by searching its own leading segment,
         // so reopening an old model still shows which word root it was composed from.
-        const segment = modelRootId && savedSuffix ? savedSuffix.split("_")[0] : "";
+        const segment = modelRootId && savedSuffix ? rootSearchSegment(savedSuffix) : "";
         if (modelRootId && !entries.some((entry) => entry.id === modelRootId) && segment) {
           try {
             const found = await getNamingEntries(segment, 1, 100, controller.signal);
@@ -391,38 +417,40 @@ export default function LogicalModelEditorPage() {
     };
   }, [composerActive, modelRootId, rootVersion]);
 
-  // Recovers the saved composition once per model: the root is reselected and the saved suffix is
-  // split back into the qualifier tail. A model saved before the rule cannot be decomposed and
-  // simply starts unselected, which is also what the layer violation list already reports.
+  // Recovers the saved composition once per model: the root is reselected and the saved suffix
+  // snapshot is split back into the qualifier tail. Recovery waits until the process code is
+  // resolvable — a not-yet-loaded planning tree must not consume the one-shot guard — and an
+  // unresolvable root leaves the composer unselected instead of pretending a match.
   useEffect(() => {
     if (!modelRootId || rootState !== "ready") return;
     if (decomposedFor.current === modelRootId) return;
-    decomposedFor.current = modelRootId;
     const entry = rootOptions.find((item) => item.id === modelRootId);
-    // An unresolvable root leaves the composer unselected instead of pretending a match.
-    if (!entry) return;
-    setRootId(modelRootId);
-    const savedSuffix = formRef.current.nameSuffix.trim();
+    if (!entry) {
+      decomposedFor.current = modelRootId;
+      return;
+    }
     const savedProcessCode =
       processes.find((item) => item.id === formRef.current.processId)?.code ?? "";
-    const head = savedProcessCode ? `${entry.enCode}_${savedProcessCode}` : null;
-    setQualifier(
-      head && savedSuffix.startsWith(head) ? savedSuffix.slice(head.length).replace(/^_/, "") : "",
-    );
+    if (!savedProcessCode) return;
+    decomposedFor.current = modelRootId;
+    setRootId(modelRootId);
+    setQualifier(decomposeSuffix(savedSuffixRef.current, entry.enCode, savedProcessCode));
   }, [modelRootId, rootState, rootOptions, processes]);
 
   // The suffix is fully derived while the composer is active; switching the process or root
-  // re-composes it live, and the payload keeps carrying a single nameSuffix.
+  // re-composes it live, and the payload keeps carrying a single nameSuffix. Until the saved
+  // composition has been recovered for an existing model the derivation stays off, so the
+  // loaded suffix is never blanked by an empty composer state.
   useEffect(() => {
-    if (!composerActive) return;
+    if (!composerActive || !rootId) return;
+    if (modelRootId && decomposedFor.current !== modelRootId) return;
     const entry = rootOptions.find((item) => item.id === rootId);
-    const head = entry && processCode ? `${entry.enCode}_${processCode}` : "";
-    const composed = head ? (qualifier ? `${head}_${qualifier}` : head) : "";
+    const composed = composeSuffix(entry?.enCode ?? "", processCode, qualifier);
     setForm((previous) =>
       previous.nameSuffix === composed ? previous : { ...previous, nameSuffix: composed },
     );
     setSuffixMismatch(false);
-  }, [composerActive, rootId, qualifier, processCode, rootOptions]);
+  }, [composerActive, rootId, qualifier, processCode, rootOptions, modelRootId]);
 
   const patch = (partial: Partial<FormState>) => {
     setForm((previous) => ({ ...previous, ...partial }));
@@ -464,8 +492,14 @@ export default function LogicalModelEditorPage() {
     const next: FormErrors = {};
     if (!form.layerId) next.layerId = "请选择数仓分层";
     else if (!layerSelectable) next.layerId = "所选分层未启用或未绑定数据源";
-    if (!suffix) next.nameSuffix = composerActive && !rootId ? "请选择词根" : "请输入表名后缀";
-    else if (!suffixValid) next.nameSuffix = MODEL_SUFFIX_RULE;
+    if (composerActive) {
+      if (!rootId) next.nameSuffix = "请选择词根";
+      else if (!suffix) next.nameSuffix = "请选择业务过程";
+      else if (!suffixValid) next.nameSuffix = "组合表名超出 41 个字符上限";
+    } else {
+      if (!suffix) next.nameSuffix = "请输入表名后缀";
+      else if (!suffixValid) next.nameSuffix = MODEL_SUFFIX_RULE;
+    }
     if (!form.cnName.trim()) next.cnName = "请输入表中文名";
     const lifecycle = Number(form.lifecycleDays);
     if (!Number.isInteger(lifecycle) || lifecycle < 1 || lifecycle > 36000)
@@ -833,7 +867,13 @@ export default function LogicalModelEditorPage() {
                           value={rootId || ""}
                           items={rootItems}
                           disabled={disabled || rootState !== "ready"}
-                          onValueChange={(value) => setRootId(value ?? "")}
+                          onValueChange={(value) => {
+                            // A manual pick takes over from pending recovery: it consumes the
+                            // one-shot guard so recovery can neither override it nor keep the
+                            // derivation blocked.
+                            decomposedFor.current = modelRootId;
+                            setRootId(value ?? "");
+                          }}
                         >
                           <SelectTrigger
                             className="w-44"
@@ -870,7 +910,7 @@ export default function LogicalModelEditorPage() {
                           size="small"
                           variant="outlined"
                           value={qualifier}
-                          maxLength={41}
+                          maxLength={qualifierCap}
                           disabled={disabled}
                           placeholder="限定词（可选）"
                           aria-label="表名限定词"

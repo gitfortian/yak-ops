@@ -428,7 +428,7 @@ export default function FieldEditor({
                       items={lookupItemsFor(row)}
                       disabled={disabled || lookups.status !== "ready"}
                       onValueChange={(value) => {
-                        const entry = lookups.data?.find((row) => row.id === value) ?? null;
+                        const entry = lookups.data?.find((item) => item.id === value) ?? null;
                         // A stand-in id that the first page did not carry keeps its binding.
                         if (value && !entry) return;
                         bindLookup(index, entry);
