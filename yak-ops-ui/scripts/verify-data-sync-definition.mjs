@@ -6,7 +6,7 @@ import {
   toSyncTaskRecord,
   updateDefinitionRequest,
 } from "../apps/web/service/data-sync/definition.ts";
-import { readSyncParameters } from "../apps/web/service/data-sync/parameters.ts";
+import { parseSyncParameters, readSyncParameters, validateSyncParameters } from "../apps/web/service/data-sync/parameters.ts";
 
 const common = {
   name: "orders",
@@ -95,6 +95,43 @@ for (const invalid of [
 ]) {
   assert.throws(() => readSyncParameters(3, JSON.stringify(invalid)));
 }
+// Display parsing preserves persisted V3 intent without treating legacy RETRACT as valid XA.
+const legacyRetract = JSON.stringify({
+  ...JSON.parse(keyless),
+  tableMappings: [
+    {
+      ...JSON.parse(keyless).tableMappings[0],
+      source: { table: "orders", keyless: true, chunkKeyColumn: "bucket" },
+    },
+  ],
+});
+const savedLegacy = parseSyncParameters(3, legacyRetract);
+assert.equal(savedLegacy.tableMappings[0].source.xa, undefined);
+assert.equal(savedLegacy.tableMappings[0].writeMode, "RETRACT");
+assert.throws(() => validateSyncParameters(savedLegacy));
+assert.throws(() => readSyncParameters(3, legacyRetract));
+const displayedLegacy = toSyncTaskRecord({
+  id: "legacy",
+  name: "legacy",
+  taskType: "DATA_SYNC",
+  status: "UNPUBLISHED",
+  definitionVersion: 2,
+  parameterSchemaVersion: 3,
+  parameters: legacyRetract,
+});
+assert.equal(displayedLegacy.sourceTable, "orders");
+assert.equal(displayedLegacy.targetTable, "ods_orders");
+assert.match(displayedLegacy.configurationError, /不支持的同步目标写入配置/);
+assert.equal(toSyncTaskRecord({
+  id: "supported",
+  name: "supported",
+  taskType: "DATA_SYNC",
+  status: "UNPUBLISHED",
+  definitionVersion: 1,
+  parameterSchemaVersion: 3,
+  parameters: keyless,
+}).configurationError, undefined);
+
 const schemaKeyless = JSON.stringify({
   ...JSON.parse(keyless),
   steps: ["SCHEMA", "FULL", "INCREMENTAL"],
