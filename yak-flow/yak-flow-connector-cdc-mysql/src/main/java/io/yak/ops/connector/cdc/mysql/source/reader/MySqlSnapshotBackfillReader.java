@@ -211,8 +211,10 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                     failure.addSuppressed(closeFailure);
                 }
             }
-            throw new SQLException("Cannot establish a consistent keyless snapshot read view; "
-                    + "MySQL FLUSH TABLES WITH READ LOCK and REPEATABLE READ privileges are required", failure);
+            throw new SQLException(
+                    "Cannot establish a consistent keyless snapshot read view; "
+                            + "MySQL FLUSH TABLES WITH READ LOCK and REPEATABLE READ privileges are required",
+                    failure);
         }
         // A pinned InnoDB read view remains valid after UNLOCK TABLES. Never hold
         // the global lock while executing or fetching the potentially large SELECT.

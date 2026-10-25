@@ -80,8 +80,11 @@ public final class MySqlBinlogSplitFilter {
                     throw new IllegalArgumentException("Legacy completed chunk requires one source primary key");
                 }
                 range = new ChunkRange(
-                        info.tableId(), schema.primaryKeys().getFirst(), LogicalTypeRoot.BIGINT,
-                        info.lowerInclusive(), info.upperExclusive());
+                        info.tableId(),
+                        schema.primaryKeys().getFirst(),
+                        LogicalTypeRoot.BIGINT,
+                        info.lowerInclusive(),
+                        info.upperExclusive());
             }
             converted.add(new FinishedChunk(info.splitId(), range, info.highWatermark()));
         }
@@ -209,7 +212,8 @@ public final class MySqlBinlogSplitFilter {
             // A keyless Chunk Key is not a stable row identity; moving it while
             // different completed chunks have different High watermarks is unsafe.
             ChunkColumn chunk = columns.get(before.tableId());
-            if (!legacyPrimaryKey && chunk != null
+            if (!legacyPrimaryKey
+                    && chunk != null
                     && chunkValueDiffers(chunk, before, after)
                     && !schemasWithPrimaryKey.contains(before.tableId())) {
                 throw new UnsupportedOperationException(
