@@ -118,6 +118,40 @@ class MySqlKeylessBackfillIT {
     }
 
     @Test
+    void checkpointsAnOversizedRepeatedRowGroupFromRealMysqlWithoutDroppingOccurrences() throws Exception {
+        String table = name("large_keyless_");
+        execute(
+                "CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
+                "INSERT INTO " + table + " VALUES (1, RPAD('x', 80, 'x'))");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        try {
+            // A small Chunk Size cannot split this group: all 16,384 physical rows share the same key.
+            for (int i = 0; i < 14; i++) {
+                execute("INSERT INTO " + table + " SELECT bucket, payload FROM " + table);
+            }
+            try (var reader =
+                    new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6791), 0)) {
+                var raw = MySqlSnapshotSplit.typed(
+                        "large-duplicates", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null));
+                var prepared = reader.read(raw);
+                assertEquals(16_384, prepared.output().rows().size());
+                var serializer = new MySqlHybridSplitSerializer();
+                byte[] checkpoint = serializer.serialize(prepared);
+                assertTrue(checkpoint.length < 8192, "Repeated physical images must use a counted checkpoint");
+                var restored = (MySqlSnapshotSplit)
+                        serializer.deserialize(serializer.getVersion(), checkpoint);
+                assertEquals(16_384, restored.output().rows().size());
+                var resumed = (MySqlSnapshotSplit) serializer.deserialize(
+                        serializer.getVersion(), serializer.serialize(restored.withOutputPosition(8192)));
+                assertEquals(8192, resumed.outputPosition());
+                assertEquals(1L, resumed.output().rows().get(8192).row().getLong(0));
+            }
+        } finally {
+            execute("DROP TABLE " + table);
+        }
+    }
+
+    @Test
     void failsClosedIfTheChunkKeyChangesDuringSnapshot() throws Exception {
         String table = name("moving_keyless_");
         execute("CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
