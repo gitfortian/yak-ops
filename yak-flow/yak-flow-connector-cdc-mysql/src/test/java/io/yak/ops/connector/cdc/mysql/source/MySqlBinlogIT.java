@@ -166,6 +166,55 @@ class MySqlBinlogIT {
         }
     }
 
+    @Test
+    void realMultiRowTransactionIdentityRemainsUniqueAcrossBinlogRotation() throws Exception {
+        String password = DATABASE_RESOURCE.metadata().password();
+        try (Connection connection = DATABASE_RESOURCE.metadata().connect();
+                Statement ddl = connection.createStatement()) {
+            ddl.execute("DROP TABLE IF EXISTS orders");
+            ddl.execute("CREATE TABLE orders(ID BIGINT PRIMARY KEY, NAME VARCHAR(100))");
+        }
+
+        var schema = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.BIGINT.copy(false)),
+                        new Column("NAME", LogicalTypes.varchar(100))),
+                List.of("ID"));
+        var source = MySqlCdcSource.builder()
+                .hostname(DATABASE_RESOURCE.metadata().host())
+                .port(DATABASE_RESOURCE.metadata().port())
+                .username(USER)
+                .password(password)
+                .serverId(5553)
+                .topicPrefix("yak_cdc_identity_rotation")
+                .table(ORDERS, schema)
+                .build();
+
+        try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, null)) {
+            awaitReplicationConnection();
+            execute(password, "INSERT INTO orders VALUES (110, 'same'), (111, 'same'), (112, 'same')");
+            List<TableRecord> rows = new ArrayList<>();
+            receive(reader, rows, 3, Duration.ofSeconds(45));
+            assertEquals(3, rows.size());
+            var beforeRotation = rows.stream()
+                    .map(TableRecord::changeEventId)
+                    .toList();
+            assertTrue(beforeRotation.stream().allMatch(java.util.Objects::nonNull));
+            assertEquals(3, new java.util.HashSet<>(beforeRotation).size());
+
+            execute(password, "FLUSH BINARY LOGS");
+            execute(password, "INSERT INTO orders VALUES (113, 'same'), (114, 'same')");
+            receive(reader, rows, 5, Duration.ofSeconds(45));
+            assertTrue(rows.stream().allMatch(record -> record.changeEventId() != null));
+            assertEquals(5, new java.util.HashSet<>(
+                    rows.stream().map(TableRecord::changeEventId).toList()).size());
+
+            MySqlBinlogSplit checkpoint = reader.snapshotState(22L).getFirst();
+            assertNotNull(checkpoint.offset());
+            assertFalse(checkpoint.schemaHistory().length == 0);
+        }
+    }
+
     private static void awaitReplicationConnection() throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (System.nanoTime() < deadline) {
