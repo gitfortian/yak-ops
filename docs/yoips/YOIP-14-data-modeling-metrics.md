@@ -1,12 +1,12 @@
 # YOIP-14: Data Modeling — Metrics
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/31
 
-Decision: Pending (link to the recorded decision after review)
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/31#issuecomment-6394901271
 
-Implementation: N/A until accepted
+Implementation: Planned — 1.8.0 batch
 
 Release: N/A until released
 
