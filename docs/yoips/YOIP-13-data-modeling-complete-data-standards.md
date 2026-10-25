@@ -22,7 +22,7 @@ The product this module is measured against defines four kinds, and the three th
 | --- | --- | --- |
 | Field standard | Name, code, type, length, precision, not-null, default value, parent standard, referenced lookup table | Name, code, type, length or precision, not-null, security level, owner and business definition; no default value, no parent and no lookup reference |
 | Lookup table (标准代码) | An enumerated value range that fields reference; drives value-range quality rules | Absent |
-| Measurement unit (度量单位) | Currency, quantifier, ratio, rank and time units referenced by fields and by atomic metrics | Absent |
+| Measurement unit (度量单位) | Currency, quantifier and time units, extended here with ratio and rank; referenced by fields and by atomic metrics | Absent |
 | Naming dictionary (命名词典) | Root words and morphemes that a layer's table-name checker validates against | Absent; YOIP-9 records the same exclusion — "可配置正则与命名词典仍不做" |
 
 Each gap blocks a capability that is already planned or already shipped:
@@ -48,17 +48,17 @@ This proposal adds the three missing kinds, closes the two field-standard gaps, 
 | Item | Contract |
 | --- | --- |
 | Standard kinds | Four kinds live under 数据建模 → 数据标准: field standards, lookup tables, measurement units and naming dictionaries. A kind selector at the top switches between them; each kind keeps its own selected container, search text and page position. |
-| Containers | Field standards and lookup tables share one Workspace directory tree. A node is either a `DIRECTORY` or a `STANDARD_SET`. A directory holds directories, standard sets and records; a standard set holds records only and cannot be a parent. Measurement units use five fixed categories — `CURRENCY`, `QUANTIFIER`, `RATIO`, `RANK`, `TIME` — instead of a tree. Naming dictionaries are a flat Workspace list. |
-| Field standard | Adds `defaultValue` (at most 2048 characters), `parentStandardId`, `lookupId` and `measureUnitId` to the existing attributes. `lengthPrecision` keeps its current wire format. |
+| Containers | Field standards and lookup tables share one Workspace directory tree. A node is either a `DIRECTORY` or a `STANDARD_SET`. A directory holds directories, standard sets and records; a standard set holds records of one kind only, declares that kind, and cannot be a parent. Measurement units use five fixed categories — `CURRENCY`, `QUANTIFIER`, `RATIO`, `RANK`, `TIME` — instead of a tree. Naming dictionaries are a flat Workspace list. |
+| Field standard | Adds `defaultValue` (at most 2048 characters), `parentStandardId`, `lookupId` and `measureUnitId` to the existing attributes. `defaultValue` is descriptive and never becomes a physical `DEFAULT` clause. `lengthPrecision` keeps its current wire format. |
 | Parent standard | A field standard may name one parent in the same Workspace. The chain is acyclic and at most eight levels deep. The link records specialization for navigation and grouping; it does **not** merge attributes, so a child keeps its own code, type and nullability. |
 | Lookup table | Code, Chinese name, English name, optional description, and an ordered value list. A value carries `valueCode`, `cnName`, `enName` and optional `meaning`. Value codes are unique inside one table. A field that binds a lookup table takes its code as the field name and its Chinese name as the display name. |
 | Measurement unit | Category, abbreviation, English name, Chinese name, optional description. Abbreviations are unique inside a Workspace. Binding a unit is an annotation: it never renames a field and never changes its type. |
 | Naming dictionary | Abbreviation, English name, Chinese name, optional description. Abbreviations are unique inside a Workspace and are the token a table-name rule matches. |
 | Binding a model field | A field may bind a field standard, a lookup table, a measurement unit, or any combination. A bound field standard is authoritative for English code, Chinese name, type, length or precision and not-null; those five controls are read-only until the standard is unbound. A lookup table supplies code and Chinese name only when no field standard is bound. A unit never overrides anything. |
-| References | Every kind exposes a reference list: field standard → model fields; lookup table → field standards and model fields; measurement unit → field standards and model fields; naming dictionary → layers whose table-name rule uses it. Deleting a referenced record is refused with the existing `HAS_DEPENDENCIES`. |
-| Table-name checking | A layer may enable a naming rule composed of one naming-dictionary entry and one business process from the same data domain. When enabled, creating or renaming a model under that layer requires the suffix to be exactly `<root word abbreviation>_<business process code>`. Disabling the rule leaves existing names untouched. |
+| References | Every kind exposes a reference list: field standard → model fields; lookup table → field standards and model fields; measurement unit → field standards and model fields; naming dictionary → models named under a layer rule that uses the entry. Deleting a referenced record is refused with the existing `REFERENCED`, which is already what the standard service raises for an asset that depends on a record; `HAS_DEPENDENCIES` stays reserved for a container that still holds children. The delete dialog loads the same list before it confirms, so the operator sees which tables and fields depend on the record and can open the owning model instead of guessing. |
+| Table-name checking | A layer may enable a naming rule. When enabled, a model that carries a business process must be named exactly `<root word abbreviation>_<process code>`, where the root word is an existing naming-dictionary entry of the Workspace and the process is the model's own business process. The dialog composes that suffix from two governed selections instead of accepting free text. Models without a business process — `DIM`, `DWS`, `ADS` — are exempt. Disabling the rule leaves existing names untouched. |
 | Uniqueness scope | Codes of all four kinds are unique inside a Workspace, not across the installation. |
-| Empty and error states | A standard set with no records shows an empty state rather than a table; creating a record still requires a selected container. A name rejected by an enabled rule is caught in the dialog, which shows the expected suffix computed from the rule; the server rejects it as a fixed `NAMING_RULE_VIOLATION` if the client check is bypassed. |
+| Empty and error states | A standard set with no records shows an empty state rather than a table; creating a record still requires a selected container. A name rejected by an enabled rule is caught in the dialog, which composes the expected suffix from the chosen root word and the model's process; the server rejects a bypass as a fixed `NAMING_RULE_VIOLATION`. A layer whose rule is enabled while non-conforming models remain lists those model names in the layer panel until they are renamed. |
 
 ### REST
 
@@ -66,8 +66,8 @@ All endpoints extend the existing namespace `/api/v1/data-modeling/data-standard
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /categories/tree` | Directory tree; existing response gains `nodeType` on every node. |
-| `POST /categories` | Create a node; request gains `nodeType`, defaulting to `DIRECTORY`. |
+| `GET /categories/tree` | Directory tree; existing response gains `nodeType` and `standardKind` on every node. |
+| `POST /categories` | Create a node; request gains `nodeType`, defaulting to `DIRECTORY`, and `standardKind`, required for a standard set. |
 | `GET /lookups` | Page lookup tables by `categoryId` and `keyword`. |
 | `GET /lookups/{id}` | Read one lookup table with its ordered values. |
 | `POST /categories/{categoryId}/lookups` | Create a lookup table under a directory or standard set. |
@@ -87,51 +87,54 @@ All endpoints extend the existing namespace `/api/v1/data-modeling/data-standard
 | `DELETE /naming-entries/{id}` | Delete an entry; refused while referenced. |
 | `GET /naming-entries/codes/availability` | Abbreviation availability. |
 | `GET /naming-entries/{id}/references` | Reference list. |
-| `GET /api/v1/data-modeling/warehouse-planning/layers/{id}/naming-rule` | Read the layer rule, or an explicit disabled state. |
-| `PUT /api/v1/data-modeling/warehouse-planning/layers/{id}/naming-rule` | Enable, replace or disable the rule under the observed revision. |
+| `GET /api/v1/data-modeling/warehouse-planning/layers/{id}/naming-rule` | Read the toggle and the models of that layer that do not conform, with their names. |
+| `PUT /api/v1/data-modeling/warehouse-planning/layers/{id}/naming-rule` | Enable or disable the rule under the observed revision. Enabling while non-conforming models exist requires `acknowledgeViolations`. |
 
 Existing field-standard endpoints keep their paths. Their payloads gain the four new optional attributes, and `GET /fields/{id}/references` starts returning real data instead of `NOT_ENABLED`.
 
-New error codes in `DimensionModelingErrorCode`:
+New error codes, each in the enum that already owns that surface — `StandardErrorCode` for data standards, `LayerErrorCode` for the layer and `DimensionModelingErrorCode` for model names:
 
 | Code | Use |
 | --- | --- |
-| `INVALID_PARENT_STANDARD` (19515) | The chosen parent is the record itself, is outside the Workspace, or would create a cycle or exceed eight levels. |
-| `INVALID_LOOKUP_VALUE` (19516) | A value code is empty or duplicated, or the submitted list is missing; the whole value list is rejected. |
-| `INVALID_NAMING_RULE` (19517) | The root word or business process is missing, outside the Workspace, or belongs to a different data domain; or the layer's existing models cannot satisfy a rule being enabled. |
-| `NAMING_RULE_VIOLATION` (19518) | A model name does not match the enabled layer rule. The fixed message is a fallback: the dialog renders the expected suffix before submitting, because the shared error type carries no per-request detail. |
+| `StandardErrorCode.INVALID_PARENT_STANDARD` (19109) | The chosen parent is the record itself, is outside the Workspace, or would create a cycle or exceed eight levels. |
+| `StandardErrorCode.INVALID_LOOKUP_VALUE` (19110) | A value code is empty or duplicated, or the submitted list is missing; the whole value list is rejected. |
+| `LayerErrorCode.INVALID_NAMING_RULE` (19208) | Enabling a rule while models of that layer do not conform, and the request does not acknowledge them. |
+| `DimensionModelingErrorCode.NAMING_RULE_VIOLATION` (19513) | A model name does not match the enabled layer rule. The fixed message is a fallback: the dialog composes the expected suffix before submitting, because the shared error type carries no per-request detail. |
 
-Duplicate codes continue to use `DUPLICATE_CODE`, revision conflicts `REVISION_CONFLICT`, and refusal to delete a referenced record `HAS_DEPENDENCIES`. A rejected name under an enabled rule uses `NAMING_RULE_VIOLATION`; `INVALID_TABLE_NAME` keeps its current meaning of a malformed prefix or an over-long name.
+Duplicate codes continue to use `DUPLICATE_CODE` and revision conflicts `REVISION_CONFLICT`, both already in `StandardErrorCode`. Refusal to delete a record that something references uses the existing `REFERENCED` (19108); refusal to delete a container that still holds children keeps `HAS_DEPENDENCIES` (19103). A rejected name under an enabled rule uses `NAMING_RULE_VIOLATION`; `INVALID_TABLE_NAME` keeps its current meaning of a malformed prefix or an over-long name.
 
 ### Persisted formats
 
 `V5__v1_7_0.sql`, the single release migration for 1.7.0, is additive except for one index replacement:
 
-- `yak_ops_standard_category` gains `node_type VARCHAR(16) NOT NULL DEFAULT 'DIRECTORY' CHECK (node_type IN ('DIRECTORY','STANDARD_SET'))`.
+- `yak_ops_standard_category` gains `node_type VARCHAR(16) NOT NULL DEFAULT 'DIRECTORY' CHECK (node_type IN ('DIRECTORY','STANDARD_SET'))` and nullable `standard_kind VARCHAR(16) CHECK (standard_kind IN ('FIELD','LOOKUP'))`, which the service requires on a standard set and forbids on a directory.
 - `yak_ops_standard_lookup`: `id`, `workspace_id`, `category_id`, `en_code`, `cn_name`, `en_name`, nullable `description`, `revision`, audit columns. Unique on `(workspace_id, en_code)` and on `(workspace_id, id)`, the latter being the foreign-key target.
 - `yak_ops_standard_lookup_value`: `id`, `workspace_id`, `lookup_id` with `ON DELETE CASCADE`, `ordinal`, `value_code`, `cn_name`, `en_name`, nullable `meaning`. Unique on `(lookup_id, value_code)` and `(lookup_id, ordinal)`. The column is `value_code` rather than `value`, which is reserved on MySQL.
 - `yak_ops_standard_measure_unit`: `id`, `workspace_id`, `category`, `en_code`, `en_name`, `cn_name`, nullable `description`, `revision`, audit columns. Unique on `(workspace_id, en_code)` and on `(workspace_id, id)`; `category` is constrained to the five values.
 - `yak_ops_standard_naming_entry`: `id`, `workspace_id`, `en_code`, `en_name`, `cn_name`, nullable `description`, `revision`, audit columns. Unique on `(workspace_id, en_code)` and on `(workspace_id, id)`. A naming entry has no category, so it needs no tree.
-- `yak_ops_standard_field` gains `default_value VARCHAR(2048)`, `parent_standard_id`, `lookup_id` and `measure_unit_id`, all nullable and all foreign keys with `ON DELETE RESTRICT` against the Workspace-scoped key of their target.
+- `yak_ops_standard_field` gains `default_value VARCHAR(2048)`, `parent_standard_id`, `lookup_id` and `measure_unit_id`, all nullable and all foreign keys with `ON DELETE RESTRICT` against the Workspace-scoped key of their target. Its `en_code` comment stops claiming a global scope.
 - `yak_ops_modeling_model_field` gains nullable `lookup_id` and `measure_unit_id` with the same referential rules, so a field can bind a lookup table without a field standard.
-- `yak_ops_modeling_layer` gains `naming_rule_enabled TINYINT NOT NULL DEFAULT 0`, nullable `naming_root_word_id` and nullable `naming_process_id`.
+- `yak_ops_modeling_model` gains nullable `naming_root_word_id`, a foreign key to the naming entry with `ON DELETE RESTRICT`, written only when a model is named under an enabled layer rule.
+- `yak_ops_modeling_layer` gains `naming_rule_enabled TINYINT NOT NULL DEFAULT 0` and nothing else: which business process a table belongs to is already a model column, and which root word it uses is recorded on the model, so a layer would only be duplicating both.
 - `uk_standard_field_code (en_code)` is replaced by `uk_standard_field_code (workspace_id, en_code)`.
 
-No existing column is dropped or rewritten. Existing rows keep their values, and every new column is nullable or has a default.
+No existing column is dropped or rewritten. Existing rows keep their values, and every new column is nullable or has a default. The naming-root backfill described above only fills a new column on rows whose name already matches, and it runs only when an operator enables a rule.
 
 ### Frontend internal contract
 
 - `service/data-modeling/data-standards` gains lookup, unit, naming-entry and reference clients; the directory tree, availability check and revision-conflict handling stay shared with field standards.
 - The data-standard page owns one kind selector and four list components. Switching kinds does not remount the page or lose the other kinds' query state.
-- The field-standard dialog splits `lengthPrecision` into separate length and precision inputs and reassembles the wire value; it does not change the payload shape.
-- A reference panel is rendered from the `references` endpoint on demand, not preloaded with every row.
-- The layer naming rule is edited from the warehouse-planning layer form and does not become a new top-level menu.
+- The field-standard dialog splits `lengthPrecision` into separate length and precision inputs and reassembles the wire value; it does not change the payload shape. `DECIMAL` shows `18,2` as placeholder text rather than as a value, so nobody inherits a scale they did not choose.
+- The lookup-table dialog sends the whole value list on every save and never a delta, matching the replace semantics of `PUT /lookups/{id}`.
+- The delete confirmation of any of the four kinds loads the `references` endpoint first, lists what depends on the record with its `path`, links each item to the model that owns it, and keeps the confirm button disabled while the list is not empty.
+- A reference panel is rendered from the same endpoint on demand, not preloaded with every row.
+- The layer naming rule is edited from the warehouse-planning layer form and does not become a new top-level menu. It is a toggle plus the list of non-conforming models; while it is on, the model dialog replaces the free-text suffix with a root-word select and shows the suffix it composed.
 
 ## Proposed Changes
 
 ### 1. Four kinds, two container shapes
 
-Field standards and lookup tables are both "records under a directory", so they share the existing category tree rather than duplicating it. The tree gains a node type because DataWorks distinguishes a directory from a standard set, and the distinction changes what a node may contain: a standard set holds records only. The constraint is enforced in the service, not in SQL, because it spans rows.
+Field standards and lookup tables are both "records under a directory", so they share the existing category tree rather than duplicating it. The tree gains a node type because DataWorks distinguishes a directory from a standard set, and the distinction changes what a node may contain: a standard set holds records only. Because both kinds share the tree, a standard set also declares which kind it holds. Without that, a set created for field standards would appear in the lookup-table tree holding a different list, and the tree could not answer what a set is for. Both constraints are enforced in the service, not in SQL, because they span rows.
 
 Measurement units deliberately do not use the tree. Their taxonomy is closed — five fixed categories — and DataWorks presents them as a fixed category list. Storing them as user-created directories would let a typo create a sixth category that no filter expects. Naming dictionaries are flat in DataWorks as well.
 
@@ -139,9 +142,9 @@ Measurement units deliberately do not use the tree. Their taxonomy is closed —
 
 The parent link is a self-referencing foreign key on the Workspace-scoped key `(workspace_id, id)`, with `ON DELETE RESTRICT` so a parent cannot vanish under its children. The service rejects self-parenting, cross-Workspace parents, cycles and depth beyond eight before the write.
 
-The link records specialization only. A child standard keeps its own code, type, length and nullability; nothing is merged down the chain. This is what DataWorks does in practice — `买家ID` and `卖家ID` specialize `会员ID` and still carry distinct codes — and merging attributes would make a child's effective contract depend on a record the reader is not looking at.
+The link records specialization only. A child standard keeps its own code, type, length and nullability; nothing is merged down the chain. DataWorks documents the same relationship for `买家ID` and `卖家ID` under `会员ID` and describes the parent as identifying field associations; two children that took the parent's abbreviation would not be distinguishable, which is the reason to define two standards at all. Merging attributes would also make a child's effective contract depend on a record the reader is not looking at, and editing a parent would change fields nobody opened.
 
-`defaultValue` is a string of at most 2048 characters, matching the DataWorks limit. It is metadata about the field, not an executed default: this proposal does not generate `DEFAULT` clauses in physical DDL, because YOIP-11 deliberately keeps physical publication free of column defaults.
+`defaultValue` is a string of at most 2048 characters, matching the DataWorks limit. It records the business assumption about what a missing value means; it is not an executed default, because this proposal does not generate `DEFAULT` clauses in physical DDL — YOIP-11 deliberately keeps physical publication free of column defaults. The dialog labels it 业务预设值 and states that it does not become a table default, so nobody expects the database to fill it in. Dropping the attribute as data without a consumer was considered and rejected: a field standard is itself a written contract, and `businessCaliber` has no machine consumer either, yet both tell a modeller how a field is meant to be used.
 
 ### 3. Lookup tables
 
@@ -153,27 +156,35 @@ Deleting a value that a field's stored data still matches is not detectable here
 
 ### 4. Measurement units
 
-The five categories mirror DataWorks. `en_code` is the abbreviation (`m`), `en_name` the English word (`meter`) and `cn_name` the Chinese name (`米`); the abbreviation is what a model field displays next to its type and what an atomic metric will store later.
+DataWorks names currency, quantifier and time units. This proposal adds `RATIO` and `RANK`, which percentage shares and ranking fields need and which a closed list has to name explicitly instead of leaving to free text. `en_code` is the abbreviation (`m`), `en_name` the English word (`meter`) and `cn_name` the Chinese name (`米`); the abbreviation is what a model field displays next to its type and what an atomic metric will store later.
 
 Units impose no constraint on a field's type or length. `BIGINT` with unit `件` and `DECIMAL` with unit `元` are both valid, and enforcing a category-to-type mapping would reject legitimate combinations such as a currency amount stored as an integer of cents.
 
 ### 5. Naming dictionary and table-name checking
 
-A dictionary entry is only useful if something validates against it, so the proposal wires it into layer table naming in the same release. A layer's rule is one root word plus one business process from the same data domain, and the expected suffix is exactly `<root word abbreviation>_<business process code>`.
+A dictionary entry is only useful if something validates against it, so the proposal wires it into layer table naming in the same release. When a layer enables the rule, a model that carries a business process must be named exactly `<root word abbreviation>_<process code>`: the root word is an existing naming-dictionary entry of the Workspace, and the process token is the model's own business process, whose code is already reserved across the installation.
 
-The rule is intentionally narrower than a regular expression. YOIP-9 already enforces the layer prefix through `MODEL_SUFFIX_RULE`, and the value this proposal adds is a governed vocabulary, not a second pattern language. A rule of one word plus one process covers the `dwd_trade_order` shape DataWorks documents; it does not cover multi-word roots, optional segments or alternation. Those stay out, as recorded in item 6 of Rejected Alternatives.
+The rule validates a shape against a governed vocabulary; it does not pin one word and one process per layer. A pinned pair yields a single legal suffix per layer, and because model names are unique per Workspace, such a layer could hold exactly one model. Which process a table belongs to is already a model property chosen when the model is created, so a layer that fixed it would either duplicate that column or contradict it.
 
-Enabling a rule on a layer that already holds models is refused when any existing model would violate it. The dialog lists the violating model names before submitting, reading the existing model page filtered by layer; the server rejects the enablement as a fixed `INVALID_NAMING_RULE`, because the shared error type carries no per-request detail. Silently grandfathering them would leave the layer in a state where the rule is on and knowingly violated. Disabling a rule never renames anything.
+The rule is intentionally narrower than a regular expression. YOIP-9 already enforces the layer prefix through `MODEL_SUFFIX_RULE`, and the value this proposal adds is a governed vocabulary, not a second pattern language. One root word plus the model's process covers the `dwd_trade_order` shape DataWorks documents; it does not cover multi-word roots, optional segments or alternation. Those stay out, as recorded in item 6 of Rejected Alternatives.
+
+Only models that carry a business process are checked. `DIM`, `DWS` and `ADS` models have no process token, so applying the rule to them would either invent one or reduce the name to a single dictionary word; both are rules this proposal cannot state, so those types are exempt rather than checked loosely.
+
+A model named under the rule records the entry it used in `naming_root_word_id`. That makes the entry's reference list exact instead of a guess from the current name, and it lets the delete check refuse a root word that is still in use instead of quietly invalidating names that were valid before the delete.
+
+Enabling a rule on a layer that already holds models is refused while any of them does not conform, unless the request acknowledges them. On enable the service matches existing names against the dictionary, backfills the entry on the ones that match, and returns the rest to the dialog by name; they stay listed in the layer panel until they are renamed. Acknowledged violations are visible rather than silent — grandfathering without acknowledgement is still refused, because the layer would otherwise switch to a state where the rule is on, knowingly broken, and nothing would record that the operator saw it. Disabling a rule never renames anything, and while a rule is on, changing a model's business process requires the matching rename in the same request.
 
 ### 6. Binding is authoritative
 
 Today a bound standard seeds the field and the user may then change the seeded values, including nullability. The contract becomes: while a standard is bound, the five inherited attributes are read-only; unbinding restores editing. A lookup table used alone controls the field name and display name the same way.
 
-Existing rows are not rewritten. A field that was bound before this release keeps its current values even if they differ from the standard, and the divergence becomes visible the next time the standard is re-bound. Rewriting stored fields during migration would silently change published-model contracts and, through YOIP-11, the DDL a later publication generates.
+Existing rows are not rewritten. A field that was bound before this release keeps its current values even if they differ from the standard, and the divergence becomes visible the next time the standard is re-bound. Rewriting stored fields during migration would silently change published-model contracts and, through YOIP-11, the DDL a later publication generates. Binding a standard to a field of an already published model does change that field's code or type, but the physical table is not altered behind the user's back: YOIP-11's create-or-verify reports the difference at the next publication, so the drift is surfaced instead of applied.
 
 ### 7. Reference queries replace the placeholder
 
-`StandardReferencesVO` gains an `items` list of `{ kind, id, name, path }` and reports `AVAILABLE` instead of `NOT_ENABLED`. Each kind answers from the tables that point at it: model fields for standards and units, field standards plus model fields for lookup tables, layers for naming entries.
+`StandardReferencesVO` gains an `items` list of `{ kind, id, name, path }` and reports `AVAILABLE` instead of `NOT_ENABLED`. Each kind answers from the tables that point at it: model fields for standards and units, field standards plus model fields for lookup tables, and models for naming entries.
+
+`path` is the locator an operator can act on — `dwd_trade_order.order_amt` for a model field, the model name for a naming entry — and each item carries the id needed to open the owning model, so the delete dialog can answer "where is this used" instead of only refusing.
 
 The query is on demand, not embedded in list responses. A page of fifty standards would otherwise need fifty reference aggregates, and the panel is opened for one record at a time.
 
@@ -184,7 +195,9 @@ All four kinds use `(workspace_id, en_code)`. For `yak_ops_standard_field` this 
 ## Compatibility, Deprecation, and Migration Plan
 
 - `V5__v1_7_0.sql` applies after `V4__v1_6_0.sql` from YOIP-11. If YOIP-11 is not accepted first, the same migration is renumbered to follow `V3__v1_5_0.sql` and nothing else changes. A fresh install applies the migrations in order.
-- Four tables are altered — `yak_ops_standard_category`, `yak_ops_standard_field`, `yak_ops_modeling_model_field` and `yak_ops_modeling_layer`; every added column is nullable or defaulted, so existing rows remain valid without a backfill.
+- Five tables are altered — `yak_ops_standard_category`, `yak_ops_standard_field`, `yak_ops_modeling_model`, `yak_ops_modeling_model_field` and `yak_ops_modeling_layer`; every added column is nullable or defaulted, so the migration needs no backfill to keep existing rows valid.
+- Beyond normal edits, the only write this proposal makes to existing model rows is the `naming_root_word_id` backfill, and only when an operator explicitly enables a rule on that layer. It is derived from the current name, so it cannot contradict what the row already says.
+- Deleting a field standard that a model field binds already fails with `REFERENCED` today — the foreign key from `yak_ops_modeling_model_field` enforces it, not the query. What changes is that the refusal becomes explainable: the same code now arrives with a list the dialog can show. The three new kinds get that constraint and query pair from the start.
 - The unique-key replacement on `yak_ops_standard_field` is a relaxation and cannot fail on existing data. It is the only change in this proposal that removes a constraint.
 - Existing field-standard REST payloads stay valid: the four new attributes are optional, and `lengthPrecision` is unchanged on the wire. Existing frontend callers keep working without modification.
 - Binding behavior changes for newly bound fields only. Previously bound fields keep their stored values; nothing is rewritten by the migration.
@@ -195,10 +208,11 @@ All four kinds use `(workspace_id, en_code)`. For `yak_ops_standard_field` this 
 
 ## Test Plan
 
-- Unit tests cover parent-chain validation (self, cross-Workspace, cycle, depth limit), lookup value ordering and duplicate detection, code availability scoped to a Workspace, unit category constraints, naming-rule matching and its rejection, reference aggregation for all four kinds, deletion refusal while referenced, and the binding matrix where a field standard wins over a lookup table and a unit overrides nothing.
-- Database integration tests cover `V5` application on top of `V4`, the self-referencing parent foreign key and its `RESTRICT` behavior, cascade deletion of lookup values with their table, the replaced unique key allowing the same code in two Workspaces, Workspace isolation for all four kinds, and refusal to delete a record referenced by a model field.
+- Unit tests cover parent-chain validation (self, cross-Workspace, cycle, depth limit), lookup value ordering and duplicate detection, code availability scoped to a Workspace, unit category constraints, reference aggregation for all four kinds including the `path` of each item, deletion refusal while referenced and container deletion still using `HAS_DEPENDENCIES`, and the binding matrix where a field standard wins over a lookup table and a unit overrides nothing.
+- Naming-rule tests cover a conforming suffix, a wrong token order, an unknown root word, a third segment, an exempt `DIM` model, enablement refused without acknowledgement, enablement accepted with it, the backfill on enable, and a rejected bypass of the composed suffix.
+- Database integration tests cover `V5` application on top of `V4`, the self-referencing parent foreign key and its `RESTRICT` behavior, cascade deletion of lookup values with their table, the replaced unique key allowing the same code in two Workspaces, Workspace isolation for all four kinds, refusal to delete a record referenced by a model field or by a model's naming root word, and a standard set rejecting a record of the other kind.
 - Frontend verification covers `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run architecture:check`, `npm run contract:check` and `npm run build`, plus Node unit tests for the naming-rule matcher and the length/precision reassembly.
-- Manual acceptance must create one record of each kind, bind a model field to a field standard that references a lookup table and a unit, confirm the five inherited attributes are read-only, reorder lookup values and confirm the value codes stay unique, enable a layer naming rule and confirm a compliant name is accepted while a non-compliant one is rejected with the expected suffix, and delete a referenced record to confirm the refusal. Browser interaction is not covered by an automated per-feature Playwright script in this proposal.
+- Manual acceptance must create one record of each kind, create a standard set and confirm it refuses a record of the other kind, bind a model field to a field standard that references a lookup table and a unit, confirm the five inherited attributes are read-only and that the default value is labelled as not producing a DDL default, reorder lookup values and confirm the value codes stay unique, enable a layer naming rule on a layer with one non-conforming model and confirm both the refusal and the acknowledged path, create a conforming model and confirm the suffix is composed rather than typed, and open the delete dialog of a referenced record to confirm it lists and links its dependants. Browser interaction is not covered by an automated per-feature Playwright script in this proposal.
 
 ## Rejected Alternatives
 
@@ -212,3 +226,7 @@ All four kinds use `(workspace_id, en_code)`. For `yak_ops_standard_field` this 
 8. **Generate quality rules from lookup tables now.** The quality module does not exist: there is no rule entity, no strong or weak classification and no schedule binding. Deriving a rule before the rule model exists would fix the shape prematurely.
 9. **Materialize a lookup table into a physical table or view now.** Publication semantics, refresh policy and ownership of a materialized code table are undecided, and YOIP-11 publishes logical models only. A materialized table without a refresh contract would go stale silently.
 10. **Keep `en_code` globally unique and apply the same scope to the new kinds.** A global key means two Workspaces cannot both define `member_id`, which contradicts the isolation every other modeling table enforces. Relaxing the key is safe for existing data.
+11. **Pin one root word and one business process on the layer.** A pinned pair produces a single legal suffix, and model names are unique per Workspace, so the layer could hold exactly one model. The business process is already a model property; a rule that fixed it as well would either duplicate that column or contradict it.
+12. **Prefill `DECIMAL` length and precision with `18,2`.** A value nobody chose is a value somebody publishes: a ratio or rate field needs more than two decimal places and would be truncated without anyone typing a wrong number. A placeholder carries the same hint without committing to it.
+13. **Return the referencing or violating names inside the error message.** The shared error envelope carries one fixed `ErrorCode` and no per-request detail; putting names in the text would either bypass the structured code or change the envelope for every module. Both lists are already readable from their own endpoint, which is what the dialogs call before submitting.
+14. **Enable a rule unconditionally and treat existing violators as exempt.** An exemption that nothing records is indistinguishable from a broken rule: the layer panel would look conforming while models under it are not. Acknowledgement keeps the convenience and leaves the list visible until the names are fixed.
