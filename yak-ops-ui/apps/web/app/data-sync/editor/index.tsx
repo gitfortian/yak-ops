@@ -10,6 +10,7 @@ import {
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "./incremental-fields";
+import { selectSourceSchema, selectSourceTable, setKeylessSource } from "./source-selection";
 import { findStepCombination } from "../solution/presentation";
 import { useSolutions } from "../solution/use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
@@ -180,6 +181,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     setTaskDirty(true);
     setParametersDirty(true);
     setForm((current) => ({ ...current, sink: { ...current.sink, [key]: value } }));
+  };
+
+  const updateSourceSelection = (update: (current: EditorForm) => EditorForm) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm(update);
   };
 
   const updateMappings = (value: DataSyncTableMapping[]) => {
@@ -369,9 +376,15 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             useIncremental={useIncremental}
             initialLoad={initialLoad}
             patchSource={patchSource}
-            setTaskDirty={setTaskDirty}
-            setParametersDirty={setParametersDirty}
-            setForm={setForm}
+            onSourceSchemaChange={(schema) =>
+              updateSourceSelection((current) => selectSourceSchema(current, schema, usesChangelog))
+            }
+            onSourceTableChange={(table) =>
+              updateSourceSelection((current) => selectSourceTable(current, table, usesChangelog))
+            }
+            onKeylessChange={(enabled) =>
+              updateSourceSelection((current) => setKeylessSource(current, enabled))
+            }
           />
 
           <div id="transform" className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
