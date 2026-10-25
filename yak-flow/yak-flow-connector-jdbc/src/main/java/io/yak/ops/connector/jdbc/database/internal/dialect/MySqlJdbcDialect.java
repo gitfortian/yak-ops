@@ -311,6 +311,21 @@ public final class MySqlJdbcDialect extends AbstractDialect {
         return JdbcNativeType.nonKey("LONGBLOB", warning);
     }
 
+    /**
+     * MySQL's null-safe comparison matches nullable before-images, and LIMIT 1
+     * retracts only one physical occurrence of a duplicate full row.
+     */
+    @Override
+    public String exactRowDeleteSql(TableId table, TableSchema schema) {
+        if (!schema.primaryKeys().isEmpty() || schema.columnCount() == 0) {
+            throw new IllegalArgumentException("MySQL exact-row DELETE requires a nonempty keyless table");
+        }
+        String predicate = schema.columns().stream()
+                .map(column -> quoteIdentifier(column.name()) + " <=> ?")
+                .collect(Collectors.joining(" AND "));
+        return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate + " LIMIT 1";
+    }
+
     @Override
     public String upsertSql(TableId table, TableSchema schema) {
         requirePrimaryKey(schema);
