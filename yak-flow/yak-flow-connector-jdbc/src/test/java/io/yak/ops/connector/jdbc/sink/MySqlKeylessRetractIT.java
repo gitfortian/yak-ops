@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /** Exercises the actual MySQL JDBC writer; no H2 approximation for DELETE LIMIT 1. */
+@Tag("jdbc")
 @Tag("mysql")
 @Timeout(120)
 class MySqlKeylessRetractIT {
