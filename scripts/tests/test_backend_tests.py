@@ -87,7 +87,7 @@ class MavenIntegrationProfileTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
-    CDC_COUNTS = {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2}
+    CDC_COUNTS = {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 4}
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -133,6 +133,15 @@ class ReportTest(unittest.TestCase):
             subject.check_reports(["cdc"], self.root)
         (self.reports / "TEST-MySqlBackfillIT.xml").unlink()
         with self.assertRaisesRegex(ValueError, "MySqlBackfillIT"):
+            subject.check_reports(["cdc"], self.root)
+
+    def test_keyless_backfill_reports_are_required(self):
+        self.complete_reports()
+        self.write("MySqlKeylessBackfillIT")
+        with self.assertRaisesRegex(ValueError, "MySqlKeylessBackfillIT"):
+            subject.check_reports(["cdc"], self.root)
+        (self.reports / "TEST-MySqlKeylessBackfillIT.xml").unlink()
+        with self.assertRaisesRegex(ValueError, "MySqlKeylessBackfillIT"):
             subject.check_reports(["cdc"], self.root)
 
     def test_xml_summary_errors_block_even_without_testcase(self):
