@@ -43,6 +43,8 @@ class DataSyncProductParametersTest {
                 mysql.stream().map(value -> value.solutionType()).toList());
         assertEquals(List.of(Step.FULL, Step.INCREMENTAL), mysql.get(1).defaultSteps());
         assertEquals(List.of("UPSERT"), mysql.get(1).allowedCombinations().getFirst().writeModes());
+        assertEquals(List.of("UPSERT", "RETRACT"),
+                plugin.solutions("MYSQL", "MYSQL").get(1).allowedCombinations().getFirst().writeModes());
         assertFalse(mysql.get(1).allowedCombinations().getFirst().supportsScheduling());
         assertEquals(List.of(SolutionType.SINGLE_TABLE_OFFLINE, SolutionType.DATABASE_OFFLINE), plugin.solutions("POSTGRE_SQL", "MYSQL")
                 .stream().map(value -> value.solutionType()).toList());
@@ -126,6 +128,28 @@ class DataSyncProductParametersTest {
         assertThrows(TaskPluginException.class, () -> plugin.validateUpdate(offline, changed, context));
         var cdcOracle = plugin.parse(json(true).replace("\"source\"}", "\"oracle\"}"));
         assertThrows(TaskPluginException.class, () -> plugin.validateReferences(cdcOracle, context));
+    }
+
+    @Test
+    void keylessRealtimeRequiresExplicitKeyAndRetraction() {
+        String keyless = """
+                {"solutionType":"SINGLE_TABLE_REALTIME","steps":["FULL","INCREMENTAL"],
+                 "schemaChangesEnabled":false,
+                 "source":{"datasourceId":"source"},"sink":{"datasourceId":"target"},
+                 "tableSelection":{"mode":"EXPLICIT"},
+                 "tableMappings":[{"source":{"table":"orders","keyless":true,"chunkKeyColumn":"bucket"},
+                                   "target":{"table":"copy"},"writeMode":"RETRACT"}]}
+                """;
+        var config = JobConfig.from(plugin.parse(keyless));
+        assertEquals(
+                "bucket",
+                config.source().get(io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        assertTrue(config.source().get(io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions.KEYLESS_ENABLED));
+        assertEquals("RETRACT", config.sink().getSourceMap().get("writeMode"));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("RETRACT", "UPSERT")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("bucket", "")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("true", "false")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("FULL", "SCHEMA")));
     }
 
     static String json(boolean realtime) {

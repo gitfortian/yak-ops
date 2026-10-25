@@ -44,12 +44,8 @@ public final class JdbcSinkFactory implements TableSinkFactory {
         if (mode == null) {
             throw new IllegalArgumentException("JDBC Sink requires a write mode");
         }
-        if (mode == JdbcWriteMode.RETRACT) {
-            throw new UnsupportedOperationException("JDBC RETRACT is reserved for keyless CDC; exact-row deletion and "
-                    + "transactional replay protection are not implemented");
-        }
-        if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT) {
-            throw new IllegalArgumentException("Changelog Source requires UPSERT");
+        if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT && mode != JdbcWriteMode.RETRACT) {
+            throw new IllegalArgumentException("Changelog Source requires UPSERT or keyless RETRACT");
         }
     }
 
@@ -61,9 +57,7 @@ public final class JdbcSinkFactory implements TableSinkFactory {
         }
         validate(options, sourceProducesChangelog);
         JdbcSinkSchemaValidator.validate(
-                source,
-                target,
-                sourceProducesChangelog || options.get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.UPSERT);
+                source, target, options.get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.UPSERT);
     }
 
     @Override
@@ -101,7 +95,11 @@ public final class JdbcSinkFactory implements TableSinkFactory {
             configured.remove(JdbcSinkOptions.WRITE_MODE.key());
             if (!common.equals(configured))
                 throw new IllegalArgumentException("JDBC routes must share connection settings");
-            validateSchema(context.options(), context.sourceSchema(), context.targetSchema(), false);
+            validateSchema(
+                    context.options(),
+                    context.sourceSchema(),
+                    context.targetSchema(),
+                    context.options().get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.RETRACT);
             plans.add(new JdbcTableWritePlan(
                     context.sourceTable(),
                     context.targetTable(),
