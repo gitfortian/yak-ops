@@ -3,8 +3,8 @@ package io.yak.ops.plugin.task.datasync.config;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.Conditions;
+import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
@@ -20,8 +20,9 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
             Options.key("primaryKeys").listType(String.class).noDefaultValue();
 
     public static final OptionRule TABLE_RULE = OptionRule.builder()
-            .required(JobOptions.TABLE, Conditions.notBlank(JobOptions.TABLE)
-                    .and(Conditions.matches(JobOptions.TABLE, "(?s)^.{1,128}$")))
+            .required(
+                    JobOptions.TABLE,
+                    Conditions.notBlank(JobOptions.TABLE).and(Conditions.matches(JobOptions.TABLE, "(?s)^.{1,128}$")))
             .optional(JobOptions.DATABASE, Conditions.matches(JobOptions.DATABASE, "(?s)^.{0,128}$"))
             .optional(JobOptions.SCHEMA, Conditions.matches(JobOptions.SCHEMA, "(?s)^.{0,128}$"))
             .optional(PRIMARY_KEYS)
