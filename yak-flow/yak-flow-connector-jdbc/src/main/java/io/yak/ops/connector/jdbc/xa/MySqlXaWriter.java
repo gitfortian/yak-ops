@@ -103,8 +103,8 @@ public final class MySqlXaWriter implements CommittingSinkWriter<TableRecord, My
         try {
             jdbc = xaConnection.getConnection();
             requireDetachedXa(jdbc);
-            JdbcKeylessTargetValidator.validate(jdbc, plan, false);
-            statements = new TableChangelogStatementExecutor(dialect, List.of(plan), 64, false);
+            JdbcKeylessTargetValidator.validate(jdbc, plan);
+            statements = new TableChangelogStatementExecutor(dialect, List.of(plan), 64);
             statements.prepareStatements(jdbc);
             resource = xaConnection.getXAResource();
             xid = MySqlXaXid.next(instanceId, subtask, ++transactionSequence);

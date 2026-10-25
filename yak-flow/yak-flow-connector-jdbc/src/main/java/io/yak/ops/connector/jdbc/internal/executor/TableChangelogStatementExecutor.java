@@ -35,11 +35,8 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     private final Map<TableId, TableSimpleStatementExecutor> writes = new LinkedHashMap<>();
     private final Map<TableId, TableSimpleStatementExecutor> deletes = new LinkedHashMap<>();
     private final int statementCacheSize;
-    private final boolean useReplayReceipts;
-    private final JdbcDialect dialect;
     private final Set<TableSimpleStatementExecutor> prepared = new LinkedHashSet<>();
     private Connection connection;
-    private JdbcReplayReceipts receipts;
     private TableSimpleStatementExecutor active;
     private TableId awaitingUpdateAfter;
     private ChangeEventId awaitingUpdateEvent;
@@ -52,21 +49,10 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     /** Bounds live statements across all routes; SQL and converters remain immutable route definitions. */
     public TableChangelogStatementExecutor(
             JdbcDialect dialect, List<JdbcTableWritePlan> plans, int statementCacheSize) {
-        this(dialect, plans, statementCacheSize, true);
-    }
-
-    /**
-     * Prepared XA transactions must not also reserve durable Receipt rows.
-     * Disabling receipts is allowed only for a checkpoint-coordinated XA owner.
-     */
-    public TableChangelogStatementExecutor(
-            JdbcDialect dialect, List<JdbcTableWritePlan> plans, int statementCacheSize, boolean useReplayReceipts) {
-        this.useReplayReceipts = useReplayReceipts;
         if (statementCacheSize < 1) {
             throw new IllegalArgumentException("JDBC statement cache size must be positive");
         }
         this.statementCacheSize = statementCacheSize;
-        this.dialect = Objects.requireNonNull(dialect, "dialect");
         installPlans(Objects.requireNonNull(dialect, "dialect"), Objects.requireNonNull(plans, "plans"));
     }
 
@@ -195,9 +181,6 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             throw new IllegalStateException("JDBC executor already owns a connection");
         }
         this.connection = Objects.requireNonNull(connection, "connection");
-        if (useReplayReceipts) {
-            receipts = new JdbcReplayReceipts(connection, dialect, List.copyOf(routes.values()));
-        }
     }
 
     /** Called only after switching away from and executing the previous active batch. */
@@ -238,9 +221,6 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                     if (!before.tableId().equals(record.tableId())) {
                         throw new IllegalStateException("JDBC UPDATE pair crosses source tables");
                     }
-                    if (plan.writeMode() == JdbcWriteMode.RETRACT && !reserve(record, plan)) {
-                        return;
-                    }
                     if (plan.writeMode() == JdbcWriteMode.RETRACT
                             || !plan.hasSamePrimaryKey(before.row(), record.row())) {
                         append(deletes.get(record.tableId()), before.row());
@@ -248,26 +228,9 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                 }
                 append(writes.get(record.tableId()), record.row());
             }
-            case INSERT -> {
-                if (plan.writeMode() != JdbcWriteMode.RETRACT || reserve(record, plan)) {
-                    append(writes.get(record.tableId()), record.row());
-                }
-            }
-            case DELETE -> {
-                if (plan.writeMode() != JdbcWriteMode.RETRACT || reserve(record, plan)) {
-                    append(deletes.get(record.tableId()), record.row());
-                }
-            }
+            case INSERT -> append(writes.get(record.tableId()), record.row());
+            case DELETE -> append(deletes.get(record.tableId()), record.row());
         }
-    }
-
-    private boolean reserve(TableRecord record, JdbcTableWritePlan plan) throws SQLException {
-        // Preserve the order of earlier DML before reserving the next mutation.
-        if (active != null) {
-            active.executeBatch();
-            active = null;
-        }
-        return useReplayReceipts ? receipts.reserve(record, plan) : true;
     }
 
     private void append(TableSimpleStatementExecutor next, RowData row) throws SQLException {
@@ -301,15 +264,6 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             closePreparedStatements();
         } catch (SQLException error) {
             failure = error;
-        }
-        if (receipts != null) {
-            try {
-                receipts.close();
-            } catch (SQLException error) {
-                if (failure == null) failure = error;
-                else failure.addSuppressed(error);
-            }
-            receipts = null;
         }
         if (failure != null) throw failure;
     }
@@ -350,13 +304,6 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     @Override
     public void cancel() throws SQLException {
         SQLException failure = null;
-        if (receipts != null) {
-            try {
-                receipts.cancel();
-            } catch (SQLException error) {
-                failure = error;
-            }
-        }
         for (TableSimpleStatementExecutor statement : writes.values()) {
             try {
                 statement.cancel();

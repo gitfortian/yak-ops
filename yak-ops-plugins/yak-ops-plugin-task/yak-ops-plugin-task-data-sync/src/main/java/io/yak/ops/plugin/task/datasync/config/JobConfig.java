@@ -137,9 +137,12 @@ public final class JobConfig {
                 throw new IllegalArgumentException("keyless must be a boolean");
             }
             boolean keyless = sourceTable.get(SolutionOptions.KEYLESS);
-            boolean xa = sourceTable.get(SolutionOptions.XA);
-            if (xa && !keyless) {
-                throw new IllegalArgumentException("XA product admission requires explicit keyless CDC");
+            Object xa = sourceTable.getSourceMap().get(SolutionOptions.XA.key());
+            if (keyless && !Boolean.TRUE.equals(xa)) {
+                throw new IllegalArgumentException("Keyless CDC requires XA; create a new XA task definition");
+            }
+            if (!keyless && xa != null) {
+                throw new IllegalArgumentException("XA requires explicit keyless CDC");
             }
             String chunkKey = sourceTable.get(SolutionOptions.CHUNK_KEY);
             JdbcWriteMode mode = table.get(JdbcSinkOptions.WRITE_MODE);
@@ -163,7 +166,7 @@ public final class JobConfig {
             output.put("datasourceId", to.get(JobOptions.DATASOURCE_ID));
             output.put("type", "JDBC");
             output.put("writeMode", mode.name());
-            if (xa) output.put(JdbcSinkOptions.XA_ENABLED.key(), true);
+            if (keyless) output.put(JdbcSinkOptions.XA_ENABLED.key(), true);
             if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
                 throw new IllegalArgumentException("Source and target tables must be unique");
             }

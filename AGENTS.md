@@ -37,6 +37,15 @@ Inspect the current code, direct callers, tests and Maven dependencies before ch
 - Do not claim exactly-once processing, distributed execution or product runtime integration without executable evidence.
 - Do not add interfaces, factories, managers or compatibility layers without a real owner and caller.
 
+## Minimal Implementation and Compatibility
+
+- Implement one clear current execution path. Do not preserve deprecated implementations, duplicate protocols, alias options, fallback branches, forwarding wrappers or outdated documentation just in case. Delete the replaced path when its replacement becomes authoritative.
+- Compatibility is not the default. Add an adapter only for a documented, currently supported published contract, named consumer and explicit maintainer decision. State its removal condition; never invent speculative consumers.
+- Prefer verified Flink/Flink CDC lifecycle and vocabulary where the semantics match. Do not copy names while silently weakening checkpoint or recovery guarantees. Reuse existing contracts before creating interfaces, factories or shared helpers.
+- Reject speculative switches, duplicate models, defensive null-handling without a real trust boundary, and layers that only delegate. Retain fail-closed state, resource and data-safety checks.
+- When removing an execution protocol, remove its implementation, tests and current documentation together. Explicitly reject incompatible persisted definitions and checkpoints; never silently reinterpret them, migrate running state or degrade delivery guarantees.
+- Every new branch, interface, compatibility exception and configuration field requires a concrete use case and owning caller. Do not delete essential recovery tests or lower verification gates to make a simplification pass.
+
 ## Common Change Patterns
 
 - **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.

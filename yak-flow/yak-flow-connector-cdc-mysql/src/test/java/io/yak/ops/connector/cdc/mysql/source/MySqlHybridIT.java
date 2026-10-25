@@ -58,36 +58,22 @@ class MySqlHybridIT {
             new Column("amount", LogicalTypes.decimal(14, 2))), List.of());
 
     @Test
-    void keylessSnapshotAndBinlogPreserveDuplicateRowsAndCrashReplay() throws Exception {
+    void keylessSnapshotAndBinlogPreserveDuplicateRows() throws Exception {
         try (Fixture fixture = new Fixture(1, 2, true)) {
             fixture.execute("INSERT INTO " + fixture.source(0)
                     + " VALUES(1,10.00),(1,10.00),(2,NULL)");
-            Saved checkpoint;
             try (Harness first = new Harness(fixture, null)) {
                 first.start();
                 first.until(first::streaming, true);
                 assertEquals(Map.of("1:10.00", 2L, "2:NULL", 1L), fixture.keylessRows(0));
-                checkpoint = first.checkpoint();
+                first.checkpoint();
                 fixture.execute("DELETE FROM " + fixture.source(0)
                         + " WHERE bucket=1 AND amount=10.00 LIMIT 1",
                         "UPDATE " + fixture.source(0)
                         + " SET amount=12.00 WHERE bucket=2",
                         "INSERT INTO " + fixture.source(0) + " VALUES(3,20.00)");
-                // The JDBC Sink commits these changes, but the source checkpoint is deliberately stale.
                 first.until(() -> fixture.keylessRows(0).equals(
                         Map.of("1:10.00", 1L, "2:12.00", 1L, "3:20.00", 1L)), false);
-            }
-            // Replay from the previous checkpoint must never duplicate changes already committed
-            // with durable transaction receipts.
-            try (Harness recovered = new Harness(fixture, checkpoint)) {
-                recovered.start();
-                recovered.until(() -> recovered.streaming()
-                        && fixture.keylessRows(0).equals(
-                                Map.of("1:10.00", 1L, "2:12.00", 1L, "3:20.00", 1L)), true);
-                fixture.execute("DELETE FROM " + fixture.source(0)
-                        + " WHERE bucket=1 AND amount=10.00 LIMIT 1");
-                recovered.until(() -> fixture.keylessRows(0).equals(
-                        Map.of("2:12.00", 1L, "3:20.00", 1L)), true);
             }
         }
     }
@@ -246,8 +232,6 @@ class MySqlHybridIT {
             if (keyless) {
                 options.set(MySqlCdcSourceOptions.KEYLESS_ENABLED, true);
                 options.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "bucket");
-                execute("CREATE TABLE IF NOT EXISTS yak_flow_cdc_receipts "
-                        + "(receipt_key BINARY(32) NOT NULL PRIMARY KEY) ENGINE=InnoDB");
             }
             List<TableSourceFactoryContext> contexts = new ArrayList<>();
             for (int i=0;i<tableCount;i++) {

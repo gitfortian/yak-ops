@@ -147,13 +147,6 @@ public final class PostgresJdbcDialect extends AbstractDialect {
     }
 
     @Override
-    public String replayReceiptSql(TableId table) {
-        String key = quoteIdentifier("receipt_key");
-        String target = qualifiedTable(table);
-        return "INSERT INTO " + target + " (" + key + ") VALUES (?) ON CONFLICT (" + key + ") DO NOTHING";
-    }
-
-    @Override
     public String upsertSql(TableId table, TableSchema schema) {
         requirePrimaryKey(schema);
         List<String> primaryKeys = schema.primaryKeys();

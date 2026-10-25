@@ -33,8 +33,8 @@ public final class SolutionOptions {
     public static final Option<Boolean> KEYLESS =
             Options.key("keyless").booleanType().defaultValue(false);
 
-    /** New keyless definitions explicitly opt in to XA; absent preserves historical Receipt semantics. */
-    public static final Option<Boolean> XA = Options.key("xa").booleanType().defaultValue(false);
+    /** Required protocol marker for keyless definitions; missing state is rejected. */
+    public static final Option<Boolean> XA = Options.key("xa").booleanType().noDefaultValue();
 
     public static final Option<String> CHUNK_KEY =
             Options.key("chunkKeyColumn").stringType().noDefaultValue();

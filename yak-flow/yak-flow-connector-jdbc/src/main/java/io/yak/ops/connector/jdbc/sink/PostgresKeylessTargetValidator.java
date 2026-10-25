@@ -9,7 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Locale;
 
-/** Verifies a real PostgreSQL heap table and its durable receipt table before RETRACT. */
+/** Verifies physical PostgreSQL full-row retraction safety. */
 public final class PostgresKeylessTargetValidator {
 
     private PostgresKeylessTargetValidator() {}
@@ -28,26 +28,7 @@ public final class PostgresKeylessTargetValidator {
             throw new SQLException("PostgreSQL RETRACT target must have no unique index");
         }
         requireNoSideEffects(connection, target);
-        validateColumns(connection, target, plan.schema(), false);
-
-        long receipts = heap(connection, owner, "yak_flow_cdc_receipts");
-        requireNoSideEffects(connection, receipts);
-        if (count(connection, "SELECT COUNT(*) FROM pg_catalog.pg_index WHERE indrelid = ? AND indisprimary", receipts)
-                != 1) {
-            throw new SQLException("PostgreSQL RETRACT receipts require a primary key");
-        }
-        String primarySql = "SELECT a.attname FROM pg_catalog.pg_index i "
-                + "JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid "
-                + "AND a.attnum = ANY(i.indkey) WHERE i.indrelid = ? AND i.indisprimary";
-        try (PreparedStatement query = connection.prepareStatement(primarySql)) {
-            query.setLong(1, receipts);
-            try (ResultSet rows = query.executeQuery()) {
-                if (!rows.next() || !"receipt_key".equals(rows.getString(1)) || rows.next()) {
-                    throw new SQLException("PostgreSQL RETRACT receipt PK must be receipt_key only");
-                }
-            }
-        }
-        validateColumns(connection, receipts, null, true);
+        validateColumns(connection, target, plan.schema());
     }
 
     private static long heap(Connection connection, String owner, String name) throws SQLException {
@@ -84,15 +65,14 @@ public final class PostgresKeylessTargetValidator {
         }
     }
 
-    private static void validateColumns(Connection connection, long oid, TableSchema schema, boolean receipt)
-            throws SQLException {
+    private static void validateColumns(Connection connection, long oid, TableSchema schema) throws SQLException {
         String columnSql = "SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), "
                 + "a.attnotnull, a.attgenerated, a.attidentity FROM pg_catalog.pg_attribute a "
                 + "WHERE a.attrelid = ? AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum";
         try (PreparedStatement query = connection.prepareStatement(columnSql)) {
             query.setLong(1, oid);
             try (ResultSet rows = query.executeQuery()) {
-                int count = receipt ? 1 : schema.columnCount();
+                int count = schema.columnCount();
                 for (int index = 0; index < count; index++) {
                     if (!rows.next()) {
                         throw new SQLException("PostgreSQL RETRACT table does not contain every expected column");
@@ -103,17 +83,9 @@ public final class PostgresKeylessTargetValidator {
                     if (!rows.getString(4).isEmpty() || !rows.getString(5).isEmpty()) {
                         throw new SQLException("PostgreSQL RETRACT cannot use generated or identity columns");
                     }
-                    if (receipt) {
-                        if (!"receipt_key".equals(name) || !"bytea".equals(nativeType) || !notNull) {
-                            throw new SQLException("PostgreSQL receipts require receipt_key BYTEA PRIMARY KEY");
-                        }
-                    } else {
-                        Column column = schema.column(index);
-                        if (!column.name().equals(name)
-                                || column.nullable() == notNull
-                                || !matches(column, nativeType)) {
-                            throw new SQLException("Unsupported PostgreSQL RETRACT column metadata: " + name);
-                        }
+                    Column column = schema.column(index);
+                    if (!column.name().equals(name) || column.nullable() == notNull || !matches(column, nativeType)) {
+                        throw new SQLException("Unsupported PostgreSQL RETRACT column metadata: " + name);
                     }
                 }
                 if (rows.next()) {
