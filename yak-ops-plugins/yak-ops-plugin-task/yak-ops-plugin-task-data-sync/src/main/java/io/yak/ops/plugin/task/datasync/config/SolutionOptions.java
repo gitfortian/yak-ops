@@ -29,20 +29,6 @@ public final class SolutionOptions {
     public static final Option<Boolean> ALLOW_DROP_COLUMNS =
             Options.key("allowDropColumns").booleanType().defaultValue(false);
 
-    /** Target-side primary-key declaration, independent of the source snapshot chunk key. */
-    public static final Option<List<String>> TARGET_PRIMARY_KEYS =
-            Options.key("primaryKeys").listType(String.class).noDefaultValue();
-
-    /** Explicitly selected no-PK source. Kept separate from the Connector's physical options. */
-    public static final Option<Boolean> KEYLESS =
-            Options.key("keyless").booleanType().defaultValue(false);
-
-    /** Required protocol marker for keyless definitions; missing state is rejected. */
-    public static final Option<Boolean> XA = Options.key("xa").booleanType().noDefaultValue();
-
-    public static final Option<String> CHUNK_KEY =
-            Options.key("chunkKeyColumn").stringType().noDefaultValue();
-
     public static final OptionRule RULE = OptionRule.builder()
             .required(SOLUTION_TYPE, STEPS, JobOptions.SOURCE, JobOptions.SINK, TABLE_SELECTION, TABLE_MAPPINGS)
             .optional(JobOptions.TRANSFORM, SCHEMA_CHANGES_ENABLED, ALLOW_DROP_COLUMNS)
@@ -70,14 +56,5 @@ public final class SolutionOptions {
             .optional(JobOptions.DATABASE, Conditions.matches(JobOptions.DATABASE, "(?s)^.{0,128}$"))
             .optional(JobOptions.SCHEMA, Conditions.matches(JobOptions.SCHEMA, "(?s)^.{0,128}$"))
             .build();
-    public static final OptionRule TARGET_TABLE_RULE = OptionRule.builder()
-            .include(TABLE_RULE)
-            .optional(TARGET_PRIMARY_KEYS)
-            .build();
-    public static final OptionRule SOURCE_TABLE_RULE = OptionRule.builder()
-            .include(TABLE_RULE)
-            .optional(KEYLESS, CHUNK_KEY, XA)
-            .build();
-
     private SolutionOptions() {}
 }
