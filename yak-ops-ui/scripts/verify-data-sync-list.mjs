@@ -130,6 +130,10 @@ assert.deepEqual(
   ["valid", "old-keyless", "xa", "broken-json", "unknown-version"],
 );
 assert.equal(projected.bizData[0].syncType, "REALTIME");
+assert.equal(projected.bizData[1].syncType, "REALTIME");
+assert.equal(projected.bizData[1].sourceDataSourceId, "source");
+assert.equal(projected.bizData[1].targetTable, "orders_copy");
+assert.equal(projected.bizData[1].tableMappings[0].source.chunkKeyColumn, "bucket");
 assert.equal(projected.bizData[2].keylessEnabled, true);
 assert.equal(projected.bizData[2].tableMappings[0].source.xa, true);
 for (const record of [projected.bizData[1], projected.bizData[3], projected.bizData[4]]) {
@@ -138,7 +142,11 @@ for (const record of [projected.bizData[1], projected.bizData[3], projected.bizD
   assert.equal(record.status, "PUBLISHED");
   assert.equal(record.updateBy, "operator");
   assert.ok(record.configurationError);
-  assert.equal("sourceDataSourceId" in record, false);
+  if (record.id === "old-keyless") {
+    assert.equal(record.sourceDataSourceId, "source");
+  } else {
+    assert.equal("sourceDataSourceId" in record, false);
+  }
 }
 assert.match(projected.bizData[1].configurationError, /不支持的同步目标写入配置/);
 assert.match(projected.bizData[3].configurationError, /JSON/);
