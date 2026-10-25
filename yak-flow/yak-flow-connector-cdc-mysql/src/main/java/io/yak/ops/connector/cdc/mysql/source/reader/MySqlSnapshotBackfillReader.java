@@ -50,34 +50,44 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
      */
     public MySqlSnapshotSplit read(MySqlSnapshotSplit split) throws Exception {
         checkCancelled();
-        if (split.chunkRange() != null) {
-            throw new UnsupportedOperationException(
-                    "Typed snapshot execution requires the chunk-aware Reader and durable handoff integration");
-        }
         if (split.prepared() || split.lastEmittedKey() != null) {
             throw new IllegalArgumentException("Backfill requires an unprepared complete chunk range");
         }
         ensureBinlog();
         BinlogOffset low = watermark();
-        MySqlChunkBackfill buffer = new MySqlChunkBackfill(
-                split,
-                Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema"),
-                MAX_ROWS,
-                MAX_PAYLOAD_BYTES);
+        var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
+        if (split.chunkRange() != null && !schema.primaryKeys().isEmpty()) {
+            throw new UnsupportedOperationException("Typed backfill currently requires a keyless source table");
+        }
+        MySqlChunkBackfill buffer = split.chunkRange() == null
+                ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
+                : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {
             snapshots.open(split);
             boolean complete = false;
             while (!complete) {
                 checkCancelled();
-                var batch = snapshots.fetch();
-                while (batch.nextSplit() != null) {
-                    MySqlHybridFetchedRecord record;
-                    while ((record = batch.nextRecordFromSplit()) != null) {
-                        for (var row : record.rows()) buffer.addSnapshot(row);
+                if (split.chunkRange() == null) {
+                    var batch = snapshots.fetch();
+                    while (batch.nextSplit() != null) {
+                        MySqlHybridFetchedRecord record;
+                        while ((record = batch.nextRecordFromSplit()) != null) {
+                            for (var row : record.rows()) buffer.addSnapshot(row);
+                        }
                     }
+                    complete = batch.finishedSplits().contains(split.splitId());
+                    batch.recycle();
+                } else {
+                    var batch = snapshots.fetchTyped();
+                    while (batch.nextSplit() != null) {
+                        io.yak.ops.core.data.TableRecord record;
+                        while ((record = batch.nextRecordFromSplit()) != null) {
+                            buffer.addSnapshot(record);
+                        }
+                    }
+                    complete = batch.finishedSplits().contains(split.splitId());
+                    batch.recycle();
                 }
-                complete = batch.finishedSplits().contains(split.splitId());
-                batch.recycle();
             }
             afterSnapshot.call();
             BinlogOffset high = watermark();
@@ -91,11 +101,18 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                     BinlogEvent event = binlog.poll();
                     if (event == null) continue;
                     int highOrder = event.offset().compareTo(high);
-                    if (event.offset().compareTo(low) > 0
-                            && highOrder <= 0
-                            && !event.records().isEmpty()
-                            && split.tableId().equals(event.records().getFirst().tableId())) {
-                        buffer.apply(event);
+                    if (event.offset().compareTo(low) > 0 && highOrder <= 0) {
+                        if (split.chunkRange() != null
+                                && event.schemaChange() != null
+                                && split.tableId().equals(event.schemaChange().tableId())) {
+                            throw new UnsupportedOperationException(
+                                    "Keyless snapshot cannot reconcile schema changes during Backfill");
+                        }
+                        if (!event.records().isEmpty()
+                                && split.tableId()
+                                        .equals(event.records().getFirst().tableId())) {
+                            buffer.apply(event);
+                        }
                     }
                     if (highOrder >= 0) break;
                 }

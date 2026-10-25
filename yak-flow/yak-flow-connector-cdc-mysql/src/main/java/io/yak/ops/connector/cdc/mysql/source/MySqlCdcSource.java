@@ -79,17 +79,20 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     @Override
     public SplitEnumerator<MySqlBinlogSplit, MySqlPendingSplitsState> createEnumerator(
             SplitEnumeratorContext<MySqlBinlogSplit> context) {
+        requirePhysicalPrimaryKeys();
         return new MySqlSourceEnumerator(context, fingerprint, null);
     }
 
     @Override
     public SplitEnumerator<MySqlBinlogSplit, MySqlPendingSplitsState> restoreEnumerator(
             SplitEnumeratorContext<MySqlBinlogSplit> context, MySqlPendingSplitsState checkpointState) {
+        requirePhysicalPrimaryKeys();
         return new MySqlSourceEnumerator(context, fingerprint, Objects.requireNonNull(checkpointState, "checkpoint"));
     }
 
     @Override
     public SourceReader<TableRecord, MySqlBinlogSplit> createReader(SourceReaderContext context) {
+        requirePhysicalPrimaryKeys();
         if (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0) {
             throw new IllegalArgumentException("MySQL Binlog Source requires exactly one SourceReader");
         }
@@ -104,6 +107,14 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     @Override
     public SimpleVersionedSerializer<MySqlPendingSplitsState> getEnumeratorCheckpointSerializer() {
         return stateSerializer;
+    }
+
+    private void requirePhysicalPrimaryKeys() {
+        if (config.schemas().values().stream()
+                .anyMatch(schema -> schema.primaryKeys().isEmpty())) {
+            throw new UnsupportedOperationException(
+                    "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
+        }
     }
 
     private static String fingerprint(MySqlCdcSourceConfig config) {

@@ -48,7 +48,7 @@ class MySqlCdcKeylessBaselineTest {
                 IllegalArgumentException.class,
                 () -> new MySqlCdcSourceConfig(
                         "localhost", 3306, "user", "secret", 6101, "baseline", Map.of(TABLE, KEYLESS), 256));
-        assertTrue(failure.getMessage().contains("primary keys"));
+        assertTrue(failure.getMessage().contains("Chunk Key"));
     }
 
     @Test
