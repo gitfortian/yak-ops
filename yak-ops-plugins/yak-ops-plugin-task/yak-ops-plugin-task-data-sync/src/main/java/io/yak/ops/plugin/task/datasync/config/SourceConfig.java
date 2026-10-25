@@ -4,6 +4,7 @@ import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
+import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
@@ -23,8 +24,11 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, Object trans
             Options.key("incremental").mapObjectType().noDefaultValue();
 
     public static final OptionRule TABLE_RULE = OptionRule.builder()
-            .required(JobOptions.TABLE)
-            .optional(JobOptions.DATABASE, JobOptions.SCHEMA, KEYLESS, CHUNK_KEY, XA)
+            .required(JobOptions.TABLE, Conditions.notBlank(JobOptions.TABLE)
+                    .and(Conditions.matches(JobOptions.TABLE, "(?s)^.{1,128}$")))
+            .optional(JobOptions.DATABASE, Conditions.matches(JobOptions.DATABASE, "(?s)^.{0,128}$"))
+            .optional(JobOptions.SCHEMA, Conditions.matches(JobOptions.SCHEMA, "(?s)^.{0,128}$"))
+            .optional( KEYLESS, CHUNK_KEY, XA)
             .build();
 
     public static SourceConfig from(
