@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Transactional MySQL receipts for keyless changes.
+ * Transactional JDBC receipts for keyless changes.
  *
  * <p>The caller owns the JDBC connection, transaction and commit. A unique receipt is inserted
  * before any row mutation; a duplicate receipt suppresses the entire mutation. Receipts are not
@@ -39,9 +39,10 @@ public final class JdbcReplayReceipts implements AutoCloseable {
                 if (plan.writeMode() != JdbcWriteMode.RETRACT) continue;
                 TableId table = plan.targetTable();
                 TableId receiptTable = new TableId(
-                        table.catalog() == null ? connection.getCatalog() : table.catalog(), null, TABLE_NAME);
-                String sql = "INSERT IGNORE INTO " + dialect.qualifiedTable(receiptTable) + " ("
-                        + dialect.quoteIdentifier("receipt_key") + ") VALUES (?)";
+                        table.catalog() == null ? connection.getCatalog() : table.catalog(),
+                        table.schema() == null ? connection.getSchema() : table.schema(),
+                        dialect.replayReceiptTableName());
+                String sql = dialect.replayReceiptSql(receiptTable);
                 statements.put(plan.sourceTable(), connection.prepareStatement(sql));
             }
         } catch (SQLException | RuntimeException failure) {
@@ -67,7 +68,7 @@ public final class JdbcReplayReceipts implements AutoCloseable {
         statement.setBytes(1, receiptKey(id, plan));
         int count = statement.executeUpdate();
         if (count != 0 && count != 1) {
-            throw new SQLException("MySQL RETRACT receipt returned an unexpected affected-row count");
+            throw new SQLException("JDBC RETRACT receipt returned an unexpected affected-row count");
         }
         return count == 1;
     }
