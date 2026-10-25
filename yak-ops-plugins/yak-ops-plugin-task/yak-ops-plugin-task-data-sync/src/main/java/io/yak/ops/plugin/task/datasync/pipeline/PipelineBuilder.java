@@ -190,7 +190,7 @@ public final class PipelineBuilder {
             sinkContexts.add(new TableSinkFactoryContext(
                     sinkOptions,
                     table.source().table(),
-                    table.source().schema(),
+                    table.writeSourceSchema(),
                     table.targetTable(),
                     table.targetSchema(),
                     metrics));
