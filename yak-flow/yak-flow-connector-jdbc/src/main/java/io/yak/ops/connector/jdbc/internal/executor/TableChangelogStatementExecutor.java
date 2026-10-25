@@ -61,7 +61,9 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
         if (connection == null) {
             throw new IllegalStateException("JDBC executor has no active connection");
         }
-        if (active != null || awaitingUpdateAfter != null || awaitingUpdateEvent != null
+        if (active != null
+                || awaitingUpdateAfter != null
+                || awaitingUpdateEvent != null
                 || beforeInExecution != null) {
             throw new IllegalStateException("Cannot replace JDBC routes while a batch or update pair is active");
         }
@@ -123,7 +125,8 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             throw new IllegalArgumentException("UPDATE_BEFORE must be followed by UPDATE_AFTER for the same table");
         }
         if (plan.writeMode() == JdbcWriteMode.RETRACT
-                && record.rowKind() == RowKind.UPDATE_AFTER && awaitingUpdateAfter == null) {
+                && record.rowKind() == RowKind.UPDATE_AFTER
+                && awaitingUpdateAfter == null) {
             throw new IllegalArgumentException("JDBC RETRACT UPDATE_AFTER requires a preceding before-image");
         }
         if (awaitingUpdateAfter != null && plan.writeMode() == JdbcWriteMode.RETRACT) {
@@ -139,7 +142,9 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             }
         }
         TableRecord detached = new TableRecord(
-                record.tableId(), record.rowKind(), plan.project(record.row(), record.rowKind()),
+                record.tableId(),
+                record.rowKind(),
+                plan.project(record.row(), record.rowKind()),
                 record.changeEventId());
         if (record.rowKind() == RowKind.UPDATE_BEFORE) {
             awaitingUpdateAfter = record.tableId();
