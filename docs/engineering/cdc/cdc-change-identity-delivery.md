@@ -58,9 +58,8 @@ and their **wire format and version are unchanged**.
   pre-existing duplicate business rows.
 - Legacy JDBC APPEND/UPSERT records can carry null identity without altering
   their SQL or existing recovery semantics.
-- No downstream exactly-once guarantee follows from identifying a replay;
-  PR 7 must implement exact-one-row RETRACT, and PR 8 must commit target DML
-  and event receipts together in the same transaction.
+- Identifying a replay is not an exactly-once guarantee. Keyless MySQL CDC requires
+  complete mutation images and checkpoint-coordinated XA commits.
 - Public keyless CDC Source and JDBC RETRACT execution gates stay closed.
 
 ## Acceptance

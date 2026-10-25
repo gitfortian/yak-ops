@@ -1,26 +1,16 @@
-# Keyless MySQL CDC: product admission
-
-This document records the initial, deliberately narrow, public admission for
-physically keyless real-time synchronization. It does not relax keyed CDC.
+# Keyless MySQL CDC: Product Admission
 
 ## Supported path
 
-- `SINGLE_TABLE_REALTIME`, steps `FULL` + `INCREMENTAL`.
-- Source: MySQL table with **no physical primary key**.
-- Target: MySQL InnoDB table with an exactly compatible full-row projection, no
-  physical primary/unique keys, and no unsupported triggers, foreign keys,
-  generated fields, or native comparison types.
-- Sink: `RETRACT`, using one-row native null-safe comparison and one of two
-  explicitly pinned recovery protocols: legacy durable receipts or checkpoint-coordinated
-  MySQL XA for new definitions.
-- Multi-table keyless tasks, Oracle/PostgreSQL product admission, keyless
-  runtime schema changes, and initial structure-creation tasks remain disabled.
+- Single-table MySQL to MySQL `SINGLE_TABLE_REALTIME`, steps `FULL` + `INCREMENTAL`.
+- A source table without a physical primary key and an explicit non-null numeric snapshot Chunk Key.
+- An existing MySQL InnoDB target with a matching physical full-row projection, no unique keys, unsupported triggers, foreign keys or generated columns.
+- Exact-row `RETRACT` with checkpoint-coordinated MySQL XA. One Sink writer, direct JDBC connections and durable aligned checkpoints are required.
+- PostgreSQL/Oracle keyless CDC, multi-table keyless execution, keyless schema changes and automatic target creation are not supported.
 
 ## Task definition
 
-The public version-three task mapping supplies `keyless` and
-`chunkKeyColumn` on **the source table**, not on the datasource connection
-and not as JDBC target column metadata:
+A keyless task must contain `xa: true`. This persisted protocol marker prevents an incompatible task definition from silently starting under a different transaction mechanism.
 
 ```json
 {
@@ -38,88 +28,18 @@ and not as JDBC target column metadata:
 }
 ```
 
-The Chunk Key selects snapshot ranges; it **does not** identify a row.
-It must be an existing non-null numeric field with a supported logical type.
-Multiple physically identical rows must retain their multiplicity.
-Moving the Chunk Key between snapshot ranges and keyless schema changes are
-intentionally rejected rather than silently risking lost or duplicate rows.
+The Chunk Key selects snapshot ranges, not row identity. Identical physical rows retain multiplicity. UPDATE and DELETE match exactly one row by its complete before-image.
 
-## Database preparation
+## Runtime requirements
 
-Source MySQL must meet the existing CDC replication preflight, including
-`binlog_format=ROW`, `binlog_row_image=FULL`, and empty
-`binlog_row_value_options`. Consistent snapshot acquisition temporarily
-requires a global read lock while the Low watermark and repeatable-read view
-are anchored. The replication identity and lock privileges must be provisioned.
+The source requires `binlog_format=ROW`, `binlog_row_image=FULL`, empty `binlog_row_value_options`, replication permissions and a consistent snapshot lock. The target requires `xa_detach_on_prepare=ON` and XA recovery privileges. SSH-tunneled and unverified MySQL XA connections are not supported.
 
-**New keyless task definitions** with `tableMappings[].source.xa=true` use a
-checkpoint-coordinated XA Committer. The target must be MySQL with
-`xa_detach_on_prepare=ON`, a direct JDBC XA connection (no SSH tunnel), and
-credentials allowed to recover owned prepared XA transactions. The Runtime requires
-a durable checkpoint store. XA PREPARE does not make rows visible: only after the
-checkpoint is persisted does the Committer execute XA COMMIT. An unresolvable
-or ambiguous XA state blocks execution.
-
-**Existing keyless task definitions** without the `xa` property stay on the
-legacy Receipt protocol. This is intentionally a *versioned selection*;
-reinterpreting old checkpoint or Receipt state as XA is unsafe. For legacy
-definitions the target administrator must still create this table:
-
-```sql
-CREATE TABLE yak_flow_cdc_receipts (
-    receipt_key BINARY(32) NOT NULL PRIMARY KEY
-) ENGINE=InnoDB;
-```
-
-For legacy Receipt writers, the receipt table is persistent runtime state. It must **not** be automatically
-created, truncated, or removed when a Job restarts or checkpoints replay; it
-must remain in the same target database/transaction boundary as the row writes.
-See `docs/engineering/cdc/mysql-keyless-transactional-replay.md`.
-
-The JDBC target writer validates physical schema, engine, constraints and
-receipt-table contract at startup. Unsafe target shapes fail closed.
+At each aligned Checkpoint the Sink prepares XA transactions. The Runtime persists prepared XIDs with Source offsets, then issues XA COMMIT after durable checkpoint publication. On restore, it reconciles only transactions owned by the current task instance and fails closed on ambiguous outcomes. Never broadly roll back unrelated prepared XIDs.
 
 ## Recovery and acceptance
 
-The keyless Hybrid Source freezes a complete normalized snapshot chunk before
-emitting rows. Low/read-view consistency, per-chunk High watermark filtering,
-stable row-image identity, and durable sink receipts must remain aligned through
-Checkpoint and restart.
+`MySqlXaSinkIT` verifies prepared visibility, orphan cleanup and recovered commit acknowledgment. `RealtimeSyncIT` exercises the product MySQL-to-MySQL snapshot and Binlog path. The JDBC/CDC/process-recovery suites remain required. Isolated database tests do not prove every JVM crash boundary or distributed exactly-once semantics.
 
-The real-MySQL `MySqlXaSinkIT` verifies XA visibility, prepared-transaction
-recovery and orphan rollback without a receipt table. The backend E2E
-`RealtimeSyncIT` exercises new keyless task publication and a real MySQL-to-MySQL
-snapshot and Binlog pipeline. These checks are distinct from the existing
-`MySqlHybridIT` Receipt regression, which covers initial snapshot, exact
-duplicate multiplicity, UPDATE/DELETE, a target commit with an intentionally
-older Source checkpoint, replay, and a subsequent DELETE after restart.
+Definitions missing the required XA marker are rejected. An incompatible previous execution and checkpoint are never implicitly upgraded or reinterpreted. After checking target data, explicitly create a new definition and execution rather than reusing stale state.
 
-Required completion gates: passing Java/Frontend quality, existing JDBC and CDC
-regressions, and real database CDC/pipeline/recovery tests. Do not mark the PR
-production-ready while any of these checks fail.
-
-## Current limits
-
-- No claim of unrestricted or distributed exactly-once semantics, especially
-  across multiple targets or table routes.
-- No keyless DDL change handling; mutable Chunk Key crossing split ranges fails.
-- The bounded distinct-row-image buffer and serialized checkpoint-state
-  constraints still apply; an oversized high-cardinality equal-Chunk-Key range
-  fails instead of dropping records.
-- Text/collation, floating-point, timezone-sensitive and otherwise unverified
-  full-row comparisons are not accepted until database-specific tests prove
-  equivalence.
-
-## Migration and operational safety
-
-- Never automatically delete or truncate `yak_flow_cdc_receipts`, since historical
-  checkpoints may still refer to it.
-- Switching an existing running task from Receipt to XA is not an in-place upgrade:
-  require a clean task boundary, independently validated target state, and a new
-  execution instance rather than interpreting an old checkpoint with a new protocol.
-- Both `XA PREPARE` and orphan recovery need XA-capable database privileges.
-  During outages, unresolved prepared XIDs can hold locks. Do not perform
-  broad `XA ROLLBACK` of other tasks or applications.
-- The initial XA implementation requires the MySQL detached-XA server capability,
-  one Writer subtask and the local durable aligned-checkpoint runtime. It does
-  not imply a distributed Flink cluster's end-to-end guarantees.
+Unsupported cases include target schema changes, Chunk Key changes across snapshot ranges, unverified full-row comparisons, multiple Sink writers, remote/rescaled transactions and unbounded duplicate-row buffering.

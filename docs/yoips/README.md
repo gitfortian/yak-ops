@@ -38,7 +38,6 @@ The original repository contained two documents labeled YOIP-4 and numbered indi
 | former YOIP-14 | [Keyless Binlog Handoff and Consistent Snapshot Boundaries](../engineering/cdc/keyless-binlog-handoff.md) | [source](https://github.com/weifuwan/yak-ops/pull/1730) |
 | former YOIP-15 | [CDC Change Identity and Runtime Delivery](../engineering/cdc/cdc-change-identity-delivery.md) | [source](https://github.com/weifuwan/yak-ops/pull/1731) |
 | former YOIP-16 | [MySQL JDBC Exact-Row RETRACT](../engineering/cdc/mysql-jdbc-exact-row-retract.md) | [source](https://github.com/weifuwan/yak-ops/pull/1732) |
-| former YOIP-17 | [MySQL Keyless CDC Transactional Replay Protection](../engineering/cdc/mysql-keyless-transactional-replay.md) | [source](https://github.com/weifuwan/yak-ops/pull/1733) |
 | former YOIP-18 | [PostgreSQL and Oracle Keyless Target Acceptance](../engineering/cdc/postgres-oracle-keyless-target-acceptance.md) | [source](https://github.com/weifuwan/yak-ops/pull/1734) |
 | former YOIP-19 | [Keyless Repeated-Row Snapshot Checkpoint Compaction](../engineering/cdc/keyless-large-duplicate-groups.md) | [source](https://github.com/weifuwan/yak-ops/pull/1735) |
 
