@@ -74,6 +74,10 @@ export interface ModelField {
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
+  lookupId: string | null;
+  lookupEnCode: string | null;
+  measureUnitId: string | null;
+  measureUnitEnCode: string | null;
   description: string | null;
 }
 
@@ -102,6 +106,8 @@ export interface LogicalModel {
   lifecycleDays: number;
   ownerId: string;
   description: string | null;
+  /** Naming-dictionary root the layer rule recorded for this model; null when the rule was off. */
+  namingRootWordId: string | null;
   fieldCount: number;
   revision: number;
   fields: ModelField[] | null;
@@ -139,6 +145,10 @@ export interface ModelFieldInput {
   isPartition: boolean;
   aggregateType: AggregateType | null;
   standardId: string | null;
+  /** Bound lookup table; the server overwrites code and name from it while no standard is set. */
+  lookupId: string | null;
+  /** Annotation only; the server validates existence and changes no attribute. */
+  measureUnitId: string | null;
   description: string | null;
 }
 

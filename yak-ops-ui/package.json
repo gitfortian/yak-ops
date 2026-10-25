@@ -12,7 +12,7 @@
     "preview": "vite preview --config apps/web/vite.config.ts",
     "architecture:check": "node scripts/check-architecture.mjs && node --test scripts/architecture-imports.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --experimental-strip-types --test apps/web/app/data-modeling/logical-models/field-mapping.test.mjs apps/web/app/data-modeling/logical-models/ddl-parser.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-draft.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-engine.test.mjs apps/web/app/data-modeling/logical-models/publication-target.test.mjs apps/web/app/data-modeling/metrics/composition.test.mjs apps/web/app/data-modeling/metrics/expression.test.mjs",
+    "test:unit": "node --experimental-strip-types --test apps/web/app/data-modeling/logical-models/field-mapping.test.mjs apps/web/app/data-modeling/logical-models/ddl-parser.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-draft.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-engine.test.mjs apps/web/app/data-modeling/logical-models/publication-target.test.mjs apps/web/app/data-modeling/logical-models/naming-composer.test.mjs apps/web/app/data-modeling/metrics/composition.test.mjs apps/web/app/data-modeling/metrics/expression.test.mjs",
     "lint": "oxlint apps packages scripts --deny-warnings",
     "lint:fix": "oxlint apps packages scripts --fix",
     "format": "oxfmt apps packages scripts",

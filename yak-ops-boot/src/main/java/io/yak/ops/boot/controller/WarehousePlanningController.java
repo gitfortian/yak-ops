@@ -1,6 +1,6 @@
 package io.yak.ops.boot.controller;
 
-import io.yak.ops.business.modeling.PlanningService;
+import io.yak.ops.business.modeling.planning.PlanningService;
 import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;

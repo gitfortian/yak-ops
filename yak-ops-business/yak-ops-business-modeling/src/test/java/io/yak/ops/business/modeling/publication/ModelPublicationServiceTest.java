@@ -125,6 +125,7 @@ class ModelPublicationServiceTest {
                 30,
                 ACTOR,
                 null,
+                null,
                 1,
                 1,
                 List.of(field("order_no", "订单号")),

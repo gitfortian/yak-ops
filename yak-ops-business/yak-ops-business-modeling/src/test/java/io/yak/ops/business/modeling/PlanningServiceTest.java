@@ -18,7 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.modeling.impl.PlanningServiceImpl;
+import io.yak.ops.business.modeling.planning.impl.PlanningServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;

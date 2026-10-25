@@ -15,9 +15,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.model.impl.ModelServiceImpl;
 import io.yak.ops.business.modeling.naming.NamingRuleService;
+import io.yak.ops.business.modeling.planning.LayerService;
 import io.yak.ops.common.bean.dto.modeling.ModelFieldInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;

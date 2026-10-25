@@ -159,6 +159,10 @@ export function columnToField(
     aggregateType: null,
     standardId: null,
     standardEnCode: null,
+    lookupId: null,
+    lookupEnCode: null,
+    measureUnitId: null,
+    measureUnitEnCode: null,
     description: null,
     importNote: mapping.note,
   };

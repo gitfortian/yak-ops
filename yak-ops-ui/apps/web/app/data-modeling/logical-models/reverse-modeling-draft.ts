@@ -52,6 +52,10 @@ export function describeFieldDrafts(columns: readonly DataSourceCatalogColumn[])
       aggregateType: null,
       standardId: null,
       standardEnCode: null,
+      lookupId: null,
+      lookupEnCode: null,
+      measureUnitId: null,
+      measureUnitEnCode: null,
       description: remarks ? truncate(remarks, DESCRIPTION_MAX) : null,
       importNote: note || null,
     };
