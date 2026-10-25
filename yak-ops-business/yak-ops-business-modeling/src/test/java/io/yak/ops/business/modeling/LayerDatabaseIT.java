@@ -11,7 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
-import io.yak.ops.business.modeling.impl.LayerServiceImpl;
+import io.yak.ops.business.modeling.planning.LayerService;
+import io.yak.ops.business.modeling.planning.impl.LayerServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.enums.common.CommonErrorCode;

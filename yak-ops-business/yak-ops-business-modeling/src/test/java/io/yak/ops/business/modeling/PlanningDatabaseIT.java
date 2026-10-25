@@ -12,7 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
-import io.yak.ops.business.modeling.impl.PlanningServiceImpl;
+import io.yak.ops.business.modeling.planning.PlanningService;
+import io.yak.ops.business.modeling.planning.impl.PlanningServiceImpl;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.NodeKind;
 import io.yak.ops.common.exception.BusinessException;

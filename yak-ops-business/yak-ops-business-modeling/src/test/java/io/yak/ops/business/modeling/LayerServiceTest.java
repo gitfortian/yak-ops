@@ -15,7 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.modeling.impl.LayerServiceImpl;
+import io.yak.ops.business.modeling.planning.impl.LayerServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
