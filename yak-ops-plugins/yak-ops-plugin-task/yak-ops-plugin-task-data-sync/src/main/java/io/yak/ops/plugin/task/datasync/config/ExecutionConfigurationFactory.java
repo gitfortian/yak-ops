@@ -29,7 +29,7 @@ public final class ExecutionConfigurationFactory {
     /** Creates an engine configuration factory with application-owned execution settings. */
     public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot) {
         this.options = Objects.requireNonNull(options, "options");
-        ConfigValidator.of(options).validate(JobOptions.RUNTIME_RULE);
+        ConfigValidator.of(options).validate(EnvironmentOptions.RUNTIME_RULE);
         this.stateRoot =
                 Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
@@ -89,9 +89,9 @@ public final class ExecutionConfigurationFactory {
         return configuration
                 .set(CheckpointingOptions.RESTORE_LATEST, Files.exists(stateDirectory.resolve("checkpoint.bin")))
                 .set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING)
-                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(JobOptions.CHECKPOINT_INTERVAL))
+                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(EnvironmentOptions.CHECKPOINT_INTERVAL))
                 .set(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS, 1)
-                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(JobOptions.MAX_RESTARTS));
+                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(EnvironmentOptions.MAX_RESTARTS));
     }
 
     private Path stateDirectory(String instanceId) {
