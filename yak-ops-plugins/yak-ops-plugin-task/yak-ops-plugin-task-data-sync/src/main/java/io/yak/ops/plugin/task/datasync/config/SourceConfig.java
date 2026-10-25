@@ -14,7 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 /** Source-owned V3 table selection and read options, projected into physical Connector settings. */
-public record SourceConfig(ReadonlyConfig options, boolean keyless, Object transactionMarker, IncrementalConfig incremental) {
+public record SourceConfig(
+        ReadonlyConfig options, boolean keyless, Boolean transactionMarker, IncrementalConfig incremental) {
 
     private static final Option<Boolean> KEYLESS = Options.key("keyless").booleanType().defaultValue(false);
     private static final Option<String> CHUNK_KEY = Options.key("chunkKeyColumn").stringType().noDefaultValue();
@@ -28,7 +29,7 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, Object trans
                     .and(Conditions.matches(JobOptions.TABLE, "(?s)^.{1,128}$")))
             .optional(JobOptions.DATABASE, Conditions.matches(JobOptions.DATABASE, "(?s)^.{0,128}$"))
             .optional(JobOptions.SCHEMA, Conditions.matches(JobOptions.SCHEMA, "(?s)^.{0,128}$"))
-            .optional( KEYLESS, CHUNK_KEY, XA)
+            .optional(KEYLESS, CHUNK_KEY, XA)
             .build();
 
     public static SourceConfig from(
@@ -45,7 +46,7 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, Object trans
             throw new IllegalArgumentException("keyless must be a boolean");
         }
         boolean keyless = table.get(KEYLESS);
-        Object marker = table.getSourceMap().get(XA.key());
+        Boolean marker = table.getSourceMap().containsKey(XA.key()) ? table.get(XA) : null;
         String chunkKey = table.get(CHUNK_KEY);
         if (keyless) {
             if (type != SolutionType.SINGLE_TABLE_REALTIME
