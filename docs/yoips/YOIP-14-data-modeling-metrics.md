@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/31
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/31#issuecomment-6394901271
 
-Implementation: Planned — 1.8.0 batch
+Implementation: #33
 
 Release: N/A until released
 
