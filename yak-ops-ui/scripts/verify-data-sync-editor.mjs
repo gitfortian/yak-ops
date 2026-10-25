@@ -118,7 +118,6 @@ assert.equal("source" in request, false);
 assert.equal("sink" in request, false);
 assert.equal("env" in request, false);
 
-
 const options = {
   published: false,
   combination: { writeModes: ["UPSERT"] },
