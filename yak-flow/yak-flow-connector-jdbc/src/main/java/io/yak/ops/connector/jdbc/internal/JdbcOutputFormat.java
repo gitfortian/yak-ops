@@ -5,11 +5,16 @@ import io.yak.ops.connector.base.sink.writer.BatchOutput;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionRetry;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.OracleJdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.PostgresJdbcDialect;
 import io.yak.ops.connector.jdbc.internal.executor.TableBufferedStatementExecutor;
 import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecutor;
 import io.yak.ops.connector.jdbc.sink.JdbcBatchOrder;
 import io.yak.ops.connector.jdbc.sink.JdbcKeylessTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
+import io.yak.ops.connector.jdbc.sink.OracleKeylessTargetValidator;
+import io.yak.ops.connector.jdbc.sink.PostgresKeylessTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.data.TableId;
@@ -125,7 +130,15 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             opened.setAutoCommit(false);
             for (JdbcTableWritePlan plan : plans) {
                 if (plan.writeMode() == JdbcWriteMode.RETRACT) {
-                    JdbcKeylessTargetValidator.validate(opened, plan);
+                    if (dialect instanceof MySqlJdbcDialect) {
+                        JdbcKeylessTargetValidator.validate(opened, plan);
+                    } else if (dialect instanceof PostgresJdbcDialect) {
+                        PostgresKeylessTargetValidator.validate(opened, plan);
+                    } else if (dialect instanceof OracleJdbcDialect) {
+                        OracleKeylessTargetValidator.validate(opened, plan);
+                    } else {
+                        throw new UnsupportedOperationException("No validated keyless RETRACT target dialect");
+                    }
                 }
             }
             buffer.prepareStatements(opened);
