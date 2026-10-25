@@ -10,7 +10,6 @@ export function useEditorDraft(
   form: EditorForm,
   batch: boolean,
   mappings: DataSyncTableMapping[],
-  useIncremental: boolean,
   savedTask: MutableRefObject<DataSyncTaskRecord | undefined>,
 ) {
   useEffect(() => {
@@ -21,16 +20,13 @@ export function useEditorDraft(
       solutionType: draft.solutionType,
       steps: draft.steps,
       name: form.name,
-      form: {
-        ...buildEditorPayload(
-          form,
-          draft,
-          batch,
-          mappings,
-          draft.solutionType.endsWith("_REALTIME") && draft.steps.includes("INCREMENTAL"),
-        ),
-        incremental: !batch && useIncremental ? form.source.incremental : undefined,
-      },
+      form: buildEditorPayload(
+        form,
+        draft,
+        batch,
+        mappings,
+        draft.solutionType.endsWith("_REALTIME") && draft.steps.includes("INCREMENTAL"),
+      ),
     });
   }, [
     id,
