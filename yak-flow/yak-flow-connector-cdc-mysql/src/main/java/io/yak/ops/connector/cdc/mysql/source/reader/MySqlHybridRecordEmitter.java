@@ -6,6 +6,7 @@ import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Objects;
 
@@ -48,8 +49,22 @@ public final class MySqlHybridRecordEmitter
             state.prepareSnapshot(event.preparedSnapshot());
             return;
         }
-        for (TableRecord row : event.rows()) {
-            output.collect(row);
+        int count = event.rows().size();
+        String eventPosition = event.binlogOffset() != null && !event.lowWatermark()
+                ? MySqlChangeEventIds.fromBinlog(event.binlogOffset())
+                : null;
+        int firstSnapshotRow = event.snapshotRowsEmitted() == null ? -1 : event.snapshotRowsEmitted() - count;
+        if (firstSnapshotRow < 0 && event.snapshotRowsEmitted() != null) {
+            throw new IllegalStateException("Snapshot output ordinal is smaller than the emitted batch");
+        }
+        for (int index = 0; index < count; index++) {
+            TableRecord row = event.rows().get(index);
+            ChangeEventId identity = firstSnapshotRow >= 0
+                    ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
+                    : eventPosition == null
+                            ? null
+                            : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+            output.collect(identity == null ? row : row.withChangeEventId(identity));
             metrics.read(generation, row.tableId(), state.binlog());
         }
         metrics.observed(generation);
