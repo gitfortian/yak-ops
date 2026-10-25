@@ -140,10 +140,7 @@ public final class OracleKeylessTargetValidator {
                         throw new SQLException("Oracle RETRACT excludes identity and virtual columns");
                     }
                     if (receipt) {
-                        if (!"RECEIPT_KEY".equals(name)
-                                || !"RAW".equals(nativeType)
-                                || length != 32
-                                || nullable) {
+                        if (!"RECEIPT_KEY".equals(name) || !"RAW".equals(nativeType) || length != 32 || nullable) {
                             throw new SQLException("Oracle receipts require RECEIPT_KEY RAW(32) NOT NULL");
                         }
                     } else {
@@ -163,8 +160,8 @@ public final class OracleKeylessTargetValidator {
     }
 
     private static boolean matches(Column column, String nativeType, int precision, int scale) {
-        if (!"NUMBER".equals(nativeType) || scale != 0
-                && column.dataType().getTypeRoot() != io.yak.ops.core.types.LogicalTypeRoot.DECIMAL) {
+        if (!"NUMBER".equals(nativeType)
+                || scale != 0 && column.dataType().getTypeRoot() != io.yak.ops.core.types.LogicalTypeRoot.DECIMAL) {
             return false;
         }
         return switch (column.dataType().getTypeRoot()) {
@@ -173,8 +170,9 @@ public final class OracleKeylessTargetValidator {
             case SMALLINT -> precision == 5 && scale == 0;
             case INTEGER -> precision == 10 && scale == 0;
             case BIGINT -> precision == 19 && scale == 0;
-            case DECIMAL -> precision == LogicalTypes.decimalPrecision(column.dataType())
-                    && scale == LogicalTypes.decimalScale(column.dataType());
+            case DECIMAL ->
+                precision == LogicalTypes.decimalPrecision(column.dataType())
+                        && scale == LogicalTypes.decimalScale(column.dataType());
             default -> false;
         };
     }
