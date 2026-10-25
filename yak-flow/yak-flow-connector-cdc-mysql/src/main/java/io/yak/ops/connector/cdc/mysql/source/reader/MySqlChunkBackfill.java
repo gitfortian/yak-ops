@@ -180,6 +180,12 @@ public final class MySqlChunkBackfill {
             if (keyless != null) {
                 keyless.check(before);
                 keyless.check(after);
+                Object beforeKey = before.row().getField(chunkColumn);
+                Object afterKey = after.row().getField(chunkColumn);
+                if (beforeKey == null || afterKey == null || compare(beforeKey, afterKey) != 0) {
+                    throw new UnsupportedOperationException(
+                            "Keyless snapshot cannot reconcile a changed Chunk Key during Backfill");
+                }
                 if (contains(before)) keyless.delete(before);
                 if (contains(after)) keyless.insert(after);
             } else {
@@ -216,7 +222,7 @@ public final class MySqlChunkBackfill {
     /**
      * Seals the normalized chunk after the Binlog reader proves it reached the High watermark.
      *
-     * @return new INSERT records sorted by primary key, safe for downstream projection
+     * @return normalized INSERT records, preserving duplicate row multiplicity for keyless tables
      */
     public List<TableRecord> finish() {
         ensureOpen();
@@ -238,7 +244,8 @@ public final class MySqlChunkBackfill {
 
     private int compare(Object value, Object boundary) {
         return switch (range.type()) {
-            case TINYINT, SMALLINT, INTEGER, BIGINT -> Long.compare(((Number) value).longValue(), (Long) boundary);
+            case TINYINT, SMALLINT, INTEGER, BIGINT ->
+                Long.compare(((Number) value).longValue(), ((Number) boundary).longValue());
             case DECIMAL -> ((BigDecimal) value).compareTo((BigDecimal) boundary);
             default ->
                 throw new IllegalArgumentException("Bounded keyless chunk values require database-aware comparisons");
