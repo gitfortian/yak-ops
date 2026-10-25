@@ -71,8 +71,7 @@ public final class OracleKeylessTargetValidator {
 
     private static void validateHeap(Connection connection, String owner, String table) throws SQLException {
         try (PreparedStatement query = connection.prepareStatement(
-                "SELECT TEMPORARY, IOT_TYPE, PARTITIONED FROM ALL_TABLES "
-                        + "WHERE OWNER = ? AND TABLE_NAME = ?")) {
+                "SELECT TEMPORARY, IOT_TYPE, PARTITIONED FROM ALL_TABLES " + "WHERE OWNER = ? AND TABLE_NAME = ?")) {
             query.setString(1, owner);
             query.setString(2, table);
             try (ResultSet rows = query.executeQuery()) {
@@ -88,17 +87,23 @@ public final class OracleKeylessTargetValidator {
     }
 
     private static void validateSideEffects(Connection connection, String owner, String table) throws SQLException {
-        if (count(connection,
-                        "SELECT COUNT(*) FROM ALL_TRIGGERS WHERE TABLE_OWNER = ? AND TABLE_NAME = ?", owner, table)
+        if (count(
+                                connection,
+                                "SELECT COUNT(*) FROM ALL_TRIGGERS WHERE TABLE_OWNER = ? AND TABLE_NAME = ?",
+                                owner,
+                                table)
                         != 0
-                || count(connection,
+                || count(
+                                connection,
                                 "SELECT COUNT(*) FROM ALL_CONSTRAINTS WHERE OWNER = ? AND TABLE_NAME = ? "
-                                        + "AND CONSTRAINT_TYPE = 'R'", owner, table)
+                                        + "AND CONSTRAINT_TYPE = 'R'",
+                                owner,
+                                table)
                         != 0) {
             throw new SQLException("Oracle RETRACT target has triggers or outgoing foreign keys");
         }
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT COUNT(*) FROM ALL_CONSTRAINTS child JOIN ALL_CONSTRAINTS parent "
+        try (PreparedStatement query =
+                connection.prepareStatement("SELECT COUNT(*) FROM ALL_CONSTRAINTS child JOIN ALL_CONSTRAINTS parent "
                         + "ON child.R_OWNER = parent.OWNER AND child.R_CONSTRAINT_NAME = parent.CONSTRAINT_NAME "
                         + "WHERE child.CONSTRAINT_TYPE = 'R' AND parent.OWNER = ? AND parent.TABLE_NAME = ?")) {
             query.setString(1, owner);
@@ -115,8 +120,8 @@ public final class OracleKeylessTargetValidator {
     private static void validateColumns(
             Connection connection, String owner, String table, TableSchema schema, boolean receipt)
             throws SQLException {
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, DATA_LENGTH, "
+        try (PreparedStatement query =
+                connection.prepareStatement("SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, DATA_LENGTH, "
                         + "NULLABLE, VIRTUAL_COLUMN, IDENTITY_COLUMN FROM ALL_TAB_COLS "
                         + "WHERE OWNER = ? AND TABLE_NAME = ? AND HIDDEN_COLUMN = 'NO' ORDER BY COLUMN_ID")) {
             query.setString(1, owner);
