@@ -89,6 +89,34 @@ public final class OracleJdbcDialect extends AbstractDialect {
      * <p>Each target column produces a positional placeholder in the USING projection.
      * A key-only table omits WHEN MATCHED UPDATE rather than inventing a no-op assignment.
      */
+    /** Oracle ROWID limits a full before-image retraction to one physical occurrence. */
+    @Override
+    public String exactRowDeleteSql(TableId table, TableSchema schema) {
+        if (!schema.primaryKeys().isEmpty() || schema.columnCount() == 0) {
+            throw new IllegalArgumentException("Oracle RETRACT requires a nonempty keyless schema");
+        }
+        String predicate = schema.columns().stream()
+                .map(column -> "DECODE(" + quoteIdentifier(column.name()) + ", ?, 1, 0) = 1")
+                .collect(Collectors.joining(" AND "));
+        String target = qualifiedTable(table);
+        return "DELETE FROM " + target + " WHERE ROWID = (SELECT ROWID FROM " + target
+                + " WHERE " + predicate + " AND ROWNUM = 1)";
+    }
+
+    @Override
+    public String replayReceiptTableName() {
+        return "YAK_FLOW_CDC_RECEIPTS";
+    }
+
+    /** A matched MERGE has zero affected rows; a new receipt is inserted once. */
+    @Override
+    public String replayReceiptSql(TableId table) {
+        String key = quoteIdentifier("RECEIPT_KEY");
+        return "MERGE INTO " + qualifiedTable(table) + " t USING (SELECT ? " + key + " FROM DUAL) s"
+                + " ON (t." + key + " = s." + key + ")"
+                + " WHEN NOT MATCHED THEN INSERT (" + key + ") VALUES (s." + key + ")";
+    }
+
     @Override
     public String upsertSql(TableId table, TableSchema schema) {
         requirePrimaryKey(schema);
