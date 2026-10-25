@@ -3,6 +3,7 @@ package io.yak.ops.connector.jdbc.internal.executor;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
+import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -38,6 +39,7 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     private Connection connection;
     private TableSimpleStatementExecutor active;
     private TableId awaitingUpdateAfter;
+    private ChangeEventId awaitingUpdateEvent;
     private TableRecord beforeInExecution;
 
     public TableChangelogStatementExecutor(JdbcDialect dialect, List<JdbcTableWritePlan> plans) {
@@ -59,7 +61,8 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
         if (connection == null) {
             throw new IllegalStateException("JDBC executor has no active connection");
         }
-        if (active != null || awaitingUpdateAfter != null || beforeInExecution != null) {
+        if (active != null || awaitingUpdateAfter != null || awaitingUpdateEvent != null
+                || beforeInExecution != null) {
             throw new IllegalStateException("Cannot replace JDBC routes while a batch or update pair is active");
         }
         closePreparedStatements();
@@ -87,6 +90,13 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                         new TableSimpleStatementExecutor(
                                 dialect.deleteSql(plan.targetTable(), plan.schema()),
                                 dialect.createRowConverter(plan.keySchema())));
+            } else if (plan.writeMode() == JdbcWriteMode.RETRACT) {
+                deletes.put(
+                        plan.sourceTable(),
+                        new TableSimpleStatementExecutor(
+                                dialect.exactRowDeleteSql(plan.targetTable(), plan.schema()),
+                                dialect.createRowConverter(plan.schema()),
+                                true));
             }
         }
     }
@@ -112,12 +122,27 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                 && (record.rowKind() != RowKind.UPDATE_AFTER || !awaitingUpdateAfter.equals(record.tableId()))) {
             throw new IllegalArgumentException("UPDATE_BEFORE must be followed by UPDATE_AFTER for the same table");
         }
-        TableRecord detached =
-                new TableRecord(record.tableId(), record.rowKind(), plan.project(record.row(), record.rowKind()));
+        if (awaitingUpdateAfter != null && plan.writeMode() == JdbcWriteMode.RETRACT) {
+            ChangeEventId next = record.changeEventId();
+            if ((awaitingUpdateEvent == null) != (next == null)
+                    || (next != null
+                            && (!awaitingUpdateEvent.sameEvent(next)
+                                    || awaitingUpdateEvent.imageIndex() != 0
+                                    || next.imageIndex() != 1
+                                    || awaitingUpdateEvent.imageCount() != 2
+                                    || next.imageCount() != 2))) {
+                throw new IllegalArgumentException("JDBC RETRACT UPDATE images must share one complete CDC event");
+            }
+        }
+        TableRecord detached = new TableRecord(
+                record.tableId(), record.rowKind(), plan.project(record.row(), record.rowKind()),
+                record.changeEventId());
         if (record.rowKind() == RowKind.UPDATE_BEFORE) {
             awaitingUpdateAfter = record.tableId();
+            awaitingUpdateEvent = record.changeEventId();
         } else if (awaitingUpdateAfter != null) {
             awaitingUpdateAfter = null;
+            awaitingUpdateEvent = null;
         }
         return detached;
     }
@@ -182,7 +207,8 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                     if (!before.tableId().equals(record.tableId())) {
                         throw new IllegalStateException("JDBC UPDATE pair crosses source tables");
                     }
-                    if (!plan.hasSamePrimaryKey(before.row(), record.row())) {
+                    if (plan.writeMode() == JdbcWriteMode.RETRACT
+                            || !plan.hasSamePrimaryKey(before.row(), record.row())) {
                         append(deletes.get(record.tableId()), before.row());
                     }
                 }
@@ -226,6 +252,7 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
         prepared.clear();
         active = null;
         beforeInExecution = null;
+        awaitingUpdateEvent = null;
         SQLException failure = null;
         for (TableSimpleStatementExecutor statement : writes.values()) {
             try {
