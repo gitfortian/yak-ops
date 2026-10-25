@@ -122,6 +122,10 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                 && (record.rowKind() != RowKind.UPDATE_AFTER || !awaitingUpdateAfter.equals(record.tableId()))) {
             throw new IllegalArgumentException("UPDATE_BEFORE must be followed by UPDATE_AFTER for the same table");
         }
+        if (plan.writeMode() == JdbcWriteMode.RETRACT
+                && record.rowKind() == RowKind.UPDATE_AFTER && awaitingUpdateAfter == null) {
+            throw new IllegalArgumentException("JDBC RETRACT UPDATE_AFTER requires a preceding before-image");
+        }
         if (awaitingUpdateAfter != null && plan.writeMode() == JdbcWriteMode.RETRACT) {
             ChangeEventId next = record.changeEventId();
             if ((awaitingUpdateEvent == null) != (next == null)
