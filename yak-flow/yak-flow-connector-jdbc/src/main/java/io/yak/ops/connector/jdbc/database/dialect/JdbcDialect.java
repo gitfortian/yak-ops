@@ -262,6 +262,17 @@ public interface JdbcDialect extends java.io.Serializable {
     String deleteSql(TableId table, TableSchema schema);
 
     /**
+     * Deletes exactly one matching physical row from a keyless target using every column.
+     *
+     * <p>This is not primary-key DELETE. The SQL must compare null values correctly and
+     * bound the affected row count to one even when identical physical rows exist.
+     * Vendors without verified behavior must reject it.
+     */
+    default String exactRowDeleteSql(TableId table, TableSchema schema) {
+        throw new UnsupportedOperationException("Exact-row RETRACT is not supported by this JDBC dialect");
+    }
+
+    /**
      * Rejects empty identifier parts before quoting or building SQL.
      *
      * @param identifier the unqualified identifier
