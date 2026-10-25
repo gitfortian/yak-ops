@@ -1,8 +1,12 @@
 import { Alert, CollapseSection, Field, FieldLabel, Switch } from "@yak-ops/yak-ui";
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataSourceEndpointCard } from "./data-source-endpoint-card";
-import { listDataSourceColumns, type DataSourceCatalogColumn } from "@/service/datasource";
+import {
+  listDataSourceColumns,
+  type DataSourceCatalogColumn,
+  type DataSourceCatalogTable,
+} from "@/service/datasource";
 import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { ExplicitTableSelection } from "./table-mapping-editor";
 import { IncrementalFields } from "./incremental-fields";
@@ -32,9 +36,9 @@ interface Props {
   useIncremental: boolean;
   initialLoad: boolean;
   patchSource: <K extends keyof EditorSource>(key: K, value: EditorSource[K]) => void;
-  setTaskDirty: Dispatch<SetStateAction<boolean>>;
-  setParametersDirty: Dispatch<SetStateAction<boolean>>;
-  setForm: Dispatch<SetStateAction<EditorForm>>;
+  onSourceSchemaChange: (schema: string) => void;
+  onSourceTableChange: (table: DataSourceCatalogTable) => void;
+  onKeylessChange: (enabled: boolean) => void;
 }
 export function SourceSection({
   id,
@@ -57,9 +61,9 @@ export function SourceSection({
   useIncremental,
   initialLoad,
   patchSource,
-  setTaskDirty,
-  setParametersDirty,
-  setForm,
+  onSourceSchemaChange,
+  onSourceTableChange,
+  onKeylessChange,
 }: Props) {
   const navigate = useNavigate();
   const combination = { writeModes: writeMode ? [writeMode] : [] };
@@ -142,45 +146,8 @@ export function SourceSection({
           schema={form.source.schema}
           table={form.source.table}
           catalog={sourceCatalog}
-          onSchemaChange={(value) => {
-            setTaskDirty(true);
-            setParametersDirty(true);
-            setForm((current) => ({
-              ...current,
-              source: {
-                ...current.source,
-                schema: value,
-                table: "",
-                keylessEnabled: false,
-                chunkKeyColumn: "",
-              },
-              sink: {
-                ...current.sink,
-                targetPrimaryKeys: [],
-                writeMode: usesChangelog ? "UPSERT" : current.sink.writeMode,
-              },
-            }));
-          }}
-          onTableChange={(table) => {
-            setTaskDirty(true);
-            setParametersDirty(true);
-            setForm((current) => ({
-              ...current,
-              source: {
-                ...current.source,
-                database: current.source.database || table.database || "",
-                schema: current.source.schema || table.schema || "",
-                table: table.name,
-                keylessEnabled: false,
-                chunkKeyColumn: "",
-              },
-              sink: {
-                ...current.sink,
-                targetPrimaryKeys: [],
-                writeMode: usesChangelog ? "UPSERT" : current.sink.writeMode,
-              },
-            }));
-          }}
+          onSchemaChange={onSourceSchemaChange}
+          onTableChange={onSourceTableChange}
         >
           {usesChangelog ? (
             <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
@@ -193,25 +160,7 @@ export function SourceSection({
                   aria-label="无主键表"
                   size="small"
                   checked={form.source.keylessEnabled}
-                  onCheckedChange={(enabled) => {
-                    setTaskDirty(true);
-                    setParametersDirty(true);
-                    setForm((current) => ({
-                      ...current,
-                      source: {
-                        ...current.source,
-                        keylessEnabled: enabled,
-                        chunkKeyColumn: enabled ? current.source.chunkKeyColumn : "",
-                      },
-                      sink: {
-                        ...current.sink,
-                        targetPrimaryKeys: [],
-                        writeMode: enabled ? "RETRACT" : "UPSERT",
-                        schemaChangesEnabled: enabled ? false : current.sink.schemaChangesEnabled,
-                        allowDropColumns: enabled ? false : current.sink.allowDropColumns,
-                      },
-                    }));
-                  }}
+                  onCheckedChange={onKeylessChange}
                 />
               </Field>
               {form.source.keylessEnabled ? (
