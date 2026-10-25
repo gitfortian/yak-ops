@@ -17,10 +17,13 @@ import java.util.Map;
 public record SourceConfig(
         ReadonlyConfig options, boolean keyless, Boolean transactionMarker, IncrementalConfig incremental) {
 
-    private static final Option<Boolean> KEYLESS = Options.key("keyless").booleanType().defaultValue(false);
-    private static final Option<String> CHUNK_KEY = Options.key("chunkKeyColumn").stringType().noDefaultValue();
+    private static final Option<Boolean> KEYLESS =
+            Options.key("keyless").booleanType().defaultValue(false);
+    private static final Option<String> CHUNK_KEY =
+            Options.key("chunkKeyColumn").stringType().noDefaultValue();
     /** V3 transaction marker is read only for validating the persisted Sink protocol. */
     private static final Option<Boolean> XA = Options.key("xa").booleanType().noDefaultValue();
+
     public static final Option<Map<String, Object>> INCREMENTAL =
             Options.key("incremental").mapObjectType().noDefaultValue();
 
