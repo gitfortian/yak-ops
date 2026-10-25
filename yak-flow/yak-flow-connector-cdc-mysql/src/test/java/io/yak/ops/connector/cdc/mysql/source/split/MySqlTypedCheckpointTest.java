@@ -99,6 +99,8 @@ class MySqlTypedCheckpointTest {
                         List.of(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(3L, "frozen")))));
         byte[] v3 = legacyV3(old);
         assertEquals(old, SERIALIZER.deserialize(3, v3));
+        // The V5 decoder must also accept the unchanged typed V4 split layout.
+        assertEquals(old, SERIALIZER.deserialize(4, SERIALIZER.serialize(old)));
         assertThrows(IOException.class, () -> SERIALIZER.deserialize(3, SERIALIZER.serialize(old)));
         assertThrows(IOException.class, () -> SERIALIZER.deserialize(4, v3));
         byte[] truncated = Arrays.copyOf(SERIALIZER.serialize(old), SERIALIZER.serialize(old).length - 1);
