@@ -1,12 +1,12 @@
 # YOIP-13: Data Modeling — Complete Data Standards
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/26
 
-Decision: Pending
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/26#issuecomment-6391845530
 
-Implementation: N/A until accepted
+Implementation: Planned — 1.7.0 batch
 
 Release: N/A until released
 
