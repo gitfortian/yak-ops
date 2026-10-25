@@ -44,17 +44,25 @@ const form = {
   name: " orders ",
   remark: " remark ",
   debug: false,
-  schemaChangesEnabled: false,
-  allowDropColumns: true,
-  writeMode: "UPSERT",
-  sourceDataSourceId: "mysql",
-  sourceDatabase: "test",
-  sourceSchema: "",
-  sourceTable: "orders",
-  targetDataSourceId: "pg",
-  targetDatabase: "target",
-  targetSchema: "public",
-  targetTable: "ods_orders",
+  source: {
+    dataSourceId: "mysql",
+    database: "test",
+    schema: "",
+    table: "orders",
+    keylessEnabled: false,
+    chunkKeyColumn: "",
+    incremental: undefined,
+  },
+  sink: {
+    dataSourceId: "pg",
+    database: "target",
+    schema: "public",
+    table: "ods_orders",
+    schemaChangesEnabled: false,
+    allowDropColumns: true,
+    writeMode: "UPSERT",
+    targetPrimaryKeys: [],
+  },
 };
 const request = params.buildEditorPayload(form, draft, false, [], true);
 assert.equal(request.name, "orders");
@@ -99,16 +107,16 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      keylessEnabled: true,
-      chunkKeyColumn: "bucket",
-      writeMode: "RETRACT",
-      schemaChangesEnabled: false,
+      source: { ...form.source, keylessEnabled: true,
+      chunkKeyColumn: "bucket" },
+      sink: { ...form.sink, writeMode: "RETRACT",
+      schemaChangesEnabled: false },
     },
     targetCatalog: { ...options.targetCatalog, tables: [{ name: "ods_orders" }] },
   }),
   true,
 );
-assert.equal(params.canSaveEditor({ ...options, form: { ...form, writeMode: "RETRACT" } }), false);
+assert.equal(params.canSaveEditor({ ...options, form: { ...form, sink: { ...form.sink, writeMode: "RETRACT" } } }), false);
 assert.equal(
   params.canSaveEditor({
     ...options,
@@ -117,11 +125,13 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      keylessEnabled: true,
-      targetPrimaryKeys: ["bucket"],
-      chunkKeyColumn: "bucket",
-      writeMode: "UPSERT",
-      schemaChangesEnabled: false,
+      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      sink: {
+        ...form.sink,
+        targetPrimaryKeys: ["bucket"],
+        writeMode: "UPSERT",
+        schemaChangesEnabled: false,
+      },
     },
   }),
   true,
