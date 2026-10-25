@@ -219,8 +219,21 @@ export interface DataSyncTaskPageParams {
   targetDataSourceId?: string;
 }
 
+/** An unreadable saved version is still a task row, but cannot perform runtime actions. */
+export interface DataSyncUnreadableTaskRecord {
+  id: string;
+  name: string;
+  status: DataSyncTaskStatus | string;
+  definitionVersion: number;
+  updateBy?: string;
+  updateTime?: string;
+  configurationError: string;
+}
+
+export type DataSyncTaskListRecord = DataSyncTaskRecord | DataSyncUnreadableTaskRecord;
+
 export interface DataSyncTaskPageResult {
-  bizData: DataSyncTaskRecord[];
+  bizData: DataSyncTaskListRecord[];
   pagination: PaginationInfo;
 }
 
