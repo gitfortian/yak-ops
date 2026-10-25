@@ -148,7 +148,9 @@ const offlineForm = {
 const offlinePayload = params.buildEditorPayload(offlineForm, offlineDraft, false, [], false);
 assert.equal(offlinePayload.incremental.column, "updated_at");
 assert.equal(offlinePayload.incremental.lookbackSeconds, 5);
-const offlineParameters = JSON.parse(transport.createDefinitionRequest(offlinePayload).parameters);
+const offlineParameters = JSON.parse(
+  transport.createDefinitionRequest(offlinePayload).parameters,
+);
 assert.equal(offlineParameters.solutionType, "SINGLE_TABLE_OFFLINE");
 assert.deepEqual(offlineParameters.steps, ["FULL", "INCREMENTAL"]);
 assert.equal(offlineParameters.tableMappings.length, 1);
@@ -163,32 +165,32 @@ const incrementalOnly = {
   ...offlineDraft,
   steps: ["INCREMENTAL"],
 };
-const incrementalOnlyPayload = params.buildEditorPayload(
+const incrementalOnlyPayload = params.buildEditorPayload(offlineForm, incrementalOnly, false, [], false);
+const incrementalOnlyParameters = JSON.parse(
+  transport.createDefinitionRequest(incrementalOnlyPayload).parameters,
+);
+assert.equal(incrementalOnlyParameters.tableMappings[0].incremental.column, "updated_at");
+const fullOnlyPayload = params.buildEditorPayload(
   offlineForm,
-  incrementalOnly,
+  { ...offlineDraft, steps: ["FULL"] },
   false,
   [],
   false,
 );
-assert.equal(
-  JSON.parse(transport.createDefinitionRequest(incrementalOnlyPayload).parameters).tableMappings[0]
-    .incremental.column,
-  "updated_at",
-);
-assert.equal(
-  "incremental" in
-    params.buildEditorPayload(
-      offlineForm,
-      { ...offlineDraft, steps: ["FULL"] },
-      false,
-      [],
-      false,
-    ),
-  false,
-);
+assert.equal("incremental" in fullOnlyPayload, false);
 const mappings = [
-  { source: { table: "customers" }, target: { table: "ods_customers" }, writeMode: "UPSERT", incremental },
-  { source: { table: "orders" }, target: { table: "ods_orders" }, writeMode: "UPSERT", incremental },
+  {
+    source: { table: "customers" },
+    target: { table: "ods_customers" },
+    writeMode: "UPSERT",
+    incremental,
+  },
+  {
+    source: { table: "orders" },
+    target: { table: "ods_orders" },
+    writeMode: "UPSERT",
+    incremental,
+  },
 ];
 const many = params.buildEditorPayload(
   offlineForm,
@@ -219,16 +221,20 @@ const retractPayload = params.buildEditorPayload(
   [],
   true,
 );
-const retractParameters = JSON.parse(transport.createDefinitionRequest(retractPayload).parameters);
+const retractParameters = JSON.parse(
+  transport.createDefinitionRequest(retractPayload).parameters,
+);
 assert.equal(retractParameters.tableMappings[0].source.xa, true);
 assert.equal(retractParameters.tableMappings[0].source.chunkKeyColumn, "bucket");
 assert.equal(retractParameters.tableMappings[0].writeMode, "RETRACT");
 assert.equal("xa" in retractParameters.tableMappings[0].target, false);
-const upsertParameters = JSON.parse(transport.createDefinitionRequest({
-  ...retractPayload,
-  writeMode: "UPSERT",
-  targetPrimaryKeys: ["bucket"],
-}).parameters);
+const upsertParameters = JSON.parse(
+  transport.createDefinitionRequest({
+    ...retractPayload,
+    writeMode: "UPSERT",
+    targetPrimaryKeys: ["bucket"],
+  }).parameters,
+);
 assert.equal(upsertParameters.tableMappings[0].source.xa, undefined);
 assert.deepEqual(upsertParameters.tableMappings[0].target.primaryKeys, ["bucket"]);
 
