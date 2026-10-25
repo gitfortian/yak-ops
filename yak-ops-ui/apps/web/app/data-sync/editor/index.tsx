@@ -387,7 +387,10 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             }
           />
 
-          <div id="transform" className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
+          <div
+            id="transform"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
             <span className="text-sm font-medium">数据转换 Transform</span>
             <span className="ml-3 text-xs text-[var(--yak-components-muted-text)]">
               当前版本不支持转换
@@ -422,7 +425,10 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             setParametersDirty={setParametersDirty}
             setForm={setForm}
           />
-          <div id="env" className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
+          <div
+            id="env"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
             <div className="text-sm font-medium">运行配置 Env</div>
             <div className="mt-2 flex flex-wrap gap-6 text-xs text-[var(--yak-components-muted-text)]">
               <span>执行模式：{usesChangelog ? "STREAMING" : "BATCH"}</span>
