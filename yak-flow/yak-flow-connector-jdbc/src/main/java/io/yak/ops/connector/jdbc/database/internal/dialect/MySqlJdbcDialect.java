@@ -328,8 +328,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
 
     @Override
     public String replayReceiptSql(TableId table) {
-        return "INSERT IGNORE INTO " + qualifiedTable(table) + " ("
-                + quoteIdentifier("receipt_key") + ") VALUES (?)";
+        return "INSERT IGNORE INTO " + qualifiedTable(table) + " (" + quoteIdentifier("receipt_key") + ") VALUES (?)";
     }
 
     @Override
