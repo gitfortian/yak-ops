@@ -77,6 +77,7 @@ public final class JdbcKeylessTargetValidator {
                 != 0) {
             throw new SQLException("MySQL RETRACT target cannot be referenced by foreign keys");
         }
+        validateReceiptTable(connection, catalog);
         try (PreparedStatement query =
                 connection.prepareStatement("SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA "
                         + "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? "
@@ -104,6 +105,62 @@ public final class JdbcKeylessTargetValidator {
                     throw new SQLException("MySQL RETRACT target has unprojected physical columns");
                 }
             }
+        }
+    }
+
+    /**
+     * The receipt table is manually provisioned. Never repair, truncate, or create it in the
+     * Writer: missing or incompatible durable deduplication state blocks keyless execution.
+     */
+    private static void validateReceiptTable(Connection connection, String catalog) throws SQLException {
+        String receipts = "yak_flow_cdc_receipts";
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?")) {
+            query.setString(1, catalog);
+            query.setString(2, receipts);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next() || !"InnoDB".equalsIgnoreCase(rows.getString(1)) || rows.next()) {
+                    throw new SQLException("MySQL RETRACT requires a durable InnoDB receipt table");
+                }
+            }
+        }
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")) {
+            query.setString(1, catalog);
+            query.setString(2, receipts);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()
+                        || !"receipt_key".equalsIgnoreCase(rows.getString(1))
+                        || !"binary(32)".equalsIgnoreCase(rows.getString(2))
+                        || !"NO".equalsIgnoreCase(rows.getString(3))
+                        || rows.next()) {
+                    throw new SQLException("MySQL RETRACT receipt table requires one BINARY(32) NOT NULL column");
+                }
+            }
+        }
+        try (PreparedStatement query =
+                connection.prepareStatement("SELECT COLUMN_NAME, NON_UNIQUE FROM information_schema.STATISTICS "
+                        + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY'")) {
+            query.setString(1, catalog);
+            query.setString(2, receipts);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()
+                        || !"receipt_key".equalsIgnoreCase(rows.getString(1))
+                        || rows.getInt(2) != 0
+                        || rows.next()) {
+                    throw new SQLException("MySQL RETRACT receipt table requires a unique primary receipt key");
+                }
+            }
+        }
+        if (count(
+                        connection,
+                        "SELECT COUNT(*) FROM information_schema.TRIGGERS "
+                                + "WHERE EVENT_OBJECT_SCHEMA = ? AND EVENT_OBJECT_TABLE = ?",
+                        catalog,
+                        receipts)
+                != 0) {
+            throw new SQLException("MySQL RETRACT receipt table must not have triggers");
         }
     }
 

@@ -87,7 +87,7 @@ class MavenIntegrationProfileTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
-    CDC_COUNTS = {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}
+    CDC_COUNTS = {"MySqlBinlogIT": 3, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

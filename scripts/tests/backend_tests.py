@@ -22,11 +22,11 @@ BUSINESS = "yak-ops-business/yak-ops-business-task"
 E2E = "yak-ops-e2e"
 # Minimum method counts prevent an empty subclass, lost inherited tests or partial run from passing.
 SUITES = {
-    "jdbc-mysql": (JDBC, "jdbc & mysql", {"MySqlSourceIT": 6, "MySqlSinkIT": 3, "MySqlKeylessRetractIT": 4}),
+    "jdbc-mysql": (JDBC, "jdbc & mysql", {"MySqlSourceIT": 6, "MySqlSinkIT": 3, "MySqlKeylessRetractIT": 8}),
     "jdbc-postgres": (JDBC, "jdbc & postgres", {"PostgresSourceIT": 5, "PostgresSinkIT": 3}),
     "jdbc-oracle": (JDBC, "jdbc & oracle", {"OracleSourceIT": 5, "OracleSinkIT": 3}),
     "pipeline": (JDBC, "pipeline", {name: 2 for name in ("MySqlToMySqlIT", "MySqlToPostgresIT", "PostgresToOracleIT", "OracleToMySqlIT")}),
-    "cdc": (CDC, "cdc", {"MySqlBinlogIT": 1, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}),
+    "cdc": (CDC, "cdc", {"MySqlBinlogIT": 3, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}),
     "cdc-pipeline": (CDC, "cdc-pipeline", {name: 1 for name in ("MySqlCdcToMySqlIT", "MySqlCdcToPostgresIT", "MySqlCdcToOracleIT")}),
     "business": (BUSINESS, "business", {"TaskCursorIT": 5, "ScheduleAdmissionIT": 13}),
     "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "SingleTableRealtimeSchemaIT": 2, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1}),

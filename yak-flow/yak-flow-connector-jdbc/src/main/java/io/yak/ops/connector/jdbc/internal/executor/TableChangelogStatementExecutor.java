@@ -35,8 +35,10 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     private final Map<TableId, TableSimpleStatementExecutor> writes = new LinkedHashMap<>();
     private final Map<TableId, TableSimpleStatementExecutor> deletes = new LinkedHashMap<>();
     private final int statementCacheSize;
+    private final JdbcDialect dialect;
     private final Set<TableSimpleStatementExecutor> prepared = new LinkedHashSet<>();
     private Connection connection;
+    private JdbcReplayReceipts receipts;
     private TableSimpleStatementExecutor active;
     private TableId awaitingUpdateAfter;
     private ChangeEventId awaitingUpdateEvent;
@@ -53,6 +55,7 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             throw new IllegalArgumentException("JDBC statement cache size must be positive");
         }
         this.statementCacheSize = statementCacheSize;
+        this.dialect = Objects.requireNonNull(dialect, "dialect");
         installPlans(Objects.requireNonNull(dialect, "dialect"), Objects.requireNonNull(plans, "plans"));
     }
 
@@ -126,6 +129,15 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                 throw new IllegalArgumentException("JDBC RETRACT UPDATE_AFTER requires a preceding before-image");
             }
         }
+        if (plan.writeMode() == JdbcWriteMode.RETRACT) {
+            ChangeEventId identity = Objects.requireNonNull(
+                    record.changeEventId(), "Keyless RETRACT requires a replay-stable CDC event ID");
+            boolean update = record.rowKind() == RowKind.UPDATE_BEFORE || record.rowKind() == RowKind.UPDATE_AFTER;
+            if (identity.imageCount() != (update ? 2 : 1)
+                    || identity.imageIndex() != (record.rowKind() == RowKind.UPDATE_AFTER ? 1 : 0)) {
+                throw new IllegalArgumentException("Keyless RETRACT requires complete CDC event image coordinates");
+            }
+        }
         if (awaitingUpdateAfter != null && plan.writeMode() == JdbcWriteMode.RETRACT) {
             ChangeEventId next = record.changeEventId();
             if ((awaitingUpdateEvent == null) != (next == null)
@@ -172,6 +184,7 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
             throw new IllegalStateException("JDBC executor already owns a connection");
         }
         this.connection = Objects.requireNonNull(connection, "connection");
+        receipts = new JdbcReplayReceipts(connection, dialect, List.copyOf(routes.values()));
     }
 
     /** Called only after switching away from and executing the previous active batch. */
@@ -194,21 +207,26 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
 
     @Override
     public void addToBatch(TableRecord record) throws SQLException {
+        JdbcTableWritePlan plan = routes.get(record.tableId());
         switch (record.rowKind()) {
             case UPDATE_BEFORE -> {
                 if (beforeInExecution != null) {
                     throw new IllegalStateException("Nested JDBC UPDATE_BEFORE is not supported");
                 }
-                // Borrow a reference from the only row buffer for the duration of this flush.
                 beforeInExecution = record;
             }
             case UPDATE_AFTER -> {
-                if (beforeInExecution != null) {
-                    TableRecord before = beforeInExecution;
-                    beforeInExecution = null;
-                    JdbcTableWritePlan plan = routes.get(record.tableId());
+                TableRecord before = beforeInExecution;
+                beforeInExecution = null;
+                if (plan.writeMode() == JdbcWriteMode.RETRACT && before == null) {
+                    throw new IllegalStateException("Keyless RETRACT has an incomplete UPDATE");
+                }
+                if (before != null) {
                     if (!before.tableId().equals(record.tableId())) {
                         throw new IllegalStateException("JDBC UPDATE pair crosses source tables");
+                    }
+                    if (plan.writeMode() == JdbcWriteMode.RETRACT && !reserve(record, plan)) {
+                        return;
                     }
                     if (plan.writeMode() == JdbcWriteMode.RETRACT
                             || !plan.hasSamePrimaryKey(before.row(), record.row())) {
@@ -217,9 +235,26 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
                 }
                 append(writes.get(record.tableId()), record.row());
             }
-            case INSERT -> append(writes.get(record.tableId()), record.row());
-            case DELETE -> append(deletes.get(record.tableId()), record.row());
+            case INSERT -> {
+                if (plan.writeMode() != JdbcWriteMode.RETRACT || reserve(record, plan)) {
+                    append(writes.get(record.tableId()), record.row());
+                }
+            }
+            case DELETE -> {
+                if (plan.writeMode() != JdbcWriteMode.RETRACT || reserve(record, plan)) {
+                    append(deletes.get(record.tableId()), record.row());
+                }
+            }
         }
+    }
+
+    private boolean reserve(TableRecord record, JdbcTableWritePlan plan) throws SQLException {
+        // Preserve the order of earlier DML before reserving the next mutation.
+        if (active != null) {
+            active.executeBatch();
+            active = null;
+        }
+        return receipts.reserve(record, plan);
     }
 
     private void append(TableSimpleStatementExecutor next, RowData row) throws SQLException {
@@ -248,7 +283,22 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     @Override
     public void closeStatements() throws SQLException {
         connection = null;
-        closePreparedStatements();
+        SQLException failure = null;
+        try {
+            closePreparedStatements();
+        } catch (SQLException error) {
+            failure = error;
+        }
+        if (receipts != null) {
+            try {
+                receipts.close();
+            } catch (SQLException error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
+            }
+            receipts = null;
+        }
+        if (failure != null) throw failure;
     }
 
     private void closePreparedStatements() throws SQLException {
@@ -287,6 +337,13 @@ public final class TableChangelogStatementExecutor implements JdbcBatchStatement
     @Override
     public void cancel() throws SQLException {
         SQLException failure = null;
+        if (receipts != null) {
+            try {
+                receipts.cancel();
+            } catch (SQLException error) {
+                failure = error;
+            }
+        }
         for (TableSimpleStatementExecutor statement : writes.values()) {
             try {
                 statement.cancel();
