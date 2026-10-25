@@ -16,6 +16,7 @@ import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress;
@@ -43,8 +44,8 @@ public final class PipelineBuilder {
         this(
                 resources,
                 factories,
-                JobOptions.defaults(),
-                new ExecutionConfigurationFactory(JobOptions.defaults(), stateRoot));
+                EnvironmentOptions.defaults(),
+                new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot));
     }
 
     /** Constructs a builder using Connector defaults. */
@@ -159,8 +160,8 @@ public final class PipelineBuilder {
         var first = plan.tables().getFirst();
         var sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
         var sinkFactory = factories.sink(first.sinkParameters().get(JobOptions.TYPE));
-        int sourceParallelism = options.get(JobOptions.SOURCE_PARALLELISM);
-        int sinkParallelism = options.get(JobOptions.SINK_PARALLELISM);
+        int sourceParallelism = options.get(EnvironmentOptions.SOURCE_PARALLELISM);
+        int sinkParallelism = options.get(EnvironmentOptions.SINK_PARALLELISM);
         if (sourceFactory.producesChangelog() && sinkParallelism != 1) {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
