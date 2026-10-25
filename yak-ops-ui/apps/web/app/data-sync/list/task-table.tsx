@@ -22,9 +22,9 @@ import type { TaskCommand } from "./use-task-actions";
 
 const PAGE_SIZE = 20;
 
-const isUnreadable = (
-  record: DataSyncTaskListRecord,
-): record is DataSyncUnreadableTaskRecord => "configurationError" in record;
+function isUnreadable(record: DataSyncTaskListRecord): record is DataSyncUnreadableTaskRecord {
+  return "configurationError" in record;
+}
 
 interface Data {
   dataSourceMap: Map<string, DataSourceRecord>;
@@ -106,19 +106,24 @@ export function TaskTable({ records, pageNo, total, loading, failed, data, actio
       key: "route",
       title: "同步链路",
       minWidth: 320,
-      render: (_value, record) =>
-        isUnreadable(record) ? (
-          <span className="text-[var(--yak-components-muted-text)]">—</span>
-        ) : dataSourcesLoading &&
-        (!dataSourceMap.has(record.sourceDataSourceId) ||
-          !dataSourceMap.has(record.targetDataSourceId)) ? (
-          <Skeleton width="90%" height={16} />
-        ) : (
+      render: (_value, record) => {
+        if (isUnreadable(record)) {
+          return <span className="text-[var(--yak-components-muted-text)]">—</span>;
+        }
+        if (
+          dataSourcesLoading &&
+          (!dataSourceMap.has(record.sourceDataSourceId) ||
+            !dataSourceMap.has(record.targetDataSourceId))
+        ) {
+          return <Skeleton width="90%" height={16} />;
+        }
+        return (
           <TaskRoute
             source={dataSourceMap.get(record.sourceDataSourceId)}
             target={dataSourceMap.get(record.targetDataSourceId)}
           />
-        ),
+        );
+      },
     },
     {
       key: "solution",
