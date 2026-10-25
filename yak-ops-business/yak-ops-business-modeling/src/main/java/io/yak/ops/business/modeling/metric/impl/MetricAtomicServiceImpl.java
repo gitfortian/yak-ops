@@ -2,6 +2,7 @@ package io.yak.ops.business.modeling.metric.impl;
 
 import io.yak.ops.business.modeling.metric.MetricAtomicService;
 import io.yak.ops.business.modeling.metric.MetricCatalog;
+import io.yak.ops.business.modeling.metric.MetricCompositionSync;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicUpdateDTO;
 import io.yak.ops.common.bean.vo.modeling.metric.MetricAtomicVO;
@@ -50,6 +51,9 @@ public class MetricAtomicServiceImpl implements MetricAtomicService {
 
     @Resource
     private MetricCatalog catalog;
+
+    @Resource
+    private MetricCompositionSync composition;
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -102,6 +106,8 @@ public class MetricAtomicServiceImpl implements MetricAtomicService {
         checkRevision(row.getRevision(), input.getRevision());
         var ownerId = catalog.owner(workspaceId, actor, input.getOwnerId());
         validate(workspaceId, input);
+        var previousCode = row.getEnCode();
+        var previousName = row.getCnName();
         copy(row, input);
         row.setOwnerId(ownerId);
         row.initUpdate(actor);
@@ -110,6 +116,9 @@ public class MetricAtomicServiceImpl implements MetricAtomicService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(MetricErrorCode.DUPLICATE_CODE, failure);
         }
+        if (!row.getEnCode().equals(previousCode) || !row.getCnName().equals(previousName))
+            composition.partEdited(
+                    workspaceId, actor, MetricCompositionSync.Part.ATOMIC, id, row.getEnCode(), row.getCnName());
         return new MetricSavedVO(id, Math.addExact(row.getRevision(), 1));
     }
 

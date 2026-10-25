@@ -46,6 +46,19 @@ public interface MetricDerivedMapper {
     @Select(PROJECTION + "WHERE d.workspace_id=#{workspaceId} AND d.en_code=#{enCode}")
     MetricDerivedEntity findByCode(@Param("workspaceId") String workspaceId, @Param("enCode") String enCode);
 
+    @Select(PROJECTION + "WHERE d.workspace_id=#{workspaceId} AND d.atomic_metric_id=#{atomicMetricId} ORDER BY d.id")
+    List<MetricDerivedEntity> byAtomic(
+            @Param("workspaceId") String workspaceId, @Param("atomicMetricId") String atomicMetricId);
+
+    @Select(PROJECTION + "WHERE d.workspace_id=#{workspaceId} AND d.period_id=#{periodId} ORDER BY d.id")
+    List<MetricDerivedEntity> byPeriod(@Param("workspaceId") String workspaceId, @Param("periodId") String periodId);
+
+    @Select(PROJECTION + "WHERE d.workspace_id=#{workspaceId} AND EXISTS (SELECT 1 FROM "
+            + "yak_ops_modeling_metric_derived_modifier l WHERE l.workspace_id=d.workspace_id "
+            + "AND l.derived_id=d.id AND l.modifier_id=#{modifierId}) ORDER BY d.id")
+    List<MetricDerivedEntity> byModifier(
+            @Param("workspaceId") String workspaceId, @Param("modifierId") String modifierId);
+
     @Insert(
             "INSERT INTO yak_ops_modeling_metric_derived(id,workspace_id,en_code,cn_name,atomic_metric_id,period_id,owner_id,description,revision,create_time,update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{enCode},#{cnName},#{atomicMetricId},#{periodId},#{ownerId},#{description},#{revision},#{createTime},#{updateTime},#{createBy},#{updateBy})")
     void insert(MetricDerivedEntity node);
@@ -57,6 +70,11 @@ public interface MetricDerivedMapper {
     @Delete(
             "DELETE FROM yak_ops_modeling_metric_derived WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id, @Param("revision") long revision);
+
+    @Update("UPDATE yak_ops_modeling_metric_derived SET en_code=#{enCode},cn_name=#{cnName},revision=revision+1,"
+            + "update_time=#{updateTime},update_by=#{updateBy} "
+            + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
+    int rename(MetricDerivedEntity node);
 
     @Select(
             "SELECT COUNT(*) FROM yak_ops_modeling_metric_derived WHERE workspace_id=#{workspaceId} AND en_code=#{enCode} "

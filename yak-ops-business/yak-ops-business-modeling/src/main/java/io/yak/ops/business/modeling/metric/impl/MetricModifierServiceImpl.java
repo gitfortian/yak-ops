@@ -1,6 +1,7 @@
 package io.yak.ops.business.modeling.metric.impl;
 
 import io.yak.ops.business.modeling.metric.MetricCatalog;
+import io.yak.ops.business.modeling.metric.MetricCompositionSync;
 import io.yak.ops.business.modeling.metric.MetricModifierService;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricModifierInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricModifierUpdateDTO;
@@ -39,6 +40,9 @@ public class MetricModifierServiceImpl implements MetricModifierService {
 
     @Resource
     private MetricCatalog catalog;
+
+    @Resource
+    private MetricCompositionSync composition;
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -88,6 +92,8 @@ public class MetricModifierServiceImpl implements MetricModifierService {
         if (input == null) throw MetricCatalog.invalid();
         checkRevision(row.getRevision(), input.getRevision());
         validate(workspaceId, input);
+        var previousCode = row.getEnCode();
+        var previousName = row.getCnName();
         copy(row, input);
         row.initUpdate(actor);
         try {
@@ -95,6 +101,9 @@ public class MetricModifierServiceImpl implements MetricModifierService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(MetricErrorCode.DUPLICATE_CODE, failure);
         }
+        if (!row.getEnCode().equals(previousCode) || !row.getCnName().equals(previousName))
+            composition.partEdited(
+                    workspaceId, actor, MetricCompositionSync.Part.MODIFIER, id, row.getEnCode(), row.getCnName());
         return new MetricSavedVO(id, Math.addExact(row.getRevision(), 1));
     }
 

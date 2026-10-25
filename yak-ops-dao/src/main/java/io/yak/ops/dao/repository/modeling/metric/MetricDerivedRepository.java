@@ -72,4 +72,31 @@ public interface MetricDerivedRepository {
      * @return the row, or empty when absent in this Workspace
      */
     Optional<MetricDerivedEntity> byCode(String workspaceId, String enCode);
+    /**
+     * Reads every derived metric built on one atomic metric, for composition propagation.
+     * @param workspaceId authorized current Workspace
+     * @param atomicMetricId edited atomic metric
+     * @return affected derived metrics without their links
+     */
+    List<MetricDerivedEntity> byAtomic(String workspaceId, String atomicMetricId);
+    /**
+     * Reads every derived metric fixed to one time period, for composition propagation.
+     * @param workspaceId authorized current Workspace
+     * @param periodId edited time period
+     * @return affected derived metrics without their links
+     */
+    List<MetricDerivedEntity> byPeriod(String workspaceId, String periodId);
+    /**
+     * Reads every derived metric whose composition uses one modifier, for composition propagation.
+     * @param workspaceId authorized current Workspace
+     * @param modifierId edited modifier
+     * @return affected derived metrics without their links
+     */
+    List<MetricDerivedEntity> byModifier(String workspaceId, String modifierId);
+    /**
+     * Rewrites the composed code and name of one derived metric without touching its links.
+     * @param node owned entity with the new values, expected revision and audit fields
+     * @return true only when the expected revision matched
+     */
+    boolean rename(MetricDerivedEntity node);
 }

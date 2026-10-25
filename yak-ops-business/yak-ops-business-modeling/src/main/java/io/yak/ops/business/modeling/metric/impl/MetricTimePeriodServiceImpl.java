@@ -1,6 +1,7 @@
 package io.yak.ops.business.modeling.metric.impl;
 
 import io.yak.ops.business.modeling.metric.MetricCatalog;
+import io.yak.ops.business.modeling.metric.MetricCompositionSync;
 import io.yak.ops.business.modeling.metric.MetricTimePeriodService;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodUpdateDTO;
@@ -34,6 +35,9 @@ public class MetricTimePeriodServiceImpl implements MetricTimePeriodService {
 
     @Resource
     private MetricCatalog catalog;
+
+    @Resource
+    private MetricCompositionSync composition;
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -83,6 +87,8 @@ public class MetricTimePeriodServiceImpl implements MetricTimePeriodService {
         if (input == null) throw MetricCatalog.invalid();
         checkRevision(row.getRevision(), input.getRevision());
         validate(input);
+        var previousCode = row.getEnCode();
+        var previousName = row.getCnName();
         copy(row, input);
         row.initUpdate(actor);
         try {
@@ -90,6 +96,9 @@ public class MetricTimePeriodServiceImpl implements MetricTimePeriodService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(MetricErrorCode.DUPLICATE_CODE, failure);
         }
+        if (!row.getEnCode().equals(previousCode) || !row.getCnName().equals(previousName))
+            composition.partEdited(
+                    workspaceId, actor, MetricCompositionSync.Part.PERIOD, id, row.getEnCode(), row.getCnName());
         return new MetricSavedVO(id, Math.addExact(row.getRevision(), 1));
     }
 

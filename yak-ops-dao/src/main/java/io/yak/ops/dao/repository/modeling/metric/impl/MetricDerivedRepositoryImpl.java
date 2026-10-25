@@ -85,6 +85,26 @@ public class MetricDerivedRepositoryImpl implements MetricDerivedRepository {
         return Optional.ofNullable(mapper.findByCode(workspaceId, enCode));
     }
 
+    @Override
+    public List<MetricDerivedEntity> byAtomic(String workspaceId, String atomicMetricId) {
+        return mapper.byAtomic(workspaceId, atomicMetricId);
+    }
+
+    @Override
+    public List<MetricDerivedEntity> byPeriod(String workspaceId, String periodId) {
+        return mapper.byPeriod(workspaceId, periodId);
+    }
+
+    @Override
+    public List<MetricDerivedEntity> byModifier(String workspaceId, String modifierId) {
+        return mapper.byModifier(workspaceId, modifierId);
+    }
+
+    @Override
+    public boolean rename(MetricDerivedEntity node) {
+        return mapper.rename(node) == 1;
+    }
+
     private void attach(List<MetricDerivedEntity> rows, List<MetricDerivedModifierEntity> links) {
         if (rows.isEmpty()) return;
         Map<String, List<MetricDerivedModifierEntity>> grouped =

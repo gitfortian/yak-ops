@@ -18,7 +18,9 @@ import io.yak.ops.business.modeling.metric.impl.MetricTimePeriodServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricCompositeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedUpdateDTO;
+import io.yak.ops.common.bean.dto.modeling.metric.MetricModifierUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodInputDTO;
+import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodUpdateDTO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricReferenceKind;
@@ -86,6 +88,7 @@ class MetricDatabaseIT {
         context = new AnnotationConfigApplicationContext(
                 Beans.class,
                 MetricCatalog.class,
+                MetricCompositionSync.class,
                 MetricTimePeriodRepositoryImpl.class,
                 MetricModifierRepositoryImpl.class,
                 MetricAtomicRepositoryImpl.class,
@@ -183,6 +186,35 @@ class MetricDatabaseIT {
 
         var stale = assertThrows(BusinessException.class, () -> derivedService.update("ws", "actor", first.id(), update));
         assertEquals(MetricErrorCode.REVISION_CONFLICT, stale.getErrorCode());
+    }
+
+    @Test
+    void propagatesAPartRenameToEveryDerivedMetricThatUsesIt() {
+        seedMetricParts("ws");
+        var derived = derivedService.create("ws", "actor", derived("atomic", "period", List.of("muying")));
+
+        var periodUpdate = new MetricTimePeriodUpdateDTO();
+        periodUpdate.setEnCode("d30");
+        periodUpdate.setCnName("最近30天");
+        periodUpdate.setRevision(1L);
+        periodsService.update("ws", "actor", "period", periodUpdate);
+        var afterPeriod = derivedService.detail("ws", "actor", derived.id());
+        assertEquals("d30_muying_pay_amt", afterPeriod.enCode());
+        assertEquals("最近30天母婴支付金额", afterPeriod.cnName());
+        assertEquals(2, afterPeriod.revision());
+
+        var modifierUpdate = new MetricModifierUpdateDTO();
+        modifierUpdate.setDomainId("domain");
+        modifierUpdate.setEnCode("baby");
+        modifierUpdate.setCnName("婴童");
+        modifierUpdate.setRevision(1L);
+        modifiersService.update("ws", "actor", "muying", modifierUpdate);
+        var afterModifier = derivedService.detail("ws", "actor", derived.id());
+        assertEquals("d30_baby_pay_amt", afterModifier.enCode());
+        assertEquals("最近30天婴童支付金额", afterModifier.cnName());
+        assertEquals(3, afterModifier.revision());
+        // The links were not rewritten by the propagation, only the composed values moved.
+        assertEquals(1, count("metric_derived_modifier"));
     }
 
     @Test
