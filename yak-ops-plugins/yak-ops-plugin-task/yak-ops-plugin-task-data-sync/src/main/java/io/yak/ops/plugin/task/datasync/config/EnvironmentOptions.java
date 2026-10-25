@@ -27,8 +27,7 @@ public final class EnvironmentOptions {
                             .and(Conditions.lessOrEqual(SOURCE_PARALLELISM, 16)))
             .optional(
                     SINK_PARALLELISM,
-                    Conditions.greaterOrEqual(SINK_PARALLELISM, 1)
-                            .and(Conditions.lessOrEqual(SINK_PARALLELISM, 16)))
+                    Conditions.greaterOrEqual(SINK_PARALLELISM, 1).and(Conditions.lessOrEqual(SINK_PARALLELISM, 16)))
             .optional(MAX_RESTARTS, Conditions.greaterOrEqual(MAX_RESTARTS, 0))
             .optional(CHECKPOINT_INTERVAL, Conditions.greaterThan(CHECKPOINT_INTERVAL, Duration.ZERO))
             .build();
