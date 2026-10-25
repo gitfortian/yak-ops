@@ -1,11 +1,13 @@
 import type {
   DataSyncTaskPageParams,
+  DataSyncTaskPageResult,
   DataSyncTaskRecord,
   DataSyncTaskSavePayload,
   DataSyncTaskUpdatePayload,
   DataSyncParameters,
   DataSyncTableMapping,
   TaskDefinitionRecord,
+  TaskDefinitionPageResult,
 } from "./types";
 import { readSyncParameters, solutionSyncType, supportsMultipleTables } from "./parameters.ts";
 
@@ -160,5 +162,36 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     createTime: definition.createTime,
     updateTime: definition.updateTime,
     updateBy: definition.updateBy,
+  };
+}
+
+/**
+ * A single unreadable stored definition must not turn a successful page request
+ * into an empty/error page. Keep its identity visible; do not invent executable
+ * parameters or silently interpret an older transaction contract as XA.
+ */
+export function projectSyncTaskPage(page: TaskDefinitionPageResult): DataSyncTaskPageResult {
+  return {
+    ...page,
+    bizData: page.bizData.map((definition) => {
+      try {
+        return toSyncTaskRecord(definition);
+      } catch (error) {
+        return {
+          id: definition.id,
+          name: definition.name,
+          status: definition.status,
+          definitionVersion: definition.definitionVersion,
+          updateBy: definition.updateBy,
+          updateTime: definition.updateTime,
+          configurationError:
+            error instanceof SyntaxError
+              ? "任务参数 JSON 格式错误"
+              : error instanceof Error
+                ? error.message
+                : "任务参数无法解析",
+        };
+      }
+    }),
   };
 }
