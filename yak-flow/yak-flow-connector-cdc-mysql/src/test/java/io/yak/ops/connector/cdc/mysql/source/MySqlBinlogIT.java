@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
@@ -121,6 +122,19 @@ class MySqlBinlogIT {
                     Set.of(ORDERS, ITEMS),
                     Set.of(firstEvents.get(0).tableId(), firstEvents.get(1).tableId()));
             assertEquals(RowKind.INSERT, firstEvents.get(0).rowKind());
+            assertNotNull(firstEvents.get(0).changeEventId(), "Real Debezium row requires fine-grained Binlog identity");
+            assertNotNull(firstEvents.get(1).changeEventId(), "Second Binlog row requires stable identity");
+            assertFalse(firstEvents.get(0).changeEventId().sameEvent(firstEvents.get(1).changeEventId()));
+
+            // One SQL statement can produce multiple row events with the same Binlog file/pos.
+            // Their per-row Debezium coordinates, not their identical payloads, must differ.
+            execute(password, "INSERT INTO orders VALUES(2, 'same'), (3, 'same')");
+            receive(reader, firstEvents, 4, Duration.ofSeconds(45));
+            assertEquals("same", firstEvents.get(2).row().getString(1));
+            assertEquals("same", firstEvents.get(3).row().getString(1));
+            assertNotNull(firstEvents.get(2).changeEventId());
+            assertNotNull(firstEvents.get(3).changeEventId());
+            assertFalse(firstEvents.get(2).changeEventId().sameEvent(firstEvents.get(3).changeEventId()));
             checkpoint = reader.snapshotState(1L).getFirst();
             assertTrue(checkpoint.schemaHistory().length > 0);
             assertTrue(checkpoint.offset() != null);
@@ -139,6 +153,13 @@ class MySqlBinlogIT {
                     List.of(RowKind.UPDATE_BEFORE, RowKind.UPDATE_AFTER, RowKind.DELETE),
                     recoveredEvents.stream().map(TableRecord::rowKind).toList());
             assertEquals("changed", recoveredEvents.get(1).row().getString(1));
+            assertNotNull(recoveredEvents.get(0).changeEventId(), "UPDATE must have a source event position");
+            assertEquals(recoveredEvents.get(0).changeEventId().eventId(),
+                    recoveredEvents.get(1).changeEventId().eventId());
+            assertEquals(0, recoveredEvents.get(0).changeEventId().imageIndex());
+            assertEquals(1, recoveredEvents.get(1).changeEventId().imageIndex());
+            assertEquals(2, recoveredEvents.get(1).changeEventId().imageCount());
+            assertNotNull(recoveredEvents.get(2).changeEventId(), "DELETE must have a source event position");
             assertEquals(ORDERS, recoveredEvents.get(0).tableId());
             assertEquals(ITEMS, recoveredEvents.get(2).tableId());
             assertFalse(reader.snapshotState(2L).isEmpty());

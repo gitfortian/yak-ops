@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
+import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 
 /**
@@ -26,8 +27,14 @@ public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, T
             schemaChanges.submitSchemaChange(event.schemaChange(), () -> state.onEmitted(event.offset()));
             return;
         }
-        for (TableRecord record : event.records()) {
-            output.collect(record);
+        String eventPosition = MySqlChangeEventIds.fromBinlog(event.offset());
+        int imageCount = event.records().size();
+        for (int index = 0; index < imageCount; index++) {
+            TableRecord record = event.records().get(index);
+            ChangeEventId identity = eventPosition == null
+                    ? null
+                    : new ChangeEventId(state.sourceId(), eventPosition, index, imageCount);
+            output.collect(identity == null ? record : record.withChangeEventId(identity));
         }
         state.onEmitted(event.offset());
     }

@@ -32,6 +32,19 @@ public final class MySqlHybridSplitState {
         }
     }
 
+    /** Stable source scope from the original durable split, independent of physical attempts. */
+    public String sourceId() {
+        return snapshot != null ? snapshot.fingerprint() : binlog.binlog().definitionFingerprint();
+    }
+
+    /** Snapshot identity is based on the original split and frozen output ordinal. */
+    public String snapshotSplitId() {
+        if (snapshot == null || !snapshot.prepared()) {
+            throw new IllegalStateException("Snapshot event identity requires frozen output");
+        }
+        return snapshot.splitId();
+    }
+
     public void emitSnapshotKey(Long key) {
         if (snapshot == null || key == null) {
             throw new IllegalStateException("Snapshot progress must contain a key");
