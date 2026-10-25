@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Link to the proposal PR
+Discussion: https://github.com/gitfortian/yak-ops/pull/31
 
 Decision: Pending (link to the recorded decision after review)
 
