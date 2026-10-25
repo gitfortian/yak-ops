@@ -8,8 +8,10 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.internal.executor.TableBufferedStatementExecutor;
 import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecutor;
 import io.yak.ops.connector.jdbc.sink.JdbcBatchOrder;
+import io.yak.ops.connector.jdbc.sink.JdbcKeylessTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
+import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SchemaChangeRequest;
@@ -121,6 +123,11 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
         Connection opened = JdbcConnectionRetry.open(connections, 1);
         try {
             opened.setAutoCommit(false);
+            for (JdbcTableWritePlan plan : plans) {
+                if (plan.writeMode() == JdbcWriteMode.RETRACT) {
+                    JdbcKeylessTargetValidator.validate(opened, plan);
+                }
+            }
             buffer.prepareStatements(opened);
         } catch (SQLException | RuntimeException failure) {
             try {

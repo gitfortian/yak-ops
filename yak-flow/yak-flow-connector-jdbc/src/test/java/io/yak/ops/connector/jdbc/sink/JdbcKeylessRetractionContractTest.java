@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
+import io.yak.ops.core.data.GenericRowData;
+import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
@@ -14,7 +17,7 @@ import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Reserves RETRACT semantics without allowing an unsafe JDBC writer to be created. */
+/** Verifies keyless contract and the deliberately closed public creation gate. */
 class JdbcKeylessRetractionContractTest {
     private static final TableId TABLE = new TableId(null, "public", "entries");
     private static final TableSchema KEYLESS = new TableSchema(
@@ -56,7 +59,7 @@ class JdbcKeylessRetractionContractTest {
     }
 
     @Test
-    void reservesRetractionModeButRejectsAllDirectSinkAndWritePlanCreation() {
+    void supportsInternalRetractionPlansButKeepsPublicFactoryClosed() {
         var options = new Configuration()
                 .set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.RETRACT)
                 .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3306/test")
@@ -70,8 +73,13 @@ class JdbcKeylessRetractionContractTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> factory.createSink(new TableSinkFactoryContext(
                         options.toReadonlyConfig(), TABLE, KEYLESS, TABLE, KEYLESS)));
-        assertThrows(UnsupportedOperationException.class,
-                () -> new JdbcTableWritePlan(TABLE, TABLE, KEYLESS, JdbcWriteMode.RETRACT));
+        var plan = new JdbcTableWritePlan(TABLE, TABLE, KEYLESS, JdbcWriteMode.RETRACT);
+        assertEquals(JdbcWriteMode.RETRACT, plan.writeMode());
+        assertTrue(plan.sql(new MySqlJdbcDialect()).startsWith("INSERT INTO"));
+        assertEquals(2, plan.project(GenericRowData.of(1L, null), RowKind.DELETE).getArity());
+        assertEquals(1L, plan.project(GenericRowData.of(1L, null), RowKind.UPDATE_BEFORE).getField(0));
+        assertTrue(new MySqlJdbcDialect().exactRowDeleteSql(TABLE, KEYLESS).contains(" <=> ?"));
+        assertTrue(new MySqlJdbcDialect().exactRowDeleteSql(TABLE, KEYLESS).endsWith(" LIMIT 1"));
         assertEquals(JdbcWriteMode.RETRACT, options.get(JdbcSinkOptions.WRITE_MODE));
     }
 

@@ -80,8 +80,11 @@ public record JdbcTableWritePlan(
         }
         if (writeMode == JdbcWriteMode.RETRACT) {
             JdbcKeylessRetractionContract.validate(sourceSchema, schema);
-            throw new UnsupportedOperationException(
-                    "JDBC RETRACT requires an implemented exact-row writer and transactional replay protection");
+            for (int index = 0; index < sourcePositions.size(); index++) {
+                if (sourcePositions.get(index) != index) {
+                    throw new IllegalArgumentException("JDBC RETRACT requires an exact full-row identity mapping");
+                }
+            }
         }
         if (writeMode == JdbcWriteMode.UPSERT) {
             // A snapshot Chunk Key chooses a read range; it is not a physical row identity.
@@ -130,7 +133,7 @@ public record JdbcTableWritePlan(
         return switch (writeMode) {
             case APPEND -> dialect.insertSql(targetTable, schema);
             case UPSERT -> dialect.upsertSql(targetTable, schema);
-            case RETRACT -> throw new UnsupportedOperationException("JDBC RETRACT writer is not implemented");
+            case RETRACT -> dialect.insertSql(targetTable, schema);
         };
     }
 
@@ -207,7 +210,8 @@ public record JdbcTableWritePlan(
     /**
      * Copies and maps one source row before it enters the sole JDBC batch buffer.
      *
-     * <p>DELETE/UPDATE_BEFORE emit only non-null primary keys. INSERT/UPDATE_AFTER project
+     * <p>UPSERT DELETE/UPDATE_BEFORE emit only non-null primary keys, while RETRACT emits
+     * the complete before-image for exact-row comparison. INSERT/UPDATE_AFTER project
      * all target columns and reject null UPSERT keys. Caller-owned mutable byte arrays are
      * detached through the internal RowData representation.
      *
@@ -225,7 +229,7 @@ public record JdbcTableWritePlan(
         if (writeMode == JdbcWriteMode.APPEND && kind != RowKind.INSERT) {
             throw new UnsupportedOperationException("APPEND mode accepts INSERT records only");
         }
-        if (kind == RowKind.DELETE || kind == RowKind.UPDATE_BEFORE) {
+        if (writeMode != JdbcWriteMode.RETRACT && (kind == RowKind.DELETE || kind == RowKind.UPDATE_BEFORE)) {
             GenericRowData keys = new GenericRowData(schema.primaryKeys().size());
             int index = 0;
             for (String key : schema.primaryKeys()) {
