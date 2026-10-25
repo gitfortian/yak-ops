@@ -45,6 +45,8 @@ export function DataSyncPage() {
   );
   const [scheduleTask, setScheduleTask] = useState<DataSyncTaskRecord>();
   const [pendingDelete, setPendingDelete] = useState<DataSyncTaskRecord>();
+  const scheduledStatus =
+    page.validRecords.find((task) => task.id === scheduleTask?.id)?.status ?? scheduleTask?.status;
 
   const canManage = (task: DataSyncTaskRecord) =>
     page.safeToAct &&
@@ -139,10 +141,7 @@ export function DataSyncPage() {
       {scheduleTask ? (
         <ScheduleDialog
           targetId={scheduleTask.id}
-          published={
-            (page.validRecords.find((task) => task.id === scheduleTask.id) || scheduleTask).status ===
-            "PUBLISHED"
-          }
+          published={scheduledStatus === "PUBLISHED"}
           open
           onClose={() => setScheduleTask(undefined)}
           onChanged={refreshSchedules}
