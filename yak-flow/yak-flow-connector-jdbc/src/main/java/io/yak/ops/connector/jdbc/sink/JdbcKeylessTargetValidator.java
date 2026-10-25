@@ -139,8 +139,8 @@ public final class JdbcKeylessTargetValidator {
                 }
             }
         }
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT COLUMN_NAME, NON_UNIQUE FROM information_schema.STATISTICS "
+        try (PreparedStatement query =
+                connection.prepareStatement("SELECT COLUMN_NAME, NON_UNIQUE FROM information_schema.STATISTICS "
                         + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY'")) {
             query.setString(1, catalog);
             query.setString(2, receipts);
