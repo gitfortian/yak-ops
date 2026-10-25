@@ -1,15 +1,27 @@
 import { Alert, CollapseSection, Field, FieldLabel, Switch } from "@yak-ops/yak-ui";
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
-import { listDataSourceColumns, type DataSourceCatalogColumn } from "@/service/datasource";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { DataSourceEndpointCard } from "./data-source-endpoint-card";
+import {
+  listDataSourceColumns,
+  type DataSourceCatalogColumn,
+  type DataSourceCatalogTable,
+} from "@/service/datasource";
 import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { ExplicitTableSelection } from "./table-mapping-editor";
 import { IncrementalFields } from "./incremental-fields";
 import { TableSection } from "./table-section";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-sync";
-import type { CatalogOptions, EditorForm } from "./types";
+import type { CatalogOptions, EditorForm, EditorSource } from "./types";
 
 interface Props {
+  id?: string;
+  sourceType: string;
+  sourceDataSources: DataSourceRecord[];
+  dataSourcesLoading: boolean;
+  loadDataSources: () => Promise<void>;
+  onConnectionChange: (value: string) => void;
   batch: boolean;
   prepareSchema: boolean;
   form: EditorForm;
@@ -23,12 +35,18 @@ interface Props {
   usesChangelog: boolean;
   useIncremental: boolean;
   initialLoad: boolean;
-  patch: <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => void;
-  setTaskDirty: Dispatch<SetStateAction<boolean>>;
-  setParametersDirty: Dispatch<SetStateAction<boolean>>;
-  setForm: Dispatch<SetStateAction<EditorForm>>;
+  patchSource: <K extends keyof EditorSource>(key: K, value: EditorSource[K]) => void;
+  onSourceSchemaChange: (schema: string) => void;
+  onSourceTableChange: (table: DataSourceCatalogTable) => void;
+  onKeylessChange: (enabled: boolean) => void;
 }
 export function SourceSection({
+  id,
+  sourceType,
+  sourceDataSources,
+  dataSourcesLoading,
+  loadDataSources,
+  onConnectionChange,
   batch,
   prepareSchema,
   form,
@@ -42,26 +60,27 @@ export function SourceSection({
   usesChangelog,
   useIncremental,
   initialLoad,
-  patch,
-  setTaskDirty,
-  setParametersDirty,
-  setForm,
+  patchSource,
+  onSourceSchemaChange,
+  onSourceTableChange,
+  onKeylessChange,
 }: Props) {
+  const navigate = useNavigate();
   const combination = { writeModes: writeMode ? [writeMode] : [] };
   const [sourceColumns, setSourceColumns] = useState<DataSourceCatalogColumn[]>([]);
   const [columnsError, setColumnsError] = useState(false);
   useEffect(() => {
-    if (!allowKeyless || !form.sourceDataSourceId || !form.sourceTable) {
+    if (!allowKeyless || !form.source.dataSourceId || !form.source.table) {
       setSourceColumns([]);
       return;
     }
     let active = true;
     setSourceColumns([]);
     setColumnsError(false);
-    void listDataSourceColumns(form.sourceDataSourceId, {
-      database: form.sourceDatabase || undefined,
-      schema: form.sourceSchema || undefined,
-      table: form.sourceTable,
+    void listDataSourceColumns(form.source.dataSourceId, {
+      database: form.source.database || undefined,
+      schema: form.source.schema || undefined,
+      table: form.source.table,
     })
       .then((columns) => {
         if (active) setSourceColumns(columns);
@@ -74,10 +93,10 @@ export function SourceSection({
     };
   }, [
     allowKeyless,
-    form.sourceDataSourceId,
-    form.sourceDatabase,
-    form.sourceSchema,
-    form.sourceTable,
+    form.source.dataSourceId,
+    form.source.database,
+    form.source.schema,
+    form.source.table,
   ]);
   const chunkColumns = sourceColumns.filter(
     (column) =>
@@ -85,13 +104,30 @@ export function SourceSection({
       /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(column.typeName || ""),
   );
   return (
-    <CollapseSection id="source" title="数据来源">
+    <CollapseSection id="source" title="数据来源 Source">
+      <div className="mb-4">
+        <DataSourceEndpointCard
+          title="来源数据源"
+          dataSourceType={sourceType}
+          dataSources={sourceDataSources}
+          dataSourceId={form.source.dataSourceId}
+          refreshing={dataSourcesLoading}
+          onRefresh={loadDataSources}
+          onCreateDataSource={() =>
+            navigate(
+              "/data-source?create=1&returnTo=" +
+                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
+            )
+          }
+          onDataSourceChange={onConnectionChange}
+        />
+      </div>
       {batch ? (
         <ExplicitTableSelection
           prepareSchema={prepareSchema}
           targetNamespace={{
-            database: form.targetDatabase || undefined,
-            schema: form.targetSchema || undefined,
+            database: form.sink.database || undefined,
+            schema: form.sink.schema || undefined,
           }}
           writeMode={combination?.writeModes[0]}
           sourceTables={sourceCatalog.tables}
@@ -104,39 +140,14 @@ export function SourceSection({
         />
       ) : (
         <TableSection
-          dataSourceId={form.sourceDataSourceId}
+          dataSourceId={form.source.dataSourceId}
           boundSchema={selectedSourceDataSource?.schema}
-          database={form.sourceDatabase}
-          schema={form.sourceSchema}
-          table={form.sourceTable}
+          database={form.source.database}
+          schema={form.source.schema}
+          table={form.source.table}
           catalog={sourceCatalog}
-          onSchemaChange={(value) => {
-            setTaskDirty(true);
-            setParametersDirty(true);
-            setForm((current) => ({
-              ...current,
-              sourceSchema: value,
-              sourceTable: "",
-              keylessEnabled: false,
-              chunkKeyColumn: "",
-              targetPrimaryKeys: [],
-              writeMode: usesChangelog ? "UPSERT" : current.writeMode,
-            }));
-          }}
-          onTableChange={(table) => {
-            setTaskDirty(true);
-            setParametersDirty(true);
-            setForm((current) => ({
-              ...current,
-              sourceDatabase: current.sourceDatabase || table.database || "",
-              sourceSchema: current.sourceSchema || table.schema || "",
-              sourceTable: table.name,
-              keylessEnabled: false,
-              chunkKeyColumn: "",
-              targetPrimaryKeys: [],
-              writeMode: usesChangelog ? "UPSERT" : current.writeMode,
-            }));
-          }}
+          onSchemaChange={onSourceSchemaChange}
+          onTableChange={onSourceTableChange}
         >
           {usesChangelog ? (
             <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
@@ -148,39 +159,27 @@ export function SourceSection({
                 <Switch
                   aria-label="无主键表"
                   size="small"
-                  checked={form.keylessEnabled}
-                  onCheckedChange={(enabled) => {
-                    setTaskDirty(true);
-                    setParametersDirty(true);
-                    setForm((current) => ({
-                      ...current,
-                      keylessEnabled: enabled,
-                      chunkKeyColumn: enabled ? current.chunkKeyColumn : "",
-                      targetPrimaryKeys: [],
-                      writeMode: enabled ? "RETRACT" : "UPSERT",
-                      schemaChangesEnabled: enabled ? false : current.schemaChangesEnabled,
-                      allowDropColumns: enabled ? false : current.allowDropColumns,
-                    }));
-                  }}
+                  checked={form.source.keylessEnabled}
+                  onCheckedChange={onKeylessChange}
                 />
               </Field>
-              {form.keylessEnabled ? (
+              {form.source.keylessEnabled ? (
                 <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                   <FieldLabel required>快照分片字段</FieldLabel>
                   <div className="w-1/2 min-w-0 max-lg:w-full">
                     <DataSyncSearchableSelect
                       placeholder="选择非空数值字段"
-                      value={form.chunkKeyColumn || null}
+                      value={form.source.chunkKeyColumn || null}
                       options={chunkColumns.map((column) => ({
                         value: column.name,
                         label: column.name,
                       }))}
-                      onValueChange={(value) => patch("chunkKeyColumn", value)}
+                      onValueChange={(value) => patchSource("chunkKeyColumn", value)}
                     />
                   </div>
                 </Field>
               ) : null}
-              {columnsError && form.keylessEnabled ? <Alert>来源字段加载失败</Alert> : null}
+              {columnsError && form.source.keylessEnabled ? <Alert>来源字段加载失败</Alert> : null}
             </>
           ) : null}
           {useIncremental ? (
@@ -188,9 +187,9 @@ export function SourceSection({
               <FieldLabel required>增量设置</FieldLabel>
               <div className="w-1/2 min-w-0 max-lg:w-full">
                 <IncrementalFields
-                  value={form.incremental}
+                  value={form.source.incremental}
                   initialLoad={initialLoad}
-                  onChange={(value) => patch("incremental", value)}
+                  onChange={(value) => patchSource("incremental", value)}
                 />
               </div>
             </Field>

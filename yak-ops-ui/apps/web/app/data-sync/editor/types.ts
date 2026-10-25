@@ -6,25 +6,34 @@ import type {
   DataSyncWriteMode,
 } from "@/service/data-sync";
 
+export interface EditorSource {
+  dataSourceId: string;
+  database: string;
+  schema: string;
+  table: string;
+  keylessEnabled: boolean;
+  chunkKeyColumn: string;
+  incremental?: DataSyncIncrementalConfig;
+}
+
+export interface EditorSink {
+  dataSourceId: string;
+  database: string;
+  schema: string;
+  table: string;
+  writeMode: DataSyncWriteMode;
+  targetPrimaryKeys: string[];
+  schemaChangesEnabled: boolean;
+  allowDropColumns: boolean;
+}
+
+/** UI state groups settings by the component that owns them, not by the V3 JSON layout. */
 export interface EditorForm {
   name: string;
   remark: string;
   debug: boolean;
-  schemaChangesEnabled: boolean;
-  allowDropColumns: boolean;
-  writeMode: DataSyncWriteMode;
-  keylessEnabled: boolean;
-  chunkKeyColumn: string;
-  targetPrimaryKeys: string[];
-  incremental?: DataSyncIncrementalConfig;
-  sourceDataSourceId: string;
-  sourceDatabase: string;
-  sourceSchema: string;
-  sourceTable: string;
-  targetDataSourceId: string;
-  targetDatabase: string;
-  targetSchema: string;
-  targetTable: string;
+  source: EditorSource;
+  sink: EditorSink;
 }
 
 export interface CatalogOptions {
@@ -39,21 +48,25 @@ export const EMPTY_FORM: EditorForm = {
   name: "",
   remark: "",
   debug: false,
-  schemaChangesEnabled: true,
-  allowDropColumns: false,
-  writeMode: "APPEND",
-  keylessEnabled: false,
-  chunkKeyColumn: "",
-  targetPrimaryKeys: [],
-  incremental: undefined,
-  sourceDataSourceId: "",
-  sourceDatabase: "",
-  sourceSchema: "",
-  sourceTable: "",
-  targetDataSourceId: "",
-  targetDatabase: "",
-  targetSchema: "",
-  targetTable: "",
+  source: {
+    dataSourceId: "",
+    database: "",
+    schema: "",
+    table: "",
+    keylessEnabled: false,
+    chunkKeyColumn: "",
+    incremental: undefined,
+  },
+  sink: {
+    dataSourceId: "",
+    database: "",
+    schema: "",
+    table: "",
+    writeMode: "APPEND",
+    targetPrimaryKeys: [],
+    schemaChangesEnabled: true,
+    allowDropColumns: false,
+  },
 };
 
 export interface TaskEditorInput {

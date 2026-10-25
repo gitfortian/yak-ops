@@ -10,13 +10,13 @@ import {
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "./incremental-fields";
+import { selectSourceSchema, selectSourceTable, setKeylessSource } from "./source-selection";
 import { findStepCombination } from "../solution/presentation";
 import { useSolutions } from "../solution/use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import type { DataSyncTableMapping, DataSyncTaskStatus } from "@/service/data-sync";
 import { BasicSection } from "./basic-section";
-import { DataSourcesSection } from "./data-sources-section";
 import { SourceSection } from "./source-section";
 import { TargetSection } from "./target-section";
 import { EditorScheduleSection } from "./schedule-section";
@@ -26,7 +26,13 @@ import { useEditorSubmission } from "./use-editor-submission";
 import { useEditorDataSources } from "./use-editor-data-sources";
 import { useEditorSchedule } from "./use-editor-schedule";
 import { useEditorDraft } from "./use-editor-draft";
-import { EMPTY_FORM, type TaskEditorInput, type EditorForm } from "./types";
+import {
+  EMPTY_FORM,
+  type TaskEditorInput,
+  type EditorForm,
+  type EditorSource,
+  type EditorSink,
+} from "./types";
 
 export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorInput) {
   const batch = supportsMultipleTables(draft.solutionType);
@@ -67,27 +73,31 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
       name: draft.name,
       remark: value?.remark || "",
       debug: value?.debug ?? false,
-      schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
-      allowDropColumns: value?.allowDropColumns ?? false,
-      writeMode: value?.keylessEnabled
-        ? value.writeMode === "UPSERT"
-          ? "UPSERT"
-          : "RETRACT"
-        : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
-          ? "UPSERT"
-          : "APPEND",
-      keylessEnabled: value?.keylessEnabled ?? false,
-      chunkKeyColumn: value?.chunkKeyColumn ?? "",
-      targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
-      incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
-      sourceDataSourceId: value?.sourceDataSourceId || "",
-      sourceDatabase: value?.sourceDatabase || "",
-      sourceSchema: value?.sourceSchema || "",
-      sourceTable: value?.sourceTable || "",
-      targetDataSourceId: value?.targetDataSourceId || "",
-      targetDatabase: value?.targetDatabase || "",
-      targetSchema: value?.targetSchema || "",
-      targetTable: value?.targetTable || "",
+      source: {
+        dataSourceId: value?.sourceDataSourceId || "",
+        database: value?.sourceDatabase || "",
+        schema: value?.sourceSchema || "",
+        table: value?.sourceTable || "",
+        keylessEnabled: value?.keylessEnabled ?? false,
+        chunkKeyColumn: value?.chunkKeyColumn ?? "",
+        incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
+      },
+      sink: {
+        dataSourceId: value?.targetDataSourceId || "",
+        database: value?.targetDatabase || "",
+        schema: value?.targetSchema || "",
+        table: value?.targetTable || "",
+        schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
+        allowDropColumns: value?.allowDropColumns ?? false,
+        writeMode: value?.keylessEnabled
+          ? value.writeMode === "UPSERT"
+            ? "UPSERT"
+            : "RETRACT"
+          : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
+            ? "UPSERT"
+            : "APPEND",
+        targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
+      },
     };
   });
   const [taskStatus] = useState<DataSyncTaskStatus>(
@@ -123,23 +133,24 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
       { id: "basic", label: "基本信息" },
-      { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
-      { id: "target", label: "目标表映射" },
+      { id: "transform", label: "数据转换" },
+      { id: "target", label: "数据去向" },
+      { id: "env", label: "运行配置" },
       ...(supportsScheduling ? [{ id: "schedule", label: "调度配置" }] : []),
     ],
     [supportsScheduling],
   );
 
   const sourceCatalog = useCatalogOptions(
-    form.sourceDataSourceId,
-    form.sourceDatabase,
-    form.sourceSchema,
+    form.source.dataSourceId,
+    form.source.database,
+    form.source.schema,
   );
   const targetCatalog = useCatalogOptions(
-    form.targetDataSourceId,
-    form.targetDatabase,
-    form.targetSchema,
+    form.sink.dataSourceId,
+    form.sink.database,
+    form.sink.schema,
   );
 
   const sourceDataSources = useMemo(
@@ -150,8 +161,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     () => dataSources.filter((item) => item.dbType === draft.targetType),
     [dataSources, draft.targetType],
   );
-  const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
-  const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
+  const selectedSourceDataSource = dataSources.find((item) => item.id === form.source.dataSourceId);
+  const selectedTargetDataSource = dataSources.find((item) => item.id === form.sink.dataSourceId);
   useEditorDraft(id, draftKey, draft, form, batch, mappings, useIncremental, savedTask);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
@@ -160,34 +171,63 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const patchSource = <K extends keyof EditorSource>(key: K, value: EditorSource[K]) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm((current) => ({ ...current, source: { ...current.source, [key]: value } }));
+  };
+
+  const patchSink = <K extends keyof EditorSink>(key: K, value: EditorSink[K]) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm((current) => ({ ...current, sink: { ...current.sink, [key]: value } }));
+  };
+
+  const updateSourceSelection = (update: (current: EditorForm) => EditorForm) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm(update);
+  };
+
   const updateMappings = (value: DataSyncTableMapping[]) => {
     setMappings(value);
     setTaskDirty(true);
     setParametersDirty(true);
   };
   const changeConnection = (side: "source" | "target", value: string) => {
+    const selected = dataSources.find((item) => item.id === value);
     setMappings([]);
+    setTaskDirty(true);
+    setParametersDirty(true);
     if (side === "source") {
-      const selected = dataSources.find((item) => item.id === value);
-      setTaskDirty(true);
-      setParametersDirty(true);
       setForm((current) => ({
         ...current,
-        sourceDataSourceId: value,
-        sourceDatabase: selected?.database || "",
-        sourceSchema: selected?.schema || "",
-        sourceTable: "",
+        source: {
+          ...current.source,
+          dataSourceId: value,
+          database: selected?.database || "",
+          schema: selected?.schema || "",
+          table: "",
+          keylessEnabled: false,
+          chunkKeyColumn: "",
+        },
+        sink: {
+          ...current.sink,
+          targetPrimaryKeys: [],
+          writeMode: usesChangelog ? "UPSERT" : current.sink.writeMode,
+        },
       }));
     } else {
-      const selected = dataSources.find((item) => item.id === value);
-      setTaskDirty(true);
-      setParametersDirty(true);
       setForm((current) => ({
         ...current,
-        targetDataSourceId: value,
-        targetDatabase: selected?.database || "",
-        targetSchema: selected?.schema || "",
-        targetTable: "",
+        sink: {
+          ...current.sink,
+          dataSourceId: value,
+          database: selected?.database || "",
+          schema: selected?.schema || "",
+          table: "",
+          targetPrimaryKeys: [],
+        },
       }));
     }
   };
@@ -315,18 +355,13 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
           <BasicSection draft={draft} form={form} patch={patch} />
 
-          <DataSourcesSection
+          <SourceSection
             id={id}
-            draft={draft}
-            form={form}
+            sourceType={draft.sourceType}
             sourceDataSources={sourceDataSources}
-            targetDataSources={targetDataSources}
             dataSourcesLoading={dataSourcesLoading}
             loadDataSources={loadDataSources}
-            requestConnectionChange={requestConnectionChange}
-          />
-
-          <SourceSection
+            onConnectionChange={(value) => requestConnectionChange("source", value)}
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -340,13 +375,34 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
-            patch={patch}
-            setTaskDirty={setTaskDirty}
-            setParametersDirty={setParametersDirty}
-            setForm={setForm}
+            patchSource={patchSource}
+            onSourceSchemaChange={(schema) =>
+              updateSourceSelection((current) => selectSourceSchema(current, schema, usesChangelog))
+            }
+            onSourceTableChange={(table) =>
+              updateSourceSelection((current) => selectSourceTable(current, table, usesChangelog))
+            }
+            onKeylessChange={(enabled) =>
+              updateSourceSelection((current) => setKeylessSource(current, enabled))
+            }
           />
 
+          <div
+            id="transform"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
+            <span className="text-sm font-medium">数据转换 Transform</span>
+            <span className="ml-3 text-xs text-[var(--yak-components-muted-text)]">
+              当前版本不支持转换
+            </span>
+          </div>
+
           <TargetSection
+            id={id}
+            targetDataSources={targetDataSources}
+            dataSourcesLoading={dataSourcesLoading}
+            loadDataSources={loadDataSources}
+            onConnectionChange={(value) => requestConnectionChange("target", value)}
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -364,11 +420,21 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             targetType={draft.targetType}
             published={published}
             saving={saving}
-            patch={patch}
+            patchSink={patchSink}
             setTaskDirty={setTaskDirty}
             setParametersDirty={setParametersDirty}
             setForm={setForm}
           />
+          <div
+            id="env"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
+            <div className="text-sm font-medium">运行配置 Env</div>
+            <div className="mt-2 flex flex-wrap gap-6 text-xs text-[var(--yak-components-muted-text)]">
+              <span>执行模式：{usesChangelog ? "STREAMING" : "BATCH"}</span>
+              <span>并行度 / Checkpoint：系统管理</span>
+            </div>
+          </div>
           {supportsScheduling ? (
             <EditorScheduleSection
               schedule={schedule}
