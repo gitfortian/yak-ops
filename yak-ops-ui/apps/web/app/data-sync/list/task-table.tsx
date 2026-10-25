@@ -11,12 +11,20 @@ import { canCancelTaskInstance, canManageTaskDefinition } from "@/service/data-s
 import { solutionSummary } from "../solution/presentation";
 import type { DataSourceRecord } from "@/service/datasource";
 import type { UserRecord } from "@/service/user";
-import type { DataSyncTaskRecord } from "@/service/data-sync";
+import type {
+  DataSyncTaskListRecord,
+  DataSyncTaskRecord,
+  DataSyncUnreadableTaskRecord,
+} from "@/service/data-sync";
 import type { TaskInstanceRecord } from "@/service/task-execution";
 import type { ScheduleSummary } from "@/service/schedule";
 import type { TaskCommand } from "./use-task-actions";
 
 const PAGE_SIZE = 20;
+
+function isUnreadable(record: DataSyncTaskListRecord): record is DataSyncUnreadableTaskRecord {
+  return "configurationError" in record;
+}
 
 interface Data {
   dataSourceMap: Map<string, DataSourceRecord>;
@@ -40,15 +48,16 @@ interface Actions {
 }
 
 interface Props {
-  records: DataSyncTaskRecord[];
+  records: DataSyncTaskListRecord[];
   pageNo: number;
   total: number;
   loading: boolean;
+  failed: boolean;
   data: Data;
   actions: Actions;
 }
 
-export function TaskTable({ records, pageNo, total, loading, data, actions }: Props) {
+export function TaskTable({ records, pageNo, total, loading, failed, data, actions }: Props) {
   const navigate = useNavigate();
   const {
     dataSourceMap,
@@ -63,7 +72,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
     actionKey,
   } = data;
 
-  const updateOperatorText = (record: DataSyncTaskRecord) => {
+  const updateOperatorText = (record: DataSyncTaskListRecord) => {
     if (!record.updateBy) return "-";
     if (record.updateBy === "system") return "SYSTEM";
     const user = updateUserMap.get(record.updateBy);
@@ -77,7 +86,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
   const publishTask = (task: DataSyncTaskRecord) => actions.command({ kind: "publish", task });
   const unpublishTask = (task: DataSyncTaskRecord) => actions.command({ kind: "unpublish", task });
 
-  const columns: TableColumns<DataSyncTaskRecord> = [
+  const columns: TableColumns<DataSyncTaskListRecord> = [
     {
       key: "name",
       title: "任务名称",
@@ -97,34 +106,49 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       key: "route",
       title: "同步链路",
       minWidth: 320,
-      render: (_value, record) =>
-        dataSourcesLoading &&
-        (!dataSourceMap.has(record.sourceDataSourceId) ||
-          !dataSourceMap.has(record.targetDataSourceId)) ? (
-          <Skeleton width="90%" height={16} />
-        ) : (
+      render: (_value, record) => {
+        if (isUnreadable(record)) {
+          return <span className="text-[var(--yak-components-muted-text)]">—</span>;
+        }
+        if (
+          dataSourcesLoading &&
+          (!dataSourceMap.has(record.sourceDataSourceId) ||
+            !dataSourceMap.has(record.targetDataSourceId))
+        ) {
+          return <Skeleton width="90%" height={16} />;
+        }
+        return (
           <TaskRoute
             source={dataSourceMap.get(record.sourceDataSourceId)}
             target={dataSourceMap.get(record.targetDataSourceId)}
           />
-        ),
+        );
+      },
     },
     {
       key: "solution",
       title: "同步方案",
       minWidth: 220,
-      render: (_value, record) => (
-        <span className="text-xs text-[var(--yak-components-tab-text-hover)]">
-          {solutionSummary(record.solutionType, record.steps)}
-        </span>
-      ),
+      render: (_value, record) =>
+        isUnreadable(record) ? (
+          <span
+            className="block truncate text-xs text-[var(--yak-components-danger-text)]"
+            title={record.configurationError}
+          >
+            配置异常：{record.configurationError}
+          </span>
+        ) : (
+          <span className="text-xs text-[var(--yak-components-tab-text-hover)]">
+            {solutionSummary(record.solutionType, record.steps)}
+          </span>
+        ),
     },
     {
       key: "schedule",
       title: "调度",
       width: 200,
       render: (_value, record) =>
-        record.syncType === "OFFLINE" ? (
+        !isUnreadable(record) && record.syncType === "OFFLINE" ? (
           <TaskScheduleCell
             schedule={schedules.records.get(record.id)}
             name={record.name}
@@ -150,6 +174,9 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       title: "执行概况",
       width: 180,
       render: (_value, record) => {
+        if (isUnreadable(record)) {
+          return <span className="text-[var(--yak-components-muted-text)]">—</span>;
+        }
         const instance = latestByTask.get(record.id);
         if (!instance) {
           if (instancesLoading) return <Skeleton width="100%" height={22} />;
@@ -211,49 +238,52 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       width: 280,
       fixed: "right",
       align: "center",
-      render: (_value, record) => (
-        <DataSyncTaskLifecycleActions
-          record={record}
-          activeInstance={activeByTask.get(record.id)}
-          instanceStateReady={instancesReady}
-          actionKey={actionKey}
-          runtimeAction={{
-            label: activeByTask.has(record.id)
-              ? "停止"
-              : record.syncType === "REALTIME"
-                ? "启动"
-                : "运行",
-            className: activeByTask.has(record.id)
-              ? "text-[var(--yak-components-danger-text)]"
-              : "text-[var(--yak-color-primary)]",
-            loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
-            disabled:
-              !instancesReady ||
-              (activeByTask.has(record.id)
-                ? !canCancelTaskInstance(activeByTask.get(record.id)!.status)
-                : record.status !== "PUBLISHED"),
-            onClick: () => {
-              const active = activeByTask.get(record.id);
-              if (active) stopTask(record, active);
-              else runTask(record);
-            },
-          }}
-          onPublish={(value) => publishTask(value)}
-          onUnpublish={(value) => unpublishTask(value)}
-          onEdit={(value) => {
-            if (canManageTask(value)) navigate(`/data-sync/${value.id}/edit`);
-          }}
-          onDetail={(value) => navigate(`/data-sync/${value.id}/detail`)}
-          onDelete={(value) => {
-            if (canManageTask(value)) actions.delete(value);
-          }}
-        />
-      ),
+      render: (_value, record) =>
+        isUnreadable(record) ? (
+          <span className="text-xs text-[var(--yak-components-muted-text)]">不可操作</span>
+        ) : (
+          <DataSyncTaskLifecycleActions
+            record={record}
+            activeInstance={activeByTask.get(record.id)}
+            instanceStateReady={instancesReady}
+            actionKey={actionKey}
+            runtimeAction={{
+              label: activeByTask.has(record.id)
+                ? "停止"
+                : record.syncType === "REALTIME"
+                  ? "启动"
+                  : "运行",
+              className: activeByTask.has(record.id)
+                ? "text-[var(--yak-components-danger-text)]"
+                : "text-[var(--yak-color-primary)]",
+              loading: actionKey === `${record.id}:run` || actionKey === `${record.id}:stop`,
+              disabled:
+                !instancesReady ||
+                (activeByTask.has(record.id)
+                  ? !canCancelTaskInstance(activeByTask.get(record.id)!.status)
+                  : record.status !== "PUBLISHED"),
+              onClick: () => {
+                const active = activeByTask.get(record.id);
+                if (active) stopTask(record, active);
+                else runTask(record);
+              },
+            }}
+            onPublish={(value) => publishTask(value)}
+            onUnpublish={(value) => unpublishTask(value)}
+            onEdit={(value) => {
+              if (canManageTask(value)) navigate(`/data-sync/${value.id}/edit`);
+            }}
+            onDetail={(value) => navigate(`/data-sync/${value.id}/detail`)}
+            onDelete={(value) => {
+              if (canManageTask(value)) actions.delete(value);
+            }}
+          />
+        ),
     },
   ];
 
   return (
-    <Table<DataSyncTaskRecord>
+    <Table<DataSyncTaskListRecord>
       className="min-h-full"
       columns={columns}
       dataSource={records}
@@ -263,7 +293,7 @@ export function TaskTable({ records, pageNo, total, loading, data, actions }: Pr
       size="medium"
       rowHeight={64}
       scroll={{ x: 1700 }}
-      emptyText="还没有同步任务"
+      emptyText={failed ? "任务列表加载失败" : "还没有同步任务"}
       pagination={
         total > 0
           ? {

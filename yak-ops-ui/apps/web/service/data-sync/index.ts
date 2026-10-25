@@ -18,6 +18,7 @@ import {
   buildSyncParameters,
   createDefinitionRequest,
   definitionPageRequest,
+  projectSyncTaskPage,
   toSyncTaskRecord,
   updateDefinitionRequest,
 } from "./definition";
@@ -69,7 +70,7 @@ export const listDataSyncTasks = async (
     definitionPageRequest(params),
     { signal },
   );
-  return { ...page, bizData: page.bizData.map(toSyncTaskRecord) };
+  return projectSyncTaskPage(page);
 };
 
 export const getDataSyncTask = async (
