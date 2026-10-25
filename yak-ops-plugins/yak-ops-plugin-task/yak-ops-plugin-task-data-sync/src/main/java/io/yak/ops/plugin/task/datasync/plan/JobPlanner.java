@@ -224,12 +224,6 @@ public final class JobPlanner {
                     + encodePart(Long.toString(targetInfo.revision()))
                     + encodeTable(targetTable)
                     + encodeSchema(expected);
-            // Pin the observed target as well as the desired result. A different valid ALTER
-            // plan must invalidate admission even when the desired schema is unchanged.
-            binding += encodePart("observedTarget")
-                    + (actual == null
-                            ? encodePart(null)
-                            : encodeSchema(actual.schema()) + encodeProperties(actual.columnProperties()));
             if (mapping.targetPrimaryKeys() != null)
                 binding += encodePart("targetPrimaryKeys") + encodePart(String.join(",", mapping.targetPrimaryKeys()));
             if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
