@@ -22,8 +22,16 @@ names, and links when translation would change their meaning. This rule applies
 to proposals and later revisions of accepted YOIPs.
 
 Use this only for major design or public interface changes. The permanent YOIP
-lives at docs/yoips/YOIP-XXXX-short-title.md; discussions and the recorded
+lives at docs/yoips/YOIP-N-short-title.md; discussion and the recorded
 decision live in its proposal PR. Do not turn it into an implementation diary.
+Use the exact six sections below and replace all template guidance with real
+design-specific content. Register the proposal in docs/yoips/README.md.
+Historical IDs 7-19 are reserved and must not be reused.
+
+Open the proposal-only PR in Discussion with Decision: Pending; then replace
+the Discussion placeholder with its PR URL. An explicit maintainer [VOTE]
+and a permalink to that same PR's decision comment are required before
+marking Accepted. CI checks links, not maintainer authority or design merit.
 -->
 
 ## Motivation
