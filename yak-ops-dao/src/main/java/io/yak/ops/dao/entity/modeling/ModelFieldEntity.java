@@ -43,6 +43,8 @@ public class ModelFieldEntity extends BaseEntity {
     private String lookupId;
     /** Bound measurement unit annotation; never changes code, name or type. */
     private String measureUnitId;
+    /** Imported derived metric; advisory, never overwrites the field's own attributes. */
+    private String metricId;
     /** Optional business description. */
     private String description;
     /** Joined standard code for display; null on write paths or when unbound. */
@@ -51,4 +53,8 @@ public class ModelFieldEntity extends BaseEntity {
     private String lookupEnCode;
     /** Joined unit abbreviation for display; null on write paths or when unbound. */
     private String measureUnitEnCode;
+    /** Joined metric code for display; null on write paths or when not imported. */
+    private String metricEnCode;
+    /** Joined metric name for display; null on write paths or when not imported. */
+    private String metricCnName;
 }

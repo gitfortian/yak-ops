@@ -6,6 +6,7 @@ import { UserManagementPage, WorkspaceManagementPage } from "@/app/management";
 import { DataSyncPage } from "@/app/data-sync";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
+import MetricsPage from "@/app/data-modeling/metrics";
 import DimensionModelingPage from "@/app/data-modeling/dimension-modeling";
 import ReverseModelingPage from "@/app/data-modeling/dimension-modeling/reverse";
 import LogicalModelEditorPage from "@/app/data-modeling/logical-models/editor";
@@ -37,6 +38,7 @@ const DEFAULT_AUTHENTICATED_PATH = "/data-source";
 const AUTHENTICATED_PATHS = new Set([
   "/data-modeling/warehouse-planning",
   "/data-modeling/data-standards",
+  "/data-modeling/metrics",
   "/data-modeling/dimension-modeling",
   "/data-modeling/dimension-modeling/reverse",
   "/data-modeling/dimensions",
@@ -137,6 +139,7 @@ export default function AppRouter() {
         >
           <Route path="/data-modeling/warehouse-planning" element={<WarehousePlanningPage />} />
           <Route path="/data-modeling/data-standards" element={<DataStandardsPage />} />
+          <Route path="/data-modeling/metrics" element={<MetricsPage />} />
           <Route path="/data-modeling/dimension-modeling" element={<DimensionModelingPage />} />
           <Route
             path="/data-modeling/dimension-modeling/reverse"

@@ -25,6 +25,7 @@ import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardLookupRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardMeasureUnitRepository;
 import io.yak.ops.workspace.WorkspaceService;
@@ -73,6 +74,9 @@ public class ModelServiceImpl implements ModelService {
 
     @Resource
     private StandardMeasureUnitRepository units;
+
+    @Resource
+    private MetricDerivedRepository derivedMetrics;
 
     /** Read-only here: the model surface shows the newest publication status but never writes one. */
     @Resource
@@ -377,6 +381,8 @@ public class ModelServiceImpl implements ModelService {
      * from the standard it claims to follow. A lookup table supplies code and Chinese name only when
      * no standard is bound, and a unit never overrides anything. The aggregate is checked after that
      * inheritance, so a standard that resolves to {@code STRING} cannot carry {@code SUM} either.
+     * A derived-metric link records provenance only: it is accepted on measure kinds, must resolve
+     * inside the Workspace, and never overwrites the field's own attributes.
      */
     private List<ModelFieldEntity> validateFields(
             String workspaceId, String actor, String modelId, ModelType type, List<ModelFieldInputDTO> input) {
@@ -396,6 +402,7 @@ public class ModelServiceImpl implements ModelService {
             var standardId = trim(field.getStandardId());
             var lookupId = trim(field.getLookupId());
             var unitId = trim(field.getMeasureUnitId());
+            var metricId = trim(field.getMetricId());
             if (standardId != null) {
                 var inherited = models.standard(workspaceId, standardId);
                 if (inherited == null) throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
@@ -412,6 +419,13 @@ public class ModelServiceImpl implements ModelService {
             }
             if (unitId != null && units.find(workspaceId, unitId).isEmpty())
                 throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+            // The metric link is advisory: it records where the field came from, but the field's
+            // own attributes stay authoritative after import. Only measure kinds carry one.
+            if (metricId != null) {
+                if (!type.allowsAggregate()) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
+                if (derivedMetrics.row(workspaceId, metricId).isEmpty())
+                    throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+            }
             if (enCode == null || !FIELD_CODE.matcher(enCode).matches() || !codes.add(enCode))
                 throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
             if (dataType == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
@@ -445,6 +459,7 @@ public class ModelServiceImpl implements ModelService {
             row.setStandardId(standardId);
             row.setLookupId(lookupId);
             row.setMeasureUnitId(unitId);
+            row.setMetricId(metricId);
             row.setDescription(optionalText(field.getDescription(), 500, DimensionModelingErrorCode.INVALID_FIELD));
             rows.add(row);
         }
@@ -567,6 +582,9 @@ public class ModelServiceImpl implements ModelService {
                 row.getLookupEnCode(),
                 row.getMeasureUnitId(),
                 row.getMeasureUnitEnCode(),
+                row.getMetricId(),
+                row.getMetricEnCode(),
+                row.getMetricCnName(),
                 row.getDescription());
     }
 }
