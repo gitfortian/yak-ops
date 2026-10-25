@@ -72,9 +72,11 @@ The Task API exposes:
 The submission response contains the Instance ID, pinned Definition version, current status
 and replay indicator. A response confirms admission, not physical Job startup.
 
-## Execution and Persistence
+## Proposed Changes
 
-### Admission
+### Execution and Persistence
+
+#### Admission
 
 The Task plugin parses and validates its parameters and prepares a read-only
 `TaskAdmissionPlan`. The plan declares the effective non-secret resource binding and
@@ -86,7 +88,7 @@ The database enforces uniqueness of `(workspace_id, trigger_type, request_id)` a
 returns the original Instance and cannot dispatch a second Job. Conflicting input reusing
 the same request identity is rejected. Concurrent target writers are rejected before start.
 
-### Dispatch and observation
+#### Dispatch and observation
 
 The embedded dispatcher holds an operating-system process lock and a database execution
 owner identity. It atomically claims one SUBMITTED Instance, changes it to LAUNCHING, and
@@ -107,7 +109,7 @@ The platform stores the authoritative terminal status and releases claims in the
 transaction. Stale callbacks cannot update terminal Instances or release another launch's
 resources. The engine's structured failure category is persisted without sensitive details.
 
-### Restart and reconciliation
+#### Restart and reconciliation
 
 A pending SUBMITTED Instance can be claimed after process restart. An Instance already in
 LAUNCHING, RUNNING or CANCELLING belongs to its recorded owner incarnation; startup
@@ -120,7 +122,7 @@ Ownership checks guard against competing executors. Confirmed terminalization an
 release require evidence that prior external writers are no longer active. Job resubmission
 across process restarts is outside this execution contract.
 
-## YakFlow Runtime Responsibility
+### YakFlow Runtime Responsibility
 
 One Task Instance owns one YakFlow Job ID. YakFlow controls JobGraph, ExecutionGraph,
 subtask deployment, restart and Checkpoint. Runtime restart attempts remain inside the
@@ -136,27 +138,7 @@ The Task plugin produces a YakFlow Pipeline using trusted injected connector res
 The Task platform uses `TaskHandle` and remains independent of ExecutionGraph internals.
 Core and Runtime do not depend on product DAOs, Controllers or business persistence.
 
-## Migration and Acceptance
-
-The forward-only Task Instance migration adds launch ownership and Job reference fields to
-`yak_ops_task_instance`. It transfers the existing single-submission ownership, Job ID and
-observed timestamps from the execution submission records, then keeps Instance as the
-authoritative lifecycle table. Published migrations retain their original contents.
-
-Acceptance covers:
-
-1. Equivalent request replay returns the same Instance, including after Definition changes.
-2. Two concurrent dispatchers cannot launch the same Instance twice.
-3. Cancellation before claiming prevents physical execution and releases resource claims.
-4. Cancellation during startup preserves CANCELLING until physical termination.
-5. Terminal callbacks are token-guarded and release claims only after confirmed completion.
-6. Embedded-process interruption retains protection for uncertain external writes.
-7. JDBC and CDC pipelines execute through YakFlow with the correct pinned configuration.
-8. Runtime internal restart and checkpoint recovery do not create another business Instance.
-9. Independent Instances use distinct checkpoint directories and cannot steal target claims.
-10. Public endpoints and UI expose Instance state and the engine Job ID directly.
-
-## Task Instance execution logs
+### Task Instance Execution Logs
 
 Every admitted Task Instance owns one stable execution log path. The path is relative to the
 application-controlled Task log root and is persisted with the Instance, independently of its
@@ -185,8 +167,7 @@ completed Tasks retain their files according to the configured local storage pol
 Task logs are per-Instance diagnostic information. The platform does not introduce a Task
 Attempt table, a remote logging RPC, or a second Runtime recovery policy for log delivery.
 
-
-## Task execution diagnostics
+### Task Execution Diagnostics
 
 Each Task Definition has a `debug` boolean, defaulting to `false`. A Task Instance
 captures this value at admission. Changing the Definition's diagnostics mode updates
@@ -207,3 +188,27 @@ non-empty event fetches. INFO events report successful Source emissions and
 committed JDBC Sink records per physical task attempt, with periodic window
 rates and terminal summaries. These diagnostic counters do not imply
 exactly-once delivery or a cross-attempt business total.
+
+## Compatibility, Deprecation, and Migration Plan
+
+The forward-only Task Instance migration adds launch ownership and Job reference fields to
+`yak_ops_task_instance`. It transfers the existing single-submission ownership, Job ID and
+observed timestamps from the execution submission records, then keeps Instance as the
+authoritative lifecycle table. Published migrations retain their original contents.
+
+## Test Plan
+
+1. Equivalent request replay returns the same Instance, including after Definition changes.
+2. Two concurrent dispatchers cannot launch the same Instance twice.
+3. Cancellation before claiming prevents physical execution and releases resource claims.
+4. Cancellation during startup preserves CANCELLING until physical termination.
+5. Terminal callbacks are token-guarded and release claims only after confirmed completion.
+6. Embedded-process interruption retains protection for uncertain external writes.
+7. JDBC and CDC pipelines execute through YakFlow with the correct pinned configuration.
+8. Runtime internal restart and checkpoint recovery do not create another business Instance.
+9. Independent Instances use distinct checkpoint directories and cannot steal target claims.
+10. Public endpoints and UI expose Instance state and the engine Job ID directly.
+
+## Rejected Alternatives
+
+The accepted proposal does not record rejected alternatives in this section. Historical design discussion is retained in [PR #1588](https://github.com/weifuwan/yak-ops/pull/1588); this document-only correction does not invent retrospective decisions.
