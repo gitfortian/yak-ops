@@ -35,9 +35,9 @@ export function DataSyncPage() {
   const filters = useTaskListFilters();
   const page = useTaskPage(scope, filters);
   const sources = useListDataSources(scope);
-  const users = useListUpdateUsers(scope, page.records);
-  const schedules = useListSchedules(scope, page.records);
-  const instances = useListInstances(scope, page.records, page.safeToAct);
+  const users = useListUpdateUsers(scope, page.validRecords);
+  const schedules = useListSchedules(scope, page.validRecords);
+  const instances = useListInstances(scope, page.validRecords, page.safeToAct);
   const commands = useTaskListActions(scope);
 
   const [createOpen, setCreateOpen] = useState(
@@ -91,12 +91,18 @@ export function DataSyncPage() {
                 </Button>
               </div>
             ) : null}
+            {page.invalidCount > 0 ? (
+              <div className="mt-3 text-sm text-[var(--yak-components-danger-text)]">
+                {page.invalidCount} 个任务配置无法解析，请查看对应行
+              </div>
+            ) : null}
             <div className="mt-4 min-h-0 min-w-0 flex-1">
               <TaskTable
                 records={page.records}
                 pageNo={filters.pageNo}
                 total={page.total}
                 loading={page.loading}
+                failed={page.error}
                 data={{
                   dataSourceMap: sources.dataSourceMap,
                   dataSourcesLoading: sources.loading,
@@ -134,7 +140,7 @@ export function DataSyncPage() {
         <ScheduleDialog
           targetId={scheduleTask.id}
           published={
-            (page.records.find((task) => task.id === scheduleTask.id) || scheduleTask).status ===
+            (page.validRecords.find((task) => task.id === scheduleTask.id) || scheduleTask).status ===
             "PUBLISHED"
           }
           open
