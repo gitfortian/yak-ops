@@ -101,7 +101,7 @@ New error codes, each in the enum that already owns that surface — `StandardEr
 | `LayerErrorCode.INVALID_NAMING_RULE` (19208) | Enabling a rule while models of that layer do not conform, and the request does not acknowledge them. |
 | `DimensionModelingErrorCode.NAMING_RULE_VIOLATION` (19513) | A model name does not match the enabled layer rule. The fixed message is a fallback: the dialog composes the expected suffix before submitting, because the shared error type carries no per-request detail. |
 
-Duplicate codes continue to use `DUPLICATE_CODE` and revision conflicts `REVISION_CONFLICT`, both already in `StandardErrorCode`. Refusal to delete a record that something references uses the existing `REFERENCED` (19108); refusal to delete a container that still holds children keeps `HAS_DEPENDENCIES` (19103). A rejected name under an enabled rule uses `NAMING_RULE_VIOLATION`; `INVALID_TABLE_NAME` keeps its current meaning of a malformed prefix or an over-long name.
+Duplicate codes continue to use `DUPLICATE_CODE` and revision conflicts `REVISION_CONFLICT`, both already in `StandardErrorCode`. Refusal to delete a record that something references uses the existing `REFERENCED` (19108); refusal to delete a container that still holds children keeps `HAS_DEPENDENCIES` (19103). A rejected name under an enabled rule uses `NAMING_RULE_VIOLATION`; `INVALID_TABLE_NAME` keeps its current meaning of a malformed suffix or an over-long name, and it stays the error for those two cases even when a rule is on, so callers can still tell a bad shape from a bad word.
 
 ### Persisted formats
 
@@ -188,6 +188,8 @@ Existing rows are not rewritten. A field that was bound before this release keep
 
 `StandardReferencesVO` gains an `items` list of `{ kind, id, name, path }` and reports `AVAILABLE` instead of `NOT_ENABLED`. Each kind answers from the tables that point at it: model fields for standards and units, field standards plus model fields for lookup tables, and models for naming entries.
 
+The two existing components stay and are derived from `items`: `count` is its length and `referenced` says whether it is non-empty. Keeping them leaves the response a superset of what the page already reads, and deriving them means the three can never disagree.
+
 `path` is the locator an operator can act on — `dwd_trade_order.order_amt` for a model field, the model name for a naming entry — and each item carries the id needed to open the owning model, so the delete dialog can answer "where is this used" instead of only refusing.
 
 The query is on demand, not embedded in list responses. A page of fifty standards would otherwise need fifty reference aggregates, and the panel is opened for one record at a time.
@@ -205,7 +207,7 @@ All four kinds use `(workspace_id, en_code)`. For `yak_ops_standard_field` this 
 - The unique-key replacement on `yak_ops_standard_field` is a relaxation and cannot fail on existing data. It is the only change in this proposal that removes a constraint.
 - Existing field-standard REST payloads stay valid: the four new attributes are optional, and `lengthPrecision` is unchanged on the wire. Existing frontend callers keep working without modification.
 - Binding behavior changes for newly bound fields only. Previously bound fields keep their stored values; nothing is rewritten by the migration.
-- `StandardReferencesVO` gains a field and changes its `availability` value from `NOT_ENABLED` to `AVAILABLE`. Both changes are additive to the JSON shape, and the only consumer is the data-standard page shipped with this release.
+- `StandardReferencesVO` gains an `items` component and starts answering `AVAILABLE` instead of `NOT_ENABLED`. The wire shape only grows, and the only consumer is the data-standard page shipped with this release: its discriminated union gains `items` on both branches, `null` while unavailable, so the compiler forces the panel to handle the state it now receives.
 - Enabling a layer naming rule is opt-in per layer and defaults to disabled, so no existing model becomes invalid on upgrade.
 - No downgrade path is provided, consistent with previous releases; restoring the pre-upgrade backup is the supported rollback.
 - Nothing is deprecated in this proposal.
