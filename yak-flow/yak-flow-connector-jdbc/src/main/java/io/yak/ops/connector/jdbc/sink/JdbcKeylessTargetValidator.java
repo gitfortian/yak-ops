@@ -77,8 +77,8 @@ public final class JdbcKeylessTargetValidator {
                 != 0) {
             throw new SQLException("MySQL RETRACT target cannot be referenced by foreign keys");
         }
-        try (PreparedStatement query = connection.prepareStatement(
-                "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA "
+        try (PreparedStatement query =
+                connection.prepareStatement("SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA "
                         + "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? "
                         + "ORDER BY ORDINAL_POSITION")) {
             query.setString(1, catalog);
@@ -90,8 +90,10 @@ public final class JdbcKeylessTargetValidator {
                     }
                     String nativeType = rows.getString(2).toLowerCase(Locale.ROOT);
                     String extra = rows.getString(4).toUpperCase(Locale.ROOT);
-                    if (nativeType.contains("unsigned") || nativeType.contains("zerofill")
-                            || extra.contains("VIRTUAL GENERATED") || extra.contains("STORED GENERATED")
+                    if (nativeType.contains("unsigned")
+                            || nativeType.contains("zerofill")
+                            || extra.contains("VIRTUAL GENERATED")
+                            || extra.contains("STORED GENERATED")
                             || extra.contains("AUTO_INCREMENT")
                             || column.nullable() != "YES".equalsIgnoreCase(rows.getString(3))
                             || !hasMatchingType(column, nativeType)) {
@@ -112,9 +114,10 @@ public final class JdbcKeylessTargetValidator {
             case SMALLINT -> base.equals("smallint");
             case INTEGER -> base.equals("int") || base.equals("integer");
             case BIGINT -> base.equals("bigint");
-            case DECIMAL -> (base.equals("decimal") || base.equals("numeric"))
-                    && nativeType.equals(base + "(" + LogicalTypes.decimalPrecision(column.dataType()) + ","
-                            + LogicalTypes.decimalScale(column.dataType()) + ")");
+            case DECIMAL ->
+                (base.equals("decimal") || base.equals("numeric"))
+                        && nativeType.equals(base + "(" + LogicalTypes.decimalPrecision(column.dataType()) + ","
+                                + LogicalTypes.decimalScale(column.dataType()) + ")");
             case BINARY -> nativeType.equals("binary(" + column.length() + ")");
             case VARBINARY -> nativeType.equals("varbinary(" + column.length() + ")");
             default -> false;
