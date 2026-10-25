@@ -2,7 +2,6 @@ package io.yak.ops.plugin.task.datasync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,7 +58,7 @@ class DataSyncPlannerAcceptanceTest {
     }
 
     @Test
-    void schemaReconciliationPinsObservedTargetNotOnlyDesiredSchema() {
+    void schemaPreparationRetainsAdmissionWhileTargetTransitionsToExpectedState() {
         var resources = new Metadata();
         resources.targetSchema = PARTIAL;
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
@@ -67,11 +66,11 @@ class DataSyncPlannerAcceptanceTest {
         var before = planner.plan(parameters, IDENTITY);
         assertTrue(before.tables().getFirst().schemaPlan().requiresDdl());
 
-        // Same datasource revision and desired output, but an independent operator applied DDL.
+        // The task's own DDL changes the physical target; admission must stay stable.
         resources.targetSchema = FULL;
         var after = planner.plan(parameters, IDENTITY);
         assertFalse(after.tables().getFirst().schemaPlan().requiresDdl());
-        assertNotEquals(before.admissionPlan().resourceRevision(), after.admissionPlan().resourceRevision());
+        assertEquals(before.admissionPlan(), after.admissionPlan());
         assertEquals(before.admissionPlan().exclusiveResources(), after.admissionPlan().exclusiveResources());
         assertEquals(0, resources.connectionReads);
     }
