@@ -15,17 +15,13 @@ import io.yak.ops.business.modeling.metric.impl.MetricCompositeServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricDerivedServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricModifierServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricTimePeriodServiceImpl;
-import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricCompositeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedUpdateDTO;
-import io.yak.ops.common.bean.dto.modeling.metric.MetricModifierInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodInputDTO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
-import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricReferenceKind;
-import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
@@ -173,7 +169,6 @@ class MetricDatabaseIT {
                 () -> derivedService.create("ws", "actor", derived("atomic", "period", List.of("muying"))));
         assertEquals(MetricErrorCode.DUPLICATE_CODE, duplicate.getErrorCode());
 
-        modifiersService.create("ws", "actor", modifier("vip"));
         var update = new MetricDerivedUpdateDTO();
         update.setAtomicMetricId("atomic");
         update.setPeriodId("period");
@@ -205,14 +200,15 @@ class MetricDatabaseIT {
         modifiersService.delete("ws", "actor", "muying", 1);
         atomicsService.delete("ws", "actor", "atomic", 1);
         periodsService.delete("ws", "actor", "period", 1);
-        assertEquals(0, count("metric_modifier"));
+        // The seeded vip modifier stays: this case only removed muying.
+        assertEquals(1, count("metric_modifier"));
     }
 
     @Test
     void answersTheReferencePanelAndRestrictsTheDerivedMetricWhileReferenced() {
         seedMetricParts("ws");
         var derived = derivedService.create("ws", "actor", derived("atomic", "period", List.of()));
-        var composite = compositesService.create("ws", "actor", composite("growth", "pay_amt * 100"));
+        var composite = compositesService.create("ws", "actor", composite("growth", "d7_pay_amt * 100"));
 
         var panel = derivedService.references("ws", "actor", derived.id());
         assertEquals(1L, panel.count());
@@ -291,24 +287,6 @@ class MetricDatabaseIT {
         return input;
     }
 
-    private static MetricModifierInputDTO modifier(String enCode) {
-        var input = new MetricModifierInputDTO();
-        input.setDomainId("domain");
-        input.setEnCode(enCode);
-        input.setCnName("muying".equals(enCode) ? "母婴" : "会员");
-        return input;
-    }
-
-    private static MetricAtomicInputDTO atomic() {
-        var input = new MetricAtomicInputDTO();
-        input.setProcessId("process");
-        input.setEnCode("pay_amt");
-        input.setCnName("支付金额");
-        input.setDataType(DataType.DECIMAL);
-        input.setAggregateType(AggregateType.SUM);
-        return input;
-    }
-
     private static MetricDerivedInputDTO derived(String atomicId, String periodId, List<String> modifierIds) {
         var input = new MetricDerivedInputDTO();
         input.setAtomicMetricId(atomicId);
@@ -326,9 +304,21 @@ class MetricDatabaseIT {
     }
 
     private void seedMetricParts(String workspace) {
-        periodsService.create(workspace, "actor", period("d7", "最近7天"));
-        modifiersService.create(workspace, "actor", modifier("muying"));
-        atomicsService.create(workspace, "actor", atomic());
+        // The services mint immutable snowflake ids, while the fixtures address the parts by the
+        // stable ids below, so the rows are seeded directly instead of through the services.
+        jdbc.update("INSERT INTO yak_ops_modeling_metric_time_period(id,workspace_id,en_code,cn_name,"
+                + "create_time,update_time,create_by,update_by) "
+                + "VALUES('period',?,?,'最近7天',NOW(3),NOW(3),'it','it')", workspace, "d7");
+        jdbc.update("INSERT INTO yak_ops_modeling_metric_modifier(id,workspace_id,domain_id,en_code,cn_name,"
+                + "create_time,update_time,create_by,update_by) "
+                + "VALUES('muying',?,'domain','muying','母婴',NOW(3),NOW(3),'it','it')", workspace);
+        jdbc.update("INSERT INTO yak_ops_modeling_metric_modifier(id,workspace_id,domain_id,en_code,cn_name,"
+                + "create_time,update_time,create_by,update_by) "
+                + "VALUES('vip',?,'domain','vip','会员',NOW(3),NOW(3),'it','it')", workspace);
+        jdbc.update("INSERT INTO yak_ops_modeling_metric_atomic(id,workspace_id,process_id,en_code,cn_name,"
+                + "data_type,aggregate_type,owner_id,create_time,update_time,create_by,update_by) "
+                + "VALUES('atomic',?,'process','pay_amt','支付金额','DECIMAL','SUM','it',NOW(3),NOW(3),'it','it')",
+                workspace);
     }
 
     private static void seedWorkspace(String id) {
