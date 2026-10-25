@@ -410,7 +410,11 @@ public class ModelServiceImpl implements ModelService {
                 cnName = inherited.cnName();
                 dataType = inherited.dataType();
                 length = inherited.lengthPrecision();
-                isNotNull = inherited.isNotNull();
+                // Nullability is not inherited: the standard only seeds the flag on the client,
+                // because the same standard is cited by ODS, DWD and DIM models whose data carries
+                // different constraints. A submitted value wins; only an absent one takes the
+                // standard as its default.
+                if (field.getIsNotNull() == null) isNotNull = inherited.isNotNull();
             } else if (lookupId != null) {
                 var lookup = lookups.find(workspaceId, lookupId)
                         .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));

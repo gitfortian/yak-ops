@@ -128,7 +128,8 @@ public class StandardMeasureUnitServiceImpl implements StandardMeasureUnitServic
         StandardCatalog.validCode(input.getEnCode());
         StandardCatalog.validName(input.getEnName());
         StandardCatalog.validName(input.getCnName());
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw StandardCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw StandardCatalog.invalid();
     }
 
     private static void copy(StandardMeasureUnitEntity row, StandardMeasureUnitInputDTO input) {

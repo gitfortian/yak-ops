@@ -18,12 +18,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import {
   checkModelName,
+  classifyModelFailure,
   getDimensions,
   saveModel,
 } from "@/service/data-modeling/dimension-modeling";
 import type {
   ConceptDimension,
   DimensionScope,
+  ModelFailure,
   ModelInput,
 } from "@/service/data-modeling/dimension-modeling/types";
 import type { DataSourceCatalogTable } from "@/service/datasource";
@@ -42,6 +44,27 @@ import { useModelOptions } from "../../logical-models/state";
 import { datamartsOf, domainsOf, processesOf } from "../../shared/planning-tree";
 
 const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
+
+/**
+ * Turns a classified save failure into one sentence the page can show.
+ *
+ * <p>The classifier already separates a naming-rule violation from a version conflict and a field
+ * rejection; collapsing all of them into one generic sentence would hide the only actionable part.
+ */
+function describeModelFailure(failure: ModelFailure): string {
+  switch (failure.kind) {
+    case "field":
+      return failure.message;
+    case "conflict":
+      return "数据已变更，请刷新页面后重试";
+    case "missing":
+      return "所选归属对象已不存在，请重新选择";
+    case "unknown-type":
+      return "模型类型无法识别，请检查分层设置";
+    default:
+      return failure.message;
+  }
+}
 
 const pickerSelect = (
   label: string,
@@ -100,7 +123,10 @@ export default function ReverseModelingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!layerId && options.layers.length > 0) setLayerId(options.layers[0]?.id ?? "");
+    if (layerId) return;
+    // A layer that is not enabled has no bound datasource, so the server rejects it with 19509.
+    const selectable = options.layers.find((layer) => layer.enabled);
+    if (selectable) setLayerId(selectable.id);
   }, [layerId, options.layers]);
 
   useEffect(() => {
@@ -201,8 +227,8 @@ export default function ReverseModelingPage() {
       const saved = await saveModel(null, input);
       toast.success("创建成功");
       navigate(`/data-modeling/logical-models/${saved.id}`);
-    } catch {
-      setError("保存失败，请检查归属与字段后重试");
+    } catch (error) {
+      setError(describeModelFailure(classifyModelFailure(error)));
     } finally {
       setSaving(false);
     }
@@ -388,7 +414,9 @@ export default function ReverseModelingPage() {
               "数仓分层",
               layerId,
               "请选择数仓分层",
-              options.layers.map((layer) => ({ value: layer.id, label: layer.cnName })),
+              options.layers
+                .filter((layer) => layer.enabled)
+                .map((layer) => ({ value: layer.id, label: layer.cnName })),
               changeLayer,
               options.status !== "ready",
             )}

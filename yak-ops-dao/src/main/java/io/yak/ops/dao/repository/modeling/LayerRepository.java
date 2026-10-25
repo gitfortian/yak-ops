@@ -27,6 +27,13 @@ public interface LayerRepository {
      */
     long builtinCount(String workspaceId);
     /**
+     * Counts the logical models still attached to one layer.
+     * @param workspaceId authorized Workspace
+     * @param layerId layer identity
+     * @return number of citing models
+     */
+    long modelsInLayer(String workspaceId, String layerId);
+    /**
      * Serializes preset seeding for one Workspace inside the caller transaction.
      *
      * <p>Concurrent first readers otherwise insert the same five rows through an

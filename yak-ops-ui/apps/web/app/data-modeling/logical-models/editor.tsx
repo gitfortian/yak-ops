@@ -348,8 +348,13 @@ export default function LogicalModelEditorPage() {
     const timer = window.setTimeout(() => {
       setNameState("checking");
       void checkModelName(form.layerId, suffix, id, controller.signal)
-        .then((available) => setNameState(available ? "available" : "taken"))
-        .catch(() => setNameState("error"));
+        .then((available) => {
+          // A late answer for an earlier suffix must not overwrite the state of the current one.
+          if (!controller.signal.aborted) setNameState(available ? "available" : "taken");
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setNameState("error");
+        });
     }, 350);
     return () => {
       controller.abort();

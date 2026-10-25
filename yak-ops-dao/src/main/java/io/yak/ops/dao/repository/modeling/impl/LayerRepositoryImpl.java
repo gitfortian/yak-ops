@@ -33,6 +33,11 @@ public class LayerRepositoryImpl implements LayerRepository {
     }
 
     @Override
+    public long modelsInLayer(String workspaceId, String layerId) {
+        return mapper.modelsInLayer(workspaceId, layerId);
+    }
+
+    @Override
     public void lockWorkspace(String workspaceId) {
         mapper.lockWorkspace(workspaceId);
     }

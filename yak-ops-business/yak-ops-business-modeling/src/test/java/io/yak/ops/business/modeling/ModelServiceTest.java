@@ -268,7 +268,7 @@ class ModelServiceTest {
     }
 
     @Test
-    void inheritsNullabilityFromTheBoundStandardInsteadOfTheSubmission() {
+    void keepsTheSubmittedNullabilityInsteadOfTheStandardOne() {
         detailGraph();
         when(models.standard("ws", "std"))
                 .thenReturn(new StandardInheritance("order_id", "订单ID", DataType.BIGINT, null, false));
@@ -283,8 +283,26 @@ class ModelServiceTest {
         service.create("ws", "actor", detailInput("order_detail", List.of(field)));
 
         verify(models).addField(captor.capture());
-        assertFalse(Boolean.TRUE.equals(captor.getValue().getIsNotNull()));
+        assertTrue(Boolean.TRUE.equals(captor.getValue().getIsNotNull()));
         assertFalse(Boolean.TRUE.equals(captor.getValue().getIsPrimaryKey()));
+    }
+
+    @Test
+    void fallsBackToTheStandardNullabilityWhenTheFieldOmitsIt() {
+        detailGraph();
+        when(models.standard("ws", "std"))
+                .thenReturn(new StandardInheritance("order_id", "订单ID", DataType.BIGINT, null, true));
+        var stored = storedModel("dwd_order_detail");
+        when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
+        when(models.fields(anyString())).thenReturn(List.of());
+        var field = field("order_id", null);
+        field.setStandardId("std");
+        var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
+
+        service.create("ws", "actor", detailInput("order_detail", List.of(field)));
+
+        verify(models).addField(captor.capture());
+        assertTrue(Boolean.TRUE.equals(captor.getValue().getIsNotNull()));
     }
 
     @Test

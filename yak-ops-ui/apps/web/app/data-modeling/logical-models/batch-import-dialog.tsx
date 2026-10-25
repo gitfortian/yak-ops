@@ -89,7 +89,9 @@ export default function BatchImportDialog({ existing, onClose, onImport }: Props
             disabled={parsed.rows.length === 0}
             onClick={() => onImport(parsed.rows)}
           >
-            导入 {parsed.rows.length} 行
+            {parsed.errors.length > 0
+              ? `仅导入可解析的 ${parsed.rows.length} 行`
+              : `导入 ${parsed.rows.length} 行`}
           </Button>
         </div>
       </DialogContent>

@@ -38,7 +38,7 @@ import {
 import { FIELD_CLASS, InputField, SelectField } from "../shared/form-fields";
 import MetricToolbar from "./metric-toolbar";
 import { processesOf } from "./planning-options";
-import { useMetricOptions, useMetricPage, useRetry } from "./page-state";
+import { useClampPage, useMetricOptions, useMetricPage, useRetry } from "./page-state";
 
 /** Mirrors the server's AggregateType.supports: SUM and AVG need arithmetic types. */
 function aggregateSupports(aggregateType: AggregateType, dataType: DataType): boolean {
@@ -73,7 +73,7 @@ function AtomicDialog(props: {
     dataType: edited?.dataType ?? "DECIMAL",
     aggregateType: edited?.aggregateType ?? "SUM",
     measureUnitId: edited?.measureUnitId ?? null,
-    ownerId: null,
+    ownerId: edited?.ownerId ?? null,
     description: edited?.description ?? null,
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -322,6 +322,7 @@ export default function AtomicSection(props: Props) {
   const list = useMetricPage(key, props.version, (signal) =>
     getAtomics({ pageNo, pageSize, keyword }, signal),
   );
+  useClampPage(list.page, list.loading, pageNo, setPageNo);
   const columns: TableColumns<MetricAtomic> = [
     { title: "中文名称", dataIndex: "cnName", width: 160, ellipsis: true },
     { title: "英文编码", dataIndex: "enCode", width: 160, ellipsis: true },

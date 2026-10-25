@@ -3,10 +3,13 @@ package io.yak.ops.business.modeling.metric;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.modeling.metric.MetricDerivedEntity;
+import io.yak.ops.dao.repository.modeling.metric.MetricCompositeRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 /**
@@ -38,6 +41,12 @@ public class MetricCompositionSync {
     @Resource
     private MetricDerivedRepository derived;
 
+    @Resource
+    private MetricCompositeRepository composites;
+
+    /** Matches the write limit {@code MetricCompositeServiceImpl} enforces on a submitted expression. */
+    private static final int MAX_EXPRESSION_LENGTH = 2048;
+
     /**
      * Recomposes every derived metric that uses an edited part.
      * @param workspaceId authorized current Workspace
@@ -67,11 +76,56 @@ public class MetricCompositionSync {
             if (derived.occupied(workspaceId, composed.enCode(), full.getId()))
                 throw new BusinessException(
                         MetricErrorCode.DUPLICATE_CODE, "composed code " + composed.enCode() + " already exists");
+            var previousCode = full.getEnCode();
             full.setEnCode(composed.enCode());
             full.setCnName(composed.cnName());
             full.initUpdate(actor);
             if (!derived.rename(full)) throw MetricCatalog.conflict();
+            rewriteCitations(workspaceId, actor, full.getId(), previousCode, composed.enCode());
         }
+    }
+
+    /**
+     * Rewrites every composite expression that cites a renamed derived metric.
+     *
+     * <p>A composite metric stores the expression exactly as it was submitted and keeps the
+     * resolved identities beside it. Renaming a derived metric therefore updates the reference
+     * rows automatically but leaves the recorded text citing a code that no longer resolves,
+     * which would both contradict the reference panel and make the next save fail. Only the
+     * identifier changes here: spacing, operators and every other cited code stay untouched.
+     *
+     * @param workspaceId authorized current Workspace
+     * @param actor authenticated editor recorded on the rewritten rows
+     * @param derivedId renamed derived metric identity
+     * @param previousCode the derived metric code before the edit
+     * @param nextCode the derived metric code after the edit
+     */
+    private void rewriteCitations(
+            String workspaceId, String actor, String derivedId, String previousCode, String nextCode) {
+        if (previousCode.equals(nextCode)) return;
+        for (var composite : composites.citingDerived(workspaceId, derivedId)) {
+            var rewritten = renameIdentifier(composite.getExpression(), previousCode, nextCode);
+            if (rewritten.equals(composite.getExpression())) continue;
+            if (rewritten.length() > MAX_EXPRESSION_LENGTH)
+                throw new BusinessException(
+                        MetricErrorCode.INVALID_METRIC_EXPRESSION,
+                        "expression of " + composite.getEnCode() + " would exceed " + MAX_EXPRESSION_LENGTH
+                                + " characters");
+            if (!composites.rewriteExpression(workspaceId, composite.getId(), rewritten, actor))
+                throw MetricCatalog.conflict();
+        }
+    }
+
+    /**
+     * Replaces one whole metric code inside an expression.
+     *
+     * <p>Codes are lowercase identifiers over {@code [a-z0-9_]}, so the boundary is exactly the
+     * character class: a code that happens to be a prefix of another one must not be rewritten
+     * inside it.
+     */
+    private static String renameIdentifier(String expression, String previousCode, String nextCode) {
+        return expression.replaceAll(
+                "(?<![a-z0-9_])" + Pattern.quote(previousCode) + "(?![a-z0-9_])", Matcher.quoteReplacement(nextCode));
     }
 
     private static DerivedComposition.Composed compose(

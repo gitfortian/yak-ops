@@ -7,6 +7,7 @@ import io.yak.ops.common.enums.modeling.LayerErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
+import io.yak.ops.common.enums.modeling.publication.PublicationErrorCode;
 import io.yak.ops.common.enums.modeling.standard.StandardErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
@@ -158,7 +159,8 @@ public class GlobalExceptionHandler {
                 // A rule the layer cannot satisfy yet: no dictionary, an unfit head, or models that
                 // still do not conform and were not acknowledged.
                 case INVALID_NAMING_RULE -> HttpStatus.UNPROCESSABLE_ENTITY;
-                case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+                case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, HAS_DEPENDENCIES, REVISION_CONFLICT ->
+                    HttpStatus.CONFLICT;
             };
         }
         if (errorCode instanceof DimensionModelingErrorCode code) {
@@ -186,6 +188,14 @@ public class GlobalExceptionHandler {
                         INVALID_DERIVED_METRIC,
                         INVALID_METRIC_EXPRESSION -> HttpStatus.BAD_REQUEST;
                 case DUPLICATE_CODE, REVISION_CONFLICT, REFERENCED -> HttpStatus.CONFLICT;
+            };
+        }
+        if (errorCode instanceof PublicationErrorCode code) {
+            return switch (code) {
+                // The request is well formed; the record simply is not in a state that allows it.
+                case INVALID_PUBLICATION_STATE -> HttpStatus.CONFLICT;
+                // The model or data source cannot be published at all until something else changes.
+                case UNSUPPORTED_PUBLICATION -> HttpStatus.UNPROCESSABLE_ENTITY;
             };
         }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;

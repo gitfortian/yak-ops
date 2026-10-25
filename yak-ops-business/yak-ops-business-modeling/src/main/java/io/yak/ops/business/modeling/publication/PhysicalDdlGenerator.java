@@ -76,6 +76,9 @@ public final class PhysicalDdlGenerator {
     }
 
     private static String escape(String value) {
-        return value.replace("'", "''");
+        // Both MySQL and PostgreSQL read a backslash inside a string literal as an escape by
+        // default, so it is doubled before the quote is. A comment that ends in a lone backslash
+        // would otherwise escape the closing quote and break the whole statement.
+        return value.replace("\\", "\\\\").replace("'", "''");
     }
 }

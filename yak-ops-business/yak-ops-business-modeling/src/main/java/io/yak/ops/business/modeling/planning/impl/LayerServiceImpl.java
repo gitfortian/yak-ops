@@ -172,6 +172,9 @@ public class LayerServiceImpl implements LayerService {
         if (row.isBuiltin()) throw new BusinessException(LayerErrorCode.BUILTIN_UNDELETABLE);
         if (revision < 1 || row.getRevision() != revision)
             throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
+        // Models cite their layer with ON DELETE RESTRICT: answer with the business error instead
+        // of letting the foreign key surface as a 500 from the persistence layer.
+        if (layers.modelsInLayer(workspaceId, id) > 0) throw new BusinessException(LayerErrorCode.HAS_DEPENDENCIES);
         if (!layers.delete(workspaceId, id, revision)) throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
     }
 

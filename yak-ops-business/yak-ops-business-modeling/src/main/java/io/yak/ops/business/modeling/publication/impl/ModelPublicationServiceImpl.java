@@ -25,6 +25,7 @@ import io.yak.ops.common.bean.vo.modeling.PublicationVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.PublicationStatus;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
+import io.yak.ops.common.enums.modeling.publication.PublicationErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.IdUtils;
@@ -133,7 +134,9 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
         // PENDING means the row was written but the terminal state never was: a process that died
         // mid-execution leaves that residue, and re-reading the target is the only way to settle it.
         if (status != PublicationStatus.UNKNOWN && status != PublicationStatus.PENDING) {
-            throw new BusinessException("只有 PENDING 或 UNKNOWN 状态的发布记录需要对账，当前状态为 " + record.getStatus());
+            throw new BusinessException(
+                    PublicationErrorCode.INVALID_PUBLICATION_STATE,
+                    "只有 PENDING 或 UNKNOWN 状态的发布记录需要对账，当前状态为 " + record.getStatus());
         }
         var dialect = dialectOf(record);
         var observed = observedColumns(record.getDatasourceId(), addressOf(record), record.getPhysicalTable());
@@ -166,7 +169,8 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
     public MetadataSnapshotVO refreshMetadata(String workspaceId, String actor, String publicationId) {
         var record = require(workspaceId, publicationId);
         if (PublicationStatus.from(record.getStatus()) != PublicationStatus.SUCCEEDED) {
-            throw new BusinessException("只有发布成功的记录可以重新采集元数据，当前状态为 " + record.getStatus());
+            throw new BusinessException(
+                    PublicationErrorCode.INVALID_PUBLICATION_STATE, "只有发布成功的记录可以重新采集元数据，当前状态为 " + record.getStatus());
         }
         try {
             return collector.collect(workspaceId, actor, record);
@@ -235,12 +239,13 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
         var model = models.detail(workspaceId, actor, modelId);
         if (model.type() == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         var fields = model.fields() == null ? List.<ModelFieldVO>of() : model.fields();
-        if (fields.isEmpty()) throw new BusinessException("模型没有字段，无法发布");
+        if (fields.isEmpty()) throw new BusinessException(PublicationErrorCode.UNSUPPORTED_PUBLICATION, "模型没有字段，无法发布");
         var layer = requireLayer(workspaceId, model);
         var datasource = resources.dataSource(workspaceId, layer.getDataSourceId());
         var dialect = PhysicalDialect.of(datasource.type());
         if (dialect == null) {
-            throw new BusinessException("数据源类型 " + datasource.type() + " 暂不支持物理发布");
+            throw new BusinessException(
+                    PublicationErrorCode.UNSUPPORTED_PUBLICATION, "数据源类型 " + datasource.type() + " 暂不支持物理发布");
         }
         var address = validateTarget(layer.getDataSourceId(), dialect, target);
         var columns = columnsOf(fields);
@@ -320,7 +325,8 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
         var datasource = resources.dataSource(record.getWorkspaceId(), record.getDatasourceId());
         var dialect = PhysicalDialect.of(datasource.type());
         if (dialect == null) {
-            throw new BusinessException("数据源类型 " + datasource.type() + " 暂不支持物理发布");
+            throw new BusinessException(
+                    PublicationErrorCode.UNSUPPORTED_PUBLICATION, "数据源类型 " + datasource.type() + " 暂不支持物理发布");
         }
         return dialect;
     }

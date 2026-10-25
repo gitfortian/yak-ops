@@ -152,7 +152,8 @@ public class StandardLookupServiceImpl implements StandardLookupService {
         StandardCatalog.validCode(input.getEnCode());
         StandardCatalog.validName(input.getCnName());
         StandardCatalog.validName(input.getEnName());
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw StandardCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw StandardCatalog.invalid();
         if (input.getValues() == null) throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE);
     }
 

@@ -152,6 +152,9 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     }
     let active = true;
     setSchemas([]);
+    // A schema belongs to one database: keeping the previous choice would submit dbB.schemaA and
+    // either create the table in the wrong place or fail the server-side address check.
+    setSchema("");
     void listDataSourceSchemas(datasourceId, database || undefined)
       .then((values) => {
         if (active) setSchemas(values);
@@ -369,12 +372,12 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 <Alert>{previewFailure}</Alert>
               </div>
             )}
-            {preview && (
+            {previewKey === targetKey && preview && (
               <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-3 text-xs leading-5 whitespace-pre-wrap text-[#344054]">
                 {preview.ddl}
               </pre>
             )}
-            {preview && (
+            {previewKey === targetKey && preview && (
               <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs text-[#475467]">
                 <Checkbox
                   aria-label="确认发布目标"

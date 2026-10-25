@@ -37,6 +37,11 @@ export default function FieldSection(props: Props) {
   }, [props.unavailable, keyword, pageNo, pageSize, props.selectedId]);
   const list = useStandardPage(query, props.version);
   useEffect(() => {
+    // A new category is a new result set: keeping the old page number would request a page that
+    // does not exist yet and briefly show an empty table.
+    setPageNo(1);
+  }, [props.selectedId]);
+  useEffect(() => {
     if (list.page && !list.loading) {
       const last = Math.max(1, list.page.pagination.pages);
       if (pageNo > last) setPageNo(last);
@@ -87,7 +92,9 @@ export default function FieldSection(props: Props) {
           page={list.failed ? null : list.page}
           pageNo={pageNo}
           pageSize={pageSize}
-          loading={props.unavailable || list.loading}
+          // An unavailable catalogue holds no query, so the hook is idle: showing its spinner
+          // through the unavailable flag left the table loading forever after a failed load.
+          loading={list.loading}
           searching={Boolean(keyword)}
           onEdit={(standard) => setDraft({ mode: "edit", standard })}
           onDelete={(node) => props.onDelete({ kind: "field", node })}

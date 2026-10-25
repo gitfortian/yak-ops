@@ -29,7 +29,7 @@ import { METRIC_CODE_PATTERN } from "@/service/data-modeling/metrics/types";
 import { FIELD_CLASS, InputField } from "../shared/form-fields";
 import { metricExpressionReferences } from "./expression";
 import MetricToolbar from "./metric-toolbar";
-import { useMetricPage } from "./page-state";
+import { useClampPage, useMetricPage } from "./page-state";
 
 function validate(input: MetricCompositeInput, references: string[] | null) {
   const errors: Record<string, string> = {};
@@ -54,7 +54,7 @@ function CompositeDialog(props: {
     enCode: edited?.enCode ?? "",
     cnName: edited?.cnName ?? "",
     expression: edited?.expression ?? "",
-    ownerId: null,
+    ownerId: edited?.ownerId ?? null,
     description: edited?.description ?? null,
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -256,6 +256,7 @@ export default function CompositeSection(props: Props) {
   const list = useMetricPage(key, props.version, (signal) =>
     getComposites({ pageNo, pageSize, keyword }, signal),
   );
+  useClampPage(list.page, list.loading, pageNo, setPageNo);
   const columns: TableColumns<MetricComposite> = [
     { title: "中文名称", dataIndex: "cnName", width: 160, ellipsis: true },
     { title: "英文编码", dataIndex: "enCode", width: 160, ellipsis: true },

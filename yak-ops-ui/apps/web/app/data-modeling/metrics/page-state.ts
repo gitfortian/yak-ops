@@ -53,6 +53,26 @@ export function useMetricPage<T extends { id: string }>(
   };
 }
 
+/**
+ * Keeps the requested page inside the range the server just reported.
+ *
+ * <p>Deleting the last row of the last page leaves the table asking for a page that no longer
+ * exists: the server answers an empty page with a smaller total and the user has to page back by
+ * hand. Existing sections that own their own paging clamp the same way.
+ */
+export function useClampPage(
+  page: { pagination: { pages: number } } | null,
+  loading: boolean,
+  pageNo: number,
+  setPageNo: (page: number) => void,
+) {
+  useEffect(() => {
+    if (!page || loading) return;
+    const last = Math.max(1, page.pagination.pages);
+    if (pageNo > last) setPageNo(last);
+  }, [page, loading, pageNo, setPageNo]);
+}
+
 interface OptionsState<T> {
   status: "loading" | "ready" | "error";
   data: T | null;

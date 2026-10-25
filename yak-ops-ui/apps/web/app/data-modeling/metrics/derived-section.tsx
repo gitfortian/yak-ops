@@ -38,7 +38,7 @@ import type {
 import { previewComposition } from "./composition";
 import { FIELD_CLASS } from "../shared/form-fields";
 import MetricToolbar from "./metric-toolbar";
-import { useMetricOptions, useMetricPage } from "./page-state";
+import { useClampPage, useMetricOptions, useMetricPage } from "./page-state";
 
 function ModifierPicker(props: {
   items: { id: string; label: string }[];
@@ -130,7 +130,7 @@ function DerivedDialog(props: {
     atomicMetricId: edited?.atomicMetricId ?? "",
     periodId: edited?.periodId ?? "",
     modifierIds: edited?.modifiers.map((part) => part.modifierId) ?? [],
-    ownerId: null,
+    ownerId: edited?.ownerId ?? null,
     description: edited?.description ?? null,
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -163,16 +163,24 @@ function DerivedDialog(props: {
   );
   const atomic = (atomics.data ?? []).find((row) => row.id === input.atomicMetricId);
   const period = (periods.data ?? []).find((row) => row.id === input.periodId);
-  const selectedModifiers = input.modifierIds
-    .map((modifierId) => (modifiers.data ?? []).find((row) => row.id === modifierId))
-    .filter((row) => row !== undefined);
+  // The option lists hold one page of 100. A saved metric may cite parts beyond it, and a blank
+  // preview would hide the composed code the record already carries, so a part that is still the
+  // one that was saved falls back to its stored code and name.
+  const savedAtomic = input.atomicMetricId === edited?.atomicMetricId ? edited : undefined;
+  const savedPeriod = input.periodId === edited?.periodId ? edited : undefined;
+  const partCode = (modifierId: string) =>
+    (modifiers.data ?? []).find((row) => row.id === modifierId)?.enCode ??
+    edited?.modifiers.find((part) => part.modifierId === modifierId)?.modifierEnCode;
+  const partName = (modifierId: string) =>
+    (modifiers.data ?? []).find((row) => row.id === modifierId)?.cnName ??
+    edited?.modifiers.find((part) => part.modifierId === modifierId)?.modifierCnName;
   const preview = previewComposition({
-    periodCode: period?.enCode,
-    modifierCodes: selectedModifiers.map((row) => row.enCode),
-    atomicCode: atomic?.enCode,
-    periodName: period?.cnName,
-    modifierNames: selectedModifiers.map((row) => row.cnName),
-    atomicName: atomic?.cnName,
+    periodCode: period?.enCode ?? savedPeriod?.periodEnCode,
+    modifierCodes: input.modifierIds.map(partCode).filter((code): code is string => Boolean(code)),
+    atomicCode: atomic?.enCode ?? savedAtomic?.atomicEnCode,
+    periodName: period?.cnName ?? savedPeriod?.periodCnName,
+    modifierNames: input.modifierIds.map(partName).filter((name): name is string => Boolean(name)),
+    atomicName: atomic?.cnName ?? savedAtomic?.atomicCnName,
   });
   // Availability re-answers on every complete part set; a stale response never wins.
   useEffect(() => {
@@ -427,6 +435,7 @@ export default function DerivedSection(props: Props) {
   const list = useMetricPage(key, props.version, (signal) =>
     getDerived({ pageNo, pageSize, keyword }, signal),
   );
+  useClampPage(list.page, list.loading, pageNo, setPageNo);
   const columns: TableColumns<MetricDerived> = [
     { title: "组合编码", dataIndex: "enCode", width: 220, ellipsis: true },
     { title: "组合名称", dataIndex: "cnName", width: 200, ellipsis: true },

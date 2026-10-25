@@ -680,7 +680,11 @@ export default function DimensionModelingPage() {
         />
       )}
       {publishingModel && (
-        <PublishDialog model={publishingModel} onClose={() => setPublishingModel(null)} />
+        <PublishDialog
+          model={publishingModel}
+          onClose={() => setPublishingModel(null)}
+          onPublished={catalog.reload}
+        />
       )}
     </div>
   );

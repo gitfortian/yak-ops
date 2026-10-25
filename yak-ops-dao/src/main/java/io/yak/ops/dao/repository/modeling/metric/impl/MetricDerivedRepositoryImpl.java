@@ -22,6 +22,7 @@ public class MetricDerivedRepositoryImpl implements MetricDerivedRepository {
     @Override
     public List<MetricDerivedEntity> page(String workspaceId, MetricQuery query) {
         var rows = mapper.page(workspaceId, query);
+        if (rows.isEmpty()) return rows;
         attach(
                 rows,
                 mapper.modifierLinksByDerived(

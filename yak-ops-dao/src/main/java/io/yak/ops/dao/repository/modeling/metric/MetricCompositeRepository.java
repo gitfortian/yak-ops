@@ -54,4 +54,26 @@ public interface MetricCompositeRepository {
      * @return true when another composite metric owns the code
      */
     boolean occupied(String workspaceId, String enCode, String excludeId);
+    /**
+     * Reads the composite metrics whose stored expression cites a derived metric.
+     *
+     * <p>Identity and expression text are the only populated attributes; the caller rewrites the
+     * cited code in place after a part edit changed the derived metric code.
+     * @param workspaceId authorized current Workspace
+     * @param derivedId edited derived metric identity
+     * @return citing composites, each with its stored expression
+     */
+    List<MetricCompositeEntity> citingDerived(String workspaceId, String derivedId);
+    /**
+     * Replaces one stored expression and advances the revision, without touching the references.
+     *
+     * <p>Used by the composition propagation: the resolved reference rows already point at the
+     * renamed derived metric, so only the recorded text has to follow.
+     * @param workspaceId authorized current Workspace
+     * @param id target composite metric identity
+     * @param expression committed expression text
+     * @param actor identity recorded on the rewritten row
+     * @return true only when the row still exists in this Workspace
+     */
+    boolean rewriteExpression(String workspaceId, String id, String expression, String actor);
 }

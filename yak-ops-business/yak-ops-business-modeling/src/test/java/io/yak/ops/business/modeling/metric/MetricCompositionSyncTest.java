@@ -11,8 +11,10 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.dao.entity.modeling.metric.MetricCompositeEntity;
 import io.yak.ops.dao.entity.modeling.metric.MetricDerivedEntity;
 import io.yak.ops.dao.entity.modeling.metric.MetricDerivedModifierEntity;
+import io.yak.ops.dao.repository.modeling.metric.MetricCompositeRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +29,7 @@ import org.mockito.MockitoAnnotations;
 /** Composition propagation: recomposing every derived metric a part edit touches. */
 class MetricCompositionSyncTest {
     @Mock MetricDerivedRepository derived;
+    @Mock MetricCompositeRepository composites;
     @InjectMocks MetricCompositionSync sync;
     AutoCloseable mocks;
 
@@ -139,6 +142,75 @@ class MetricCompositionSyncTest {
 
         verify(derived, never()).find(anyString(), anyString());
         verify(derived, never()).rename(any());
+    }
+
+    @Test
+    void rewritesEveryCompositeExpressionThatCitesTheRenamedDerivedMetric() {
+        when(derived.byPeriod("ws", "period")).thenReturn(List.of(row("d1")));
+        when(derived.find("ws", "d1")).thenReturn(Optional.of(full("d1", "d7_pay_amt", List.of())));
+        when(derived.rename(any())).thenReturn(true);
+        when(composites.citingDerived("ws", "d1"))
+                .thenReturn(List.of(composite("c1", "growth", "d7_pay_amt * 100 + d7_pay_amt")));
+        when(composites.rewriteExpression(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
+
+        sync.partEdited("ws", "actor", MetricCompositionSync.Part.PERIOD, "period", "d30", "最近30天");
+
+        verify(composites).rewriteExpression("ws", "c1", "d30_pay_amt * 100 + d30_pay_amt", "actor");
+    }
+
+    @Test
+    void rewritesOnlyTheWholeIdentifierNotTheLongerCodeThatContainsIt() {
+        when(derived.byAtomic("ws", "atomic")).thenReturn(List.of(row("d1")));
+        when(derived.find("ws", "d1")).thenReturn(Optional.of(full("d1", "d7_pay_amt", List.of())));
+        when(derived.rename(any())).thenReturn(true);
+        when(composites.citingDerived("ws", "d1"))
+                .thenReturn(List.of(composite("c1", "growth", "d7_pay_amt + d7_pay_amt_net")));
+        when(composites.rewriteExpression(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
+
+        sync.partEdited("ws", "actor", MetricCompositionSync.Part.ATOMIC, "atomic", "gmv", "成交额");
+
+        verify(composites).rewriteExpression("ws", "c1", "d7_gmv + d7_pay_amt_net", "actor");
+    }
+
+    @Test
+    void skipsTheExpressionWhenTheCodeDidNotChange() {
+        when(derived.byPeriod("ws", "period")).thenReturn(List.of(row("d1")));
+        when(derived.find("ws", "d1")).thenReturn(Optional.of(full("d1", "d7_pay_amt", List.of())));
+        when(derived.rename(any())).thenReturn(true);
+
+        sync.partEdited("ws", "actor", MetricCompositionSync.Part.PERIOD, "period", "d7", "近一周");
+
+        verify(composites, never()).citingDerived(anyString(), anyString());
+        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void refusesAnExpressionThatWouldOverflowAfterTheRewrite() {
+        when(derived.byAtomic("ws", "atomic")).thenReturn(List.of(row("d1")));
+        when(derived.find("ws", "d1")).thenReturn(Optional.of(full("d1", "d7_pay_amt", List.of())));
+        when(derived.rename(any())).thenReturn(true);
+        // 2046 characters before the edit, 2051 after: the stored text was legal, the rewritten one is not.
+        var expression = "d7_pay_amt" + " + 1".repeat(509);
+        when(composites.citingDerived("ws", "d1")).thenReturn(List.of(composite("c1", "growth", expression)));
+
+        var error = assertThrows(
+                BusinessException.class,
+                () -> sync.partEdited(
+                        "ws", "actor", MetricCompositionSync.Part.ATOMIC, "atomic", "order_amount", "订单金额"));
+
+        assertEquals(MetricErrorCode.INVALID_METRIC_EXPRESSION, error.getErrorCode());
+        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyString(), anyString());
+    }
+
+    private static MetricCompositeEntity composite(String id, String enCode, String expression) {
+        var row = new MetricCompositeEntity();
+        row.setId(id);
+        row.setWorkspaceId("ws");
+        row.setEnCode(enCode);
+        row.setExpression(expression);
+        return row;
     }
 
     private static MetricDerivedEntity row(String id) {
