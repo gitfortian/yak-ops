@@ -141,6 +141,8 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
             plan.sql(dialect);
             if (plan.writeMode() == JdbcWriteMode.UPSERT) {
                 dialect.deleteSql(plan.targetTable(), plan.schema());
+            } else if (plan.writeMode() == JdbcWriteMode.RETRACT) {
+                dialect.exactRowDeleteSql(plan.targetTable(), plan.schema());
             }
         }
     }
@@ -180,6 +182,9 @@ public final class JdbcSink implements Sink<TableRecord>, SchemaEvolutionSink {
                 .filter(route -> route.sourceTable().equals(change.tableId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("CDC DDL references an unconfigured table"));
+        if (plan.writeMode() == JdbcWriteMode.RETRACT) {
+            throw new UnsupportedOperationException("Keyless RETRACT schema changes require coordinated acceptance");
+        }
 
         Schema currentSource = Schema.from(plan.sourceSchema(), null, java.util.Map.of(), java.util.Map.of());
         if (!currentSource.toTableSchema().equals(change.before().toTableSchema())) {
