@@ -21,7 +21,7 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
           ? {
               keyless: true,
               chunkKeyColumn: task.chunkKeyColumn,
-              ...(task.xaEnabled ? { xa: true } : {}),
+              xa: true,
             }
           : {}),
       },
@@ -110,7 +110,7 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
           ? {
               keyless: true,
               chunkKeyColumn: table.source.chunkKeyColumn,
-              ...(table.source.xa ? { xa: true } : {}),
+              xa: true,
             }
           : {}),
       },
@@ -138,7 +138,6 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     debug: definition.debug ?? false,
     writeMode: mapping.writeMode,
     keylessEnabled: mapping.source.keyless ?? false,
-    xaEnabled: mapping.source.xa ?? false,
     chunkKeyColumn: mapping.source.chunkKeyColumn,
     incremental: mapping.incremental ? { ...mapping.incremental } : undefined,
     sourceDataSourceId: parameters.source.datasourceId,

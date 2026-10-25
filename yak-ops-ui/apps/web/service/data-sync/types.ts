@@ -176,7 +176,6 @@ export interface DataSyncMappingConfig {
 export interface DataSyncTaskRecord {
   id: string;
   keylessEnabled?: boolean;
-  xaEnabled?: boolean;
   chunkKeyColumn?: string;
   schemaChangesEnabled?: boolean;
   allowDropColumns?: boolean;
@@ -260,7 +259,6 @@ interface DataSyncTaskSaveBase {
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
   keylessEnabled?: boolean;
-  xaEnabled?: boolean;
   chunkKeyColumn?: string;
   schemaChangesEnabled?: boolean;
   allowDropColumns?: boolean;

@@ -118,7 +118,6 @@ export function SourceSection({
               sourceSchema: value,
               sourceTable: "",
               keylessEnabled: false,
-              xaEnabled: false,
               chunkKeyColumn: "",
               writeMode: usesChangelog ? "UPSERT" : current.writeMode,
             }));
@@ -132,7 +131,6 @@ export function SourceSection({
               sourceSchema: current.sourceSchema || table.schema || "",
               sourceTable: table.name,
               keylessEnabled: false,
-              xaEnabled: false,
               chunkKeyColumn: "",
               writeMode: usesChangelog ? "UPSERT" : current.writeMode,
             }));
@@ -155,7 +153,6 @@ export function SourceSection({
                     setForm((current) => ({
                       ...current,
                       keylessEnabled: enabled,
-                      xaEnabled: enabled,
                       chunkKeyColumn: enabled ? current.chunkKeyColumn : "",
                       writeMode: enabled ? "RETRACT" : "UPSERT",
                       schemaChangesEnabled: enabled ? false : current.schemaChangesEnabled,

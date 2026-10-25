@@ -6,6 +6,9 @@ This document defines durable frontend engineering constraints. Current source c
 
 ## Ownership and Dependencies
 
+- Use the current feature contract directly. Do not keep compatibility re-exports, obsolete editor state, alias props, duplicate mappers or fallback UI paths without a supported consumer and explicit removal plan. Reject incompatible stored data instead of silently converting it.
+
+
 - `apps/web` owns the product application. `packages/yak-ui` owns domain-agnostic controls; `packages/yak-ui/src/index.ts` defines their public API.
 - `apps/web/app/<domain>` owns domain pages and interaction state. `app/layout` owns the shell; `app/router` owns route composition and historical URL redirects. `app/data-sync` is the unified offline/realtime synchronization feature.
 - Product requests flow from `app/<domain>` to `service/<domain>` to `service/http`. The HTTP transport is centralized, including consistent response and authentication error handling. Domain services own endpoint adaptation and request/response types and must never depend on App code.

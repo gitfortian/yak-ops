@@ -64,6 +64,7 @@ const keyless = createDefinitionRequest({
   schemaChangesEnabled: false,
 }).parameters;
 assert.equal(readSyncParameters(3, keyless).tableMappings[0].source.chunkKeyColumn, "bucket");
+assert.equal(readSyncParameters(3, keyless).tableMappings[0].source.xa, true);
 assert.equal(
   toSyncTaskRecord({
     id: "keyless",
@@ -77,6 +78,10 @@ assert.equal(
   true,
 );
 for (const invalid of [
+  { ...JSON.parse(keyless), tableMappings: [{
+    ...JSON.parse(keyless).tableMappings[0],
+    source: { table: "source", keyless: true, chunkKeyColumn: "bucket" },
+  }] },
   { ...JSON.parse(keyless), schemaChangesEnabled: true },
   { ...JSON.parse(keyless), steps: ["SCHEMA", "FULL", "INCREMENTAL"] },
   {

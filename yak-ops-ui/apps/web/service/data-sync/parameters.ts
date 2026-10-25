@@ -153,7 +153,7 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
         (typeof mapping.source.chunkKeyColumn !== "string" ||
           !mapping.source.chunkKeyColumn.trim() ||
           mapping.source.chunkKeyColumn.length > 128)) ||
-      (mapping.source.xa !== undefined && (typeof mapping.source.xa !== "boolean" || !keyless)) ||
+      (keyless ? mapping.source.xa !== true : mapping.source.xa !== undefined) ||
       (keyless &&
         (value.solutionType !== "SINGLE_TABLE_REALTIME" ||
           value.steps.includes("SCHEMA") ||

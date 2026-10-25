@@ -137,7 +137,7 @@ class DataSyncProductParametersTest {
                  "schemaChangesEnabled":false,
                  "source":{"datasourceId":"source"},"sink":{"datasourceId":"target"},
                  "tableSelection":{"mode":"EXPLICIT"},
-                 "tableMappings":[{"source":{"table":"orders","keyless":true,"chunkKeyColumn":"bucket"},
+                 "tableMappings":[{"source":{"table":"orders","keyless":true,"chunkKeyColumn":"bucket","xa":true},
                                    "target":{"table":"copy"},"writeMode":"RETRACT"}]}
                 """;
         var config = JobConfig.from(plugin.parse(keyless));
@@ -146,6 +146,9 @@ class DataSyncProductParametersTest {
                 config.source().get(io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         assertTrue(config.source().get(io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions.KEYLESS_ENABLED));
         assertEquals("RETRACT", config.sink().getSourceMap().get("writeMode"));
+        assertTrue(config.sink().get(io.yak.ops.connector.jdbc.sink.JdbcSinkOptions.XA_ENABLED));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace(",\"xa\":true", "")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace(",\"xa\":true", ",\"xa\":false")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("RETRACT", "UPSERT")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("bucket", "")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("true", "false")));
