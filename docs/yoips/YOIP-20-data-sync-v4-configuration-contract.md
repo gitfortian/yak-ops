@@ -92,13 +92,37 @@ For supported offline incremental jobs, `source.tables[].incremental` owns `mode
 
 `write.mode` uses implemented `APPEND`, `UPSERT`, or `RETRACT` options, subject to solution and physical target capability. Optional `write.primaryKeys` explicitly declares the target write identity; it is **not** the snapshot Chunk Key and must pass target-side physical schema/non-null/uniqueness admission. When omitted, the planner uses verified physical target metadata. An explicit `transaction.mode: "CHECKPOINT_XA"` in `write` is required for the supported keyless `RETRACT` protocol; it is not permitted on unrelated modes. The associated XA JDBC options and instance identity are generated on the Sink physical boundary, never under Source. This declaration pins transaction intent; no execution path is allowed to silently upgrade a stored protocol.
 
-`schemaPolicy.initial` is one of `VERIFY` (target already exists and is checked) or `CREATE_OR_ALTER` (explicit initial schema preparation under existing safety checks). `schemaPolicy.evolution.enabled` and `schemaPolicy.evolution.allowDropColumns` are required booleans. DROP COLUMN requires evolution enabled and the existing supported source/target dialect capabilities. The initial preparation policy is distinct from the ongoing Schema Change Event application policy. Until the Planner supports genuinely independent per-route schema preparation/evolution, the validator requires the corresponding policy to be consistent across all tables in the job; the nested location does not promise per-route runtime capability.
+`schemaPolicy.initial` is one of `VERIFY` (target already exists and is checked) or `CREATE_OR_ALTER` (explicit initial schema preparation under existing safety checks). `schemaPolicy.evolution.enabled` and `schemaPolicy.evolution.allowDropColumns` are required booleans. DROP COLUMN requires evolution enabled and the existing supported source/target dialect capabilities. The initial preparation policy is distinct from the ongoing Schema Change Event application policy. Initial `CREATE_OR_ALTER` requires the `FULL` data step, matching the current schema-preparation admission; no schema-only or incremental-only DDL is unlocked. Until the Planner supports genuinely independent per-route schema preparation/evolution, the validator requires the corresponding policy to be consistent across all tables in the job; the nested location does not promise per-route runtime capability.
 
 ### Environment and REST transport
 
 `env: {}` does not grant access to `ExecutionOptions`, `CheckpointingOptions`, or `PipelineOptions`. The effective physical environment is formed from application policy, trusted Task/Instance identity, verified topology, and any future **explicitly authorized** public Env options. It never accepts supplied checkpoint state paths, restore flags, CDC server IDs, writer commit IDs, or credentials.
 
-A follow-up implementation may replace the current stringified `CreateDefinitionDTO.parameters` transport with a JSON object using a generic JSON tree while continuing to store canonical immutable versioned JSON. This is a **separate explicit HTTP contract change**; V4 schema acceptance must not silently make the existing V3 string transport accept new shapes. The first activation PR must pin the chosen transport and test both success and rejection paths. Page/list summary models do not need complete `parameters` or executable Connector configuration.
+The **proposed V4 HTTP representation** is a structured JSON object under `parameters`, not a JSON string inside JSON. The generic create/update request uses `parameters` as an object (for example, a server-side JSON tree), while the persistence layer continues to store canonical immutable JSON text and the Task Plugin determines the pinned parameter schema version. A metadata-only update omits `parameters` and retains the current immutable definition version. Detail and immutable-version responses expose the stored parameters as JSON objects along with their pinned `parameterSchemaVersion`, preserving original V2/V3 field contents without pretending they are V4. The request must not accept user-supplied schema versions or silently reinterpret legacy string payloads as V4.
+
+```json
+{
+  "name": "orders-realtime",
+  "taskType": "DATA_SYNC",
+  "parameters": {
+    "solutionType": "SINGLE_TABLE_REALTIME",
+    "steps": ["FULL", "INCREMENTAL"],
+    "source": { "datasourceId": "mysql-source", "tables": [
+      { "id": "orders", "database": "app", "table": "orders" }
+    ] },
+    "transform": [],
+    "sink": { "datasourceId": "pg-target", "tables": [
+      { "input": "orders", "schema": "public", "table": "ods_orders",
+        "write": { "mode": "UPSERT" },
+        "schemaPolicy": { "initial": "VERIFY",
+          "evolution": { "enabled": true, "allowDropColumns": false } } }
+    ] },
+    "env": {}
+  }
+}
+```
+
+This is an **explicit HTTP breaking contract** to be implemented in a later PR, not behavior supplied by the current DTO. The V4 activation must test create, update, details, immutable versions and request rejection for malformed or wrong-type `parameters`. List/page summary models do not need complete `parameters` or executable Connector configuration.
 
 ### Additional proposed examples
 
@@ -121,6 +145,49 @@ Offline incremental source selection (embedded into an otherwise valid V4 job):
       }
     }
   ]
+}
+```
+
+Full offline multi-table fixture (the `source.tables[].id`/`sink.tables[].input` relation is exact):
+
+```json
+{
+  "solutionType": "DATABASE_OFFLINE",
+  "steps": ["FULL"],
+  "source": {
+    "datasourceId": "mysql-source",
+    "tables": [
+      { "id": "customers", "database": "crm", "table": "customers" },
+      { "id": "orders", "database": "crm", "table": "orders" }
+    ]
+  },
+  "transform": [],
+  "sink": {
+    "datasourceId": "pg-target",
+    "tables": [
+      {
+        "input": "customers",
+        "schema": "public",
+        "table": "ods_customers",
+        "write": { "mode": "APPEND" },
+        "schemaPolicy": {
+          "initial": "CREATE_OR_ALTER",
+          "evolution": { "enabled": false, "allowDropColumns": false }
+        }
+      },
+      {
+        "input": "orders",
+        "schema": "public",
+        "table": "ods_orders",
+        "write": { "mode": "APPEND" },
+        "schemaPolicy": {
+          "initial": "CREATE_OR_ALTER",
+          "evolution": { "enabled": false, "allowDropColumns": false }
+        }
+      }
+    ]
+  },
+  "env": {}
 }
 ```
 
