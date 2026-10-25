@@ -115,8 +115,8 @@ public final class JdbcKeylessTargetValidator {
             case DECIMAL -> (base.equals("decimal") || base.equals("numeric"))
                     && nativeType.equals(base + "(" + LogicalTypes.decimalPrecision(column.dataType()) + ","
                             + LogicalTypes.decimalScale(column.dataType()) + ")");
-            case BINARY, VARBINARY -> nativeType.equals(base + "(" + column.length() + ")")
-                    && (base.equals("binary") || base.equals("varbinary"));
+            case BINARY -> nativeType.equals("binary(" + column.length() + ")");
+            case VARBINARY -> nativeType.equals("varbinary(" + column.length() + ")");
             default -> false;
         };
     }
