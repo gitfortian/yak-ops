@@ -16,8 +16,13 @@ public class StandardReferenceRepositoryImpl implements StandardReferenceReposit
     private StandardReferenceMapper mapper;
 
     @Override
-    public List<Item> modelFieldsByStandard(String workspaceId, String standardId) {
-        return project(mapper.modelFieldsByStandard(workspaceId, standardId));
+    public List<Item> byStandard(String workspaceId, String standardId) {
+        var children = mapper.fieldStandardsByParent(workspaceId, standardId);
+        var fields = mapper.modelFieldsByStandard(workspaceId, standardId);
+        var items = new ArrayList<Item>(children.size() + fields.size());
+        items.addAll(project(children));
+        items.addAll(project(fields));
+        return List.copyOf(items);
     }
 
     @Override

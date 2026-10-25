@@ -24,6 +24,12 @@ public interface StandardReferenceMapper {
             + "WHERE f.workspace_id=#{workspaceId} AND f.standard_id=#{id} ORDER BY m.name,f.en_code")
     List<ReferenceRow> modelFieldsByStandard(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
+    /** Child field standards that specialize one parent standard. */
+    @Select("SELECT 'FIELD_STANDARD' AS kind,s.id AS id,s.cn_name AS name,s.en_code AS path "
+            + "FROM yak_ops_standard_field s "
+            + "WHERE s.workspace_id=#{workspaceId} AND s.parent_standard_id=#{id} ORDER BY s.en_code")
+    List<ReferenceRow> fieldStandardsByParent(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     /** Field standards that reference one lookup table. */
     @Select("SELECT 'FIELD_STANDARD' AS kind,s.id AS id,s.cn_name AS name,s.en_code AS path "
             + "FROM yak_ops_standard_field s "

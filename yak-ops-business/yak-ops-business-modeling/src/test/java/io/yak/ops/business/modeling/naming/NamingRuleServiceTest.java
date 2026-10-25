@@ -3,6 +3,7 @@ package io.yak.ops.business.modeling.naming;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -67,6 +68,43 @@ class NamingRuleServiceTest {
         assertEquals(3, rule.revision());
         assertEquals(1, rule.violations().size());
         assertEquals("m2", rule.violations().getFirst().modelId());
+    }
+
+    @Test
+    void ignoresExemptModelsWhenReportingAndEnabling() {
+        when(entries.entries("ws")).thenReturn(List.of(entry("root", "trade")));
+        when(models.namingRows("ws", "layer"))
+                .thenReturn(List.of(
+                        row("m1", "dwd_trade_order", "order"),
+                        row("m3", "dwd_legacy_order", "order"),
+                        new ModelNamingRow("m2", ModelType.DIM, "dim_trade", "维度表", "order", null)));
+        var rule = service.rule("ws", "actor", "layer");
+        assertEquals(1, rule.violations().size());
+        assertEquals("m3", rule.violations().getFirst().modelId());
+
+        // A DIM model never conforms on save, so it neither blocks enablement nor gets a root word.
+        when(layers.updateNamingRule("ws", "layer", true, 3, "actor")).thenReturn(true);
+        service.update("ws", "actor", "layer", update(true, true));
+        verify(models).backfillNamingRoot("ws", "m1", "root");
+        verify(models, never()).backfillNamingRoot("ws", "m2", "root");
+        verify(models, never()).backfillNamingRoot("ws", "m3", "root");
+    }
+
+    @Test
+    void enablesALayerHoldingOnlyExemptModelsWithoutViolations() {
+        var stored = layer(3);
+        when(layers.layer("ws", "layer")).thenReturn(Optional.of(stored));
+        when(entries.entries("ws")).thenReturn(List.of(entry("root", "trade")));
+        when(models.namingRows("ws", "layer"))
+                .thenReturn(List.of(new ModelNamingRow("m1", ModelType.ADS, "ads_trade", "应用表", null, null)));
+        when(layers.updateNamingRule("ws", "layer", true, 3, "actor"))
+                .thenAnswer(call -> {
+                    stored.setNamingRuleEnabled(true);
+                    return true;
+                });
+        var rule = service.update("ws", "actor", "layer", update(true, false));
+        assertTrue(rule.enabled());
+        verify(models, never()).backfillNamingRoot(anyString(), anyString(), anyString());
     }
 
     @Test

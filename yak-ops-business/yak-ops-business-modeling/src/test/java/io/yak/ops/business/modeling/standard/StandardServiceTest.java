@@ -287,14 +287,18 @@ class StandardServiceTest {
     @Test
     void reportsEachDependantOfAReferencedStandard() {
         when(nodes.field("ws", "field")).thenReturn(Optional.of(field("field", 1)));
-        when(references.modelFieldsByStandard("ws", "field"))
-                .thenReturn(List.of(new StandardReferencesVO.Item(
-                        StandardReferenceKind.MODEL_FIELD, "model", "order_amount", "dwd_order.order_amount")));
+        when(references.byStandard("ws", "field"))
+                .thenReturn(List.of(
+                        new StandardReferencesVO.Item(
+                                StandardReferenceKind.FIELD_STANDARD, "child", "子标准", "order_id"),
+                        new StandardReferencesVO.Item(
+                                StandardReferenceKind.MODEL_FIELD, "model", "order_amount", "dwd_order.order_amount")));
         var result = service.references("ws", "actor", "field");
-        assertEquals(1, result.items().size());
+        assertEquals(2, result.items().size());
+        assertEquals(StandardReferenceKind.FIELD_STANDARD, result.items().getFirst().kind());
         assertEquals("AVAILABLE", result.availability());
         assertTrue(result.referenced());
-        assertEquals(1L, result.count());
+        assertEquals(2L, result.count());
     }
 
     @Test

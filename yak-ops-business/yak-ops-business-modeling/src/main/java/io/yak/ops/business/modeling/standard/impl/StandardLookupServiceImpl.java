@@ -37,6 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class StandardLookupServiceImpl implements StandardLookupService {
     private static final int MAX_VALUE_CODE = 64;
 
+    /** Bounds one submitted value list; typical dictionaries stay under fifty rows. */
+    private static final int MAX_VALUES = 1000;
+
     @Resource
     private StandardLookupRepository lookups;
 
@@ -162,6 +165,7 @@ public class StandardLookupServiceImpl implements StandardLookupService {
     private static List<StandardLookupValueEntity> values(
             String workspaceId, String lookupId, StandardLookupInputDTO input) {
         var submitted = input.getValues();
+        if (submitted.size() > MAX_VALUES) throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE);
         var seen = new HashSet<String>();
         var rows = new ArrayList<StandardLookupValueEntity>(submitted.size());
         for (var index = 0; index < submitted.size(); index++) {

@@ -125,6 +125,17 @@ class StandardLookupServiceTest {
     }
 
     @Test
+    void refusesAnOversizedValueListInsteadOfWritingIt() {
+        var submitted = input("order_status");
+        while (submitted.getValues().size() <= 1000)
+            submitted.getValues().add(value("v" + submitted.getValues().size()));
+        var error =
+                assertThrows(BusinessException.class, () -> service.create("ws", "actor", "category", submitted));
+        assertEquals(StandardErrorCode.INVALID_LOOKUP_VALUE, error.getErrorCode());
+        verify(lookups, never()).replaceValues(anyString(), any());
+    }
+
+    @Test
     void refusesAMissingValueList() {
         var submitted = input("order_status");
         submitted.setValues(null);

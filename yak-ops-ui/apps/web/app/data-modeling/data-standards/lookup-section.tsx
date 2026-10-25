@@ -34,6 +34,8 @@ import { useKindPage } from "./state";
 
 const LOOKUP_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_VALUE_CODE = 64;
+/** Mirrors the service-side cap on one submitted value list. */
+const MAX_VALUES = 1000;
 
 interface Draft {
   mode: "create";
@@ -271,7 +273,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
               <span className="text-xs font-medium">码表值</span>
               <Button
                 size="small"
-                disabled={saving || loading}
+                disabled={saving || loading || input.values.length >= MAX_VALUES}
                 onClick={() =>
                   setInput((previous) => ({
                     ...previous,
@@ -286,6 +288,9 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
                 添加值
               </Button>
             </div>
+            {input.values.length >= MAX_VALUES && (
+              <p className="text-xs text-[#b54708]">一张码表最多 {MAX_VALUES} 个值。</p>
+            )}
             {input.values.length === 0 && (
               <p className="text-xs text-[#667085]">码表至少需要一个值。</p>
             )}

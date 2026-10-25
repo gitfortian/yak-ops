@@ -250,7 +250,7 @@ public class StandardServiceImpl implements StandardService {
     public StandardReferencesVO references(String workspaceId, String actor, String id) {
         catalog.authorize(workspaceId, actor);
         requireField(workspaceId, id);
-        return StandardReferencesVO.of(references.modelFieldsByStandard(workspaceId, id));
+        return StandardReferencesVO.of(references.byStandard(workspaceId, id));
     }
 
     private static CategoryEntity newCategory(

@@ -6,12 +6,12 @@ import java.util.List;
 /** On-demand reference lists across the standard kinds and the models that consume them. */
 public interface StandardReferenceRepository {
     /**
-     * Reads the model fields that bind one field standard.
+     * Reads the child standards and model fields that depend on one field standard.
      * @param workspaceId authorized current Workspace
      * @param standardId target field standard
-     * @return dependants ordered by model and field code
+     * @return dependants, child standards first, then model fields ordered by model and field code
      */
-    List<StandardReferencesVO.Item> modelFieldsByStandard(String workspaceId, String standardId);
+    List<StandardReferencesVO.Item> byStandard(String workspaceId, String standardId);
     /**
      * Reads the field standards and model fields that reference one lookup table.
      * @param workspaceId authorized current Workspace

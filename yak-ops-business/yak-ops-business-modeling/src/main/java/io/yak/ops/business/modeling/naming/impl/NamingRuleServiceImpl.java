@@ -48,7 +48,7 @@ public class NamingRuleServiceImpl implements NamingRuleService {
         requireActor(workspaceId, actor);
         var layer = require(workspaceId, layerId);
         var dictionary = entries.entries(workspaceId);
-        var violations = models.namingRows(workspaceId, layerId).stream()
+        var violations = governable(models.namingRows(workspaceId, layerId)).stream()
                 .filter(row -> resolve(dictionary, row, layer).isEmpty())
                 .map(row -> new NamingViolationVO(row.id(), row.name(), row.cnName(), row.type(), row.processCode()))
                 .toList();
@@ -79,13 +79,15 @@ public class NamingRuleServiceImpl implements NamingRuleService {
     /**
      * Validates and applies enablement.
      *
-     * <p>The fit check uses the shortest dictionary entry: with the root word free per model, a
-     * process that cannot fit even the shortest head could never be named at all, so the layer must
-     * not switch to a state it cannot satisfy. Conforming models then record their matched entry.
+     * <p>Only public-layer models are governed: {@code DIM} and {@code ADS} are exempt from the
+     * rule on save, so they neither block enablement nor appear as violations. The fit check uses
+     * the shortest dictionary entry: with the root word free per model, a process that cannot fit
+     * even the shortest head could never be named at all, so the layer must not switch to a state
+     * it cannot satisfy. Conforming models then record their matched entry.
      */
     private void enable(String workspaceId, LayerEntity layer, boolean acknowledged) {
         var dictionary = entries.entries(workspaceId);
-        var rows = models.namingRows(workspaceId, layer.getId());
+        var rows = governable(models.namingRows(workspaceId, layer.getId()));
         var shortest = dictionary.stream()
                 .map(StandardNamingEntryEntity::getEnCode)
                 .min(Comparator.comparingInt(String::length))
@@ -99,6 +101,13 @@ public class NamingRuleServiceImpl implements NamingRuleService {
             resolve(dictionary, row, layer)
                     .filter(entry -> !entry.getId().equals(row.namingRootWordId()))
                     .ifPresent(entry -> models.backfillNamingRoot(workspaceId, row.id(), entry.getId()));
+    }
+
+    /** Keeps the models the rule actually governs: the public layers that carry a process. */
+    private static List<ModelNamingRow> governable(List<ModelNamingRow> rows) {
+        return rows.stream()
+                .filter(row -> row.type() != null && row.type().isPublicLayer())
+                .toList();
     }
 
     private static Optional<StandardNamingEntryEntity> resolve(
