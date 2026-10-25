@@ -28,7 +28,7 @@ export function DataSyncTaskDetailPage() {
     ready: instancesReady,
     refresh: refreshActiveInstances,
   } = useActiveTaskInstance(scope, taskId);
-  const canStart = canManageTaskDefinition(instancesReady, activeInstance);
+  const canStart = !task?.configurationError && canManageTaskDefinition(instancesReady, activeInstance);
   const {
     executionId,
     activeTab,
@@ -132,6 +132,11 @@ export function DataSyncTaskDetailPage() {
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-5 max-md:px-4">
+          {task.configurationError ? (
+            <div className="mb-4 text-sm text-[var(--yak-components-danger-text)]">
+              任务配置无法执行：{task.configurationError}
+            </div>
+          ) : null}
           <div className="space-y-8">
             <TaskSummary
               task={task}
