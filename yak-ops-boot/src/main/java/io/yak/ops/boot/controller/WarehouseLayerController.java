@@ -1,7 +1,7 @@
 package io.yak.ops.boot.controller;
 
-import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.naming.NamingRuleService;
+import io.yak.ops.business.modeling.planning.LayerService;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NamingRuleUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;

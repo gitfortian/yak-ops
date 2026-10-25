@@ -1,8 +1,8 @@
 package io.yak.ops.business.modeling.model.impl;
 
-import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.model.ModelService;
 import io.yak.ops.business.modeling.naming.NamingRuleService;
+import io.yak.ops.business.modeling.planning.LayerService;
 import io.yak.ops.common.bean.dto.modeling.ModelFieldInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;

@@ -1,6 +1,6 @@
-package io.yak.ops.business.modeling.impl;
+package io.yak.ops.business.modeling.planning.impl;
 
-import io.yak.ops.business.modeling.PlanningService;
+import io.yak.ops.business.modeling.planning.PlanningService;
 import io.yak.ops.common.bean.dto.modeling.DatamartInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NodeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.SubjectInputDTO;

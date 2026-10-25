@@ -1,6 +1,6 @@
-package io.yak.ops.business.modeling.impl;
+package io.yak.ops.business.modeling.planning.impl;
 
-import io.yak.ops.business.modeling.LayerService;
+import io.yak.ops.business.modeling.planning.LayerService;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.bean.vo.modeling.LayerDataSourceVO;
