@@ -48,7 +48,8 @@ final class MySqlKeylessRecords {
         long size = payloadBytes(copy.row());
         RowValues key = values(copy.row());
         Group existing = rows.get(key);
-        if (count >= MAX_TOTAL_ROWS || (existing == null && (rows.size() >= maxRows || size > maxBytes - retainedBytes))) {
+        if (count >= MAX_TOTAL_ROWS
+                || (existing == null && (rows.size() >= maxRows || size > maxBytes - retainedBytes))) {
             failed = true;
             rows.clear();
             count = 0;

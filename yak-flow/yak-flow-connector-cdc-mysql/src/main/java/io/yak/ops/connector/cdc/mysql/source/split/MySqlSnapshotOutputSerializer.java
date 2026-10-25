@@ -70,8 +70,7 @@ final class MySqlSnapshotOutputSerializer {
         }
     }
 
-    private static MySqlSnapshotOutput readRows(DataInputStream in, TableId table, boolean packed)
-            throws IOException {
+    private static MySqlSnapshotOutput readRows(DataInputStream in, TableId table, boolean packed) throws IOException {
         BinlogOffset low = BinlogOffset.readFrom(in);
         BinlogOffset high = BinlogOffset.readFrom(in);
         int marker = in.readInt();
