@@ -157,7 +157,7 @@ function AtomicDialog(props: {
   };
   const processItems = (processes.data ?? []).map((choice) => ({
     value: choice.id,
-    label: choice.domainName + " / " + choice.name,
+    label: choice.path + " / " + choice.name,
   }));
   const unitItems = [
     { value: "", label: "不绑定" },

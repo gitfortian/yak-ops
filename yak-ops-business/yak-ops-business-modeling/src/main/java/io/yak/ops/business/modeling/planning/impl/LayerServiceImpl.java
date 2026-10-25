@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -101,7 +102,14 @@ public class LayerServiceImpl implements LayerService {
     public boolean available(String workspaceId, String actor, String enCode, String excludeId) {
         requireActor(workspaceId, actor);
         var code = normalizeCode(enCode);
-        if (excludeId != null) requireLayer(workspaceId, excludeId);
+        if (excludeId != null) {
+            // Editing a layer keeps its own abbreviation available; everything else is unchanged.
+            var editing = requireLayer(workspaceId, excludeId);
+            if (code.equals(editing.getEnCode())) return !layers.occupied(workspaceId, code, excludeId);
+        }
+        // A preset abbreviation is refused by create and update whatever the table holds, so the
+        // pre-check has to answer the same way or the form would offer a code the save rejects.
+        if (reserved(code)) return false;
         return !layers.occupied(workspaceId, code, excludeId);
     }
 
@@ -149,6 +157,12 @@ public class LayerServiceImpl implements LayerService {
         if (!row.isBuiltin() && reserved(fields.enCode())) throw new BusinessException(LayerErrorCode.DUPLICATE_CODE);
         if (row.isBuiltin() && !presetFieldsUnchanged(row, fields))
             throw new BusinessException(LayerErrorCode.BUILTIN_IMMUTABLE);
+        // A model's stored table name is the layer prefix plus its suffix, frozen when it was saved.
+        // Changing the abbreviation under existing models would leave every one of them contradicting
+        // the naming rule and the physical table it was published to, so it needs the same guard as
+        // deletion: move or remove the models first.
+        if (!row.getEnCode().equals(fields.enCode()) && layers.modelsInLayer(workspaceId, id) > 0)
+            throw new BusinessException(LayerErrorCode.HAS_DEPENDENCIES);
         requireBinding(workspaceId, fields.dataSourceId(), fields.enabled());
         row.setEnCode(fields.enCode());
         row.setCnName(fields.cnName());
@@ -173,9 +187,15 @@ public class LayerServiceImpl implements LayerService {
         if (revision < 1 || row.getRevision() != revision)
             throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
         // Models cite their layer with ON DELETE RESTRICT: answer with the business error instead
-        // of letting the foreign key surface as a 500 from the persistence layer.
+        // of letting the foreign key surface as a 500 from the persistence layer. A model saved
+        // between the count and the delete still reaches the database, so that case is mapped too.
         if (layers.modelsInLayer(workspaceId, id) > 0) throw new BusinessException(LayerErrorCode.HAS_DEPENDENCIES);
-        if (!layers.delete(workspaceId, id, revision)) throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
+        try {
+            if (!layers.delete(workspaceId, id, revision))
+                throw new BusinessException(LayerErrorCode.REVISION_CONFLICT);
+        } catch (DataIntegrityViolationException stillReferenced) {
+            throw new BusinessException(LayerErrorCode.HAS_DEPENDENCIES, stillReferenced);
+        }
     }
 
     /**

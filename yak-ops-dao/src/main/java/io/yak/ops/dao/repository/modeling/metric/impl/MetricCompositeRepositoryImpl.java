@@ -85,12 +85,14 @@ public class MetricCompositeRepositoryImpl implements MetricCompositeRepository 
     }
 
     @Override
-    public boolean rewriteExpression(String workspaceId, String id, String expression, String actor) {
+    public boolean rewriteExpression(String workspaceId, String id, long revision, String expression, String actor) {
         var audit = new MetricCompositeEntity();
         audit.setWorkspaceId(workspaceId);
         audit.setId(id);
         audit.initUpdate(actor);
-        return mapper.rewriteExpression(workspaceId, id, expression, audit.getUpdateTime(), audit.getUpdateBy()) == 1;
+        return mapper.rewriteExpression(
+                        workspaceId, id, revision, expression, audit.getUpdateTime(), audit.getUpdateBy())
+                == 1;
     }
 
     private static MetricCompositeRefEntity reference(MetricCompositeEntity row, String derivedMetricId) {

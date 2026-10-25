@@ -39,9 +39,15 @@ export function rootSearchSegment(savedSuffix: string): string {
   return savedSuffix.split("_")[0] ?? "";
 }
 
-/** Room left for the qualifier once prefix, root and process segments are in place; 0 when full. */
+/**
+ * Room left for the qualifier once the root and process segments are in place; 0 when full.
+ *
+ * <p>The 41-character budget applies to the suffix alone, and the layer prefix is stored beside it
+ * rather than inside it, so the prefix must not be subtracted here: doing so would reject a name the
+ * server accepts.
+ */
 export function qualifierMaxLength(prefix: string, rootCode: string, processCode: string): number {
   const head = composeSuffix(rootCode, processCode, "");
   if (!head) return 41;
-  return Math.max(0, 41 - prefix.length - 1 - head.length - 1);
+  return Math.max(0, 41 - head.length - 1);
 }

@@ -65,7 +65,7 @@ public interface MetricCompositeMapper {
     List<MetricCompositeRefEntity> referencesByComposite(
             @Param("workspaceId") String workspaceId, @Param("compositeIds") List<String> compositeIds);
 
-    @Select("SELECT c.id,c.en_code,c.expression FROM yak_ops_modeling_metric_composite c "
+    @Select("SELECT c.id,c.en_code,c.expression,c.revision FROM yak_ops_modeling_metric_composite c "
             + "JOIN yak_ops_modeling_metric_composite_ref r ON r.workspace_id=c.workspace_id AND r.composite_id=c.id "
             + "WHERE c.workspace_id=#{workspaceId} AND r.derived_metric_id=#{derivedId}")
     List<MetricCompositeEntity> citingDerived(
@@ -73,10 +73,11 @@ public interface MetricCompositeMapper {
 
     @Update("UPDATE yak_ops_modeling_metric_composite SET expression=#{expression},revision=revision+1,"
             + "update_time=#{updateTime},update_by=#{updateBy} "
-            + "WHERE workspace_id=#{workspaceId} AND id=#{id}")
+            + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
     int rewriteExpression(
             @Param("workspaceId") String workspaceId,
             @Param("id") String id,
+            @Param("revision") long revision,
             @Param("expression") String expression,
             @Param("updateTime") LocalDateTime updateTime,
             @Param("updateBy") String updateBy);

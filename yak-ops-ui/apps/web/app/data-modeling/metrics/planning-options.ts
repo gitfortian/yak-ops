@@ -10,19 +10,29 @@ export interface DomainChoice {
 export interface ProcessChoice {
   id: string;
   name: string;
-  domainName: string;
+  /** Category and domain the process sits under, for the flat selector's label. */
+  path: string;
 }
 
+/** Every data domain with its category, used as a flat selector. */
 export { allDomainsOf as domainsOf };
 
-/** Every business process with its owning domain, used as a flat selector. */
+/**
+ * Every business process with its owning category and domain, used as a flat selector.
+ *
+ * <p>A process is the third level of the planning tree (category → domain → process). Reading the
+ * second level here would hand the caller domain identities, which the service rejects because an
+ * atomic metric anchors to a process.
+ */
 export function processesOf(tree: PlanningTree): ProcessChoice[] {
   return tree.categories.flatMap((category) =>
-    category.children.map((domain) => ({
-      id: domain.id,
-      name: domain.name,
-      domainName: domain.name,
-    })),
+    category.children.flatMap((domain) =>
+      domain.children.map((process) => ({
+        id: process.id,
+        name: process.name,
+        path: category.name + " / " + domain.name,
+      })),
+    ),
   );
 }
 

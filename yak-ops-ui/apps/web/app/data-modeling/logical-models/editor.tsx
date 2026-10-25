@@ -592,7 +592,9 @@ export default function LogicalModelEditorPage() {
         if (result.field === "nameSuffix") setErrors({ nameSuffix: result.message });
         else if (result.field === "layer") setErrors({ layerId: result.message });
         else if (result.field === "ownership") setFailure(result.message);
-        else setFailure(`字段校验未通过：${result.message}`);
+        // The server message already names what failed, so it is shown as written instead of
+        // collecting a second prefix in front of it.
+        else setFailure(result.message);
       } else setFailure(result.message);
     } finally {
       busy.current = false;

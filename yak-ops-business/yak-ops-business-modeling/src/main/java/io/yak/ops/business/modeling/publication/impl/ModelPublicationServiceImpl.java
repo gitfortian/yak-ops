@@ -101,7 +101,9 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
         record.setDatasourceRevision(plan.datasourceRevision());
         record.setPhysicalDatabase(plan.address().database());
         record.setPhysicalSchema(plan.address().schema());
-        record.setPhysicalTable(plan.model().name());
+        // Stored as the catalog spells it, so every later lookup (verify, reconcile, metadata)
+        // asks for the name the engine actually reports instead of the model's lower-case form.
+        record.setPhysicalTable(plan.dialect().catalogName(plan.model().name()));
         record.setStatus(PublicationStatus.PENDING.name());
         record.setDdl(plan.script().script());
         record.setCreatedTime(DateUtils.now());
@@ -139,7 +141,8 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
                     "只有 PENDING 或 UNKNOWN 状态的发布记录需要对账，当前状态为 " + record.getStatus());
         }
         var dialect = dialectOf(record);
-        var observed = observedColumns(record.getDatasourceId(), addressOf(record), record.getPhysicalTable());
+        var observed = observedColumns(
+                record.getDatasourceId(), addressOf(record), dialect.catalogName(record.getPhysicalTable()));
         if (observed.isEmpty()) {
             publications.reconcile(
                     workspaceId, publicationId, PublicationStatus.FAILED.name(), "对账时目标库中不存在该表", DateUtils.now());
@@ -183,7 +186,9 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
     private void execute(String workspaceId, Plan plan, String publicationId) {
         try {
             var observed = observedColumns(
-                    plan.datasourceId(), plan.address(), plan.model().name());
+                    plan.datasourceId(),
+                    plan.address(),
+                    plan.dialect().catalogName(plan.model().name()));
             if (observed.isPresent()) {
                 var mismatch = PhysicalTableVerifier.verify(plan.dialect(), plan.columns(), observed.get());
                 if (mismatch.isPresent()) {

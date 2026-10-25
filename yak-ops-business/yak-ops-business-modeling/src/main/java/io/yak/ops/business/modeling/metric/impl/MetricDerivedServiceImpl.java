@@ -2,6 +2,7 @@ package io.yak.ops.business.modeling.metric.impl;
 
 import io.yak.ops.business.modeling.metric.DerivedComposition;
 import io.yak.ops.business.modeling.metric.MetricCatalog;
+import io.yak.ops.business.modeling.metric.MetricCompositionSync;
 import io.yak.ops.business.modeling.metric.MetricDerivedService;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedUpdateDTO;
@@ -62,6 +63,9 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
     @Resource
     private MetricCatalog catalog;
 
+    @Resource
+    private MetricCompositionSync composition;
+
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PageData<MetricDerivedVO> page(
@@ -118,6 +122,7 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
         checkRevision(row.getRevision(), input.getRevision());
         var parts = resolveParts(workspaceId, input);
         var ownerId = catalog.owner(workspaceId, actor, input.getOwnerId());
+        var previousCode = row.getEnCode();
         row.setEnCode(parts.composed().enCode());
         row.setCnName(parts.composed().cnName());
         row.setAtomicMetricId(parts.atomic().getId());
@@ -131,6 +136,9 @@ public class MetricDerivedServiceImpl implements MetricDerivedService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(MetricErrorCode.DUPLICATE_CODE, failure);
         }
+        // Replacing a part changes the composed code, exactly like renaming the part itself does,
+        // so the composite expressions citing this metric have to follow in the same transaction.
+        composition.renamed(workspaceId, actor, id, previousCode, row.getEnCode());
         return new MetricSavedVO(id, Math.addExact(row.getRevision(), 1));
     }
 

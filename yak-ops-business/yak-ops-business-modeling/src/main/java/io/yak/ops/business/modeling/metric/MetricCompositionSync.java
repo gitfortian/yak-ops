@@ -81,12 +81,12 @@ public class MetricCompositionSync {
             full.setCnName(composed.cnName());
             full.initUpdate(actor);
             if (!derived.rename(full)) throw MetricCatalog.conflict();
-            rewriteCitations(workspaceId, actor, full.getId(), previousCode, composed.enCode());
+            renamed(workspaceId, actor, full.getId(), previousCode, composed.enCode());
         }
     }
 
     /**
-     * Rewrites every composite expression that cites a renamed derived metric.
+     * Follows a derived metric rename into every composite expression that cites it.
      *
      * <p>A composite metric stores the expression exactly as it was submitted and keeps the
      * resolved identities beside it. Renaming a derived metric therefore updates the reference
@@ -94,14 +94,17 @@ public class MetricCompositionSync {
      * which would both contradict the reference panel and make the next save fail. Only the
      * identifier changes here: spacing, operators and every other cited code stay untouched.
      *
+     * <p>Two edits reach this code: renaming a part recomposes every derived metric built on it,
+     * and replacing a derived metric's own parts recomposes that one row. Both end up here,
+     * because both leave the same stale text behind.
+     *
      * @param workspaceId authorized current Workspace
      * @param actor authenticated editor recorded on the rewritten rows
      * @param derivedId renamed derived metric identity
      * @param previousCode the derived metric code before the edit
      * @param nextCode the derived metric code after the edit
      */
-    private void rewriteCitations(
-            String workspaceId, String actor, String derivedId, String previousCode, String nextCode) {
+    public void renamed(String workspaceId, String actor, String derivedId, String previousCode, String nextCode) {
         if (previousCode.equals(nextCode)) return;
         for (var composite : composites.citingDerived(workspaceId, derivedId)) {
             var rewritten = renameIdentifier(composite.getExpression(), previousCode, nextCode);
@@ -111,7 +114,8 @@ public class MetricCompositionSync {
                         MetricErrorCode.INVALID_METRIC_EXPRESSION,
                         "expression of " + composite.getEnCode() + " would exceed " + MAX_EXPRESSION_LENGTH
                                 + " characters");
-            if (!composites.rewriteExpression(workspaceId, composite.getId(), rewritten, actor))
+            if (!composites.rewriteExpression(
+                    workspaceId, composite.getId(), composite.getRevision(), rewritten, actor))
                 throw MetricCatalog.conflict();
         }
     }

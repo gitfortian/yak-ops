@@ -7,5 +7,7 @@ public enum StandardReferenceKind {
     /** A field standard that references the record. */
     FIELD_STANDARD,
     /** A model whose name was composed from the record under an enabled layer rule. */
-    MODEL
+    MODEL,
+    /** An atomic metric that binds the record; only measurement units can be cited this way. */
+    ATOMIC_METRIC
 }

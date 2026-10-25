@@ -58,6 +58,12 @@ public interface StandardReferenceMapper {
             + "WHERE f.workspace_id=#{workspaceId} AND f.measure_unit_id=#{id} ORDER BY m.name,f.en_code")
     List<ReferenceRow> modelFieldsByUnit(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
+    /** Atomic metrics that annotate their caliber with one measurement unit. */
+    @Select("SELECT 'ATOMIC_METRIC' AS kind,a.id AS id,a.cn_name AS name,a.en_code AS path "
+            + "FROM yak_ops_modeling_metric_atomic a "
+            + "WHERE a.workspace_id=#{workspaceId} AND a.measure_unit_id=#{id} ORDER BY a.en_code")
+    List<ReferenceRow> atomicMetricsByUnit(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     /** Models whose name was composed from one naming entry under an enabled layer rule. */
     @Select("SELECT 'MODEL' AS kind,m.id AS id,m.cn_name AS name,m.name AS path "
             + "FROM yak_ops_modeling_model m "

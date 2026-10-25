@@ -50,12 +50,12 @@ public final class PhysicalDdlGenerator {
             if (column.notNull() || column.keyPosition() != null) definition.append(" NOT NULL");
             var comment = commentOf(column);
             if (comment != null && dialect.hasInlineComments()) {
-                definition.append(" COMMENT '").append(escape(comment)).append('\'');
+                definition.append(" COMMENT '").append(escape(comment, dialect)).append('\'');
             }
             definitions.add(definition.toString());
             if (comment != null && !dialect.hasInlineComments()) {
                 comments.add("COMMENT ON COLUMN " + qualified + "." + dialect.quote(column.name()) + " IS '"
-                        + escape(comment) + "'");
+                        + escape(comment, dialect) + "'");
             }
         }
         var keyColumns = columns.stream()
@@ -75,10 +75,12 @@ public final class PhysicalDdlGenerator {
         return comment == null || comment.isEmpty() ? null : comment;
     }
 
-    private static String escape(String value) {
-        // Both MySQL and PostgreSQL read a backslash inside a string literal as an escape by
-        // default, so it is doubled before the quote is. A comment that ends in a lone backslash
-        // would otherwise escape the closing quote and break the whole statement.
-        return value.replace("\\", "\\\\").replace("'", "''");
+    private static String escape(String value, PhysicalDialect dialect) {
+        // MySQL reads a backslash inside a string literal as an escape character, so it is doubled
+        // before the quote is; a comment that ends in a lone backslash would otherwise escape the
+        // closing quote and break the whole statement. PostgreSQL (standard_conforming_strings) and
+        // Oracle treat a backslash as an ordinary character, where doubling would store two.
+        var prepared = dialect == PhysicalDialect.MYSQL ? value.replace("\\", "\\\\") : value;
+        return prepared.replace("'", "''");
     }
 }

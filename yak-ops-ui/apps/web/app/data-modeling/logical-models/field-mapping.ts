@@ -163,6 +163,7 @@ export function columnToField(
     lookupEnCode: null,
     measureUnitId: null,
     measureUnitEnCode: null,
+    metricId: null,
     description: null,
     importNote: mapping.note,
   };

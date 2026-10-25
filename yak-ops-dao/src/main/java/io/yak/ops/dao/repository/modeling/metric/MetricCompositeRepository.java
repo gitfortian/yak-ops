@@ -57,23 +57,27 @@ public interface MetricCompositeRepository {
     /**
      * Reads the composite metrics whose stored expression cites a derived metric.
      *
-     * <p>Identity and expression text are the only populated attributes; the caller rewrites the
-     * cited code in place after a part edit changed the derived metric code.
+     * <p>Identity, expression text and revision are the only populated attributes; the caller
+     * rewrites the cited code in place after a part edit changed the derived metric code, and
+     * needs the revision to avoid overwriting a concurrent edit of the same expression.
      * @param workspaceId authorized current Workspace
      * @param derivedId edited derived metric identity
-     * @return citing composites, each with its stored expression
+     * @return citing composites, each with its stored expression and revision
      */
     List<MetricCompositeEntity> citingDerived(String workspaceId, String derivedId);
     /**
-     * Replaces one stored expression and advances the revision, without touching the references.
+     * Replaces one stored expression, advancing the revision, without touching the references.
      *
      * <p>Used by the composition propagation: the resolved reference rows already point at the
-     * renamed derived metric, so only the recorded text has to follow.
+     * renamed derived metric, so only the recorded text has to follow. The revision is part of the
+     * predicate because the expression is authored text, not a derived audit field: a user who
+     * saved the same composite in the meantime must not be overwritten silently.
      * @param workspaceId authorized current Workspace
      * @param id target composite metric identity
+     * @param revision revision the caller read
      * @param expression committed expression text
      * @param actor identity recorded on the rewritten row
-     * @return true only when the row still exists in this Workspace
+     * @return true only when the row is still at that revision in this Workspace
      */
-    boolean rewriteExpression(String workspaceId, String id, String expression, String actor);
+    boolean rewriteExpression(String workspaceId, String id, long revision, String expression, String actor);
 }

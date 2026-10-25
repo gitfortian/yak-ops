@@ -3,6 +3,7 @@ package io.yak.ops.business.modeling.metric;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -151,12 +152,12 @@ class MetricCompositionSyncTest {
         when(derived.rename(any())).thenReturn(true);
         when(composites.citingDerived("ws", "d1"))
                 .thenReturn(List.of(composite("c1", "growth", "d7_pay_amt * 100 + d7_pay_amt")));
-        when(composites.rewriteExpression(anyString(), anyString(), anyString(), anyString()))
+        when(composites.rewriteExpression(anyString(), anyString(), anyLong(), anyString(), anyString()))
                 .thenReturn(true);
 
         sync.partEdited("ws", "actor", MetricCompositionSync.Part.PERIOD, "period", "d30", "最近30天");
 
-        verify(composites).rewriteExpression("ws", "c1", "d30_pay_amt * 100 + d30_pay_amt", "actor");
+        verify(composites).rewriteExpression("ws", "c1", 3L, "d30_pay_amt * 100 + d30_pay_amt", "actor");
     }
 
     @Test
@@ -166,12 +167,12 @@ class MetricCompositionSyncTest {
         when(derived.rename(any())).thenReturn(true);
         when(composites.citingDerived("ws", "d1"))
                 .thenReturn(List.of(composite("c1", "growth", "d7_pay_amt + d7_pay_amt_net")));
-        when(composites.rewriteExpression(anyString(), anyString(), anyString(), anyString()))
+        when(composites.rewriteExpression(anyString(), anyString(), anyLong(), anyString(), anyString()))
                 .thenReturn(true);
 
         sync.partEdited("ws", "actor", MetricCompositionSync.Part.ATOMIC, "atomic", "gmv", "成交额");
 
-        verify(composites).rewriteExpression("ws", "c1", "d7_gmv + d7_pay_amt_net", "actor");
+        verify(composites).rewriteExpression("ws", "c1", 3L, "d7_gmv + d7_pay_amt_net", "actor");
     }
 
     @Test
@@ -183,7 +184,7 @@ class MetricCompositionSyncTest {
         sync.partEdited("ws", "actor", MetricCompositionSync.Part.PERIOD, "period", "d7", "近一周");
 
         verify(composites, never()).citingDerived(anyString(), anyString());
-        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyString(), anyString());
+        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -201,7 +202,7 @@ class MetricCompositionSyncTest {
                         "ws", "actor", MetricCompositionSync.Part.ATOMIC, "atomic", "order_amount", "订单金额"));
 
         assertEquals(MetricErrorCode.INVALID_METRIC_EXPRESSION, error.getErrorCode());
-        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyString(), anyString());
+        verify(composites, never()).rewriteExpression(anyString(), anyString(), anyLong(), anyString(), anyString());
     }
 
     private static MetricCompositeEntity composite(String id, String enCode, String expression) {
@@ -210,6 +211,7 @@ class MetricCompositionSyncTest {
         row.setWorkspaceId("ws");
         row.setEnCode(enCode);
         row.setExpression(expression);
+        row.setRevision(3);
         return row;
     }
 
