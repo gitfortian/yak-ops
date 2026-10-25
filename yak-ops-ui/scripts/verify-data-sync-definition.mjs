@@ -6,7 +6,11 @@ import {
   toSyncTaskRecord,
   updateDefinitionRequest,
 } from "../apps/web/service/data-sync/definition.ts";
-import { parseSyncParameters, readSyncParameters, validateSyncParameters } from "../apps/web/service/data-sync/parameters.ts";
+import {
+  parseSyncParameters,
+  readSyncParameters,
+  validateSyncParameters,
+} from "../apps/web/service/data-sync/parameters.ts";
 
 const common = {
   name: "orders",
@@ -122,15 +126,18 @@ const displayedLegacy = toSyncTaskRecord({
 assert.equal(displayedLegacy.sourceTable, "orders");
 assert.equal(displayedLegacy.targetTable, "ods_orders");
 assert.match(displayedLegacy.configurationError, /不支持的同步目标写入配置/);
-assert.equal(toSyncTaskRecord({
-  id: "supported",
-  name: "supported",
-  taskType: "DATA_SYNC",
-  status: "UNPUBLISHED",
-  definitionVersion: 1,
-  parameterSchemaVersion: 3,
-  parameters: keyless,
-}).configurationError, undefined);
+assert.equal(
+  toSyncTaskRecord({
+    id: "supported",
+    name: "supported",
+    taskType: "DATA_SYNC",
+    status: "UNPUBLISHED",
+    definitionVersion: 1,
+    parameterSchemaVersion: 3,
+    parameters: keyless,
+  }).configurationError,
+  undefined,
+);
 
 const schemaKeyless = JSON.stringify({
   ...JSON.parse(keyless),
