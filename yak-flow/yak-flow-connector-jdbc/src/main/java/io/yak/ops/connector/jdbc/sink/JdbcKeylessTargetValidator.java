@@ -2,6 +2,7 @@ package io.yak.ops.connector.jdbc.sink;
 
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypes;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -111,9 +112,11 @@ public final class JdbcKeylessTargetValidator {
             case SMALLINT -> base.equals("smallint");
             case INTEGER -> base.equals("int") || base.equals("integer");
             case BIGINT -> base.equals("bigint");
-            case DECIMAL -> base.equals("decimal") || base.equals("numeric");
-            case BINARY -> base.equals("binary") || base.endsWith("blob");
-            case VARBINARY -> base.equals("varbinary") || base.endsWith("blob");
+            case DECIMAL -> (base.equals("decimal") || base.equals("numeric"))
+                    && nativeType.equals(base + "(" + LogicalTypes.decimalPrecision(column.dataType()) + ","
+                            + LogicalTypes.decimalScale(column.dataType()) + ")");
+            case BINARY, VARBINARY -> nativeType.equals(base + "(" + column.length() + ")")
+                    && (base.equals("binary") || base.equals("varbinary"));
             default -> false;
         };
     }
