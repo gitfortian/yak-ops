@@ -8,6 +8,7 @@ import {
 import { ChevronDown, ChevronRight, Folder, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { StandardCategory } from "@/service/data-modeling/data-standards/types";
+import { STANDARD_KIND_LABEL } from "@/service/data-modeling/data-standards/types";
 import { categoryPath } from "./state";
 
 interface Props {
@@ -72,6 +73,11 @@ export default function CategoryTree(props: Props) {
               >
                 <Folder size={14} />
                 <span className="truncate">{node.name}</span>
+                {node.nodeType === "STANDARD_SET" && (
+                  <span className="ml-1 shrink-0 rounded border border-[var(--yak-components-panel-border)] px-1 text-[10px] leading-4 text-[#667085]">
+                    {node.standardKind ? STANDARD_KIND_LABEL[node.standardKind] : "标准集"}
+                  </span>
+                )}
               </Button>
               <div className="flex opacity-100 md:opacity-0 md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
                 <Button

@@ -123,10 +123,24 @@ public interface ModelRepository {
      */
     void addField(ModelFieldEntity row);
     /**
-     * Reads the three attributes a bound standard forces onto its consumers.
+     * Reads the five attributes a bound standard forces onto its consumers.
      * @param workspaceId authorized Workspace
      * @param id standard identity
      * @return inherited attributes, or null when the standard is absent
      */
     StandardInheritance standard(String workspaceId, String id);
+    /**
+     * Reads every DWD and DWS model of one layer for naming-rule matching.
+     * @param workspaceId authorized Workspace
+     * @param layerId layer identity
+     * @return models ordered by table name
+     */
+    List<ModelNamingRow> namingRows(String workspaceId, String layerId);
+    /**
+     * Records the root word a model's name was composed from, without touching its revision.
+     * @param workspaceId authorized Workspace
+     * @param id model identity
+     * @param rootWordId matched naming entry
+     */
+    void backfillNamingRoot(String workspaceId, String id, String rootWordId);
 }

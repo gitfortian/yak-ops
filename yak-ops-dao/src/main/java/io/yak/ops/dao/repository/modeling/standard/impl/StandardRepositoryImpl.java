@@ -64,8 +64,8 @@ public class StandardRepositoryImpl implements StandardRepository {
     }
 
     @Override
-    public boolean hasFields(String workspaceId, String categoryId) {
-        return mapper.fieldsInCategory(workspaceId, categoryId) > 0;
+    public boolean hasRecords(String workspaceId, String categoryId) {
+        return mapper.recordsInCategory(workspaceId, categoryId) > 0;
     }
 
     @Override
@@ -89,8 +89,8 @@ public class StandardRepositoryImpl implements StandardRepository {
     }
 
     @Override
-    public boolean occupied(String enCode, String excludeId) {
-        return mapper.occupied(enCode, excludeId) > 0;
+    public boolean occupied(String workspaceId, String enCode, String excludeId) {
+        return mapper.occupied(workspaceId, enCode, excludeId) > 0;
     }
 
     @Override
@@ -101,5 +101,10 @@ public class StandardRepositoryImpl implements StandardRepository {
     @Override
     public long countFields(String workspaceId, FieldQuery query) {
         return mapper.countFields(workspaceId, query);
+    }
+
+    @Override
+    public String parentStandardId(String workspaceId, String id) {
+        return mapper.parentStandardId(workspaceId, id);
     }
 }

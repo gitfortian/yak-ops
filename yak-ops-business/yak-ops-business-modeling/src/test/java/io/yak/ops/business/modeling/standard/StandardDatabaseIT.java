@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import io.yak.ops.business.modeling.standard.StandardCatalog;
 import io.yak.ops.business.modeling.standard.impl.StandardServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.standard.CategoryInputDTO;
 import io.yak.ops.common.bean.dto.modeling.standard.StandardInputDTO;
@@ -25,6 +26,10 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.modeling.standard.StandardFieldEntity;
 import io.yak.ops.dao.entity.security.UserEntity;
 import io.yak.ops.dao.repository.modeling.standard.StandardRepository;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardLookupRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardMeasureUnitRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardNamingEntryRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardReferenceRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.standard.impl.StandardRepositoryImpl;
 import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.testutils.MySqlDatabase;
@@ -78,7 +83,14 @@ class StandardDatabaseIT {
         jdbc = new JdbcTemplate(source);
         Flyway.configure().dataSource(source).locations("classpath:db/migration/yak-ops").load().migrate();
         context = new AnnotationConfigApplicationContext(
-                Beans.class, StandardRepositoryImpl.class, StandardServiceImpl.class);
+                Beans.class,
+                StandardRepositoryImpl.class,
+                StandardServiceImpl.class,
+                StandardCatalog.class,
+                StandardLookupRepositoryImpl.class,
+                StandardMeasureUnitRepositoryImpl.class,
+                StandardNamingEntryRepositoryImpl.class,
+                StandardReferenceRepositoryImpl.class);
         service = context.getBean(StandardService.class);
     }
 
@@ -139,15 +151,22 @@ class StandardDatabaseIT {
     }
 
     @Test
-    void globalCodeRaceHasOneWinnerAcrossWorkspaces() throws Exception {
+    void workspaceCodeRaceHasOneWinnerAndOtherWorkspacesMayReuseTheCode() throws Exception {
+        // The unique key is (workspace_id, en_code) since YOIP-13: a same-workspace race still
+        // lets exactly one create win, while another Workspace legitimately owns the same code.
         var start = new CountDownLatch(1);
         try (var workers = Executors.newFixedThreadPool(2)) {
             var first = workers.submit(() -> createCodeAfter(start, "ws"));
-            var second = workers.submit(() -> createCodeAfter(start, "other"));
+            var second = workers.submit(() -> createCodeAfter(start, "ws"));
             start.countDown();
             assertEquals(1, first.get(30, TimeUnit.SECONDS) + second.get(30, TimeUnit.SECONDS));
         }
         assertEquals(1, count("field"));
+
+        service.initialize("other", "actor");
+        var category = service.createCategory("other", "actor", category("共享目录"));
+        service.createField("other", "actor", category.id(), input("shared_code"));
+        assertEquals(2, count("field"));
     }
 
     @Test

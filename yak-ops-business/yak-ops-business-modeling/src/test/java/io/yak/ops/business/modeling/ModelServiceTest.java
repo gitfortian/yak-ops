@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.model.impl.ModelServiceImpl;
+import io.yak.ops.business.modeling.naming.NamingRuleService;
 import io.yak.ops.common.bean.dto.modeling.ModelFieldInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;
@@ -40,6 +41,8 @@ import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.StandardInheritance;
+import io.yak.ops.dao.repository.modeling.standard.StandardLookupRepository;
+import io.yak.ops.dao.repository.modeling.standard.StandardMeasureUnitRepository;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import java.util.List;
@@ -59,6 +62,9 @@ class ModelServiceTest {
     @Mock PlanningRepository planning;
     @Mock DimensionRepository dimensions;
     @Mock LayerService layers;
+    @Mock NamingRuleService naming;
+    @Mock StandardLookupRepository lookups;
+    @Mock StandardMeasureUnitRepository units;
     @Mock WorkspaceService workspaces;
     @Mock PublicationRepository publications;
     @InjectMocks ModelServiceImpl service;
@@ -68,7 +74,7 @@ class ModelServiceTest {
     void setup() {
         mocks = MockitoAnnotations.openMocks(this);
         when(workspaces.isActiveMember("ws", "actor")).thenReturn(true);
-        when(layers.options("ws", "actor")).thenReturn(List.of(new LayerOptionVO("layer", "DWD", "明细层", "ds", "主库")));
+        when(layers.options("ws", "actor")).thenReturn(List.of(new LayerOptionVO("layer", "DWD", "明细层", "ds", "主库", false)));
         when(publications.latestStatusByModel(anyString(), anyCollection())).thenReturn(Map.of());
     }
 
@@ -233,17 +239,16 @@ class ModelServiceTest {
     }
 
     @Test
-    void inheritsCodeTypeAndLengthFromTheBoundStandard() {
+    void inheritsTheFiveAttributesFromTheBoundStandard() {
         detailGraph();
         when(models.standard("ws", "std"))
-                .thenReturn(new StandardInheritance("order_id", DataType.BIGINT, "20"));
+                .thenReturn(new StandardInheritance("order_id", "订单ID", DataType.BIGINT, "20", true));
         var stored = storedModel("dwd_order_detail");
         when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
         when(models.fields(anyString())).thenReturn(List.of());
         var field = field("placeholder", DataType.STRING);
         field.setLengthPrecision("10");
         field.setStandardId("std");
-        field.setIsNotNull(true);
         field.setIsPrimaryKey(true);
         var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
 
@@ -252,6 +257,7 @@ class ModelServiceTest {
         verify(models).addField(captor.capture());
         var row = captor.getValue();
         assertEquals("order_id", row.getEnCode());
+        assertEquals("订单ID", row.getCnName());
         assertEquals(DataType.BIGINT, row.getDataType());
         assertEquals("20", row.getLengthPrecision());
         assertTrue(Boolean.TRUE.equals(row.getIsPrimaryKey()));
@@ -260,16 +266,16 @@ class ModelServiceTest {
     }
 
     @Test
-    void keepsSubmittedNullabilityInsteadOfTheStandardContract() {
+    void inheritsNullabilityFromTheBoundStandardInsteadOfTheSubmission() {
         detailGraph();
         when(models.standard("ws", "std"))
-                .thenReturn(new StandardInheritance("order_id", DataType.BIGINT, null));
+                .thenReturn(new StandardInheritance("order_id", "订单ID", DataType.BIGINT, null, false));
         var stored = storedModel("dwd_order_detail");
         when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
         when(models.fields(anyString())).thenReturn(List.of());
         var field = field("order_id", null);
         field.setStandardId("std");
-        field.setIsNotNull(false);
+        field.setIsNotNull(true);
         var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
 
         service.create("ws", "actor", detailInput("order_detail", List.of(field)));
@@ -415,7 +421,7 @@ class ModelServiceTest {
     void checksTheMeasureAgainstTheTypeInheritedFromTheStandard() {
         detailGraph();
         when(models.standard("ws", "std"))
-                .thenReturn(new StandardInheritance("region", DataType.STRING, null));
+                .thenReturn(new StandardInheritance("region", "区域", DataType.STRING, null, false));
         var bounded = measure("placeholder", DataType.DECIMAL, AggregateType.SUM);
         bounded.setStandardId("std");
         var input = summaryInput("order_summary", List.of(bounded));

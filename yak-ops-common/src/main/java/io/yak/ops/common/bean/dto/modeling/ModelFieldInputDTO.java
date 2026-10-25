@@ -40,6 +40,14 @@ public class ModelFieldInputDTO {
     @Size(max = 64, message = "数据标准标识过长")
     private String standardId;
 
+    /** Lookup table supplying code and name only while no field standard is bound. */
+    @Size(max = 64, message = "标准代码标识过长")
+    private String lookupId;
+
+    /** Measurement unit annotation; never changes the field's code, name or type. */
+    @Size(max = 64, message = "度量单位标识过长")
+    private String measureUnitId;
+
     @Size(max = 500, message = "描述不能超过500个字符")
     private String description;
 }

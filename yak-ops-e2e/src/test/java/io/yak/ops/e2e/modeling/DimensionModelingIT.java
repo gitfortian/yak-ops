@@ -163,7 +163,7 @@ class DimensionModelingIT extends BackendTestBase {
                         List.of(partitionField("ds", "STRING"), partitionField("region", "STRING"))),
                 400);
 
-        // A bound standard overwrites the code and type; submitted nullability is kept as sent.
+        // A bound standard is authoritative: code, type, precision and nullability are all inherited.
         var created = api.call(
                 "POST",
                 API + "/models",
@@ -182,7 +182,7 @@ class DimensionModelingIT extends BackendTestBase {
         assertEquals(prefix + "_order_id", inherited.path("enCode").asText());
         assertEquals("DECIMAL", inherited.path("dataType").asText());
         assertEquals("20,2", inherited.path("lengthPrecision").asText());
-        assertFalse(inherited.path("isNotNull").asBoolean());
+        assertTrue(inherited.path("isNotNull").asBoolean());
         assertTrue(inherited.path("isPrimaryKey").asBoolean());
         // The flags come back from the same read path the UI uses, not only from the write payload.
         var partition = created.path("fields").get(1);

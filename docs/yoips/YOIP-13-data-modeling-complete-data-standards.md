@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/26
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/26#issuecomment-6391845530
 
-Implementation: Planned — 1.7.0 batch
+Implementation: #28
 
 Release: N/A until released
 
@@ -55,7 +55,7 @@ This proposal adds the three missing kinds, closes the two field-standard gaps, 
 | Measurement unit | Category, abbreviation, English name, Chinese name, optional description. Abbreviations are unique inside a Workspace. Binding a unit is an annotation: it never renames a field and never changes its type. |
 | Naming dictionary | Abbreviation, English name, Chinese name, optional description. Abbreviations are unique inside a Workspace and are the token a table-name rule matches. |
 | Binding a model field | A field may bind a field standard, a lookup table, a measurement unit, or any combination. A bound field standard is authoritative for English code, Chinese name, type, length or precision and not-null; those five controls are read-only until the standard is unbound. A lookup table supplies code and Chinese name only when no field standard is bound. A unit never overrides anything. |
-| References | Every kind exposes a reference list: field standard → model fields; lookup table → field standards and model fields; measurement unit → field standards and model fields; naming dictionary → models named under a layer rule that uses the entry. Deleting a referenced record is refused with the existing `REFERENCED`, which is already what the standard service raises for an asset that depends on a record; `HAS_DEPENDENCIES` stays reserved for a container that still holds children. The delete dialog loads the same list before it confirms, so the operator sees which tables and fields depend on the record and can open the owning model instead of guessing. |
+| References | Every kind exposes a reference list: field standard → child field standards and model fields; lookup table → field standards and model fields; measurement unit → field standards and model fields; naming dictionary → models named under a layer rule that uses the entry. Deleting a referenced record is refused with the existing `REFERENCED`, which is already what the standard service raises for an asset that depends on a record; `HAS_DEPENDENCIES` stays reserved for a container that still holds children. The delete dialog loads the same list before it confirms, so the operator sees which tables and fields depend on the record and can open the owning model instead of guessing. |
 | Table-name checking | A layer may enable a naming rule. When enabled, the suffix of a model that carries a business process must begin with `<root word abbreviation>_<process code>`, where the root word is an existing naming-dictionary entry of the Workspace and the process is the model's own business process. An optional `_<qualifier>` may follow, so one process can carry several tables; the full name stays the layer prefix plus this suffix. The dialog composes the required head from two governed selections instead of accepting free text. Models without a business process — `DIM` and `ADS` — are exempt. Disabling the rule leaves existing names untouched. |
 | Uniqueness scope | Codes of all four kinds are unique inside a Workspace, not across the installation. |
 | Empty and error states | A standard set with no records shows an empty state rather than a table; creating a record still requires a selected container. A name rejected by an enabled rule is caught in the dialog, which composes the required head from the chosen root word and the model's own process; the server rejects a bypass as a fixed `NAMING_RULE_VIOLATION`. A layer whose rule is enabled while non-conforming models remain lists those model names in the layer panel until they are renamed. |
@@ -201,7 +201,7 @@ Existing rows are not rewritten. A field that was bound before this release keep
 
 ### 7. Reference queries replace the placeholder
 
-`StandardReferencesVO` gains an `items` list of `{ kind, id, name, path }` and reports `AVAILABLE` instead of `NOT_ENABLED`. Each kind answers from the tables that point at it: model fields for standards and units, field standards plus model fields for lookup tables, and models for naming entries.
+`StandardReferencesVO` gains an `items` list of `{ kind, id, name, path }` and reports `AVAILABLE` instead of `NOT_ENABLED`. Each kind answers from the tables that point at it: child field standards plus model fields for a standard, field standards plus model fields for lookup tables and units, and models for naming entries.
 
 The two existing components stay and are derived from `items`: `count` is its length and `referenced` says whether it is non-empty. Keeping them leaves the response a superset of what the page already reads, and deriving them means the three can never disagree.
 

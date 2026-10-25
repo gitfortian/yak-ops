@@ -30,6 +30,8 @@ public class ModelEntity extends BaseEntity {
     private String dimensionId;
     /** Full table name including the layer prefix, unique inside the Workspace. */
     private String name;
+    /** Root word the name was composed from under an enabled layer rule; null otherwise. */
+    private String namingRootWordId;
     /** Business display name. */
     private String cnName;
     /** Declared storage strategy. */

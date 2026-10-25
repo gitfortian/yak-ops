@@ -28,6 +28,9 @@ public class LayerEntity extends BaseEntity {
     /** Whether dimension modeling may select this layer. */
     private boolean enabled;
 
+    /** Whether model suffixes of this layer must carry a dictionary root word and the process. */
+    private boolean namingRuleEnabled;
+
     /** Whether this row is one of the five undeletable presets. */
     private boolean builtin;
 

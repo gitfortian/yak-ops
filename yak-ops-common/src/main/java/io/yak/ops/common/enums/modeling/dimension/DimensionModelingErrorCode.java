@@ -27,6 +27,8 @@ public enum DimensionModelingErrorCode implements ErrorCode {
     UNKNOWN_MODEL_TYPE(19510, "模型类型无法识别，不允许编辑"),
     PARTITION_RULE(19511, "分区字段只能有一个，且类型必须为 STRING"),
     DUPLICATE_TABLE_NAME(19512, "表名在当前工作空间已存在"),
+    /** A suffix that does not start with a dictionary root word followed by the model's process. */
+    NAMING_RULE_VIOLATION(19513, "表名不符合当前分层启用的命名规则：须以命名词根加下划线加业务过程编码开头"),
     /**
      * A collection run failed. A failed publication is not an error code: it is a recorded terminal
      * state that the publish endpoint returns, so the client can read which column differs.

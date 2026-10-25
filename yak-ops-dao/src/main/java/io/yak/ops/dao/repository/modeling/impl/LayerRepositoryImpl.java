@@ -1,5 +1,7 @@
 package io.yak.ops.dao.repository.modeling.impl;
 
+import io.yak.ops.common.constant.CommonConstants;
+import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.dao.entity.datasource.DataSourceEntity;
 import io.yak.ops.dao.entity.modeling.LayerEntity;
 import io.yak.ops.dao.mapper.modeling.LayerMapper;
@@ -48,6 +50,18 @@ public class LayerRepositoryImpl implements LayerRepository {
     @Override
     public boolean update(LayerEntity row) {
         return mapper.update(row) == 1;
+    }
+
+    @Override
+    public boolean updateNamingRule(String workspaceId, String id, boolean enabled, long revision, String actor) {
+        return mapper.updateNamingRule(
+                        workspaceId,
+                        id,
+                        enabled,
+                        revision,
+                        actor == null || actor.isBlank() ? CommonConstants.SYSTEM_USER : actor.strip(),
+                        DateUtils.now())
+                == 1;
     }
 
     @Override

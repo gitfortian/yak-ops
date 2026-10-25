@@ -16,7 +16,7 @@ public class StandardFieldEntity extends BaseEntity {
     private String categoryId;
     /** Business display name of the standardized field. */
     private String cnName;
-    /** Globally unique standard code shared across Workspaces. */
+    /** Workspace-unique code inside standard fields. */
     private String enCode;
     /** Logical type of the standardized field. */
     private DataType dataType;
@@ -30,6 +30,24 @@ public class StandardFieldEntity extends BaseEntity {
     private String ownerId;
     /** Optional business definition; excluded from diagnostics. */
     private String businessCaliber;
+    /** Descriptive business preset; never generated as a physical DEFAULT clause. */
+    private String defaultValue;
+    /** Optional parent standard recording specialization, never inherited attributes. */
+    private String parentStandardId;
+    /** Optional bound lookup table. */
+    private String lookupId;
+    /** Optional bound measurement unit. */
+    private String measureUnitId;
+    /** Joined parent code for display; null on write paths or when absent. */
+    private String parentStandardEnCode;
+    /** Joined lookup code for display; null on write paths or when unbound. */
+    private String lookupEnCode;
+    /** Joined lookup Chinese name for display; null on write paths or when unbound. */
+    private String lookupCnName;
+    /** Joined unit abbreviation for display; null on write paths or when unbound. */
+    private String measureUnitEnCode;
+    /** Joined unit Chinese name for display; null on write paths or when unbound. */
+    private String measureUnitCnName;
     /** Optimistic version advanced after every accepted update. */
     private long revision;
 }

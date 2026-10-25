@@ -5,7 +5,7 @@ import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.common.enums.modeling.standard.SecurityLevel;
 import java.time.LocalDateTime;
 
-/** Authorized standard attributes and a minimal owner projection. */
+/** Authorized standard attributes, its reference codes and a minimal owner projection. */
 public record StandardFieldVO(
         String id,
         String categoryId,
@@ -20,6 +20,15 @@ public record StandardFieldVO(
         String ownerName,
         boolean ownerActive,
         String businessCaliber,
+        String defaultValue,
+        String parentStandardId,
+        String parentStandardEnCode,
+        String lookupId,
+        String lookupEnCode,
+        String lookupCnName,
+        String measureUnitId,
+        String measureUnitEnCode,
+        String measureUnitCnName,
         LocalDateTime updateTime,
         long revision) {
     @Override

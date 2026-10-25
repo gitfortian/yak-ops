@@ -24,6 +24,7 @@ public class StandardInputDTO {
     @NotNull(message = "必填参数不能为空")
     private DataType dataType;
 
+    /** Required for DECIMAL, where it must carry both a length and a precision, such as 18,2. */
     @Size(max = 32, message = "文本长度超过限制")
     private String lengthPrecision;
 
@@ -40,4 +41,17 @@ public class StandardInputDTO {
 
     @Size(max = 2000, message = "文本长度超过限制")
     private String businessCaliber;
+
+    /** Descriptive business preset; never becomes a physical DEFAULT clause. */
+    @Size(max = 2048, message = "业务预设值不能超过2048个字符")
+    private String defaultValue;
+
+    @Size(max = 64, message = "父标准标识长度超过限制")
+    private String parentStandardId;
+
+    @Size(max = 64, message = "标准代码标识长度超过限制")
+    private String lookupId;
+
+    @Size(max = 64, message = "度量单位标识长度超过限制")
+    private String measureUnitId;
 }

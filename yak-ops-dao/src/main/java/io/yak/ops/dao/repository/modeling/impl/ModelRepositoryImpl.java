@@ -1,9 +1,11 @@
 package io.yak.ops.dao.repository.modeling.impl;
 
+import io.yak.ops.common.enums.modeling.ModelType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.dao.entity.modeling.ModelEntity;
 import io.yak.ops.dao.entity.modeling.ModelFieldEntity;
 import io.yak.ops.dao.mapper.modeling.ModelMapper;
+import io.yak.ops.dao.repository.modeling.ModelNamingRow;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.StandardInheritance;
 import jakarta.annotation.Resource;
@@ -104,7 +106,27 @@ public class ModelRepositoryImpl implements ModelRepository {
         if (projection == null) return null;
         return new StandardInheritance(
                 projection.getEnCode(),
+                projection.getCnName(),
                 projection.getDataType() == null ? null : DataType.valueOf(projection.getDataType()),
-                projection.getLengthPrecision());
+                projection.getLengthPrecision(),
+                Boolean.TRUE.equals(projection.getIsNotNull()));
+    }
+
+    @Override
+    public List<ModelNamingRow> namingRows(String workspaceId, String layerId) {
+        return mapper.namingRows(workspaceId, layerId).stream()
+                .map(row -> new ModelNamingRow(
+                        row.getId(),
+                        ModelType.valueOf(row.getType()),
+                        row.getName(),
+                        row.getCnName(),
+                        row.getProcessCode(),
+                        row.getNamingRootWordId()))
+                .toList();
+    }
+
+    @Override
+    public void backfillNamingRoot(String workspaceId, String id, String rootWordId) {
+        mapper.backfillNamingRoot(workspaceId, id, rootWordId);
     }
 }

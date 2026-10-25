@@ -46,6 +46,16 @@ public interface LayerMapper {
             "UPDATE yak_ops_modeling_layer SET en_code=#{enCode},cn_name=#{cnName},data_source_id=#{dataSourceId},description=#{description},enabled=#{enabled},revision=revision+1,update_time=#{updateTime},update_by=#{updateBy} WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
     int update(LayerEntity row);
 
+    @Update(
+            "UPDATE yak_ops_modeling_layer SET naming_rule_enabled=#{enabled},revision=revision+1,update_time=#{now},update_by=#{actor} WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
+    int updateNamingRule(
+            @Param("workspaceId") String workspaceId,
+            @Param("id") String id,
+            @Param("enabled") boolean enabled,
+            @Param("revision") long revision,
+            @Param("actor") String actor,
+            @Param("now") java.time.LocalDateTime now);
+
     @Delete(
             "DELETE FROM yak_ops_modeling_layer WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id, @Param("revision") long revision);

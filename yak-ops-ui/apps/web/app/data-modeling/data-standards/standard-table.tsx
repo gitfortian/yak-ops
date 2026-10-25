@@ -26,6 +26,23 @@ export default function StandardTable(props: Props) {
       render: (_, row) => row.lengthPrecision ?? "—",
     },
     {
+      title: "业务预设值",
+      key: "default",
+      width: 140,
+      ellipsis: true,
+      render: (_, row) => row.defaultValue ?? "—",
+    },
+    {
+      title: "关联标准",
+      key: "links",
+      width: 170,
+      ellipsis: true,
+      render: (_, row) =>
+        [row.lookupCnName, row.measureUnitCnName, row.parentStandardEnCode]
+          .filter(Boolean)
+          .join(" / ") || "—",
+    },
+    {
       title: "安全等级",
       key: "security",
       width: 100,
@@ -83,7 +100,7 @@ export default function StandardTable(props: Props) {
       loading={props.loading}
       size="small"
       bordered={false}
-      scroll={{ x: props.searching ? 1360 : 1140 }}
+      scroll={{ x: props.searching ? 1780 : 1560 }}
       emptyText="暂无字段标准"
       pagination={{
         current: props.pageNo,

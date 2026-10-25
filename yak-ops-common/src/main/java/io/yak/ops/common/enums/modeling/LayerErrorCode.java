@@ -14,7 +14,13 @@ public enum LayerErrorCode implements ErrorCode {
     BUILTIN_UNDELETABLE(19204, "默认分层不允许删除"),
     REVISION_CONFLICT(19205, "数据已变更，请刷新后重试"),
     INVALID_DATASOURCE(19206, "请选择当前工作空间已存在的物理数据源"),
-    DATASOURCE_REQUIRED(19207, "启用分层前必须先绑定物理数据源");
+    DATASOURCE_REQUIRED(19207, "启用分层前必须先绑定物理数据源"),
+    /**
+     * Enabling a naming rule while the layer cannot satisfy it: no dictionary entry exists, a
+     * process code leaves no room for the required head, or non-conforming models were not
+     * acknowledged. The offending names are read from the rule endpoint, not carried here.
+     */
+    INVALID_NAMING_RULE(19208, "命名规则无法启用：请先补齐命名词典，或确认该分层下不符合规则的模型");
 
     private final Integer code;
     private final String message;
