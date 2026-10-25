@@ -41,6 +41,7 @@ import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.StandardInheritance;
+import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardLookupRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardMeasureUnitRepository;
 import io.yak.ops.workspace.WorkspaceService;
@@ -65,6 +66,7 @@ class ModelServiceTest {
     @Mock NamingRuleService naming;
     @Mock StandardLookupRepository lookups;
     @Mock StandardMeasureUnitRepository units;
+    @Mock MetricDerivedRepository derivedMetrics;
     @Mock WorkspaceService workspaces;
     @Mock PublicationRepository publications;
     @InjectMocks ModelServiceImpl service;
@@ -445,6 +447,48 @@ class ModelServiceTest {
 
         verify(models).addField(captor.capture());
         assertEquals(AggregateType.COUNT, captor.getValue().getAggregateType());
+    }
+
+    @Test
+    void recordsAnAdvisoryMetricLinkOnASummaryField() {
+        detailGraph();
+        var stored = storedModel("dws_order_summary");
+        stored.setType(ModelType.DWS.name());
+        when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
+        when(models.fields(anyString())).thenReturn(List.of());
+        when(derivedMetrics.row("ws", "metric")).thenReturn(Optional.of(new io.yak.ops.dao.entity.modeling.metric.MetricDerivedEntity()));
+        var imported = measure("amount", DataType.DECIMAL, AggregateType.SUM);
+        imported.setMetricId("metric");
+
+        service.create("ws", "actor", summaryInput("order_summary", List.of(imported)));
+
+        var captor = ArgumentCaptor.forClass(ModelFieldEntity.class);
+        verify(models).addField(captor.capture());
+        assertEquals("metric", captor.getValue().getMetricId());
+    }
+
+    @Test
+    void refusesAMetricLinkOnADetailField() {
+        detailGraph();
+        var imported = field("order_id", DataType.BIGINT);
+        imported.setMetricId("metric");
+
+        var error = assertThrows(BusinessException.class,
+                () -> service.create("ws", "actor", detailInput("order_detail", List.of(imported))));
+
+        assertEquals(DimensionModelingErrorCode.INVALID_FIELD, error.getErrorCode());
+    }
+
+    @Test
+    void refusesAnUnknownMetricLink() {
+        detailGraph();
+        var imported = measure("amount", DataType.DECIMAL, AggregateType.SUM);
+        imported.setMetricId("ghost");
+
+        var error = assertThrows(BusinessException.class,
+                () -> service.create("ws", "actor", summaryInput("order_summary", List.of(imported))));
+
+        assertEquals(CommonErrorCode.RESOURCE_NOT_EXISTS, error.getErrorCode());
     }
 
     @Test

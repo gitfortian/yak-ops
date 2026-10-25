@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   Boxes,
   Database,
+  Gauge,
   LayoutGrid,
   Network,
   Settings,
@@ -39,6 +40,7 @@ export const DATA_MODELING_PRODUCT_LABEL = "数据建模";
 export const DATA_MODELING_NAVIGATION: ProductNavigationItem[] = [
   { label: "数仓规划", path: "/data-modeling/warehouse-planning", icon: Network },
   { label: "数据标准", path: "/data-modeling/data-standards", icon: Database },
+  { label: "数据指标", path: "/data-modeling/metrics", icon: Gauge },
   { label: "维度建模", path: "/data-modeling/dimension-modeling", icon: Boxes },
 ];
 

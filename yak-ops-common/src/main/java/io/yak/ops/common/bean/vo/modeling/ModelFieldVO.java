@@ -23,6 +23,9 @@ import io.yak.ops.common.enums.modeling.standard.DataType;
  * @param lookupEnCode bound lookup code for display, null when unbound
  * @param measureUnitId bound measurement unit identity, null when unbound
  * @param measureUnitEnCode bound unit abbreviation for display, null when unbound
+ * @param metricId imported derived-metric identity, null when not imported
+ * @param metricEnCode imported metric code for display, null when not imported
+ * @param metricCnName imported metric name for display, null when not imported
  * @param description optional business description
  */
 public record ModelFieldVO(
@@ -42,4 +45,7 @@ public record ModelFieldVO(
         String lookupEnCode,
         String measureUnitId,
         String measureUnitEnCode,
+        String metricId,
+        String metricEnCode,
+        String metricCnName,
         String description) {}

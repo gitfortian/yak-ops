@@ -48,6 +48,13 @@ public class ModelFieldInputDTO {
     @Size(max = 64, message = "度量单位标识过长")
     private String measureUnitId;
 
+    /**
+     * Derived metric the field was imported from; accepted for DWS and ADS only. The link is
+     * advisory: it never overwrites the field's own attributes.
+     */
+    @Size(max = 64, message = "派生指标标识过长")
+    private String metricId;
+
     @Size(max = 500, message = "描述不能超过500个字符")
     private String description;
 }

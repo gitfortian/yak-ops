@@ -116,14 +116,16 @@ public interface ModelMapper {
 
     @Select("SELECT f.id,f.workspace_id,f.model_id,f.ordinal,f.en_code,f.cn_name,f.data_type,f.length_precision,"
             + "f.is_primary_key,f.is_not_null,f.is_partition,f.aggregate_type,f.standard_id,"
-            + "f.lookup_id,f.measure_unit_id,f.description,"
+            + "f.lookup_id,f.measure_unit_id,f.metric_id,f.description,"
             + "f.create_time,"
             + "f.update_time,f.create_by,f.update_by,s.en_code AS standard_en_code,"
-            + "l.en_code AS lookup_en_code,u.en_code AS measure_unit_en_code "
+            + "l.en_code AS lookup_en_code,u.en_code AS measure_unit_en_code,"
+            + "md.en_code AS metric_en_code,md.cn_name AS metric_cn_name "
             + "FROM yak_ops_modeling_model_field f "
             + "LEFT JOIN yak_ops_standard_field s ON s.workspace_id=f.workspace_id AND s.id=f.standard_id "
             + "LEFT JOIN yak_ops_standard_lookup l ON l.workspace_id=f.workspace_id AND l.id=f.lookup_id "
             + "LEFT JOIN yak_ops_standard_measure_unit u ON u.workspace_id=f.workspace_id AND u.id=f.measure_unit_id "
+            + "LEFT JOIN yak_ops_modeling_metric_derived md ON md.workspace_id=f.workspace_id AND md.id=f.metric_id "
             + "WHERE f.model_id=#{modelId} ORDER BY f.ordinal,f.id")
     List<ModelFieldEntity> fields(@Param("modelId") String modelId);
 
@@ -132,10 +134,10 @@ public interface ModelMapper {
 
     @Insert("INSERT INTO yak_ops_modeling_model_field(id,workspace_id,model_id,ordinal,en_code,cn_name,data_type,"
             + "length_precision,is_primary_key,is_not_null,is_partition,aggregate_type,standard_id,"
-            + "lookup_id,measure_unit_id,description,"
+            + "lookup_id,measure_unit_id,metric_id,description,"
             + "create_time,update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{modelId},#{ordinal},"
             + "#{enCode},#{cnName},#{dataType},#{lengthPrecision},#{isPrimaryKey},#{isNotNull},#{isPartition},"
-            + "#{aggregateType},#{standardId},#{lookupId},#{measureUnitId},#{description},#{createTime},"
+            + "#{aggregateType},#{standardId},#{lookupId},#{measureUnitId},#{metricId},#{description},#{createTime},"
             + "#{updateTime},#{createBy},#{updateBy})")
     int insertField(ModelFieldEntity row);
 

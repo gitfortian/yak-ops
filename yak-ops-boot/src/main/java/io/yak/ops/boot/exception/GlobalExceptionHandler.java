@@ -6,6 +6,7 @@ import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.common.enums.modeling.LayerErrorCode;
 import io.yak.ops.common.enums.modeling.ModelingErrorCode;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
+import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.enums.modeling.standard.StandardErrorCode;
 import io.yak.ops.common.enums.schedule.ScheduleErrorCode;
 import io.yak.ops.common.exception.BusinessException;
@@ -73,9 +74,14 @@ public class GlobalExceptionHandler {
         HttpStatus status = businessStatus(errorCode);
         if (status.is5xxServerError())
             LOG.error("Business request failed, errorCode={}", errorCode.getCode(), exception);
-        Result<Object> body = exception instanceof DataSourceException dataSourceException
-                ? Result.fail(errorCode.getCode(), dataSourceException.getUserMessage())
-                : Result.fail(errorCode);
+        Result<Object> body;
+        if (exception instanceof DataSourceException dataSourceException) {
+            body = Result.fail(errorCode.getCode(), dataSourceException.getUserMessage());
+        } else if (exception.getDetail() != null) {
+            body = Result.fail(errorCode.getCode(), errorCode.getMessage() + ": " + exception.getDetail());
+        } else {
+            body = Result.fail(errorCode);
+        }
         if (exception instanceof DataSourceException datasource
                 && errorCode == DataSourceErrorCode.INVALID_CONNECTION_PARAMS
                 && !datasource.getValidationErrors().isEmpty()) {
@@ -170,6 +176,16 @@ public class GlobalExceptionHandler {
                 // The physical table exists; only reading it back failed, so this is an upstream fault.
                 case METADATA_COLLECTION_FAILED -> HttpStatus.BAD_GATEWAY;
                 case DUPLICATE_CODE, DUPLICATE_TABLE_NAME, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
+            };
+        }
+        if (errorCode instanceof MetricErrorCode code) {
+            return switch (code) {
+                case INVALID_CODE,
+                        INVALID_OWNER,
+                        INVALID_ATOMIC_METRIC,
+                        INVALID_DERIVED_METRIC,
+                        INVALID_METRIC_EXPRESSION -> HttpStatus.BAD_REQUEST;
+                case DUPLICATE_CODE, REVISION_CONFLICT, REFERENCED -> HttpStatus.CONFLICT;
             };
         }
         if (errorCode == CommonErrorCode.PARAM_NOT_VALID) return HttpStatus.BAD_REQUEST;
