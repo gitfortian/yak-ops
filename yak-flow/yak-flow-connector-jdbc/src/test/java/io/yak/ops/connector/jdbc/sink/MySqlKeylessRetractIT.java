@@ -18,6 +18,7 @@ import io.yak.ops.testutils.TestNames;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.UUID;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -80,7 +81,8 @@ class MySqlKeylessRetractIT {
                             () -> writer.add(row(table, RowKind.UPDATE_AFTER, 4, "1.00", null)));
                 }
                 try (JdbcOutputFormat writer = writer(table)) {
-                    writer.add(row(table, RowKind.UPDATE_BEFORE, 4, "1.00", null));
+                    writer.add(row(table, RowKind.UPDATE_BEFORE, 4, "1.00", null)
+                            .withChangeEventId(new ChangeEventId("source", "incomplete", 0, 2)));
                     assertThrows(IllegalStateException.class, writer::flush);
                 }
                 try (JdbcOutputFormat writer = writer(table)) {
@@ -154,6 +156,8 @@ class MySqlKeylessRetractIT {
 
     private void create(Connection connection, TableId table, String constraints) throws SQLException {
         try (var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE IF NOT EXISTS `yak_flow_cdc_receipts` "
+                    + "(`receipt_key` BINARY(32) NOT NULL PRIMARY KEY) ENGINE=InnoDB");
             statement.execute("CREATE TABLE " + dialect.qualifiedTable(table)
                     + " (bucket BIGINT NOT NULL, amount DECIMAL(14,2) NULL, "
                     + "payload VARBINARY(12) NULL" + constraints + ") ENGINE=InnoDB");
@@ -167,8 +171,13 @@ class MySqlKeylessRetractIT {
     }
 
     private TableRecord row(TableId table, RowKind kind, long bucket, String amount, byte[] payload) {
-        return new TableRecord(table, kind, GenericRowData.of(
+        TableRecord record = new TableRecord(table, kind, GenericRowData.of(
                 bucket, amount == null ? null : new BigDecimal(amount), payload));
+        if (kind == RowKind.INSERT || kind == RowKind.DELETE) {
+            return record.withChangeEventId(new ChangeEventId(
+                    "source-" + table.table(), UUID.randomUUID().toString(), 0, 1));
+        }
+        return record;
     }
 
     private long count(Connection connection, TableId table, long bucket) throws SQLException {
