@@ -47,5 +47,6 @@ public final class SolutionOptions {
             .required(JobOptions.SOURCE, TARGET, JdbcSinkOptions.WRITE_MODE)
             .optional(SourceConfig.INCREMENTAL)
             .build();
+
     private SolutionOptions() {}
 }
