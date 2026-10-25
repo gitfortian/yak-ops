@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.model.ModelService;
 import io.yak.ops.business.modeling.model.impl.ModelServiceImpl;
+import io.yak.ops.business.modeling.naming.impl.NamingRuleServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.ModelFieldInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;
@@ -24,9 +25,13 @@ import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.repository.modeling.impl.DimensionRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.impl.LayerRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.ModelRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PublicationRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardLookupRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardMeasureUnitRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardNamingEntryRepositoryImpl;
 import io.yak.ops.testutils.MySqlDatabase;
 import io.yak.ops.workspace.WorkspaceService;
 import java.util.List;
@@ -78,7 +83,12 @@ class ModelDatabaseIT {
                 ModelServiceImpl.class,
                 PlanningRepositoryImpl.class,
                 DimensionRepositoryImpl.class,
-                PublicationRepositoryImpl.class);
+                PublicationRepositoryImpl.class,
+                LayerRepositoryImpl.class,
+                StandardLookupRepositoryImpl.class,
+                StandardMeasureUnitRepositoryImpl.class,
+                StandardNamingEntryRepositoryImpl.class,
+                NamingRuleServiceImpl.class);
         service = context.getBean(ModelService.class);
     }
 

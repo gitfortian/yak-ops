@@ -50,7 +50,9 @@ class DataStandardsIT extends BackendTestBase {
         assertEquals("交易类 / 订单", read.path("categoryPath").asText());
         assertEquals(prefix + "_one", read.path("enCode").asText());
         assertEquals("INTERNAL", read.path("securityLevel").asText());
-        assertEquals("NOT_ENABLED", api.call("GET", API + "/fields/" + firstId + "/references").path("availability").asText());
+        var references = api.call("GET", API + "/fields/" + firstId + "/references");
+        assertEquals("AVAILABLE", references.path("availability").asText());
+        assertEquals(0, references.path("items").size());
         assertFalse(api.call("GET", API + "/fields/codes/availability?enCode=" + prefix + "_one")
                 .path("available")
                 .asBoolean());

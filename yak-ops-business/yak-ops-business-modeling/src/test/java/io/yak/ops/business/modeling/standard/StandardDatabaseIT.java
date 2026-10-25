@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import io.yak.ops.business.modeling.standard.StandardCatalog;
 import io.yak.ops.business.modeling.standard.impl.StandardServiceImpl;
 import io.yak.ops.common.bean.dto.modeling.standard.CategoryInputDTO;
 import io.yak.ops.common.bean.dto.modeling.standard.StandardInputDTO;
@@ -25,6 +26,10 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.modeling.standard.StandardFieldEntity;
 import io.yak.ops.dao.entity.security.UserEntity;
 import io.yak.ops.dao.repository.modeling.standard.StandardRepository;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardLookupRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardMeasureUnitRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardNamingEntryRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.standard.impl.StandardReferenceRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.standard.impl.StandardRepositoryImpl;
 import io.yak.ops.dao.repository.security.UserRepository;
 import io.yak.ops.testutils.MySqlDatabase;
@@ -78,7 +83,14 @@ class StandardDatabaseIT {
         jdbc = new JdbcTemplate(source);
         Flyway.configure().dataSource(source).locations("classpath:db/migration/yak-ops").load().migrate();
         context = new AnnotationConfigApplicationContext(
-                Beans.class, StandardRepositoryImpl.class, StandardServiceImpl.class);
+                Beans.class,
+                StandardRepositoryImpl.class,
+                StandardServiceImpl.class,
+                StandardCatalog.class,
+                StandardLookupRepositoryImpl.class,
+                StandardMeasureUnitRepositoryImpl.class,
+                StandardNamingEntryRepositoryImpl.class,
+                StandardReferenceRepositoryImpl.class);
         service = context.getBean(StandardService.class);
     }
 
