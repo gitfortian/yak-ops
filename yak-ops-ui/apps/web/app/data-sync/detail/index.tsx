@@ -28,7 +28,8 @@ export function DataSyncTaskDetailPage() {
     ready: instancesReady,
     refresh: refreshActiveInstances,
   } = useActiveTaskInstance(scope, taskId);
-  const canStart = !task?.configurationError && canManageTaskDefinition(instancesReady, activeInstance);
+  const canStart =
+    !task?.configurationError && canManageTaskDefinition(instancesReady, activeInstance);
   const {
     executionId,
     activeTab,
