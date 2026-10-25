@@ -327,6 +327,12 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     }
 
     @Override
+    public String replayReceiptSql(TableId table) {
+        return "INSERT IGNORE INTO " + qualifiedTable(table) + " ("
+                + quoteIdentifier("receipt_key") + ") VALUES (?)";
+    }
+
+    @Override
     public String upsertSql(TableId table, TableSchema schema) {
         requirePrimaryKey(schema);
         List<String> primaryKeys = schema.primaryKeys();
