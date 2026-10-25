@@ -2,6 +2,7 @@ package io.yak.ops.business.modeling.model.impl;
 
 import io.yak.ops.business.modeling.LayerService;
 import io.yak.ops.business.modeling.model.ModelService;
+import io.yak.ops.business.modeling.naming.NamingRuleService;
 import io.yak.ops.common.bean.dto.modeling.ModelFieldInputDTO;
 import io.yak.ops.common.bean.dto.modeling.ModelInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelDTO;
@@ -24,6 +25,8 @@ import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
+import io.yak.ops.dao.repository.modeling.standard.StandardLookupRepository;
+import io.yak.ops.dao.repository.modeling.standard.StandardMeasureUnitRepository;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
 import jakarta.annotation.Resource;
@@ -61,6 +64,15 @@ public class ModelServiceImpl implements ModelService {
 
     @Resource
     private LayerService layers;
+
+    @Resource
+    private NamingRuleService naming;
+
+    @Resource
+    private StandardLookupRepository lookups;
+
+    @Resource
+    private StandardMeasureUnitRepository units;
 
     /** Read-only here: the model surface shows the newest publication status but never writes one. */
     @Resource
@@ -136,8 +148,10 @@ public class ModelServiceImpl implements ModelService {
         row.setRevision(1);
         row.initCreate(actor);
         row.setLayerId(layer.id());
-        row.setName(fullName(layer, input.getNameSuffix()));
-        applyModel(row, workspaceId, actor, input);
+        var suffix = suffix(input.getNameSuffix());
+        row.setName(fullName(layer, suffix));
+        var processCode = applyModel(row, workspaceId, actor, input);
+        applyNaming(row, layer, workspaceId, input.getType(), suffix, processCode);
         var fields = validateFields(workspaceId, actor, row.getId(), input.getType(), input.getFields());
         if (models.occupied(workspaceId, row.getName(), null))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
@@ -166,8 +180,10 @@ public class ModelServiceImpl implements ModelService {
         if (input.getType() != stored) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         var layer = requireLayer(workspaceId, actor, input.getLayerId());
         row.setLayerId(layer.id());
-        row.setName(fullName(layer, input.getNameSuffix()));
-        applyModel(row, workspaceId, actor, input);
+        var suffix = suffix(input.getNameSuffix());
+        row.setName(fullName(layer, suffix));
+        var processCode = applyModel(row, workspaceId, actor, input);
+        applyNaming(row, layer, workspaceId, stored, suffix, processCode);
         var fields = validateFields(workspaceId, actor, id, stored, input.getFields());
         if (models.occupied(workspaceId, row.getName(), id))
             throw new BusinessException(DimensionModelingErrorCode.DUPLICATE_TABLE_NAME);
@@ -200,7 +216,7 @@ public class ModelServiceImpl implements ModelService {
             String workspaceId, String actor, String layerId, String nameSuffix, String excludeId) {
         requireActor(workspaceId, actor);
         var layer = requireLayer(workspaceId, actor, layerId);
-        return !models.occupied(workspaceId, fullName(layer, nameSuffix), trim(excludeId));
+        return !models.occupied(workspaceId, fullName(layer, suffix(nameSuffix)), trim(excludeId));
     }
 
     /**
@@ -220,22 +236,52 @@ public class ModelServiceImpl implements ModelService {
 
     /** Builds the full table name; the prefix follows the selected layer so a rename cannot drift. */
     private static String fullName(LayerOptionVO layer, String suffix) {
-        var normalized = trim(suffix);
-        if (normalized == null || !SUFFIX.matcher(normalized).matches())
-            throw new BusinessException(DimensionModelingErrorCode.INVALID_TABLE_NAME);
-        var name = layer.enCode().toLowerCase(Locale.ROOT) + "_" + normalized;
+        var name = layer.enCode().toLowerCase(Locale.ROOT) + "_" + suffix;
         if (name.length() > MAX_TABLE_NAME) throw new BusinessException(DimensionModelingErrorCode.INVALID_TABLE_NAME);
         return name;
     }
 
-    /** Validates and copies every non-identity attribute, including the scope ownership rules. */
-    private void applyModel(ModelEntity row, String workspaceId, String actor, ModelInputDTO input) {
+    /** Validates the suffix shape; {@code INVALID_TABLE_NAME} keeps meaning a malformed or over-long name. */
+    private static String suffix(String value) {
+        var normalized = trim(value);
+        if (normalized == null || !SUFFIX.matcher(normalized).matches())
+            throw new BusinessException(DimensionModelingErrorCode.INVALID_TABLE_NAME);
+        return normalized;
+    }
+
+    /**
+     * Applies the layer naming rule and records the root word the name was composed from.
+     *
+     * <p>The rule is checked on every save, not only when it is enabled, because both halves of the
+     * composed head stay editable: a process code can be lengthened and a dictionary abbreviation
+     * can be renamed. {@code DIM} and {@code ADS} are exempt because they carry no process token.
+     */
+    private void applyNaming(
+            ModelEntity row,
+            LayerOptionVO layer,
+            String workspaceId,
+            ModelType type,
+            String suffix,
+            String processCode) {
+        row.setNamingRootWordId(null);
+        if (!layer.namingRuleEnabled() || !type.isPublicLayer()) return;
+        if (processCode == null) throw new BusinessException(DimensionModelingErrorCode.NAMING_RULE_VIOLATION);
+        row.setNamingRootWordId(naming.rootWord(workspaceId, suffix, processCode));
+    }
+
+    /**
+     * Validates and copies every non-identity attribute, including the scope ownership rules.
+     *
+     * @return the code of the owning business process for a public-layer model, null otherwise
+     */
+    private String applyModel(ModelEntity row, String workspaceId, String actor, ModelInputDTO input) {
         if (input.getType() == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         row.setType(input.getType().name());
         var categoryId = requireIdentifier(input.getCategoryId());
         requireNode(workspaceId, NodeKind.CATEGORY, categoryId);
         row.setCategoryId(categoryId);
-        if (input.getType().isPublicLayer()) applyProcessOwnership(row, workspaceId, categoryId, input);
+        String processCode = null;
+        if (input.getType().isPublicLayer()) processCode = applyProcessOwnership(row, workspaceId, categoryId, input);
         else if (input.getType() == ModelType.DIM) applyDimensionOwnership(row, workspaceId, categoryId, input);
         else applyApplicationOwnership(row, workspaceId, input);
         row.setCnName(requireText(input.getCnName(), 128));
@@ -247,10 +293,11 @@ public class ModelServiceImpl implements ModelService {
         row.setLifecycleDays(lifecycle);
         row.setOwnerId(requireOwner(workspaceId, actor, input.getOwnerId()));
         row.setDescription(optionalText(input.getDescription(), 500));
+        return processCode;
     }
 
     /** DWD and DWS hang below a business process inside one data domain of the selected category. */
-    private void applyProcessOwnership(ModelEntity row, String workspaceId, String categoryId, ModelInputDTO input) {
+    private String applyProcessOwnership(ModelEntity row, String workspaceId, String categoryId, ModelInputDTO input) {
         var domainId = requireIdentifier(input.getDomainId());
         var domain = requireNode(workspaceId, NodeKind.DOMAIN, domainId);
         if (!categoryId.equals(domain.getParentId()))
@@ -265,6 +312,7 @@ public class ModelServiceImpl implements ModelService {
         row.setDomainId(domainId);
         row.setDatamartId(null);
         row.setDimensionId(null);
+        return process.getCode();
     }
 
     /** DIM is anchored to exactly one scope; a public-layer DIM must bind a dimension of that domain. */
@@ -324,10 +372,11 @@ public class ModelServiceImpl implements ModelService {
     /**
      * Builds the replacement field rows.
      *
-     * <p>A bound standard overwrites the code, type and length before validation, so a client cannot
-     * desynchronize a field from the standard it claims to follow. Nullability and the primary-key
-     * flag stay exactly as submitted. The aggregate is checked after that inheritance, so a standard
-     * that resolves to {@code STRING} cannot carry {@code SUM} either.
+     * <p>Binding is authoritative rather than advisory: a bound standard overwrites code, Chinese
+     * name, type, length and nullability before validation, so a client cannot desynchronize a field
+     * from the standard it claims to follow. A lookup table supplies code and Chinese name only when
+     * no standard is bound, and a unit never overrides anything. The aggregate is checked after that
+     * inheritance, so a standard that resolves to {@code STRING} cannot carry {@code SUM} either.
      */
     private List<ModelFieldEntity> validateFields(
             String workspaceId, String actor, String modelId, ModelType type, List<ModelFieldInputDTO> input) {
@@ -340,20 +389,33 @@ public class ModelServiceImpl implements ModelService {
             var field = submitted.get(index);
             if (field == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
             var enCode = trim(field.getEnCode());
+            var cnName = field.getCnName();
             var dataType = field.getDataType();
             var length = trim(field.getLengthPrecision());
+            var isNotNull = Boolean.TRUE.equals(field.getIsNotNull());
             var standardId = trim(field.getStandardId());
+            var lookupId = trim(field.getLookupId());
+            var unitId = trim(field.getMeasureUnitId());
             if (standardId != null) {
                 var inherited = models.standard(workspaceId, standardId);
                 if (inherited == null) throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
                 enCode = inherited.enCode();
+                cnName = inherited.cnName();
                 dataType = inherited.dataType();
                 length = inherited.lengthPrecision();
+                isNotNull = inherited.isNotNull();
+            } else if (lookupId != null) {
+                var lookup = lookups.find(workspaceId, lookupId)
+                        .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+                enCode = lookup.getEnCode();
+                cnName = lookup.getCnName();
             }
+            if (unitId != null && units.find(workspaceId, unitId).isEmpty())
+                throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
             if (enCode == null || !FIELD_CODE.matcher(enCode).matches() || !codes.add(enCode))
                 throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
             if (dataType == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
-            var cnName = requireText(field.getCnName(), 128, DimensionModelingErrorCode.INVALID_FIELD);
+            var displayName = requireText(cnName, 128, DimensionModelingErrorCode.INVALID_FIELD);
             if (length != null && length.length() > 32)
                 throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
             var partition = Boolean.TRUE.equals(field.getIsPartition());
@@ -373,14 +435,16 @@ public class ModelServiceImpl implements ModelService {
             row.setModelId(modelId);
             row.setOrdinal(index + 1);
             row.setEnCode(enCode);
-            row.setCnName(cnName);
+            row.setCnName(displayName);
             row.setDataType(dataType);
             row.setLengthPrecision(length);
             row.setIsPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
-            row.setIsNotNull(Boolean.TRUE.equals(field.getIsNotNull()));
+            row.setIsNotNull(isNotNull);
             row.setIsPartition(partition);
             row.setAggregateType(aggregate);
             row.setStandardId(standardId);
+            row.setLookupId(lookupId);
+            row.setMeasureUnitId(unitId);
             row.setDescription(optionalText(field.getDescription(), 500, DimensionModelingErrorCode.INVALID_FIELD));
             rows.add(row);
         }
@@ -499,6 +563,10 @@ public class ModelServiceImpl implements ModelService {
                 row.getAggregateType(),
                 row.getStandardId(),
                 row.getStandardEnCode(),
+                row.getLookupId(),
+                row.getLookupEnCode(),
+                row.getMeasureUnitId(),
+                row.getMeasureUnitEnCode(),
                 row.getDescription());
     }
 }

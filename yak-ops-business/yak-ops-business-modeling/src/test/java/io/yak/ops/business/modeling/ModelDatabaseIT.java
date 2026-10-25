@@ -92,7 +92,7 @@ class ModelDatabaseIT {
         reset(WORKSPACES, LAYERS);
         when(WORKSPACES.isActiveMember(anyString(), anyString())).thenReturn(true);
         when(LAYERS.options(anyString(), anyString()))
-                .thenReturn(List.of(new LayerOptionVO("layer", "DWD", "明细层", "ds", "主库")));
+                .thenReturn(List.of(new LayerOptionVO("layer", "DWD", "明细层", "ds", "主库", false)));
         for (String table :
                 List.of("model_field", "model", "dimension", "datamart", "subject", "process", "domain", "category", "layer"))
             jdbc.update("DELETE FROM yak_ops_modeling_" + table);

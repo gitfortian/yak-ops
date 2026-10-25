@@ -98,7 +98,9 @@ class ModelPublicationServiceTest {
     }
 
     private static ModelFieldVO field(String code, String cnName) {
-        return new ModelFieldVO(code, 1, code, cnName, DataType.STRING, "32", true, true, false, null, null, null, null);
+        return new ModelFieldVO(
+                code, 1, code, cnName, DataType.STRING, "32", true, true, false, null, null, null, null, null, null, null,
+                null);
     }
 
     private static ModelVO model() {

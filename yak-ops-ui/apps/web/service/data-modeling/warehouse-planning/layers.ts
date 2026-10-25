@@ -12,6 +12,7 @@ export interface Layer {
   description: string | null;
   enabled: boolean;
   builtin: boolean;
+  namingRuleEnabled: boolean;
   sortNo: number;
   revision: number;
 }
@@ -113,3 +114,38 @@ export const deleteLayer = (layer: Layer) =>
       { skipErrorHandler: true },
     ),
   );
+
+export interface NamingViolation {
+  modelId: string;
+  name: string;
+  cnName: string;
+  type: string;
+  processCode: string | null;
+}
+
+export interface LayerNamingRule {
+  layerId: string;
+  enabled: boolean;
+  revision: number;
+  violations: NamingViolation[];
+}
+
+/** Reads one layer's naming rule together with the models that currently violate it. */
+export const getNamingRule = (layerId: string, signal?: AbortSignal) =>
+  layerRequest(
+    HttpUtils.getData<LayerNamingRule>(`${API}/${encodeURIComponent(layerId)}/naming-rule`, {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
+
+export function updateNamingRule(
+  layerId: string,
+  input: { enabled: boolean; acknowledgeViolations: boolean; revision: number },
+) {
+  return layerRequest(
+    HttpUtils.putData<LayerNamingRule>(`${API}/${encodeURIComponent(layerId)}/naming-rule`, input, {
+      skipErrorHandler: true,
+    }),
+  );
+}

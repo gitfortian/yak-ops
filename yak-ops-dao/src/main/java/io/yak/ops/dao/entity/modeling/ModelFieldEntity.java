@@ -39,8 +39,16 @@ public class ModelFieldEntity extends BaseEntity {
     private AggregateType aggregateType;
     /** Bound field standard; null when the field is maintained by hand. */
     private String standardId;
+    /** Bound lookup table; supplies code and name only when no field standard is bound. */
+    private String lookupId;
+    /** Bound measurement unit annotation; never changes code, name or type. */
+    private String measureUnitId;
     /** Optional business description. */
     private String description;
     /** Joined standard code for display; null on write paths or when unbound. */
     private String standardEnCode;
+    /** Joined lookup code for display; null on write paths or when unbound. */
+    private String lookupEnCode;
+    /** Joined unit abbreviation for display; null on write paths or when unbound. */
+    private String measureUnitEnCode;
 }

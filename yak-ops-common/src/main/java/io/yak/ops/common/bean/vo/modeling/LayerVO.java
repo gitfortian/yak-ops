@@ -11,6 +11,7 @@ package io.yak.ops.common.bean.vo.modeling;
  * @param description optional business description
  * @param enabled whether dimension modeling may select the layer
  * @param builtin whether the layer is one of the five presets
+ * @param namingRuleEnabled whether model suffixes of this layer must carry a dictionary root word
  * @param sortNo display order
  * @param revision current optimistic version
  */
@@ -23,5 +24,6 @@ public record LayerVO(
         String description,
         boolean enabled,
         boolean builtin,
+        boolean namingRuleEnabled,
         int sortNo,
         long revision) {}

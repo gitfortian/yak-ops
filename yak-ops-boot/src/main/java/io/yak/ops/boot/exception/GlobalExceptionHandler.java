@@ -126,8 +126,16 @@ public class GlobalExceptionHandler {
     private static HttpStatus businessStatus(ErrorCode errorCode) {
         if (errorCode instanceof StandardErrorCode code) {
             return switch (code) {
-                case INVALID_CODE, INVALID_OWNER, INVALID_PRECISION, DEPTH_LIMIT -> HttpStatus.BAD_REQUEST;
-                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT, REFERENCED -> HttpStatus.CONFLICT;
+                case INVALID_CODE,
+                        INVALID_OWNER,
+                        INVALID_PRECISION,
+                        DEPTH_LIMIT,
+                        INVALID_PARENT_STANDARD,
+                        INVALID_LOOKUP_VALUE -> HttpStatus.BAD_REQUEST;
+                // The set's kind is locked by a record that already exists, so the request is
+                // well-formed but conflicts with committed state.
+                case DUPLICATE_CODE, HAS_DEPENDENCIES, REVISION_CONFLICT, REFERENCED, STANDARD_SET_KIND_LOCKED ->
+                    HttpStatus.CONFLICT;
             };
         }
         if (errorCode instanceof ModelingErrorCode code) {
@@ -141,6 +149,9 @@ public class GlobalExceptionHandler {
                 case INVALID_CODE, INVALID_DATASOURCE -> HttpStatus.BAD_REQUEST;
                 // A missing binding is a state precondition for enabling, not a malformed request.
                 case DATASOURCE_REQUIRED -> HttpStatus.UNPROCESSABLE_ENTITY;
+                // A rule the layer cannot satisfy yet: no dictionary, an unfit head, or models that
+                // still do not conform and were not acknowledged.
+                case INVALID_NAMING_RULE -> HttpStatus.UNPROCESSABLE_ENTITY;
                 case DUPLICATE_CODE, BUILTIN_IMMUTABLE, BUILTIN_UNDELETABLE, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }
@@ -152,7 +163,8 @@ public class GlobalExceptionHandler {
                         INVALID_MODEL,
                         INVALID_TABLE_NAME,
                         UNKNOWN_MODEL_TYPE,
-                        PARTITION_RULE -> HttpStatus.BAD_REQUEST;
+                        PARTITION_RULE,
+                        NAMING_RULE_VIOLATION -> HttpStatus.BAD_REQUEST;
                 // A layer that is disabled or unbound is a state precondition, not a malformed request.
                 case LAYER_NOT_SELECTABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
                 // The physical table exists; only reading it back failed, so this is an upstream fault.

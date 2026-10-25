@@ -9,6 +9,13 @@ import {
   FieldLabel,
   FieldRequiredMark,
   Form,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
   Textarea,
   toast,
 } from "@yak-ops/yak-ui";
@@ -17,7 +24,10 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   checkCodeUnique,
   classifyStandardFailure,
+  getLookups,
+  getMeasureUnits,
   getOwners,
+  getStandards,
   saveStandard,
 } from "@/service/data-modeling/data-standards";
 import {
@@ -26,10 +36,20 @@ import {
   SECURITY_LEVELS,
   type OwnerOption,
   type StandardDraft,
+  type StandardField,
   type StandardInput,
 } from "@/service/data-modeling/data-standards/types";
 import { FIELD_CLASS, InputField, SelectField } from "../shared/form-fields";
+import { useOptions } from "./state";
 import { STANDARD_CODE, validateStandard } from "./validation";
+
+const NONE = "NONE";
+
+/** Splits the stored `p,s` pair so DECIMAL can be edited as two numbers. */
+function pairOf(value: string | null) {
+  const [precision = "", scale = ""] = (value ?? "").split(",");
+  return { precision, scale };
+}
 
 export default function StandardDialog(props: {
   draft: StandardDraft;
@@ -50,11 +70,39 @@ export default function StandardDialog(props: {
     securityLevel: edited?.securityLevel ?? "INTERNAL",
     ownerId: edited?.ownerId ?? currentUser?.id ?? "",
     businessCaliber: edited?.businessCaliber ?? null,
+    defaultValue: edited?.defaultValue ?? null,
+    parentStandardId: edited?.parentStandardId ?? null,
+    lookupId: edited?.lookupId ?? null,
+    measureUnitId: edited?.measureUnitId ?? null,
   }));
   const [errors, setErrors] = useState<Partial<Record<keyof StandardInput, string>>>({});
   const [owners, setOwners] = useState<OwnerOption[]>([]);
   const [ownerState, setOwnerState] = useState<"loading" | "ready" | "error">("loading");
   const [ownerVersion, setOwnerVersion] = useState(0);
+  const [parentKeyword, setParentKeyword] = useState("");
+  const [parentOptions, setParentOptions] = useState<{ value: string; label: string }[]>(() =>
+    edited?.parentStandardId
+      ? [
+          {
+            value: edited.parentStandardId,
+            label: (edited.parentStandardEnCode ?? edited.parentStandardId) + "（当前父标准）",
+          },
+        ]
+      : [],
+  );
+  const [parentState, setParentState] = useState<"idle" | "loading" | "error">("idle");
+  const [optionVersion, setOptionVersion] = useState(0);
+  const lookups = useOptions(
+    (signal) =>
+      getLookups({ scope: "KEYWORD", keyword: "", pageNo: 1, pageSize: 100 }, signal).then(
+        (page) => page.bizData,
+      ),
+    optionVersion,
+  );
+  const units = useOptions(
+    (signal) => getMeasureUnits(null, "", 1, 100, signal).then((page) => page.bizData),
+    optionVersion,
+  );
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [failure, setFailure] = useState("");
@@ -64,6 +112,7 @@ export default function StandardDialog(props: {
     busy = useRef(false),
     ownerTouched = useRef(false);
   const codeRequest = useRef<AbortController | null>(null);
+  const parentRequest = useRef<AbortController | null>(null);
   const latestCode = useRef(input.enCode);
   latestCode.current = input.enCode;
   const form = useRef<HTMLFormElement>(null);
@@ -73,6 +122,7 @@ export default function StandardDialog(props: {
     return () => {
       active.current = false;
       codeRequest.current?.abort();
+      parentRequest.current?.abort();
     };
   }, []);
   useEffect(() => {
@@ -110,6 +160,12 @@ export default function StandardDialog(props: {
       setCheckingCode(false);
     }
   };
+  // A DECIMAL pair is stored as `p,s`; an incomplete pair is kept verbatim so validation can name it.
+  const setPair = (precision: string, scale: string) =>
+    change(
+      "lengthPrecision",
+      precision.trim() || scale.trim() ? `${precision.trim()},${scale.trim()}` : null,
+    );
   const validateCode = async () => {
     const value = input.enCode;
     codeRequest.current?.abort();
@@ -137,6 +193,35 @@ export default function StandardDialog(props: {
       if (active.current && !controller.signal.aborted) setCheckingCode(false);
     }
   };
+  const searchParents = async () => {
+    const keyword = parentKeyword.trim();
+    parentRequest.current?.abort();
+    if (!keyword) {
+      setParentState("idle");
+      return;
+    }
+    const controller = new AbortController();
+    parentRequest.current = controller;
+    setParentState("loading");
+    try {
+      const page = await getStandards(
+        { scope: "ALL", keyword, pageNo: 1, pageSize: 20 },
+        controller.signal,
+      );
+      if (!active.current || controller.signal.aborted) return;
+      const found = page.bizData
+        .filter((row: StandardField) => row.id !== edited?.id)
+        .map((row: StandardField) => ({ value: row.id, label: `${row.cnName}（${row.enCode}）` }));
+      setParentOptions((previous) =>
+        previous
+          .filter((item) => item.value === input.parentStandardId)
+          .concat(found.filter((item) => item.value !== input.parentStandardId)),
+      );
+      setParentState("idle");
+    } catch {
+      if (active.current && !controller.signal.aborted) setParentState("error");
+    }
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy.current || conflict || stale || ownerState !== "ready") return;
@@ -157,8 +242,8 @@ export default function StandardDialog(props: {
       await saveStandard(props.draft, {
         ...input,
         cnName: input.cnName.trim(),
-        lengthPrecision: input.lengthPrecision || null,
         businessCaliber: input.businessCaliber?.trim() || null,
+        defaultValue: input.defaultValue?.trim() || null,
       });
       if (active.current) {
         toast.success("保存成功");
@@ -175,6 +260,11 @@ export default function StandardDialog(props: {
               ...previous,
               lengthPrecision: "长度或精度与数据类型不匹配",
             }));
+          else if (result.field === "parentStandardId")
+            setErrors((previous) => ({
+              ...previous,
+              parentStandardId: "父标准不能是自身或形成循环",
+            }));
           else {
             setErrors((previous) => ({ ...previous, ownerId: "请选择当前工作空间有效成员" }));
             setOwnerVersion((value) => value + 1);
@@ -187,7 +277,7 @@ export default function StandardDialog(props: {
         } else if (result.kind === "forbidden") {
           setStale(true);
           setFailure("无权在该分类下保存标准。");
-        } else setFailure(result.message);
+        } else setFailure(result.kind === "unknown" ? result.message : "保存失败，请稍后重试");
       }
     } finally {
       busy.current = false;
@@ -205,6 +295,34 @@ export default function StandardDialog(props: {
       label: (edited.ownerName ?? edited.ownerId) + "（已不可选）",
       disabled: true,
     });
+  const pair = pairOf(input.lengthPrecision);
+  const lookupItems = [
+    { value: NONE, label: "不使用" },
+    ...(lookups.data ?? []).map((row) => ({
+      value: row.id,
+      label: `${row.cnName}（${row.enCode}）`,
+    })),
+  ];
+  if (edited?.lookupId && !lookupItems.some((item) => item.value === edited.lookupId))
+    lookupItems.push({
+      value: edited.lookupId,
+      label: (edited.lookupCnName ?? edited.lookupEnCode ?? edited.lookupId) + "（不可选）",
+    });
+  const unitItems = [
+    { value: NONE, label: "不使用" },
+    ...(units.data ?? []).map((row) => ({
+      value: row.id,
+      label: `${row.cnName}（${row.enCode}）`,
+    })),
+  ];
+  if (edited?.measureUnitId && !unitItems.some((item) => item.value === edited.measureUnitId))
+    unitItems.push({
+      value: edited.measureUnitId,
+      label:
+        (edited.measureUnitCnName ?? edited.measureUnitEnCode ?? edited.measureUnitId) +
+        "（不可选）",
+    });
+  const parentItems = [{ value: NONE, label: "无" }, ...parentOptions];
   return (
     <Dialog
       open
@@ -213,7 +331,7 @@ export default function StandardDialog(props: {
         if (!open && !busy.current) props.onClose();
       }}
     >
-      <DialogContent className="w-[640px] rounded-xl p-5 shadow-none">
+      <DialogContent className="max-h-[86vh] w-[640px] overflow-auto rounded-xl p-5 shadow-none">
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑标准" : "新建标准"}
         </DialogTitle>
@@ -259,15 +377,61 @@ export default function StandardDialog(props: {
               }
             }}
           />
-          <InputField
-            id={id + "-precision"}
-            label="长度/精度"
-            value={input.lengthPrecision ?? ""}
-            maxLength={32}
-            disabled={saving || (input.dataType !== "STRING" && input.dataType !== "DECIMAL")}
-            error={errors.lengthPrecision}
-            onChange={(value) => change("lengthPrecision", value || null)}
-          />
+          {input.dataType === "DECIMAL" ? (
+            <>
+              <div className={FIELD_CLASS}>
+                <span className="pt-1 text-xs font-medium">
+                  精度
+                  <FieldRequiredMark />
+                </span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={id + "-precision"}
+                    size="small"
+                    variant="outlined"
+                    value={pair.precision}
+                    maxLength={2}
+                    inputMode="numeric"
+                    disabled={saving}
+                    aria-label="总位数"
+                    aria-invalid={Boolean(errors.lengthPrecision) || undefined}
+                    placeholder="总位数，如18"
+                    onChange={(event) => setPair(event.target.value, pair.scale)}
+                  />
+                  <Input
+                    id={id + "-scale"}
+                    size="small"
+                    variant="outlined"
+                    value={pair.scale}
+                    maxLength={2}
+                    inputMode="numeric"
+                    disabled={saving}
+                    aria-label="小数位"
+                    aria-invalid={Boolean(errors.lengthPrecision) || undefined}
+                    placeholder="小数位，如2"
+                    onChange={(event) => setPair(pair.precision, event.target.value)}
+                  />
+                </div>
+              </div>
+              {errors.lengthPrecision ? (
+                <p className="pl-[116px] text-xs text-[#d92d20]">{errors.lengthPrecision}</p>
+              ) : (
+                <p className="pl-[116px] text-[11px] text-[#667085]">
+                  DECIMAL 必须填完整的“总位数,小数位”，整数位由两者相减得出
+                </p>
+              )}
+            </>
+          ) : (
+            <InputField
+              id={id + "-precision"}
+              label="长度"
+              value={input.lengthPrecision ?? ""}
+              maxLength={32}
+              disabled={saving || input.dataType !== "STRING"}
+              error={errors.lengthPrecision}
+              onChange={(value) => change("lengthPrecision", value || null)}
+            />
+          )}
           <div className={FIELD_CLASS}>
             <span id={id + "-nullable-label"} className="pt-1 text-xs font-medium">
               是否非空
@@ -323,6 +487,98 @@ export default function StandardDialog(props: {
               </Button>
             </Alert>
           )}
+          <Field className={FIELD_CLASS} invalid={Boolean(errors.parentStandardId)}>
+            <FieldLabel htmlFor={id + "-parent"} className="pt-1">
+              父标准
+            </FieldLabel>
+            <div>
+              <div className="flex items-center gap-2">
+                <Input
+                  id={id + "-parent-search"}
+                  size="small"
+                  variant="outlined"
+                  value={parentKeyword}
+                  maxLength={128}
+                  disabled={saving}
+                  aria-label="搜索可作为父标准的字段标准"
+                  placeholder="输入关键字查找字段标准"
+                  onChange={(event) => setParentKeyword(event.target.value)}
+                />
+                <Button
+                  size="small"
+                  disabled={saving || parentState === "loading"}
+                  onClick={() => void searchParents()}
+                >
+                  查找
+                </Button>
+              </div>
+              <div className="mt-2">
+                <Select
+                  value={input.parentStandardId ?? NONE}
+                  size="small"
+                  items={parentItems}
+                  disabled={saving}
+                  onValueChange={(value) =>
+                    change("parentStandardId", !value || value === NONE ? null : value)
+                  }
+                >
+                  <SelectTrigger id={id + "-parent"} variant="outlined">
+                    <SelectValue placeholder="请选择" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {parentItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        <SelectItemText>{item.label}</SelectItemText>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <FieldError match={Boolean(errors.parentStandardId)}>
+                {errors.parentStandardId}
+              </FieldError>
+              {parentState === "error" && (
+                <p className="mt-1 text-xs text-[#d92d20]">查找失败，请重试</p>
+              )}
+            </div>
+          </Field>
+          <SelectField
+            id={id + "-lookup"}
+            label="标准代码"
+            required={false}
+            value={input.lookupId ?? NONE}
+            items={lookupItems}
+            disabled={saving || lookups.status === "loading"}
+            hint="引用码表约束该字段的取值范围；本标准的编码与名称不受影响"
+            onChange={(value) => change("lookupId", value === NONE ? null : value)}
+          />
+          <SelectField
+            id={id + "-unit"}
+            label="度量单位"
+            required={false}
+            value={input.measureUnitId ?? NONE}
+            items={unitItems}
+            disabled={saving || units.status === "loading"}
+            onChange={(value) => change("measureUnitId", value === NONE ? null : value)}
+          />
+          {(lookups.status === "error" || units.status === "error") && (
+            <Alert>
+              标准代码或度量单位加载失败
+              <Button size="small" onClick={() => setOptionVersion((value) => value + 1)}>
+                重试
+              </Button>
+            </Alert>
+          )}
+          <InputField
+            id={id + "-default"}
+            label="业务预设值"
+            value={input.defaultValue ?? ""}
+            maxLength={2048}
+            disabled={saving}
+            error={errors.defaultValue}
+            hint="仅作为业务预设值保存，不写入建表语句的默认值"
+            onChange={(value) => change("defaultValue", value || null)}
+          />
           <Field className={FIELD_CLASS} invalid={Boolean(errors.businessCaliber)}>
             <FieldLabel htmlFor={id + "-caliber"} className="pt-1">
               业务口径

@@ -10,6 +10,7 @@ import {
 } from "@/service/data-modeling/warehouse-planning/layers";
 import LayerDeleteDialog from "./layer-delete-dialog";
 import LayerDialog from "./layer-dialog";
+import NamingRuleDialog from "./naming-rule-dialog";
 
 export default function LayerPanel() {
   const [layers, setLayers] = useState<Layer[]>([]);
@@ -19,6 +20,7 @@ export default function LayerPanel() {
   const [version, setVersion] = useState(0);
   const [draft, setDraft] = useState<Layer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Layer | null>(null);
+  const [naming, setNaming] = useState<Layer | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
 
   useEffect(() => {
@@ -113,13 +115,32 @@ export default function LayerPanel() {
       ),
     },
     {
+      title: "命名规则",
+      key: "naming",
+      width: 100,
+      render: (_, row) => (
+        <span className="text-xs text-[#667085]">
+          {row.namingRuleEnabled ? "已启用" : "未启用"}
+        </span>
+      ),
+    },
+    {
       title: "操作",
       key: "actions",
-      width: 130,
+      width: 190,
       fixed: "right",
       align: "center",
       render: (_, row) => (
         <div className="flex items-center justify-center gap-2">
+          <Button
+            size="small"
+            variant="ghost"
+            disabled={loading}
+            className="px-0.5 font-normal text-[#667085]"
+            onClick={() => setNaming(row)}
+          >
+            命名规则
+          </Button>
           <Button
             size="small"
             variant="ghost"
@@ -181,7 +202,7 @@ export default function LayerPanel() {
             loading={loading}
             size="small"
             bordered={false}
-            scroll={{ x: 960 }}
+            scroll={{ x: 1250 }}
             emptyText="暂无分层"
             pagination={false}
           />
@@ -204,6 +225,16 @@ export default function LayerPanel() {
           onClose={() => setDeleting(null)}
           onDeleted={() => {
             setDeleting(null);
+            refresh();
+          }}
+        />
+      )}
+      {naming && (
+        <NamingRuleDialog
+          layer={naming}
+          onClose={() => setNaming(null)}
+          onSaved={() => {
+            setNaming(null);
             refresh();
           }}
         />

@@ -19,6 +19,10 @@ import io.yak.ops.common.enums.modeling.standard.DataType;
  * @param aggregateType measure function, null for a plain column and always null outside DWS / ADS
  * @param standardId bound field standard identity, null when maintained by hand
  * @param standardEnCode bound standard code for display, null when unbound
+ * @param lookupId bound lookup table identity, null when unbound
+ * @param lookupEnCode bound lookup code for display, null when unbound
+ * @param measureUnitId bound measurement unit identity, null when unbound
+ * @param measureUnitEnCode bound unit abbreviation for display, null when unbound
  * @param description optional business description
  */
 public record ModelFieldVO(
@@ -34,4 +38,8 @@ public record ModelFieldVO(
         AggregateType aggregateType,
         String standardId,
         String standardEnCode,
+        String lookupId,
+        String lookupEnCode,
+        String measureUnitId,
+        String measureUnitEnCode,
         String description) {}

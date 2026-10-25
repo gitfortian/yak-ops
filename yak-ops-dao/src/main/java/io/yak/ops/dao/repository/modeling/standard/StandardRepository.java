@@ -56,12 +56,12 @@ public interface StandardRepository {
      */
     boolean deleteCategory(String workspaceId, String id, long revision);
     /**
-     * Checks whether a directory still owns fields under the catalog lock.
+     * Checks whether a node still owns records of either kind under the catalog lock.
      * @param workspaceId authorized current Workspace
-     * @param categoryId owning directory identity
-     * @return true when at least one field remains
+     * @param categoryId owning node identity
+     * @return true when at least one field standard or lookup table remains
      */
-    boolean hasFields(String workspaceId, String categoryId);
+    boolean hasRecords(String workspaceId, String categoryId);
     /**
      * Finds a field within the authorized Workspace.
      * @param workspaceId authorized current Workspace
@@ -89,16 +89,13 @@ public interface StandardRepository {
      */
     boolean deleteField(String workspaceId, String id, long revision);
     /**
-     * Checks the global standard namespace without exposing the occupying field.
-     *
-     * <p>The probe deliberately spans Workspaces because the code namespace is global; a caller can only learn
-     * that a code exists somewhere, never in which Workspace or on which field.
-     *
+     * Checks the Workspace standard namespace without exposing the occupying field.
+     * @param workspaceId authorized current Workspace
      * @param enCode exact validated standard code
      * @param excludeId authorized edited identity, or null for creation
-     * @return true when another field owns the exact code
+     * @return true when another field of this Workspace owns the exact code
      */
-    boolean occupied(String enCode, String excludeId);
+    boolean occupied(String workspaceId, String enCode, String excludeId);
     /**
      * Reads the requested page in deterministic update time and identity order.
      * @param workspaceId authorized current Workspace
@@ -113,4 +110,11 @@ public interface StandardRepository {
      * @return the total number of matches
      */
     long countFields(String workspaceId, FieldQuery query);
+    /**
+     * Reads only the parent link of a standard, used to walk a chain without loading attributes.
+     * @param workspaceId authorized current Workspace
+     * @param id child identity
+     * @return parent identity, or null when the standard has no parent
+     */
+    String parentStandardId(String workspaceId, String id);
 }

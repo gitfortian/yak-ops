@@ -1,9 +1,12 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.modeling.LayerService;
+import io.yak.ops.business.modeling.naming.NamingRuleService;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
+import io.yak.ops.common.bean.dto.modeling.NamingRuleUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.bean.vo.modeling.LayerDataSourceVO;
+import io.yak.ops.common.bean.vo.modeling.LayerNamingRuleVO;
 import io.yak.ops.common.bean.vo.modeling.LayerOptionVO;
 import io.yak.ops.common.bean.vo.modeling.LayerVO;
 import io.yak.ops.common.context.WorkspaceContext;
@@ -32,6 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class WarehouseLayerController {
     @Resource
     private LayerService service;
+
+    @Resource
+    private NamingRuleService namingRules;
 
     @Resource
     private AuthenticationManager authentication;
@@ -77,5 +83,18 @@ public class WarehouseLayerController {
     public Result<Boolean> delete(@PathVariable String id, @RequestParam @Min(1) long revision) {
         service.delete(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, revision);
         return Result.success(true);
+    }
+
+    @GetMapping("/{id}/naming-rule")
+    public Result<LayerNamingRuleVO> namingRule(@PathVariable String id) {
+        return Result.success(
+                namingRules.rule(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id));
+    }
+
+    @PutMapping("/{id}/naming-rule")
+    public Result<LayerNamingRuleVO> updateNamingRule(
+            @PathVariable String id, @Valid @RequestBody NamingRuleUpdateDTO input) {
+        return Result.success(
+                namingRules.update(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, input));
     }
 }

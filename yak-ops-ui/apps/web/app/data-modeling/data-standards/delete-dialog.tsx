@@ -9,19 +9,43 @@ import {
 } from "@yak-ops/yak-ui";
 import { useEffect, useRef, useState } from "react";
 import {
-  checkStandardReferenced,
+  checkReferences,
   classifyStandardFailure,
   deleteStandardTarget,
 } from "@/service/data-modeling/data-standards";
-import type { DeleteTarget } from "@/service/data-modeling/data-standards/types";
+import type { DeleteTarget, ReferenceItem } from "@/service/data-modeling/data-standards/types";
+import { REFERENCE_KIND_LABEL } from "@/service/data-modeling/data-standards/types";
+
+function nameOf(target: DeleteTarget) {
+  return target.kind === "category" ? target.node.name : target.node.cnName;
+}
+
+function ReferenceList(props: { items: readonly ReferenceItem[] }) {
+  return (
+    <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-[#475467]">
+      {props.items.map((item) => (
+        <li key={item.kind + item.id + item.path} className="flex min-w-0 gap-2">
+          <span className="shrink-0 rounded bg-[#f2f4f7] px-1 text-[10px] leading-4 text-[#667085]">
+            {REFERENCE_KIND_LABEL[item.kind]}
+          </span>
+          <span className="truncate" title={item.path}>
+            {item.name}
+            {item.path ? " · " + item.path : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 export default function DeleteDialog(props: {
   target: DeleteTarget;
   onClose: () => void;
   onDeleted: () => void;
 }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error" | "referenced">(
-    props.target.kind === "field" ? "loading" : "ready",
+    props.target.kind === "category" ? "ready" : "loading",
   );
+  const [items, setItems] = useState<readonly ReferenceItem[]>([]);
   const [version, setVersion] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [conflict, setConflict] = useState(false);
@@ -36,16 +60,16 @@ export default function DeleteDialog(props: {
     };
   }, []);
   useEffect(() => {
-    if (props.target.kind !== "field") return;
+    if (props.target.kind === "category") return;
     const controller = new AbortController();
     let current = true;
     setStatus("loading");
-    void checkStandardReferenced(props.target.node.id, controller.signal)
+    void checkReferences(props.target.kind, props.target.node.id, controller.signal)
       .then((result) => {
-        if (current) {
-          const referenced = result.availability === "AVAILABLE" && result.referenced;
-          setStatus(referenced ? "referenced" : "ready");
-        }
+        if (!current) return;
+        const referenced = result.availability === "AVAILABLE" && result.referenced;
+        setItems(result.availability === "AVAILABLE" ? (result.items ?? []) : []);
+        setStatus(referenced ? "referenced" : "ready");
       })
       .catch(() => {
         if (current) setStatus("error");
@@ -82,7 +106,7 @@ export default function DeleteDialog(props: {
       if (active.current) setDeleting(false);
     }
   };
-  const name = props.target.kind === "category" ? props.target.node.name : props.target.node.cnName;
+  const name = nameOf(props.target);
   return (
     <Dialog
       open
@@ -102,7 +126,12 @@ export default function DeleteDialog(props: {
             </Button>
           </Alert>
         )}
-        {status === "referenced" && <Alert>该标准已被资产引用，无法删除</Alert>}
+        {status === "referenced" && (
+          <Alert>
+            该记录已被引用，无法删除
+            <ReferenceList items={items} />
+          </Alert>
+        )}
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
         {failure && <Alert>{failure}</Alert>}
         <div className="mt-5 flex justify-end gap-2">

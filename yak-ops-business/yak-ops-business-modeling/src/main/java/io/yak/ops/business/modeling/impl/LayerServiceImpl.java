@@ -75,7 +75,8 @@ public class LayerServiceImpl implements LayerService {
                         row.getEnCode(),
                         row.getCnName(),
                         row.getDataSourceId(),
-                        datasourceNames.get(row.getDataSourceId())))
+                        datasourceNames.get(row.getDataSourceId()),
+                        row.isNamingRuleEnabled()))
                 .toList();
     }
 
@@ -240,6 +241,7 @@ public class LayerServiceImpl implements LayerService {
                 row.getDescription(),
                 row.isEnabled(),
                 row.isBuiltin(),
+                row.isNamingRuleEnabled(),
                 row.getSortNo(),
                 revision);
     }

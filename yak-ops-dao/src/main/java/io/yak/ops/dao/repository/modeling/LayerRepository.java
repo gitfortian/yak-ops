@@ -52,6 +52,16 @@ public interface LayerRepository {
      */
     boolean update(LayerEntity row);
     /**
+     * Toggles the layer naming rule with an optimistic guard.
+     * @param workspaceId authorized Workspace
+     * @param id layer identity
+     * @param enabled requested rule state
+     * @param revision expected version
+     * @param actor authenticated updater
+     * @return true if the matching row was updated
+     */
+    boolean updateNamingRule(String workspaceId, String id, boolean enabled, long revision, String actor);
+    /**
      * Removes a layer with an optimistic guard.
      * @param workspaceId authorized Workspace
      * @param id layer identity

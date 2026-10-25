@@ -1,50 +1,51 @@
-import { Alert, Button, Form, Input, PageHeader } from "@yak-ops/yak-ui";
+import { Alert, Button, PageHeader } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   CategoryDraft,
   DeleteTarget,
   SavedStandard,
   StandardCategory,
-  StandardDraft,
-  StandardQuery,
+  StandardKind,
 } from "@/service/data-modeling/data-standards/types";
 import CategoryDialog from "./category-dialog";
 import CategoryTree from "./category-tree";
 import DeleteDialog from "./delete-dialog";
-import StandardDialog from "./standard-dialog";
-import StandardTable from "./standard-table";
-import { categoryPath, pathLabel, useCatalog, useStandardPage } from "./state";
+import FieldSection from "./field-section";
+import NamingEntrySection from "./naming-entry-section";
+import LookupSection from "./lookup-section";
+import UnitSection from "./unit-section";
+import { categoryPath, pathLabel, useCatalog } from "./state";
+
+const TABS = [
+  { key: "field", label: "字段标准" },
+  { key: "lookup", label: "标准代码" },
+  { key: "unit", label: "度量单位" },
+  { key: "naming", label: "命名词典" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+/** The kind a standard set holds, or null for a directory that accepts both. */
+function lockedKind(node: StandardCategory | null): StandardKind | null {
+  return node?.nodeType === "STANDARD_SET" ? (node.standardKind ?? "FIELD") : null;
+}
 
 export default function DataStandardsPage() {
   const catalog = useCatalog();
-  const [searchText, setSearchText] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [pageNo, setPageNo] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [tab, setTab] = useState<TabKey>("field");
   const [version, setVersion] = useState(0);
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft | null>(null);
-  const [fieldDraft, setFieldDraft] = useState<StandardDraft | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   const unavailable = catalog.loading || catalog.failed;
-  const query = useMemo<StandardQuery | null>(() => {
-    if (unavailable) return null;
-    if (keyword) return { scope: "ALL", keyword, pageNo, pageSize };
-    if (catalog.selectedId)
-      return { scope: "CATEGORY", categoryId: catalog.selectedId, pageNo, pageSize };
-    return null;
-  }, [unavailable, keyword, pageNo, pageSize, catalog.selectedId]);
-  const list = useStandardPage(query, version);
-  useEffect(() => {
-    if (list.page && !list.loading) {
-      const last = Math.max(1, list.page.pagination.pages);
-      if (pageNo > last) setPageNo(last);
-    }
-  }, [list.page, list.loading, pageNo]);
-  const clearSearch = () => {
-    setSearchText("");
-    setKeyword("");
-    setPageNo(1);
+  const selected = useMemo(() => {
+    const path = categoryPath(catalog.roots, catalog.selectedId);
+    return path?.at(-1) ?? null;
+  }, [catalog.roots, catalog.selectedId]);
+  const selectedPath = pathLabel(catalog.roots, catalog.selectedId);
+  const kind = lockedKind(selected);
+  const changed = () => {
+    setVersion((value) => value + 1);
+    catalog.refresh();
   };
   const createCategory = (parent: StandardCategory | null) =>
     setCategoryDraft({
@@ -54,19 +55,18 @@ export default function DataStandardsPage() {
     });
   const categorySaved = (saved: SavedStandard) => {
     if (categoryDraft?.mode === "create") {
-      clearSearch();
       catalog.refresh(saved.id);
-    } else catalog.refresh();
+      setVersion((value) => value + 1);
+    } else changed();
     setCategoryDraft(null);
-    setVersion((value) => value + 1);
   };
   const deleted = () => {
     if (!deleting) return;
     if (deleting.kind === "category") {
       catalog.refresh(deleting.node.id === catalog.selectedId ? deleting.node.parentId : undefined);
-    }
+      setVersion((value) => value + 1);
+    } else changed();
     setDeleting(null);
-    setVersion((value) => value + 1);
   };
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -75,14 +75,7 @@ export default function DataStandardsPage() {
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
-          <Button
-            size="small"
-            disabled={catalog.loading}
-            onClick={() => {
-              catalog.refresh();
-              setVersion((value) => value + 1);
-            }}
-          >
+          <Button size="small" disabled={catalog.loading} onClick={changed}>
             刷新
           </Button>
         }
@@ -117,10 +110,7 @@ export default function DataStandardsPage() {
             nodes={catalog.roots}
             selectedId={catalog.selectedId}
             disabled={unavailable}
-            onSelect={(id) => {
-              clearSearch();
-              catalog.select(id);
-            }}
+            onSelect={catalog.select}
             onCreate={createCategory}
             onRename={(category) => {
               const parent = categoryPath(catalog.roots, category.id)?.at(-2);
@@ -136,76 +126,69 @@ export default function DataStandardsPage() {
             <p className="p-3 text-sm text-[#667085]">暂无分类</p>
           )}
         </aside>
-        <section aria-label="字段标准" className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Form
-              className="flex max-w-full items-center gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setKeyword(searchText.trim());
-                setPageNo(1);
-              }}
-            >
-              <Input
-                size="small"
-                variant="outlined"
-                value={searchText}
-                maxLength={128}
-                disabled={unavailable}
-                aria-label="搜索全部分类中的标准"
-                placeholder="中文名称或英文编码"
-                onChange={(event) => setSearchText(event.target.value)}
-              />
-              <Button size="small" type="submit" disabled={unavailable}>
-                搜索
-              </Button>
-              {(searchText || keyword) && (
-                <Button size="small" disabled={unavailable} onClick={clearSearch}>
-                  清空
-                </Button>
-              )}
-            </Form>
-            <Button
-              size="small"
-              variant="primary"
-              disabled={unavailable || !catalog.selectedId}
-              onClick={() => {
-                if (catalog.selectedId)
-                  setFieldDraft({
-                    mode: "create",
-                    category: {
-                      id: catalog.selectedId,
-                      path: pathLabel(catalog.roots, catalog.selectedId),
-                    },
-                  });
-              }}
-            >
-              新建标准
-            </Button>
+        <section className="flex min-h-0 min-w-0 flex-col gap-3">
+          <div
+            role="tablist"
+            aria-label="标准种类"
+            className="flex flex-wrap items-center gap-1 border-b border-[var(--yak-components-panel-border)]"
+          >
+            {TABS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.key}
+                className={
+                  "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors " +
+                  (tab === item.key
+                    ? "border-[var(--yak-color-primary)] font-medium [color:var(--yak-color-primary)]"
+                    : "border-transparent text-[#667085] hover:text-[#344054]")
+                }
+                onClick={() => setTab(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          {list.failed && (
-            <Alert>
-              字段标准加载失败
-              <Button size="small" onClick={() => setVersion((value) => value + 1)}>
-                重试
-              </Button>
-            </Alert>
-          )}
-          <div className="min-h-0 min-w-0 flex-1 overflow-auto">
-            <StandardTable
-              page={list.failed ? null : list.page}
-              pageNo={pageNo}
-              pageSize={pageSize}
-              loading={unavailable || list.loading}
-              searching={Boolean(keyword)}
-              onEdit={(standard) => setFieldDraft({ mode: "edit", standard })}
-              onDelete={(node) => setDeleting({ kind: "field", node })}
-              onPageChange={(page, size) => {
-                setPageSize(size);
-                setPageNo(size === pageSize ? page : 1);
-              }}
+          {tab === "field" && (
+            <FieldSection
+              selectedId={catalog.selectedId}
+              selectedPath={selectedPath}
+              unavailable={unavailable}
+              kindBlocked={kind !== null && kind !== "FIELD"}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+              onCatalogStale={() => catalog.refresh()}
             />
-          </div>
+          )}
+          {tab === "lookup" && (
+            <LookupSection
+              selectedId={catalog.selectedId}
+              selectedPath={selectedPath}
+              unavailable={unavailable}
+              kindBlocked={kind !== null && kind !== "LOOKUP"}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {tab === "unit" && (
+            <UnitSection
+              unavailable={unavailable}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {tab === "naming" && (
+            <NamingEntrySection
+              unavailable={unavailable}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
         </section>
       </div>
       {categoryDraft && (
@@ -213,20 +196,6 @@ export default function DataStandardsPage() {
           draft={categoryDraft}
           onClose={() => setCategoryDraft(null)}
           onSaved={categorySaved}
-        />
-      )}
-      {fieldDraft && (
-        <StandardDialog
-          draft={fieldDraft}
-          onClose={() => setFieldDraft(null)}
-          onSaved={() => {
-            setFieldDraft(null);
-            setVersion((value) => value + 1);
-          }}
-          onStaleCategory={() => {
-            catalog.refresh();
-            setVersion((value) => value + 1);
-          }}
         />
       )}
       {deleting && (
