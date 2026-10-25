@@ -17,13 +17,22 @@ All YOIPs must be written in English, including titles, sections, tables, exampl
 
 A YOIP is appropriate for a significant new subsystem, externally supported API, plugin SPI, serialized state/checkpoint format, persisted task-definition format, user-facing configuration, monitoring interface, deployment contract or significant compatibility change. Small internal refactors, bug fixes and class/package reorganizations do **not** require a YOIP.
 
+### YOIP Admission and Historical IDs
+
+One significant design proposal may guide multiple implementation PRs. Do **not** assign a new YOIP to every CDC source/sink step, bug fix, class rename, CI repair, acceptance run or internal refactor. Put implementation details, test evidence, and rollout progress into focused PRs, tests, JavaDoc or release documentation. A material new public guarantee requires a new discussion, not silent edits to accepted design history.
+
+Use the [YOIP index](../docs/yoips/README.md) as the proposal register. Historical identifiers YOIP-7 through YOIP-19 are retired and reserved. Do not reuse them or reinterpret the legacy navigation pages as approved design records. New proposals must be registered in the index and use the exact six English template sections in order, with substantive content rather than placeholders.
+
+The existing CI scope job runs `scripts/ci/check_yoips.py` for changes to YOIP records. It validates syntax, index registration and decision links; it cannot verify who voted or evaluate design quality. Normal implementation PRs do not need to change a YOIP.
+
 ### Propose and Discuss
 
-- Create a **proposal-only** PR containing `docs/yoips/YOIP-XXXX-short-title.md`, based on [YOIP_TEMPLATE.md](YOIP_TEMPLATE.md). Reserve the next unused number after checking existing proposals and PRs. A proposed YOIP is not an implemented feature.
+- Create a **proposal-only** PR containing `docs/yoips/YOIP-N-short-title.md`, based on [YOIP_TEMPLATE.md](YOIP_TEMPLATE.md), and add its entry to the [YOIP index](../docs/yoips/README.md). Check open proposals and reserve an unused number above the historical 7–19 range. A proposed YOIP is not an implemented feature.
+- Start with `Status: Discussion` and `Decision: Pending`. After opening the proposal PR, replace the Discussion placeholder with its actual GitHub PR URL. The initial CI run can fail until the PR URL is recorded.
 - Title the proposal PR `[DISCUSS][YOIP-XXXX] Description`. Link the proposal to the PR discussion and record the status as `Discussion`.
 - Discuss motivation, public interfaces, compatibility and rejected alternatives **on the proposal PR**, not in implementation commits. Update the proposal to reflect material design changes.
 - When outstanding design questions are resolved, request an explicit maintainer **[VOTE]** / decision in the proposal PR. Record the acceptance or rejection and its rationale there; do not infer acceptance from silence or a green CI status.
-- For acceptance, change the proposal status to `Accepted` and merge it after maintainer review. Link it from subsequent implementation PRs. Rejected proposals may remain as closed PR discussions; do not merge a rejected design into active requirements.
+- For acceptance, link the actual maintainer `[VOTE] Accepted` comment from the same proposal PR in the `Decision` field, update the proposal index, then change status to `Accepted` and merge after maintainer review. Link it from subsequent implementation PRs. Rejected proposals may remain as closed PR discussions; do not merge a rejected design into active requirements.
 - Release notes and executable verification evidence belong with the relevant implementation/release, not in the YOIP's ongoing progress log. Major changes to an accepted public design need renewed discussion, typically a new YOIP.
 
 **Platform adaptation:** This repository currently has GitHub Issues and Discussions disabled. Therefore proposal PRs provide the discussion and decision record; this does not claim an Apache mailing-list vote or Apache committer consensus. If those GitHub features are enabled later, the discussion venue can be changed without changing the YOIP criteria or template.

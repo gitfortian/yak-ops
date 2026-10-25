@@ -15,6 +15,12 @@ YOIPs record **long-lived architectural decisions** for significant subsystems, 
 
 YOIP-3 retains the original document's Accepted label, but no independent decision permalink was included in that historical record. YOIP-6 remains Discussion even though its implementation PR was merged. Merging implementation code or passing CI does not substitute for a design decision.
 
+## New Proposals
+
+A YOIP is one significant architectural or public-contract decision, **not** an implementation step or test report. Follow the [template](../../.github/YOIP_TEMPLATE.md) and [contribution process](../../.github/CONTRIBUTING.md). Check open proposal PRs and choose a new, unused ID beyond the retired 7–19 range. Add the document and update this index in the same PR.
+
+Start with `Discussion`, then link that proposal PR's real URL. Mark `Accepted` only after an explicit maintainer `[VOTE]` and a same-PR decision-comment permalink. The PR-scope validator checks document structure and link shape; only human review establishes a real decision.
+
 ## Historical Engineering Notes
 
 The original repository contained two documents labeled YOIP-4 and numbered individual CDC implementation notes as YOIP-7 through YOIP-19. These are **not separate accepted proposals**. Their former paths remain as navigation notices so links from earlier PRs remain usable. The full text is retained under [`docs/engineering/cdc/`](../engineering/cdc/README.md). The former identifiers are reserved to avoid confusing old references with future designs.
