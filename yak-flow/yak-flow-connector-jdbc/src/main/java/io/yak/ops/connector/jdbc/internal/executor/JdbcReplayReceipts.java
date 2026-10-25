@@ -38,8 +38,8 @@ public final class JdbcReplayReceipts implements AutoCloseable {
             for (JdbcTableWritePlan plan : plans) {
                 if (plan.writeMode() != JdbcWriteMode.RETRACT) continue;
                 TableId table = plan.targetTable();
-                TableId receiptTable = new TableId(table.catalog() == null ? connection.getCatalog() : table.catalog(),
-                        null, TABLE_NAME);
+                TableId receiptTable = new TableId(
+                        table.catalog() == null ? connection.getCatalog() : table.catalog(), null, TABLE_NAME);
                 String sql = "INSERT IGNORE INTO " + dialect.qualifiedTable(receiptTable) + " ("
                         + dialect.quoteIdentifier("receipt_key") + ") VALUES (?)";
                 statements.put(plan.sourceTable(), connection.prepareStatement(sql));
