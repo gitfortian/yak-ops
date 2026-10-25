@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Link to the proposal PR
+Discussion: https://github.com/weifuwan/yak-ops/pull/1744
 
 Decision: Pending maintainer review
 
