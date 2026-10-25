@@ -152,6 +152,7 @@ class MySqlKeylessRetractIT {
                 TableRecord first = row(table, RowKind.INSERT, 8, "4.00", null);
                 TableRecord duplicate = row(table, RowKind.INSERT, 8, "4.00", null);
                 TableRecord removeOne = row(table, RowKind.DELETE, 8, "4.00", null);
+                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat writer = writer(table)) {
                     writer.add(first);
                     writer.add(duplicate);
@@ -167,7 +168,7 @@ class MySqlKeylessRetractIT {
                     restored.flush();
                 }
                 assertEquals(1, count(connection, table, 8));
-                assertEquals(3, receiptCount(connection, table));
+                assertEquals(originalReceipts + 3, receiptCount(connection));
             } finally {
                 drop(connection, table);
             }
@@ -185,6 +186,7 @@ class MySqlKeylessRetractIT {
                         .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 0, 2));
                 TableRecord after = row(table, RowKind.UPDATE_AFTER, 9, "7.00", null)
                         .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 1, 2));
+                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat writer = writer(table)) {
                     writer.add(initial);
                     writer.add(before);
@@ -200,7 +202,7 @@ class MySqlKeylessRetractIT {
                     restored.flush();
                 }
                 assertEquals(1, count(connection, table, 9));
-                assertEquals(2, receiptCount(connection, table));
+                assertEquals(originalReceipts + 2, receiptCount(connection));
             } finally {
                 drop(connection, table);
             }
@@ -215,19 +217,20 @@ class MySqlKeylessRetractIT {
             try {
                 TableRecord initial = row(table, RowKind.INSERT, 11, "2.00", null);
                 TableRecord missing = row(table, RowKind.DELETE, 12, "2.00", null);
+                long originalReceipts = receiptCount(connection);
                 try (JdbcOutputFormat failed = writer(table)) {
                     failed.add(initial);
                     failed.add(missing);
                     assertThrows(SQLException.class, failed::flush);
                 }
-                assertEquals(0, receiptCount(connection, table));
+                assertEquals(originalReceipts, receiptCount(connection));
                 assertEquals(0, countAll(connection, table));
                 try (JdbcOutputFormat restored = writer(table)) {
                     restored.add(initial);
                     restored.flush();
                 }
                 assertEquals(1, count(connection, table, 11));
-                assertEquals(1, receiptCount(connection, table));
+                assertEquals(originalReceipts + 1, receiptCount(connection));
             } finally {
                 drop(connection, table);
             }
@@ -249,7 +252,7 @@ class MySqlKeylessRetractIT {
         }
     }
 
-    private long receiptCount(Connection connection, TableId table) throws SQLException {
+    private long receiptCount(Connection connection) throws SQLException {
         try (var statement = connection.createStatement();
                 var rows = statement.executeQuery(
                         "SELECT COUNT(*) FROM `yak_flow_cdc_receipts`")) {
