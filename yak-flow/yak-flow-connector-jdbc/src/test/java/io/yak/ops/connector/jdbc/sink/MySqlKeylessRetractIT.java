@@ -96,7 +96,7 @@ class MySqlKeylessRetractIT {
     }
 
     @Test
-    void refusesUniqueTargetBeforeWriting() throws Exception {
+    void refusesUniqueIndexesAndNarrowerPhysicalDecimalTypes() throws Exception {
         try (Connection connection = DATABASE.metadata().connect()) {
             TableId table = table(connection);
             create(connection, table, ", UNIQUE KEY only_one (bucket)");
@@ -105,6 +105,18 @@ class MySqlKeylessRetractIT {
                 assertEquals(0, countAll(connection, table));
             } finally {
                 drop(connection, table);
+            }
+            TableId narrow = table(connection);
+            create(connection, narrow, "");
+            try {
+                try (var statement = connection.createStatement()) {
+                    statement.execute("ALTER TABLE " + dialect.qualifiedTable(narrow)
+                            + " MODIFY amount DECIMAL(10,2) NULL");
+                }
+                assertThrows(SQLException.class, () -> writer(narrow));
+                assertEquals(0, countAll(connection, narrow));
+            } finally {
+                drop(connection, narrow);
             }
         }
     }
