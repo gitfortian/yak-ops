@@ -62,10 +62,14 @@ class JdbcKeylessRetractionContractTest {
     void supportsRetractionPlansAndValidatesFactorySchema() {
         var options = new Configuration()
                 .set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.RETRACT)
+                .set(JdbcSinkOptions.XA_ENABLED, true)
+                .set(JdbcSinkOptions.XA_INSTANCE_ID, "keyless-test")
                 .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3306/test")
                 .set(JdbcConnectionOptions.USERNAME, "user")
                 .set(JdbcConnectionOptions.PASSWORD, "secret");
         var factory = new JdbcSinkFactory();
+        var withoutXa = new Configuration().set(JdbcSinkOptions.WRITE_MODE, JdbcWriteMode.RETRACT);
+        assertThrows(UnsupportedOperationException.class, () -> factory.validate(withoutXa.toReadonlyConfig(), true));
         factory.validate(options.toReadonlyConfig(), true);
         factory.validateSchema(options.toReadonlyConfig(), KEYLESS, KEYLESS, true);
         factory.createSink(new TableSinkFactoryContext(

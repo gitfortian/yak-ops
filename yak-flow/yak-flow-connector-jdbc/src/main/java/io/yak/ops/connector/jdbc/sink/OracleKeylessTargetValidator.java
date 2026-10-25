@@ -40,7 +40,6 @@ public final class OracleKeylessTargetValidator {
         }
         validateSideEffects(connection, owner, target);
         validateColumns(connection, owner, target, plan.schema());
-
     }
 
     private static void validateHeap(Connection connection, String owner, String table) throws SQLException {
@@ -91,11 +90,10 @@ public final class OracleKeylessTargetValidator {
         }
     }
 
-    private static void validateColumns(
-            Connection connection, String owner, String table, TableSchema schema)
+    private static void validateColumns(Connection connection, String owner, String table, TableSchema schema)
             throws SQLException {
         try (PreparedStatement query =
-                connection.prepareStatement("SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, DATA_LENGTH, "
+                connection.prepareStatement("SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE, "
                         + "NULLABLE, VIRTUAL_COLUMN, IDENTITY_COLUMN FROM ALL_TAB_COLS "
                         + "WHERE OWNER = ? AND TABLE_NAME = ? AND HIDDEN_COLUMN = 'NO' ORDER BY COLUMN_ID")) {
             query.setString(1, owner);
@@ -108,9 +106,8 @@ public final class OracleKeylessTargetValidator {
                     String nativeType = rows.getString(2).toUpperCase(Locale.ROOT);
                     int precision = rows.getInt(3);
                     int scale = rows.getInt(4);
-                    int length = rows.getInt(5);
-                    boolean nullable = "Y".equals(rows.getString(6));
-                    if (!"NO".equals(rows.getString(7)) || !"NO".equals(rows.getString(8))) {
+                    boolean nullable = "Y".equals(rows.getString(5));
+                    if (!"NO".equals(rows.getString(6)) || !"NO".equals(rows.getString(7))) {
                         throw new SQLException("Oracle RETRACT excludes identity and virtual columns");
                     }
                     Column column = schema.column(index);

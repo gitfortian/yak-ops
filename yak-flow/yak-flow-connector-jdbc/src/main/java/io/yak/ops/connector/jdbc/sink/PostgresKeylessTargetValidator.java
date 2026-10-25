@@ -29,7 +29,6 @@ public final class PostgresKeylessTargetValidator {
         }
         requireNoSideEffects(connection, target);
         validateColumns(connection, target, plan.schema());
-
     }
 
     private static long heap(Connection connection, String owner, String name) throws SQLException {
@@ -66,8 +65,7 @@ public final class PostgresKeylessTargetValidator {
         }
     }
 
-    private static void validateColumns(Connection connection, long oid, TableSchema schema)
-            throws SQLException {
+    private static void validateColumns(Connection connection, long oid, TableSchema schema) throws SQLException {
         String columnSql = "SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), "
                 + "a.attnotnull, a.attgenerated, a.attidentity FROM pg_catalog.pg_attribute a "
                 + "WHERE a.attrelid = ? AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum";

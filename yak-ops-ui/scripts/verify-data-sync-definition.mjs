@@ -78,10 +78,15 @@ assert.equal(
   true,
 );
 for (const invalid of [
-  { ...JSON.parse(keyless), tableMappings: [{
-    ...JSON.parse(keyless).tableMappings[0],
-    source: { table: "source", keyless: true, chunkKeyColumn: "bucket" },
-  }] },
+  {
+    ...JSON.parse(keyless),
+    tableMappings: [
+      {
+        ...JSON.parse(keyless).tableMappings[0],
+        source: { table: "source", keyless: true, chunkKeyColumn: "bucket" },
+      },
+    ],
+  },
   { ...JSON.parse(keyless), schemaChangesEnabled: true },
   { ...JSON.parse(keyless), steps: ["SCHEMA", "FULL", "INCREMENTAL"] },
   {
