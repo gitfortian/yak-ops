@@ -3,9 +3,6 @@ package io.yak.ops.plugin.task.datasync.config;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
-import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
-import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.HashSet;
@@ -104,6 +101,7 @@ public final class JobConfig {
                 || (!type.supportsMultipleTables() && mappings.size() != 1)) {
             throw new IllegalArgumentException("Unsupported explicit table mapping count");
         }
+        requireEmptyTransforms(parameters);
         List<TableConfig> tables = new java.util.ArrayList<>();
         java.util.Set<List<String>> sources = new HashSet<>();
         java.util.Set<List<String>> targets = new HashSet<>();
@@ -124,84 +122,25 @@ public final class JobConfig {
             ReadonlyConfig targetTable = ReadonlyConfig.fromMap(table.get(SolutionOptions.TARGET));
             validate(sourceTable, SolutionOptions.SOURCE_TABLE_RULE, "tableMappings.source");
             validate(targetTable, SolutionOptions.TARGET_TABLE_RULE, "tableMappings.target");
-            List<String> targetPrimaryKeys =
-                    targetTable.getSourceMap().containsKey(SolutionOptions.TARGET_PRIMARY_KEYS.key())
-                            ? targetTable.get(SolutionOptions.TARGET_PRIMARY_KEYS)
-                            : null;
-            if (targetPrimaryKeys != null && parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED)) {
-                throw new IllegalArgumentException("Runtime schema evolution is unsupported with custom target keys");
-            }
-            if (targetPrimaryKeys != null
-                    && (targetPrimaryKeys.isEmpty()
-                            || targetPrimaryKeys.stream().anyMatch(key -> key == null || key.isBlank())
-                            || new HashSet<>(targetPrimaryKeys).size() != targetPrimaryKeys.size())) {
-                throw new IllegalArgumentException("Target primary key columns must be unique and nonempty");
-            }
-            requireEmptyTransforms(parameters);
-            Map<String, Object> input = new LinkedHashMap<>(sourceTable.getSourceMap());
-            // Public mapping controls are translated to physical Connector options below.
-            input.remove(SolutionOptions.KEYLESS.key());
-            input.remove(SolutionOptions.CHUNK_KEY.key());
-            input.remove(SolutionOptions.XA.key());
-            input.put("datasourceId", from.get(JobOptions.DATASOURCE_ID));
-            input.put("type", type.sourceIdentifier());
-            Object rawKeyless = sourceTable.getSourceMap().get(SolutionOptions.KEYLESS.key());
-            if (rawKeyless != null && !(rawKeyless instanceof Boolean)) {
-                throw new IllegalArgumentException("keyless must be a boolean");
-            }
-            boolean keyless = sourceTable.get(SolutionOptions.KEYLESS);
-            Object xa = sourceTable.getSourceMap().get(SolutionOptions.XA.key());
-            String chunkKey = sourceTable.get(SolutionOptions.CHUNK_KEY);
-            JdbcWriteMode mode = table.get(JdbcSinkOptions.WRITE_MODE);
-            if (keyless) {
-                if (type != SolutionType.SINGLE_TABLE_REALTIME
-                        || !expected.containsAll(List.of(Step.FULL.name(), Step.INCREMENTAL.name()))
-                        || parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED)
-                        || (mode != JdbcWriteMode.RETRACT && mode != JdbcWriteMode.UPSERT)
-                        || chunkKey == null
-                        || chunkKey.isBlank()) {
-                    throw new IllegalArgumentException("Keyless CDC requires single-table FULL + INCREMENTAL, "
-                            + "an explicit Chunk Key and disabled runtime schema changes");
-                }
-                if (mode == JdbcWriteMode.RETRACT && (!Boolean.TRUE.equals(xa) || targetPrimaryKeys != null)) {
-                    throw new IllegalArgumentException("Keyless RETRACT requires XA and no target primary key");
-                }
-                if (mode == JdbcWriteMode.UPSERT && (xa != null || targetPrimaryKeys == null)) {
-                    throw new IllegalArgumentException(
-                            "Keyless UPSERT requires a verified target primary key without XA");
-                }
-                input.put(MySqlCdcSourceOptions.KEYLESS_ENABLED.key(), true);
-                input.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
-            } else {
-                if (xa != null
-                        || mode == JdbcWriteMode.RETRACT
-                        || sourceTable.getSourceMap().containsKey(SolutionOptions.CHUNK_KEY.key())) {
-                    throw new IllegalArgumentException("RETRACT, XA and Chunk Key require explicit keyless CDC");
-                }
-            }
-            Map<String, Object> output = new LinkedHashMap<>(targetTable.getSourceMap());
-            output.remove(SolutionOptions.TARGET_PRIMARY_KEYS.key());
-            output.put("datasourceId", to.get(JobOptions.DATASOURCE_ID));
-            output.put("type", "JDBC");
-            output.put("writeMode", mode.name());
-            if (keyless && mode == JdbcWriteMode.RETRACT) output.put(JdbcSinkOptions.XA_ENABLED.key(), true);
+            SourceConfig source = SourceConfig.from(
+                    sourceTable,
+                    from.get(JobOptions.DATASOURCE_ID),
+                    type,
+                    expected,
+                    parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED),
+                    table);
+            boolean offlineIncremental = type.supportsScheduling() && expected.contains(Step.INCREMENTAL.name());
+            SinkConfig sink = SinkConfig.from(
+                    targetTable,
+                    to.get(JobOptions.DATASOURCE_ID),
+                    table,
+                    source,
+                    parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED),
+                    offlineIncremental);
             if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
                 throw new IllegalArgumentException("Source and target tables must be unique");
             }
-            IncrementalConfig incremental = null;
-            boolean selectedIncremental = expected.contains(Step.INCREMENTAL.name()) && type.supportsScheduling();
-            if (selectedIncremental) {
-                Map<String, Object> options = table.get(SolutionOptions.INCREMENTAL);
-                if (options == null) throw new IllegalArgumentException("Incremental table settings are required");
-                incremental = IncrementalConfig.from(options);
-                if (table.get(JdbcSinkOptions.WRITE_MODE) != io.yak.ops.connector.jdbc.sink.JdbcWriteMode.UPSERT) {
-                    throw new IllegalArgumentException("Offline incremental requires UPSERT");
-                }
-            } else if (table.getSourceMap().containsKey(SolutionOptions.INCREMENTAL.key())) {
-                throw new IllegalArgumentException("Incremental settings require an offline incremental step");
-            }
-            tables.add(new TableConfig(
-                    ReadonlyConfig.fromMap(input), ReadonlyConfig.fromMap(output), incremental, targetPrimaryKeys));
+            tables.add(new TableConfig(source.options(), sink.options(), source.incremental(), sink.targetPrimaryKeys()));
         }
         Map<String, Object> canonical = new LinkedHashMap<>(parameters.getSourceMap());
         canonical.put("steps", expected);
