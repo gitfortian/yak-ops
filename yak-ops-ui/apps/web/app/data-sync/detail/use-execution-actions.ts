@@ -30,7 +30,8 @@ export function useExecutionActions({
   const [running, setRunning] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const run = async () => {
-    if (!taskId || running || !canStart || task?.configurationError || task?.status !== "PUBLISHED") return;
+    if (!taskId || running || !canStart || task?.configurationError || task?.status !== "PUBLISHED")
+      return;
     setRunning(true);
     try {
       const active = await listLatestTaskInstances([taskId], true);
