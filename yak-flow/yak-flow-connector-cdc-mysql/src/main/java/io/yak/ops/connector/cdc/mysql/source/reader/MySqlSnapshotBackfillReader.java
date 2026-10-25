@@ -109,7 +109,8 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                                     "Keyless snapshot cannot reconcile schema changes during Backfill");
                         }
                         if (!event.records().isEmpty()
-                                && split.tableId().equals(event.records().getFirst().tableId())) {
+                                && split.tableId()
+                                        .equals(event.records().getFirst().tableId())) {
                             buffer.apply(event);
                         }
                     }

@@ -110,7 +110,8 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     }
 
     private void requirePhysicalPrimaryKeys() {
-        if (config.schemas().values().stream().anyMatch(schema -> schema.primaryKeys().isEmpty())) {
+        if (config.schemas().values().stream()
+                .anyMatch(schema -> schema.primaryKeys().isEmpty())) {
             throw new UnsupportedOperationException(
                     "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
         }
