@@ -17,6 +17,10 @@ import { listQueryKeys } from "./query-keys";
 const PAGE_SIZE = 20;
 const EMPTY_TASKS: DataSyncTaskListRecord[] = [];
 
+function isReadableTask(record: DataSyncTaskListRecord): record is DataSyncTaskRecord {
+  return !("configurationError" in record);
+}
+
 export function useTaskPage(scope: string, filters: TaskListFilters) {
   const query = useQuery({
     queryKey: [
@@ -42,13 +46,7 @@ export function useTaskPage(scope: string, filters: TaskListFilters) {
       previousQuery?.queryKey[1] === scope ? previous : undefined,
   });
   const records = query.data?.bizData ?? EMPTY_TASKS;
-  const validRecords = useMemo(
-    () =>
-      records.filter(
-        (record): record is DataSyncTaskRecord => !("configurationError" in record),
-      ),
-    [records],
-  );
+  const validRecords = useMemo(() => records.filter(isReadableTask), [records]);
   return {
     records,
     validRecords,
