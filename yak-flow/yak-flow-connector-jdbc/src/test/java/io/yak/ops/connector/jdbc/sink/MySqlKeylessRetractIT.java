@@ -143,6 +143,121 @@ class MySqlKeylessRetractIT {
         }
     }
 
+    @Test
+    void replayAfterTargetCommitBeforeSourceCheckpointIsNotAppliedTwice() throws Exception {
+        try (Connection connection = DATABASE.metadata().connect()) {
+            TableId table = table(connection);
+            create(connection, table, "");
+            try {
+                TableRecord first = row(table, RowKind.INSERT, 8, "4.00", null);
+                TableRecord duplicate = row(table, RowKind.INSERT, 8, "4.00", null);
+                TableRecord removeOne = row(table, RowKind.DELETE, 8, "4.00", null);
+                try (JdbcOutputFormat writer = writer(table)) {
+                    writer.add(first);
+                    writer.add(duplicate);
+                    writer.add(removeOne);
+                    writer.flush();
+                }
+                assertEquals(1, count(connection, table, 8));
+                // Simulate crash after external commit but before the source checkpoint is durable.
+                try (JdbcOutputFormat restored = writer(table)) {
+                    restored.add(first);
+                    restored.add(duplicate);
+                    restored.add(removeOne);
+                    restored.flush();
+                }
+                assertEquals(1, count(connection, table, 8));
+                assertEquals(3, receiptCount(connection, table));
+            } finally {
+                drop(connection, table);
+            }
+        }
+    }
+
+    @Test
+    void updateImagesReserveOneReceiptAndCanBeReplayedTogether() throws Exception {
+        try (Connection connection = DATABASE.metadata().connect()) {
+            TableId table = table(connection);
+            create(connection, table, "");
+            try {
+                TableRecord initial = row(table, RowKind.INSERT, 8, "4.00", null);
+                TableRecord before = row(table, RowKind.UPDATE_BEFORE, 8, "4.00", null)
+                        .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 0, 2));
+                TableRecord after = row(table, RowKind.UPDATE_AFTER, 9, "7.00", null)
+                        .withChangeEventId(new ChangeEventId("source-" + table.table(), "update", 1, 2));
+                try (JdbcOutputFormat writer = writer(table)) {
+                    writer.add(initial);
+                    writer.add(before);
+                    writer.add(after);
+                    writer.flush();
+                }
+                assertEquals(0, count(connection, table, 8));
+                assertEquals(1, count(connection, table, 9));
+                try (JdbcOutputFormat restored = writer(table)) {
+                    restored.add(initial);
+                    restored.add(before);
+                    restored.add(after);
+                    restored.flush();
+                }
+                assertEquals(1, count(connection, table, 9));
+                assertEquals(2, receiptCount(connection, table));
+            } finally {
+                drop(connection, table);
+            }
+        }
+    }
+
+    @Test
+    void rollbackRemovesReceiptSoRecoveryCanRetryTheSameEvent() throws Exception {
+        try (Connection connection = DATABASE.metadata().connect()) {
+            TableId table = table(connection);
+            create(connection, table, "");
+            try {
+                TableRecord initial = row(table, RowKind.INSERT, 11, "2.00", null);
+                TableRecord missing = row(table, RowKind.DELETE, 12, "2.00", null);
+                try (JdbcOutputFormat failed = writer(table)) {
+                    failed.add(initial);
+                    failed.add(missing);
+                    assertThrows(SQLException.class, failed::flush);
+                }
+                assertEquals(0, receiptCount(connection, table));
+                assertEquals(0, countAll(connection, table));
+                try (JdbcOutputFormat restored = writer(table)) {
+                    restored.add(initial);
+                    restored.flush();
+                }
+                assertEquals(1, count(connection, table, 11));
+                assertEquals(1, receiptCount(connection, table));
+            } finally {
+                drop(connection, table);
+            }
+        }
+    }
+
+    @Test
+    void missingReplayIdentityIsRejectedBeforeAnySql() throws Exception {
+        try (Connection connection = DATABASE.metadata().connect()) {
+            TableId table = table(connection);
+            create(connection, table, "");
+            try (JdbcOutputFormat writer = writer(table)) {
+                assertThrows(NullPointerException.class, () -> writer.add(new TableRecord(
+                        table, RowKind.INSERT, GenericRowData.of(1L, null, null))));
+                assertEquals(0, countAll(connection, table));
+            } finally {
+                drop(connection, table);
+            }
+        }
+    }
+
+    private long receiptCount(Connection connection, TableId table) throws SQLException {
+        try (var statement = connection.createStatement();
+                var rows = statement.executeQuery(
+                        "SELECT COUNT(*) FROM `yak_flow_cdc_receipts`")) {
+            rows.next();
+            return rows.getLong(1);
+        }
+    }
+
     private JdbcOutputFormat writer(TableId table) throws SQLException {
         return new JdbcOutputFormat(
                 () -> DATABASE.metadata().connect(),
