@@ -20,7 +20,7 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, Object trans
     private static final Option<String> CHUNK_KEY = Options.key("chunkKeyColumn").stringType().noDefaultValue();
     /** V3 transaction marker is read only for validating the persisted Sink protocol. */
     private static final Option<Boolean> XA = Options.key("xa").booleanType().noDefaultValue();
-    private static final Option<Map<String, Object>> INCREMENTAL =
+    public static final Option<Map<String, Object>> INCREMENTAL =
             Options.key("incremental").mapObjectType().noDefaultValue();
 
     public static final OptionRule TABLE_RULE = OptionRule.builder()
