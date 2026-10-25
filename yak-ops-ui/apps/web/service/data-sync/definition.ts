@@ -9,7 +9,7 @@ import type {
   TaskDefinitionRecord,
   TaskDefinitionPageResult,
 } from "./types";
-import { readSyncParameters, solutionSyncType, supportsMultipleTables } from "./parameters.ts";
+import { parseSyncParameters, solutionSyncType, supportsMultipleTables, validateSyncParameters } from "./parameters.ts";
 
 /** Writes the single public product configuration; connector identifiers are resolved by the backend. */
 export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncParameters {
@@ -104,10 +104,17 @@ export function definitionPageRequest(params: DataSyncTaskPageParams) {
 /** Projects one immutable version into the unified task UI without rewriting stored version-two JSON. */
 export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTaskRecord {
   if (definition.taskType !== "DATA_SYNC") throw new Error("不支持的同步任务定义");
-  const parameters = readSyncParameters(definition.parameterSchemaVersion, definition.parameters);
+  const parameters = parseSyncParameters(definition.parameterSchemaVersion, definition.parameters);
+  let configurationError: string | undefined;
+  try {
+    validateSyncParameters(parameters);
+  } catch (failure) {
+    configurationError = failure instanceof Error ? failure.message : "任务参数校验失败";
+  }
   const mapping = parameters.tableMappings[0];
   return {
     id: definition.id,
+    ...(configurationError ? { configurationError } : {}),
     tableMappings: parameters.tableMappings.map((table) => ({
       source: {
         database: table.source.database,
