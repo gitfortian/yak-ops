@@ -8,7 +8,7 @@ import io.yak.ops.configuration.rule.OptionRule;
 import java.util.List;
 import java.util.Map;
 
-/** User-defined pipeline fields and system-owned execution options. */
+/** Persisted DATA_SYNC job keys and shared Connector endpoint identity. */
 public final class JobOptions {
 
     public static final Option<Map<String, Object>> SOURCE =
@@ -50,5 +50,4 @@ public final class JobOptions {
     }
 
     private JobOptions() {}
-
 }
