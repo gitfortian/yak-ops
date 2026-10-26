@@ -31,44 +31,7 @@ public record MySqlHybridEnumeratorState(
         List<FinishedSnapshotSplitInfo> finishedSplitInfos,
         int nextTableIndex,
         int nextChunkIndex,
-        Long nextChunkLower,
         ChunkRange nextChunkRange) {
-
-    /** Keeps legacy checkpoint builders and current BIGINT discovery unchanged. */
-    public MySqlHybridEnumeratorState(
-            String fingerprint,
-            Phase phase,
-            MySqlHybridBinlogSplit pendingBinlog,
-            boolean binlogAssigned,
-            BinlogOffset lowWatermark,
-            BinlogOffset highWatermark,
-            boolean snapshotPlanned,
-            int totalSnapshotSplits,
-            List<MySqlSnapshotSplit> pendingSnapshots,
-            Map<String, MySqlSnapshotSplit> assignedSnapshots,
-            Set<String> finishedSnapshots,
-            List<FinishedSnapshotSplitInfo> finishedSplitInfos,
-            int nextTableIndex,
-            int nextChunkIndex,
-            Long nextChunkLower) {
-        this(
-                fingerprint,
-                phase,
-                pendingBinlog,
-                binlogAssigned,
-                lowWatermark,
-                highWatermark,
-                snapshotPlanned,
-                totalSnapshotSplits,
-                pendingSnapshots,
-                assignedSnapshots,
-                finishedSnapshots,
-                finishedSplitInfos,
-                nextTableIndex,
-                nextChunkIndex,
-                nextChunkLower,
-                null);
-    }
 
     public enum Phase {
         BOOTSTRAP,
@@ -81,8 +44,7 @@ public record MySqlHybridEnumeratorState(
         Objects.requireNonNull(fingerprint, "fingerprint");
         finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
         if (nextChunkRange != null
-                && (nextChunkLower != null
-                        || nextChunkIndex < 1
+                && (nextChunkIndex < 1
                         || nextChunkRange.start() == null
                         || nextChunkRange.end() != null)) {
             throw new IllegalArgumentException("Invalid typed chunk discovery cursor");
@@ -90,8 +52,7 @@ public record MySqlHybridEnumeratorState(
         if (nextTableIndex < 0
                 || nextChunkIndex < 0
                 || nextChunkIndex > 10_000
-                || (nextChunkIndex == 0 && nextChunkLower != null)
-                || (nextChunkIndex > 0 && nextChunkLower == null && nextChunkRange == null)) {
+                || (nextChunkIndex > 0 && nextChunkRange == null)) {
             throw new IllegalArgumentException("Invalid snapshot discovery position");
         }
         Objects.requireNonNull(phase, "phase");
