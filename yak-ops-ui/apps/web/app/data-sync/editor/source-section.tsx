@@ -91,8 +91,7 @@ export function SourceSection({
       column.nullable === false &&
       /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(
         column.typeName || "",
-      ) &&
-      (form.source.sourceHasPrimaryKey !== true || column.primaryKey === true),
+      ),
   );
   return (
     <CollapseSection id="source" title="数据来源 Source">
