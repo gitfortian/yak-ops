@@ -129,7 +129,13 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Frontend format
-        run: npm run format:check
+        run: |
+          if ! npm run format:check; then
+            echo "Formatting diff for diagnosis:"
+            npx oxfmt --write apps packages scripts
+            git diff -- apps packages scripts
+            exit 1
+          fi
 
       - name: Frontend lint
         run: npm run lint
