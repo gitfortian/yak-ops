@@ -125,7 +125,7 @@ class DataSyncProductParametersTest {
     void keylessXaIsSinkOwnedAndSnapshotKeyIsSourceOwned() {
         String keyless = keyless("RETRACT", "\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}");
         var config = JobConfig.from(plugin.parse(keyless));
-        assertTrue(config.source().get(MySqlCdcSourceOptions.KEYLESS_ENABLED));
+        assertFalse(config.source().getSourceMap().containsKey("keyless"));
         assertEquals("bucket", config.source().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         assertTrue(config.sink().get(JdbcSinkOptions.XA_ENABLED));
         assertFalse(config.source().getSourceMap().containsKey("xa"));
@@ -133,6 +133,7 @@ class DataSyncProductParametersTest {
                 ",\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}", "")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("CHECKPOINT_XA", "NONE")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("RETRACT", "APPEND")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("\"snapshot\"", "\"keyless\":true,\"snapshot\"")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("bucket", "")));
     }
 
@@ -189,7 +190,7 @@ class DataSyncProductParametersTest {
         return """
                 {"solutionType":"SINGLE_TABLE_REALTIME","steps":["FULL","INCREMENTAL"],
                  "source":{"datasourceId":"source","tables":[{"id":"orders","table":"orders",
-                           "keyless":true,"snapshot":{"chunkKeyColumn":"bucket"}}]},
+                           "snapshot":{"chunkKeyColumn":"bucket"}}]},
                  "transform":[],
                  "sink":{"datasourceId":"target",
                          "schemaPolicy":{"initial":"VERIFY","evolution":{"enabled":false,"allowDropColumns":false}},
