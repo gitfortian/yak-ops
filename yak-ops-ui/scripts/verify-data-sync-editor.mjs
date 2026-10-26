@@ -53,7 +53,7 @@ const form = {
     database: "test",
     schema: "",
     table: "orders",
-    keylessEnabled: false,
+    sourceHasPrimaryKey: true,
     chunkKeyColumn: "",
     incremental: undefined,
   },
@@ -71,7 +71,7 @@ const form = {
 const selection = compile("../apps/web/app/data-sync/editor/source-selection.ts", {});
 const keyed = {
   ...form,
-  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
   sink: {
     ...form.sink,
     writeMode: "RETRACT",
@@ -82,7 +82,7 @@ const keyed = {
 const selectedSchema = selection.selectSourceSchema(keyed, "new_schema", true);
 assert.equal(selectedSchema.source.schema, "new_schema");
 assert.equal(selectedSchema.source.table, "");
-assert.equal(selectedSchema.source.keylessEnabled, false);
+assert.equal(selectedSchema.source.sourceHasPrimaryKey, undefined);
 assert.equal(selectedSchema.sink.writeMode, "UPSERT");
 assert.equal(selectedSchema.sink.targetPrimaryKeys.length, 0);
 assert.equal(selectedSchema.sink.dataSourceId, "pg");
@@ -93,17 +93,20 @@ const selectedTable = selection.selectSourceTable(
   true,
 );
 assert.equal(selectedTable.source.table, "invoices");
-assert.equal(selectedTable.source.keylessEnabled, false);
+assert.equal(selectedTable.source.sourceHasPrimaryKey, undefined);
 assert.equal(selectedTable.sink.writeMode, "UPSERT");
 assert.equal(selectedTable.sink.table, "ods_orders");
 
-const selectedKeyless = selection.setKeylessSource(form, true);
-assert.equal(selectedKeyless.source.keylessEnabled, true);
+const selectedKeyless = selection.setSourcePrimaryKeys(form, false);
+assert.equal(selectedKeyless.source.sourceHasPrimaryKey, false);
 assert.equal(selectedKeyless.sink.writeMode, "RETRACT");
 assert.equal(selectedKeyless.sink.schemaChangesEnabled, false);
 assert.equal(selectedKeyless.sink.allowDropColumns, false);
 assert.equal(selectedKeyless.sink.targetPrimaryKeys.length, 0);
-assert.equal(selection.setKeylessSource(selectedKeyless, false).source.chunkKeyColumn, "");
+assert.equal(
+  selection.setSourcePrimaryKeys(selectedKeyless, true).source.sourceHasPrimaryKey,
+  true,
+);
 
 const request = params.buildEditorPayload(form, draft, false, [], true);
 assert.equal(request.name, "orders");
@@ -212,7 +215,7 @@ assert.equal(multiParameters.sink.tables[1].table, "ods_orders");
 assert.equal("incremental" in many, false);
 const retractForm = {
   ...form,
-  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
   sink: {
     ...form.sink,
     targetPrimaryKeys: [],
@@ -290,7 +293,7 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
       sink: { ...form.sink, writeMode: "RETRACT", schemaChangesEnabled: false },
     },
     targetCatalog: { ...options.targetCatalog, tables: [{ name: "ods_orders" }] },
@@ -312,7 +315,7 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
       sink: {
         ...form.sink,
         targetPrimaryKeys: ["bucket"],

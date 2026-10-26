@@ -94,7 +94,7 @@ The `schema` string is the target namespace; `schemaPolicy` is a separate object
 
 `source.datasourceId` is required. `source.tables` is a nonempty array of explicit objects, each with a unique nonblank `id` (stable within this definition), a nonblank `table`, and optional `database` and `schema` namespaces. The first V4 release permits one Source datasource per job and at most 100 explicit one-to-one table routes. A single-table solution requires one element.
 
-For supported MySQL keyless CDC, explicit `keyless: true` opts into the no-physical-primary-key path. `snapshot.chunkKeyColumn` is the snapshot split key and is not a claim of uniqueness or target row identity. The backend verifies source metadata and the supported source/sink combination. The job never writes `source.xa`.
+The MySQL CDC Source derives physical-primary-key presence from authorized Catalog metadata; no `keyless` flag is accepted in source table parameters. `snapshot.chunkKeyColumn` is an optional snapshot split key when a physical primary key exists and is mandatory when none exists. It is not a claim of uniqueness or target row identity. The backend verifies the actual source schema and supported source/sink combination. The job never writes `source.xa`.
 
 For supported offline incremental jobs, `source.tables[].incremental` owns `mode` (`TIMESTAMP` or `INCREASING`), `column`, and optional `initialValue`, `delaySeconds`, and `lookbackSeconds`. These settings are admitted only with an offline `INCREMENTAL` data step. They are not put in the corresponding Sink table.
 
@@ -240,7 +240,7 @@ Full offline multi-table fixture (the `source.tables[].id`/`sink.tables[].input`
 }
 ```
 
-Keyless Source and explicit target write identity (a selected subset of a V4 job):
+Source without a physical primary key and explicit target write identity (a selected subset of a V4 job):
 
 ```json
 {
@@ -251,7 +251,6 @@ Keyless Source and explicit target write identity (a selected subset of a V4 job
         "id": "events",
         "database": "app",
         "table": "events",
-        "keyless": true,
         "snapshot": {
           "chunkKeyColumn": "event_id"
         }
@@ -284,7 +283,7 @@ Keyless Source and explicit target write identity (a selected subset of a V4 job
 }
 ```
 
-Keyless exact-row retraction uses the same explicit keyless Source but the Sink table contains `"write": {"mode":"RETRACT","transaction":{"mode":"CHECKPOINT_XA"}}` and no `write.primaryKeys`. It remains limited to the existing supported MySQL-to-MySQL transactional path and its recovery guarantees; setting these fields alone does not make unsupported cross-database XA possible.
+Exact-row retraction for a source without physical primary keys uses the same schema-derived Source but the Sink table contains `"write": {"mode":"RETRACT","transaction":{"mode":"CHECKPOINT_XA"}}` and no `write.primaryKeys`. It remains limited to the existing supported MySQL-to-MySQL transactional path and its recovery guarantees; setting these fields alone does not make unsupported cross-database XA possible.
 
 ## Proposed Changes
 
@@ -315,7 +314,7 @@ Schema preparation is requested by `sink.schemaPolicy.initial`, **not** a second
 | Concern | V4 owning path | Runtime owner |
 | --- | --- | --- |
 | Source datasource and namespace | `source.datasourceId`, `source.tables[]` | DataSource lookup, Source Factory |
-| Keyless opt-in and snapshot split key | `source.tables[].keyless`, `.snapshot.chunkKeyColumn` | MySQL CDC Source |
+| Physical primary-key metadata and snapshot split key | Catalog-derived metadata and `source.tables[].snapshot.chunkKeyColumn` | MySQL CDC Source |
 | Offline incremental range | `source.tables[].incremental` | Offline incremental planner, JDBC Source |
 | Target table and explicit write identity | `sink.tables[].table`, `.write.primaryKeys` | Target metadata validator, JDBC Sink |
 | Write mode and transaction semantics | `sink.tables[].write` | JDBC Sink writer/committer with Checkpoint |
@@ -328,6 +327,10 @@ Schema preparation is requested by `sink.schemaPolicy.initial`, **not** a second
 A Sink referencing a Source output is a constrained mapping, not a general graph. `transform: []` is mandatory and routing must remain one-to-one until a separately accepted proposal establishes transform semantics, repartitioning, row-type changes, state compatibility, and ordering. Unsupported Source/Sink connector types must not be introduced merely by changing a `solutionType` string. Extra Source/Sink/Env property bags, unvalidated raw JDBC SQL, and physical Connector option injection are rejected.
 
 The V4 public contract establishes stable component ownership and the ability to add future supported options through their owner. It does **not** promise dynamic schema/table discovery, arbitrary transforms, per-route independent checkpoint intervals, operator-parallel CDC sinks, or a general DAG engine.
+
+### Source Chunk Key contract refinement (October 26, 2026)
+
+The first V4 implementation persisted an explicit `source.tables[].keyless` opt-in. The Source contract now derives primary-key presence from the authorized table metadata, and the obsolete flag is **rejected**, not ignored. Existing V4 definitions with that field do not become executable through an implicit conversion; operators must create a new definition with the supported Source contract. The `parameterSchemaVersion` remains 4 for this deliberately breaking V4 refinement, so historical V4 JSON may fail strict validation. This does not rewrite immutable definitions or adopt old CDC offsets/checkpoints. The existing keyed BIGINT scan limitations remain enforced until the separately reviewed typed Snapshot/Backfill lifecycle is unified.
 
 ## Compatibility, Deprecation, and Migration Plan
 

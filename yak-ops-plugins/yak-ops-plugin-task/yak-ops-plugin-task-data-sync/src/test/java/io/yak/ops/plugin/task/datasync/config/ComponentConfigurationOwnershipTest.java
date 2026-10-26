@@ -18,7 +18,7 @@ class ComponentConfigurationOwnershipTest {
         var saved = ConfigParser.parseJson(keyless("RETRACT", "\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}"));
         var job = JobConfig.from(saved);
         assertEquals(saved, job.parameters());
-        assertTrue(job.source().get(MySqlCdcSourceOptions.KEYLESS_ENABLED));
+        assertFalse(job.source().getSourceMap().containsKey("keyless"));
         assertEquals("bucket", job.source().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         assertFalse(job.source().getSourceMap().containsKey("xa"));
         assertFalse(job.source().getSourceMap().containsKey("snapshot"));
@@ -81,7 +81,7 @@ class ComponentConfigurationOwnershipTest {
         return """
                 {"solutionType":"SINGLE_TABLE_REALTIME","steps":["FULL","INCREMENTAL"],
                  "source":{"datasourceId":"source","tables":[{"id":"orders","table":"orders",
-                           "keyless":true,"snapshot":{"chunkKeyColumn":"bucket"}}]},
+                           "snapshot":{"chunkKeyColumn":"bucket"}}]},
                  "transform":[],
                  "sink":{"datasourceId":"sink",
                          "schemaPolicy":{"initial":"VERIFY","evolution":{"enabled":false,"allowDropColumns":false}},

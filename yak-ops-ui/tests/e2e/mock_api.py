@@ -145,6 +145,8 @@ async def mock(route):
         data = paging(sources)
     elif "/catalog/schemas" in p:
         data = []
+    elif "/catalog/columns" in p:
+        data = [{"name": "id", "typeName": "BIGINT", "nullable": False, "primaryKey": True}]
     elif "/catalog/tables" in p:
         mode = state["catalog_mode"]
         if "/src/" in p:

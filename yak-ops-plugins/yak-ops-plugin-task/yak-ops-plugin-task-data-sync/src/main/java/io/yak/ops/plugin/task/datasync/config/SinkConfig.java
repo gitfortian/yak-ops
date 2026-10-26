@@ -42,7 +42,6 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
     public static SinkConfig from(
             ReadonlyConfig target,
             String datasourceId,
-            SourceConfig source,
             SolutionType type,
             List<Step> steps,
             boolean schemaChangesEnabled) {
@@ -68,22 +67,17 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
             }
             xa = true;
         }
-        if (source.keyless()) {
-            if (mode == JdbcWriteMode.RETRACT && (!xa || keys != null)) {
-                throw new IllegalArgumentException("Keyless RETRACT requires checkpoint XA and no custom target keys");
-            }
-            if (mode == JdbcWriteMode.UPSERT && (xa || keys == null)) {
-                throw new IllegalArgumentException("Keyless UPSERT requires an explicit target primary key without XA");
-            }
-            if (mode != JdbcWriteMode.RETRACT && mode != JdbcWriteMode.UPSERT) {
-                throw new IllegalArgumentException("Unsupported keyless write mode");
-            }
-        } else if (mode == JdbcWriteMode.RETRACT || xa) {
-            throw new IllegalArgumentException("RETRACT and checkpoint XA require keyless CDC");
+        if (mode == JdbcWriteMode.RETRACT
+                && (!xa || keys != null || type != SolutionType.SINGLE_TABLE_REALTIME || schemaChangesEnabled)) {
+            throw new IllegalArgumentException(
+                    "RETRACT requires realtime checkpoint XA, no target keys and no schema evolution");
+        }
+        if (xa && mode != JdbcWriteMode.RETRACT) {
+            throw new IllegalArgumentException("Checkpoint XA requires RETRACT write mode");
         }
         if ((!type.supportsScheduling() || steps.contains(Step.INCREMENTAL))
                 && mode != JdbcWriteMode.UPSERT
-                && !(source.keyless() && mode == JdbcWriteMode.RETRACT)) {
+                && mode != JdbcWriteMode.RETRACT) {
             throw new IllegalArgumentException("Changelog and offline incremental require UPSERT");
         }
         Map<String, Object> physical = new LinkedHashMap<>(target.getSourceMap());

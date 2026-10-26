@@ -98,7 +98,6 @@ const validXa = definition("xa", {
     tables: [
       {
         ...baseParameters.source.tables[0],
-        keyless: true,
         snapshot: { chunkKeyColumn: "bucket" },
       },
     ],
@@ -134,7 +133,7 @@ assert.deepEqual(
   ["valid", "old-version", "xa", "invalid", "unknown-version"],
 );
 assert.equal(projected.bizData[0].syncType, "REALTIME");
-assert.equal(projected.bizData[2].keylessEnabled, true);
+assert.equal(projected.bizData[2].chunkKeyColumn, "bucket");
 assert.equal(projected.bizData[2].tableMappings[0].source.chunkKeyColumn, "bucket");
 assert.equal(projected.bizData[2].writeMode, "RETRACT");
 for (const record of [projected.bizData[1], projected.bizData[3], projected.bizData[4]]) {

@@ -157,6 +157,13 @@ public final class JobPlanner {
             if (mapping.targetPrimaryKeys() != null && !"MYSQL".equals(targetInfo.type())) {
                 throw new IllegalArgumentException("Explicit target primary keys currently require a MySQL target");
             }
+            SchemaValidator.validateCdcWrite(
+                    from.schema(),
+                    targetInfo.type(),
+                    source,
+                    sink,
+                    mapping.targetPrimaryKeys(),
+                    job.schemaChangesEnabled());
             TableSchema writeSource = SchemaValidator.writeSchema(from, mapping.targetPrimaryKeys());
             CreateTableEvent event = prepareSchema
                     ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
@@ -184,16 +191,13 @@ public final class JobPlanner {
             if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
                 String chunkKey = source.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
                 if (chunkKey != null) binding += encodePart("chunkKey") + encodePart(chunkKey);
-                if (source.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
-                    if (!"MYSQL".equals(from.datasourceType()) || !"MYSQL".equals(targetInfo.type())) {
-                        throw new IllegalArgumentException("Keyless CDC product acceptance is MySQL to MySQL only");
-                    }
-                    binding += encodePart("keyless");
-                }
+                if (from.schema().primaryKeys().isEmpty()) binding += encodePart("noPhysicalPrimaryKey");
             }
             if (sink.get(JdbcSinkOptions.XA_ENABLED)) {
-                if (!"MYSQL".equals(targetInfo.type()) || !source.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
-                    throw new IllegalArgumentException("MySQL XA requires a keyless MySQL CDC Source");
+                if (!"MYSQL".equals(targetInfo.type())
+                        || !from.schema().primaryKeys().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "MySQL XA RETRACT requires a source without physical primary keys");
                 }
                 binding += encodePart("XA");
             }

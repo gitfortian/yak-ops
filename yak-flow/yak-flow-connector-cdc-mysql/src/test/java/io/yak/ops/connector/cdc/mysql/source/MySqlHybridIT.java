@@ -230,7 +230,6 @@ class MySqlHybridIT {
                     .set(MySqlCdcSourceOptions.SERVER_ID, 7001).set(MySqlCdcSourceOptions.TOPIC_PREFIX, prefix)
                     .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, chunkSize);
             if (keyless) {
-                options.set(MySqlCdcSourceOptions.KEYLESS_ENABLED, true);
                 options.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "bucket");
             }
             List<TableSourceFactoryContext> contexts = new ArrayList<>();

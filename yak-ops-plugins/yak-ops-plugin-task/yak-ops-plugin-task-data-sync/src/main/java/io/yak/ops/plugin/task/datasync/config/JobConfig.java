@@ -153,7 +153,7 @@ public final class JobConfig {
             ReadonlyConfig target = targets.remove(id);
             if (target == null) throw new IllegalArgumentException("Sink input must reference a Source table");
             SourceConfig input = SourceConfig.from(source, fromId, type, dataSteps, evolve);
-            SinkConfig output = SinkConfig.from(target, toId, input, type, dataSteps, evolve);
+            SinkConfig output = SinkConfig.from(target, toId, type, dataSteps, evolve);
             if (!sourceTables.add(tableKey(source)) || !sinkTables.add(tableKey(target))) {
                 throw new IllegalArgumentException("Duplicate physical table route");
             }

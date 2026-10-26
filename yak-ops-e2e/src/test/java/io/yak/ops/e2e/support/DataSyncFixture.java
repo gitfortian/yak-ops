@@ -192,7 +192,6 @@ public final class DataSyncFixture implements AutoCloseable {
                 "source", Map.of("datasourceId", sourceId, "tables", List.of(Map.of(
                         "id", "keyless",
                         "table", "keyless_source",
-                        "keyless", true,
                         "snapshot", Map.of("chunkKeyColumn", "bucket")))),
                 "transform", List.of(),
                 "sink", Map.of(

@@ -54,7 +54,7 @@ export interface DataSyncIncrementalConfig {
 }
 
 export interface DataSyncTableMapping {
-  source: DataSyncTablePath & { keyless?: boolean; chunkKeyColumn?: string };
+  source: DataSyncTablePath & { chunkKeyColumn?: string };
   target: DataSyncTablePath & { primaryKeys?: string[] };
   writeMode: DataSyncWriteMode;
   incremental?: DataSyncIncrementalConfig;
@@ -131,7 +131,6 @@ export interface DataSyncParameters {
     tables: Array<
       DataSyncTablePath & {
         id: string;
-        keyless?: boolean;
         snapshot?: { chunkKeyColumn: string };
         incremental?: DataSyncIncrementalConfig;
       }
@@ -164,7 +163,6 @@ export interface DataSyncTaskRecord {
   id: string;
   /** Persisted definition can be displayed, but fails current static execution validation. */
   configurationError?: string;
-  keylessEnabled?: boolean;
   chunkKeyColumn?: string;
   targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;
@@ -257,7 +255,6 @@ interface DataSyncTaskSaveBase {
 }
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
-  keylessEnabled?: boolean;
   chunkKeyColumn?: string;
   targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;

@@ -95,7 +95,7 @@ class DataSyncPlannerAcceptanceTest {
     void keylessRetractWithoutSinkCheckpointTransactionFailsAdmission() {
         String invalid = realtime()
                 .replace("\"id\":\"orders\",\"table\":\"orders\"",
-                        "\"id\":\"orders\",\"table\":\"orders\",\"keyless\":true,\"snapshot\":{\"chunkKeyColumn\":\"id\"}")
+                        "\"id\":\"orders\",\"table\":\"orders\",\"snapshot\":{\"chunkKeyColumn\":\"id\"}")
                 .replace("\"mode\":\"UPSERT\"", "\"mode\":\"RETRACT\"");
         assertThrows(TaskPluginException.class, () -> plugin.parse(invalid));
     }

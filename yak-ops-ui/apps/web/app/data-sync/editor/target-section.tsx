@@ -133,7 +133,7 @@ export function TargetSection({
               onValueChange={(value) => patchSink("writeMode", value as DataSyncWriteMode)}
             />
           </Field>
-          {usesChangelog && form.source.keylessEnabled ? (
+          {usesChangelog && form.source.sourceHasPrimaryKey === false ? (
             <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
               <FieldLabel>目标主键</FieldLabel>
               <Input
@@ -160,7 +160,12 @@ export function TargetSection({
             aria-label="同步结构变更"
             size="small"
             checked={form.sink.schemaChangesEnabled}
-            disabled={published || saving || targetType === "ORACLE" || form.source.keylessEnabled}
+            disabled={
+              published ||
+              saving ||
+              targetType === "ORACLE" ||
+              form.source.sourceHasPrimaryKey === false
+            }
             onCheckedChange={(checked) => {
               patchSink("schemaChangesEnabled", checked);
               if (!checked) patchSink("allowDropColumns", false);

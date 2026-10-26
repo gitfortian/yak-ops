@@ -19,7 +19,7 @@ import {
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "./incremental-fields";
-import { selectSourceSchema, selectSourceTable, setKeylessSource } from "./source-selection";
+import { selectSourceSchema, selectSourceTable, setSourcePrimaryKeys } from "./source-selection";
 import { findStepCombination } from "../solution/presentation";
 import { useSolutions } from "../solution/use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
@@ -88,7 +88,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         database: value?.sourceDatabase || "",
         schema: value?.sourceSchema || "",
         table: value?.sourceTable || "",
-        keylessEnabled: value?.keylessEnabled ?? false,
+        sourceHasPrimaryKey: undefined,
         chunkKeyColumn: value?.chunkKeyColumn ?? "",
         incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
       },
@@ -99,13 +99,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         table: value?.targetTable || "",
         schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
         allowDropColumns: value?.allowDropColumns ?? false,
-        writeMode: value?.keylessEnabled
-          ? value.writeMode === "UPSERT"
-            ? "UPSERT"
-            : "RETRACT"
-          : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
-            ? "UPSERT"
-            : "APPEND",
+        writeMode:
+          value?.writeMode === "RETRACT"
+            ? "RETRACT"
+            : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
+              ? "UPSERT"
+              : "APPEND",
         targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
       },
     };
@@ -217,7 +216,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
           database: selected?.database || "",
           schema: selected?.schema || "",
           table: "",
-          keylessEnabled: false,
+          sourceHasPrimaryKey: undefined,
           chunkKeyColumn: "",
         },
         sink: {
@@ -388,7 +387,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             mappings={mappings}
             updateMappings={updateMappings}
             writeMode={combination?.writeModes[0]}
-            allowKeyless={usesChangelog && !batch && draft.targetType === "MYSQL"}
+            allowChunkKey={usesChangelog && !batch && draft.sourceType === "MYSQL"}
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
@@ -399,8 +398,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             onSourceTableChange={(table) =>
               updateSourceSelection((current) => selectSourceTable(current, table, usesChangelog))
             }
-            onKeylessChange={(enabled) =>
-              updateSourceSelection((current) => setKeylessSource(current, enabled))
+            onSourcePrimaryKeys={(hasPrimaryKey) =>
+              setForm((current) => setSourcePrimaryKeys(current, hasPrimaryKey))
             }
           />
 
