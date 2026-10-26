@@ -43,6 +43,9 @@ export function classifyModelFailure(error: unknown): ModelFailure {
     case 19508:
     case 19512:
       return { kind: "field", field: "nameSuffix", message: message(error) };
+    // The layer's naming rule rejected the composed suffix, which is the same control the user edits.
+    case 19513:
+      return { kind: "field", field: "nameSuffix", message: message(error) };
     case 19509:
       return { kind: "field", field: "layer", message: message(error) };
     case 19510:

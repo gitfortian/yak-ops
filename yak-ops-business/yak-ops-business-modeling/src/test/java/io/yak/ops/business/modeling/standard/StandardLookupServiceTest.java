@@ -108,6 +108,29 @@ class StandardLookupServiceTest {
     }
 
     @Test
+    void refusesValueCodesThatOnlyDifferInCase() {
+        // The column collation is case-insensitive, so the database would reject the list; the
+        // contract error has to come from us instead of a driver exception turning into a 500.
+        var submitted = input("order_status");
+        submitted.getValues().add(value("PAID"));
+        var error =
+                assertThrows(BusinessException.class, () -> service.create("ws", "actor", "category", submitted));
+        assertEquals(StandardErrorCode.INVALID_LOOKUP_VALUE, error.getErrorCode());
+        verify(lookups, never()).replaceValues(anyString(), any());
+    }
+
+    @Test
+    void mapsAValueCollisionSeenOnlyByTheDatabaseToTheContractError() {
+        doThrow(new DuplicateKeyException("uk_lookup_value"))
+                .when(lookups)
+                .replaceValues(anyString(), any());
+        var error = assertThrows(
+                BusinessException.class,
+                () -> service.create("ws", "actor", "category", input("order_status")));
+        assertEquals(StandardErrorCode.INVALID_LOOKUP_VALUE, error.getErrorCode());
+    }
+
+    @Test
     void refusesABlankOrOversizedValueCode() {
         var blank = input("order_status");
         blank.getValues().getFirst().setValueCode("   ");

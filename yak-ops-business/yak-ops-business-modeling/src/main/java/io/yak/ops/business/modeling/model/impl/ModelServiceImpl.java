@@ -42,8 +42,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Owns DWD/DIM model transactions: layer-derived table names, scope rules, field replacement and the
- * three attributes inherited from a bound field standard.
+ * Owns logical-model transactions for all four types: layer-derived table names, scope rules,
+ * field replacement and the attributes inherited from a bound field standard.
  */
 @Service
 public class ModelServiceImpl implements ModelService {
@@ -376,9 +376,11 @@ public class ModelServiceImpl implements ModelService {
     /**
      * Builds the replacement field rows.
      *
-     * <p>Binding is authoritative rather than advisory: a bound standard overwrites code, Chinese
-     * name, type, length and nullability before validation, so a client cannot desynchronize a field
-     * from the standard it claims to follow. A lookup table supplies code and Chinese name only when
+     * <p>Binding is authoritative rather than advisory for the identity of the field: a bound
+     * standard overwrites code, Chinese name, type and length before validation, so a client cannot
+     * desynchronize a field from the standard it claims to follow. Nullability is the exception --
+     * the standard only supplies a default there, because the same standard is cited by layers whose
+     * data carries different constraints (YOIP-9 section 4). A lookup table supplies code and Chinese name only when
      * no standard is bound, and a unit never overrides anything. The aggregate is checked after that
      * inheritance, so a standard that resolves to {@code STRING} cannot carry {@code SUM} either.
      * A derived-metric link records provenance only: it is accepted on measure kinds, must resolve
@@ -410,7 +412,11 @@ public class ModelServiceImpl implements ModelService {
                 cnName = inherited.cnName();
                 dataType = inherited.dataType();
                 length = inherited.lengthPrecision();
-                isNotNull = inherited.isNotNull();
+                // Nullability is not inherited: the standard only seeds the flag on the client,
+                // because the same standard is cited by ODS, DWD and DIM models whose data carries
+                // different constraints. A submitted value wins; only an absent one takes the
+                // standard as its default.
+                if (field.getIsNotNull() == null) isNotNull = inherited.isNotNull();
             } else if (lookupId != null) {
                 var lookup = lookups.find(workspaceId, lookupId)
                         .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));

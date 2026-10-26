@@ -24,6 +24,7 @@ import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -89,7 +90,7 @@ public class StandardLookupServiceImpl implements StandardLookupService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(StandardErrorCode.DUPLICATE_CODE, failure);
         }
-        lookups.replaceValues(row.getId(), values(workspaceId, row.getId(), input));
+        replaceValues(workspaceId, row.getId(), input);
         return new StandardSavedVO(row.getId(), 1);
     }
 
@@ -108,8 +109,24 @@ public class StandardLookupServiceImpl implements StandardLookupService {
         } catch (DuplicateKeyException failure) {
             throw new BusinessException(StandardErrorCode.DUPLICATE_CODE, failure);
         }
-        lookups.replaceValues(id, values(workspaceId, id, input));
+        replaceValues(workspaceId, id, input);
         return new StandardSavedVO(id, Math.addExact(row.getRevision(), 1));
+    }
+
+    /**
+     * Replaces the whole value list, translating a unique-key collision into the contract error.
+     *
+     * <p>The in-memory duplicate check compares folded codes, but the column's collation is the
+     * authority on what counts as the same value (it also folds accents). A collision that only the
+     * database sees must still answer {@code INVALID_LOOKUP_VALUE} rather than escape as a driver
+     * exception and reach the client as a generic server error.
+     */
+    private void replaceValues(String workspaceId, String lookupId, StandardLookupInputDTO input) {
+        try {
+            lookups.replaceValues(lookupId, values(workspaceId, lookupId, input));
+        } catch (DuplicateKeyException collision) {
+            throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE, collision);
+        }
     }
 
     @Override
@@ -152,7 +169,8 @@ public class StandardLookupServiceImpl implements StandardLookupService {
         StandardCatalog.validCode(input.getEnCode());
         StandardCatalog.validName(input.getCnName());
         StandardCatalog.validName(input.getEnName());
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw StandardCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw StandardCatalog.invalid();
         if (input.getValues() == null) throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE);
     }
 
@@ -173,7 +191,12 @@ public class StandardLookupServiceImpl implements StandardLookupService {
             if (value == null) throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE);
             var code =
                     value.getValueCode() == null ? null : value.getValueCode().strip();
-            if (code == null || code.isEmpty() || code.length() > MAX_VALUE_CODE || !seen.add(code))
+            // Codes that differ only in case are the same value to the column's collation, so the
+            // duplicate check has to fold them the same way before the database does it for us.
+            if (code == null
+                    || code.isEmpty()
+                    || code.length() > MAX_VALUE_CODE
+                    || !seen.add(code.toLowerCase(Locale.ROOT)))
                 throw new BusinessException(StandardErrorCode.INVALID_LOOKUP_VALUE);
             var row = new StandardLookupValueEntity();
             row.setId(IdUtils.nextId());

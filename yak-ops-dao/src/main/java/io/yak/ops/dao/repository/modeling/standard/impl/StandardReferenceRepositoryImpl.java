@@ -39,9 +39,13 @@ public class StandardReferenceRepositoryImpl implements StandardReferenceReposit
     public List<Item> byUnit(String workspaceId, String unitId) {
         var standards = mapper.fieldStandardsByUnit(workspaceId, unitId);
         var fields = mapper.modelFieldsByUnit(workspaceId, unitId);
-        var items = new ArrayList<Item>(standards.size() + fields.size());
+        // Atomic metrics bind a unit as a caliber annotation; the foreign key is restrictive, so
+        // leaving them out would let the delete dialog offer a delete the database then refuses.
+        var metrics = mapper.atomicMetricsByUnit(workspaceId, unitId);
+        var items = new ArrayList<Item>(standards.size() + fields.size() + metrics.size());
         items.addAll(project(standards));
         items.addAll(project(fields));
+        items.addAll(project(metrics));
         return List.copyOf(items);
     }
 

@@ -79,6 +79,10 @@ export interface ModelField {
   measureUnitId: string | null;
   measureUnitEnCode: string | null;
   description: string | null;
+  /** Derived metric this field was imported from; advisory, and only measure kinds carry one. */
+  metricId: string | null;
+  metricEnCode: string | null;
+  metricCnName: string | null;
 }
 
 /**
@@ -149,6 +153,11 @@ export interface ModelFieldInput {
   lookupId: string | null;
   /** Annotation only; the server validates existence and changes no attribute. */
   measureUnitId: string | null;
+  /**
+   * Derived metric this field came from, kept as an opaque passthrough: the editor has no control
+   * for it this version, but dropping it on save would clear a link the delete protection relies on.
+   */
+  metricId: string | null;
   description: string | null;
 }
 

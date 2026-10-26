@@ -171,7 +171,8 @@ public class MetricAtomicServiceImpl implements MetricAtomicService {
         var unitId = trim(input.getMeasureUnitId());
         if (unitId != null && units.find(workspaceId, unitId).isEmpty())
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw MetricCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw MetricCatalog.invalid();
     }
 
     private static void copy(MetricAtomicEntity row, MetricAtomicInputDTO input) {

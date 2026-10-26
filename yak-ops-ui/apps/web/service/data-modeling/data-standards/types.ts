@@ -143,7 +143,7 @@ export interface StandardNamingEntry extends StandardNamingEntryInput {
   revision: number;
 }
 export interface ReferenceItem {
-  kind: "MODEL_FIELD" | "FIELD_STANDARD" | "MODEL";
+  kind: "MODEL_FIELD" | "FIELD_STANDARD" | "MODEL" | "ATOMIC_METRIC";
   id: string;
   name: string;
   path: string;
@@ -152,6 +152,7 @@ export const REFERENCE_KIND_LABEL: Record<ReferenceItem["kind"], string> = {
   MODEL_FIELD: "模型字段",
   FIELD_STANDARD: "字段标准",
   MODEL: "模型",
+  ATOMIC_METRIC: "原子指标",
 };
 export type DeleteTarget =
   | { kind: "category"; node: StandardCategory }

@@ -182,7 +182,9 @@ class DimensionModelingIT extends BackendTestBase {
         assertEquals(prefix + "_order_id", inherited.path("enCode").asText());
         assertEquals("DECIMAL", inherited.path("dataType").asText());
         assertEquals("20,2", inherited.path("lengthPrecision").asText());
-        assertTrue(inherited.path("isNotNull").asBoolean());
+        // The standard seeds nullability but never overrides it: the request asked for a nullable
+        // field and the stored row keeps that choice (YOIP-9 §4).
+        assertFalse(inherited.path("isNotNull").asBoolean());
         assertTrue(inherited.path("isPrimaryKey").asBoolean());
         // The flags come back from the same read path the UI uses, not only from the write payload.
         var partition = created.path("fields").get(1);

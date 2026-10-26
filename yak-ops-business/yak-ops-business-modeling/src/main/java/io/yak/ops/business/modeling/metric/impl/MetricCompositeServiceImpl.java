@@ -144,7 +144,8 @@ public class MetricCompositeServiceImpl implements MetricCompositeService {
         for (var code : codes) {
             derived.byCode(workspaceId, code).orElseThrow(() -> unknownReference(code));
         }
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw MetricCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw MetricCatalog.invalid();
     }
 
     private List<MetricCompositeRefEntity> resolveReferences(String workspaceId, String expression) {

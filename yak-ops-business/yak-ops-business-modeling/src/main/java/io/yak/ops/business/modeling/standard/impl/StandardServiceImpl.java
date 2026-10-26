@@ -362,8 +362,8 @@ public class StandardServiceImpl implements StandardService {
                 || input.getOwnerId().length() > 64
                 || !workspaces.isActiveMember(workspaceId, input.getOwnerId()))
             throw new BusinessException(StandardErrorCode.INVALID_OWNER);
-        if (input.getBusinessCaliber() != null && input.getBusinessCaliber().length() > 2000)
-            throw StandardCatalog.invalid();
+        if (input.getBusinessCaliber() != null
+                && input.getBusinessCaliber().strip().length() > 2000) throw StandardCatalog.invalid();
         String value = input.getLengthPrecision();
         if (value != null && value.isBlank()) {
             value = null;
@@ -386,7 +386,8 @@ public class StandardServiceImpl implements StandardService {
             }
             if (!valid) throw new BusinessException(StandardErrorCode.INVALID_PRECISION);
         }
-        if (input.getDefaultValue() != null && input.getDefaultValue().length() > 2048) throw StandardCatalog.invalid();
+        if (input.getDefaultValue() != null && input.getDefaultValue().strip().length() > 2048)
+            throw StandardCatalog.invalid();
         validateParent(workspaceId, id, trim(input.getParentStandardId()));
         var lookupId = trim(input.getLookupId());
         if (lookupId != null && lookups.find(workspaceId, lookupId).isEmpty())

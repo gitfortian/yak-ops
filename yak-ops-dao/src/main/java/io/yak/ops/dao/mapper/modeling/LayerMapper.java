@@ -22,6 +22,15 @@ public interface LayerMapper {
     @Select("SELECT COUNT(*) FROM yak_ops_modeling_layer WHERE workspace_id=#{workspaceId} AND builtin=1")
     long builtinCount(String workspaceId);
 
+    /**
+     * Counts the logical models still attached to one layer.
+     *
+     * <p>Models cite their layer with {@code ON DELETE RESTRICT}, so a delete that skips this
+     * check surfaces as a raw foreign-key violation instead of a business answer.
+     */
+    @Select("SELECT COUNT(*) FROM yak_ops_modeling_model WHERE workspace_id=#{workspaceId} AND layer_id=#{layerId}")
+    long modelsInLayer(@Param("workspaceId") String workspaceId, @Param("layerId") String layerId);
+
     @Select("SELECT id FROM yak_ops_workspace WHERE id=#{workspaceId} FOR UPDATE")
     String lockWorkspace(@Param("workspaceId") String workspaceId);
 

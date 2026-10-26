@@ -141,7 +141,8 @@ public class MetricTimePeriodServiceImpl implements MetricTimePeriodService {
         if (input == null) throw MetricCatalog.invalid();
         MetricCatalog.validCode(input.getEnCode());
         MetricCatalog.validName(input.getCnName());
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw MetricCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw MetricCatalog.invalid();
     }
 
     private static void copy(MetricTimePeriodEntity row, MetricTimePeriodInputDTO input) {

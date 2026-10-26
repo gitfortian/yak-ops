@@ -151,7 +151,8 @@ public class MetricModifierServiceImpl implements MetricModifierService {
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         MetricCatalog.validCode(input.getEnCode());
         MetricCatalog.validName(input.getCnName());
-        if (input.getDescription() != null && input.getDescription().length() > 500) throw MetricCatalog.invalid();
+        if (input.getDescription() != null && input.getDescription().strip().length() > 500)
+            throw MetricCatalog.invalid();
     }
 
     private static void copy(MetricModifierEntity row, MetricModifierInputDTO input) {

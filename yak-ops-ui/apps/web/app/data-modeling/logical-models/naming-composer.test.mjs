@@ -37,11 +37,9 @@ test("resolves the keyword segment used to find a saved root beyond the first pa
   assert.equal(rootSearchSegment(""), "");
 });
 
-test("caps the qualifier so the full name stays within 41 characters", () => {
-  assert.equal(
-    qualifierMaxLength("dwd", "trade", "order"),
-    41 - "dwd".length - 1 - "trade_order".length - 1,
-  );
+test("caps the qualifier so the suffix stays within 41 characters", () => {
+  // The budget covers the suffix only; the layer prefix is stored beside it, not inside it.
+  assert.equal(qualifierMaxLength("dwd", "trade", "order"), 41 - "trade_order".length - 1);
   assert.equal(qualifierMaxLength("", "", ""), 41);
   assert.equal(qualifierMaxLength("dwd", "a_very_long_root_word_code", "a_very_long_process"), 0);
 });

@@ -28,6 +28,8 @@ export interface FieldDraft {
   lookupEnCode: string | null;
   measureUnitId: string | null;
   measureUnitEnCode: string | null;
+  /** Derived metric the field was imported from; submitted back unchanged, never edited here. */
+  metricId: string | null;
   /** Optional business description; loaded from and submitted with the model field. */
   description: string | null;
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
@@ -81,6 +83,7 @@ export function emptyField(): FieldDraft {
     lookupEnCode: null,
     measureUnitId: null,
     measureUnitEnCode: null,
+    metricId: null,
     description: null,
     importNote: null,
   };
@@ -103,6 +106,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     lookupEnCode: field.lookupEnCode,
     measureUnitId: field.measureUnitId,
     measureUnitEnCode: field.measureUnitEnCode,
+    metricId: field.metricId ?? null,
     description: field.description,
     importNote: null,
   };
@@ -125,6 +129,7 @@ export function fromStandard(standard: StandardField): FieldDraft {
     lookupEnCode: null,
     measureUnitId: null,
     measureUnitEnCode: null,
+    metricId: null,
     description: null,
     importNote: null,
   };
@@ -143,6 +148,7 @@ export function toModelFieldInput(row: FieldDraft): ModelFieldInput {
     standardId: row.standardId,
     lookupId: row.lookupId,
     measureUnitId: row.measureUnitId,
+    metricId: row.metricId,
     description: row.description,
   };
 }

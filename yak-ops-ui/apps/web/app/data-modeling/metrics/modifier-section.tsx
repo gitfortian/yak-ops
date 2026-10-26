@@ -30,7 +30,7 @@ import { METRIC_CODE_PATTERN } from "@/service/data-modeling/metrics/types";
 import { FIELD_CLASS, InputField, SelectField } from "../shared/form-fields";
 import MetricToolbar from "./metric-toolbar";
 import { domainLabel, domainsOf } from "./planning-options";
-import { useMetricOptions, useMetricPage, useRetry } from "./page-state";
+import { useClampPage, useMetricOptions, useMetricPage, useRetry } from "./page-state";
 
 function validate(input: MetricModifierInput) {
   const errors: Record<string, string> = {};
@@ -242,6 +242,7 @@ export default function ModifierSection(props: Props) {
   const list = useMetricPage(key, props.version, (signal) =>
     getModifiers({ pageNo, pageSize, keyword }, signal),
   );
+  useClampPage(list.page, list.loading, pageNo, setPageNo);
   const columns: TableColumns<MetricModifier> = [
     { title: "中文名称", dataIndex: "cnName", width: 160, ellipsis: true },
     { title: "英文编码", dataIndex: "enCode", width: 160, ellipsis: true },

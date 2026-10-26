@@ -28,7 +28,7 @@ import type {
 import { METRIC_CODE_PATTERN } from "@/service/data-modeling/metrics/types";
 import { FIELD_CLASS, InputField } from "../shared/form-fields";
 import MetricToolbar from "./metric-toolbar";
-import { useMetricPage } from "./page-state";
+import { useClampPage, useMetricPage } from "./page-state";
 
 function validate(input: MetricTimePeriodInput) {
   const errors: Record<string, string> = {};
@@ -205,6 +205,7 @@ export default function TimePeriodSection(props: Props) {
   const list = useMetricPage(key, props.version, (signal) =>
     getTimePeriods({ pageNo, pageSize, keyword }, signal),
   );
+  useClampPage(list.page, list.loading, pageNo, setPageNo);
   const columns: TableColumns<MetricTimePeriod> = [
     { title: "中文名称", dataIndex: "cnName", width: 180, ellipsis: true },
     { title: "英文编码", dataIndex: "enCode", width: 160, ellipsis: true },

@@ -20,7 +20,13 @@ public enum LayerErrorCode implements ErrorCode {
      * process code leaves no room for the required head, or non-conforming models were not
      * acknowledged. The offending names are read from the rule endpoint, not carried here.
      */
-    INVALID_NAMING_RULE(19208, "命名规则无法启用：请先补齐命名词典，或确认该分层下不符合规则的模型");
+    INVALID_NAMING_RULE(19208, "命名规则无法启用：请先补齐命名词典，或确认该分层下不符合规则的模型"),
+    /**
+     * A layer that still owns logical models cannot be deleted, and its abbreviation cannot change:
+     * models cite it with RESTRICT and their stored table names carry its prefix. Both operations
+     * need the models moved elsewhere or removed first.
+     */
+    HAS_DEPENDENCIES(19209, "该分层下存在逻辑模型，请先移除或迁移模型");
 
     private final Integer code;
     private final String message;

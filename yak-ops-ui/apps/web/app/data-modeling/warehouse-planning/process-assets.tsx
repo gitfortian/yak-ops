@@ -62,8 +62,9 @@ export default function ProcessAssets({ processId }: { processId: string }) {
             pageSize,
             total: data.page.pagination.total,
             onChange: (page, size) => {
-              setPageNo(page);
               setPageSize(size);
+              // A new page size renumbers every page, so the current number is meaningless after it.
+              setPageNo(size === pageSize ? page : 1);
             },
           }}
           emptyText="暂无关联逻辑模型"

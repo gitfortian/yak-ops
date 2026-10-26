@@ -15,6 +15,7 @@ import io.yak.ops.business.modeling.metric.impl.MetricCompositeServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricDerivedServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricModifierServiceImpl;
 import io.yak.ops.business.modeling.metric.impl.MetricTimePeriodServiceImpl;
+import io.yak.ops.common.bean.dto.modeling.metric.MetricAtomicUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricCompositeInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricDerivedUpdateDTO;
@@ -22,8 +23,10 @@ import io.yak.ops.common.bean.dto.modeling.metric.MetricModifierUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodInputDTO;
 import io.yak.ops.common.bean.dto.modeling.metric.MetricTimePeriodUpdateDTO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
+import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.metric.MetricErrorCode;
 import io.yak.ops.common.enums.modeling.metric.MetricReferenceKind;
+import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.ErrorCode;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
@@ -215,6 +218,30 @@ class MetricDatabaseIT {
         assertEquals(3, afterModifier.revision());
         // The links were not rewritten by the propagation, only the composed values moved.
         assertEquals(1, count("metric_derived_modifier"));
+    }
+
+    @Test
+    void keepsCompositeExpressionsInStepWithARenamedDerivedMetric() {
+        seedMetricParts("ws");
+        var derived = derivedService.create("ws", "actor", derived("atomic", "period", List.of()));
+        assertEquals("d7_pay_amt", derivedService.detail("ws", "actor", derived.id()).enCode());
+        var composite = compositesService.create("ws", "actor", composite("growth", "d7_pay_amt * 100"));
+
+        var atomicUpdate = new MetricAtomicUpdateDTO();
+        atomicUpdate.setProcessId("process");
+        atomicUpdate.setEnCode("gmv");
+        atomicUpdate.setCnName("成交额");
+        atomicUpdate.setDataType(DataType.DECIMAL);
+        atomicUpdate.setAggregateType(AggregateType.SUM);
+        atomicUpdate.setRevision(1L);
+        atomicsService.update("ws", "actor", "atomic", atomicUpdate);
+
+        assertEquals("d7_gmv", derivedService.detail("ws", "actor", derived.id()).enCode());
+        var rewritten = compositesService.detail("ws", "actor", composite.id());
+        // The stored text follows the rename, so the reference panel and the expression agree and
+        // the composite metric can be saved again without an INVALID_METRIC_EXPRESSION.
+        assertEquals("d7_gmv * 100", rewritten.expression());
+        assertEquals("d7_gmv", rewritten.references().getFirst().derivedEnCode());
     }
 
     @Test

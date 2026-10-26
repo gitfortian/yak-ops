@@ -37,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 
 /** Layer authorization, preset seeding, binding rules and revision contracts without external resources. */
@@ -261,6 +262,55 @@ class LayerServiceTest {
 
         assertFalse(service.available("ws", "actor", "ods", null));
         assertTrue(service.available("ws", "actor", "free", null));
+    }
+
+    @Test
+    void answersUnavailableForAPresetAbbreviationEvenWhenNoRowHoldsIt() {
+        // Nothing has been seeded yet, so the table is empty; create would still refuse the code.
+        when(layers.occupied("ws", "DWD", null)).thenReturn(false);
+
+        assertFalse(service.available("ws", "actor", "dwd", null));
+        verify(layers, never()).occupied(anyString(), anyString(), any());
+    }
+
+    @Test
+    void keepsALayersOwnAbbreviationAvailableWhileItIsBeingEdited() {
+        var custom = preset("CUSTOM", false, null);
+        custom.setBuiltin(false);
+        when(layers.layer("ws", "layer-1")).thenReturn(Optional.of(custom));
+        when(layers.occupied("ws", "CUSTOM", "layer-1")).thenReturn(false);
+
+        assertTrue(service.available("ws", "actor", "custom", "layer-1"));
+    }
+
+    @Test
+    void refusesToRenameALayerThatStillOwnsModels() {
+        var custom = preset("CUSTOM", false, null);
+        custom.setBuiltin(false);
+        when(layers.layer("ws", "layer-1")).thenReturn(Optional.of(custom));
+        when(layers.modelsInLayer("ws", "layer-1")).thenReturn(2L);
+
+        var error = assertThrows(
+                BusinessException.class,
+                () -> service.update("ws", "actor", "layer-1", update("自定义层", "RENAMED", 1)));
+
+        assertEquals(LayerErrorCode.HAS_DEPENDENCIES, error.getErrorCode());
+        verify(layers, never()).update(any());
+    }
+
+    @Test
+    void mapsAModelSavedDuringTheDeleteToTheDependencyError() {
+        var custom = preset("CUSTOM", false, null);
+        custom.setBuiltin(false);
+        when(layers.layer("ws", "layer-1")).thenReturn(Optional.of(custom));
+        when(layers.modelsInLayer("ws", "layer-1")).thenReturn(0L);
+        doThrow(new DataIntegrityViolationException("fk"))
+                .when(layers)
+                .delete("ws", "layer-1", 1);
+
+        var error = assertThrows(BusinessException.class, () -> service.delete("ws", "actor", "layer-1", 1));
+
+        assertEquals(LayerErrorCode.HAS_DEPENDENCIES, error.getErrorCode());
     }
 
     @Test

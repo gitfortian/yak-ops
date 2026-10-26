@@ -45,6 +45,7 @@ class MetricDerivedServiceTest {
     @Mock MetricTimePeriodRepository periods;
     @Mock MetricModifierRepository modifiers;
     @Mock MetricReferenceRepository references;
+    @Mock MetricCompositionSync composition;
     @Mock WorkspaceService workspaces;
     @InjectMocks MetricDerivedServiceImpl service;
     AutoCloseable mocks;
@@ -156,6 +157,8 @@ class MetricDerivedServiceTest {
         assertEquals("d7_muying_pay_amt", stored.getValue().getEnCode());
         assertEquals("最近7天母婴支付金额", stored.getValue().getCnName());
         assertEquals(3L, saved.revision());
+        // The old code is gone from the row, so every composite expression citing it has to follow.
+        verify(composition).renamed("ws", "actor", "metric", "d7_pay_amt", "d7_muying_pay_amt");
     }
 
     @Test

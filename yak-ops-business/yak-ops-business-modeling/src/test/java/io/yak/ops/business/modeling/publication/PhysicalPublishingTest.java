@@ -92,6 +92,34 @@ class PhysicalPublishingTest {
     }
 
     @Test
+    void doublesABackslashOnlyWhereTheEngineReadsItAsAnEscape() {
+        var columns = List.of(new PhysicalColumnSpec("order_no", DataType.STRING, "32", true, null, "路径\\"));
+
+        // MySQL would otherwise escape the closing quote; the other two store the backslash as is.
+        assertTrue(
+                PhysicalDdlGenerator.generate(PhysicalDialect.MYSQL, MYSQL_ADDRESS, "dwd_order", columns)
+                        .script()
+                        .contains("COMMENT '路径\\\\'"));
+        assertTrue(
+                PhysicalDdlGenerator.generate(PhysicalDialect.POSTGRESQL, PG_ADDRESS, "dwd_order", columns)
+                        .script()
+                        .contains("IS '路径\\'"));
+        assertTrue(
+                PhysicalDdlGenerator.generate(PhysicalDialect.ORACLE, PG_ADDRESS, "dwd_order", columns)
+                        .script()
+                        .contains("IS '路径\\'"));
+    }
+
+    @Test
+    void reportsTheOracleCatalogNameInUpperCaseSoLookupsMatch() {
+        assertEquals("DWD_ORDER", PhysicalDialect.ORACLE.catalogName("dwd_order"));
+        // Idempotent, so a stored name can be normalized again during reconciliation.
+        assertEquals("DWD_ORDER", PhysicalDialect.ORACLE.catalogName("DWD_ORDER"));
+        assertEquals("dwd_order", PhysicalDialect.MYSQL.catalogName("dwd_order"));
+        assertEquals("dwd_order", PhysicalDialect.POSTGRESQL.catalogName("dwd_order"));
+    }
+
+    @Test
     void omitsCommentStatementsWhenTheFieldHasNoChineseName() {
         var script = PhysicalDdlGenerator.generate(
                 PhysicalDialect.POSTGRESQL,

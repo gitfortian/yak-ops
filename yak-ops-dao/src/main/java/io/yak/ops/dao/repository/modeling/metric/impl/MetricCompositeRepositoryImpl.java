@@ -79,6 +79,22 @@ public class MetricCompositeRepositoryImpl implements MetricCompositeRepository 
         return mapper.occupied(workspaceId, enCode, excludeId) > 0;
     }
 
+    @Override
+    public List<MetricCompositeEntity> citingDerived(String workspaceId, String derivedId) {
+        return mapper.citingDerived(workspaceId, derivedId);
+    }
+
+    @Override
+    public boolean rewriteExpression(String workspaceId, String id, long revision, String expression, String actor) {
+        var audit = new MetricCompositeEntity();
+        audit.setWorkspaceId(workspaceId);
+        audit.setId(id);
+        audit.initUpdate(actor);
+        return mapper.rewriteExpression(
+                        workspaceId, id, revision, expression, audit.getUpdateTime(), audit.getUpdateBy())
+                == 1;
+    }
+
     private static MetricCompositeRefEntity reference(MetricCompositeEntity row, String derivedMetricId) {
         var reference = new MetricCompositeRefEntity();
         reference.setId(IdUtils.nextId());

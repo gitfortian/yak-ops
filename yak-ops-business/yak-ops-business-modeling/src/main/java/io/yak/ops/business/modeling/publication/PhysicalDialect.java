@@ -1,5 +1,7 @@
 package io.yak.ops.business.modeling.publication;
 
+import java.util.Locale;
+
 /**
  * Engines a logical model can be published to.
  *
@@ -54,6 +56,25 @@ public enum PhysicalDialect {
     /** Whether column comments are written inline in {@code CREATE TABLE} instead of separately. */
     public boolean hasInlineComments() {
         return inlineComments;
+    }
+
+    /**
+     * Resolves the name this engine's catalog will report for one unquoted identifier.
+     *
+     * <p>DDL and catalog lookups have to agree on the spelling, because the catalog is queried by
+     * exact name. MySQL and PostgreSQL store an unquoted identifier as written, while Oracle folds
+     * it to upper case, so asking Oracle for {@code dwd_order} never matches the {@code DWD_ORDER}
+     * it created. Callers use this for every lookup that follows a publication.
+     *
+     * @param identifier bare identifier as written in the model
+     * @return the spelling the catalog reports for it
+     */
+    public String catalogName(String identifier) {
+        if (identifier == null) return null;
+        return switch (this) {
+            case MYSQL, POSTGRESQL -> identifier;
+            case ORACLE -> identifier.toUpperCase(Locale.ROOT);
+        };
     }
 
     /**
