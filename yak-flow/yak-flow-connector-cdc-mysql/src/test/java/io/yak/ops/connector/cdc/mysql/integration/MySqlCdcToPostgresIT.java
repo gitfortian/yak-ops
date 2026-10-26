@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 @Tag("cdc-pipeline-postgres")
+@Tag("cdc-acceptance-postgres")
 class MySqlCdcToPostgresIT extends MySqlCdcPipelineTestBase {
     @RegisterExtension
     static final PostgresDatabase TARGET = new PostgresDatabase();

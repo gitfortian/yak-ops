@@ -65,6 +65,20 @@ class SuiteSelectionTest(unittest.TestCase):
         self.assertRaises(ValueError, subject.require_results, [], "failure", "skipped")
 
 
+class NightlyAcceptanceTest(unittest.TestCase):
+    def test_nightly_calls_full_suite_not_fast_or_selected_only(self):
+        workflow = (subject.ROOT / ".github/workflows/nightly-backend-acceptance.yml").read_text()
+        self.assertIn("schedule:", workflow)
+        self.assertIn("uses: ./.github/workflows/backend-tests.yml", workflow)
+        self.assertIn("suite: full", workflow)
+        self.assertNotIn("continue-on-error: true", workflow)
+
+    def test_release_full_retains_cross_db_acceptance(self):
+        self.assertIn("cdc-acceptance-postgres", subject.SUITES)
+        self.assertIn("cdc-acceptance-oracle", subject.SUITES)
+        self.assertIn("cdc-recovery", subject.SUITES)
+
+
 class MavenIntegrationProfileTest(unittest.TestCase):
     def test_integration_profile_skips_surefire_but_not_failsafe(self):
         namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
@@ -159,11 +173,16 @@ class ReportTest(unittest.TestCase):
 
     def test_pipeline_and_crash_recovery_are_distinct_suites(self):
         self.assertEqual({"MySqlCdcToMySqlIT": 2}, subject.SUITES["cdc-pipeline-mysql"][2])
-        self.assertEqual({"MySqlCdcToPostgresIT": 2}, subject.SUITES["cdc-pipeline-postgres"][2])
-        self.assertEqual({"MySqlCdcToOracleIT": 2}, subject.SUITES["cdc-pipeline-oracle"][2])
+        self.assertEqual({"MySqlCdcToPostgresIT": 1}, subject.SUITES["cdc-pipeline-postgres"][2])
+        self.assertEqual({"MySqlCdcToOracleIT": 1}, subject.SUITES["cdc-pipeline-oracle"][2])
+        self.assertEqual({"MySqlCdcToPostgresIT": 1}, subject.SUITES["cdc-acceptance-postgres"][2])
+        self.assertEqual({"MySqlCdcToOracleIT": 1}, subject.SUITES["cdc-acceptance-oracle"][2])
         self.assertEqual({"MySqlCdcToMySqlCrashRecoveryIT": 1}, subject.SUITES["cdc-recovery"][2])
-        classes = [set(spec[2]) for suite, spec in subject.SUITES.items() if suite.startswith("cdc-")]
-        self.assertEqual(sum(map(len, classes)), len(set().union(*classes)))
+        owners = [classname for suite, spec in subject.SUITES.items()
+                  if suite.startswith("cdc-") for classname in spec[2]]
+        self.assertEqual(2, owners.count("MySqlCdcToPostgresIT"))
+        self.assertEqual(2, owners.count("MySqlCdcToOracleIT"))
+        self.assertEqual(len(owners) - 2, len(set(owners)))
 
     def test_new_unregistered_it_fails(self):
         with patch.object(subject, "SUITES", {"small": ("module", "tag", {"NamedIT": 1})}):

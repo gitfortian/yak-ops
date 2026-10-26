@@ -128,9 +128,8 @@ public final class MySqlHybridSplitAssigner {
         boolean tableComplete = range.last();
         int nextTable = tableComplete ? nextTableIndex + 1 : nextTableIndex;
         int nextChunk = tableComplete ? 0 : nextChunkIndex + 1;
-        ChunkRange nextRange = tableComplete
-                ? null
-                : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
+        ChunkRange nextRange =
+                tableComplete ? null : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
         snapshots.append(List.of(split), nextTable == tableCount);
         nextTableIndex = nextTable;
         nextChunkIndex = nextChunk;

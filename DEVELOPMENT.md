@@ -56,6 +56,8 @@ bash scripts/tests/run.sh pipeline
 bash scripts/tests/run.sh cdc-pipeline-mysql
 bash scripts/tests/run.sh cdc-pipeline-postgres
 bash scripts/tests/run.sh cdc-pipeline-oracle
+bash scripts/tests/run.sh cdc-acceptance-postgres
+bash scripts/tests/run.sh cdc-acceptance-oracle
 bash scripts/tests/run.sh cdc-recovery
 bash scripts/tests/run.sh business
 bash scripts/tests/run.sh backend-e2e
@@ -70,7 +72,9 @@ Common Source/Sink behavior belongs in reusable Connector test bases, database-s
 
 JUnit owns shared containers within one module's test execution. Data is isolated per scenario; normal E2E shares the application process, not Workspace or task state. Destructive and process-recovery cases own independent processes. Stop running tasks before deleting their data. Do not mix class-scoped container shutdown with root-store reuse, share resources across CI jobs, or enable parallel methods without proving isolation.
 
-The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. CDC groups separate Binlog, Snapshot/Backfill, Hybrid, each real target Pipeline, and crash recovery into independently reported matrix jobs; no cases are removed. Unknown CDC production changes and shared contracts retain conservative coverage, and each required group must provide its complete method-level audit. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
+The [Nightly Backend Acceptance workflow](.github/workflows/nightly-backend-acceptance.yml) runs `suite: full` every day at 18:00 UTC (02:00 Asia/Singapore) on the default branch. It is also manually runnable. Nightly is additional coverage, not a replacement for affected PR checks or the full Release Gate; failure, skip or missing evidence must not be treated as success.
+
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. CDC groups separate Binlog, Snapshot/Backfill, Hybrid, each real target Pipeline, and crash recovery into independently reported matrix jobs. MySQL keeps the two full pipeline scenarios; PostgreSQL and Oracle run their real CDC/Schema/Checkpoint scenario in the regular Pipeline suites and retain the distinct multi-table Changelog/Checkpoint scenario in their `cdc-acceptance-*` suites. All test methods still run during `full`; none were deleted. Shared Runtime, JDBC dialect, CDC base, unknown CDC source, and other high-risk changes select the full cross-database acceptance. Verified snapshot-only changes can skip duplicate target multi-table acceptance while keeping each target's real Schema test and MySQL full Changelog test. All required groups preserve method-level audit evidence. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
 
 Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
 

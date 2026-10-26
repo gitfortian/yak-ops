@@ -76,6 +76,33 @@ class CdcAuditTest(unittest.TestCase):
         self.write_source("SharedITBase", ("first",))
         self.assertEqual("FAIL", self.collect()["status"])
 
+    def test_split_suites_audit_only_selected_method_but_require_full_source_inventory(self):
+        self.inventory = {
+            "cdc-pipeline-postgres": {"ExampleIT": ("first",)},
+            "cdc-acceptance-postgres": {"ExampleIT": ("second",)},
+        }
+        self.write_report(("first",))
+        fast = audit.collect(self.root, "cdc-pipeline-postgres", self.inventory)
+        self.assertEqual("PASS", fast["status"])
+        self.assertEqual((1, 1), (fast["observedMethods"], fast["expectedMethods"]))
+        self.write_report(("second",))
+        full = audit.collect(self.root, "cdc-acceptance-postgres", self.inventory)
+        self.assertEqual("PASS", full["status"])
+        self.assertEqual((1, 1), (full["observedMethods"], full["expectedMethods"]))
+        # A missing test in either half remains a source inventory failure.
+        self.write_source("ExampleIT", ("first",))
+        self.assertEqual("FAIL", audit.collect(self.root, "cdc-pipeline-postgres", self.inventory)["status"])
+
+    def test_full_inventory_combines_split_suite_methods(self):
+        self.inventory = {
+            "cdc-pipeline-postgres": {"ExampleIT": ("first",)},
+            "cdc-acceptance-postgres": {"ExampleIT": ("second",)},
+        }
+        self.write_report(("first", "second"))
+        report = audit.collect(self.root, "full", self.inventory)
+        self.assertEqual("PASS", report["status"])
+        self.assertEqual((2, 2), (report["observedMethods"], report["expectedMethods"]))
+
     def test_duplicate_result_cannot_replace_missing_test(self):
         self.write_report(("first", "first"))
         result = self.collect()
