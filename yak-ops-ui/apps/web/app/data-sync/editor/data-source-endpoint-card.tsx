@@ -57,6 +57,7 @@ export function DataSourceEndpointCard({
         <Field className="grid grid-cols-[90px_minmax(0,1fr)] items-center !gap-3">
           <FieldLabel required>数据源</FieldLabel>
           <DataSyncSearchableSelect
+            ariaLabel={`选择${title}数据源`}
             value={dataSourceId || null}
             options={dataSourceOptions}
             placeholder="请选择数据源"
