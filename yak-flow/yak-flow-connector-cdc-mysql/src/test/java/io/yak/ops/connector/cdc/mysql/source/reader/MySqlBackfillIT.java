@@ -203,7 +203,7 @@ class MySqlBackfillIT {
     }
 
     @Test
-    void limitedReplicationPrivilegesPermitBigintScanButNotTypedGlobalReadLock() throws Exception {
+    void limitedReplicationPrivilegesAllowJdbcScanButRejectTypedGlobalReadLock() throws Exception {
         String table = "limited_" + UUID.randomUUID().toString().replace("-", "");
         String user = "snap_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         execute(
@@ -217,13 +217,25 @@ class MySqlBackfillIT {
             var db = DATABASE.metadata();
             var config = new MySqlCdcSourceConfig(
                     db.host(), db.port(), user, "test-only-snapshot", 6831, table, Map.of(id, SCHEMA), 256);
-            try (var reader = new MySqlSnapshotBackfillReader(config, 0)) {
-                var prepared = reader.read(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
-                assertEquals(1, prepared.output().rows().size());
-                assertEquals(1L, prepared.output().rows().getFirst().row().getLong(0));
+            // Verify the restricted account can scan real rows with ordinary JDBC SELECT.
+            // Debezium no_data schema bootstrap has separate locking requirements and is
+            // deliberately not part of this JDBC privilege-boundary assertion.
+            try (var snapshots = new MySqlSnapshotSplitReader(config)) {
+                snapshots.open(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
+                var batch = snapshots.fetch();
+                assertEquals("bigint", batch.nextSplit());
+                var record = batch.nextRecordFromSplit();
+                assertNotNull(record);
+                assertEquals(1, record.rows().size());
+                assertEquals(1L, record.rows().getFirst().row().getLong(0));
+                assertNull(batch.nextRecordFromSplit());
+                assertTrue(batch.finishedSplits().contains("bigint"));
+                batch.recycle();
             }
+            // Exercise the actual typed read-view code, not merely an unrelated SQL probe.
+            // It must reject a user with replication privileges but no global read-lock privilege.
             try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
-                var failure = assertThrows(java.sql.SQLException.class, () -> reader.read(
+                var failure = assertThrows(java.sql.SQLException.class, () -> reader.openConsistentSnapshot(
                         MySqlSnapshotSplit.typed(
                                 "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
                 assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());

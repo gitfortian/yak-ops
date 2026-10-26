@@ -166,7 +166,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
      * <p>The lock is released immediately after the JDBC SELECT has opened on the
      * anchored read view. A failure always releases it before propagating.
      */
-    private BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
+    BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
         Connection view = null;
         BinlogOffset low;
