@@ -84,7 +84,7 @@ class MySqlCdcKeylessBaselineTest {
                         List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> JdbcSinkSchemaValidator.validate(KEYLESS, KEYED, true));
+                () -> JdbcSinkSchemaValidator.validate(KEYLESS, KEYED, JdbcWriteMode.UPSERT));
     }
 
     @Test

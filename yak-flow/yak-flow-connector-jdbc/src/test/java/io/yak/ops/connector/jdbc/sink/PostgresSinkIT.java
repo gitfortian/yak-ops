@@ -26,7 +26,7 @@ class PostgresSinkIT extends JdbcSinkTestBase {
         var target = new io.yak.ops.core.types.TableSchema(
                 java.util.List.of(new io.yak.ops.core.types.Column("id", io.yak.ops.core.types.LogicalTypes.SMALLINT)),
                 java.util.List.of());
-        JdbcSinkSchemaValidator.validate(source, target, false);
+        JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND);
         var route = new JdbcTableWritePlan(
                 new io.yak.ops.core.data.TableId(null, "public", "input"),
                 new io.yak.ops.core.data.TableId(null, "public", "output"),
