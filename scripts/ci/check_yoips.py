@@ -120,6 +120,21 @@ def validate_proposal(path: str, text: str, previous: str | None, occupied: dict
     return errors
 
 
+def side_branch_changes(base: str, head: str, *, root: Path = ROOT) -> list[set[str]]:
+    """Proposal paths each merged side branch does not hold identically with the head.
+
+    A sync PR merges a long-lived branch, so every record that arrives byte-identical
+    with a merged side was authored there; only the rest belongs to this PR.
+    """
+    log = git("rev-list", "--first-parent", "--merges", "--parents", f"{base}..{head}", root=root)
+    sides = [parent for line in log.decode().splitlines() for parent in line.split()[2:]]
+    changes = []
+    for side in sides:
+        diff = git("diff", "--name-only", "-z", side, head, "--", "docs/yoips/", root=root)
+        changes.append({name.decode("utf-8") for name in diff.split(b"\0") if name})
+    return changes
+
+
 def verify(base: str, head: str, *, root: Path = ROOT) -> tuple[int, list[str]]:
     changed = changed_files(base, head, root=root)
     paths = files_at(head, root=root)
@@ -134,12 +149,16 @@ def verify(base: str, head: str, *, root: Path = ROOT) -> tuple[int, list[str]]:
 
     errors = []
     inspected = 0
+    side_changes = side_branch_changes(base, head, root=root)
     for action, path in changed:
         if not path.startswith("docs/yoips/") or path == "docs/yoips/README.md":
             continue
         if not path.startswith("docs/yoips/YOIP-"):
             continue
         if action == "D":
+            renamed = path.replace("docs/yoips/YOIP-", "docs/yoips/FYOIP-", 1)
+            if any(a == "A" and p == renamed for a, p in changed):
+                continue  # Renamed into the fork FYOIP namespace within this PR.
             errors.append(f"{path}: do not delete proposal records or historical link stubs")
             continue
         if action not in ("A", "M", "T"):
@@ -147,6 +166,8 @@ def verify(base: str, head: str, *, root: Path = ROOT) -> tuple[int, list[str]]:
             continue
         previous = None if action == "A" else content_at(base, path, root=root)
         current = content_at(head, path, root=root)
+        if any(path not in changes for changes in side_changes):
+            continue  # A merged side branch already owns this exact record.
         if current.startswith(HISTORICAL_PREFIX):
             if previous is not None and previous.startswith(HISTORICAL_PREFIX):
                 continue  # Existing PR #1736 link stubs may be maintained.

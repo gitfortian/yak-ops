@@ -133,6 +133,27 @@ class YoipGitDiffTest(unittest.TestCase):
         self.cmd("commit", "-qm", msg)
         return self.cmd("rev-parse", "HEAD").strip()
 
+    def merge_side_branch(self, files):
+        """Commit records on a side branch and merge it, the way an upstream sync does."""
+        original = self.cmd("rev-parse", "--abbrev-ref", "HEAD").strip()
+        self.cmd("checkout", "-q", "-b", "upstream")
+        for path, text in files.items():
+            self.write(path, text)
+        self.commit("upstream records")
+        self.cmd("checkout", "-q", original)
+        self.cmd("merge", "-q", "--no-ff", "upstream", "-m", "Merge upstream")
+        return self.cmd("rev-parse", "HEAD").strip()
+
+    def test_stub_merged_in_from_a_side_branch_is_inherited(self):
+        head = self.merge_side_branch({
+            "docs/yoips/YOIP-21-retired-note.md": "# Historical engineering note moved: upstream\n",
+        })
+        self.assertEqual((0, []), verify(self.base, head, root=self.root))
+
+    def test_proposal_merged_in_from_a_side_branch_is_not_authored_here(self):
+        head = self.merge_side_branch({"docs/yoips/YOIP-22-incomplete.md": "# YOIP-22: Incomplete\n"})
+        self.assertEqual((0, []), verify(self.base, head, root=self.root))
+
     def test_only_new_proposal_checked(self):
         self.write("docs/yoips/YOIP-20-durable-source-recovery.md", proposal(20))
         self.write("docs/yoips/README.md", "# YOIP index\n[Proposal 20](YOIP-20-durable-source-recovery.md)\n")
