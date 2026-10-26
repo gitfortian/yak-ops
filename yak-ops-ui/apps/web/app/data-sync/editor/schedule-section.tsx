@@ -23,7 +23,7 @@ export function EditorScheduleSection({
   onChange,
 }: Props) {
   return (
-    <div className="space-y-3 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
+    <div className="space-y-3">
       {scheduleError ? (
         <Alert>
           <div className="flex flex-wrap items-center justify-between gap-2">

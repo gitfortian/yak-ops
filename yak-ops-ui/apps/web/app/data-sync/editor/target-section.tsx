@@ -4,10 +4,7 @@ import { TableMappingEditor } from "./table-mapping-editor";
 import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { TableSection } from "./table-section";
 import type { DataSourceRecord } from "@/service/datasource";
-import type {
-  DataSyncTableMapping,
-  DataSyncWriteMode,
-} from "@/service/data-sync";
+import type { DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-sync";
 import type { CatalogOptions, EditorForm, EditorSink } from "./types";
 
 interface Props {

@@ -342,4 +342,3 @@ export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
 }
-
