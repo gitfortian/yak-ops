@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
@@ -218,21 +219,25 @@ class MySqlBackfillIT {
                 // Debezium's no-data schema bootstrap needs table-level LOCK TABLES.
                 // This must not grant RELOAD or FLUSH_TABLES required by the Typed FTWRL path.
                 "GRANT SELECT, LOCK TABLES ON yak_cdc_it.* TO '" + user + "'@'%'",
-                "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '" + user + "'@'%'");
+                "GRANT REPLICATION SLAVE, REPLICATION CLIENT, SHOW DATABASES ON *.* TO '" + user + "'@'%'");
         TableId id = new TableId("yak_cdc_it", null, table);
         TableId pulseTable = new TableId("yak_cdc_it", null, activity);
         try (var pulses = Executors.newSingleThreadScheduledExecutor()) {
             // Supply Binlog activity without starving the Debezium heartbeat.
             // Bootstrap ignores ordinary rows until the first completed-schema heartbeat,
             // so bursts of continuous DML would leave the reader waiting for its anchor.
+            var firstPulse = new CompletableFuture<Void>();
             var task = pulses.scheduleWithFixedDelay(() -> {
                 try {
                     execute("INSERT INTO " + activity + "(name) VALUES('pulse')");
+                    firstPulse.complete(null);
                 } catch (Exception error) {
+                    firstPulse.completeExceptionally(error);
                     throw new IllegalStateException("MySQL test Binlog activity failed", error);
                 }
             }, 0, 3, TimeUnit.SECONDS);
             try {
+                firstPulse.get(10, TimeUnit.SECONDS);
                 var db = DATABASE.metadata();
                 var config = new MySqlCdcSourceConfig(
                         db.host(),
