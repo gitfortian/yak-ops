@@ -76,10 +76,6 @@ public final class MySqlHybridSourceEnumerator
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         tables = List.copyOf(config.schemas().keySet());
-        if (restored != null && restored.nextChunkLower() != null) {
-            throw new IllegalArgumentException(
-                    "Legacy BIGINT discovery checkpoints cannot enter unified typed Snapshot execution");
-        }
         if (restored != null && restored.nextChunkRange() != null) {
             int index = restored.nextTableIndex();
             if (index >= tables.size()) {
@@ -231,7 +227,7 @@ public final class MySqlHybridSourceEnumerator
         }
         planning = true;
         context.callAsync(
-                () -> splitter.planNextTyped(table, fingerprint, tableIndex, chunkIndex, cursor), (split, failure) -> {
+                () -> splitter.planNext(table, fingerprint, tableIndex, chunkIndex, cursor), (split, failure) -> {
                     planning = false;
                     if (closed) return;
                     if (failure != null) {
@@ -245,7 +241,7 @@ public final class MySqlHybridSourceEnumerator
                     ChunkRange next = tableComplete
                             ? null
                             : new ChunkRange(table, range.column(), range.type(), range.end(), null);
-                    assigner.appendTypedPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
+                    assigner.appendPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
                     // A table's final split count is only known after the terminal range.
                     if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
                     assignAvailable();
