@@ -43,7 +43,7 @@ public record MySqlSnapshotSplit(
                 null);
     }
 
-    /** Typed ranges are restorable but are not yet executable by the legacy BIGINT Reader. */
+    /** One durable typed range; raw scans restart entirely until normalized output is frozen. */
     public static MySqlSnapshotSplit typed(String splitId, String fingerprint, ChunkRange range) {
         Objects.requireNonNull(range, "range");
         return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null, null, 0, null, range);

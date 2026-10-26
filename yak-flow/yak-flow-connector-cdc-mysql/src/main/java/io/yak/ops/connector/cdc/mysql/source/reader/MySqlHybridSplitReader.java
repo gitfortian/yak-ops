@@ -69,8 +69,8 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     public void addSplits(List<MySqlHybridSplit> splits) throws Exception {
         for (MySqlHybridSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
-                // The typed backfill reader freezes the complete keyless range before any rows
-                // can be emitted. The checkpointed output position preserves duplicate rows.
+                // Typed backfill freezes every range before emitting rows; checkpointed
+                // output positions preserve both keyed updates and keyless duplicates.
                 pending.addLast(snapshot);
                 if (snapshot.prepared()) released.add(snapshot.splitId());
             } else if (split instanceof MySqlHybridBinlogSplit stream) {

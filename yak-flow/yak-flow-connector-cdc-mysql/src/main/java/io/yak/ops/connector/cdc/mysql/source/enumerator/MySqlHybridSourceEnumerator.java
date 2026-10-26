@@ -15,12 +15,10 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
-import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.types.LogicalTypeRoot;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,7 +35,6 @@ public final class MySqlHybridSourceEnumerator
     private final MySqlHybridSplitAssigner assigner;
     private final String fingerprint;
     private final List<TableId> tables;
-    private final Set<TableId> typedTables;
     private final Set<Integer> waitingReaders = new LinkedHashSet<>();
     private final TableMetrics metrics;
     private final long generation;
@@ -78,19 +75,13 @@ public final class MySqlHybridSourceEnumerator
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         tables = List.copyOf(config.schemas().keySet());
-        typedTables = new LinkedHashSet<>();
-        config.schemas().forEach((table, schema) -> {
-            var chunkColumn = ChunkUtils.getChunkKeyColumn(
-                    schema, config.chunkKeyColumns().get(table));
-            if (schema.primaryKeys().size() != 1
-                    || !schema.primaryKeys().getFirst().equals(chunkColumn.name())
-                    || chunkColumn.dataType().getTypeRoot() != LogicalTypeRoot.BIGINT) {
-                typedTables.add(table);
-            }
-        });
+        if (restored != null && restored.nextChunkLower() != null) {
+            throw new IllegalArgumentException(
+                    "Legacy BIGINT discovery checkpoints cannot enter unified typed Snapshot execution");
+        }
         if (restored != null && restored.nextChunkRange() != null) {
             int index = restored.nextTableIndex();
-            if (index >= tables.size() || !typedTables.contains(tables.get(index))) {
+            if (index >= tables.size()) {
                 throw new IllegalArgumentException("Restored typed chunk cursor references an invalid table");
             }
             TableId table = tables.get(index);
@@ -231,22 +222,15 @@ public final class MySqlHybridSourceEnumerator
                 || assigner.pendingSnapshotCount() >= MAX_PENDING_CHUNKS) return;
         int tableIndex = assigner.nextTableIndex();
         int chunkIndex = assigner.nextChunkIndex();
-        Long lower = assigner.nextChunkLower();
         if (tableIndex >= tables.size()) throw new IllegalStateException("Incomplete discovery terminal marker");
         TableId table = tables.get(tableIndex);
-        boolean typed = typedTables.contains(table);
         ChunkRange cursor = assigner.nextChunkRange();
-        if (typed && ((chunkIndex == 0) != (cursor == null))) {
+        if ((chunkIndex == 0) != (cursor == null)) {
             throw new IllegalStateException("Typed chunk discovery cursor does not match its index");
-        }
-        if (!typed && cursor != null) {
-            throw new IllegalStateException("Legacy BIGINT discovery cannot resume a typed cursor");
         }
         planning = true;
         context.callAsync(
-                () -> typed
-                        ? splitter.planNextTyped(table, fingerprint, tableIndex, chunkIndex, cursor)
-                        : splitter.planNext(table, fingerprint, tableIndex, chunkIndex, lower),
+                () -> splitter.planNextTyped(table, fingerprint, tableIndex, chunkIndex, cursor),
                 (split, failure) -> {
                     planning = false;
                     if (closed) return;
@@ -255,18 +239,13 @@ public final class MySqlHybridSourceEnumerator
                         throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
                     }
                     ChunkRange range = split.chunkRange();
-                    boolean tableComplete = typed ? range.last() : split.upperExclusive() == null;
+                    boolean tableComplete = range.last();
                     int nextTable = tableComplete ? tableIndex + 1 : tableIndex;
                     int nextChunk = tableComplete ? 0 : chunkIndex + 1;
-                    if (typed) {
-                        ChunkRange next = tableComplete
-                                ? null
-                                : new ChunkRange(table, range.column(), range.type(), range.end(), null);
-                        assigner.appendTypedPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
-                    } else {
-                        assigner.appendPlan(
-                                split, nextTable, nextChunk, split.upperExclusive(), nextTable == tables.size());
-                    }
+                    ChunkRange next = tableComplete
+                            ? null
+                            : new ChunkRange(table, range.column(), range.type(), range.end(), null);
+                    assigner.appendTypedPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
                     // A table's final split count is only known after the terminal range.
                     if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
                     assignAvailable();
