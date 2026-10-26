@@ -75,7 +75,8 @@ public final class JdbcSinkSchemaValidator {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");
         if (!source.primaryKeys().isEmpty() || !target.primaryKeys().isEmpty()) {
-            throw new IllegalArgumentException("JDBC RETRACT requires without physical primary keys source and target tables");
+            throw new IllegalArgumentException(
+                    "JDBC RETRACT requires source and target schemas without physical primary keys");
         }
         if (source.columnCount() == 0 || source.columnCount() != target.columnCount()) {
             throw new IllegalArgumentException("JDBC RETRACT requires a complete full-row field mapping");

@@ -93,8 +93,7 @@ public record JdbcTableWritePlan(
             if (schema.primaryKeys().isEmpty()
                     || sourceSchema.primaryKeys().isEmpty()
                     || schema.primaryKeys().size() != sourceSchema.primaryKeys().size()) {
-                throw new IllegalArgumentException(
-                        "JDBC UPSERT requires row identity on both source and target");
+                throw new IllegalArgumentException("JDBC UPSERT requires row identity on both source and target");
             }
             Set<String> sourceKeys = new HashSet<>();
             for (String targetKey : schema.primaryKeys()) {
