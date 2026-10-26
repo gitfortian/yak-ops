@@ -32,9 +32,9 @@ EXPECTED = {
             "backfillsRepeatedUpdatesDeletesCrossChunkMovesAndIgnoresOtherTables",
             "quietEmptyChunkAndFollowingScanFinishFromActualWatermarks",
             "plansKeylessStringChunksWithActualMySqlCollation",
-            "typedKeyedChunkReconcilesOneCommittedTransactionAfterLowWithoutHoldingTheReadLock",
+            "typedKeyedChunkReconcilesTransactionCommittedBetweenLowAndReadView",
             "wideSnapshotChunkFailsBeforePublishingPartialOutputWhenByteBudgetIsExceeded",
-            "limitedReplicationPrivilegesAllowJdbcScanButRejectTypedGlobalReadLock",
+            "limitedReplicationPrivilegesPermitTypedSnapshotReadViewWithoutGlobalReadLock",
         ),
         "MySqlKeylessBackfillIT": (
             "reconcilesDuplicateRowsInTheLowHighWindowAndFreezesOneDurableChunk",

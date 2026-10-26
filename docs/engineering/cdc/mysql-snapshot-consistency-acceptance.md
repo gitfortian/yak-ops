@@ -1,8 +1,8 @@
 # MySQL Incremental Snapshot: Consistency and Lock Acceptance
 
-This is the test baseline for the subsequent unified-Chunk and lock-free Snapshot refactors.
-It describes **current observable behavior**, not a proposal to add connector options or
-a claim that Source-only tests establish end-to-end exactly-once delivery.
+This document records the acceptance baseline for unified Chunk discovery and lock-free
+typed Snapshot reads. It describes tested behavior, not a claim that Source-only tests
+establish end-to-end exactly-once delivery.
 
 ## Implementation under test
 
@@ -17,8 +17,8 @@ a claim that Source-only tests establish end-to-end exactly-once delivery.
 | Case | Automated evidence | Required behavior |
 | --- | --- | --- |
 | BIGINT physical primary key | `MySqlBackfillIT.backfillsRepeatedUpdatesDeletesCrossChunkMovesAndIgnoresOtherTables` | Repeated updates, deletions, inserts and cross-range key moves reconcile only in their matching half-open range |
-| Typed range with physical primary key | `MySqlBackfillIT.typedKeyedChunkReconcilesOneCommittedTransactionAfterLowWithoutHoldingTheReadLock` | Transaction committed after the pinned Low/read-view boundary is Backfilled, and the global read lock is not held while executing the post-Low callback |
-| Restricted CDC account | `MySqlBackfillIT.limitedReplicationPrivilegesPermitBigintScanButNotTypedGlobalReadLock` | Document the **current discrepancy**: BIGINT uses no FTWRL while Typed requests it even for a physical primary key. The Typed error must be explicit rather than silently falling back |
+| Typed range with physical primary key | `MySqlBackfillIT.typedKeyedChunkReconcilesTransactionCommittedBetweenLowAndReadView` | A transaction committed between Low and read-view creation is reconciled even when the snapshot can also see its changes |
+| Restricted CDC account | `MySqlBackfillIT.limitedReplicationPrivilegesPermitTypedSnapshotReadViewWithoutGlobalReadLock` | Typed JDBC snapshot read-view creation succeeds without global FTWRL privilege |
 | Wide range with bounded payload | `MySqlBackfillIT.wideSnapshotChunkFailsBeforePublishingPartialOutputWhenByteBudgetIsExceeded` | Exceeding the retained payload budget fails before a prepared result is published; 100,000 rows is **not** the only guard |
 | No physical primary key, duplicate images | `MySqlKeylessBackfillIT.reconcilesDuplicateRowsInTheLowHighWindowAndFreezesOneDurableChunk` | Preserve the multiplicity of identical rows while processing delete/update/insert |
 | Commit after Low, before typed scan | `MySqlKeylessBackfillIT.consistentReadViewPreventsDoubleCountingWritesAfterLowBeforeTypedScan` | Pinned view + Binlog Backfill must neither duplicate nor lose identical rows |
@@ -34,9 +34,9 @@ exactly-once delivery to every Sink.
 
 ## Refactor guardrails
 
-1. Do not delete the Typed FTWRL until lock-free keyed and keyless paths are proven
-   separately under concurrent transactions. Keyless full-row identity is not a
-   substitute for a stable source primary key.
+1. Typed Snapshot must capture Low before establishing its InnoDB read view and reconcile
+   the full Low-to-High Binlog interval. Do not add a global read lock as a substitute for
+   proving the overlap cases; keyed and keyless paths still require separate acceptance.
 2. Do not remove the prepared-output checkpoint merely because Low/High Backfill
    passes: first prove correctness after XA prepare, checkpoint publication, commit,
    and process crashes with a real target database.

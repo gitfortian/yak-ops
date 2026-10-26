@@ -104,24 +104,37 @@ public final class MySqlHybridSplitAssigner {
         completed.put(info.splitId(), info);
     }
 
-    /** Atomically persist the planned range and the next database-ordered discovery cursor. */
-    public void appendPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
+    /** Atomically persist one discovered range and advance the durable discovery cursor. */
+    public void appendPlan(MySqlSnapshotSplit split, int tableCount) {
+        ChunkRange range = split.chunkRange();
         if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT
-                || split.chunkRange() == null
-                || (next != null
-                        && (next.end() != null
-                                || next.start() == null
-                                || !next.tableId().equals(split.tableId())
-                                || !next.column().equals(split.chunkRange().column())
-                                || next.type() != split.chunkRange().type()
-                                || !Objects.equals(
-                                        next.start(), split.chunkRange().end())))) {
+                || tableCount < 1
+                || nextTableIndex < 0
+                || nextTableIndex >= tableCount
+                || range == null) {
             throw new IllegalStateException("Invalid snapshot discovery transition");
         }
-        snapshots.append(List.of(split), last);
-        nextTableIndex = table;
-        nextChunkIndex = chunk;
-        nextChunkRange = next;
+        if ((nextChunkIndex == 0 && (nextChunkRange != null || range.start() != null))
+                || (nextChunkIndex > 0
+                        && (nextChunkRange == null
+                                || nextChunkRange.end() != null
+                                || !nextChunkRange.tableId().equals(range.tableId())
+                                || !nextChunkRange.column().equals(range.column())
+                                || nextChunkRange.type() != range.type()
+                                || !Objects.equals(nextChunkRange.start(), range.start())))) {
+            throw new IllegalStateException("Snapshot range differs from the durable discovery cursor");
+        }
+
+        boolean tableComplete = range.last();
+        int nextTable = tableComplete ? nextTableIndex + 1 : nextTableIndex;
+        int nextChunk = tableComplete ? 0 : nextChunkIndex + 1;
+        ChunkRange nextRange = tableComplete
+                ? null
+                : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
+        snapshots.append(List.of(split), nextTable == tableCount);
+        nextTableIndex = nextTable;
+        nextChunkIndex = nextChunk;
+        nextChunkRange = nextRange;
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {

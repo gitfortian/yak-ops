@@ -132,7 +132,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
-        assigner.appendPlan(first, 0, 1, cursor, false);
+        assigner.appendPlan(first, 1);
         var saved = SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshot(9)));
         var restored = new MySqlHybridSplitAssigner(FINGERPRINT, saved);
@@ -141,7 +141,7 @@ class MySqlTypedSnapshotAssignmentTest {
                 restored.nextChunkRange());
         assertEquals(cursor.start(), last.chunkRange().start());
         assertNull(last.chunkRange().end());
-        restored.appendPlan(last, 1, 0, null, true);
+        restored.appendPlan(last, 1);
         assertTrue(restored.snapshot(10).snapshotPlanned());
         assertNull(restored.snapshot(10).nextChunkRange());
     }

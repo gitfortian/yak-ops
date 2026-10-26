@@ -234,14 +234,8 @@ public final class MySqlHybridSourceEnumerator
                         metrics.readFailed(generation, table, false);
                         throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
                     }
-                    ChunkRange range = split.chunkRange();
-                    boolean tableComplete = range.last();
-                    int nextTable = tableComplete ? tableIndex + 1 : tableIndex;
-                    int nextChunk = tableComplete ? 0 : chunkIndex + 1;
-                    ChunkRange next = tableComplete
-                            ? null
-                            : new ChunkRange(table, range.column(), range.type(), range.end(), null);
-                    assigner.appendPlan(split, nextTable, nextChunk, next, nextTable == tables.size());
+                    boolean tableComplete = split.chunkRange().last();
+                    assigner.appendPlan(split, tables.size());
                     // A table's final split count is only known after the terminal range.
                     if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
                     assignAvailable();
