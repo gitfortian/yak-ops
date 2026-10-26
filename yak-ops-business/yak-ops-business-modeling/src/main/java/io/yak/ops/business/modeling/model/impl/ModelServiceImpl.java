@@ -152,7 +152,7 @@ public class ModelServiceImpl implements ModelService {
         row.setRevision(1);
         row.initCreate(actor);
         row.setLayerId(layer.id());
-        var suffix = suffix(input.getNameSuffix());
+        var suffix = suffix(layer, input.getNameSuffix());
         row.setName(fullName(layer, suffix));
         var processCode = applyModel(row, workspaceId, actor, input);
         applyNaming(row, layer, workspaceId, input.getType(), suffix, processCode);
@@ -184,7 +184,7 @@ public class ModelServiceImpl implements ModelService {
         if (input.getType() != stored) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         var layer = requireLayer(workspaceId, actor, input.getLayerId());
         row.setLayerId(layer.id());
-        var suffix = suffix(input.getNameSuffix());
+        var suffix = suffix(layer, input.getNameSuffix());
         row.setName(fullName(layer, suffix));
         var processCode = applyModel(row, workspaceId, actor, input);
         applyNaming(row, layer, workspaceId, stored, suffix, processCode);
@@ -220,7 +220,7 @@ public class ModelServiceImpl implements ModelService {
             String workspaceId, String actor, String layerId, String nameSuffix, String excludeId) {
         requireActor(workspaceId, actor);
         var layer = requireLayer(workspaceId, actor, layerId);
-        return !models.occupied(workspaceId, fullName(layer, suffix(nameSuffix)), trim(excludeId));
+        return !models.occupied(workspaceId, fullName(layer, suffix(layer, nameSuffix)), trim(excludeId));
     }
 
     /**
@@ -245,10 +245,21 @@ public class ModelServiceImpl implements ModelService {
         return name;
     }
 
-    /** Validates the suffix shape; {@code INVALID_TABLE_NAME} keeps meaning a malformed or over-long name. */
-    private static String suffix(String value) {
+    /**
+     * Validates the suffix shape and drops a layer prefix the caller typed in anyway.
+     *
+     * <p>The stored table name is the layer prefix plus this suffix, so a suffix that already
+     * starts with the prefix would be stored as {@code dwd_dwd_order_detail}. Create, update and
+     * the availability check share this normalization so all three agree on the same suffix.
+     */
+    private static String suffix(LayerOptionVO layer, String value) {
         var normalized = trim(value);
-        if (normalized == null || !SUFFIX.matcher(normalized).matches())
+        if (normalized == null) throw new BusinessException(DimensionModelingErrorCode.INVALID_TABLE_NAME);
+        var prefix = layer.enCode().toLowerCase(Locale.ROOT) + "_";
+        while (normalized.startsWith(prefix) && normalized.length() > prefix.length()) {
+            normalized = normalized.substring(prefix.length());
+        }
+        if (!SUFFIX.matcher(normalized).matches())
             throw new BusinessException(DimensionModelingErrorCode.INVALID_TABLE_NAME);
         return normalized;
     }

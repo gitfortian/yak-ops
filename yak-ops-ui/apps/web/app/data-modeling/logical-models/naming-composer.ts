@@ -20,6 +20,18 @@ export function composeSuffix(rootCode: string, processCode: string, qualifier: 
 }
 
 /**
+ * Drops a layer prefix already typed into the suffix; the layer supplies it at save time. The
+ * server strips it as well, so a direct API call and the editor normalize the same way.
+ */
+export function stripLayerPrefix(value: string, prefix: string): string {
+  if (!prefix) return value;
+  const head = `${prefix.toLowerCase()}_`;
+  let suffix = value;
+  while (suffix.startsWith(head) && suffix.length > head.length) suffix = suffix.slice(head.length);
+  return suffix;
+}
+
+/**
  * Splits a saved suffix back into its qualifier tail given the root and process it was built
  * from; "" when the head does not match, including an unknown root or an unresolved process.
  */

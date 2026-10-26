@@ -111,7 +111,7 @@ export function getStandards(query: StandardQuery, signal?: AbortSignal) {
     pageSize: String(query.pageSize),
   });
   if (query.scope === "CATEGORY") params.set("categoryId", query.categoryId);
-  else params.set("keyword", query.keyword);
+  else if (query.keyword) params.set("keyword", query.keyword);
   return standardRequest(
     HttpUtils.getData<StandardPage>(API + "/fields?" + params, { signal, skipErrorHandler: true }),
   );

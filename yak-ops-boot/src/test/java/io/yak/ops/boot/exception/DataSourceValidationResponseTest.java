@@ -34,6 +34,17 @@ class DataSourceValidationResponseTest {
     }
 
     @Test
+    void reportsARejectedConnectionAsABadRequestWithTheDriverReason() {
+        var response = new GlobalExceptionHandler().handleBusinessException(new DataSourceException(
+                DataSourceErrorCode.CONNECT_FAILED,
+                "Access denied for user 'root'@'localhost' (using password: YES)"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(DataSourceErrorCode.CONNECT_FAILED.getCode(), response.getBody().getCode());
+        assertTrue(response.getBody().getMessage().contains("Access denied"));
+    }
+
+    @Test
     void ordinaryDatasourceErrorsKeepTheExistingResponseEnvelope() {
         var response = new GlobalExceptionHandler().handleBusinessException(
                 new DataSourceException(DataSourceErrorCode.INVALID_CONNECTION_PARAMS));

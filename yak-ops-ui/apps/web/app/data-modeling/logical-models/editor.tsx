@@ -65,6 +65,7 @@ import {
   qualifierMaxLength,
   rootSearchSegment,
   sanitizeQualifier,
+  stripLayerPrefix,
 } from "./naming-composer";
 import { datamartsOf, domainsOf, processesOf } from "../shared/planning-tree";
 import { DimensionScopeRadio } from "../shared/scope-radio";
@@ -967,7 +968,11 @@ export default function LogicalModelEditorPage() {
                           disabled={disabled}
                           placeholder="order_detail"
                           aria-invalid={Boolean(errors.nameSuffix) || undefined}
-                          onChange={(event) => patch({ nameSuffix: event.target.value })}
+                          onChange={(event) =>
+                            patch({
+                              nameSuffix: stripLayerPrefix(event.target.value, prefix),
+                            })
+                          }
                         />
                       </div>
                       <FieldError match={Boolean(errors.nameSuffix)}>

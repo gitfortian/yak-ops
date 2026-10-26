@@ -24,6 +24,22 @@ class DerivedCompositionTest {
     }
 
     @Test
+    void collapsesTheOverlapBetweenAModifierAndTheAtomicName() {
+        var composed = DerivedComposition.compose("d7", List.of("paid"), "pay_amount", "最近7天", List.of("支付"), "支付金额");
+
+        assertEquals("d7_paid_pay_amount", composed.enCode());
+        assertEquals("最近7天支付金额", composed.cnName());
+    }
+
+    @Test
+    void keepsOneCopyOfARepeatedSegment() {
+        var composed = DerivedComposition.compose("d7", List.of("d7"), "pay_amount", "最近7天", List.of("最近7天"), "支付金额");
+
+        assertEquals("d7_pay_amount", composed.enCode());
+        assertEquals("最近7天支付金额", composed.cnName());
+    }
+
+    @Test
     void acceptsValuesAtTheColumnLimits() {
         var period = "p".repeat(20);
         var modifier = "m".repeat(20);

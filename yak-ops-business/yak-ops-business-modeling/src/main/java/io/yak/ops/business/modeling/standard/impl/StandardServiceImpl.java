@@ -169,10 +169,13 @@ public class StandardServiceImpl implements StandardService {
     public PageData<StandardFieldVO> page(
             String workspaceId, String actor, String categoryId, String keyword, int pageNo, int pageSize) {
         catalog.authorize(workspaceId, actor);
-        if ((categoryId == null) == (keyword == null)) throw StandardCatalog.invalid();
+        // A blank keyword is "no text filter", not a malformed scope: the standard picker opens
+        // without one and expects the first page, so only two real filters at once are refused.
+        var keywordFilter = keyword == null || keyword.isBlank() ? null : keyword;
+        if (categoryId != null && keywordFilter != null) throw StandardCatalog.invalid();
         long offset = StandardCatalog.offset(pageNo, pageSize);
         if (categoryId != null) catalog.category(workspaceId, categoryId);
-        var query = new FieldQuery(categoryId, StandardCatalog.keyword(keyword), offset, pageSize);
+        var query = new FieldQuery(categoryId, StandardCatalog.keyword(keywordFilter), offset, pageSize);
         long total = nodes.countFields(workspaceId, query);
         var rows = nodes.fields(workspaceId, query);
         return PageData.of(project(workspaceId, actor, rows), total, pageNo, pageSize);

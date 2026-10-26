@@ -21,9 +21,30 @@ export interface Composed {
 }
 
 export function composeComposition(part: CompositionPart): Composed {
-  const code = [part.periodCode, ...part.modifierCodes, part.atomicCode].join("_");
-  const name = [part.periodName, ...part.modifierNames, part.atomicName].join("");
-  return { enCode: code, cnName: name };
+  const code = [part.periodCode];
+  for (const segment of [...part.modifierCodes, part.atomicCode]) {
+    if (!segment || code[code.length - 1] === segment) continue;
+    code.push(segment);
+  }
+  let name = part.periodName;
+  for (const segment of [...part.modifierNames, part.atomicName]) {
+    if (!segment) continue;
+    name = appendWithoutOverlap(name, segment);
+  }
+  return { enCode: code.join("_"), cnName: name };
+}
+
+/**
+ * Appends one name segment, keeping the longest suffix of the built name that is also a prefix of
+ * the segment only once: a "支付" modifier over a "支付金额" atomic part must not read
+ * "最近7天支付支付金额".
+ */
+function appendWithoutOverlap(current: string, segment: string): string {
+  const limit = Math.min(current.length, segment.length);
+  for (let overlap = limit; overlap > 0; overlap -= 1) {
+    if (current.endsWith(segment.slice(0, overlap))) return current + segment.slice(overlap);
+  }
+  return current + segment;
 }
 
 export function compositionFits(composed: Composed): boolean {
