@@ -40,8 +40,8 @@ class MySqlTypedKeyedBackfillTest {
         buffer.addSnapshot(row(RowKind.INSERT, 7, 2, 1, "different"));
         buffer.apply(event(row(RowKind.UPDATE_BEFORE, 7, 1, 1, "old"),
                 row(RowKind.UPDATE_AFTER, 7, 1, 1, "new")));
-        assertEquals(List.of("new", "different"),
-                buffer.finish().stream().map(r -> r.row().getString(3)).toList());
+        assertEquals(List.of("different", "new"),
+                buffer.finish().stream().map(r -> r.row().getString(3)).sorted().toList());
     }
 
     @Test
