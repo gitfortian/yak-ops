@@ -120,5 +120,8 @@ assert.doesNotMatch(
   read("apps/web/app/layout/ProductLauncher.tsx"),
   /listUserPreferences|updateUserPreferenceFavorite/,
 );
-assert.match(read("apps/web/app/router/data-sync-redirects.tsx"), /DataSyncInstanceRedirect/);
+assert.match(
+  read("apps/web/app/router/data-sync-instance-redirect.tsx"),
+  /DataSyncInstanceRedirect/,
+);
 console.log("App Shell composition, user-owned favorites and mutation rollback contracts passed");

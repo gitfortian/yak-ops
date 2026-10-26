@@ -105,6 +105,17 @@ class BackendNamingTest(unittest.TestCase):
             "class ExternalCodec {}",
         ))
 
+    def test_obsolete_datasync_packages_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = (Path(directory) / "yak-ops-common/src/main/java/io/yak/ops/common/bean/dto/datasync")
+            folder.mkdir(parents=True)
+            (folder / "ObsoleteTaskDTO.java").write_text(
+                source("io.yak.ops.common.bean.dto.datasync", "class ObsoleteTaskDTO {}"),
+                encoding="utf-8",
+            )
+            _, errors = verify_repository(Path(directory))
+            self.assertTrue(any("Obsolete Data Sync contract package" in error for error in errors))
+
     def test_repository_scan_reports_path_and_line(self):
         with tempfile.TemporaryDirectory() as root:
             folder = Path(root) / "yak-ops-core/src/main/java/io/yak/ops/core"
