@@ -120,6 +120,17 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
     test_root = module / "src/test/java"
     expected = {name: tuple(methods) for group in suites for name, methods in selected[group].items()}
     errors: list[str] = []
+    if inventory is None:
+        from backend_tests import SUITES
+
+        for name in suites:
+            registered = set(SUITES[name][2])
+            audited = set(selected[name])
+            if registered != audited:
+                errors.append(
+                    f"{name}: test-class registration mismatch; "
+                    f"missing={sorted(registered - audited)}, unexpected={sorted(audited - registered)}"
+                )
     for classname, required in sorted(expected.items()):
         try:
             actual = source_methods(test_root, classname)
