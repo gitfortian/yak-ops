@@ -45,7 +45,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /** Factory-created Hybrid Source with real Debezium, real JDBC Sink, serialized checkpoints and deterministic failure boundaries. */
-@Tag("cdc")
+@Tag("cdc-hybrid")
 @Timeout(240)
 class MySqlHybridIT {
     @RegisterExtension static final MySqlDatabase DATABASE = MySqlDatabase.cdc();
