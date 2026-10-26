@@ -27,7 +27,6 @@ import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -90,7 +89,7 @@ public final class MySqlCdcCrashRecoveryProcess {
                 .build();
 
         Configuration configuration = new Configuration()
-                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofHours(1))
+                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(30))
                 .set(CheckpointingOptions.STATE_DIRECTORY, stateDirectory.toString())
                 .set(CheckpointingOptions.RESTORE_LATEST, restore);
         SourceTransformation<TableRecord> input =
