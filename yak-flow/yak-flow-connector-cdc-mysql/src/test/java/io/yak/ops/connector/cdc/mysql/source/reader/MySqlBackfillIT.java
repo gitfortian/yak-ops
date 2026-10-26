@@ -222,16 +222,16 @@ class MySqlBackfillIT {
         TableId id = new TableId("yak_cdc_it", null, table);
         TableId pulseTable = new TableId("yak_cdc_it", null, activity);
         try (var pulses = Executors.newSingleThreadScheduledExecutor()) {
-            // Supply actual Binlog events during both CDC bootstraps. A read-only
-            // tracked table can otherwise remain idle before Debezium has anchored
-            // its partition; the separate table leaves the asserted snapshot unchanged.
+            // Supply Binlog activity without starving the Debezium heartbeat.
+            // Bootstrap ignores ordinary rows until the first completed-schema heartbeat,
+            // so bursts of continuous DML would leave the reader waiting for its anchor.
             var task = pulses.scheduleWithFixedDelay(() -> {
                 try {
                     execute("INSERT INTO " + activity + "(name) VALUES('pulse')");
                 } catch (Exception error) {
                     throw new IllegalStateException("MySQL test Binlog activity failed", error);
                 }
-            }, 0, 200, TimeUnit.MILLISECONDS);
+            }, 0, 3, TimeUnit.SECONDS);
             try {
                 var db = DATABASE.metadata();
                 var config = new MySqlCdcSourceConfig(
