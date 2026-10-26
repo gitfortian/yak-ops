@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
@@ -113,7 +114,7 @@ class MySqlBinlogIT {
         MySqlBinlogSplit checkpoint;
         try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, null)) {
             // Bootstrap captures table schemas but no table rows, then starts the Binlog stream.
-            awaitReplicationConnection();
+            awaitReaderReady(reader);
             execute(password, "INSERT INTO orders VALUES(1, 'first')");
             execute(password, "INSERT INTO items VALUES(10, 'item')");
             receive(reader, firstEvents, 2, Duration.ofSeconds(45));
@@ -121,6 +122,19 @@ class MySqlBinlogIT {
                     Set.of(ORDERS, ITEMS),
                     Set.of(firstEvents.get(0).tableId(), firstEvents.get(1).tableId()));
             assertEquals(RowKind.INSERT, firstEvents.get(0).rowKind());
+            assertNotNull(firstEvents.get(0).changeEventId(), "Real Debezium row requires fine-grained Binlog identity");
+            assertNotNull(firstEvents.get(1).changeEventId(), "Second Binlog row requires stable identity");
+            assertFalse(firstEvents.get(0).changeEventId().sameEvent(firstEvents.get(1).changeEventId()));
+
+            // One SQL statement can produce multiple row events with the same Binlog file/pos.
+            // Their per-row Debezium coordinates, not their identical payloads, must differ.
+            execute(password, "INSERT INTO orders VALUES(2, 'same'), (3, 'same')");
+            receive(reader, firstEvents, 4, Duration.ofSeconds(45));
+            assertEquals("same", firstEvents.get(2).row().getString(1));
+            assertEquals("same", firstEvents.get(3).row().getString(1));
+            assertNotNull(firstEvents.get(2).changeEventId());
+            assertNotNull(firstEvents.get(3).changeEventId());
+            assertFalse(firstEvents.get(2).changeEventId().sameEvent(firstEvents.get(3).changeEventId()));
             checkpoint = reader.snapshotState(1L).getFirst();
             assertTrue(checkpoint.schemaHistory().length > 0);
             assertTrue(checkpoint.offset() != null);
@@ -131,7 +145,7 @@ class MySqlBinlogIT {
 
         List<TableRecord> recoveredEvents = new ArrayList<>();
         try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, checkpoint)) {
-            awaitReplicationConnection();
+            awaitReaderReady(reader);
             execute(password, "UPDATE orders SET NAME='changed' WHERE ID=1");
             execute(password, "DELETE FROM items WHERE ID=10");
             receive(reader, recoveredEvents, 3, Duration.ofSeconds(45));
@@ -139,25 +153,97 @@ class MySqlBinlogIT {
                     List.of(RowKind.UPDATE_BEFORE, RowKind.UPDATE_AFTER, RowKind.DELETE),
                     recoveredEvents.stream().map(TableRecord::rowKind).toList());
             assertEquals("changed", recoveredEvents.get(1).row().getString(1));
+            assertNotNull(recoveredEvents.get(0).changeEventId(), "UPDATE must have a source event position");
+            assertEquals(recoveredEvents.get(0).changeEventId().eventId(),
+                    recoveredEvents.get(1).changeEventId().eventId());
+            assertEquals(0, recoveredEvents.get(0).changeEventId().imageIndex());
+            assertEquals(1, recoveredEvents.get(1).changeEventId().imageIndex());
+            assertEquals(2, recoveredEvents.get(1).changeEventId().imageCount());
+            assertNotNull(recoveredEvents.get(2).changeEventId(), "DELETE must have a source event position");
             assertEquals(ORDERS, recoveredEvents.get(0).tableId());
             assertEquals(ITEMS, recoveredEvents.get(2).tableId());
             assertFalse(reader.snapshotState(2L).isEmpty());
         }
     }
 
-    private static void awaitReplicationConnection() throws Exception {
+    @Test
+    void realMultiRowTransactionIdentityRemainsUniqueAcrossBinlogRotation() throws Exception {
+        String password = DATABASE_RESOURCE.metadata().password();
+        try (Connection connection = DATABASE_RESOURCE.metadata().connect();
+                Statement ddl = connection.createStatement()) {
+            ddl.execute("DROP TABLE IF EXISTS orders");
+            ddl.execute("CREATE TABLE orders(ID BIGINT PRIMARY KEY, NAME VARCHAR(100))");
+        }
+
+        var schema = new TableSchema(
+                List.of(
+                        new Column("ID", LogicalTypes.BIGINT.copy(false)),
+                        new Column("NAME", LogicalTypes.varchar(100))),
+                List.of("ID"));
+        var source = MySqlCdcSource.builder()
+                .hostname(DATABASE_RESOURCE.metadata().host())
+                .port(DATABASE_RESOURCE.metadata().port())
+                .username(USER)
+                .password(password)
+                .serverId(5553)
+                .topicPrefix("yak_cdc_identity_rotation")
+                .table(ORDERS, schema)
+                .build();
+
+        try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, null)) {
+            awaitReaderReady(reader);
+            execute(password, "INSERT INTO orders VALUES (110, 'same'), (111, 'same'), (112, 'same')");
+            List<TableRecord> rows = new ArrayList<>();
+            receive(reader, rows, 3, Duration.ofSeconds(45));
+            assertEquals(3, rows.size());
+            var beforeRotation = rows.stream()
+                    .map(TableRecord::changeEventId)
+                    .toList();
+            assertTrue(beforeRotation.stream().allMatch(java.util.Objects::nonNull));
+            assertEquals(3, new java.util.HashSet<>(beforeRotation).size());
+
+            execute(password, "FLUSH BINARY LOGS");
+            execute(password, "INSERT INTO orders VALUES (113, 'same'), (114, 'same')");
+            receive(reader, rows, 5, Duration.ofSeconds(45));
+            assertTrue(rows.stream().allMatch(record -> record.changeEventId() != null));
+            assertEquals(5, new java.util.HashSet<>(
+                    rows.stream().map(TableRecord::changeEventId).toList()).size());
+
+            MySqlBinlogSplit checkpoint = reader.snapshotState(22L).getFirst();
+            assertNotNull(checkpoint.offset());
+            assertFalse(checkpoint.schemaHistory().length == 0);
+        }
+    }
+
+    /** The owning Reader must have consumed the post-bootstrap heartbeat before test DML.
+     *
+     * <p>A server-wide SHOW PROCESSLIST Binlog Dump belongs to an arbitrary replication
+     * client and is not evidence that this Reader has finished its schema snapshot.
+     */
+    private static void awaitReaderReady(SourceReader<TableRecord, MySqlBinlogSplit> reader) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (System.nanoTime() < deadline) {
-            try (Connection connection = DATABASE_RESOURCE.metadata().connect();
-                    var statement = connection.createStatement();
-                    var rows = statement.executeQuery("SHOW PROCESSLIST")) {
-                while (rows.next()) {
-                    if (rows.getString("Command").startsWith("Binlog Dump")) return;
+            if (reader.pollNext(record -> {
+                throw new AssertionError("Unexpected row before first test mutation: " + record.tableId());
+            }) == InputStatus.END_OF_INPUT) {
+                throw new AssertionError("Unbounded Binlog Reader ended during bootstrap");
+            }
+            try {
+                List<MySqlBinlogSplit> splits = reader.snapshotState(0L);
+                if (splits.size() == 1
+                        && splits.getFirst().offset() != null
+                        && splits.getFirst().schemaHistory().length > 0) {
+                    return;
+                }
+            } catch (IllegalStateException notReady) {
+                if (notReady.getMessage() == null
+                        || !notReady.getMessage().contains("no complete offset/schema-history checkpoint")) {
+                    throw notReady;
                 }
             }
-            java.util.concurrent.TimeUnit.MILLISECONDS.sleep(100);
+            Thread.sleep(50);
         }
-        throw new AssertionError("CDC replication connection did not become ready");
+        throw new AssertionError("Own MySQL CDC Reader did not complete no-data bootstrap");
     }
 
     private static SourceReader<TableRecord, MySqlBinlogSplit> createReader(

@@ -100,7 +100,12 @@ async def mock_planning(route):
         if state.get("planning_fail_tree"):
             status, code, message = 503, 999, "加载失败"
         else:
-            data = tree()
+            # The page renders two presentational trees, so roots split by kind.
+            roots = tree()
+            data = {
+                "categories": [node for node in roots if node["kind"] != "DATASET"],
+                "datamarts": [node for node in roots if node["kind"] == "DATASET"],
+            }
     elif path == "/owners":
         data = [{"userId": "user1", "displayName": "Tester"}]
     elif path == "/codes/availability":
@@ -221,6 +226,10 @@ async def mock(route):
                                               "table": item["target"]["table"]},
             "action": "CREATE",
             "statements": ["CREATE TABLE public." + item["target"]["table"] + " (id BIGINT PRIMARY KEY)"],
+            "differences": [{
+                "column": None, "action": "CREATE_TABLE", "reason": "TABLE_MISSING",
+                "sourceType": None, "targetType": None,
+            }],
         } for index, item in enumerate(details["tableMappings"])]
     elif p.startswith("/api/v1/data-source/"):
         data = next((x for x in sources if x["id"] == p.rsplit("/", 1)[-1]), {})

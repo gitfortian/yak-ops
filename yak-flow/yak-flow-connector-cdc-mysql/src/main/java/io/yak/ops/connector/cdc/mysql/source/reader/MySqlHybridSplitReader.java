@@ -69,6 +69,8 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     public void addSplits(List<MySqlHybridSplit> splits) throws Exception {
         for (MySqlHybridSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
+                // The typed backfill reader freezes the complete keyless range before any rows
+                // can be emitted. The checkpointed output position preserves duplicate rows.
                 pending.addLast(snapshot);
                 if (snapshot.prepared()) released.add(snapshot.splitId());
             } else if (split instanceof MySqlHybridBinlogSplit stream) {
@@ -171,7 +173,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     }
 
     private void startStreaming(MySqlHybridBinlogSplit split) throws Exception {
-        filter = new MySqlBinlogSplitFilter(config.schemas(), split.finishedSplits());
+        filter = MySqlBinlogSplitFilter.fromFinishedSplits(config.schemas(), split.finishedSplits());
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();

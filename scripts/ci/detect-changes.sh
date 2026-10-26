@@ -5,7 +5,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 changed=()
 full=false
+paths_mode=false
 if [[ "${1:-}" == "--paths" ]]; then
+    paths_mode=true
     shift
     changed=("$@")
 else
@@ -39,6 +41,10 @@ else
         fi
         mapfile -d '' -t changed < "${changed_file}"
     fi
+fi
+# Run the cheap proposal validation in the existing PR scope job.
+if [[ "${paths_mode}" == false && "${CI_EVENT_NAME:-${GITHUB_EVENT_NAME:-}}" == "pull_request" ]]; then
+    python3 scripts/ci/check_yoips.py --base "${CI_PR_BASE_SHA:?Missing PR base SHA}" --head "${CI_PR_HEAD_SHA:?Missing PR head SHA}"
 fi
 if [[ "${full}" == true ]]; then
     result="$(python3 -c 'import sys; sys.path.insert(0, "scripts/ci"); import impact; print(impact.outputs([], full=True), end="")')"

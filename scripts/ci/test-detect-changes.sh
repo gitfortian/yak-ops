@@ -38,4 +38,8 @@ expect_scope "${all_true}" yak-flow/yak-flow-runtime/src/main/java/StreamTask.ja
 # Reusable Release Gate runs never skip quality, tests, or packaging.
 actual="$(env -u GITHUB_OUTPUT -u GITHUB_STEP_SUMMARY CI_EVENT_NAME=workflow_dispatch bash scripts/ci/detect-changes.sh)"
 [[ "${actual}" == *'backend=true'* && "${actual}" == *'frontend=true'* && "${actual}" == *'distribution=true'* && "${actual}" == *'release=true'* && "${actual}" == *'tests=true'* ]] || { echo 'Release quality cannot be conditional' >&2; exit 1; }
+# Enforce backend naming without an extra workflow or database test matrix.
+python3 -m unittest discover -s scripts/ci -p 'test_backend_naming.py' -v
+python3 -m unittest discover -s scripts/ci -p 'test_yoips.py' -v
+python3 scripts/ci/check_backend_naming.py
 echo 'CI change-scope regression checks passed.'

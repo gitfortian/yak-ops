@@ -37,7 +37,9 @@ export interface DataSyncOperationsResult {
 export const getDataSyncOperations = (
   syncType: DataSyncType,
   range: DataSyncOperationsRange,
+  signal?: AbortSignal,
 ): Promise<DataSyncOperationsResult> =>
   HttpUtils.getData<DataSyncOperationsResult>(
     `/api/v1/data-sync/operations/dashboard?syncType=${syncType}&range=${range}`,
+    { signal },
   );

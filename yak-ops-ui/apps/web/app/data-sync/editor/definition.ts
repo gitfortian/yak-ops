@@ -1,5 +1,5 @@
-import { validIncrementalConfig } from "@/service/data-sync/parameters";
-import { validTableMappings } from "../table-mapping-editor";
+import { offlineIncremental, validIncrementalConfig } from "@/service/data-sync/parameters";
+import { validTableMappings } from "./table-mapping-editor";
 import { sameScheduleRule } from "@/app/schedule/schedule-presentation";
 import { selectedTableKey } from "./table-section";
 import type {
@@ -22,25 +22,32 @@ export function buildEditorPayload(
   const common = {
     name: form.name.trim(),
     debug: form.debug,
-    sourceDataSourceId: form.sourceDataSourceId,
-    sourceDatabase: form.sourceDatabase || undefined,
-    sourceSchema: form.sourceSchema || undefined,
-    sourceTable: form.sourceTable,
-    targetDataSourceId: form.targetDataSourceId,
-    targetDatabase: form.targetDatabase || undefined,
-    targetSchema: form.targetSchema || undefined,
-    targetTable: form.targetTable,
+    sourceDataSourceId: form.source.dataSourceId,
+    sourceDatabase: form.source.database || undefined,
+    sourceSchema: form.source.schema || undefined,
+    sourceTable: form.source.table,
+    targetDataSourceId: form.sink.dataSourceId,
+    targetDatabase: form.sink.database || undefined,
+    targetSchema: form.sink.schema || undefined,
+    targetTable: form.sink.table,
     remark: form.remark.trim() || undefined,
   };
   return {
     ...common,
     solutionType: draft.solutionType,
     steps: draft.steps,
-    writeMode: form.writeMode,
+    writeMode: form.sink.writeMode,
+    targetPrimaryKeys: form.sink.targetPrimaryKeys?.filter(Boolean) ?? [],
+    ...(!batch && offlineIncremental(draft.solutionType, draft.steps) && form.source.incremental
+      ? { incremental: { ...form.source.incremental } }
+      : {}),
+    ...(usesChangelog && form.source.keylessEnabled && !batch
+      ? { keylessEnabled: true, chunkKeyColumn: form.source.chunkKeyColumn }
+      : {}),
     ...(usesChangelog
       ? {
-          schemaChangesEnabled: form.schemaChangesEnabled,
-          allowDropColumns: form.schemaChangesEnabled && form.allowDropColumns,
+          schemaChangesEnabled: form.sink.schemaChangesEnabled,
+          allowDropColumns: form.sink.schemaChangesEnabled && form.sink.allowDropColumns,
         }
       : {}),
     tableMappings: batch ? mappings : undefined,
@@ -97,11 +104,21 @@ export function canSaveEditor({
     Boolean(combination) &&
     !solutionsLoading &&
     !solutionsError &&
-    combination!.writeModes.includes(form.writeMode) &&
+    combination!.writeModes.includes(form.sink.writeMode) &&
+    (form.source.keylessEnabled
+      ? !batch &&
+        draft.solutionType === "SINGLE_TABLE_REALTIME" &&
+        draft.targetType === "MYSQL" &&
+        !form.sink.schemaChangesEnabled &&
+        (form.sink.targetPrimaryKeys?.length
+          ? form.sink.writeMode === "UPSERT" && form.sink.targetPrimaryKeys.every(Boolean)
+          : form.sink.writeMode === "RETRACT") &&
+        Boolean(form.source.chunkKeyColumn.trim())
+      : form.sink.writeMode !== "RETRACT") &&
     (!useIncremental ||
       (batch
         ? mappings.every((mapping) => validIncrementalConfig(mapping.incremental, !initialLoad))
-        : validIncrementalConfig(form.incremental, !initialLoad))) &&
+        : validIncrementalConfig(form.source.incremental, !initialLoad))) &&
     selectedSourceDataSource?.dbType === draft.sourceType &&
     selectedTargetDataSource?.dbType === draft.targetType &&
     (!supportsScheduling ||
@@ -109,9 +126,9 @@ export function canSaveEditor({
         !scheduleNeedsReload &&
         (!schedule?.enabled || sameScheduleRule(scheduleForm, schedule)))) &&
     form.name.trim() &&
-    Boolean(form.sourceDataSourceId && form.targetDataSourceId) &&
+    Boolean(form.source.dataSourceId && form.sink.dataSourceId) &&
     (!prepareSchema ||
-      Boolean(form.targetDatabase && (draft.targetType !== "POSTGRE_SQL" || form.targetSchema))) &&
+      Boolean(form.sink.database && (draft.targetType !== "POSTGRE_SQL" || form.sink.schema))) &&
     (batch
       ? validTableMappings(
           mappings,
@@ -120,14 +137,14 @@ export function canSaveEditor({
           prepareSchema,
         )
       : Boolean(
-          form.sourceTable &&
+          form.source.table &&
           (prepareSchema
-            ? Boolean(form.targetTable.trim())
+            ? Boolean(form.sink.table.trim())
             : selectedTableKey(
                 targetCatalog.tables,
-                form.targetDatabase,
-                form.targetSchema,
-                form.targetTable,
+                form.sink.database,
+                form.sink.schema,
+                form.sink.table,
               )),
         )) &&
     !sourceCatalog.loading &&

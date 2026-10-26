@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -31,7 +31,44 @@ public record MySqlHybridEnumeratorState(
         List<FinishedSnapshotSplitInfo> finishedSplitInfos,
         int nextTableIndex,
         int nextChunkIndex,
-        Long nextChunkLower) {
+        Long nextChunkLower,
+        ChunkRange nextChunkRange) {
+
+    /** Keeps legacy checkpoint builders and current BIGINT discovery unchanged. */
+    public MySqlHybridEnumeratorState(
+            String fingerprint,
+            Phase phase,
+            MySqlHybridBinlogSplit pendingBinlog,
+            boolean binlogAssigned,
+            BinlogOffset lowWatermark,
+            BinlogOffset highWatermark,
+            boolean snapshotPlanned,
+            int totalSnapshotSplits,
+            List<MySqlSnapshotSplit> pendingSnapshots,
+            Map<String, MySqlSnapshotSplit> assignedSnapshots,
+            Set<String> finishedSnapshots,
+            List<FinishedSnapshotSplitInfo> finishedSplitInfos,
+            int nextTableIndex,
+            int nextChunkIndex,
+            Long nextChunkLower) {
+        this(
+                fingerprint,
+                phase,
+                pendingBinlog,
+                binlogAssigned,
+                lowWatermark,
+                highWatermark,
+                snapshotPlanned,
+                totalSnapshotSplits,
+                pendingSnapshots,
+                assignedSnapshots,
+                finishedSnapshots,
+                finishedSplitInfos,
+                nextTableIndex,
+                nextChunkIndex,
+                nextChunkLower,
+                null);
+    }
 
     public enum Phase {
         BOOTSTRAP,
@@ -43,11 +80,18 @@ public record MySqlHybridEnumeratorState(
     public MySqlHybridEnumeratorState {
         Objects.requireNonNull(fingerprint, "fingerprint");
         finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
+        if (nextChunkRange != null
+                && (nextChunkLower != null
+                        || nextChunkIndex < 1
+                        || nextChunkRange.start() == null
+                        || nextChunkRange.end() != null)) {
+            throw new IllegalArgumentException("Invalid typed chunk discovery cursor");
+        }
         if (nextTableIndex < 0
                 || nextChunkIndex < 0
                 || nextChunkIndex > 10_000
                 || (nextChunkIndex == 0 && nextChunkLower != null)
-                || (nextChunkIndex > 0 && nextChunkLower == null)) {
+                || (nextChunkIndex > 0 && nextChunkLower == null && nextChunkRange == null)) {
             throw new IllegalArgumentException("Invalid snapshot discovery position");
         }
         Objects.requireNonNull(phase, "phase");
@@ -80,10 +124,9 @@ public record MySqlHybridEnumeratorState(
             }
             BinlogOffset maximum = finishedSplitInfos.stream()
                     .map(FinishedSnapshotSplitInfo::highWatermark)
-                    .max(BinlogOffsetOrder::compare)
+                    .max(BinlogOffset::compareTo)
                     .orElseThrow();
-            if (BinlogOffsetOrder.compare(highWatermark, maximum) != 0
-                    || BinlogOffsetOrder.compare(lowWatermark, highWatermark) > 0) {
+            if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
                 throw new IllegalArgumentException("Hybrid coordinator watermarks differ from completed chunks");
             }
         }

@@ -42,6 +42,13 @@ class ImpactTest(unittest.TestCase):
         common = impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/main/java/internal/JdbcOutputFormat.java"])
         self.assertEqual(["jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc-pipeline"], common)
 
+    def test_shared_cdc_base_runs_affected_cdc_suites(self):
+        path = "yak-flow/yak-flow-connector-cdc-base/src/main/java/io/yak/ops/connector/cdc/base/source/assigner/SnapshotSplitAssigner.java"
+        self.assertEqual({"cdc", "cdc-pipeline", "recovery-e2e"}, set(impact.select_suites([path])))
+        self.assertIn("yak-flow/yak-flow-connector-cdc-mysql", impact.analyze([path])["modules"])
+        self.assertEqual([], impact.select_suites([
+            "yak-flow/yak-flow-connector-cdc-base/src/test/java/SnapshotSplitAssignerTest.java"]))
+
     def test_test_only_changes_do_not_start_database(self):
         self.assertEqual([], impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/test/java/JdbcBatchExecutionTest.java"]))
         self.assertEqual(["jdbc-mysql"], impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/test/java/MySqlSourceIT.java"]))

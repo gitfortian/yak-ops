@@ -31,15 +31,15 @@ public record DataSourcePluginDescriptor(
     public static final String CURRENT_API_VERSION = "5";
 
     public DataSourcePluginDescriptor {
-        type = normalizeType(type);
+        type = canonicalTypeName(type);
         aliases = immutableAliases(type, aliases);
-        apiVersion = normalize(apiVersion, CURRENT_API_VERSION);
+        apiVersion = defaultIfBlank(apiVersion, CURRENT_API_VERSION);
         capabilities = immutableCapabilities(capabilities);
         secretFieldKeys = immutableSecretFieldKeys(secretFieldKeys);
     }
 
     public boolean matchesType(String value) {
-        String normalized = normalizeType(value);
+        String normalized = canonicalTypeName(value);
         return type.equals(normalized) || aliases.contains(normalized);
     }
 
@@ -47,7 +47,7 @@ public record DataSourcePluginDescriptor(
         return capability != null && capabilities.contains(capability);
     }
 
-    public static String normalizeType(String value) {
+    public static String canonicalTypeName(String value) {
         String normalized = StringUtils.trimToNull(value);
         if (normalized == null) throw new IllegalArgumentException("plugin type must not be blank");
         return normalized.toUpperCase(Locale.ROOT).replace('-', '_');
@@ -57,7 +57,7 @@ public record DataSourcePluginDescriptor(
         if (CollectionUtils.isEmpty(values)) return Set.of();
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
         for (String value : values) {
-            String alias = normalizeType(value);
+            String alias = canonicalTypeName(value);
             if (!type.equals(alias)) normalized.add(alias);
         }
         return Collections.unmodifiableSet(normalized);
@@ -78,7 +78,7 @@ public record DataSourcePluginDescriptor(
         return Collections.unmodifiableSet(normalized);
     }
 
-    private static String normalize(String value, String fallback) {
+    private static String defaultIfBlank(String value, String fallback) {
         String normalized = StringUtils.trimToNull(value);
         return normalized == null ? fallback : normalized;
     }

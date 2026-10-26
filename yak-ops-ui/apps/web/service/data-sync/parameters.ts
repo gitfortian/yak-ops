@@ -12,7 +12,7 @@ const SOLUTIONS = new Set([
   "DATABASE_OFFLINE",
   "DATABASE_REALTIME",
 ]);
-const WRITES = new Set(["APPEND", "UPSERT"]);
+const WRITES = new Set(["APPEND", "UPSERT", "RETRACT"]);
 
 export const solutionSyncType = (type: DataSyncSolutionType) =>
   type === "SINGLE_TABLE_REALTIME" || type === "DATABASE_REALTIME" ? "REALTIME" : "OFFLINE";
@@ -52,8 +52,8 @@ export const validIncrementalConfig = (
   return true;
 };
 
-/** Interprets the pinned parameter version; unrecognized formats are never guessed as offline. */
-export function readSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
+/** Reads the stored parameter shape for presentation; it does not admit a task for execution. */
+export function parseSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
   const parsed = JSON.parse(content);
   let value: DataSyncParameters;
   if (schemaVersion === 2) {
@@ -99,6 +99,41 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
   } else {
     throw new Error("不支持的同步任务参数版本");
   }
+
+  if (
+    !value ||
+    !SOLUTIONS.has(value.solutionType) ||
+    !Array.isArray(value.steps) ||
+    !value.steps.every((step) => ["SCHEMA", "FULL", "INCREMENTAL"].includes(step)) ||
+    !value.source?.datasourceId ||
+    typeof value.source.datasourceId !== "string" ||
+    !value.sink?.datasourceId ||
+    typeof value.sink.datasourceId !== "string" ||
+    value.tableSelection?.mode !== "EXPLICIT" ||
+    !Array.isArray(value.tableMappings) ||
+    value.tableMappings.length < 1 ||
+    value.tableMappings.length > 100
+  ) {
+    throw new Error("不支持的同步任务定义");
+  }
+  for (const mapping of value.tableMappings) {
+    if (
+      !mapping?.source ||
+      !mapping.target ||
+      typeof mapping.source.table !== "string" ||
+      !mapping.source.table.trim() ||
+      typeof mapping.target.table !== "string" ||
+      !mapping.target.table.trim() ||
+      !WRITES.has(mapping.writeMode)
+    ) {
+      throw new Error("不支持的同步任务表映射");
+    }
+  }
+  return value;
+}
+
+/** Enforces static job and write-protocol admission without reading external resources. */
+export function validateSyncParameters(value: DataSyncParameters): void {
   const realtime = value && solutionSyncType(value.solutionType) === "REALTIME";
   if (
     value?.schemaChangesEnabled !== undefined &&
@@ -146,13 +181,46 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
   const sources = new Set<string>();
   const targets = new Set<string>();
   for (const mapping of value.tableMappings) {
+    const keyless = mapping?.source?.keyless === true;
+    const validRetract =
+      keyless &&
+      mapping.writeMode === "RETRACT" &&
+      mapping.source.xa === true &&
+      mapping.target.primaryKeys === undefined;
+    const validKeyedWrite =
+      keyless &&
+      mapping.writeMode === "UPSERT" &&
+      mapping.source.xa === undefined &&
+      Boolean(mapping.target.primaryKeys?.length);
+    const invalidTransaction = keyless
+      ? !validRetract && !validKeyedWrite
+      : mapping.source.xa !== undefined;
     if (
+      (mapping?.source?.keyless !== undefined && typeof mapping.source.keyless !== "boolean") ||
+      (mapping?.source?.chunkKeyColumn !== undefined &&
+        (typeof mapping.source.chunkKeyColumn !== "string" ||
+          !mapping.source.chunkKeyColumn.trim() ||
+          mapping.source.chunkKeyColumn.length > 128)) ||
+      (mapping.target?.primaryKeys !== undefined &&
+        (!Array.isArray(mapping.target.primaryKeys) ||
+          mapping.target.primaryKeys.length === 0 ||
+          new Set(mapping.target.primaryKeys).size !== mapping.target.primaryKeys.length ||
+          mapping.target.primaryKeys.some((key) => typeof key !== "string" || !key.trim()))) ||
+      invalidTransaction ||
+      (keyless &&
+        (value.solutionType !== "SINGLE_TABLE_REALTIME" ||
+          value.schemaChangesEnabled !== false ||
+          value.allowDropColumns === true ||
+          !mapping.source.chunkKeyColumn)) ||
+      (!keyless &&
+        (mapping?.source?.chunkKeyColumn !== undefined || mapping.writeMode === "RETRACT")) ||
       !mapping?.source?.table ||
       !mapping.target?.table ||
       !WRITES.has(mapping.writeMode) ||
       ((solutionSyncType(value.solutionType) === "REALTIME" ||
         offlineIncremental(value.solutionType, value.steps)) &&
-        mapping.writeMode !== "UPSERT") ||
+        mapping.writeMode !== "UPSERT" &&
+        !(keyless && mapping.writeMode === "RETRACT")) ||
       (offlineIncremental(value.solutionType, value.steps)
         ? !validIncrementalConfig(mapping.incremental, !value.steps.includes("FULL"))
         : mapping.incremental !== undefined)
@@ -173,5 +241,11 @@ export function readSyncParameters(schemaVersion: number, content: string): Data
     sources.add(sourceKey);
     targets.add(targetKey);
   }
+}
+
+/** Interprets a pinned version with the complete current static execution contract. */
+export function readSyncParameters(schemaVersion: number, content: string): DataSyncParameters {
+  const value = parseSyncParameters(schemaVersion, content);
+  validateSyncParameters(value);
   return value;
 }

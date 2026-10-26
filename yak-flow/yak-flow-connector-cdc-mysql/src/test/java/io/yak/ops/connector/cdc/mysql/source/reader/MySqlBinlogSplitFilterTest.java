@@ -132,6 +132,20 @@ class MySqlBinlogSplitFilterTest {
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)))));
     }
 
+
+    @Test
+    void binlogRotationDoesNotDiscardEventsAfterSnapshotHighWatermark() {
+        BinlogOffset high = new BinlogOffset(
+                Map.of("server", "shop"), Map.of("file", "mysql-bin.9", "pos", 900L));
+        var filter = new MySqlBinlogSplitFilter(
+                Map.of(TABLE, SCHEMA),
+                List.of(new FinishedSnapshotSplitInfo(TABLE, "single", null, null, high)));
+        BinlogEvent later = new BinlogEvent(
+                List.of(row(RowKind.INSERT, 1L, "after rotation")),
+                new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.10", "pos", 4L)));
+        assertEquals(1, filter.filter(later).records().size());
+    }
+
     private static MySqlBinlogSplitFilter filter() {
         return new MySqlBinlogSplitFilter(
                 Map.of(TABLE, SCHEMA),

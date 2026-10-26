@@ -3,7 +3,9 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -12,6 +14,7 @@ import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.testutils.MySqlDatabase;
 import java.sql.DriverManager;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +60,7 @@ class MySqlBackfillIT {
                     values.put(row.row().getLong(0), row.row().getString(1));
                 }
                 assertEquals(Map.of(1L,"final",5L,"new"), values);
-                assertTrue(BinlogOffsetOrder.compare(split.output().high(), split.output().low()) > 0);
+                assertTrue(split.output().high().compareTo(split.output().low()) > 0);
                 assertEquals(0, split.outputPosition());
             }
         } finally { execute("DROP TABLE " + table, "DROP TABLE " + other); }
@@ -71,12 +74,62 @@ class MySqlBackfillIT {
         try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), 6601, table), 0)) {
             var empty = reader.read(new MySqlSnapshotSplit("empty", "fp", id, null, 10L, null));
             assertTrue(empty.output().rows().isEmpty());
-            assertEquals(0, BinlogOffsetOrder.compare(empty.output().low(), empty.output().high()));
+            assertEquals(0, empty.output().low().compareTo(empty.output().high()));
             execute("INSERT INTO " + table + " VALUES(20,'present')");
             var second = reader.read(new MySqlSnapshotSplit("second", "fp", id, 10L, null, null));
             assertEquals(1, second.output().rows().size());
             assertEquals(20L, second.output().rows().getFirst().row().getLong(0));
         } finally { execute("DROP TABLE " + table); }
+    }
+
+    @Test
+    void plansKeylessStringChunksWithActualMySqlCollation() throws Exception {
+        String table = "typed_" + UUID.randomUUID().toString().replace("-", "");
+        execute(
+                "CREATE TABLE " + table
+                        + "(id INT NOT NULL, code VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL)",
+                "INSERT INTO " + table + " VALUES (1,'a'),(2,'A'),(3,'b'),(4,'B'),(5,'c')");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.INTEGER.copy(false)),
+                        new Column("code", LogicalTypes.varchar(40).copy(false))),
+                List.of());
+        var db = DATABASE.metadata();
+        try {
+            var splitter = new MySqlChunkSplitter(
+                    () -> DriverManager.getConnection(db.url(), db.username(), db.password()),
+                    JdbcDialects.forUrl(db.url()),
+                    Map.of(id, schema),
+                    Map.of(id, "code"),
+                    1);
+            List<ChunkRange> ranges = splitter.splitChunks(id);
+            assertEquals(3, ranges.size());
+            assertEquals(ranges.get(1), splitter.nextChunk(id, ranges.getFirst().end()));
+            List<Integer> observed = new ArrayList<>();
+            try (var connection = DriverManager.getConnection(db.url(), db.username(), db.password())) {
+                for (ChunkRange range : ranges) {
+                    String key = "`code`";
+                    List<String> predicates = new ArrayList<>();
+                    if (range.start() != null) predicates.add(key + " >= ?");
+                    if (range.end() != null) predicates.add(key + " < ?");
+                    String sql = "SELECT id FROM " + table
+                            + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates));
+                    try (var statement = connection.prepareStatement(sql)) {
+                        int parameter = 1;
+                        if (range.start() != null) statement.setObject(parameter++, range.start());
+                        if (range.end() != null) statement.setObject(parameter, range.end());
+                        try (var rows = statement.executeQuery()) {
+                            while (rows.next()) observed.add(rows.getInt(1));
+                        }
+                    }
+                }
+            }
+            observed.sort(Integer::compareTo);
+            assertEquals(List.of(1, 2, 3, 4, 5), observed);
+        } finally {
+            execute("DROP TABLE " + table);
+        }
     }
 
     private static MySqlCdcSourceConfig config(Map<TableId, TableSchema> schemas, int serverId, String topic) {

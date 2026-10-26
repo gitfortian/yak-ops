@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.base.source.meta.split.StreamSplit;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetOrder;
 import java.util.List;
 import java.util.Objects;
 
@@ -17,7 +17,7 @@ import java.util.Objects;
  * serialized Schema History bytes and exposes them only through defensive copies.
  * An assigned split has execution identity, rather than implicit record value equality.
  */
-public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
+public final class MySqlHybridBinlogSplit implements MySqlHybridSplit, StreamSplit {
 
     public static final String ID = MySqlBinlogSplit.ID;
 
@@ -63,12 +63,12 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
             BinlogOffset maximum = null;
             for (FinishedSnapshotSplitInfo info : this.finishedSplits) {
                 if (!ids.add(info.splitId())) throw new IllegalArgumentException("Duplicate streaming chunk identity");
-                BinlogOffsetOrder.compare(binlog.offset(), info.highWatermark());
-                if (maximum == null || BinlogOffsetOrder.compare(info.highWatermark(), maximum) > 0) {
+                binlog.offset().compareTo(info.highWatermark());
+                if (maximum == null || info.highWatermark().compareTo(maximum) > 0) {
                     maximum = info.highWatermark();
                 }
             }
-            if (BinlogOffsetOrder.compare(highWatermark, maximum) != 0) {
+            if (highWatermark.compareTo(maximum) != 0) {
                 throw new IllegalArgumentException("Hybrid handoff High differs from completed chunk metadata");
             }
         } else if (highWatermark != null || !this.finishedSplits.isEmpty()) {
@@ -118,7 +118,7 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit {
         if (completed.isEmpty()) throw new IllegalArgumentException("Snapshot handoff requires per-chunk watermarks");
         BinlogOffset start = completed.stream()
                 .map(FinishedSnapshotSplitInfo::highWatermark)
-                .min(BinlogOffsetOrder::compare)
+                .min(BinlogOffset::compareTo)
                 .orElseThrow();
         return new MySqlHybridBinlogSplit(
                 binlog.withProgress(start, binlog.schemaHistory()),

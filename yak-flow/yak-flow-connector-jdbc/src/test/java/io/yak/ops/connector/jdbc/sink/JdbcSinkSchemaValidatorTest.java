@@ -52,7 +52,7 @@ class JdbcSinkSchemaValidatorTest {
     }
 
     @Test
-    void rejectsImplicitNumericWideningBeforeJdbcSinkConstruction() {
+    void acceptsSafeNumericWideningBeforeJdbcSinkConstruction() {
         TableSchema source = table(
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.INTEGER));
@@ -60,7 +60,10 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.BIGINT));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        JdbcSinkSchemaValidator.validate(source, target, false);
+        var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, Map.of());
+        assertEquals(42L, plan.project(io.yak.ops.core.data.GenericRowData.of(5L, 42), io.yak.ops.core.data.RowKind.INSERT)
+                .getLong(1));
     }
 
     @Test
@@ -109,6 +112,22 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("amount", LogicalTypes.decimal(20, 2)));
 
         assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+    }
+
+    @Test
+    void differentiatesSnapshotChunkColumnsFromChangelogRowIdentity() {
+        var sourceColumns = List.of(
+                new Column("chunk_bucket", LogicalTypes.BIGINT.copy(false)),
+                new Column("value", LogicalTypes.varchar(64)));
+        TableSchema keyless = new TableSchema(sourceColumns, List.of());
+        TableSchema target = new TableSchema(sourceColumns, List.of("chunk_bucket"));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> JdbcSinkSchemaValidator.validate(keyless, target, true));
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("Chunk Key"));
+        JdbcSinkSchemaValidator.validate(keyless, keyless, false);
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcSinkSchemaValidator.validate(target, keyless, true));
     }
 
     private static TableSchema table(Column... columns) {

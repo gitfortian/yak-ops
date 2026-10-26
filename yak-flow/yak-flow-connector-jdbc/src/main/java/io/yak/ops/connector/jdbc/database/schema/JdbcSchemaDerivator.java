@@ -2,6 +2,7 @@ package io.yak.ops.connector.jdbc.database.schema;
 
 import io.yak.ops.connector.jdbc.database.JdbcSchemaCompatibility;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
+import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan.Kind;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan.Reason;
 import io.yak.ops.core.data.TableId;
@@ -69,8 +70,8 @@ public final class JdbcSchemaDerivator {
             checkIdentifiers(source, source, differences);
             List<PhysicalColumn> columns = new ArrayList<>();
             for (PhysicalColumn column : source.columns()) {
-                LogicalType normalized =
-                        normalize(dialect, column, source.primaryKeys().contains(column.name()), differences);
+                LogicalType normalized = resolveTargetColumnType(
+                        dialect, column, source.primaryKeys().contains(column.name()), differences);
                 if (normalized != null) {
                     columns.add(column.copy(normalized));
                 }
@@ -96,8 +97,8 @@ public final class JdbcSchemaDerivator {
         for (PhysicalColumn incoming : source.columns()) {
             PhysicalColumn actual = existing.get(incoming.name());
             if (actual == null) {
-                LogicalType normalized =
-                        normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+                LogicalType normalized = resolveTargetColumnType(
+                        dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
                 if (normalized == null) continue;
                 if (source.primaryKeys().contains(incoming.name())
                         || !normalized.isNullable()
@@ -139,6 +140,16 @@ public final class JdbcSchemaDerivator {
                         actual.type());
                 continue;
             }
+            if (dialect instanceof MySqlJdbcDialect && nativeTypeChanged(incoming.properties(), actual.properties())) {
+                add(
+                        differences,
+                        incoming.name(),
+                        Kind.INCOMPATIBLE,
+                        Reason.UNSAFE_TYPE_CHANGE,
+                        incoming.type(),
+                        actual.type());
+                continue;
+            }
             if (incoming.type().isNullable() && !actual.type().isNullable()) {
                 add(
                         differences,
@@ -149,8 +160,8 @@ public final class JdbcSchemaDerivator {
                         actual.type());
                 continue;
             }
-            LogicalType planned =
-                    normalize(dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
+            LogicalType planned = resolveTargetColumnType(
+                    dialect, incoming, source.primaryKeys().contains(incoming.name()), differences);
             if (planned == null) continue;
             if (canContain(planned, actual.type())) {
                 add(differences, incoming.name(), Kind.COMPATIBLE, Reason.COMPATIBLE, planned, actual.type());
@@ -158,6 +169,7 @@ public final class JdbcSchemaDerivator {
                     && !current.primaryKeys().contains(incoming.name())
                     && ordinaryColumn(incoming)
                     && ordinaryColumn(actual)
+                    && !requiresExactNativeType(actual.properties())
                     && canWiden(planned, actual.type())) {
                 widened.put(incoming.name(), planned.copy(actual.type().isNullable()));
                 previous.put(incoming.name(), actual.type());
@@ -244,7 +256,7 @@ public final class JdbcSchemaDerivator {
         return JdbcSchemaCompatibility.isCompatible(from, to);
     }
 
-    private static LogicalType normalize(
+    private static LogicalType resolveTargetColumnType(
             JdbcDialect dialect, PhysicalColumn column, boolean key, List<SchemaChangePlan.Difference> differences) {
         try {
             if (!column.type().isResolved()) {
@@ -254,7 +266,9 @@ public final class JdbcSchemaDerivator {
             ColumnProperties physical = column.properties();
             if (physical != null
                     && physical.nativeType() != null
-                    && physical.nativeType().toLowerCase(Locale.ROOT).contains("unsigned")) {
+                    && (physical.nativeType().toLowerCase(Locale.ROOT).contains("unsigned")
+                            || (MySqlJdbcDialect.requiresExactNativeType(physical.nativeType())
+                                    && !(dialect instanceof MySqlJdbcDialect)))) {
                 add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
@@ -264,7 +278,7 @@ public final class JdbcSchemaDerivator {
                 add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
                 return null;
             }
-            return dialect.normalizeTargetType(logical);
+            return dialect.toTargetLogicalType(logical);
         } catch (IllegalArgumentException | UnsupportedOperationException failure) {
             add(differences, column.name(), Kind.INCOMPATIBLE, Reason.UNSUPPORTED_TYPE, column.type(), null);
             return null;
@@ -292,6 +306,17 @@ public final class JdbcSchemaDerivator {
                 }
             }
         }
+    }
+
+    private static boolean requiresExactNativeType(ColumnProperties properties) {
+        return properties != null && MySqlJdbcDialect.requiresExactNativeType(properties.nativeType());
+    }
+
+    private static boolean nativeTypeChanged(ColumnProperties incoming, ColumnProperties actual) {
+        if (!requiresExactNativeType(incoming) && !requiresExactNativeType(actual)) return false;
+        String sourceType = incoming == null ? null : incoming.nativeType();
+        String targetType = actual == null ? null : actual.nativeType();
+        return !Objects.equals(sourceType, targetType);
     }
 
     private static boolean ordinaryColumn(PhysicalColumn column) {

@@ -9,14 +9,14 @@ import {
   solutionSyncType,
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
-import { EMPTY_INCREMENTAL } from "../incremental-fields";
-import { findStepCombination } from "../solution-presentation";
-import { useSolutions } from "../use-solutions";
-import { EditorAnchorStepper, type EditorAnchorItem } from "../editor-anchor-stepper";
+import { EMPTY_INCREMENTAL } from "./incremental-fields";
+import { selectSourceSchema, selectSourceTable, setKeylessSource } from "./source-selection";
+import { findStepCombination } from "../solution/presentation";
+import { useSolutions } from "../solution/use-solutions";
+import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import type { DataSyncTableMapping, DataSyncTaskStatus } from "@/service/data-sync";
 import { BasicSection } from "./basic-section";
-import { DataSourcesSection } from "./data-sources-section";
 import { SourceSection } from "./source-section";
 import { TargetSection } from "./target-section";
 import { EditorScheduleSection } from "./schedule-section";
@@ -26,7 +26,13 @@ import { useEditorSubmission } from "./use-editor-submission";
 import { useEditorDataSources } from "./use-editor-data-sources";
 import { useEditorSchedule } from "./use-editor-schedule";
 import { useEditorDraft } from "./use-editor-draft";
-import { EMPTY_FORM, type TaskEditorInput, type EditorForm } from "./types";
+import {
+  EMPTY_FORM,
+  type TaskEditorInput,
+  type EditorForm,
+  type EditorSource,
+  type EditorSink,
+} from "./types";
 
 export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskEditorInput) {
   const batch = supportsMultipleTables(draft.solutionType);
@@ -37,7 +43,6 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     side: "source" | "target";
     value: string;
   }>();
-  const localScroll = true;
   const basePath = "/data-sync";
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
@@ -68,19 +73,31 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
       name: draft.name,
       remark: value?.remark || "",
       debug: value?.debug ?? false,
-      schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
-      allowDropColumns: value?.allowDropColumns ?? false,
-      writeMode:
-        value?.writeMode === "UPSERT" || usesChangelog || useIncremental ? "UPSERT" : "APPEND",
-      incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
-      sourceDataSourceId: value?.sourceDataSourceId || "",
-      sourceDatabase: value?.sourceDatabase || "",
-      sourceSchema: value?.sourceSchema || "",
-      sourceTable: value?.sourceTable || "",
-      targetDataSourceId: value?.targetDataSourceId || "",
-      targetDatabase: value?.targetDatabase || "",
-      targetSchema: value?.targetSchema || "",
-      targetTable: value?.targetTable || "",
+      source: {
+        dataSourceId: value?.sourceDataSourceId || "",
+        database: value?.sourceDatabase || "",
+        schema: value?.sourceSchema || "",
+        table: value?.sourceTable || "",
+        keylessEnabled: value?.keylessEnabled ?? false,
+        chunkKeyColumn: value?.chunkKeyColumn ?? "",
+        incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
+      },
+      sink: {
+        dataSourceId: value?.targetDataSourceId || "",
+        database: value?.targetDatabase || "",
+        schema: value?.targetSchema || "",
+        table: value?.targetTable || "",
+        schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
+        allowDropColumns: value?.allowDropColumns ?? false,
+        writeMode: value?.keylessEnabled
+          ? value.writeMode === "UPSERT"
+            ? "UPSERT"
+            : "RETRACT"
+          : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
+            ? "UPSERT"
+            : "APPEND",
+        targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
+      },
     };
   });
   const [taskStatus] = useState<DataSyncTaskStatus>(
@@ -116,23 +133,24 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
       { id: "basic", label: "基本信息" },
-      { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
-      { id: "target", label: "目标表映射" },
+      { id: "transform", label: "数据转换" },
+      { id: "target", label: "数据去向" },
+      { id: "env", label: "运行配置" },
       ...(supportsScheduling ? [{ id: "schedule", label: "调度配置" }] : []),
     ],
     [supportsScheduling],
   );
 
   const sourceCatalog = useCatalogOptions(
-    form.sourceDataSourceId,
-    form.sourceDatabase,
-    form.sourceSchema,
+    form.source.dataSourceId,
+    form.source.database,
+    form.source.schema,
   );
   const targetCatalog = useCatalogOptions(
-    form.targetDataSourceId,
-    form.targetDatabase,
-    form.targetSchema,
+    form.sink.dataSourceId,
+    form.sink.database,
+    form.sink.schema,
   );
 
   const sourceDataSources = useMemo(
@@ -143,14 +161,32 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     () => dataSources.filter((item) => item.dbType === draft.targetType),
     [dataSources, draft.targetType],
   );
-  const selectedSourceDataSource = dataSources.find((item) => item.id === form.sourceDataSourceId);
-  const selectedTargetDataSource = dataSources.find((item) => item.id === form.targetDataSourceId);
-  useEditorDraft(id, draftKey, draft, form, batch, mappings, useIncremental, savedTask);
+  const selectedSourceDataSource = dataSources.find((item) => item.id === form.source.dataSourceId);
+  const selectedTargetDataSource = dataSources.find((item) => item.id === form.sink.dataSourceId);
+  useEditorDraft(id, draftKey, draft, form, batch, mappings, savedTask);
 
   const patch = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
     setTaskDirty(true);
     if (key !== "name" && key !== "remark" && key !== "debug") setParametersDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const patchSource = <K extends keyof EditorSource>(key: K, value: EditorSource[K]) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm((current) => ({ ...current, source: { ...current.source, [key]: value } }));
+  };
+
+  const patchSink = <K extends keyof EditorSink>(key: K, value: EditorSink[K]) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm((current) => ({ ...current, sink: { ...current.sink, [key]: value } }));
+  };
+
+  const updateSourceSelection = (update: (current: EditorForm) => EditorForm) => {
+    setTaskDirty(true);
+    setParametersDirty(true);
+    setForm(update);
   };
 
   const updateMappings = (value: DataSyncTableMapping[]) => {
@@ -159,28 +195,39 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     setParametersDirty(true);
   };
   const changeConnection = (side: "source" | "target", value: string) => {
+    const selected = dataSources.find((item) => item.id === value);
     setMappings([]);
+    setTaskDirty(true);
+    setParametersDirty(true);
     if (side === "source") {
-      const selected = dataSources.find((item) => item.id === value);
-      setTaskDirty(true);
-      setParametersDirty(true);
       setForm((current) => ({
         ...current,
-        sourceDataSourceId: value,
-        sourceDatabase: selected?.database || "",
-        sourceSchema: selected?.schema || "",
-        sourceTable: "",
+        source: {
+          ...current.source,
+          dataSourceId: value,
+          database: selected?.database || "",
+          schema: selected?.schema || "",
+          table: "",
+          keylessEnabled: false,
+          chunkKeyColumn: "",
+        },
+        sink: {
+          ...current.sink,
+          targetPrimaryKeys: [],
+          writeMode: usesChangelog ? "UPSERT" : current.sink.writeMode,
+        },
       }));
     } else {
-      const selected = dataSources.find((item) => item.id === value);
-      setTaskDirty(true);
-      setParametersDirty(true);
       setForm((current) => ({
         ...current,
-        targetDataSourceId: value,
-        targetDatabase: selected?.database || "",
-        targetSchema: selected?.schema || "",
-        targetTable: "",
+        sink: {
+          ...current.sink,
+          dataSourceId: value,
+          database: selected?.database || "",
+          schema: selected?.schema || "",
+          table: "",
+          targetPrimaryKeys: [],
+        },
       }));
     }
   };
@@ -241,7 +288,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
   if (published) {
     return (
-      <div className="min-h-full bg-[#f6f6f6] text-[#242731]">
+      <div className="min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
         <PageHeader
           title={pageTitle}
           bordered
@@ -260,17 +307,11 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   }
 
   return (
-    <div
-      className={
-        localScroll
-          ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#f6f6f6] text-[#242731]"
-          : "min-h-full bg-[#f6f6f6] text-[#242731]"
-      }
-    >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
       <PageHeader
         title={pageTitle}
         bordered
-        className={localScroll ? "shrink-0 bg-white px-6 max-md:px-4" : "bg-white px-6 max-md:px-4"}
+        className="shrink-0 bg-white px-6 max-md:px-4"
         extra={
           <>
             <Button size="small" disabled={saving} onClick={() => navigate(basePath)}>
@@ -292,20 +333,10 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         }
       />
 
-      <div
-        className={
-          localScroll
-            ? "flex min-h-0 flex-1 gap-5 px-6 max-md:px-4"
-            : "flex gap-5 px-6 pb-8 pt-5 max-md:px-4"
-        }
-      >
+      <div className="flex min-h-0 flex-1 gap-5 px-6 max-md:px-4">
         <main
           ref={editorScrollRef}
-          className={
-            localScroll
-              ? "min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
-              : "min-w-0 flex-1 space-y-4"
-          }
+          className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pb-8 pt-5"
         >
           {solutionsError ? (
             <Alert>
@@ -324,18 +355,13 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
           <BasicSection draft={draft} form={form} patch={patch} />
 
-          <DataSourcesSection
+          <SourceSection
             id={id}
-            draft={draft}
-            form={form}
+            sourceType={draft.sourceType}
             sourceDataSources={sourceDataSources}
-            targetDataSources={targetDataSources}
             dataSourcesLoading={dataSourcesLoading}
             loadDataSources={loadDataSources}
-            requestConnectionChange={requestConnectionChange}
-          />
-
-          <SourceSection
+            onConnectionChange={(value) => requestConnectionChange("source", value)}
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -345,16 +371,38 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             mappings={mappings}
             updateMappings={updateMappings}
             writeMode={combination?.writeModes[0]}
+            allowKeyless={usesChangelog && !batch && draft.targetType === "MYSQL"}
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
-            patch={patch}
-            setTaskDirty={setTaskDirty}
-            setParametersDirty={setParametersDirty}
-            setForm={setForm}
+            patchSource={patchSource}
+            onSourceSchemaChange={(schema) =>
+              updateSourceSelection((current) => selectSourceSchema(current, schema, usesChangelog))
+            }
+            onSourceTableChange={(table) =>
+              updateSourceSelection((current) => selectSourceTable(current, table, usesChangelog))
+            }
+            onKeylessChange={(enabled) =>
+              updateSourceSelection((current) => setKeylessSource(current, enabled))
+            }
           />
 
+          <div
+            id="transform"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
+            <span className="text-sm font-medium">数据转换 Transform</span>
+            <span className="ml-3 text-xs text-[var(--yak-components-muted-text)]">
+              当前版本不支持转换
+            </span>
+          </div>
+
           <TargetSection
+            id={id}
+            targetDataSources={targetDataSources}
+            dataSourcesLoading={dataSourcesLoading}
+            loadDataSources={loadDataSources}
+            onConnectionChange={(value) => requestConnectionChange("target", value)}
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -372,11 +420,21 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             targetType={draft.targetType}
             published={published}
             saving={saving}
-            patch={patch}
+            patchSink={patchSink}
             setTaskDirty={setTaskDirty}
             setParametersDirty={setParametersDirty}
             setForm={setForm}
           />
+          <div
+            id="env"
+            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
+          >
+            <div className="text-sm font-medium">运行配置 Env</div>
+            <div className="mt-2 flex flex-wrap gap-6 text-xs text-[var(--yak-components-muted-text)]">
+              <span>执行模式：{usesChangelog ? "STREAMING" : "BATCH"}</span>
+              <span>并行度 / Checkpoint：系统管理</span>
+            </div>
+          </div>
           {supportsScheduling ? (
             <EditorScheduleSection
               schedule={schedule}
@@ -391,17 +449,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
           ) : null}
         </main>
 
-        <aside
-          className={
-            localScroll
-              ? "hidden h-fit w-44 shrink-0 self-start pt-5 lg:block"
-              : "sticky top-4 hidden h-fit w-44 shrink-0 self-start lg:block"
-          }
-        >
-          <EditorAnchorStepper
-            items={anchorItems}
-            scrollRootRef={localScroll ? editorScrollRef : undefined}
-          />
+        <aside className="hidden h-fit w-44 shrink-0 self-start pt-5 lg:block">
+          <EditorAnchorStepper items={anchorItems} scrollRootRef={editorScrollRef} />
         </aside>
       </div>
       {pendingConnection ? (

@@ -9,8 +9,8 @@ import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.datasync.DataSyncTaskPlugin;
+import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
-import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
@@ -48,10 +48,10 @@ public class TaskPluginConfiguration {
             @Value("${yak.task.data-sync.cdc.checkpoint-interval:PT10S}") String checkpointInterval,
             @Value("${yak.task.data-sync.cdc.max-restarts:1}") int maxRestarts) {
         return new io.yak.ops.configuration.Configuration()
-                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
-                .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
-                .set(JobOptions.CHECKPOINT_INTERVAL, Duration.parse(checkpointInterval))
-                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .set(EnvironmentOptions.SOURCE_PARALLELISM, sourceParallelism)
+                .set(EnvironmentOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(EnvironmentOptions.CHECKPOINT_INTERVAL, Duration.parse(checkpointInterval))
+                .set(EnvironmentOptions.MAX_RESTARTS, maxRestarts)
                 .toReadonlyConfig();
     }
 

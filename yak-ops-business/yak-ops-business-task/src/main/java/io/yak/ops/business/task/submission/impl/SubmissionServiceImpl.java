@@ -2,7 +2,7 @@ package io.yak.ops.business.task.submission.impl;
 
 import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.business.task.submission.AdmissionService;
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.business.task.submission.ScheduleFireResult;
 import io.yak.ops.business.task.submission.ScheduleRequestId;
 import io.yak.ops.business.task.submission.SubmissionResult;
@@ -56,7 +56,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private ScheduleFireRepository fires;
 
     @Resource
-    private ScheduleAdmissionGate scheduleGate;
+    private ScheduleAdmissionController admissionController;
 
     @Resource
     private WorkspaceService workspaces;
@@ -167,7 +167,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 || trigger.scheduledTime().getNano() % 1_000_000 != 0) {
             throw new BusinessException(CommonErrorCode.PARAM_NOT_VALID);
         }
-        try (ScheduleAdmissionGate.Permit ignored = scheduleGate.enter()) {
+        try (ScheduleAdmissionController.Permit ignored = admissionController.enter()) {
             var selected = schedules.queryIncludingDeleted(trigger.workspaceId(), trigger.scheduleId());
             if (selected.isEmpty()) {
                 return new ScheduleFireResult(

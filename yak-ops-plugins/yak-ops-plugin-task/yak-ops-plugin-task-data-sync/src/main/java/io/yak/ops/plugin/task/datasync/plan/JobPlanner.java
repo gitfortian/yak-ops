@@ -4,6 +4,7 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
+import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.CreateTableEvent;
 import io.yak.ops.core.types.Column;
@@ -176,7 +177,7 @@ public final class JobPlanner {
                         actual.datasourceType(), targetTable.catalog(), targetTable.schema(), actual.revision());
             }
             sourceFactory.validateDatasource(from.datasourceType());
-            sourceFactory.validateSchema(from.schema());
+            sourceFactory.validateSchema(JobOptions.connectorOptions(source), from.schema());
             SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
             SolutionCatalog.validateSchemaChanges(
                     job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
@@ -196,15 +197,21 @@ public final class JobPlanner {
                                     != tables.getFirst().targetDatasource().revision())) {
                 throw new IllegalStateException("Datasource revision changed while planning the table collection");
             }
-            CreateTableEvent event = prepareSchema ? SchemaValidator.createEvent(from, targetInfo, targetTable) : null;
+            if (mapping.targetPrimaryKeys() != null && !"MYSQL".equals(targetInfo.type())) {
+                throw new IllegalArgumentException("Explicit target primary keys currently require a MySQL target");
+            }
+            TableSchema writeSource = SchemaValidator.writeSchema(from, mapping.targetPrimaryKeys());
+            CreateTableEvent event = prepareSchema
+                    ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
+                    : null;
             SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
             if (schema != null && !preview) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
             if (schema == null || !schema.blocked()) {
-                sinkFactory.validateSchema(sink, from.schema(), expected, sourceFactory.producesChangelog());
+                sinkFactory.validateSchema(sink, writeSource, expected, sourceFactory.producesChangelog());
             }
             if (actual != null && (schema == null || (!schema.blocked() && !schema.requiresDdl()))) {
-                sinkFactory.validateSchema(sink, from.schema(), actual.schema(), sourceFactory.producesChangelog());
+                sinkFactory.validateSchema(sink, writeSource, actual.schema(), sourceFactory.producesChangelog());
             }
             String target = encodePart(sinkId) + encodeTable(targetTable);
             String binding = encodePart(workspaceId)
@@ -217,6 +224,24 @@ public final class JobPlanner {
                     + encodePart(Long.toString(targetInfo.revision()))
                     + encodeTable(targetTable)
                     + encodeSchema(expected);
+            if (mapping.targetPrimaryKeys() != null)
+                binding += encodePart("targetPrimaryKeys") + encodePart(String.join(",", mapping.targetPrimaryKeys()));
+            if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
+                String chunkKey = source.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+                if (chunkKey != null) binding += encodePart("chunkKey") + encodePart(chunkKey);
+                if (source.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
+                    if (!"MYSQL".equals(from.datasourceType()) || !"MYSQL".equals(targetInfo.type())) {
+                        throw new IllegalArgumentException("Keyless CDC product acceptance is MySQL to MySQL only");
+                    }
+                    binding += encodePart("keyless");
+                }
+            }
+            if (sink.get(JdbcSinkOptions.XA_ENABLED)) {
+                if (!"MYSQL".equals(targetInfo.type()) || !source.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
+                    throw new IllegalArgumentException("MySQL XA requires a keyless MySQL CDC Source");
+                }
+                binding += encodePart("XA");
+            }
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
                 binding += encodeProperties(event.getColumnProperties());
@@ -233,10 +258,14 @@ public final class JobPlanner {
                         MySqlCdcSourceOptions.TOPIC_PREFIX.key(), MySqlCdcReplicationIdentity.topicPrefix(instanceId));
                 if (tables.isEmpty()) claims.add(MySqlCdcReplicationIdentity.exclusiveResource(instanceId));
             }
+            Map<String, Object> preparedSink = new LinkedHashMap<>(sink.getSourceMap());
+            if (sink.get(JdbcSinkOptions.XA_ENABLED) && instanceId != null) {
+                preparedSink.put(JdbcSinkOptions.XA_INSTANCE_ID.key(), instanceId);
+            }
             bindings.append(binding);
             tables.add(new TablePlan(
                     source,
-                    sink,
+                    ReadonlyConfig.fromMap(preparedSink),
                     from,
                     targetInfo,
                     targetTable,
@@ -244,7 +273,8 @@ public final class JobPlanner {
                     event,
                     ReadonlyConfig.fromMap(prepared),
                     schema,
-                    actual));
+                    actual,
+                    writeSource));
         }
         if (job.sourceDataSourceId().equals(job.targetDataSourceId())
                 && sources.stream().anyMatch(targets::contains)) {

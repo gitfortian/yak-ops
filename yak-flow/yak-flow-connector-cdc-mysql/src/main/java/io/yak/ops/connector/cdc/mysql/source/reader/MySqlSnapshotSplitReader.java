@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
@@ -12,6 +13,7 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -31,8 +33,9 @@ import org.slf4j.MDC;
  * Performs bounded JDBC snapshot scanning on the owning Connector Base fetcher thread.
  *
  * <p>Physical JDBC statements and ResultSets never cross the mailbox handover. Rows are
- * converted into detached Core TableRecords and their primary-key positions are advanced
- * only by the mailbox RecordEmitter, not by this prefetcher.
+ * converted into detached Core TableRecords. Legacy BIGINT scan progress is advanced
+ * only by the mailbox emitter. A typed scan has no per-row checkpoint cursor and must
+ * be fully reconciled and frozen before any row reaches the downstream.
  */
 public final class MySqlSnapshotSplitReader implements AutoCloseable {
 
@@ -66,9 +69,23 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
         this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
     }
 
-    /** Starts a split from its last mailbox-emitted key using ordered, exclusive cursor seek. */
+    /** Opens a half-open range; typed splits are only consumed by the backfill/freeze stage. */
     public void open(MySqlSnapshotSplit split) throws SQLException {
+        open(split, null);
+    }
+
+    /**
+     * Uses a caller-owned, already established consistent MySQL read view for typed chunks.
+     * This Reader takes over ownership and closes the connection on completion or failure.
+     */
+    void open(MySqlSnapshotSplit split, Connection consistentView) throws SQLException {
         checkCancelled();
+        if (consistentView != null && split.chunkRange() == null) {
+            throw new IllegalArgumentException("Consistent typed snapshot connection requires a typed split");
+        }
+        if (split.chunkRange() != null && split.prepared()) {
+            throw new IllegalArgumentException("Frozen typed snapshot output must be replayed, not rescanned");
+        }
         if (active != null) {
             throw new IllegalStateException("Snapshot reader already has a running split");
         }
@@ -76,20 +93,34 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
         fetchedRows = 0;
         batchId = 0;
         TableSchema schema = Objects.requireNonNull(schemas.get(split.tableId()), "snapshot table schema");
-        String key = MySqlChunkSplitter.splitKey(schema);
+        ChunkRange range = split.chunkRange();
+        String key = range == null ? MySqlChunkSplitter.splitKey(schema) : range.column();
+        if (range != null) {
+            Column selected = schema.columns().stream()
+                    .filter(column -> column.name().equals(range.column()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Typed snapshot chunk column is missing"));
+            if (!split.tableId().equals(range.tableId())
+                    || selected.nullable()
+                    || selected.dataType().getTypeRoot() != range.type()) {
+                throw new IllegalArgumentException("Typed snapshot range conflicts with its source schema");
+            }
+        }
         String quoted = dialect.quoteIdentifier(key);
         String columns = schema.columns().stream()
                 .map(column -> dialect.quoteIdentifier(column.name()))
                 .collect(Collectors.joining(", "));
-        List<Long> bounds = new ArrayList<>();
+        List<Object> bounds = new ArrayList<>();
         List<String> predicates = new ArrayList<>();
-        if (split.lowerInclusive() != null) {
+        Object lower = range == null ? split.lowerInclusive() : range.start();
+        Object upper = range == null ? split.upperExclusive() : range.end();
+        if (lower != null) {
             predicates.add(quoted + " >= ?");
-            bounds.add(split.lowerInclusive());
+            bounds.add(lower);
         }
-        if (split.upperExclusive() != null) {
+        if (upper != null) {
             predicates.add(quoted + " < ?");
-            bounds.add(split.upperExclusive());
+            bounds.add(upper);
         }
         if (split.lastEmittedKey() != null) {
             predicates.add(quoted + " > ?");
@@ -99,14 +130,14 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
                 + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
                 + " ORDER BY " + quoted;
         try {
-            connection = connections.getConnection();
-            connection.setReadOnly(true);
+            connection = consistentView == null ? connections.getConnection() : consistentView;
+            if (consistentView == null) connection.setReadOnly(true);
             statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
             checkCancelled();
             statement.setQueryTimeout(60);
             statement.setFetchSize(FETCH_BATCH);
             for (int index = 0; index < bounds.size(); index++) {
-                statement.setLong(index + 1, bounds.get(index));
+                statement.setObject(index + 1, bounds.get(index));
             }
             checkCancelled();
             long executeStartedNanos = System.nanoTime();
@@ -152,6 +183,9 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
         if (active == null) {
             throw new IllegalStateException("No active MySQL snapshot split");
         }
+        if (active.chunkRange() != null) {
+            throw new IllegalStateException("Typed rows must be reconciled before checkpointed downstream emission");
+        }
         MySqlSnapshotSplit split = active;
         long fetchStartedNanos = System.nanoTime();
         String key = MySqlChunkSplitter.splitKey(schemas.get(split.tableId()));
@@ -185,6 +219,44 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
                         fetchedRows,
                         (System.nanoTime() - splitStartedNanos) / 1_000_000);
             }
+            close();
+        }
+        return new RecordsBySplits<>(
+                batch.isEmpty() ? Map.of() : Map.of(split.splitId(), batch),
+                completed ? Set.of(split.splitId()) : Set.of());
+    }
+
+    /**
+     * Fetches raw typed rows without assigning a synthetic key or advancing a resume cursor.
+     *
+     * <p>Only the bounded snapshot/backfill stage may consume these rows. If it fails before
+     * freezing its normalized output, the entire half-open chunk must be reread; a partial
+     * raw scan cannot be resumed by skipping equal Chunk Key values.
+     */
+    public RecordsWithSplitIds<TableRecord> fetchTyped() throws SQLException {
+        checkCancelled();
+        if (active == null || active.chunkRange() == null) {
+            throw new IllegalStateException("Typed fetch requires an active typed snapshot split");
+        }
+        MySqlSnapshotSplit split = active;
+        long startedNanos = System.nanoTime();
+        List<TableRecord> batch = new ArrayList<>(FETCH_BATCH);
+        for (int remaining = FETCH_BATCH; hasRow && remaining > 0; remaining--) {
+            checkCancelled();
+            batch.add(new TableRecord(split.tableId(), RowKind.INSERT, converter.toInternal(results)));
+            hasRow = results.next();
+        }
+        boolean completed = !hasRow;
+        fetchedRows += batch.size();
+        if ("true".equals(MDC.get("taskLogDebug"))) {
+            LOG.debug(
+                    "CDC typed snapshot fetch completed, split={}, batch={}, batchRows={}, fetchMs={}",
+                    split.splitId(),
+                    ++batchId,
+                    batch.size(),
+                    (System.nanoTime() - startedNanos) / 1_000_000);
+        }
+        if (completed) {
             close();
         }
         return new RecordsBySplits<>(

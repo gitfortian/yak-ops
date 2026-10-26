@@ -247,7 +247,7 @@ public final class JdbcSplitPlanner {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setQueryTimeout(queryTimeoutSeconds);
             try (ResultSet results = statement.executeQuery()) {
-                var schema = dialect.createRowConverter(results.getMetaData()).schema();
+                var schema = dialect.typeConverter().convert(results.getMetaData());
                 if (schema.columnCount() != readColumns.size()) {
                     throw new SQLException("JDBC projected column count changed during split planning");
                 }

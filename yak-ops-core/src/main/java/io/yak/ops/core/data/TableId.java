@@ -12,15 +12,15 @@ import java.util.Objects;
 public record TableId(String catalog, String schema, String table) implements Serializable {
 
     public TableId {
-        catalog = normalize(catalog);
-        schema = normalize(schema);
+        catalog = trimOptionalIdentifier(catalog);
+        schema = trimOptionalIdentifier(schema);
         table = Objects.requireNonNull(table, "table").trim();
         if (table.isEmpty()) {
             throw new IllegalArgumentException("Table name must not be empty");
         }
     }
 
-    private static String normalize(String value) {
+    private static String trimOptionalIdentifier(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
 }

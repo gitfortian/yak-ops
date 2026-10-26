@@ -6,7 +6,11 @@ import {
   toSyncTaskRecord,
   updateDefinitionRequest,
 } from "../apps/web/service/data-sync/definition.ts";
-import { readSyncParameters } from "../apps/web/service/data-sync/parameters.ts";
+import {
+  parseSyncParameters,
+  readSyncParameters,
+  validateSyncParameters,
+} from "../apps/web/service/data-sync/parameters.ts";
 
 const common = {
   name: "orders",
@@ -54,6 +58,106 @@ assert.equal(json.debug, undefined);
 assert.equal(json.source.type, undefined);
 assert.equal("parametersFormat" in created, false);
 assert.equal(buildSyncParameters(offline).tableMappings[0].writeMode, "APPEND");
+const keyless = createDefinitionRequest({
+  ...realtime,
+  targetDataSourceId: "mysql-target",
+  targetSchema: undefined,
+  writeMode: "RETRACT",
+  keylessEnabled: true,
+  chunkKeyColumn: "bucket",
+  schemaChangesEnabled: false,
+}).parameters;
+assert.equal(readSyncParameters(3, keyless).tableMappings[0].source.chunkKeyColumn, "bucket");
+assert.equal(readSyncParameters(3, keyless).tableMappings[0].source.xa, true);
+assert.equal(
+  toSyncTaskRecord({
+    id: "keyless",
+    name: "keyless",
+    taskType: "DATA_SYNC",
+    status: "UNPUBLISHED",
+    definitionVersion: 1,
+    parameterSchemaVersion: 3,
+    parameters: keyless,
+  }).keylessEnabled,
+  true,
+);
+for (const invalid of [
+  {
+    ...JSON.parse(keyless),
+    tableMappings: [
+      {
+        ...JSON.parse(keyless).tableMappings[0],
+        source: { table: "source", keyless: true, chunkKeyColumn: "bucket" },
+      },
+    ],
+  },
+  { ...JSON.parse(keyless), schemaChangesEnabled: true },
+  {
+    ...JSON.parse(keyless),
+    tableMappings: [{ ...JSON.parse(keyless).tableMappings[0], writeMode: "UPSERT" }],
+  },
+]) {
+  assert.throws(() => readSyncParameters(3, JSON.stringify(invalid)));
+}
+// Display parsing preserves persisted V3 intent without treating legacy RETRACT as valid XA.
+const legacyRetract = JSON.stringify({
+  ...JSON.parse(keyless),
+  tableMappings: [
+    {
+      ...JSON.parse(keyless).tableMappings[0],
+      source: { table: "orders", keyless: true, chunkKeyColumn: "bucket" },
+    },
+  ],
+});
+const savedLegacy = parseSyncParameters(3, legacyRetract);
+assert.equal(savedLegacy.tableMappings[0].source.xa, undefined);
+assert.equal(savedLegacy.tableMappings[0].writeMode, "RETRACT");
+assert.throws(() => validateSyncParameters(savedLegacy));
+assert.throws(() => readSyncParameters(3, legacyRetract));
+const displayedLegacy = toSyncTaskRecord({
+  id: "legacy",
+  name: "legacy",
+  taskType: "DATA_SYNC",
+  status: "UNPUBLISHED",
+  definitionVersion: 2,
+  parameterSchemaVersion: 3,
+  parameters: legacyRetract,
+});
+assert.equal(displayedLegacy.sourceTable, "orders");
+assert.equal(displayedLegacy.targetTable, "ods_orders");
+assert.match(displayedLegacy.configurationError, /不支持的同步目标写入配置/);
+assert.equal(
+  toSyncTaskRecord({
+    id: "supported",
+    name: "supported",
+    taskType: "DATA_SYNC",
+    status: "UNPUBLISHED",
+    definitionVersion: 1,
+    parameterSchemaVersion: 3,
+    parameters: keyless,
+  }).configurationError,
+  undefined,
+);
+
+const schemaKeyless = JSON.stringify({
+  ...JSON.parse(keyless),
+  steps: ["SCHEMA", "FULL", "INCREMENTAL"],
+});
+const schemaSteps = readSyncParameters(3, schemaKeyless).steps;
+assert.deepEqual(schemaSteps, ["SCHEMA", "FULL", "INCREMENTAL"]);
+const businessKey = createDefinitionRequest({
+  ...realtime,
+  targetDataSourceId: "mysql-target",
+  targetSchema: undefined,
+  keylessEnabled: true,
+  chunkKeyColumn: "bucket",
+  targetPrimaryKeys: ["bucket"],
+  writeMode: "UPSERT",
+  schemaChangesEnabled: false,
+}).parameters;
+const businessPrimaryKeys = readSyncParameters(3, businessKey).tableMappings[0].target.primaryKeys;
+assert.deepEqual(businessPrimaryKeys, ["bucket"]);
+assert.equal(readSyncParameters(3, businessKey).tableMappings[0].source.xa, undefined);
 const metadata = updateDefinitionRequest({ name: "renamed", remark: "remark", debug: true });
 assert.equal(metadata.parameters, undefined);
 assert.equal(metadata.debug, true);

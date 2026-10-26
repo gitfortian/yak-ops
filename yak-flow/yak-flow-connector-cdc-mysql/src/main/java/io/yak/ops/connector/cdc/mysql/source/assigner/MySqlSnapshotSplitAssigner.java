@@ -1,31 +1,24 @@
 package io.yak.ops.connector.cdc.mysql.source.assigner;
 
+import io.yak.ops.connector.cdc.base.source.assigner.SnapshotSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
- * Tracks planned, reader-assigned and mailbox-completed JDBC snapshot ranges.
+ * MySQL Snapshot split assignment backed by the common CDC assigner.
  *
- * <p>The Runtime still owns delivery ACK and Reader split cursors. This assigner keeps
- * only coordinator scheduling metadata and never treats split assignment as completion.
+ * <p>MySQL chunk discovery and Binlog handoff remain in the MySQL connector. Existing
+ * checkpoint state and the reader-assignment protocol are unchanged.
  */
-public final class MySqlSnapshotSplitAssigner {
+public final class MySqlSnapshotSplitAssigner extends SnapshotSplitAssigner<MySqlSnapshotSplit> {
 
-    private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
-    private final Map<String, MySqlSnapshotSplit> assigned = new LinkedHashMap<>();
-    private final Set<String> finished = new LinkedHashSet<>();
-    private int total;
-    private boolean planned;
+    private static final int MAX_SPLITS = 10_000;
 
-    public MySqlSnapshotSplitAssigner() {}
+    public MySqlSnapshotSplitAssigner() {
+        super(MAX_SPLITS);
+    }
 
     public MySqlSnapshotSplitAssigner(
             List<MySqlSnapshotSplit> pending,
@@ -33,84 +26,6 @@ public final class MySqlSnapshotSplitAssigner {
             Set<String> finished,
             int total,
             boolean planned) {
-        this.pending.addAll(Objects.requireNonNull(pending, "pending"));
-        this.assigned.putAll(Objects.requireNonNull(assigned, "assigned"));
-        this.finished.addAll(Objects.requireNonNull(finished, "finished"));
-        this.total = total;
-        this.planned = planned;
-        if (total < 0 || this.pending.size() + this.assigned.size() + this.finished.size() != total) {
-            throw new IllegalArgumentException("Invalid restored snapshot assignment accounting");
-        }
-    }
-
-    /** Registers a complete plan for direct callers. */
-    public void plan(List<MySqlSnapshotSplit> ranges) {
-        append(ranges, true);
-    }
-
-    /** Appends a bounded discovery page without treating undiscovered tables as finished. */
-    public void append(List<MySqlSnapshotSplit> ranges, boolean lastPage) {
-        if (planned || total + ranges.size() > 10_000) {
-            throw new IllegalStateException("Snapshot discovery is complete or exceeds the checkpoint chunk limit");
-        }
-        Set<String> ids = new LinkedHashSet<>(assigned.keySet());
-        ids.addAll(finished);
-        pending.forEach(split -> ids.add(split.splitId()));
-        for (MySqlSnapshotSplit split : ranges) {
-            if (!ids.add(split.splitId())) throw new IllegalArgumentException("Duplicate MySQL snapshot split ID");
-        }
-        pending.addAll(ranges);
-        total += ranges.size();
-        planned = lastPage;
-    }
-
-    /** Assigns a split without acknowledging its downstream consumption. */
-    public MySqlSnapshotSplit next() {
-        MySqlSnapshotSplit split = pending.pollFirst();
-        if (split != null) {
-            assigned.put(split.splitId(), split);
-        }
-        return split;
-    }
-
-    public void complete(String splitId) {
-        if (finished.contains(splitId)) {
-            return;
-        }
-        if (assigned.remove(splitId) == null) {
-            throw new IllegalArgumentException("Completed MySQL snapshot split was not assigned");
-        }
-        finished.add(splitId);
-    }
-
-    public void addBack(MySqlSnapshotSplit split) {
-        if (finished.contains(split.splitId()) || assigned.remove(split.splitId()) == null) {
-            throw new IllegalArgumentException("Returned snapshot split is not assigned");
-        }
-        pending.addFirst(split);
-    }
-
-    public boolean allFinished() {
-        return planned && pending.isEmpty() && assigned.isEmpty() && finished.size() == total;
-    }
-
-    public boolean planned() {
-        return planned;
-    }
-
-    public int total() {
-        return total;
-    }
-
-    public List<MySqlSnapshotSplit> pending() {
-        return List.copyOf(new ArrayList<>(pending));
-    }
-
-    public Map<String, MySqlSnapshotSplit> assigned() {
-        return Map.copyOf(assigned);
-    }
-
-    public Set<String> finished() {
-        return Set.copyOf(finished);
+        super(pending, assigned, finished, total, planned, MAX_SPLITS);
     }
 }

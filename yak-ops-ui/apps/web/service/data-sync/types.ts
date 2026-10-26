@@ -1,6 +1,6 @@
 import type { TaskInstanceStatus } from "../task-execution/types";
 
-export type DataSyncWriteMode = "APPEND" | "UPSERT";
+export type DataSyncWriteMode = "APPEND" | "UPSERT" | "RETRACT";
 
 export interface PaginationInfo {
   pageNo: number;
@@ -54,8 +54,8 @@ export interface DataSyncIncrementalConfig {
 }
 
 export interface DataSyncTableMapping {
-  source: DataSyncTablePath;
-  target: DataSyncTablePath;
+  source: DataSyncTablePath & { keyless?: boolean; chunkKeyColumn?: string; xa?: boolean };
+  target: DataSyncTablePath & { primaryKeys?: string[] };
   writeMode: DataSyncWriteMode;
   incremental?: DataSyncIncrementalConfig;
 }
@@ -175,6 +175,11 @@ export interface DataSyncMappingConfig {
 
 export interface DataSyncTaskRecord {
   id: string;
+  /** Persisted definition can be displayed, but fails current static execution validation. */
+  configurationError?: string;
+  keylessEnabled?: boolean;
+  chunkKeyColumn?: string;
+  targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;
   allowDropColumns?: boolean;
   tableMappings: DataSyncTableMapping[];
@@ -216,8 +221,21 @@ export interface DataSyncTaskPageParams {
   targetDataSourceId?: string;
 }
 
+/** An unreadable saved version is still a task row, but cannot perform runtime actions. */
+export interface DataSyncUnreadableTaskRecord {
+  id: string;
+  name: string;
+  status: DataSyncTaskStatus | string;
+  definitionVersion: number;
+  updateBy?: string;
+  updateTime?: string;
+  configurationError: string;
+}
+
+export type DataSyncTaskListRecord = DataSyncTaskRecord | DataSyncUnreadableTaskRecord;
+
 export interface DataSyncTaskPageResult {
-  bizData: DataSyncTaskRecord[];
+  bizData: DataSyncTaskListRecord[];
   pagination: PaginationInfo;
 }
 
@@ -256,6 +274,9 @@ interface DataSyncTaskSaveBase {
 }
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
+  keylessEnabled?: boolean;
+  chunkKeyColumn?: string;
+  targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;
   allowDropColumns?: boolean;
   tableMappings?: DataSyncTableMapping[];

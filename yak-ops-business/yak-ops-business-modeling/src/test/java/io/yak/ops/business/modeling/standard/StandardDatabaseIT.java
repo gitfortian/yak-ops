@@ -152,7 +152,7 @@ class StandardDatabaseIT {
 
     @Test
     void workspaceCodeRaceHasOneWinnerAndOtherWorkspacesMayReuseTheCode() throws Exception {
-        // The unique key is (workspace_id, en_code) since YOIP-13: a same-workspace race still
+        // The unique key is (workspace_id, en_code) since FYOIP-13: a same-workspace race still
         // lets exactly one create win, while another Workspace legitimately owns the same code.
         var start = new CountDownLatch(1);
         try (var workers = Executors.newFixedThreadPool(2)) {

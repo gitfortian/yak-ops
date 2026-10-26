@@ -10,8 +10,8 @@ import {
   SelectValue,
 } from "@yak-ops/yak-ui";
 import { Plus } from "lucide-react";
-import { DATA_SYNC_TASK_STATUS_ITEMS } from "../task-lifecycle";
-import { SOLUTION_LABELS } from "../solution-presentation";
+import { DATA_SYNC_TASK_STATUS_ITEMS } from "./task-lifecycle";
+import { SOLUTION_LABELS } from "../solution/presentation";
 import type { TaskListFilters } from "./filters";
 
 interface Props {

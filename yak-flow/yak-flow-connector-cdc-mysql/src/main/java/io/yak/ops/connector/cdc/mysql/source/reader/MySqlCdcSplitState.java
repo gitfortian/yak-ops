@@ -19,6 +19,10 @@ public final class MySqlCdcSplitState {
         emittedOffset = assigned.offset();
     }
 
+    public String sourceId() {
+        return assigned.definitionFingerprint();
+    }
+
     public void onEmitted(BinlogOffset offset) {
         emittedOffset = Objects.requireNonNull(offset, "offset");
     }

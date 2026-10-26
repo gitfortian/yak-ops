@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkArchitectureImports } from "./architecture-imports.mjs";
+import { checkDataSyncStyleTokens } from "./data-sync-style-architecture.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const violations = [];
@@ -35,12 +36,21 @@ const requiredAppShellFiles = [
   "apps/web/app/layout/ProductSidebar.tsx",
   "apps/web/app/layout/ProductLauncher.tsx",
   "apps/web/app/layout/AllProductMenu.tsx",
+  "apps/web/app/layout/account-menu.tsx",
+  "apps/web/app/layout/workspace-switcher.tsx",
+  "apps/web/app/layout/workspace-create-dialog.tsx",
+  "apps/web/app/layout/use-product-favorites.ts",
+  "apps/web/app/layout/product-favorites.ts",
+  "apps/web/app/datasource/list/page.tsx",
+  "apps/web/app/data-sync/list/page.tsx",
+  "apps/web/app/data-sync/editor/page.tsx",
+  "apps/web/app/schedule/dialog/schedule-dialog.tsx",
+  "apps/web/app/operations/dashboard/page.tsx",
   "apps/web/app/layout/navigation.ts",
-  "apps/web/app/management/index.tsx",
-  "apps/web/app/management/users/index.tsx",
-  "apps/web/app/management/users/form.tsx",
-  "apps/web/app/management/workspaces/index.tsx",
-  "apps/web/app/management/workspaces/form.tsx",
+  "apps/web/app/management/users/page.tsx",
+  "apps/web/app/management/users/user-form.tsx",
+  "apps/web/app/management/workspaces/page.tsx",
+  "apps/web/app/management/workspaces/workspace-form.tsx",
   "apps/web/service/user/index.ts",
   "apps/web/service/user/types.ts",
 ];
@@ -49,6 +59,21 @@ for (const path of requiredAppShellFiles) {
   if (!existsSync(join(root, path))) {
     fail(`required app shell file is missing: ${path}`);
   }
+}
+
+// Deleted forwarding files must not silently return as compatibility surfaces.
+const forbiddenFeatureForwarders = [
+  "apps/web/app/management/index.tsx",
+  "apps/web/app/management/users/index.tsx",
+  "apps/web/app/management/workspaces/index.tsx",
+  "apps/web/app/operations/index.tsx",
+  "apps/web/app/operations/dashboard.tsx",
+  "apps/web/app/schedule/schedule-dialog.tsx",
+  "apps/web/app/schedule/schedule-form.tsx",
+  "apps/web/app/schedule/schedule-fire-history.tsx",
+];
+for (const path of forbiddenFeatureForwarders) {
+  if (existsSync(join(root, path))) fail(`obsolete forwarding path exists: ${path}`);
 }
 
 const packageRoot = join(root, "packages");
@@ -143,6 +168,10 @@ for (const path of files) {
     for (const message of checkArchitectureImports(relativePath, content, root)) {
       fail(message);
     }
+  }
+
+  for (const message of checkDataSyncStyleTokens(relativePath, content)) {
+    fail(message);
   }
 
   if (relativePath !== "apps/web/service/http/request.ts" && directFetchPattern.test(content)) {

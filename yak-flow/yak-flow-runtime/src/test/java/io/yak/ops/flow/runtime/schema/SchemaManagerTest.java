@@ -124,6 +124,35 @@ class SchemaManagerTest {
         assertEquals(1, restored.currentVersion(TARGET));
     }
 
+
+    @Test
+    void checkpointRestoresPhysicalTypesAndCommittedSchemaEventIds() throws Exception {
+        Schema physical = new Schema(
+                java.util.List.of(
+                        new PhysicalColumn("id", new BasicType(false, LogicalTypeRoot.BIGINT)),
+                        new PhysicalColumn(
+                                "status",
+                                new VarCharType(64),
+                                null,
+                                new io.yak.ops.core.event.ColumnProperties(
+                                        null, false, false, null, false, "enum('open','closed')"))),
+                java.util.List.of("id"));
+        var state = new SchemaManagerSnapshot(java.util.List.of(new SchemaManagerSnapshot.TableState(
+                SOURCE, TARGET, physical, physical, 2L, Map.of("binlog:0001:100", "schema-digest"))));
+        var serializer = new SchemaManagerSnapshotSerializer();
+        var restored = serializer.deserialize(serializer.getVersion(), serializer.serialize(state));
+        assertEquals(state, restored);
+        SchemaManager manager = new SchemaManager();
+        manager.restore(restored);
+        assertEquals(2L, manager.currentVersion(TARGET));
+        assertEquals(
+                "enum('open','closed')",
+                manager.state(TARGET).orElseThrow().sourceSchema()
+                        .column("status").orElseThrow().properties().nativeType());
+        assertEquals("schema-digest", manager.snapshot().tables().getFirst()
+                .appliedEventFingerprints().get("binlog:0001:100"));
+    }
+
     @Test
     void checkpointFormatPersistsSchemaStateAlongsideSourceOffsets() throws Exception {
         Schema before = schema(false);

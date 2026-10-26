@@ -9,22 +9,17 @@ import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlDebeziumRecordConverter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.jdbc.database.catalog.JdbcTableMetadata;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.types.TableSchema;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +49,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private volatile boolean stopped;
     private boolean started;
     private BinlogOffset lastQueuedOffset;
+    private boolean awaitingSchemaSnapshot;
+    private final Set<TableId> bootstrapTables = new HashSet<>();
 
     public MySqlBinlogEngine(MySqlCdcSourceConfig config) {
         this(config, config.serverId());
@@ -71,11 +68,17 @@ public final class MySqlBinlogEngine implements AutoCloseable {
 
     /** Starts the engine, optionally seeding its offset and Schema History from a checkpoint. */
     public void start(MySqlBinlogSplit split) throws IOException {
+        try (var connection = config.openSnapshotConnection()) {
+            MySqlBinlogConfigurationValidator.validate(connection);
+        } catch (java.sql.SQLException | IllegalArgumentException error) {
+            throw new IOException("MySQL CDC Binlog settings validation failed: " + error.getMessage(), error);
+        }
         if (started || stopped) {
             throw new IllegalStateException("MySQL Binlog engine cannot start twice");
         }
         started = true;
         lastQueuedOffset = split.offset();
+        awaitingSchemaSnapshot = split.offset() == null;
         directory = Files.createTempDirectory("yakflow-binlog-");
         historyPath = directory.resolve("schema-history.dat");
         byte[] history = split.schemaHistory();
@@ -130,26 +133,54 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             }
             try {
                 SourceRecord source = event.record();
-                TableId changed = converter.schemaMismatch(source);
-                if (changed != null) {
-                    // A Debezium DDL with empty tableChanges must not cause the next
-                    // row to bypass SchemaCoordinator. Read metadata, verify that it
-                    // describes THIS row, and emit the schema boundary before the row.
-                    // It uses the previous offset: acknowledging the boundary must
-                    // not checkpoint past the still-pending row.
-                    BinlogEvent transition = reconcile(source, changed);
-                    LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
-                    enqueue(transition);
-                }
-                BinlogEvent converted = converter.convert(source);
-                if (converted != null) {
-                    if (converted.schemaChange() != null) {
+                if (awaitingSchemaSnapshot) {
+                    // Debezium's no_data snapshot emits CREATE table metadata before it completes.
+                    // The forced heartbeat is emitted only after postSnapshot(), with the
+                    // completed snapshot offset. Earlier records must never anchor Hybrid.
+                    if (isHeartbeat(source)) {
+                        if (config.schemaEvolutionEnabled()
+                                && !bootstrapTables.containsAll(config.schemas().keySet())) {
+                            throw new IllegalStateException(
+                                    "MySQL CDC initial schema snapshot did not register all selected tables: "
+                                            + config.schemas().keySet().stream()
+                                                    .filter(table -> !bootstrapTables.contains(table))
+                                                    .toList());
+                        }
+                        if (snapshotHistory().length == 0) {
+                            throw new IllegalStateException("MySQL CDC initial schema snapshot has no Schema History");
+                        }
+                        BinlogEvent anchor = Objects.requireNonNull(converter.convert(source), "snapshot heartbeat");
+                        enqueue(anchor);
+                        lastQueuedOffset = anchor.offset();
+                        awaitingSchemaSnapshot = false;
                         LOG.info(
-                                "MySQL CDC independent DDL event: table={}",
-                                converted.schemaChange().tableId());
+                                "MySQL CDC initial schema snapshot completed, tables={}",
+                                config.schemas().size());
+                    } else {
+                        converter.applyInitialSchemaTables(source, bootstrapTables);
                     }
-                    enqueue(converted);
-                    lastQueuedOffset = converted.offset();
+                } else {
+                    TableId changed = converter.schemaMismatch(source);
+                    if (changed != null) {
+                        // Some MySQL DDLs carry no tableChanges. Only the Debezium row
+                        // schema at THIS Binlog position may prove a safe change.
+                        // Current JDBC catalog metadata could already describe later DDL.
+                        // Hold the preceding offset until SchemaCoordinator accepts the
+                        // transition, so recovery cannot skip the discovering row.
+                        BinlogEvent transition = converter.reconcileRowSchema(source, lastQueuedOffset);
+                        LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
+                        enqueue(transition);
+                    }
+                    BinlogEvent converted = converter.convert(source);
+                    if (converted != null) {
+                        if (converted.schemaChange() != null) {
+                            LOG.info(
+                                    "MySQL CDC independent DDL event: table={}",
+                                    converted.schemaChange().tableId());
+                        }
+                        enqueue(converted);
+                        lastQueuedOffset = converted.offset();
+                    }
                 }
             } catch (InterruptedException interrupted) {
                 throw interrupted;
@@ -164,31 +195,8 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         committer.markBatchFinished();
     }
 
-    private BinlogEvent reconcile(SourceRecord source, TableId table) throws SQLException {
-        if (lastQueuedOffset == null) {
-            throw new IllegalStateException("Cannot reconcile CDC schema before an established binlog offset");
-        }
-        TableSchema live;
-        try (Connection connection = config.openSnapshotConnection()) {
-            live = JdbcTableMetadata.readTable(
-                    connection, JdbcDialects.forUrl(connection.getMetaData().getURL()), table);
-        }
-        Struct envelope = (Struct) source.value();
-        Struct row = envelope.schema().field("after") == null ? null : envelope.getStruct("after");
-        if (row == null && envelope.schema().field("before") != null) {
-            row = envelope.getStruct("before");
-        }
-        if (row == null) {
-            throw new IllegalStateException("CDC schema reconciliation requires a row image");
-        }
-        if (!converter.matchesRowSchema(row, live)) {
-            throw new IllegalStateException(
-                    "Current MySQL metadata does not match the binlog row; cannot safely recover schema");
-        }
-        BinlogOffset position = new BinlogOffset(
-                new LinkedHashMap<String, Object>(source.sourcePartition()),
-                new LinkedHashMap<String, Object>(source.sourceOffset()));
-        return converter.reconcile(table, live, lastQueuedOffset, position);
+    private static boolean isHeartbeat(SourceRecord source) {
+        return source.topic() != null && source.topic().startsWith("__debezium-heartbeat.");
     }
 
     private void enqueue(BinlogEvent record) throws InterruptedException {

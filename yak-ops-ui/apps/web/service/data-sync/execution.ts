@@ -5,7 +5,7 @@ import type {
 } from "../task-execution/types";
 import type { DataSyncInstancePageParams, DataSyncInstanceRecord } from "./types";
 
-import { readSyncParameters, solutionSyncType } from "./parameters.ts";
+import { parseSyncParameters, solutionSyncType } from "./parameters.ts";
 import { readExecutionReport } from "./report.ts";
 
 export const isTaskInstanceActive = (status: TaskInstanceStatus): boolean =>
@@ -42,7 +42,7 @@ export function toDataSyncInstanceRecord(
     throw new Error("Task Instance Definition version mismatch");
   }
 
-  const parameters = readSyncParameters(version.parameterSchemaVersion, version.parameters);
+  const parameters = parseSyncParameters(version.parameterSchemaVersion, version.parameters);
   const source = { ...parameters.source, ...parameters.tableMappings[0].source };
   const sink = {
     ...parameters.sink,

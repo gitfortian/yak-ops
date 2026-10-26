@@ -49,19 +49,18 @@ public final class LoginAttemptGuard {
 
     public boolean isBlocked(String username, String ipAddress) {
         Instant now = clock.instant();
-        return isBlocked(key("user", normalizeUsername(username)), now)
-                || isBlocked(key("ip", normalizeIp(ipAddress)), now);
+        return isBlocked(key("user", usernameKey(username)), now) || isBlocked(key("ip", ipKey(ipAddress)), now);
     }
 
     public void recordFailure(String username, String ipAddress) {
         Instant now = clock.instant();
-        recordFailure(key("user", normalizeUsername(username)), now);
-        recordFailure(key("ip", normalizeIp(ipAddress)), now);
+        recordFailure(key("user", usernameKey(username)), now);
+        recordFailure(key("ip", ipKey(ipAddress)), now);
     }
 
     public void recordSuccess(String username, String ipAddress) {
-        failures.remove(key("user", normalizeUsername(username)));
-        failures.remove(key("ip", normalizeIp(ipAddress)));
+        failures.remove(key("user", usernameKey(username)));
+        failures.remove(key("ip", ipKey(ipAddress)));
     }
 
     private boolean isBlocked(String key, Instant now) {
@@ -95,11 +94,11 @@ public final class LoginAttemptGuard {
         return dimension + ':' + value;
     }
 
-    private static String normalizeUsername(String username) {
+    private static String usernameKey(String username) {
         return ObjectUtils.isNull(username) ? "<blank>" : username.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static String normalizeIp(String ipAddress) {
+    private static String ipKey(String ipAddress) {
         return StringUtils.isBlank(ipAddress) ? "<unknown>" : ipAddress.trim();
     }
 

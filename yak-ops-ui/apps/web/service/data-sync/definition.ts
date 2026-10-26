@@ -1,20 +1,43 @@
 import type {
   DataSyncTaskPageParams,
+  DataSyncTaskPageResult,
   DataSyncTaskRecord,
   DataSyncTaskSavePayload,
   DataSyncTaskUpdatePayload,
   DataSyncParameters,
   DataSyncTableMapping,
   TaskDefinitionRecord,
+  TaskDefinitionPageResult,
 } from "./types";
-import { readSyncParameters, solutionSyncType, supportsMultipleTables } from "./parameters.ts";
+import {
+  parseSyncParameters,
+  solutionSyncType,
+  supportsMultipleTables,
+  validateSyncParameters,
+} from "./parameters.ts";
 
 /** Writes the single public product configuration; connector identifiers are resolved by the backend. */
 export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncParameters {
   let tableMappings: DataSyncTableMapping[] = [
     {
-      source: { database: task.sourceDatabase, schema: task.sourceSchema, table: task.sourceTable },
-      target: { database: task.targetDatabase, schema: task.targetSchema, table: task.targetTable },
+      source: {
+        database: task.sourceDatabase,
+        schema: task.sourceSchema,
+        table: task.sourceTable,
+        ...(task.keylessEnabled
+          ? {
+              keyless: true,
+              chunkKeyColumn: task.chunkKeyColumn,
+              ...(task.writeMode === "RETRACT" ? { xa: true } : {}),
+            }
+          : {}),
+      },
+      target: {
+        database: task.targetDatabase,
+        schema: task.targetSchema,
+        table: task.targetTable,
+        ...(task.targetPrimaryKeys?.length ? { primaryKeys: [...task.targetPrimaryKeys] } : {}),
+      },
       writeMode: task.writeMode,
       ...(task.incremental ? { incremental: { ...task.incremental } } : {}),
     },
@@ -86,20 +109,35 @@ export function definitionPageRequest(params: DataSyncTaskPageParams) {
 /** Projects one immutable version into the unified task UI without rewriting stored version-two JSON. */
 export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTaskRecord {
   if (definition.taskType !== "DATA_SYNC") throw new Error("不支持的同步任务定义");
-  const parameters = readSyncParameters(definition.parameterSchemaVersion, definition.parameters);
+  const parameters = parseSyncParameters(definition.parameterSchemaVersion, definition.parameters);
+  let configurationError: string | undefined;
+  try {
+    validateSyncParameters(parameters);
+  } catch (failure) {
+    configurationError = failure instanceof Error ? failure.message : "任务参数校验失败";
+  }
   const mapping = parameters.tableMappings[0];
   return {
     id: definition.id,
+    ...(configurationError ? { configurationError } : {}),
     tableMappings: parameters.tableMappings.map((table) => ({
       source: {
         database: table.source.database,
         schema: table.source.schema,
         table: table.source.table,
+        ...(table.source.keyless
+          ? {
+              keyless: true,
+              chunkKeyColumn: table.source.chunkKeyColumn,
+              ...(table.source.xa ? { xa: true } : {}),
+            }
+          : {}),
       },
       target: {
         database: table.target.database,
         schema: table.target.schema,
         table: table.target.table,
+        ...(table.target.primaryKeys ? { primaryKeys: [...table.target.primaryKeys] } : {}),
       },
       writeMode: table.writeMode,
       ...(table.incremental ? { incremental: { ...table.incremental } } : {}),
@@ -119,6 +157,9 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     status: definition.status,
     debug: definition.debug ?? false,
     writeMode: mapping.writeMode,
+    keylessEnabled: mapping.source.keyless ?? false,
+    chunkKeyColumn: mapping.source.chunkKeyColumn,
+    targetPrimaryKeys: mapping.target.primaryKeys,
     incremental: mapping.incremental ? { ...mapping.incremental } : undefined,
     sourceDataSourceId: parameters.source.datasourceId,
     sourceDatabase: mapping.source.database ?? undefined,
@@ -133,5 +174,36 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     createTime: definition.createTime,
     updateTime: definition.updateTime,
     updateBy: definition.updateBy,
+  };
+}
+
+/**
+ * A single unreadable stored definition must not turn a successful page request
+ * into an empty/error page. Keep its identity visible; do not invent executable
+ * parameters or silently interpret an older transaction contract as XA.
+ */
+export function projectSyncTaskPage(page: TaskDefinitionPageResult): DataSyncTaskPageResult {
+  return {
+    ...page,
+    bizData: page.bizData.map((definition) => {
+      try {
+        return toSyncTaskRecord(definition);
+      } catch (error) {
+        return {
+          id: definition.id,
+          name: definition.name,
+          status: definition.status,
+          definitionVersion: definition.definitionVersion,
+          updateBy: definition.updateBy,
+          updateTime: definition.updateTime,
+          configurationError:
+            error instanceof SyntaxError
+              ? "任务参数 JSON 格式错误"
+              : error instanceof Error
+                ? error.message
+                : "任务参数无法解析",
+        };
+      }
+    }),
   };
 }

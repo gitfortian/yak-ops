@@ -95,7 +95,7 @@ public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlug
     }
 
     @Override
-    protected String normalizeSchema(String schema) {
+    protected String resolveSchema(String schema) {
         String normalized = StringUtils.trimToNull(schema);
         if (normalized != null) {
             throw parameterError("PostgreSQL schema 不属于数据源连接字段，请通过 properties.currentSchema 配置", null);
@@ -104,7 +104,7 @@ public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlug
     }
 
     @Override
-    protected Map<String, String> normalizeProperties(Map<String, String> properties) {
+    protected Map<String, String> prepareConnectionProperties(Map<String, String> properties) {
         Map<String, String> normalized = canonicalizeProperties(properties, PROPERTY_KEYS);
         for (String key : java.util.List.of("sslmode", "tcpKeepAlive", "reWriteBatchedInserts")) {
             String value = normalized.get(key);

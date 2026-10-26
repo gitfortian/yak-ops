@@ -8,7 +8,8 @@ import java.util.List;
 public final class JdbcSinkOptions {
 
     public static final Option<JdbcWriteMode> WRITE_MODE = Options.key("writeMode")
-            .singleChoice(JdbcWriteMode.class, List.of(JdbcWriteMode.APPEND, JdbcWriteMode.UPSERT))
+            .singleChoice(
+                    JdbcWriteMode.class, List.of(JdbcWriteMode.APPEND, JdbcWriteMode.UPSERT, JdbcWriteMode.RETRACT))
             .noDefaultValue();
 
     /** Physical opt-in; callers must establish that target tables can be reordered independently. */
@@ -19,6 +20,14 @@ public final class JdbcSinkOptions {
     /** Maximum live PreparedStatements per Writer, across all table routes and mutation kinds. */
     public static final Option<Integer> STATEMENT_CACHE_SIZE =
             Options.key("connector.jdbc.sink.statement-cache-size").intType().defaultValue(64);
+
+    /** Opt-in to XA after a versioned product configuration selection. */
+    public static final Option<Boolean> XA_ENABLED =
+            Options.key("connector.jdbc.sink.xa-enabled").booleanType().defaultValue(false);
+
+    /** Stable task Instance identity assigned by the Runtime planner, never by user input. */
+    public static final Option<String> XA_INSTANCE_ID =
+            Options.key("connector.jdbc.sink.xa-instance").stringType().noDefaultValue();
 
     private JdbcSinkOptions() {}
 }

@@ -3,9 +3,9 @@ package io.yak.ops.connector.jdbc.database.internal.dialect;
 import io.yak.ops.connector.jdbc.database.dialect.AbstractDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
-import io.yak.ops.connector.jdbc.database.internal.convert.MySqlJdbcDialectConverter;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcTypeConverter;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.schema.PhysicalColumn;
@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 public final class MySqlJdbcDialect extends AbstractDialect {
 
     @Override
-    public JdbcDialectConverter createRowConverter(java.sql.ResultSetMetaData metadata) throws java.sql.SQLException {
-        return new MySqlJdbcDialectConverter(metadata);
+    public JdbcTypeConverter typeConverter() {
+        return new MySqlTypeConverter();
     }
 
     @Override
@@ -72,14 +72,46 @@ public final class MySqlJdbcDialect extends AbstractDialect {
 
     @Override
     public List<String> addColumnStatements(TableId table, PhysicalColumn column) {
+        if (!column.type().isResolved() || !column.type().isNullable()) {
+            throw new IllegalArgumentException("ADD COLUMN requires a resolved nullable type: " + column.name());
+        }
+        ColumnProperties properties = column.properties();
+        if (properties != null && (!properties.isKnown() || properties.hasFeatures())) {
+            throw new IllegalArgumentException("ADD COLUMN cannot preserve column expressions: " + column.name());
+        }
+        if (properties != null && !supportsNativeColumnAddition(properties.nativeType())) {
+            throw new IllegalArgumentException("ADD COLUMN cannot preserve native type: " + column.name());
+        }
         Column target = new Column(column.name(), column.type());
-        String definition =
-                quoteIdentifier(column.name()) + " " + nativeType(target).ddl();
+        String definition = quoteIdentifier(column.name()) + " " + validatedColumnType(target, properties) + " NULL";
         String comment = column.comment();
         if (comment != null && !comment.isBlank()) {
             definition += " COMMENT " + stringLiteral(comment);
         }
         return List.of("ALTER TABLE " + qualifiedTable(table) + " ADD COLUMN " + definition);
+    }
+
+    /**
+     * Native types that carry semantics beyond their YakFlow logical type must not be
+     * silently replaced by a generic type during schema evolution.
+     */
+    public static boolean requiresExactNativeType(String nativeType) {
+        if (nativeType == null) return false;
+        String type = nativeType.trim().toLowerCase(java.util.Locale.ROOT);
+        return type.startsWith("enum(")
+                || type.startsWith("set(")
+                || type.equals("json")
+                || type.equals("year")
+                || type.startsWith("year(")
+                || type.equals("point")
+                || type.contains("unsigned")
+                || type.contains("zerofill");
+    }
+
+    private static boolean supportsNativeColumnAddition(String nativeType) {
+        if (!requiresExactNativeType(nativeType)) return true;
+        String type = nativeType.trim().toLowerCase(java.util.Locale.ROOT);
+        return type.startsWith("enum(") || type.startsWith("set(") || type.equals("json");
     }
 
     @Override
@@ -101,7 +133,7 @@ public final class MySqlJdbcDialect extends AbstractDialect {
     }
 
     @Override
-    public LogicalType normalizeTargetType(Column column) {
+    public LogicalType toTargetLogicalType(Column column) {
         JdbcNativeType targetType = nativeType(column);
         boolean nullable = column.nullable();
         return switch (column.dataType().getTypeRoot()) {
@@ -149,7 +181,8 @@ public final class MySqlJdbcDialect extends AbstractDialect {
 
         String tableCommentClause =
                 tableComment == null || tableComment.isBlank() ? "" : " COMMENT=" + stringLiteral(tableComment);
-        String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause;
+        String createTableSql = "CREATE TABLE " + qualifiedTable(table) + " (" + definitions + ")" + tableCommentClause
+                + " ENGINE=InnoDB";
         return new JdbcDdlPlan(createTableSql, List.of(createTableSql));
     }
 
@@ -277,6 +310,21 @@ public final class MySqlJdbcDialect extends AbstractDialect {
                 ? "BINARY length=" + length + " 超过保守 VARBINARY 容量，目标使用 LONGBLOB"
                 : "BINARY length 未知，目标使用 LONGBLOB";
         return JdbcNativeType.nonKey("LONGBLOB", warning);
+    }
+
+    /**
+     * MySQL's null-safe comparison matches nullable before-images, and LIMIT 1
+     * retracts only one physical occurrence of a duplicate full row.
+     */
+    @Override
+    public String exactRowDeleteSql(TableId table, TableSchema schema) {
+        if (!schema.primaryKeys().isEmpty() || schema.columnCount() == 0) {
+            throw new IllegalArgumentException("MySQL exact-row DELETE requires a nonempty keyless table");
+        }
+        String predicate = schema.columns().stream()
+                .map(column -> quoteIdentifier(column.name()) + " <=> ?")
+                .collect(Collectors.joining(" AND "));
+        return "DELETE FROM " + qualifiedTable(table) + " WHERE " + predicate + " LIMIT 1";
     }
 
     @Override

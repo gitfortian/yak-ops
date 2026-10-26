@@ -1,7 +1,7 @@
 package io.yak.ops.business.schedule.impl;
 
 import io.yak.ops.business.schedule.ScheduleRegistrationService;
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.common.bean.vo.schedule.ScheduleRegistrationVO;
 import io.yak.ops.dao.entity.schedule.ScheduleEntity;
 import io.yak.ops.dao.repository.schedule.ScheduleFireRepository;
@@ -46,7 +46,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
     private CronService cron;
 
     @Resource
-    private ScheduleAdmissionGate gate;
+    private ScheduleAdmissionController admissionController;
 
     @Resource
     private Clock scheduleClock;
@@ -58,8 +58,8 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
 
     @Override
     public synchronized void reconcile() {
-        gate.verifyOwnership();
-        if (retention == null || retention.compareTo(gate.maxLateness()) <= 0) {
+        admissionController.verifyOwnership();
+        if (retention == null || retention.compareTo(admissionController.maxLateness()) <= 0) {
             throw new IllegalStateException("Schedule fire retention must exceed maximum lateness");
         }
         List<RegisteredSchedule> registered = scheduler.registrations();
@@ -69,7 +69,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
                     registration.registration().workspaceId(),
                     registration.registration().scheduleId()));
         }
-        Instant before = gate.now().minus(retention);
+        Instant before = admissionController.now().minus(retention);
         String cursor = null;
         while (true) {
             List<ScheduleEntity> rows = schedules.scan(cursor, 200);
@@ -77,7 +77,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
                 break;
             }
             for (ScheduleEntity row : rows) {
-                gate.verifyOwnership();
+                admissionController.verifyOwnership();
                 if (row.isEnabled() || present.contains(key(row.getWorkspaceId(), row.getId()))) {
                     synchronize(row.getWorkspaceId(), row.getId());
                 }
@@ -103,7 +103,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
     public synchronized void synchronize(String workspaceId, String scheduleId) {
         String identity = key(workspaceId, scheduleId);
         try {
-            gate.verifyOwnership();
+            admissionController.verifyOwnership();
             var selected = schedules.queryIncludingDeleted(workspaceId, scheduleId);
             if (selected.isEmpty()
                     || selected.orElseThrow().getDeletedAt() != null
@@ -114,7 +114,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
             }
             ScheduleEntity schedule = selected.orElseThrow();
             var current = scheduler.registration(workspaceId, scheduleId);
-            Instant now = gate.now();
+            Instant now = admissionController.now();
             if (current.isPresent()
                     && matches(schedule, current.orElseThrow().registration())
                     && ((current.orElseThrow().triggerPresent()
@@ -152,7 +152,7 @@ public class ScheduleRegistrationServiceImpl implements ScheduleRegistrationServ
         Map<String, ScheduleRegistrationVO> result = new HashMap<>();
         Map<String, RegisteredSchedule> registrations = new HashMap<>();
         try {
-            gate.verifyOwnership();
+            admissionController.verifyOwnership();
             for (RegisteredSchedule registered : scheduler.registrations()) {
                 ScheduleRegistration value = registered.registration();
                 registrations.put(key(value.workspaceId(), value.scheduleId()), registered);

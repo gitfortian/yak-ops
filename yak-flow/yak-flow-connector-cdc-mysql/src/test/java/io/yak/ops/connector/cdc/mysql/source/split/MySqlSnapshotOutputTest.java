@@ -102,6 +102,60 @@ class MySqlSnapshotOutputTest {
     }
 
     @Test
+    void compressesPreparedRowsWithoutChangingRecoveryData() throws Exception {
+        java.util.ArrayList<TableRecord> rows = new java.util.ArrayList<>();
+        for (long index = 0; index < 1000; index++) {
+            rows.add(new TableRecord(TABLE, RowKind.INSERT,
+                    GenericRowData.of(index, "a repetitive CDC payload ".repeat(20))));
+        }
+        MySqlSnapshotSplit prepared = range().withOutput(
+                new MySqlSnapshotOutput(offset(100), offset(200), rows));
+        var serializer = new MySqlHybridSplitSerializer();
+        byte[] encoded = serializer.serialize(prepared);
+        byte[] legacy = legacySnapshot(prepared);
+        assertTrue(encoded.length < legacy.length / 2, "Prepared row checkpoint should be compact");
+        assertEquals(prepared, serializer.deserialize(serializer.getVersion(), encoded));
+        assertEquals(prepared, serializer.deserialize(2, legacy));
+    }
+
+    @Test
+    void detectsCorruptedOrTruncatedCompressedSnapshotOutput() throws Exception {
+        var serializer = new MySqlHybridSplitSerializer();
+        byte[] encoded = serializer.serialize(prepared());
+        byte[] corrupted = encoded.clone();
+        // The last four bytes are the output cursor, not the checksummed row payload.
+        corrupted[corrupted.length - 5] ^= 0x01;
+        assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), corrupted));
+        byte[] invalidCursor = encoded.clone();
+        invalidCursor[invalidCursor.length - 1] = 3;
+        assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), invalidCursor));
+        assertThrows(IOException.class, () -> serializer.deserialize(
+                serializer.getVersion(), Arrays.copyOf(encoded, encoded.length - 1)));
+    }
+
+    /** The old checkpoint body remains readable after upgrading the split version. */
+    private static byte[] legacySnapshot(MySqlSnapshotSplit snapshot) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var out = new java.io.DataOutputStream(bytes)) {
+            out.writeByte(1);
+            out.writeUTF(snapshot.splitId());
+            out.writeUTF(snapshot.fingerprint());
+            out.writeUTF(snapshot.tableId().catalog());
+            out.writeUTF(snapshot.tableId().table());
+            out.writeBoolean(snapshot.lowerInclusive() != null);
+            if (snapshot.lowerInclusive() != null) out.writeLong(snapshot.lowerInclusive());
+            out.writeBoolean(snapshot.upperExclusive() != null);
+            if (snapshot.upperExclusive() != null) out.writeLong(snapshot.upperExclusive());
+            out.writeBoolean(snapshot.lastEmittedKey() != null);
+            if (snapshot.lastEmittedKey() != null) out.writeLong(snapshot.lastEmittedKey());
+            out.writeByte(1);
+            MySqlSnapshotOutputSerializer.write(out, snapshot.output());
+            out.writeInt(snapshot.outputPosition());
+        }
+        return bytes.toByteArray();
+    }
+
+    @Test
     void invalidOutputPositionsAndConflictingRangesAreRejected() {
         assertThrows(IllegalArgumentException.class, () -> prepared().withOutputPosition(3));
         var state = new MySqlHybridSplitState(range());
