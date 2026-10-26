@@ -18,7 +18,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Verifies the exact-row contract and public JDBC RETRACT admission. */
-class JdbcKeylessRetractionContractTest {
+class JdbcExactRowValidationTest {
     private static final TableId TABLE = new TableId(null, "public", "entries");
     private static final TableSchema KEYLESS = new TableSchema(
             List.of(
@@ -28,25 +28,25 @@ class JdbcKeylessRetractionContractTest {
 
     @Test
     void admitsOnlyFullRowKeylessCompatibleMetadata() {
-        JdbcKeylessRetractionContract.validate(KEYLESS, KEYLESS);
+        JdbcSinkSchemaValidator.validateExactRow(KEYLESS, KEYLESS);
         var keyed = new TableSchema(KEYLESS.columns(), List.of("bucket"));
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(keyed, KEYLESS));
+                () -> JdbcSinkSchemaValidator.validateExactRow(keyed, KEYLESS));
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(KEYLESS, keyed));
+                () -> JdbcSinkSchemaValidator.validateExactRow(KEYLESS, keyed));
         var incomplete = new TableSchema(List.of(KEYLESS.column(0)), List.of());
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(KEYLESS, incomplete));
+                () -> JdbcSinkSchemaValidator.validateExactRow(KEYLESS, incomplete));
         var renamed = new TableSchema(
                 List.of(new Column("different", LogicalTypes.BIGINT.copy(false)), KEYLESS.column(1)),
                 List.of());
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(KEYLESS, renamed));
+                () -> JdbcSinkSchemaValidator.validateExactRow(KEYLESS, renamed));
         var coerced = new TableSchema(
                 List.of(new Column("bucket", LogicalTypes.decimal(20, 0).copy(false)), KEYLESS.column(1)),
                 List.of());
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(KEYLESS, coerced));
+                () -> JdbcSinkSchemaValidator.validateExactRow(KEYLESS, coerced));
     }
 
     @Test
@@ -54,7 +54,7 @@ class JdbcKeylessRetractionContractTest {
         var schema = new TableSchema(
                 List.of(new Column("name", LogicalTypes.varchar(64))), List.of());
         var error = assertThrows(IllegalArgumentException.class,
-                () -> JdbcKeylessRetractionContract.validate(schema, schema));
+                () -> JdbcSinkSchemaValidator.validateExactRow(schema, schema));
         assertTrue(error.getMessage().contains("verified database semantics"));
     }
 

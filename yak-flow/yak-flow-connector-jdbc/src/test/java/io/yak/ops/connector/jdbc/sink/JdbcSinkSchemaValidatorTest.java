@@ -33,7 +33,7 @@ class JdbcSinkSchemaValidatorTest {
                         new Column("id", LogicalTypes.BIGINT.copy(false))),
                 List.of("id"));
 
-        JdbcSinkSchemaValidator.validate(source, target, true);
+        JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.UPSERT);
         JdbcTableWritePlan writePlan =
                 new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.UPSERT, source, Map.of());
 
@@ -48,7 +48,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("optional", LogicalTypes.varchar(64)));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND));
     }
 
     @Test
@@ -60,7 +60,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.BIGINT));
 
-        JdbcSinkSchemaValidator.validate(source, target, false);
+        JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND);
         var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, Map.of());
         assertEquals(42L, plan.project(io.yak.ops.core.data.GenericRowData.of(5L, 42), io.yak.ops.core.data.RowKind.INSERT)
                 .getLong(1));
@@ -75,8 +75,8 @@ class JdbcSinkSchemaValidatorTest {
                 List.of(new Column("id", LogicalTypes.BIGINT), new Column("ID", LogicalTypes.BIGINT)),
                 List.of("id"));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(ambiguous, source, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(ambiguous, source, JdbcWriteMode.APPEND));
     }
 
     @Test
@@ -88,7 +88,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("name", LogicalTypes.varchar(32)));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND));
     }
 
     @Test
@@ -99,7 +99,7 @@ class JdbcSinkSchemaValidatorTest {
         TableSchema source = new TableSchema(columns, List.of("id"));
         TableSchema target = new TableSchema(columns, List.of("name"));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, true));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.UPSERT));
     }
 
     @Test
@@ -111,7 +111,7 @@ class JdbcSinkSchemaValidatorTest {
                 new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("amount", LogicalTypes.decimal(20, 2)));
 
-        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, false));
+        assertThrows(IllegalArgumentException.class, () -> JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND));
     }
 
     @Test
@@ -123,11 +123,11 @@ class JdbcSinkSchemaValidatorTest {
         TableSchema target = new TableSchema(sourceColumns, List.of("chunk_bucket"));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> JdbcSinkSchemaValidator.validate(keyless, target, true));
+                () -> JdbcSinkSchemaValidator.validate(keyless, target, JdbcWriteMode.UPSERT));
         org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("Chunk Key"));
-        JdbcSinkSchemaValidator.validate(keyless, keyless, false);
+        JdbcSinkSchemaValidator.validate(keyless, keyless, JdbcWriteMode.APPEND);
         assertThrows(IllegalArgumentException.class,
-                () -> JdbcSinkSchemaValidator.validate(target, keyless, true));
+                () -> JdbcSinkSchemaValidator.validate(target, keyless, JdbcWriteMode.UPSERT));
     }
 
     private static TableSchema table(Column... columns) {

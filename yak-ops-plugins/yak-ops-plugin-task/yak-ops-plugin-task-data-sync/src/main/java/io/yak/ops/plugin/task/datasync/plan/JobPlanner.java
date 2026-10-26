@@ -193,14 +193,7 @@ public final class JobPlanner {
                 if (chunkKey != null) binding += encodePart("chunkKey") + encodePart(chunkKey);
                 if (from.schema().primaryKeys().isEmpty()) binding += encodePart("noPhysicalPrimaryKey");
             }
-            if (sink.get(JdbcSinkOptions.XA_ENABLED)) {
-                if (!"MYSQL".equals(targetInfo.type())
-                        || !from.schema().primaryKeys().isEmpty()) {
-                    throw new IllegalArgumentException(
-                            "MySQL XA RETRACT requires a source without physical primary keys");
-                }
-                binding += encodePart("XA");
-            }
+            if (sink.get(JdbcSinkOptions.XA_ENABLED)) binding += encodePart("XA");
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
                 binding += encodeProperties(event.getColumnProperties());

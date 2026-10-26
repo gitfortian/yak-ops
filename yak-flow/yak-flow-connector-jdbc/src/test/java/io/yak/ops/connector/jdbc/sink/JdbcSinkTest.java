@@ -187,7 +187,7 @@ class JdbcSinkTest {
                         new Column("AMOUNT", LogicalTypes.decimal(10, 3)),
                         new Column("FLAG", LogicalTypes.SMALLINT)),
                 List.of("ID"));
-        JdbcSinkSchemaValidator.validate(source, target, false);
+        JdbcSinkSchemaValidator.validate(source, target, JdbcWriteMode.APPEND);
         var plan = new JdbcTableWritePlan(SOURCE, TARGET, target, JdbcWriteMode.APPEND, source, java.util.Map.of());
         var sink = new JdbcSink(
                 () -> open(url), new AnsiJdbcDialect(), plan, new BatchFlushPolicy(10, Duration.ZERO));

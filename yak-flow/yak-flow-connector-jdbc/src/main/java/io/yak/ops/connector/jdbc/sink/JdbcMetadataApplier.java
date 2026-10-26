@@ -116,7 +116,8 @@ public final class JdbcMetadataApplier implements MetadataApplier {
         Objects.requireNonNull(event, "event");
         Objects.requireNonNull(dialect, "dialect");
         TableSchema schema = event.getSchema();
-        JdbcSinkSchemaValidator.validate(schema, schema, !schema.primaryKeys().isEmpty());
+        JdbcSinkSchemaValidator.validate(
+                schema, schema, schema.primaryKeys().isEmpty() ? JdbcWriteMode.APPEND : JdbcWriteMode.UPSERT);
         for (Column column : schema.columns()) {
             JdbcNativeType nativeType = dialect.nativeType(column);
             ColumnProperties property = event.getColumnProperties().get(column.name());
@@ -610,7 +611,7 @@ public final class JdbcMetadataApplier implements MetadataApplier {
             throw new IllegalArgumentException("Target primary keys do not match the expected key order");
         }
         JdbcSinkSchemaValidator.validate(
-                expected, actual, !expected.primaryKeys().isEmpty());
+                expected, actual, expected.primaryKeys().isEmpty() ? JdbcWriteMode.APPEND : JdbcWriteMode.UPSERT);
     }
 
     /**
