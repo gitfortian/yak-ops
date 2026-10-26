@@ -90,7 +90,9 @@ for (const obsoleteType of [
   "DataSyncOfflineRuntimePlan",
   "DataSyncMappingConfig",
 ]) {
-  if (dataSyncTypes.includes(obsoleteType)) fail(`obsolete Data Sync type must not return: ${obsoleteType}`);
+  if (dataSyncTypes.includes(obsoleteType)) {
+    fail(`obsolete Data Sync type must not return: ${obsoleteType}`);
+  }
 }
 
 const packageRoot = join(root, "packages");
