@@ -56,8 +56,10 @@ EXPECTED = {
         ),
     },
     "cdc-pipeline-mysql": {"MySqlCdcToMySqlIT": PIPELINE_METHODS},
-    "cdc-pipeline-postgres": {"MySqlCdcToPostgresIT": PIPELINE_METHODS},
-    "cdc-pipeline-oracle": {"MySqlCdcToOracleIT": PIPELINE_METHODS},
+    "cdc-pipeline-postgres": {"MySqlCdcToPostgresIT": (PIPELINE_METHODS[1],)},
+    "cdc-pipeline-oracle": {"MySqlCdcToOracleIT": (PIPELINE_METHODS[1],)},
+    "cdc-acceptance-postgres": {"MySqlCdcToPostgresIT": (PIPELINE_METHODS[0],)},
+    "cdc-acceptance-oracle": {"MySqlCdcToOracleIT": (PIPELINE_METHODS[0],)},
     "cdc-recovery": {
         "MySqlCdcToMySqlCrashRecoveryIT": (
             "replaysCommittedChangeAfterProcessCrashBeforeCheckpointAndDoesNotReplayAfterCheckpoint",
@@ -123,7 +125,10 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
 
     module = root / CDC
     test_root = module / "src/test/java"
-    expected = {name: tuple(methods) for group in suites for name, methods in selected[group].items()}
+    expected: dict[str, tuple[str, ...]] = {}
+    for group in suites:
+        for classname, methods in selected[group].items():
+            expected[classname] = tuple(dict.fromkeys(expected.get(classname, ()) + tuple(methods)))
     errors: list[str] = []
     if inventory is None:
         from backend_tests import SUITES
@@ -139,10 +144,21 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
     for classname, required in sorted(expected.items()):
         try:
             actual = source_methods(test_root, classname)
-            if actual != set(required) or len(required) != len(set(required)):
+            # A class may be split into fast schema and full changelog suites.
+            # The combined inventory must still register every Java @Test method.
+            source_expected = set(required)
+            if inventory is None:
+                source_expected = {
+                    method
+                    for entries in EXPECTED.values()
+                    for entry, methods in entries.items()
+                    if entry == classname
+                    for method in methods
+                }
+            if actual != source_expected or len(required) != len(set(required)):
                 errors.append(
                     f"{classname}: Java @Test inventory mismatch; "
-                    f"missing={sorted(set(required) - actual)}, unregistered={sorted(actual - set(required))}"
+                    f"missing={sorted(source_expected - actual)}, unregistered={sorted(actual - source_expected)}"
                 )
         except (ValueError, OSError) as exc:
             errors.append(str(exc))
