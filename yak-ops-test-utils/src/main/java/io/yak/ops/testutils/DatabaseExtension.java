@@ -45,6 +45,7 @@ public abstract class DatabaseExtension implements BeforeAllCallback, TestWatche
         long started = System.nanoTime();
         try {
             container.start();
+            long containerReady = System.nanoTime();
             DatabaseMetadata metadata = describe(container);
             long deadline = System.nanoTime() + Duration.ofSeconds(90).toNanos();
             Exception last = null;
@@ -53,10 +54,17 @@ public abstract class DatabaseExtension implements BeforeAllCallback, TestWatche
                         var statement = connection.createStatement()) {
                     statement.setQueryTimeout(5);
                     statement.execute(metadata.url().startsWith("jdbc:oracle:") ? "SELECT 1 FROM DUAL" : "SELECT 1");
+                    long sqlReady = System.nanoTime();
+                    long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(sqlReady - started);
+                    long containerMillis = TimeUnit.NANOSECONDS.toMillis(containerReady - started);
+                    long readyMillis = TimeUnit.NANOSECONDS.toMillis(sqlReady - containerReady);
                     Files.createDirectories(directory);
                     Files.writeString(
                             directory.resolve("startup.json"),
-                            "{\"elapsedMillis\":" + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) + "}");
+                            "{\"elapsedMillis\":" + elapsedMillis
+                                    + ",\"containerStartupMillis\":" + containerMillis
+                                    + ",\"sqlReadyMillis\":" + readyMillis
+                                    + "}");
                     return new Resource(container, metadata, directory);
                 } catch (java.sql.SQLException unavailable) {
                     last = unavailable;
