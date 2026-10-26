@@ -2,11 +2,16 @@ package io.yak.ops.e2e.datasync;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.e2e.support.BackendTestBase;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +19,115 @@ import org.junit.jupiter.api.Test;
 
 /** Starts real Task Definitions and checks runtime DDL at the public product boundary. */
 class SingleTableRealtimeSchemaIT extends BackendTestBase {
+    @Test
+    void emptyTenColumnOrdersTableStreamsItsFirstInsertAfterBootstrap() throws Exception {
+        fixture.source.execute(
+                "CREATE TABLE bootstrap_orders ("
+                        + "id BIGINT NOT NULL PRIMARY KEY, order_no VARCHAR(64) NOT NULL,"
+                        + "customer_name VARCHAR(100) NOT NULL, amount DECIMAL(14,2) NOT NULL,"
+                        + "quantity INT NOT NULL, order_status VARCHAR(24) NOT NULL,"
+                        + "order_date DATE, created_at DATETIME(3) NOT NULL,"
+                        + "updated_at DATETIME(3), remark VARCHAR(200))");
+        Map<String, Object> parameters = new LinkedHashMap<>(fixture.parameters(
+                "SINGLE_TABLE_REALTIME", List.of("SCHEMA", "FULL", "INCREMENTAL"),
+                List.of(fixture.route("bootstrap_orders", "bootstrap_orders"))));
+        parameters.put("schemaChangesEnabled", true);
+        String instance = fixture.submit(fixture.create(parameters, true));
+        fixture.awaitState(instance, "RUNNING");
+
+        // This is the initially empty source case: only the target DDL may run so far.
+        await().alias("Target table exists before the first source INSERT")
+                .atMost(Duration.ofSeconds(120))
+                .untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var statement = connection.prepareStatement(
+                                    "SELECT COUNT(*) FROM information_schema.tables "
+                                            + "WHERE table_schema=? AND table_name='bootstrap_orders'")) {
+                        statement.setString(1, fixture.targetSchema);
+                        try (var rows = statement.executeQuery()) {
+                            rows.next();
+                            assertEquals(1, rows.getLong(1));
+                        }
+                    }
+                });
+
+        // A successful row count cannot prove temporal correctness: a wrongly derived
+        // TIMESTAMP(0) accepts inserts but silently discards MySQL DATETIME(3) fractions.
+        try (Connection connection = fixture.target.connect();
+                var statement = connection.prepareStatement(
+                        "SELECT column_name, datetime_precision FROM information_schema.columns "
+                                + "WHERE table_schema=? AND table_name='bootstrap_orders' "
+                                + "AND column_name IN ('created_at', 'updated_at')")) {
+            statement.setString(1, fixture.targetSchema);
+            try (var columns = statement.executeQuery()) {
+                Map<String, Integer> precisions = new LinkedHashMap<>();
+                while (columns.next()) {
+                    precisions.put(columns.getString(1), columns.getInt(2));
+                }
+                assertEquals(Map.of("created_at", 3, "updated_at", 3), precisions);
+            }
+        }
+
+        fixture.source.execute(
+                "INSERT INTO bootstrap_orders VALUES "
+                        + "(1,'SO-1001','张三',125.50,2,'CREATED','2026-10-20',"
+                        + "'2026-10-20 09:15:23.123',NULL,'第一笔订单'),"
+                        + "(2,'SO-1002','李四',880.00,1,'PAID','2026-10-20',"
+                        + "'2026-10-20 10:20:00.000',NULL,'第二笔订单'),"
+                        + "(3,'SO-1003','王五',49.99,3,'CREATED','2026-10-21',"
+                        + "'2026-10-21 11:30:00.000',NULL,NULL)");
+
+        await().alias("First INSERT after CDC schema bootstrap")
+                .atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var statement = connection.createStatement();
+                            var rows = statement.executeQuery(
+                                    "SELECT * FROM " + fixture.table("bootstrap_orders") + " ORDER BY id")) {
+                        assertTrue(rows.next());
+                        assertEquals(1L, rows.getLong("id"));
+                        assertEquals("SO-1001", rows.getString("order_no"));
+                        assertEquals("张三", rows.getString("customer_name"));
+                        assertEquals(new BigDecimal("125.50"), rows.getBigDecimal("amount"));
+                        assertEquals(2, rows.getInt("quantity"));
+                        assertEquals("CREATED", rows.getString("order_status"));
+                        assertEquals(LocalDate.of(2026, 10, 20), rows.getDate("order_date").toLocalDate());
+                        assertEquals(LocalDateTime.parse("2026-10-20T09:15:23.123"),
+                                rows.getTimestamp("created_at").toLocalDateTime());
+                        assertEquals(null, rows.getTimestamp("updated_at"));
+                        assertEquals("第一笔订单", rows.getString("remark"));
+
+                        assertTrue(rows.next());
+                        assertEquals(2L, rows.getLong("id"));
+                        assertEquals(new BigDecimal("880.00"), rows.getBigDecimal("amount"));
+                        assertEquals("李四", rows.getString("customer_name"));
+
+                        assertTrue(rows.next());
+                        assertEquals(3L, rows.getLong("id"));
+                        assertEquals(new BigDecimal("49.99"), rows.getBigDecimal("amount"));
+                        assertEquals(null, rows.getString("remark"));
+                        assertFalse(rows.next());
+                    }
+                });
+        fixture.source.execute(
+                "UPDATE bootstrap_orders SET order_status='PAID', updated_at='2026-10-20 12:34:56.654' WHERE id=1");
+        awaitString("bootstrap_orders", "order_status", 1L, "PAID");
+        await().alias("Updated MySQL DATETIME(3) retains milliseconds")
+                .atMost(Duration.ofSeconds(120))
+                .untilAsserted(() -> {
+                    try (Connection connection = fixture.target.connect();
+                            var statement = connection.createStatement();
+                            var rows = statement.executeQuery(
+                                    "SELECT updated_at FROM " + fixture.table("bootstrap_orders") + " WHERE id=1")) {
+                        assertTrue(rows.next());
+                        assertEquals(LocalDateTime.parse("2026-10-20T12:34:56.654"),
+                                rows.getTimestamp(1).toLocalDateTime());
+                    }
+                });
+        fixture.awaitState(instance, "RUNNING");
+    }
+
     @Test
     void autoCreatesTargetAndEvolvesColumnsDuringStreaming() throws Exception {
         fixture.source.execute(

@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
+import io.debezium.connector.mysql.gtid.MySqlGtidSet;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -15,7 +16,7 @@ import java.util.Objects;
  * and byte position. An immutable copy is checkpointed after downstream emission.
  */
 public record BinlogOffset(Map<String, Object> partition, Map<String, Object> position)
-        implements java.io.Serializable {
+        implements Comparable<BinlogOffset>, java.io.Serializable {
 
     public BinlogOffset {
         partition = immutable(Objects.requireNonNull(partition, "partition"));
@@ -23,6 +24,88 @@ public record BinlogOffset(Map<String, Object> partition, Map<String, Object> po
         if (partition.isEmpty() || position.isEmpty()) {
             throw new IllegalArgumentException("MySQL Binlog offset requires a source partition and position");
         }
+    }
+
+    /**
+     * Orders the offsets of the same Debezium source for snapshot backfill and binlog filtering.
+     *
+     * <p>GTID sets are compared with Debezium's GTID implementation. When both sets identify
+     * the same completed transactions, file and event positions distinguish records within
+     * the transaction. File-name rotation follows the ordering used by Flink CDC's BinlogOffset.
+     *
+     * @throws IllegalArgumentException if the partitions differ or the offsets cannot be ordered
+     */
+    @Override
+    public int compareTo(BinlogOffset other) {
+        Objects.requireNonNull(other, "other");
+        if (!partition.equals(other.partition)) {
+            throw new IllegalArgumentException("Cannot compare offsets from different MySQL source partitions");
+        }
+
+        String leftGtids = text(position, "gtids");
+        String rightGtids = text(other.position, "gtids");
+        if (leftGtids != null && rightGtids != null) {
+            MySqlGtidSet leftSet = new MySqlGtidSet(leftGtids);
+            MySqlGtidSet rightSet = new MySqlGtidSet(rightGtids);
+            if (!leftSet.equals(rightSet)) {
+                boolean leftWithinRight = leftSet.isContainedWithin(rightSet);
+                boolean rightWithinLeft = rightSet.isContainedWithin(leftSet);
+                if (leftWithinRight && !rightWithinLeft) {
+                    return -1;
+                }
+                if (rightWithinLeft && !leftWithinRight) {
+                    return 1;
+                }
+                throw new IllegalArgumentException("Incomparable MySQL GTID sets");
+            }
+        }
+
+        String leftFile = text(position, "file");
+        String rightFile = text(other.position, "file");
+        if (leftFile == null || rightFile == null) {
+            if (leftFile != null || rightFile != null || leftGtids == null || rightGtids == null) {
+                throw new IllegalArgumentException("Comparable MySQL offsets require matching position metadata");
+            }
+            return compareEventRow(position, other.position);
+        }
+
+        // MySQL binlog names can change digit widths at a rotation boundary (e.g. .9 -> .10).
+        int fileOrder = leftFile.length() == rightFile.length()
+                ? leftFile.compareToIgnoreCase(rightFile)
+                : Integer.compare(leftFile.length(), rightFile.length());
+        if (fileOrder != 0) {
+            return fileOrder;
+        }
+        int positionOrder = Long.compare(requiredPosition(position), requiredPosition(other.position));
+        return positionOrder != 0 ? positionOrder : compareEventRow(position, other.position);
+    }
+
+    private static int compareEventRow(Map<String, Object> left, Map<String, Object> right) {
+        int eventOrder = Long.compare(number(left, "event"), number(right, "event"));
+        return eventOrder != 0 ? eventOrder : Long.compare(number(left, "row"), number(right, "row"));
+    }
+
+    private static String text(Map<String, Object> offset, String key) {
+        Object value = offset.get(key);
+        return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
+    private static long requiredPosition(Map<String, Object> offset) {
+        if (!offset.containsKey("pos")) {
+            throw new IllegalArgumentException("MySQL binlog offset has no file position");
+        }
+        return number(offset, "pos");
+    }
+
+    private static long number(Map<String, Object> offset, String key) {
+        Object value = offset.get(key);
+        if (value == null && !offset.containsKey(key)) {
+            return 0L;
+        }
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("Invalid MySQL binlog offset field: " + key);
+        }
+        return number.longValue();
     }
 
     private static Map<String, Object> immutable(Map<String, ?> values) {

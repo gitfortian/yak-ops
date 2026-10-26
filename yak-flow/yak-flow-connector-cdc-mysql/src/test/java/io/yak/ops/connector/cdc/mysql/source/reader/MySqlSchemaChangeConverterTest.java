@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -24,7 +26,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 
-/** Exercises structured Debezium DDL, ordered row conversion and Source mailbox gating. */
+/** Exercises structured Debezium DDL, ordered row conversion and Source mailbox schema-change handling. */
 class MySqlSchemaChangeConverterTest {
 
     private static final TableId SOURCE = new TableId("shop", null, "orders");
@@ -49,11 +51,35 @@ class MySqlSchemaChangeConverterTest {
 
     private static final String NEW_TABLE = """
             {"primaryKeyColumnNames":["id"],"columns":[
-                {"name":"id","jdbcType":-5,"typeName":"BIGINT","optional":false},
-                {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"optional":true},
-                {"name":"note","jdbcType":12,"typeName":"VARCHAR","length":128,"optional":true}
+                {"name":"id","jdbcType":-5,"typeName":"BIGINT","position":1,"optional":false,"autoIncremented":false,"generated":false},
+                {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"position":2,"optional":true,"autoIncremented":false,"generated":false},
+                {"name":"note","jdbcType":12,"typeName":"VARCHAR","length":128,"position":3,"optional":true,"autoIncremented":false,"generated":false}
             ]}
             """;
+
+    @Test
+    void initialCreateIsSchemaBootstrapButRuntimeCreateRemainsRejected() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        SourceRecord initial = ddl("CREATE", NEW_TABLE, 60L);
+
+        java.util.Set<TableId> registered = new java.util.HashSet<>();
+        converter.applyInitialSchemaTables(initial, registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
+        converter.applyInitialSchemaTables(ddl("ALTER", NEW_TABLE, 61L), registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
+        converter.applyInitialSchemaTables(ddl("DROP", NEW_TABLE, 62L), registered);
+        assertTrue(registered.isEmpty());
+        converter.applyInitialSchemaTables(ddl("CREATE", NEW_TABLE, 63L), registered);
+        assertEquals(java.util.Set.of(SOURCE), registered);
+        assertThrows(UnsupportedOperationException.class, () -> converter.convert(initial));
+        assertThrows(
+                IllegalStateException.class,
+                () -> converter.applyInitialSchemaTables(insertWithNote(64L), registered));
+        // Initial CREATE metadata is consumed only by the engine before the completed
+        // schema-snapshot heartbeat; it must not change the registered runtime schema.
+        assertEquals(2, converter.convert(ddl("ALTER", NEW_TABLE, 63L))
+                .schemaChange().before().columns().size());
+    }
 
     @Test
     void ddlCarriesSchemaChangeAndFollowingRowsUseNewColumnPositions() {
@@ -103,24 +129,36 @@ class MySqlSchemaChangeConverterTest {
                 .field("jdbcType", org.apache.kafka.connect.data.Schema.INT32_SCHEMA)
                 .field("typeName", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
                 .field("length", org.apache.kafka.connect.data.Schema.OPTIONAL_INT32_SCHEMA)
+                .field("position", org.apache.kafka.connect.data.Schema.INT32_SCHEMA)
+                .field("autoIncremented", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
+                .field("generated", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
                 .field("optional", org.apache.kafka.connect.data.Schema.BOOLEAN_SCHEMA)
                 .build();
         var idColumn = new Struct(columnMetadata)
                 .put("name", "id")
                 .put("jdbcType", java.sql.Types.BIGINT)
                 .put("typeName", "BIGINT")
+                .put("position", 1)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", false);
         var nameColumn = new Struct(columnMetadata)
                 .put("name", "name")
                 .put("jdbcType", java.sql.Types.VARCHAR)
                 .put("typeName", "VARCHAR")
                 .put("length", 64)
+                .put("position", 2)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", true);
         var noteColumn = new Struct(columnMetadata)
                 .put("name", "note")
                 .put("jdbcType", java.sql.Types.VARCHAR)
                 .put("typeName", "VARCHAR")
                 .put("length", 128)
+                .put("position", 3)
+                .put("autoIncremented", false)
+                .put("generated", false)
                 .put("optional", true);
         var tableMetadata = SchemaBuilder.struct()
                 .field(
@@ -184,32 +222,75 @@ class MySqlSchemaChangeConverterTest {
     }
 
     @Test
-    void rowSchemaMismatchReconcilesBeforeTheRowWithoutAdvancingItsOffset() {
+    void rowSchemaMismatchUsesDebeziumMetadataWithoutQueryingLiveCatalog() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         SourceRecord row = insertWithNote(101L);
         assertEquals(SOURCE, converter.schemaMismatch(row));
-
-        TableSchema evolved = new TableSchema(
-                List.of(
-                        new Column("id", LogicalTypes.BIGINT.copy(false)),
-                        new Column("name", LogicalTypes.varchar(64)),
-                        new Column("note", LogicalTypes.varchar(128))),
-                List.of("id"));
         var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        var current = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
-                new java.util.LinkedHashMap<String, Object>(row.sourcePartition()),
-                new java.util.LinkedHashMap<String, Object>(row.sourceOffset()));
-        BinlogEvent boundary = converter.reconcile(SOURCE, evolved, previous, current);
-        assertEquals(100L, boundary.offset().position().get("pos"));
-        assertTrue(boundary.records().isEmpty());
-        assertEquals(3, boundary.schemaChange().after().columns().size());
+        BinlogEvent transition = converter.reconcileRowSchema(row, previous);
+        assertEquals(previous, transition.offset());
+        assertTrue(transition.records().isEmpty());
+        assertEquals(3, transition.schemaChange().after().columns().size());
         assertEquals(null, converter.schemaMismatch(row));
-
         BinlogEvent delivered = converter.convert(row);
         assertEquals(101L, delivered.offset().position().get("pos"));
-        assertEquals(3, delivered.records().getFirst().row().getArity());
         assertEquals("hello", delivered.records().getFirst().row().getString(2));
+    }
+
+    @Test
+    void incompleteRowMetadataFailsClosedBeforeUpdatingSourceSchema() {
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        SourceRecord row = insertWithNote(101L, false);
+        var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        assertThrows(UnsupportedOperationException.class, () -> converter.reconcileRowSchema(row, previous));
+        assertEquals(SOURCE, converter.schemaMismatch(row));
+    }
+
+
+    @Test
+    void structuredDdlMatchesJdbcTypeMappingsAndPreservesFractions() throws Exception {
+        String table = """
+                {"primaryKeyColumnNames":["id"],"columns":[
+                  {"name":"id","jdbcType":-5,"typeName":"BIGINT","position":1,"optional":false,"autoIncremented":false,"generated":false},
+                  {"name":"name","jdbcType":12,"typeName":"VARCHAR","length":64,"position":2,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"bits","jdbcType":-7,"typeName":"BIT","length":8,"position":3,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"amount","jdbcType":3,"typeName":"DECIMAL","length":14,"scale":2,"position":4,"optional":true,"autoIncremented":false,"generated":false},
+                  {"name":"updated_at","jdbcType":93,"typeName":"DATETIME","length":0,"scale":3,"position":5,"optional":true,"autoIncremented":false,"generated":false}
+                ]}
+                """;
+        var after = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true)
+                .convert(ddl("ALTER", table, 201L)).schemaChange().after();
+        assertEquals(LogicalTypes.varbinary(8), after.column("bits").orElseThrow().type());
+        assertEquals(LogicalTypes.decimal(14, 2), after.column("amount").orElseThrow().type());
+        assertEquals(LogicalTypes.timestamp(3), after.column("updated_at").orElseThrow().type());
+    }
+
+    @Test
+    void unsupportedStructuredDdlDoesNotAdvanceTheRegisteredSchema() {
+        String spatial = NEW_TABLE.replace(
+                "\"jdbcType\":12,\"typeName\":\"VARCHAR\",\"length\":128",
+                "\"jdbcType\":-2,\"typeName\":\"POINT\",\"length\":0");
+        var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
+        assertThrows(UnsupportedOperationException.class, () -> converter.convert(ddl("ALTER", spatial, 202L)));
+        assertEquals(2, converter.convert(ddl("ALTER", NEW_TABLE, 203L))
+                .schemaChange().before().columns().size());
+    }
+
+    @Test
+    void changingCdcFieldTypeCannotKeepStalePhysicalMetadata() {
+        var before = Schema.from(
+                ORIGINAL, null, Map.of(), Map.of("name",
+                        new io.yak.ops.core.event.ColumnProperties(null, false, false, null, false, "varchar(64)")));
+        String altered = NEW_TABLE.replace(
+                "\"typeName\":\"VARCHAR\",\"length\":64",
+                "\"typeName\":\"VARCHAR\",\"length\":128");
+        var after = new MySqlDebeziumRecordConverter(
+                Map.of(SOURCE, ORIGINAL), Map.of(SOURCE, before), true)
+                .convert(ddl("ALTER", altered, 204L)).schemaChange().after();
+        assertEquals(null, after.column("name").orElseThrow().properties());
+        assertEquals(128, after.toTableSchema().column(1).length());
     }
 
     @Test
@@ -254,7 +335,7 @@ class MySqlSchemaChangeConverterTest {
                 return acknowledgment;
             }
         };
-        var gate = new MySqlSchemaChangeGate(context);
+        var handler = new SchemaChangeHandler(context);
         Schema before = Schema.from(ORIGINAL, null, Map.of(), Map.of());
         Schema after = new Schema(
                 List.of(
@@ -262,13 +343,18 @@ class MySqlSchemaChangeConverterTest {
                         before.columns().get(1),
                         new io.yak.ops.core.schema.PhysicalColumn("note", LogicalTypes.varchar(128))),
                 List.of("id"));
-        gate.begin(new SourceSchemaChange("position-100", SOURCE, before, after), () -> progressed.set(true));
-        assertFalse(gate.consumeAcknowledgment());
-        assertThrows(IllegalStateException.class, gate::requireCheckpointReady);
+        handler.submitSchemaChange(
+                new SourceSchemaChange("position-100", SOURCE, before, after), () -> progressed.set(true));
+        assertFalse(handler.tryCompleteSchemaChange());
+        assertFalse(handler.getAvailableFuture().isDone());
+        assertThrows(IllegalStateException.class, handler::requireNoPendingSchemaChange);
         acknowledgment.complete(1L);
-        assertTrue(gate.consumeAcknowledgment());
+        assertTrue(handler.getAvailableFuture().isDone());
+        assertThrows(IllegalStateException.class, handler::requireNoPendingSchemaChange);
+        assertFalse(progressed.get());
+        assertTrue(handler.tryCompleteSchemaChange());
         assertTrue(progressed.get());
-        gate.requireCheckpointReady();
+        handler.requireNoPendingSchemaChange();
     }
 
     private static SourceRecord ddl(String type, String tableJson, long position) {
@@ -286,10 +372,20 @@ class MySqlSchemaChangeConverterTest {
     }
 
     private static SourceRecord insertWithNote(long position) {
+        return insertWithNote(position, true);
+    }
+
+    private static SourceRecord insertWithNote(long position, boolean withMetadata) {
         org.apache.kafka.connect.data.Schema rowSchema = SchemaBuilder.struct()
                 .field("id", org.apache.kafka.connect.data.Schema.INT64_SCHEMA)
                 .field("name", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
-                .field("note", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+                .field("note", withMetadata
+                        ? SchemaBuilder.string()
+                                .optional()
+                                .parameter("__debezium.source.column.type", "VARCHAR(128)")
+                                .parameter("__debezium.source.column.length", "128")
+                                .build()
+                        : org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
                 .build();
         org.apache.kafka.connect.data.Schema sourceSchema = SchemaBuilder.struct()
                 .field("db", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)

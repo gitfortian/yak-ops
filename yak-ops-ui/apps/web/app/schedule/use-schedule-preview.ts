@@ -1,45 +1,48 @@
 import { useEffect, useState } from "react";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { useQuery } from "@tanstack/react-query";
 import { isInvalidScheduleRule, previewSchedule } from "@/service/schedule";
+import { scheduleQueryKeys, useScheduleScope } from "./query-keys";
 
-type PreviewState = {
-  key: string;
-  status: "loading" | "ready" | "invalid" | "error";
-  times: string[];
-};
-
+/** Delayed candidate reads are cached by user, Workspace, Cron expression and time zone. */
 export function useSchedulePreview(cronExpression: string, timeZone: string) {
-  const { currentWorkspace } = useWorkspace();
-  const key = JSON.stringify([currentWorkspace?.id, cronExpression, timeZone]);
-  const [state, setState] = useState<PreviewState>();
-  const [refresh, setRefresh] = useState(0);
+  const { userId, workspaceId } = useScheduleScope();
+  const [debounced, setDebounced] = useState({ cronExpression, timeZone });
   useEffect(() => {
-    if (!cronExpression.trim() || !timeZone || !currentWorkspace?.id) return;
-    const controller = new AbortController();
-    setState({ key, status: "loading", times: [] });
-    const timer = window.setTimeout(() => {
-      void previewSchedule({ cronExpression, timeZone }, controller.signal)
-        .then((result) => {
-          if (!controller.signal.aborted)
-            setState({ key, status: "ready", times: result.nextFireTimes });
-        })
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted)
-            setState({
-              key,
-              status: isInvalidScheduleRule(error) ? "invalid" : "error",
-              times: [],
-            });
-        });
-    }, 250);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [key, cronExpression, timeZone, currentWorkspace?.id, refresh]);
+    const timer = window.setTimeout(() => setDebounced({ cronExpression, timeZone }), 250);
+    return () => window.clearTimeout(timer);
+  }, [cronExpression, timeZone]);
+
+  const hasRule = Boolean(cronExpression.trim() && timeZone);
+  const settled = debounced.cronExpression === cronExpression && debounced.timeZone === timeZone;
+  const query = useQuery({
+    queryKey: scheduleQueryKeys.preview(
+      userId,
+      workspaceId,
+      debounced.cronExpression,
+      debounced.timeZone,
+    ),
+    queryFn: ({ signal }) => previewSchedule(debounced, signal),
+    enabled: Boolean(userId && workspaceId && hasRule && settled),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const status = !cronExpression.trim()
+    ? "empty"
+    : !timeZone
+      ? "invalid"
+      : !userId || !workspaceId || !settled || query.isPending
+        ? "loading"
+        : query.isError
+          ? isInvalidScheduleRule(query.error)
+            ? "invalid"
+            : "error"
+          : "ready";
+
   return {
-    status: !cronExpression.trim() ? "empty" : state?.key === key ? state.status : "loading",
-    times: state?.key === key ? state.times : [],
-    retry: () => setRefresh((value) => value + 1),
+    status,
+    times: status === "ready" ? (query.data?.nextFireTimes ?? []) : [],
+    retry: () => {
+      void query.refetch();
+    },
   };
 }

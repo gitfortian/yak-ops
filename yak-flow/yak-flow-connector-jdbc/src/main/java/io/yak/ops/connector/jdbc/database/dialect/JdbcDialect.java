@@ -54,6 +54,13 @@ public interface JdbcDialect extends java.io.Serializable {
      * @return a converter whose field order matches the result-set projection
      * @throws SQLException if metadata cannot be resolved safely
      */
+    /**
+     * Resolves source JDBC metadata without constructing a runtime row converter.
+     *
+     * <p>Catalog discovery, split planning and source readers share this mapping.
+     */
+    JdbcTypeConverter typeConverter();
+
     JdbcDialectConverter createRowConverter(ResultSetMetaData metadata) throws SQLException;
 
     /**
@@ -92,7 +99,7 @@ public interface JdbcDialect extends java.io.Serializable {
      * will create for a source column. No database access or SQL execution is permitted here.
      * Unsupported mappings must fail explicitly rather than assuming types are identical.
      */
-    default LogicalType normalizeTargetType(Column column) {
+    default LogicalType toTargetLogicalType(Column column) {
         nativeType(column);
         return column.dataType();
     }
@@ -253,6 +260,17 @@ public interface JdbcDialect extends java.io.Serializable {
      * @throws IllegalArgumentException if the schema has no primary key
      */
     String deleteSql(TableId table, TableSchema schema);
+
+    /**
+     * Deletes exactly one matching physical row from a keyless target using every column.
+     *
+     * <p>This is not primary-key DELETE. The SQL must compare null values correctly and
+     * bound the affected row count to one even when identical physical rows exist.
+     * Vendors without verified behavior must reject it.
+     */
+    default String exactRowDeleteSql(TableId table, TableSchema schema) {
+        throw new UnsupportedOperationException("Exact-row RETRACT is not supported by this JDBC dialect");
+    }
 
     /**
      * Rejects empty identifier parts before quoting or building SQL.

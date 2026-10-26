@@ -16,6 +16,14 @@ public final class MySqlCdcSourceOptions {
     public static final Option<Integer> SNAPSHOT_CHUNK_SIZE =
             Options.key("data-sync.mysql-cdc.snapshot-chunk-size").intType().defaultValue(1024);
 
+    public static final Option<String> CHUNK_KEY_COLUMN = Options.key("data-sync.mysql-cdc.snapshot-chunk-key-column")
+            .stringType()
+            .noDefaultValue();
+
+    /** Explicit opt-in for the Hybrid keyless source; the standalone Binlog source remains gated. */
+    public static final Option<Boolean> KEYLESS_ENABLED =
+            Options.key("data-sync.mysql-cdc.keyless.enabled").booleanType().defaultValue(false);
+
     public static final Option<Integer> QUEUE_CAPACITY =
             Options.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 

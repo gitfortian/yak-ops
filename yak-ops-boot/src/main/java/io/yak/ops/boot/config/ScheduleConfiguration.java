@@ -1,6 +1,6 @@
 package io.yak.ops.boot.config;
 
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.business.task.submission.SubmissionService;
 import io.yak.ops.plugin.scheduler.api.CronService;
 import io.yak.ops.plugin.scheduler.api.Scheduler;
@@ -27,13 +27,15 @@ public class ScheduleConfiguration {
     }
 
     @Bean
-    ScheduleAdmissionGate scheduleAdmissionGate(
+    ScheduleAdmissionController scheduleAdmissionController(
             Clock scheduleClock, @Value("${yak.schedule.max-lateness:PT60S}") Duration maxLateness) {
-        return new ScheduleAdmissionGate(scheduleClock, maxLateness);
+        return new ScheduleAdmissionController(scheduleClock, maxLateness);
     }
 
     @Bean(destroyMethod = "")
-    Scheduler scheduleEngine(DataSource dataSource, SubmissionService submissions, ScheduleAdmissionGate gate) {
-        return new QuartzScheduler(dataSource, trigger -> submissions.submitScheduled(trigger), gate.maxLateness());
+    Scheduler scheduleEngine(
+            DataSource dataSource, SubmissionService submissions, ScheduleAdmissionController admissionController) {
+        return new QuartzScheduler(
+                dataSource, trigger -> submissions.submitScheduled(trigger), admissionController.maxLateness());
     }
 }

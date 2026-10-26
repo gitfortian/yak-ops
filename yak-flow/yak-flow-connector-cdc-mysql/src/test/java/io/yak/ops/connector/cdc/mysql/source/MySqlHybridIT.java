@@ -53,6 +53,47 @@ class MySqlHybridIT {
             new Column("id", LogicalTypes.BIGINT.copy(false)),
             new Column("name", LogicalTypes.varchar(100).copy(false))), List.of("id"));
 
+    private static final TableSchema KEYLESS_SCHEMA = new TableSchema(List.of(
+            new Column("bucket", LogicalTypes.BIGINT.copy(false)),
+            new Column("amount", LogicalTypes.decimal(14, 2))), List.of());
+
+    @Test
+    void keylessSnapshotAndBinlogPreserveDuplicateRows() throws Exception {
+        try (Fixture fixture = new Fixture(1, 2, true)) {
+            fixture.execute("INSERT INTO " + fixture.source(0)
+                    + " VALUES(1,10.00),(1,10.00),(2,NULL)");
+            try (Harness first = new Harness(fixture, null)) {
+                first.start();
+                first.until(first::streaming, true);
+                assertEquals(Map.of("1:10.00", 2L, "2:NULL", 1L), fixture.keylessRows(0));
+                first.checkpoint();
+                fixture.execute("DELETE FROM " + fixture.source(0)
+                        + " WHERE bucket=1 AND amount=10.00 LIMIT 1",
+                        "UPDATE " + fixture.source(0)
+                        + " SET amount=12.00 WHERE bucket=2",
+                        "INSERT INTO " + fixture.source(0) + " VALUES(3,20.00)");
+                first.until(() -> fixture.keylessRows(0).equals(
+                        Map.of("1:10.00", 1L, "2:12.00", 1L, "3:20.00", 1L)), false);
+            }
+        }
+    }
+
+    @Test
+    void emptyTableFinishesSchemaBootstrapBeforeItsFirstInsert() throws Exception {
+        try (Fixture fixture = new Fixture(1, 1000);
+                Harness pipeline = new Harness(fixture, null)) {
+            pipeline.start();
+            // No source row exists when the no_data schema snapshot and Hybrid handoff run.
+            pipeline.until(pipeline::streaming, true);
+            assertTrue(fixture.values(0).isEmpty());
+            fixture.execute("INSERT INTO " + fixture.source(0) + " VALUES(1,'first'),(2,'second'),(3,'third')");
+            pipeline.until(() -> fixture.values(0).equals(Map.of(
+                    1L, "first", 2L, "second", 3L, "third")), true);
+            assertEquals(3, pipeline.observed.stream()
+                    .filter(row -> row.rowKind() == RowKind.INSERT).count());
+        }
+    }
+
     @Test
     void factoryPipelineSnapshotsMultipleTablesThenStreamsUpdatesDeletesAndKeyMoves() throws Exception {
         try (Fixture fixture = new Fixture(2, 1)) {
@@ -72,6 +113,39 @@ class MySqlHybridIT {
                 pipeline.until(() -> fixture.values(0).equals(Map.of(1L,"updated",150L,"moving"))
                         && fixture.values(1).equals(Map.of(20L,"added")), true);
                 assertTrue(pipeline.observed.stream().anyMatch(row -> row.rowKind() == RowKind.DELETE));
+            }
+        }
+    }
+
+    @Test
+    void identicalPayloadRowsRemainDistinctThroughKeyMovesAndStreamingRecovery() throws Exception {
+        try (Fixture fixture = new Fixture(1, 1)) {
+            fixture.execute("INSERT INTO " + fixture.source(0)
+                    + " VALUES(1,'same'),(2,'same'),(3,'other')");
+            Saved saved;
+            try (Harness first = new Harness(fixture, null)) {
+                first.start();
+                first.until(first::streaming, true);
+                assertEquals(Map.of(1L, "same", 2L, "same", 3L, "other"), fixture.values(0));
+
+                fixture.execute(
+                        "DELETE FROM " + fixture.source(0) + " WHERE id=1",
+                        "UPDATE " + fixture.source(0) + " SET id=30 WHERE id=3",
+                        "INSERT INTO " + fixture.source(0) + " VALUES(4,'same')");
+                first.until(() -> fixture.values(0).equals(
+                        Map.of(2L, "same", 4L, "same", 30L, "other")), true);
+                assertTrue(first.observed.stream().anyMatch(row -> row.rowKind() == RowKind.DELETE));
+                saved = first.checkpoint();
+            }
+            fixture.execute(
+                    "DELETE FROM " + fixture.source(0) + " WHERE id=4",
+                    "UPDATE " + fixture.source(0) + " SET name='retained' WHERE id=2");
+            try (Harness restored = new Harness(fixture, saved)) {
+                restored.start();
+                restored.until(() -> fixture.values(0).equals(
+                        Map.of(2L, "retained", 30L, "other")), true);
+                assertEquals(2, fixture.values(0).size());
+                assertFalse(fixture.values(0).containsKey(4L));
             }
         }
     }
@@ -146,20 +220,36 @@ class MySqlHybridIT {
         private final MySqlHybridCdcSource source;
         private final List<JdbcTableWritePlan> plans = new ArrayList<>();
         private Fixture(int tableCount, int chunkSize) throws Exception {
+            this(tableCount, chunkSize, false);
+        }
+        private Fixture(int tableCount, int chunkSize, boolean keyless) throws Exception {
             this.tableCount=tableCount;
             var db=DATABASE.metadata();
             Configuration options = new Configuration().set(JdbcConnectionOptions.URL, db.url())
                     .set(JdbcConnectionOptions.USERNAME, db.username()).set(JdbcConnectionOptions.PASSWORD, db.password())
                     .set(MySqlCdcSourceOptions.SERVER_ID, 7001).set(MySqlCdcSourceOptions.TOPIC_PREFIX, prefix)
                     .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, chunkSize);
+            if (keyless) {
+                options.set(MySqlCdcSourceOptions.KEYLESS_ENABLED, true);
+                options.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "bucket");
+            }
             List<TableSourceFactoryContext> contexts = new ArrayList<>();
             for (int i=0;i<tableCount;i++) {
-                execute("CREATE TABLE " + source(i) + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
-                        "CREATE TABLE " + target(i) + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
+                if (keyless) {
+                    execute("CREATE TABLE " + source(i)
+                            + "(bucket BIGINT NOT NULL, amount DECIMAL(14,2) NULL) ENGINE=InnoDB",
+                            "CREATE TABLE " + target(i)
+                            + "(bucket BIGINT NOT NULL, amount DECIMAL(14,2) NULL) ENGINE=InnoDB");
+                } else {
+                    execute("CREATE TABLE " + source(i) + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
+                            "CREATE TABLE " + target(i) + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
+                }
                 TableId from = new TableId("yak_cdc_it", null, source(i));
                 TableId to = new TableId("yak_cdc_it", null, target(i));
-                contexts.add(new TableSourceFactoryContext(options.toReadonlyConfig(), from, SCHEMA, metrics));
-                plans.add(new JdbcTableWritePlan(from, to, SCHEMA, JdbcWriteMode.UPSERT));
+                TableSchema schema = keyless ? KEYLESS_SCHEMA : SCHEMA;
+                contexts.add(new TableSourceFactoryContext(options.toReadonlyConfig(), from, schema, metrics));
+                plans.add(new JdbcTableWritePlan(from, to, schema,
+                        keyless ? JdbcWriteMode.RETRACT : JdbcWriteMode.UPSERT));
             }
             source = (MySqlHybridCdcSource) new MySqlCdcSourceFactory().createSource(contexts);
         }
@@ -177,6 +267,20 @@ class MySqlHybridIT {
                     var rows=sql.executeQuery("SELECT id,name FROM " + target(table))) {
                 Map<Long,String> result=new LinkedHashMap<>();
                 while(rows.next()) result.put(rows.getLong(1),rows.getString(2));
+                return result;
+            }
+        }
+        private Map<String,Long> keylessRows(int table) throws Exception {
+            var db=DATABASE.metadata();
+            try(var connection=DriverManager.getConnection(db.url(),db.username(),db.password());
+                    var sql=connection.createStatement();
+                    var rows=sql.executeQuery("SELECT bucket,amount,COUNT(*) FROM "
+                            + target(table) + " GROUP BY bucket,amount")) {
+                Map<String,Long> result=new LinkedHashMap<>();
+                while(rows.next()) {
+                    java.math.BigDecimal amount=rows.getBigDecimal(2);
+                    result.put(rows.getLong(1)+":"+(amount==null?"NULL":amount.toPlainString()), rows.getLong(3));
+                }
                 return result;
             }
         }

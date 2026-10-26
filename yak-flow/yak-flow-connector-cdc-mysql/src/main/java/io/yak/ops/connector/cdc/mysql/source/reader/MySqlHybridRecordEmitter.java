@@ -2,9 +2,11 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
+import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Objects;
 
@@ -18,26 +20,17 @@ public final class MySqlHybridRecordEmitter
         implements RecordEmitter<MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplitState> {
 
     private final SourceReaderContext context;
-    private final MySqlSchemaChangeGate schemaGate;
+    private final SchemaChangeHandler schemaChanges;
     private final MySqlHybridSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
-
-    public MySqlHybridRecordEmitter(SourceReaderContext context, MySqlHybridSplitReader splits) {
-        this(context, splits, new TableMetrics());
-    }
-
-    /** Creates the mailbox emitter with phase-aware, generation-fenced record measurements. */
-    public MySqlHybridRecordEmitter(SourceReaderContext context, MySqlHybridSplitReader splits, TableMetrics metrics) {
-        this(context, splits, metrics, new MySqlSchemaChangeGate(context));
-    }
 
     public MySqlHybridRecordEmitter(
             SourceReaderContext context,
             MySqlHybridSplitReader splits,
             TableMetrics metrics,
-            MySqlSchemaChangeGate schemaGate) {
-        this.schemaGate = Objects.requireNonNull(schemaGate, "schemaGate");
+            SchemaChangeHandler schemaChanges) {
+        this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
         this.metrics = metrics;
         generation = metrics.generation();
         this.context = Objects.requireNonNull(context, "context");
@@ -49,15 +42,27 @@ public final class MySqlHybridRecordEmitter
             MySqlHybridFetchedRecord event, ReaderOutput<TableRecord> output, MySqlHybridSplitState state)
             throws Exception {
         if (event.schemaChange() != null) {
-            schemaGate.begin(event.schemaChange(), () -> state.emitBinlog(event.binlogOffset()));
+            schemaChanges.submitSchemaChange(event.schemaChange(), () -> state.emitBinlog(event.binlogOffset()));
             return;
         }
         if (event.preparedSnapshot() != null) {
             state.prepareSnapshot(event.preparedSnapshot());
             return;
         }
-        for (TableRecord row : event.rows()) {
-            output.collect(row);
+        int count = event.rows().size();
+        String eventPosition = event.binlogOffset() != null && !event.lowWatermark()
+                ? MySqlChangeEventIds.fromBinlog(event.binlogOffset())
+                : null;
+        int firstSnapshotRow = event.snapshotRowsEmitted() == null ? -1 : event.snapshotRowsEmitted() - count;
+        if (firstSnapshotRow < 0 && event.snapshotRowsEmitted() != null) {
+            throw new IllegalStateException("Snapshot output ordinal is smaller than the emitted batch");
+        }
+        for (int index = 0; index < count; index++) {
+            TableRecord row = event.rows().get(index);
+            ChangeEventId identity = firstSnapshotRow >= 0
+                    ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
+                    : eventPosition == null ? null : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+            output.collect(identity == null ? row : row.withChangeEventId(identity));
             metrics.read(generation, row.tableId(), state.binlog());
         }
         metrics.observed(generation);

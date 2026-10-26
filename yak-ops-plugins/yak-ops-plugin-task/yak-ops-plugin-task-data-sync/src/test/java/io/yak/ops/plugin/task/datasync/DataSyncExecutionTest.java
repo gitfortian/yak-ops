@@ -35,6 +35,7 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
+import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
 import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
@@ -321,8 +322,8 @@ class DataSyncExecutionTest {
         PipelineBuilder builder = new PipelineBuilder(
                 resources,
                 factories,
-                JobOptions.defaults(),
-                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                EnvironmentOptions.defaults(),
+                new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), Path.of("target/data-sync")),
                 Map.of("JDBC", sourceSettings),
                 Map.of());
 
@@ -350,8 +351,8 @@ class DataSyncExecutionTest {
         PipelineBuilder builder = new PipelineBuilder(
                 resources,
                 factories,
-                JobOptions.defaults(),
-                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                EnvironmentOptions.defaults(),
+                new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), Path.of("target/data-sync")),
                 Map.of("JDBC", sourceSettings),
                 Map.of("JDBC", sinkSettings));
 
@@ -384,8 +385,8 @@ class DataSyncExecutionTest {
         PipelineBuilder invalidSource = new PipelineBuilder(
                 resources,
                 factories,
-                JobOptions.defaults(),
-                new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                EnvironmentOptions.defaults(),
+                new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), Path.of("target/data-sync")),
                 Map.of("JDBC", unknown),
                 Map.of());
         assertThrows(IllegalArgumentException.class, () -> invalidSource.build(plan, CONTEXT, false));
@@ -393,8 +394,8 @@ class DataSyncExecutionTest {
             PipelineBuilder builder = new PipelineBuilder(
                     resources,
                     factories,
-                    JobOptions.defaults(),
-                    new ExecutionConfigurationFactory(JobOptions.defaults(), Path.of("target/data-sync")),
+                    EnvironmentOptions.defaults(),
+                    new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), Path.of("target/data-sync")),
                     Map.of(),
                     Map.of("JDBC", invalidSink));
             assertThrows(IllegalArgumentException.class, () -> builder.build(plan, CONTEXT, false));
@@ -434,10 +435,10 @@ class DataSyncExecutionTest {
     private static ReadonlyConfig runtimeOptions(
             int sourceParallelism, int sinkParallelism, Duration checkpointInterval, int maxRestarts) {
         return new Configuration()
-                .set(JobOptions.SOURCE_PARALLELISM, sourceParallelism)
-                .set(JobOptions.SINK_PARALLELISM, sinkParallelism)
-                .set(JobOptions.CHECKPOINT_INTERVAL, checkpointInterval)
-                .set(JobOptions.MAX_RESTARTS, maxRestarts)
+                .set(EnvironmentOptions.SOURCE_PARALLELISM, sourceParallelism)
+                .set(EnvironmentOptions.SINK_PARALLELISM, sinkParallelism)
+                .set(EnvironmentOptions.CHECKPOINT_INTERVAL, checkpointInterval)
+                .set(EnvironmentOptions.MAX_RESTARTS, maxRestarts)
                 .toReadonlyConfig();
     }
 

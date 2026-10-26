@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.cdc.mysql.source.debezium.CheckpointOffsetBackingStore;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
@@ -35,6 +36,7 @@ public final class MySqlCdcSourceConfig {
     private final int serverId;
     private final String topicPrefix;
     private final Map<TableId, TableSchema> schemas;
+    private final Map<TableId, String> chunkKeyColumns;
     private final int queueCapacity;
     private final Map<String, String> connectionProperties;
     private final Map<TableId, Schema> physicalSchemas;
@@ -72,6 +74,31 @@ public final class MySqlCdcSourceConfig {
                 schemas,
                 queueCapacity,
                 connectionProperties,
+                Map.of());
+    }
+
+    public MySqlCdcSourceConfig(
+            String hostname,
+            int port,
+            String username,
+            String password,
+            int serverId,
+            String topicPrefix,
+            Map<TableId, TableSchema> schemas,
+            int queueCapacity,
+            Map<String, String> connectionProperties,
+            Map<TableId, String> chunkKeyColumns) {
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                chunkKeyColumns,
                 null,
                 false);
     }
@@ -86,6 +113,7 @@ public final class MySqlCdcSourceConfig {
             Map<TableId, TableSchema> schemas,
             int queueCapacity,
             Map<String, String> connectionProperties,
+            Map<TableId, String> chunkKeyColumns,
             Map<TableId, Schema> physicalSchemas,
             boolean schemaEvolutionEnabled) {
         this.schemaEvolutionEnabled = schemaEvolutionEnabled;
@@ -102,15 +130,18 @@ public final class MySqlCdcSourceConfig {
         this.port = port;
         this.serverId = serverId;
         this.queueCapacity = queueCapacity;
-        this.connectionProperties = normalizeConnectionProperties(connectionProperties);
+        this.connectionProperties = prepareConnectionProperties(connectionProperties);
         Map<TableId, TableSchema> resolved = new LinkedHashMap<>();
         Objects.requireNonNull(schemas, "schemas").forEach((table, schema) -> {
             Objects.requireNonNull(table, "table");
             Objects.requireNonNull(schema, "schema");
-            if (table.catalog() == null
-                    || table.schema() != null
-                    || schema.primaryKeys().isEmpty()) {
-                throw new IllegalArgumentException("MySQL CDC requires database-qualified tables with primary keys");
+            if (table.catalog() == null || table.schema() != null) {
+                throw new IllegalArgumentException("MySQL CDC requires database-qualified tables");
+            }
+            if (schema.primaryKeys().isEmpty()) {
+                // An explicit Chunk Key permits internal Backfill planning only. Both public
+                // Source execution entry points still reject keyless streaming tasks.
+                MySqlKeylessSourceContract.validate(schema, chunkKeyColumns.get(table));
             }
             schema.columns().forEach(column -> {
                 if (!column.dataType().isResolved()) {
@@ -125,6 +156,16 @@ public final class MySqlCdcSourceConfig {
             throw new IllegalArgumentException("MySQL CDC requires at least one table");
         }
         this.schemas = Collections.unmodifiableMap(resolved);
+        Map<TableId, String> requestedKeys = new LinkedHashMap<>();
+        Objects.requireNonNull(chunkKeyColumns, "chunkKeyColumns").forEach((table, selected) -> {
+            TableSchema schema = resolved.get(table);
+            if (schema == null) {
+                throw new IllegalArgumentException("Unknown MySQL CDC chunk-key table: " + table);
+            }
+            requestedKeys.put(
+                    table, ChunkUtils.getChunkKeyColumn(schema, selected).name());
+        });
+        this.chunkKeyColumns = Collections.unmodifiableMap(requestedKeys);
         Map<TableId, Schema> shapes = new LinkedHashMap<>();
         resolved.forEach((table, tableSchema) -> shapes.put(
                 table,
@@ -145,7 +186,7 @@ public final class MySqlCdcSourceConfig {
      * Use a numeric UTC offset for new JDBC sessions when no time zone was explicitly configured.
      * This avoids ambiguous OS names and does not require MySQL named time zone tables.
      */
-    private static Map<String, String> normalizeConnectionProperties(Map<String, String> supplied) {
+    private static Map<String, String> prepareConnectionProperties(Map<String, String> supplied) {
         Map<String, String> values = new LinkedHashMap<>();
         Objects.requireNonNull(supplied, "connectionProperties").forEach((key, value) -> {
             if (key == null || !key.matches("[A-Za-z][A-Za-z0-9_.-]*") || value == null) {
@@ -200,6 +241,11 @@ public final class MySqlCdcSourceConfig {
         return schemas;
     }
 
+    /** Explicit table-level chunk columns; absent entries default to the first physical primary-key column. */
+    public Map<TableId, String> chunkKeyColumns() {
+        return chunkKeyColumns;
+    }
+
     public Map<TableId, Schema> physicalSchemas() {
         return physicalSchemas;
     }
@@ -237,6 +283,7 @@ public final class MySqlCdcSourceConfig {
                 shape,
                 queueCapacity,
                 connectionProperties,
+                chunkKeyColumns,
                 models,
                 enabled);
     }
@@ -253,6 +300,7 @@ public final class MySqlCdcSourceConfig {
                 schemas,
                 queueCapacity,
                 connectionProperties,
+                chunkKeyColumns,
                 physicalSchemas,
                 false);
     }

@@ -20,6 +20,7 @@ public final class TableRecord {
     private final TableId tableId;
     private final RowKind rowKind;
     private final RowData row;
+    private final ChangeEventId changeEventId;
 
     /**
      * Wraps a row whose ownership is transferred to downstream processing.
@@ -29,9 +30,23 @@ public final class TableRecord {
      * @param row caller-owned payload, which must not be mutated after handoff
      */
     public TableRecord(TableId tableId, RowKind rowKind, RowData row) {
+        this(tableId, rowKind, row, null);
+    }
+
+    public TableRecord(TableId tableId, RowKind rowKind, RowData row, ChangeEventId changeEventId) {
         this.tableId = Objects.requireNonNull(tableId, "tableId");
         this.rowKind = Objects.requireNonNull(rowKind, "rowKind");
         this.row = Objects.requireNonNull(row, "row");
+        this.changeEventId = changeEventId;
+    }
+
+    /** Returns a new transport envelope with the same business row and a stable change identity. */
+    public TableRecord withChangeEventId(ChangeEventId identity) {
+        Objects.requireNonNull(identity, "identity");
+        if (changeEventId != null && !changeEventId.equals(identity)) {
+            throw new IllegalStateException("Cannot reassign a CDC change identity");
+        }
+        return new TableRecord(tableId, rowKind, row, identity);
     }
 
     /** Returns the physical identity of the emitted table. */
@@ -47,6 +62,11 @@ public final class TableRecord {
     /** Returns the transferred row payload without copying it. */
     public RowData row() {
         return row;
+    }
+
+    /** Optional transport metadata; absent on legacy JDBC and unsupported CDC offsets. */
+    public ChangeEventId changeEventId() {
+        return changeEventId;
     }
 
     /** Excludes arbitrary RowData contents from diagnostics. */

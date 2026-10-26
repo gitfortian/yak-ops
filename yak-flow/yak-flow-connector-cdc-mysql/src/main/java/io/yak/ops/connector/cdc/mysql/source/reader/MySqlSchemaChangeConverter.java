@@ -3,22 +3,16 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SourceSchemaChange;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.schema.Schema;
-import io.yak.ops.core.types.BasicType;
-import io.yak.ops.core.types.DecimalType;
 import io.yak.ops.core.types.LogicalType;
-import io.yak.ops.core.types.LogicalTypeRoot;
-import io.yak.ops.core.types.TimeType;
-import io.yak.ops.core.types.TimestampType;
-import io.yak.ops.core.types.VarBinaryType;
-import io.yak.ops.core.types.VarCharType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Types;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,10 +29,47 @@ import org.apache.kafka.connect.data.Struct;
 public final class MySqlSchemaChangeConverter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final MySqlTypeConverter TYPES = new MySqlTypeConverter();
     private final Set<TableId> selected;
 
     public MySqlSchemaChangeConverter(Set<TableId> selected) {
         this.selected = Set.copyOf(Objects.requireNonNull(selected, "selected"));
+    }
+
+    /**
+     * Replays structured table metadata during the initial no_data schema snapshot.
+     * Debezium can emit DROP and CREATE for the same existing table while rebuilding
+     * history. The final registered set, not any individual operation, is authoritative.
+     * These events never enter the runtime SchemaCoordinator.
+     */
+    public void applyInitialTables(Struct envelope, Set<TableId> registered) {
+        Objects.requireNonNull(envelope, "envelope");
+        Objects.requireNonNull(registered, "registered");
+        if (envelope.schema().field("tableChanges") == null
+                || !(envelope.get("tableChanges") instanceof List<?> changes)) {
+            throw new IllegalStateException("MySQL CDC initial schema snapshot has no tableChanges");
+        }
+        for (Object item : changes) {
+            if (!(item instanceof Struct change)) {
+                throw new IllegalStateException("Invalid MySQL CDC initial table metadata");
+            }
+            TableId table = resolveTable(text(change, "id"));
+            if (!selected.contains(table)) {
+                continue;
+            }
+            String operation = text(change, "type");
+            if ("DROP".equalsIgnoreCase(operation)) {
+                registered.remove(table);
+            } else if ("CREATE".equalsIgnoreCase(operation) || "ALTER".equalsIgnoreCase(operation)) {
+                if (change.schema().field("table") == null || change.get("table") == null) {
+                    throw new IllegalStateException("MySQL CDC initial table metadata is missing: " + table);
+                }
+                registered.add(table);
+            } else {
+                throw new IllegalStateException(
+                        "Unexpected MySQL CDC table change during initial schema snapshot: " + operation);
+            }
+        }
     }
 
     public SourceSchemaChange convert(Struct envelope, BinlogOffset offset, Map<TableId, Schema> current) {
@@ -95,60 +126,77 @@ public final class MySqlSchemaChangeConverter {
     }
 
     private static Schema tableSchema(Struct change, Schema previous) {
-        if (change.schema().field("table") == null) {
-            throw new UnsupportedOperationException("Debezium DDL has no table metadata");
+        io.debezium.relational.history.TableChanges.TableChange parsed = parseTableChange(change);
+        if (parsed.getPreviousId() != null) {
+            throw new UnsupportedOperationException("MySQL CDC does not support table renames");
         }
-        Object document = change.get("table");
-        JsonNode table;
-        try {
-            if (document instanceof String json) {
-                table = JSON.readTree(json);
-            } else if (document instanceof Struct || document instanceof Map<?, ?>) {
-                table = connectJson(document);
-            } else {
-                throw new UnsupportedOperationException("Unsupported Debezium schema table metadata representation");
-            }
-        } catch (com.fasterxml.jackson.core.JsonProcessingException failure) {
-            throw new IllegalArgumentException("Invalid Debezium table schema metadata", failure);
-        }
-        JsonNode columnsNode = table.path("columns");
-        JsonNode keysNode = table.path("primaryKeyColumnNames");
-        if (!columnsNode.isArray() || !keysNode.isArray() || columnsNode.isEmpty()) {
-            throw new UnsupportedOperationException("Debezium table metadata lacks columns or primary keys");
-        }
-        List<String> keys = new ArrayList<>();
-        keysNode.forEach(node -> keys.add(node.asText()));
-        if (!previous.primaryKeys().equals(keys)) {
+        io.debezium.relational.Table table = Objects.requireNonNull(parsed.getTable(), "Debezium table metadata");
+        if (!previous.primaryKeys().equals(table.primaryKeyColumnNames())) {
             throw new UnsupportedOperationException("Runtime MySQL CDC cannot change table primary keys");
         }
-
         List<PhysicalColumn> columns = new ArrayList<>();
-        for (JsonNode metadata : columnsNode) {
-            String name = requiredText(metadata, "name");
-            String nativeType = requiredText(metadata, "typeName").toLowerCase(java.util.Locale.ROOT);
+        for (io.debezium.relational.Column metadata : table.columns()) {
+            String name = metadata.name();
+            String nativeType =
+                    Objects.requireNonNull(metadata.typeName(), "native type").toLowerCase(java.util.Locale.ROOT);
             if (nativeType.contains("unsigned") || nativeType.startsWith("enum") || nativeType.startsWith("set")) {
                 throw new UnsupportedOperationException("Unsupported MySQL native type in CDC DDL");
             }
-            if (metadata.path("autoIncremented").asBoolean(false)
-                    || metadata.path("generated").asBoolean(false)
-                    || !metadata.path("defaultValueExpression").isNull()
-                            && metadata.hasNonNull("defaultValueExpression")) {
+            if (metadata.isAutoIncremented()
+                    || metadata.isGenerated()
+                    || metadata.defaultValueExpression().isPresent()) {
                 throw new UnsupportedOperationException("CDC schema evolution cannot change generated/default columns");
             }
-            boolean nullable = metadata.path("optional").asBoolean(true);
-            int jdbcType = metadata.path("jdbcType").asInt(Integer.MIN_VALUE);
-            LogicalType type = logicalType(jdbcType, metadata, nullable);
+            LogicalType type;
+            try {
+                type = TYPES.convertColumn(
+                        metadata.jdbcType(),
+                        metadata.typeName(),
+                        metadata.length(),
+                        metadata.scale().orElse(0),
+                        metadata.isOptional(),
+                        name);
+            } catch (SQLException failure) {
+                throw new UnsupportedOperationException("Unsupported MySQL CDC column type: " + name, failure);
+            }
             PhysicalColumn existing = previous.column(name).orElse(null);
+            // Debezium may report only a SQL type family. Never retain a pre-DDL native
+            // definition when the logical field has changed.
             columns.add(new PhysicalColumn(
                     name,
                     type,
                     existing == null ? null : existing.comment(),
-                    existing == null ? null : existing.properties()));
+                    existing != null && existing.type().equals(type) ? existing.properties() : null));
         }
-        return new Schema(columns, keys, previous.comment());
+        return new Schema(columns, table.primaryKeyColumnNames(), previous.comment());
     }
 
-    /** Converts Kafka Connect's nested Struct/array metadata into an ordinary JSON tree. */
+    /**
+     * Deserializes Debezium's own table-change document rather than independently
+     * interpreting its column metadata. The document is captured at the DDL Binlog offset.
+     */
+    private static io.debezium.relational.history.TableChanges.TableChange parseTableChange(Struct change) {
+        try {
+            io.debezium.document.Document document = io.debezium.document.Document.create();
+            document.setString("type", text(change, "type"));
+            document.setString("id", text(change, "id"));
+            if (change.schema().field("previousId") != null && change.get("previousId") != null) {
+                document.setString("previousId", text(change, "previousId"));
+            }
+            if (change.schema().field("table") != null && change.get("table") != null) {
+                Object raw = change.get("table");
+                String json = raw instanceof String string ? string : JSON.writeValueAsString(connectJson(raw));
+                document.setDocument(
+                        "table",
+                        io.debezium.document.DocumentReader.defaultReader().read(json));
+            }
+            return io.debezium.relational.history.JsonTableChangeSerializer.fromDocument(document, true);
+        } catch (java.io.IOException failure) {
+            throw new IllegalArgumentException("Invalid Debezium structured table metadata", failure);
+        }
+    }
+
+    /** Converts Kafka Connect's structured metadata into Debezium's document format. */
     private static JsonNode connectJson(Object value) {
         if (value instanceof Struct struct) {
             var result = JSON.createObjectNode();
@@ -177,31 +225,6 @@ public final class MySqlSchemaChangeConverter {
         return JSON.valueToTree(value);
     }
 
-    private static LogicalType logicalType(int jdbc, JsonNode column, boolean nullable) {
-        int length = column.path("length").asInt(0);
-        int scale = column.path("scale").asInt(0);
-        return switch (jdbc) {
-            case Types.BOOLEAN, Types.BIT -> new BasicType(nullable, LogicalTypeRoot.BOOLEAN);
-            case Types.TINYINT -> new BasicType(nullable, LogicalTypeRoot.TINYINT);
-            case Types.SMALLINT -> new BasicType(nullable, LogicalTypeRoot.SMALLINT);
-            case Types.INTEGER -> new BasicType(nullable, LogicalTypeRoot.INTEGER);
-            case Types.BIGINT -> new BasicType(nullable, LogicalTypeRoot.BIGINT);
-            case Types.FLOAT, Types.REAL -> new BasicType(nullable, LogicalTypeRoot.FLOAT);
-            case Types.DOUBLE -> new BasicType(nullable, LogicalTypeRoot.DOUBLE);
-            case Types.DECIMAL, Types.NUMERIC -> new DecimalType(nullable, length, scale);
-            case Types.CHAR, Types.NCHAR -> new io.yak.ops.core.types.CharType(nullable, length);
-            case Types.VARCHAR, Types.NVARCHAR, Types.LONGVARCHAR, Types.LONGNVARCHAR ->
-                new VarCharType(nullable, length > 0 ? length : VarCharType.MAX_LENGTH);
-            case Types.BINARY -> new io.yak.ops.core.types.BinaryType(nullable, length);
-            case Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB ->
-                new VarBinaryType(nullable, length > 0 ? length : VarBinaryType.MAX_LENGTH);
-            case Types.DATE -> new BasicType(nullable, LogicalTypeRoot.DATE);
-            case Types.TIME, Types.TIME_WITH_TIMEZONE -> new TimeType(nullable, Math.min(6, Math.max(0, scale)));
-            case Types.TIMESTAMP -> new TimestampType(nullable, Math.min(6, Math.max(0, scale)));
-            default -> throw new UnsupportedOperationException("Unsupported MySQL CDC JDBC logical type: " + jdbc);
-        };
-    }
-
     private static String text(Struct struct, String field) {
         if (struct.schema().field(field) == null) {
             throw new UnsupportedOperationException("Debezium schema change is missing " + field);
@@ -211,14 +234,6 @@ public final class MySqlSchemaChangeConverter {
             throw new UnsupportedOperationException("Invalid Debezium schema change " + field);
         }
         return result;
-    }
-
-    private static String requiredText(JsonNode node, String field) {
-        JsonNode value = node.path(field);
-        if (!value.isTextual() || value.textValue().isBlank()) {
-            throw new UnsupportedOperationException("Debezium column metadata is missing " + field);
-        }
-        return value.textValue();
     }
 
     /** Hashes the complete Connect offset, including intra-binlog event counters. */

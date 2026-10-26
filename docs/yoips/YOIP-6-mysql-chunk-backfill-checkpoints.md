@@ -6,7 +6,7 @@ Discussion: https://github.com/weifuwan/yak-ops/pull/1653
 
 Decision: Pending maintainer review of checkpoint compatibility and the implementation evidence.
 
-Implementation: Draft PR #1653, following the approved implementation scope in the task discussion. This document does not claim a maintainer approval or release.
+Implementation: [PR #1653](https://github.com/weifuwan/yak-ops/pull/1653) was merged. This implementation merge does not establish a formal YOIP acceptance decision.
 
 Release: N/A
 

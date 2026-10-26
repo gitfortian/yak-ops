@@ -23,8 +23,12 @@ function compile(file, mocks) {
 }
 
 const params = compile("../apps/web/app/data-sync/editor/definition.ts", {
-  "@/service/data-sync/parameters": { validIncrementalConfig: (x) => Boolean(x?.column) },
-  "../table-mapping-editor": { validTableMappings: (rows) => rows.length > 0 },
+  "@/service/data-sync/parameters": {
+    validIncrementalConfig: (x) => Boolean(x?.column),
+    offlineIncremental: (solution, steps) =>
+      solution.endsWith("_OFFLINE") && steps.includes("INCREMENTAL"),
+  },
+  "./table-mapping-editor": { validTableMappings: (rows) => rows.length > 0 },
   "@/app/schedule/schedule-presentation": {
     sameScheduleRule: (a, b) => a.cronExpression === b.cronExpression,
   },
@@ -44,18 +48,63 @@ const form = {
   name: " orders ",
   remark: " remark ",
   debug: false,
-  schemaChangesEnabled: false,
-  allowDropColumns: true,
-  writeMode: "UPSERT",
-  sourceDataSourceId: "mysql",
-  sourceDatabase: "test",
-  sourceSchema: "",
-  sourceTable: "orders",
-  targetDataSourceId: "pg",
-  targetDatabase: "target",
-  targetSchema: "public",
-  targetTable: "ods_orders",
+  source: {
+    dataSourceId: "mysql",
+    database: "test",
+    schema: "",
+    table: "orders",
+    keylessEnabled: false,
+    chunkKeyColumn: "",
+    incremental: undefined,
+  },
+  sink: {
+    dataSourceId: "pg",
+    database: "target",
+    schema: "public",
+    table: "ods_orders",
+    schemaChangesEnabled: false,
+    allowDropColumns: true,
+    writeMode: "UPSERT",
+    targetPrimaryKeys: [],
+  },
 };
+const selection = compile("../apps/web/app/data-sync/editor/source-selection.ts", {});
+const keyed = {
+  ...form,
+  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  sink: {
+    ...form.sink,
+    writeMode: "RETRACT",
+    targetPrimaryKeys: ["bucket"],
+    schemaChangesEnabled: false,
+  },
+};
+const selectedSchema = selection.selectSourceSchema(keyed, "new_schema", true);
+assert.equal(selectedSchema.source.schema, "new_schema");
+assert.equal(selectedSchema.source.table, "");
+assert.equal(selectedSchema.source.keylessEnabled, false);
+assert.equal(selectedSchema.sink.writeMode, "UPSERT");
+assert.equal(selectedSchema.sink.targetPrimaryKeys.length, 0);
+assert.equal(selectedSchema.sink.dataSourceId, "pg");
+
+const selectedTable = selection.selectSourceTable(
+  keyed,
+  { name: "invoices", schema: "public" },
+  true,
+);
+assert.equal(selectedTable.source.table, "invoices");
+assert.equal(selectedTable.source.keylessEnabled, false);
+assert.equal(selectedTable.sink.writeMode, "UPSERT");
+assert.equal(selectedTable.sink.table, "ods_orders");
+
+const selectedKeyless = selection.setKeylessSource(form, true);
+assert.equal(selectedKeyless.source.keylessEnabled, true);
+assert.equal(selectedKeyless.sink.writeMode, "RETRACT");
+assert.equal(selectedKeyless.sink.schemaChangesEnabled, false);
+assert.equal(selectedKeyless.sink.allowDropColumns, false);
+assert.equal(selectedKeyless.sink.targetPrimaryKeys.length, 0);
+assert.equal(selection.setKeylessSource(selectedKeyless, false).source.chunkKeyColumn, "");
+
 const request = params.buildEditorPayload(form, draft, false, [], true);
 assert.equal(request.name, "orders");
 assert.equal(request.remark, "remark");
@@ -66,6 +115,130 @@ assert.equal(
   false,
 );
 assert.equal(request.tableMappings, undefined);
+assert.equal(request.sourceDataSourceId, "mysql");
+assert.equal(request.targetDataSourceId, "pg");
+assert.equal(request.writeMode, "UPSERT");
+assert.equal("source" in request, false);
+assert.equal("sink" in request, false);
+assert.equal("env" in request, false);
+
+const transport = compile("../apps/web/service/data-sync/definition.ts", {
+  "./parameters.ts": {
+    solutionSyncType: (solution) => (solution.endsWith("_REALTIME") ? "REALTIME" : "OFFLINE"),
+    supportsMultipleTables: (solution) => solution.startsWith("DATABASE_"),
+  },
+});
+const incremental = {
+  mode: "TIMESTAMP",
+  column: "updated_at",
+  initialValue: "2026-10-01T00:00:00",
+  delaySeconds: 0,
+  lookbackSeconds: 5,
+};
+const offlineDraft = {
+  ...draft,
+  solutionType: "SINGLE_TABLE_OFFLINE",
+  steps: ["FULL", "INCREMENTAL"],
+};
+const offlineForm = {
+  ...form,
+  source: { ...form.source, incremental },
+  sink: { ...form.sink, writeMode: "UPSERT" },
+};
+const offlinePayload = params.buildEditorPayload(offlineForm, offlineDraft, false, [], false);
+assert.equal(offlinePayload.incremental.column, "updated_at");
+assert.equal(offlinePayload.incremental.lookbackSeconds, 5);
+const offlineParameters = JSON.parse(transport.createDefinitionRequest(offlinePayload).parameters);
+assert.equal(offlineParameters.solutionType, "SINGLE_TABLE_OFFLINE");
+assert.deepEqual(offlineParameters.steps, ["FULL", "INCREMENTAL"]);
+assert.equal(offlineParameters.tableMappings.length, 1);
+assert.deepEqual(offlineParameters.tableMappings[0].incremental, incremental);
+assert.equal(offlineParameters.tableMappings[0].source.table, "orders");
+assert.equal(offlineParameters.tableMappings[0].target.table, "ods_orders");
+assert.equal(offlineParameters.tableMappings[0].writeMode, "UPSERT");
+assert.equal("env" in offlineParameters, false);
+assert.equal("incremental" in offlineParameters.source, false);
+
+const incrementalOnly = {
+  ...offlineDraft,
+  steps: ["INCREMENTAL"],
+};
+const incrementalOnlyPayload = params.buildEditorPayload(
+  offlineForm,
+  incrementalOnly,
+  false,
+  [],
+  false,
+);
+const incrementalOnlyParameters = JSON.parse(
+  transport.createDefinitionRequest(incrementalOnlyPayload).parameters,
+);
+assert.equal(incrementalOnlyParameters.tableMappings[0].incremental.column, "updated_at");
+const fullOnlyPayload = params.buildEditorPayload(
+  offlineForm,
+  { ...offlineDraft, steps: ["FULL"] },
+  false,
+  [],
+  false,
+);
+assert.equal("incremental" in fullOnlyPayload, false);
+const mappings = [
+  {
+    source: { table: "customers" },
+    target: { table: "ods_customers" },
+    writeMode: "UPSERT",
+    incremental,
+  },
+  {
+    source: { table: "orders" },
+    target: { table: "ods_orders" },
+    writeMode: "UPSERT",
+    incremental,
+  },
+];
+const many = params.buildEditorPayload(
+  offlineForm,
+  { ...offlineDraft, solutionType: "DATABASE_OFFLINE" },
+  true,
+  mappings,
+  false,
+);
+const multiParameters = JSON.parse(transport.createDefinitionRequest(many).parameters);
+assert.equal(multiParameters.tableMappings.length, 2);
+assert.equal(multiParameters.tableMappings[0].incremental.column, "updated_at");
+assert.equal(multiParameters.tableMappings[1].target.table, "ods_orders");
+assert.equal("incremental" in many, false);
+const retractForm = {
+  ...form,
+  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  sink: {
+    ...form.sink,
+    targetPrimaryKeys: [],
+    writeMode: "RETRACT",
+    schemaChangesEnabled: false,
+  },
+};
+const retractPayload = params.buildEditorPayload(
+  retractForm,
+  { ...draft, solutionType: "SINGLE_TABLE_REALTIME", steps: ["FULL", "INCREMENTAL"] },
+  false,
+  [],
+  true,
+);
+const retractParameters = JSON.parse(transport.createDefinitionRequest(retractPayload).parameters);
+assert.equal(retractParameters.tableMappings[0].source.xa, true);
+assert.equal(retractParameters.tableMappings[0].source.chunkKeyColumn, "bucket");
+assert.equal(retractParameters.tableMappings[0].writeMode, "RETRACT");
+assert.equal("xa" in retractParameters.tableMappings[0].target, false);
+const upsertParameters = JSON.parse(
+  transport.createDefinitionRequest({
+    ...retractPayload,
+    writeMode: "UPSERT",
+    targetPrimaryKeys: ["bucket"],
+  }).parameters,
+);
+assert.equal(upsertParameters.tableMappings[0].source.xa, undefined);
+assert.deepEqual(upsertParameters.tableMappings[0].target.primaryKeys, ["bucket"]);
 
 const options = {
   published: false,
@@ -90,6 +263,66 @@ const options = {
   sourceCatalog: { schemas: [], tables: [], loading: false, error: "" },
 };
 assert.equal(params.canSaveEditor(options), true);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    draft: offlineDraft,
+    form: offlineForm,
+    useIncremental: true,
+  }),
+  true,
+);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    draft: offlineDraft,
+    form: { ...offlineForm, source: { ...offlineForm.source, incremental: undefined } },
+    useIncremental: true,
+  }),
+  false,
+);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    draft: { ...draft, targetType: "MYSQL", steps: ["FULL", "INCREMENTAL"] },
+    selectedTargetDataSource: { dbType: "MYSQL" },
+    prepareSchema: false,
+    combination: { writeModes: ["UPSERT", "RETRACT"] },
+    form: {
+      ...form,
+      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      sink: { ...form.sink, writeMode: "RETRACT", schemaChangesEnabled: false },
+    },
+    targetCatalog: { ...options.targetCatalog, tables: [{ name: "ods_orders" }] },
+  }),
+  true,
+);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    form: { ...form, sink: { ...form.sink, writeMode: "RETRACT" } },
+  }),
+  false,
+);
+assert.equal(
+  params.canSaveEditor({
+    ...options,
+    draft: { ...draft, targetType: "MYSQL" },
+    selectedTargetDataSource: { dbType: "MYSQL" },
+    combination: { writeModes: ["UPSERT", "RETRACT"] },
+    form: {
+      ...form,
+      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      sink: {
+        ...form.sink,
+        targetPrimaryKeys: ["bucket"],
+        writeMode: "UPSERT",
+        schemaChangesEnabled: false,
+      },
+    },
+  }),
+  true,
+);
 assert.equal(params.canSaveEditor({ ...options, published: true }), false);
 assert.equal(
   params.canSaveEditor({ ...options, supportsScheduling: true, scheduleNeedsReload: true }),

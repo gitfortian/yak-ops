@@ -15,7 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.dao.entity.schedule.ScheduleEntity;
 import io.yak.ops.dao.repository.schedule.ScheduleFireRepository;
 import io.yak.ops.dao.repository.schedule.ScheduleRepository;
@@ -46,7 +46,7 @@ class ScheduleRegistrationServiceTest {
     private final Scheduler scheduler = mock(Scheduler.class);
     private final CronService cron = mock(CronService.class);
     private final Clock clock = Clock.fixed(now, ZoneOffset.UTC);
-    private final ScheduleAdmissionGate gate = new ScheduleAdmissionGate(clock, Duration.ofSeconds(60));
+    private final ScheduleAdmissionController admissionController = new ScheduleAdmissionController(clock, Duration.ofSeconds(60));
     private final ScheduleEntity row = new ScheduleEntity();
 
     @BeforeEach
@@ -60,8 +60,8 @@ class ScheduleRegistrationServiceTest {
                         scheduler,
                         "cron",
                         cron,
-                        "gate",
-                        gate,
+                        "admissionController",
+                        admissionController,
                         "scheduleClock",
                         clock,
                         "retention",
@@ -71,7 +71,7 @@ class ScheduleRegistrationServiceTest {
             field.setAccessible(true);
             field.set(service, entry.getValue());
         }
-        gate.prepare("owner", () -> {});
+        admissionController.prepare("owner", () -> {});
         row.setId("schedule");
         row.setWorkspaceId("ws");
         row.setEnabled(true);
@@ -115,7 +115,7 @@ class ScheduleRegistrationServiceTest {
 
     @Test
     void stoppedOwnerDoesNotApplyRegistrations() {
-        gate.stop();
+        admissionController.stop();
         service.synchronize("ws", "schedule");
         verifyNoInteractions(scheduler);
         assertEquals("ERROR", service.describe(List.of(row)).get("schedule").status());

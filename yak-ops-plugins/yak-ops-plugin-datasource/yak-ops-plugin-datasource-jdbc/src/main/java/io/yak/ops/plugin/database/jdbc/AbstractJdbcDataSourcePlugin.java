@@ -254,7 +254,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         try {
             ReadonlyConfig input = connectionOptions(configuration);
             JsonNode root = MAPPER.valueToTree(input.getSourceMap());
-            Map<String, String> properties = normalizeProperties(parseProperties(root.get("properties")));
+            Map<String, String> properties = prepareConnectionProperties(parseProperties(root.get("properties")));
 
             Map<String, Object> values = new LinkedHashMap<>(input.getSourceMap());
             values.put("properties", properties);
@@ -271,8 +271,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             String schema = StringUtils.trimToNull(options.get(SCHEMA));
             String username = options.get(USERNAME).trim();
             String password = options.get(PASSWORD);
-            String driverId = normalizeDriverId(root);
-            String driver = normalizeDriverClassName(root, driverId);
+            String driverId = resolveDriverId(root);
+            String driver = resolveDriverClassName(root, driverId);
             SshTunnelConfig sshTunnel = parseSshTunnel(options);
 
             String jdbcUrl;
@@ -293,7 +293,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 database = inferDatabase(jdbcUrl);
             }
 
-            schema = normalizeSchema(schema);
+            schema = resolveSchema(schema);
             ObjectNode normalized = JSONUtils.createObjectNode();
             normalized.put("dbType", type());
             putIfText(normalized, "host", host);
@@ -449,15 +449,15 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
                 && !normalized.contains(".faultinjection.");
     }
 
-    protected Map<String, String> normalizeProperties(Map<String, String> properties) {
+    protected Map<String, String> prepareConnectionProperties(Map<String, String> properties) {
         return properties;
     }
 
-    protected String normalizeSchema(String schema) {
+    protected String resolveSchema(String schema) {
         return StringUtils.trimToNull(schema);
     }
 
-    protected String normalizeDriverId(JsonNode connectionJson) {
+    protected String resolveDriverId(JsonNode connectionJson) {
         String driverId = StringUtils.trimToNull(JSONUtils.firstText(connectionJson, "driverId"));
         if (driverId != null) {
             throw parameterError("当前数据源不支持 JDBC Driver 选择：" + driverId, null);
@@ -465,7 +465,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         return null;
     }
 
-    protected String normalizeDriverClassName(JsonNode connectionJson, String driverId) {
+    protected String resolveDriverClassName(JsonNode connectionJson, String driverId) {
         String driver = StringUtils.trimToNull(JSONUtils.firstText(connectionJson, "driverClassName", "driver"));
         return driver == null ? defaultDriverClassName() : driver;
     }

@@ -46,6 +46,9 @@ concurrency:
 jobs:
   quality:
     name: Quality Gate
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/quality-check.yml
 
   backend-tests:

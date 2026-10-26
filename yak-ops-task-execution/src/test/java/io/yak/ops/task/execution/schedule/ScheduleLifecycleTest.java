@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.schedule.ScheduleRegistrationService;
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.plugin.scheduler.api.Scheduler;
 import io.yak.ops.task.execution.owner.EmbeddedExecutionOwner;
 import java.time.Clock;
@@ -18,36 +18,36 @@ import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Verifies owner-before-store startup and gate-before-store shutdown without pretending to run Quartz. */
+/** Verifies owner-before-store startup and admission-before-store shutdown without pretending to run Quartz. */
 class ScheduleLifecycleTest {
     @Test
     void ownershipAndReconciliationPrecedeAdmissionAndEngineStart() throws Exception {
         EmbeddedExecutionOwner owner = mock(EmbeddedExecutionOwner.class);
         Scheduler scheduler = mock(Scheduler.class);
         ScheduleRegistrationService registrations = mock(ScheduleRegistrationService.class);
-        ScheduleAdmissionGate gate = new ScheduleAdmissionGate(Clock.systemUTC(), Duration.ofSeconds(60));
-        ScheduleLifecycle lifecycle = setup(owner, scheduler, gate, registrations);
+        ScheduleAdmissionController admissionController = new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
+        ScheduleLifecycle lifecycle = setup(owner, scheduler, admissionController, registrations);
         when(owner.incarnation()).thenReturn("owner");
         doAnswer(call -> {
-                    assertFalse(gate.isOpen());
+                    assertFalse(admissionController.isOpen());
                     return null;
                 })
                 .when(scheduler)
                 .initialize();
         doAnswer(call -> {
-                    assertFalse(gate.isOpen());
+                    assertFalse(admissionController.isOpen());
                     return null;
                 })
                 .when(registrations)
                 .reconcile();
         doAnswer(call -> {
-                    assertTrue(gate.isOpen());
+                    assertTrue(admissionController.isOpen());
                     return null;
                 })
                 .when(scheduler)
                 .start();
         doAnswer(call -> {
-                    assertFalse(gate.isOpen());
+                    assertFalse(admissionController.isOpen());
                     return null;
                 })
                 .when(scheduler)
@@ -61,7 +61,7 @@ class ScheduleLifecycleTest {
         } finally {
             lifecycle.close();
         }
-        assertFalse(gate.isOpen());
+        assertFalse(admissionController.isOpen());
     }
 
     @Test
@@ -69,8 +69,8 @@ class ScheduleLifecycleTest {
         EmbeddedExecutionOwner owner = mock(EmbeddedExecutionOwner.class);
         Scheduler scheduler = mock(Scheduler.class);
         ScheduleRegistrationService registrations = mock(ScheduleRegistrationService.class);
-        ScheduleAdmissionGate gate = new ScheduleAdmissionGate(Clock.systemUTC(), Duration.ofSeconds(60));
-        ScheduleLifecycle lifecycle = setup(owner, scheduler, gate, registrations);
+        ScheduleAdmissionController admissionController = new ScheduleAdmissionController(Clock.systemUTC(), Duration.ofSeconds(60));
+        ScheduleLifecycle lifecycle = setup(owner, scheduler, admissionController, registrations);
         when(owner.incarnation()).thenThrow(new IllegalStateException("owner unavailable"));
         assertThrows(IllegalStateException.class, lifecycle::start);
         verifyNoInteractions(scheduler, registrations);
@@ -80,7 +80,7 @@ class ScheduleLifecycleTest {
     private ScheduleLifecycle setup(
             EmbeddedExecutionOwner owner,
             Scheduler scheduler,
-            ScheduleAdmissionGate gate,
+            ScheduleAdmissionController admissionController,
             ScheduleRegistrationService registrations)
             throws Exception {
         ScheduleLifecycle lifecycle = new ScheduleLifecycle();
@@ -89,8 +89,8 @@ class ScheduleLifecycleTest {
                         owner,
                         "scheduler",
                         scheduler,
-                        "gate",
-                        gate,
+                        "admissionController",
+                        admissionController,
                         "registrations",
                         registrations,
                         "interval",

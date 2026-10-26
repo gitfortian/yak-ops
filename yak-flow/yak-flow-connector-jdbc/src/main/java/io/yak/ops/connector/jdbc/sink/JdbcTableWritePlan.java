@@ -19,8 +19,8 @@ import java.util.stream.IntStream;
  * Defines an immutable source-to-target table mapping and its resolved JDBC write contract.
  *
  * <p>Target column order determines positional SQL binding. Source positions select fields
- * without implicit type coercion; logical type roots must match. UPDATE_BEFORE/DELETE carry
- * only the target's key values, whereas INSERT/UPDATE_AFTER carry the full target schema.
+ * with explicit lossless conversion to target logical types. UPDATE_BEFORE/DELETE carry
+ * only the converted target key values, whereas INSERT/UPDATE_AFTER carry the full target schema.
  * Planning and projection do not open JDBC connections.
  */
 public record JdbcTableWritePlan(
@@ -38,7 +38,7 @@ public record JdbcTableWritePlan(
 
     /**
      * Maps target column names to source column names; unmapped target columns use their own name.
-     * No implicit type coercion is performed.
+     * Only explicitly supported lossless type conversions are performed.
      */
     public JdbcTableWritePlan(
             TableId sourceTable,
@@ -73,14 +73,52 @@ public record JdbcTableWritePlan(
                 throw new IllegalArgumentException("JDBC source field position is outside the schema");
             }
             Column source = sourceSchema.column(position);
-            if (!target.dataType().isResolved()
-                    || !source.dataType().isResolved()
-                    || target.dataType().getTypeRoot() != source.dataType().getTypeRoot()) {
-                throw new IllegalArgumentException("JDBC mapping requires matching resolved logical types");
+            if (!JdbcColumnValueConverter.supports(source, target)) {
+                throw new IllegalArgumentException(
+                        "JDBC mapping cannot safely convert source to target field: " + target.name());
             }
         }
-        if (writeMode == JdbcWriteMode.UPSERT && schema.primaryKeys().isEmpty()) {
-            throw new IllegalArgumentException("JDBC UPSERT requires primary keys");
+        if (writeMode == JdbcWriteMode.RETRACT) {
+            JdbcKeylessRetractionContract.validate(sourceSchema, schema);
+            for (int index = 0; index < sourcePositions.size(); index++) {
+                if (sourcePositions.get(index) != index) {
+                    throw new IllegalArgumentException("JDBC RETRACT requires an exact full-row identity mapping");
+                }
+            }
+        }
+        if (writeMode == JdbcWriteMode.UPSERT) {
+            // A snapshot Chunk Key chooses a read range; it is not a physical row identity.
+            // Every destination key must map bijectively to a declared source primary key,
+            // including when source and destination field names differ.
+            if (schema.primaryKeys().isEmpty()
+                    || sourceSchema.primaryKeys().isEmpty()
+                    || schema.primaryKeys().size() != sourceSchema.primaryKeys().size()) {
+                throw new IllegalArgumentException(
+                        "JDBC UPSERT requires physical primary keys on both source and target");
+            }
+            Set<String> sourceKeys = new HashSet<>();
+            for (String targetKey : schema.primaryKeys()) {
+                int targetPosition = -1;
+                for (int index = 0; index < schema.columnCount(); index++) {
+                    if (schema.column(index).name().equals(targetKey)) {
+                        targetPosition = index;
+                        break;
+                    }
+                }
+                if (targetPosition < 0) {
+                    throw new IllegalArgumentException("Missing destination primary-key column: " + targetKey);
+                }
+                String sourceKey =
+                        sourceSchema.column(sourcePositions.get(targetPosition)).name();
+                if (!sourceSchema.primaryKeys().contains(sourceKey) || !sourceKeys.add(sourceKey)) {
+                    throw new IllegalArgumentException(
+                            "JDBC UPSERT destination primary key must map to a source physical primary key: "
+                                    + targetKey);
+                }
+            }
+            if (!sourceKeys.equals(new HashSet<>(sourceSchema.primaryKeys()))) {
+                throw new IllegalArgumentException("JDBC UPSERT does not preserve the full source row identity");
+            }
         }
     }
 
@@ -95,6 +133,7 @@ public record JdbcTableWritePlan(
         return switch (writeMode) {
             case APPEND -> dialect.insertSql(targetTable, schema);
             case UPSERT -> dialect.upsertSql(targetTable, schema);
+            case RETRACT -> dialect.insertSql(targetTable, schema);
         };
     }
 
@@ -171,7 +210,8 @@ public record JdbcTableWritePlan(
     /**
      * Copies and maps one source row before it enters the sole JDBC batch buffer.
      *
-     * <p>DELETE/UPDATE_BEFORE emit only non-null primary keys. INSERT/UPDATE_AFTER project
+     * <p>UPSERT DELETE/UPDATE_BEFORE emit only non-null primary keys, while RETRACT emits
+     * the complete before-image for exact-row comparison. INSERT/UPDATE_AFTER project
      * all target columns and reject null UPSERT keys. Caller-owned mutable byte arrays are
      * detached through the internal RowData representation.
      *
@@ -189,19 +229,26 @@ public record JdbcTableWritePlan(
         if (writeMode == JdbcWriteMode.APPEND && kind != RowKind.INSERT) {
             throw new UnsupportedOperationException("APPEND mode accepts INSERT records only");
         }
-        if (kind == RowKind.DELETE || kind == RowKind.UPDATE_BEFORE) {
+        if (writeMode != JdbcWriteMode.RETRACT && (kind == RowKind.DELETE || kind == RowKind.UPDATE_BEFORE)) {
             GenericRowData keys = new GenericRowData(schema.primaryKeys().size());
             int index = 0;
             for (String key : schema.primaryKeys()) {
                 int targetIndex = targetIndex(key);
-                Object value = row.getField(sourcePositions.get(targetIndex));
+                int sourcePosition = sourcePositions.get(targetIndex);
+                Objects.requireNonNull(row.getField(sourcePosition), "JDBC retract primary key must not be null");
+                Object value = JdbcColumnValueConverter.convert(
+                        row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(targetIndex));
                 keys.setField(index++, Objects.requireNonNull(value, "JDBC retract primary key must not be null"));
             }
             return keys;
         }
         GenericRowData projected = new GenericRowData(schema.columnCount());
         for (int index = 0; index < projected.getArity(); index++) {
-            projected.setField(index, row.getField(sourcePositions.get(index)));
+            int sourcePosition = sourcePositions.get(index);
+            projected.setField(
+                    index,
+                    JdbcColumnValueConverter.convert(
+                            row, sourcePosition, sourceSchema.column(sourcePosition), schema.column(index)));
         }
         if (writeMode == JdbcWriteMode.UPSERT) {
             for (String key : schema.primaryKeys()) {

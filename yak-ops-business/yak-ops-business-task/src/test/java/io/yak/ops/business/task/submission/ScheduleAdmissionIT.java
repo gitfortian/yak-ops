@@ -101,7 +101,7 @@ class ScheduleAdmissionIT {
     private static final TestPlugin PLUGIN = new TestPlugin();
     private static AnnotationConfigApplicationContext context;
     private static JdbcTemplate jdbc;
-    private static ScheduleAdmissionGate gate;
+    private static ScheduleAdmissionController admissionController;
     private static SubmissionService submissions;
     private static DataSource dataSource;
 
@@ -163,15 +163,15 @@ class ScheduleAdmissionIT {
                 SubmissionServiceImpl.class,
                 AdmissionServiceImpl.class);
         context.refresh();
-        gate = context.getBean(ScheduleAdmissionGate.class);
+        admissionController = context.getBean(ScheduleAdmissionController.class);
         submissions = context.getBean(SubmissionService.class);
     }
 
     @AfterAll
     static void closeBoundary() {
-        if (gate != null) {
-            gate.stop();
-            gate.awaitQuiescence();
+        if (admissionController != null) {
+            admissionController.stop();
+            admissionController.awaitQuiescence();
         }
         if (context != null) {
             context.close();
@@ -180,8 +180,8 @@ class ScheduleAdmissionIT {
 
     @BeforeEach
     void resetRows() {
-        gate.stop();
-        gate.awaitQuiescence();
+        admissionController.stop();
+        admissionController.awaitQuiescence();
         LOSE_COMMIT_RESPONSE.set(false);
         for (String table : List.of(
                 "yak_ops_task_execution_claim",
@@ -216,8 +216,8 @@ class ScheduleAdmissionIT {
         jdbc.update(
                 "INSERT INTO yak_ops_schedule (id,workspace_id,target_type,target_id,cron_expression,time_zone,enabled,revision,enabled_at,enabled_by,create_time,update_time,create_by,update_by) VALUES ('schedule','ws','TASK','task','0 * * * * ?','UTC',1,2,'2026-10-13 00:00:00','actor',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'actor','actor')");
         NOW.set(BASE);
-        gate.prepare("test-owner", () -> {});
-        gate.open();
+        admissionController.prepare("test-owner", () -> {});
+        admissionController.open();
         NOW.set(BASE.plusSeconds(60));
     }
 
@@ -419,7 +419,7 @@ class ScheduleAdmissionIT {
                 () -> context.getBean(AdmissionService.class).admitScheduled(trigger(), null, null));
         jdbc.update("UPDATE yak_ops_task_execution_owner SET owner_incarnation='other-owner'");
         assertThrows(IllegalStateException.class, () -> submissions.submitScheduled(trigger()));
-        assertFalse(gate.isOpen());
+        assertFalse(admissionController.isOpen());
         assertEquals(0, count("yak_ops_task_instance"));
         assertEquals(0, count("yak_ops_schedule_fire"));
     }
@@ -563,8 +563,8 @@ class ScheduleAdmissionIT {
         }
 
         @Bean
-        ScheduleAdmissionGate scheduleAdmissionGate(Clock scheduleClock) {
-            return new ScheduleAdmissionGate(scheduleClock, Duration.ofSeconds(60));
+        ScheduleAdmissionController scheduleAdmissionController(Clock scheduleClock) {
+            return new ScheduleAdmissionController(scheduleClock, Duration.ofSeconds(60));
         }
 
         @Bean

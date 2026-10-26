@@ -3,7 +3,6 @@ package io.yak.ops.plugin.task.datasync.config;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.HashSet;
@@ -102,6 +101,7 @@ public final class JobConfig {
                 || (!type.supportsMultipleTables() && mappings.size() != 1)) {
             throw new IllegalArgumentException("Unsupported explicit table mapping count");
         }
+        requireEmptyTransforms(parameters);
         List<TableConfig> tables = new java.util.ArrayList<>();
         java.util.Set<List<String>> sources = new HashSet<>();
         java.util.Set<List<String>> targets = new HashSet<>();
@@ -120,32 +120,26 @@ public final class JobConfig {
             validate(table, SolutionOptions.TABLE_MAPPING_RULE, "tableMappings");
             ReadonlyConfig sourceTable = ReadonlyConfig.fromMap(table.get(JobOptions.SOURCE));
             ReadonlyConfig targetTable = ReadonlyConfig.fromMap(table.get(SolutionOptions.TARGET));
-            validate(sourceTable, SolutionOptions.TABLE_RULE, "tableMappings.source");
-            validate(targetTable, SolutionOptions.TABLE_RULE, "tableMappings.target");
-            requireEmptyTransforms(parameters);
-            Map<String, Object> input = new LinkedHashMap<>(sourceTable.getSourceMap());
-            input.put("datasourceId", from.get(JobOptions.DATASOURCE_ID));
-            input.put("type", type.sourceIdentifier());
-            Map<String, Object> output = new LinkedHashMap<>(targetTable.getSourceMap());
-            output.put("datasourceId", to.get(JobOptions.DATASOURCE_ID));
-            output.put("type", "JDBC");
-            output.put("writeMode", table.get(JdbcSinkOptions.WRITE_MODE).name());
+            SourceConfig source = SourceConfig.from(
+                    sourceTable,
+                    from.get(JobOptions.DATASOURCE_ID),
+                    type,
+                    expected,
+                    parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED),
+                    table);
+            boolean offlineIncremental = type.supportsScheduling() && expected.contains(Step.INCREMENTAL.name());
+            SinkConfig sink = SinkConfig.from(
+                    targetTable,
+                    to.get(JobOptions.DATASOURCE_ID),
+                    table,
+                    source,
+                    parameters.get(SolutionOptions.SCHEMA_CHANGES_ENABLED),
+                    offlineIncremental);
             if (!sources.add(tableKey(sourceTable)) || !targets.add(tableKey(targetTable))) {
                 throw new IllegalArgumentException("Source and target tables must be unique");
             }
-            IncrementalConfig incremental = null;
-            boolean selectedIncremental = expected.contains(Step.INCREMENTAL.name()) && type.supportsScheduling();
-            if (selectedIncremental) {
-                Map<String, Object> options = table.get(SolutionOptions.INCREMENTAL);
-                if (options == null) throw new IllegalArgumentException("Incremental table settings are required");
-                incremental = IncrementalConfig.from(options);
-                if (table.get(JdbcSinkOptions.WRITE_MODE) != io.yak.ops.connector.jdbc.sink.JdbcWriteMode.UPSERT) {
-                    throw new IllegalArgumentException("Offline incremental requires UPSERT");
-                }
-            } else if (table.getSourceMap().containsKey(SolutionOptions.INCREMENTAL.key())) {
-                throw new IllegalArgumentException("Incremental settings require an offline incremental step");
-            }
-            tables.add(new TableConfig(ReadonlyConfig.fromMap(input), ReadonlyConfig.fromMap(output), incremental));
+            tables.add(
+                    new TableConfig(source.options(), sink.options(), source.incremental(), sink.targetPrimaryKeys()));
         }
         Map<String, Object> canonical = new LinkedHashMap<>(parameters.getSourceMap());
         canonical.put("steps", expected);

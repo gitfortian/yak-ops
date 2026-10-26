@@ -22,12 +22,19 @@ public final class TableSimpleStatementExecutor implements JdbcBatchStatementExe
 
     private final String sql;
     private final JdbcDialectConverter converter;
+    private final boolean exactOneRow;
     private volatile PreparedStatement statement;
     private int pendingRows;
 
     public TableSimpleStatementExecutor(String sql, JdbcDialectConverter converter) {
+        this(sql, converter, false);
+    }
+
+    /** Fails closed when a single-row RETRACT cannot verify exactly one affected row. */
+    public TableSimpleStatementExecutor(String sql, JdbcDialectConverter converter, boolean exactOneRow) {
         this.sql = Objects.requireNonNull(sql, "sql");
         this.converter = Objects.requireNonNull(converter, "converter");
+        this.exactOneRow = exactOneRow;
     }
 
     @Override
@@ -50,7 +57,18 @@ public final class TableSimpleStatementExecutor implements JdbcBatchStatementExe
     public void executeBatch() throws SQLException {
         long startedNanos = System.nanoTime();
         int rows = pendingRows;
-        requireStatement().executeBatch();
+        int[] affected = requireStatement().executeBatch();
+        if (exactOneRow) {
+            if (affected.length != rows) {
+                throw new SQLException("JDBC RETRACT returned an incomplete batch update count");
+            }
+            for (int count : affected) {
+                if (count != 1) {
+                    // SUCCESS_NO_INFO is not sufficient proof for exact-row deletion.
+                    throw new SQLException("JDBC RETRACT must delete exactly one physical row per event");
+                }
+            }
+        }
         pendingRows = 0;
         if ("true".equals(MDC.get("taskLogDebug"))) {
             LOG.debug(

@@ -10,6 +10,7 @@ import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -17,8 +18,8 @@ import java.util.Objects;
 /**
  * Creates the YakFlow execution configuration for an admitted Task Instance.
  *
- * <p>The Task platform owns cross-process recovery. New instances do not restore another
- * instance's checkpoint; restarts inside one Job require completed checkpoints.
+ * <p>Checkpoints are scoped to a persistent Task Instance. A relaunched Instance restores its
+ * existing checkpoint; newly submitted Instances start without restored state.
  */
 public final class ExecutionConfigurationFactory {
 
@@ -28,7 +29,7 @@ public final class ExecutionConfigurationFactory {
     /** Creates an engine configuration factory with application-owned execution settings. */
     public ExecutionConfigurationFactory(ReadonlyConfig options, Path stateRoot) {
         this.options = Objects.requireNonNull(options, "options");
-        ConfigValidator.of(options).validate(JobOptions.RUNTIME_RULE);
+        ConfigValidator.of(options).validate(EnvironmentOptions.RULE);
         this.stateRoot =
                 Objects.requireNonNull(stateRoot, "stateRoot").toAbsolutePath().normalize();
     }
@@ -83,11 +84,14 @@ public final class ExecutionConfigurationFactory {
                     .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, 0);
         }
 
+        // Only the same Instance can own this directory. A corrupted checkpoint must fail restore,
+        // not silently restart CDC from the beginning and duplicate committed target rows.
         return configuration
+                .set(CheckpointingOptions.RESTORE_LATEST, Files.exists(stateDirectory.resolve("checkpoint.bin")))
                 .set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING)
-                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(JobOptions.CHECKPOINT_INTERVAL))
+                .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(EnvironmentOptions.CHECKPOINT_INTERVAL))
                 .set(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS, 1)
-                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(JobOptions.MAX_RESTARTS));
+                .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(EnvironmentOptions.MAX_RESTARTS));
     }
 
     private Path stateDirectory(String instanceId) {

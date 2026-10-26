@@ -2,7 +2,7 @@ package io.yak.ops.business.task.submission.impl;
 
 import io.yak.ops.business.task.submission.AdmissionRequest;
 import io.yak.ops.business.task.submission.AdmissionService;
-import io.yak.ops.business.task.submission.ScheduleAdmissionGate;
+import io.yak.ops.business.task.submission.ScheduleAdmissionController;
 import io.yak.ops.business.task.submission.ScheduleFireResult;
 import io.yak.ops.business.task.submission.ScheduleRequestId;
 import io.yak.ops.business.task.submission.SubmissionResult;
@@ -74,7 +74,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private ExecutionOwnerRepository owners;
 
     @Resource
-    private ScheduleAdmissionGate scheduleGate;
+    private ScheduleAdmissionController admissionController;
 
     @Resource
     private WorkspaceService workspaces;
@@ -182,7 +182,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public ScheduleFireResult admitScheduled(
             ScheduleTrigger trigger, AdmissionRequest request, ScheduleFireReason preparationFailure) {
-        scheduleGate.checkAdmission();
+        admissionController.checkAdmission();
         ScheduleEntity selected = schedules
                 .queryIncludingDeleted(trigger.workspaceId(), trigger.scheduleId())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
@@ -198,8 +198,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request != null) {
             validateScheduledRequest(request, schedule, trigger, key, fingerprint);
         }
-        if (!owners.isCurrentForAdmission(scheduleGate.checkAdmission())) {
-            scheduleGate.stop();
+        if (!owners.isCurrentForAdmission(admissionController.checkAdmission())) {
+            admissionController.stop();
             throw new IllegalStateException("Schedule database ownership was lost");
         }
         var fire = fires.findForUpdate(trigger.workspaceId(), key);
@@ -271,7 +271,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         Object savepoint = status.createSavepoint();
         try {
             SubmissionResult admitted = persist(request, definition, currentPlan);
-            scheduleGate.checkAdmission();
+            admissionController.checkAdmission();
             ScheduleFireReason late = timeGuard(schedule, trigger);
             if (late != null) {
                 status.rollbackToSavepoint(savepoint);
@@ -326,7 +326,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     private ScheduleFireReason timeGuard(ScheduleEntity schedule, ScheduleTrigger trigger) {
-        Instant now = scheduleGate.now();
+        Instant now = admissionController.now();
         Instant time = trigger.scheduledTime();
         if (time.isAfter(now)
                 || trigger.fireTime().isBefore(time)
@@ -335,11 +335,11 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
         if (schedule.getEnabledAt() == null
                 || !time.isAfter(schedule.getEnabledAt().toInstant(ZoneOffset.UTC))
-                || !time.isAfter(scheduleGate.activation())
+                || !time.isAfter(admissionController.activation())
                 || !time.isAfter(trigger.activatedAt())
                 || (schedule.getRetiredBefore() != null
                         && time.isBefore(schedule.getRetiredBefore().toInstant(ZoneOffset.UTC)))
-                || Duration.between(time, now).compareTo(scheduleGate.maxLateness()) > 0) {
+                || Duration.between(time, now).compareTo(admissionController.maxLateness()) > 0) {
             return ScheduleFireReason.MISSED_WINDOW;
         }
         return null;
@@ -360,7 +360,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         fire.setTargetId(schedule.getTargetId());
         fire.setScheduledTime(utc(trigger.scheduledTime()));
         fire.setFireTime(utc(trigger.fireTime()));
-        fire.setResolvedTime(utc(scheduleGate.now()));
+        fire.setResolvedTime(utc(admissionController.now()));
         fire.setRequestId(key);
         fire.setOutcome(outcome);
         fire.setReason(reason);

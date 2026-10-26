@@ -2,9 +2,9 @@ package io.yak.ops.connector.jdbc.database.internal.dialect;
 
 import io.yak.ops.connector.jdbc.database.dialect.AbstractDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
-import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcNativeType;
-import io.yak.ops.connector.jdbc.database.internal.convert.PostgresJdbcDialectConverter;
+import io.yak.ops.connector.jdbc.database.dialect.JdbcTypeConverter;
+import io.yak.ops.connector.jdbc.database.internal.convert.PostgresTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.PhysicalColumn;
 import io.yak.ops.core.types.Column;
@@ -24,8 +24,8 @@ import java.util.stream.Collectors;
 public final class PostgresJdbcDialect extends AbstractDialect {
 
     @Override
-    public JdbcDialectConverter createRowConverter(java.sql.ResultSetMetaData metadata) throws java.sql.SQLException {
-        return new PostgresJdbcDialectConverter(metadata);
+    public JdbcTypeConverter typeConverter() {
+        return new PostgresTypeConverter();
     }
 
     @Override
@@ -100,7 +100,7 @@ public final class PostgresJdbcDialect extends AbstractDialect {
     }
 
     @Override
-    public LogicalType normalizeTargetType(Column column) {
+    public LogicalType toTargetLogicalType(Column column) {
         JdbcNativeType targetType = nativeType(column);
         boolean nullable = column.nullable();
         return switch (column.dataType().getTypeRoot()) {
@@ -127,6 +127,23 @@ public final class PostgresJdbcDialect extends AbstractDialect {
             return JdbcNativeType.of("VARCHAR(" + length + ")");
         }
         return JdbcNativeType.of("TEXT", "STRING length 未知，目标使用 TEXT");
+    }
+
+    /**
+     * ctid identifies one tuple only within this statement; the complete before-image
+     * chooses candidates and FOR UPDATE serializes the selected physical occurrence.
+     */
+    @Override
+    public String exactRowDeleteSql(TableId table, TableSchema schema) {
+        if (!schema.primaryKeys().isEmpty() || schema.columnCount() == 0) {
+            throw new IllegalArgumentException("PostgreSQL RETRACT requires a nonempty keyless schema");
+        }
+        String predicate = schema.columns().stream()
+                .map(column -> quoteIdentifier(column.name()) + " IS NOT DISTINCT FROM ?")
+                .collect(Collectors.joining(" AND "));
+        String target = qualifiedTable(table);
+        String select = "SELECT ctid FROM " + target + " WHERE " + predicate + " LIMIT 1 FOR UPDATE";
+        return "DELETE FROM " + target + " WHERE ctid = (" + select + ")";
     }
 
     @Override

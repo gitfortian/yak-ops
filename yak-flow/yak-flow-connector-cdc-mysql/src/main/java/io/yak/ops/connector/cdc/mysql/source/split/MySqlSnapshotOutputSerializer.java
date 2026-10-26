@@ -5,6 +5,8 @@ import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -17,6 +19,10 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.CRC32C;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 /** Scalar-only snapshot state encoding; never enables Java or polymorphic object deserialization. */
 final class MySqlSnapshotOutputSerializer {
@@ -38,17 +44,150 @@ final class MySqlSnapshotOutputSerializer {
     }
 
     static MySqlSnapshotOutput read(DataInputStream in, TableId table) throws IOException {
+        return readRows(in, table, false);
+    }
+
+    /**
+     * Version 5 encodes full-row image multiplicities instead of materializing each duplicate.
+     * Earlier versions only understand positive row counts and remain readable unchanged.
+     */
+    private static void writePacked(DataOutputStream out, MySqlSnapshotOutput output) throws IOException {
+        if (!(output.rows() instanceof MySqlSnapshotRows rows)) {
+            write(out, output);
+            return;
+        }
+        output.low().writeTo(out);
+        output.high().writeTo(out);
+        out.writeInt(-1);
+        if (rows.runs().size() > 100_000 || rows.size() > 10_000_000) {
+            throw new IOException("Snapshot distinct-row or logical-row limit exceeded");
+        }
+        out.writeInt(rows.runs().size());
+        for (MySqlSnapshotRows.Run run : rows.runs()) {
+            out.writeInt(run.copies());
+            writeRow(out, run.record());
+            if (out.size() > MAX_BYTES) throw new IOException("Snapshot output exceeds state byte limit");
+        }
+    }
+
+    private static MySqlSnapshotOutput readRows(DataInputStream in, TableId table, boolean packed) throws IOException {
         BinlogOffset low = BinlogOffset.readFrom(in);
         BinlogOffset high = BinlogOffset.readFrom(in);
-        int count = count(in, 100_000);
-        List<TableRecord> rows = new ArrayList<>(Math.min(count, 1024));
-        for (int n = 0; n < count; n++) {
-            int arity = count(in, 4096);
-            GenericRowData row = new GenericRowData(arity);
-            for (int i = 0; i < arity; i++) row.setField(i, readValue(in));
-            rows.add(new TableRecord(table, RowKind.INSERT, row));
+        int marker = in.readInt();
+        if (marker == -1 && packed) {
+            int runs = count(in, 100_000);
+            List<MySqlSnapshotRows.Run> groups = new ArrayList<>(Math.min(runs, 1024));
+            int total = 0;
+            for (int n = 0; n < runs; n++) {
+                int copies = in.readInt();
+                if (copies < 1 || total > 10_000_000 - copies) {
+                    throw new IOException("Invalid snapshot row multiplicity");
+                }
+                total += copies;
+                groups.add(new MySqlSnapshotRows.Run(readRow(in, table), copies));
+            }
+            return new MySqlSnapshotOutput(low, high, new MySqlSnapshotRows(groups));
         }
+        if (marker < 0 || marker > 100_000 || marker > in.available()) {
+            throw new IOException("Invalid snapshot state row count");
+        }
+        List<TableRecord> rows = new ArrayList<>(Math.min(marker, 1024));
+        for (int n = 0; n < marker; n++) rows.add(readRow(in, table));
         return new MySqlSnapshotOutput(low, high, rows);
+    }
+
+    private static void writeRow(DataOutputStream out, TableRecord record) throws IOException {
+        int arity = record.row().getArity();
+        if (arity > 4096) throw new IOException("Snapshot row arity exceeds state limit");
+        out.writeInt(arity);
+        for (int i = 0; i < arity; i++) writeValue(out, record.row().getField(i));
+    }
+
+    private static TableRecord readRow(DataInputStream in, TableId table) throws IOException {
+        int arity = count(in, 4096);
+        GenericRowData row = new GenericRowData(arity);
+        for (int i = 0; i < arity; i++) row.setField(i, readValue(in));
+        return new TableRecord(table, RowKind.INSERT, row);
+    }
+
+    /**
+     * Stores prepared rows in a bounded, checksummed frame.
+     *
+     * <p>These rows must remain durable until the Reader finishes emission: recreating a newer
+     * snapshot after partial external writes could leave deleted rows in a JDBC target. Compression
+     * reduces checkpoint size without changing that recovery contract.
+     */
+    static void writeCompact(DataOutputStream out, MySqlSnapshotOutput output) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream state = new DataOutputStream(bytes)) {
+            writePacked(state, output);
+        }
+        byte[] uncompressed = bytes.toByteArray();
+        if (uncompressed.length > MAX_BYTES) {
+            throw new IOException("Snapshot output exceeds uncompressed state byte limit");
+        }
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (DeflaterOutputStream compressor =
+                new DeflaterOutputStream(compressed, new Deflater(Deflater.BEST_SPEED))) {
+            compressor.write(uncompressed);
+        }
+        byte[] zipped = compressed.toByteArray();
+        boolean useCompression = zipped.length < uncompressed.length;
+        byte[] stored = useCompression ? zipped : uncompressed;
+        CRC32C checksum = new CRC32C();
+        checksum.update(uncompressed);
+        out.writeInt(uncompressed.length);
+        out.writeBoolean(useCompression);
+        out.writeInt(stored.length);
+        out.writeInt((int) checksum.getValue());
+        out.write(stored);
+    }
+
+    /** Reads the version 3 frame, rejecting oversized, truncated or corrupted snapshot state. */
+    static MySqlSnapshotOutput readCompact(DataInputStream in, TableId table) throws IOException {
+        return readCompact(in, table, false);
+    }
+
+    static MySqlSnapshotOutput readCompact(DataInputStream in, TableId table, boolean packed) throws IOException {
+        int originalSize = in.readInt();
+        boolean compressed = in.readBoolean();
+        int storedSize = in.readInt();
+        int checksum = in.readInt();
+        if (originalSize < 1
+                || originalSize > MAX_BYTES
+                || storedSize < 1
+                || storedSize > MAX_BYTES
+                || storedSize > in.available()) {
+            throw new IOException("Invalid snapshot output frame size");
+        }
+        byte[] stored = in.readNBytes(storedSize);
+        byte[] decoded;
+        if (compressed) {
+            decoded = new byte[originalSize];
+            try (InflaterInputStream stream = new InflaterInputStream(new ByteArrayInputStream(stored))) {
+                int copied = 0;
+                while (copied < decoded.length) {
+                    int read = stream.read(decoded, copied, decoded.length - copied);
+                    if (read < 0) throw new IOException("Truncated compressed snapshot output");
+                    if (read == 0) throw new IOException("Snapshot inflater did not advance");
+                    copied += read;
+                }
+                if (stream.read() != -1) {
+                    throw new IOException("Compressed snapshot exceeds declared size");
+                }
+            }
+        } else {
+            decoded = stored;
+        }
+        if (decoded.length != originalSize) throw new IOException("Snapshot output size differs from frame");
+        CRC32C actual = new CRC32C();
+        actual.update(decoded);
+        if ((int) actual.getValue() != checksum) throw new IOException("Snapshot output checksum mismatch");
+        try (DataInputStream source = new DataInputStream(new ByteArrayInputStream(decoded))) {
+            MySqlSnapshotOutput restored = readRows(source, table, packed);
+            if (source.available() != 0) throw new IOException("Trailing bytes in snapshot output");
+            return restored;
+        }
     }
 
     private static void writeValue(DataOutputStream out, Object value) throws IOException {

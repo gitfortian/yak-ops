@@ -237,17 +237,17 @@ class JdbcSchemaDerivatorTest {
     }
 
     @Test
-    void normalizesNativeTargetTypeWithoutTouchingSourceDefinitions() {
+    void mapsNativeTargetTypeWithoutTouchingSourceDefinitions() {
         assertEquals(
                 LogicalTypes.TINYINT,
-                MYSQL.normalizeTargetType(new io.yak.ops.core.types.Column("flag", LogicalTypes.BOOLEAN)));
+                MYSQL.toTargetLogicalType(new io.yak.ops.core.types.Column("flag", LogicalTypes.BOOLEAN)));
         assertEquals(
                 LogicalTypes.BINARY,
-                POSTGRES.normalizeTargetType(
+                POSTGRES.toTargetLogicalType(
                         new io.yak.ops.core.types.Column("payload", LogicalTypes.fixedBinary(20))));
         assertEquals(
                 LogicalTypes.STRING,
-                MYSQL.normalizeTargetType(new io.yak.ops.core.types.Column("txt", LogicalTypes.varchar(20000))));
+                MYSQL.toTargetLogicalType(new io.yak.ops.core.types.Column("txt", LogicalTypes.varchar(20000))));
     }
 
     @Test
@@ -289,6 +289,41 @@ class JdbcSchemaDerivatorTest {
                 d -> d.reason() == SchemaChangePlan.Reason.UNSAFE_COLUMN_PROPERTIES));
     }
 
+
+    @Test
+    void nativeEnumOptionsAndJsonTypeMismatchesBlockWithoutDdl() {
+        for (String[] variants : List.of(
+                new String[] {"enum('active','inactive')", "enum('active','deleted')"},
+                new String[] {"set('read','write')", "set('read','execute')"},
+                new String[] {"json", "longtext"})) {
+            var source = schema(
+                    List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                            new PhysicalColumn("choice", LogicalTypes.STRING, null,
+                                    new ColumnProperties(null, false, false, null, false, variants[0]))),
+                    List.of("id"));
+            var target = schema(
+                    List.of(column("id", LogicalTypes.BIGINT.copy(false)),
+                            new PhysicalColumn("choice", LogicalTypes.STRING, null,
+                                    new ColumnProperties(null, false, false, null, false, variants[1]))),
+                    List.of("id"));
+            var plan = JdbcSchemaDerivator.derive(TABLE, source, Optional.of(target), MYSQL);
+            assertTrue(plan.blocked());
+            assertTrue(plan.changes().isEmpty());
+            assertTrue(plan.differences().stream().anyMatch(
+                    difference -> difference.reason() == SchemaChangePlan.Reason.UNSAFE_TYPE_CHANGE));
+        }
+    }
+
+    @Test
+    void nativeEnumOptionsRemainCompatibleWhenTheyMatch() {
+        var column = new PhysicalColumn(
+                "choice", LogicalTypes.STRING, null,
+                new ColumnProperties(null, false, false, null, false, "enum('active','inactive')"));
+        var source = schema(List.of(column("id", LogicalTypes.BIGINT.copy(false)), column), List.of("id"));
+        var plan = JdbcSchemaDerivator.derive(TABLE, source, Optional.of(source), MYSQL);
+        assertFalse(plan.blocked());
+        assertFalse(plan.requiresDdl());
+    }
     private static Schema schema(List<PhysicalColumn> columns, List<String> keys) {
         return new Schema(columns, keys, null);
     }

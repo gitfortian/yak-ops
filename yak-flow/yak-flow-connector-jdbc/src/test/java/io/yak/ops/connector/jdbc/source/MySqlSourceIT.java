@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
+import io.yak.ops.connector.jdbc.database.catalog.JdbcTableMetadata;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.connector.jdbc.source.enumerator.JdbcSplitPlanner;
 import io.yak.ops.connector.jdbc.source.reader.JdbcSourceSplitReader;
 import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.TimeType;
+import io.yak.ops.core.types.TimestampType;
 import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.MySqlDatabase;
 import io.yak.ops.testutils.TestNames;
@@ -52,6 +55,33 @@ class MySqlSourceIT extends JdbcSourceTestBase {
     @Override
     protected String widenColumn(String table, String column) {
         return "ALTER TABLE " + table + " MODIFY COLUMN " + column + " VARCHAR(72)";
+    }
+
+    @Test
+    void mysqlCatalogPreservesFractionalSecondsForTargetSchema() throws Exception {
+        JdbcConnectionOptions options =
+                new JdbcConnectionOptions(database().url(), database().username(), database().password());
+        JdbcDialect dialect = JdbcDialects.forUrl(database().url());
+        String name = TestNames.unique("temporal").toUpperCase(java.util.Locale.ROOT);
+        String quoted = dialect.quoteIdentifier(name);
+        try (Connection connection = new io.yak.ops.connector.jdbc.database.connection.DefaultJdbcConnectionProvider(
+                        options)
+                .getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE " + quoted
+                    + " (ID BIGINT PRIMARY KEY, CREATED_AT DATETIME(3), UPDATED_AT DATETIME(6),"
+                    + " WHOLE_SECOND DATETIME, EVENT_TIME TIME(2))");
+            try {
+                var schema = JdbcTableMetadata.readTable(
+                        connection, dialect, new TableId(connection.getCatalog(), null, name));
+                assertEquals(3, ((TimestampType) schema.column(1).dataType()).precision());
+                assertEquals(6, ((TimestampType) schema.column(2).dataType()).precision());
+                assertEquals(0, ((TimestampType) schema.column(3).dataType()).precision());
+                assertEquals(2, ((TimeType) schema.column(4).dataType()).precision());
+            } finally {
+                statement.execute("DROP TABLE " + quoted);
+            }
+        }
     }
 
     @Test
