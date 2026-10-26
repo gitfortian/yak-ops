@@ -44,9 +44,7 @@ public record MySqlHybridEnumeratorState(
         Objects.requireNonNull(fingerprint, "fingerprint");
         finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
         if (nextChunkRange != null
-                && (nextChunkIndex < 1
-                        || nextChunkRange.start() == null
-                        || nextChunkRange.end() != null)) {
+                && (nextChunkIndex < 1 || nextChunkRange.start() == null || nextChunkRange.end() != null)) {
             throw new IllegalArgumentException("Invalid typed chunk discovery cursor");
         }
         if (nextTableIndex < 0
