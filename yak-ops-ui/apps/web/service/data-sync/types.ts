@@ -343,22 +343,3 @@ export interface DataSyncInstancePageResult {
   pagination: PaginationInfo;
 }
 
-export interface DataSyncSchemaPreview {
-  mappingIndex: number;
-  target: { catalog: string; schema: string | null; table: string };
-  action: "CREATE" | "ALTER" | "VERIFY" | "BLOCKED";
-  statements: string[];
-  differences: Array<{
-    column: string | null;
-    action:
-      | "COMPATIBLE"
-      | "CREATE_TABLE"
-      | "ADD_COLUMN"
-      | "ALTER_COLUMN_TYPE"
-      | "METADATA_DIFFERENCE"
-      | "INCOMPATIBLE";
-    reason: string;
-    sourceType: string | null;
-    targetType: string | null;
-  }>;
-}

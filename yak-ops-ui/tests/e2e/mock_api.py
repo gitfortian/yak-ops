@@ -157,19 +157,6 @@ async def mock(route):
                 [] if mode == "schema" else ["batch_a_copy", "batch_b_copy"])
             data = [{"database": "ods", "schema": "public", "name": name, "type": "TABLE"}
                     for name in names]
-    elif p == "/api/v1/data-sync/schema/preview" and method == "POST":
-        details = b["parameters"]
-        state["schema_previews"] = state.get("schema_previews", 0) + 1
-        data = [{
-            "mappingIndex": index, "target": {"catalog": "ods", "schema": "public",
-                                              "table": item["table"]},
-            "action": "CREATE",
-            "statements": ["CREATE TABLE public." + item["table"] + " (id BIGINT PRIMARY KEY)"],
-            "differences": [{
-                "column": None, "action": "CREATE_TABLE", "reason": "TABLE_MISSING",
-                "sourceType": None, "targetType": None,
-            }],
-        } for index, item in enumerate(details["sink"]["tables"])]
     elif p.startswith("/api/v1/data-source/"):
         data = next((x for x in sources if x["id"] == p.rsplit("/", 1)[-1]), {})
     elif p == "/api/v1/task-definitions/page":

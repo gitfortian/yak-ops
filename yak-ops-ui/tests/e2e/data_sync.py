@@ -63,6 +63,12 @@ async def verify_solution_creation(page):
     await expect(page).to_have_url(re.compile("/data-sync/new$"))
     await expect(page.get_by_role("textbox", name="任务名称", exact=True)).to_have_value("CDC draft")
     await expect(page.locator("#schedule")).to_have_count(0)
+    await expect(page.locator("#datasource")).to_be_visible()
+    await expect(page.locator("#env")).to_be_visible()
+    await expect(page.locator("#transform")).to_have_count(0)
+    await expect(page.locator("#datasource").get_by_role("combobox", name="选择来源数据源")).to_be_visible()
+    await expect(page.locator("#datasource").get_by_role("combobox", name="选择去向数据源")).to_be_visible()
+    await expect(page.locator("#env").get_by_role("switch", name="Debug")).to_be_visible()
     # Catch missing Field.Root context when the realtime editor first renders.
     schema_switch = page.get_by_role("switch", name="同步结构变更", exact=True)
     await expect(schema_switch).to_be_visible()
@@ -172,8 +178,8 @@ async def prepare_database_task(page, kind):
 
 
 async def pick_datasources(page):
-    for section, name in (("#source", "MySQL source"), ("#target", "PostgreSQL target")):
-        await pick_option(page, page.locator(section).get_by_role("combobox", name="数据源", exact=True), name)
+    for label, name in (("选择来源数据源", "MySQL source"), ("选择去向数据源", "PostgreSQL target")):
+        await pick_option(page, page.locator("#datasource").get_by_role("combobox", name=label, exact=True), name)
 
 
 def batch_write_mode(page):
@@ -273,8 +279,8 @@ async def verify_multitable_selection(page):
     assert [entry["table"] for entry in saved["sink"]["tables"]] == ["batch_a_copy"]
 
 
-async def verify_schema_preview(page):
-    """Optional structure stage, DDL preview without side effects, and stable draft."""
+async def verify_schema_configuration(page):
+    """Schema preparation remains configurable without exposing a speculative DDL preview."""
     import json
     state["catalog_mode"] = "schema"
     dialog = await prepare_database_task(page, "单表离线")
@@ -293,17 +299,12 @@ async def verify_schema_preview(page):
         await pick_option(page, schema_select, "public")
     field = target.get_by_placeholder("去向表名称", exact=True)
     await expect(field).to_be_enabled()
+    await expect(page.get_by_role("button", name="DDL 预览", exact=True)).to_have_count(0)
     for table in ("sm_browser_unused", "sm_browser_target"):
         await field.fill(table)
-        await page.get_by_role("button", name="DDL 预览", exact=True).click()
-        ddl = page.get_by_role("dialog", name="DDL 预览", exact=True)
-        await expect(ddl.locator("code")).to_contain_text("CREATE TABLE")
-        await expect(ddl.locator("code")).to_contain_text(table)
-        await expect(ddl.get_by_text("创建表", exact=True)).to_be_visible()
-        await expect(ddl.get_by_role("textbox")).to_have_count(0)
-        await ddl.get_by_role("button", name="关闭", exact=True).click()
-    assert state.get("schema_previews") == 2
-    assert state["created_tasks"] == 0, "DDL preview must not save a Task"
+    assert state["created_tasks"] == 0, "Editing schema configuration must not save a Task"
+    assert not any(req[1] == "/api/v1/data-sync/schema/preview" for req in state["requests"])
+
     await page.reload()
     await expect(page.get_by_placeholder("去向表名称", exact=True)).to_have_value("sm_browser_target")
     await page.get_by_role("button", name="保存", exact=True).click()
