@@ -126,7 +126,7 @@ class ImpactTest(unittest.TestCase):
 
 
     def test_registry_change_only_selects_affected_suite(self):
-        before = 'SUITES = {"cdc": (1, 2), "backend-e2e": (1, 2)}\n\ndef runner():\n    return True\n'
+        before = 'SUITES = {"cdc-binlog": (1, 2), "backend-e2e": (1, 2)}\n\ndef runner():\n    return True\n'
         after = 'SUITES = {"cdc": (1, 2), "backend-e2e": (1, 3)}\n\ndef runner():\n    return True\n'
         self.assertEqual({"backend-e2e"}, impact.compare_suite_registry(before, after))
         self.assertEqual(set(), impact.compare_suite_registry(before, before + "# comment only\n"))
