@@ -131,9 +131,17 @@ public final class JobConfigValidator {
                 throw new IllegalArgumentException("Batch destinations overlap their source tables");
             }
         } catch (RuntimeException failure) {
-            if (schemas && failure instanceof SchemaValidationException schemaFailure) {
-                throw new TaskValidationException(
-                        "SCHEMA_VALIDATION", safeSchemaMessage(schemaFailure.failure()), schemaFailure);
+            if (schemas) {
+                RuntimeException reason = failure instanceof SchemaValidationException schema
+                        ? schema.failure()
+                        : failure;
+                String message = safeSchemaMessage(reason);
+                // Plain validation errors may originate before the schema wrapper. Only explicitly
+                // classified messages can cross the public boundary; all others stay private.
+                if (failure instanceof SchemaValidationException
+                        || !message.equals("目标表结构不兼容，请检查字段类型和默认值等属性")) {
+                    throw new TaskValidationException("SCHEMA_VALIDATION", message, failure);
+                }
             }
             throw new TaskPluginException("Invalid DATA_SYNC resource binding or Schema", failure);
         }
@@ -146,6 +154,34 @@ public final class JobConfigValidator {
     public static String safeSchemaMessage(RuntimeException failure) {
         String message = failure.getMessage();
         if (message != null) {
+            String identityError = switch (message) {
+                case "CDC without physical primary keys requires verified target keys for UPSERT",
+                        "JDBC changelog UPSERT requires a source write identity; "
+                                + "a snapshot Chunk Key does not identify a unique row" ->
+                    "无物理主键的实时 UPSERT 需要目标主键；请选择来源表中具有非空唯一索引的字段";
+                case "JDBC changelog UPSERT requires a target write identity",
+                        "JDBC UPSERT requires row identity on both source and target" ->
+                    "按主键更新需要目标表主键，请检查目标主键配置和目标表结构";
+                case "Target primary key must match an enforced source unique index" ->
+                    "目标主键必须与来源表已建立的非空唯一索引或物理主键一致";
+                case "Unknown target key column" ->
+                    "目标主键字段在来源表中不存在";
+                case "Explicit target primary keys require MySQL source metadata" ->
+                    "自定义目标主键目前仅支持 MySQL 来源表";
+                case "CDC without physical primary keys requires a MySQL target" ->
+                    "无物理主键的实时同步当前仅支持 MySQL 目标库";
+                case "CDC without physical primary keys cannot evolve target schema" ->
+                    "无物理主键的实时同步暂不支持同步结构变更，请关闭该选项";
+                case "JDBC UPSERT requires matching source and target write identity columns",
+                        "JDBC UPSERT does not preserve the full source row identity" ->
+                    "来源与目标写入主键不一致，请检查主键字段映射";
+                case "JDBC RETRACT requires source and target schemas without physical primary keys" ->
+                    "逐行更新要求来源和目标表均无主键；若来源有非空唯一索引，请填写目标主键改用按主键更新";
+                case "JDBC RETRACT requires a complete full-row field mapping" ->
+                    "逐行更新要求来源和目标字段完全对应，请检查目标表结构";
+                default -> null;
+            };
+            if (identityError != null) return identityError;
             if (message.startsWith("Schema change blocked: ")) {
                 String detail = message.substring("Schema change blocked: ".length());
                 String[] parts = detail.split(": ", 2);
@@ -183,7 +219,13 @@ public final class JobConfigValidator {
                 {"Unknown target generation metadata for column: ", "无法确认目标字段生成规则"},
                 {"Target column properties do not match: ", "目标字段属性与来源不一致"},
                 {"Unexpected target column properties: ", "目标表存在不兼容的字段属性"},
-                {"Target dialect cannot preserve column properties: ", "目标数据库暂不支持该字段属性"}
+                {"Target dialect cannot preserve column properties: ", "目标数据库暂不支持该字段属性"},
+                {"Target primary key cannot be nullable: ", "目标主键必须是非空字段"},
+                {"Unverified target primary-key comparison: ", "该字段类型暂不支持作为目标主键"},
+                {"JDBC RETRACT full-row comparison requires verified database semantics for: ",
+                    "逐行更新不支持该字段类型；如有非空唯一索引，请填写目标主键改用按主键更新"},
+                {"JDBC RETRACT requires equal source and target column definitions: ",
+                    "逐行更新要求来源和目标字段类型、顺序及可空性一致"}
             };
             for (String[] reason : reasons) {
                 if (!message.startsWith(reason[0])) continue;
