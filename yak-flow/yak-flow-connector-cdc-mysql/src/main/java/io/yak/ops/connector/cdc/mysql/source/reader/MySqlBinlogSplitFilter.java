@@ -309,7 +309,7 @@ public final class MySqlBinlogSplitFilter {
         }
         Object value = record.row().getField(column.position());
         // Validate the scalar type even after the fast path no longer needs a range lookup.
-        compare(column.type(), value, value);
+        validateChunkValue(column.type(), value);
         if (pureBinlogPhaseTables.contains(record.tableId())) {
             return true;
         }
@@ -341,6 +341,19 @@ public final class MySqlBinlogSplitFilter {
 
     boolean isPureBinlogPhase(TableId tableId) {
         return pureBinlogPhaseTables.contains(tableId);
+    }
+
+    private static void validateChunkValue(LogicalTypeRoot type, Object value) {
+        switch (type) {
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> toLong(value);
+            case DECIMAL -> toDecimal(value);
+            case CHAR, VARCHAR -> {
+                if (!(value instanceof String)) {
+                    throw new IllegalArgumentException("String chunk key has an unexpected type");
+                }
+            }
+            default -> throw new IllegalArgumentException("Unsupported Binlog chunk key type: " + type);
+        }
     }
 
     private static int compare(LogicalTypeRoot type, Object left, Object right) {
