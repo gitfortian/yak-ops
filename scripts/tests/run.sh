@@ -6,7 +6,5 @@ suite="${1:-full}"
 case "$suite" in
     jdbc)
         case "${2:-}" in mysql|postgres|oracle) suite="jdbc-$2" ;; *) echo 'Usage: run.sh jdbc {mysql|postgres|oracle}' >&2; exit 2 ;; esac ;;
-    cdc)
-        [[ "${2:-mysql}" == mysql ]] || { echo 'Only MySQL CDC is supported' >&2; exit 2; } ;;
 esac
 python3 scripts/tests/backend_tests.py run "$suite"
