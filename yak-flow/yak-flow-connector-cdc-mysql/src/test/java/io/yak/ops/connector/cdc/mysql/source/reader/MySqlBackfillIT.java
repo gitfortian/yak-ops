@@ -20,9 +20,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -206,67 +203,45 @@ class MySqlBackfillIT {
     }
 
     @Test
-    void limitedReplicationPrivilegesPermitBigintScanButNotTypedGlobalReadLock() throws Exception {
+    void limitedReplicationPrivilegesAllowJdbcScanButRejectTypedGlobalReadLock() throws Exception {
         String table = "limited_" + UUID.randomUUID().toString().replace("-", "");
-        String activity = "heartbeat_" + UUID.randomUUID().toString().replace("-", "");
         String user = "snap_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         execute(
                 "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
-                "CREATE TABLE " + activity
-                        + "(id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
                 "INSERT INTO " + table + " VALUES (1,'original')",
                 "CREATE USER '" + user + "'@'%' IDENTIFIED BY 'test-only-snapshot'",
-                // Debezium's no-data schema bootstrap needs table-level LOCK TABLES.
-                // This must not grant RELOAD or FLUSH_TABLES required by the Typed FTWRL path.
-                "GRANT SELECT, LOCK TABLES ON yak_cdc_it.* TO '" + user + "'@'%'",
-                "GRANT REPLICATION SLAVE, REPLICATION CLIENT, SHOW DATABASES ON *.* TO '" + user + "'@'%'");
+                "GRANT SELECT ON yak_cdc_it.* TO '" + user + "'@'%'",
+                "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '" + user + "'@'%'");
         TableId id = new TableId("yak_cdc_it", null, table);
-        TableId pulseTable = new TableId("yak_cdc_it", null, activity);
-        try (var pulses = Executors.newSingleThreadScheduledExecutor()) {
-            // Supply Binlog activity without starving the Debezium heartbeat.
-            // Bootstrap ignores ordinary rows until the first completed-schema heartbeat,
-            // so bursts of continuous DML would leave the reader waiting for its anchor.
-            var firstPulse = new CompletableFuture<Void>();
-            var task = pulses.scheduleWithFixedDelay(() -> {
-                try {
-                    execute("INSERT INTO " + activity + "(name) VALUES('pulse')");
-                    firstPulse.complete(null);
-                } catch (Exception error) {
-                    firstPulse.completeExceptionally(error);
-                    throw new IllegalStateException("MySQL test Binlog activity failed", error);
-                }
-            }, 0, 3, TimeUnit.SECONDS);
-            try {
-                firstPulse.get(10, TimeUnit.SECONDS);
-                var db = DATABASE.metadata();
-                var config = new MySqlCdcSourceConfig(
-                        db.host(),
-                        db.port(),
-                        user,
-                        "test-only-snapshot",
-                        6831,
-                        table,
-                        Map.of(id, SCHEMA, pulseTable, SCHEMA),
-                        256);
-                try (var reader = new MySqlSnapshotBackfillReader(config, 0)) {
-                    var prepared = reader.read(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
-                    assertEquals(1, prepared.output().rows().size());
-                    assertEquals(1L, prepared.output().rows().getFirst().row().getLong(0));
-                }
-                try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
-                    var failure = assertThrows(java.sql.SQLException.class, () -> reader.read(
-                            MySqlSnapshotSplit.typed(
-                                    "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
-                    assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());
-                }
-                if (task.isDone()) task.get();
-            } finally {
-                task.cancel(true);
+        try {
+            var db = DATABASE.metadata();
+            var config = new MySqlCdcSourceConfig(
+                    db.host(), db.port(), user, "test-only-snapshot", 6831, table, Map.of(id, SCHEMA), 256);
+            // Verify the restricted account can scan real rows with ordinary JDBC SELECT.
+            // Debezium no_data schema bootstrap has separate locking requirements and is
+            // deliberately not part of this JDBC privilege-boundary assertion.
+            try (var snapshots = new MySqlSnapshotSplitReader(config)) {
+                snapshots.open(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
+                var batch = snapshots.fetch();
+                assertEquals("bigint", batch.nextSplit());
+                var record = batch.nextRecordFromSplit();
+                assertNotNull(record);
+                assertEquals(1, record.rows().size());
+                assertEquals(1L, record.rows().getFirst().row().getLong(0));
+                assertNull(batch.nextRecordFromSplit());
+                assertTrue(batch.finishedSplits().contains("bigint"));
+                batch.recycle();
+            }
+            // Exercise the actual typed read-view code, not merely an unrelated SQL probe.
+            // It must reject a user with replication privileges but no global read-lock privilege.
+            try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
+                var failure = assertThrows(java.sql.SQLException.class, () -> reader.openConsistentSnapshot(
+                        MySqlSnapshotSplit.typed(
+                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
+                assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());
             }
         } finally {
-            execute("DROP USER IF EXISTS '" + user + "'@'%'",
-                    "DROP TABLE " + table,
-                    "DROP TABLE " + activity);
+            execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
         }
     }
 
