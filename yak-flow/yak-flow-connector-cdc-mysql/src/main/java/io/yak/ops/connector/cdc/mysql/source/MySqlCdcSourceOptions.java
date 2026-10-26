@@ -20,10 +20,6 @@ public final class MySqlCdcSourceOptions {
             .stringType()
             .noDefaultValue();
 
-    /** Explicit opt-in for the Hybrid keyless source; the standalone Binlog source remains gated. */
-    public static final Option<Boolean> KEYLESS_ENABLED =
-            Options.key("data-sync.mysql-cdc.keyless.enabled").booleanType().defaultValue(false);
-
     public static final Option<Integer> QUEUE_CAPACITY =
             Options.key("data-sync.mysql-cdc.queue-capacity").intType().defaultValue(256);
 

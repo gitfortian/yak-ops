@@ -58,7 +58,7 @@ public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybr
         config.schemas().forEach((table, schema) -> {
             String chunkKey = config.chunkKeyColumns().get(table);
             if (schema.primaryKeys().isEmpty()) {
-                MySqlKeylessSourceContract.validate(schema, chunkKey);
+                io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils.getChunkKeyColumn(schema, chunkKey);
             } else {
                 MySqlChunkSplitter.splitKey(schema, chunkKey);
             }

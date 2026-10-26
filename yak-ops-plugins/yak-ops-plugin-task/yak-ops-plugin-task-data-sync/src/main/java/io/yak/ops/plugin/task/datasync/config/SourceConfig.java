@@ -14,10 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 /** Validates one Source table's read intent and constructs its Connector-scoped inputs. */
-public record SourceConfig(ReadonlyConfig options, boolean keyless, IncrementalConfig incremental) {
+public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental) {
     public static final Option<String> ID = Options.key("id").stringType().noDefaultValue();
-    private static final Option<Boolean> KEYLESS =
-            Options.key("keyless").booleanType().defaultValue(false);
     private static final Option<Map<String, Object>> SNAPSHOT =
             Options.key("snapshot").mapObjectType().noDefaultValue();
     private static final Option<String> CHUNK_KEY =
@@ -28,7 +26,7 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, IncrementalC
     public static final OptionRule TABLE_RULE = OptionRule.builder()
             .required(ID, Conditions.notBlank(ID))
             .required(JobOptions.TABLE, Conditions.notBlank(JobOptions.TABLE))
-            .optional(JobOptions.DATABASE, JobOptions.SCHEMA, KEYLESS, SNAPSHOT, INCREMENTAL)
+            .optional(JobOptions.DATABASE, JobOptions.SCHEMA, SNAPSHOT, INCREMENTAL)
             .build();
 
     private static final OptionRule SNAPSHOT_RULE =
@@ -41,17 +39,11 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, IncrementalC
             List<Step> steps,
             boolean schemaChangesEnabled) {
         validate(table, TABLE_RULE, "source.tables");
-        boolean keyless = table.get(KEYLESS);
         Map<String, Object> snapshot = table.get(SNAPSHOT);
-        if (keyless) {
-            if (type != SolutionType.SINGLE_TABLE_REALTIME
-                    || !steps.containsAll(List.of(Step.FULL, Step.INCREMENTAL))
-                    || schemaChangesEnabled
-                    || snapshot == null) {
-                throw new IllegalArgumentException("Keyless CDC requires a supported realtime snapshot");
-            }
-        } else if (snapshot != null) {
-            throw new IllegalArgumentException("Snapshot Chunk Key requires explicit keyless CDC");
+        if (snapshot != null
+                && (type != SolutionType.SINGLE_TABLE_REALTIME
+                        || !steps.containsAll(List.of(Step.FULL, Step.INCREMENTAL)))) {
+            throw new IllegalArgumentException("Snapshot Chunk Key requires realtime FULL and INCREMENTAL");
         }
         String chunkKey = null;
         if (snapshot != null) {
@@ -72,16 +64,13 @@ public record SourceConfig(ReadonlyConfig options, boolean keyless, IncrementalC
         }
         IncrementalConfig incremental = options == null ? null : IncrementalConfig.from(options);
         Map<String, Object> physical = new LinkedHashMap<>(table.getSourceMap());
-        for (Option<?> field : List.of(ID, KEYLESS, SNAPSHOT, INCREMENTAL)) {
+        for (Option<?> field : List.of(ID, SNAPSHOT, INCREMENTAL)) {
             physical.remove(field.key());
         }
         physical.put(JobOptions.DATASOURCE_ID.key(), datasourceId);
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
-        if (keyless) {
-            physical.put(MySqlCdcSourceOptions.KEYLESS_ENABLED.key(), true);
-            physical.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
-        }
-        return new SourceConfig(ReadonlyConfig.fromMap(physical), keyless, incremental);
+        if (chunkKey != null) physical.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
+        return new SourceConfig(ReadonlyConfig.fromMap(physical), incremental);
     }
 
     private static void validate(ReadonlyConfig settings, OptionRule rule, String component) {

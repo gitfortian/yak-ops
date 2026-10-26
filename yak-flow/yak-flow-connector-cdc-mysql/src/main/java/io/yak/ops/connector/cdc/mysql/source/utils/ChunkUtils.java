@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.TableSchema;
 import java.util.Objects;
 
@@ -30,6 +31,22 @@ public final class ChunkUtils {
                 if (!column.dataType().isResolved() || column.nullable()) {
                     throw new IllegalArgumentException(
                             "MySQL snapshot chunk key column must be resolved and non-null: " + columnName);
+                }
+                if (schema.primaryKeys().isEmpty()) {
+                    for (Column field : schema.columns()) {
+                        if (!field.dataType().isResolved()) {
+                            throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
+                        }
+                    }
+                    LogicalTypeRoot type = column.dataType().getTypeRoot();
+                    if (type != LogicalTypeRoot.TINYINT
+                            && type != LogicalTypeRoot.SMALLINT
+                            && type != LogicalTypeRoot.INTEGER
+                            && type != LogicalTypeRoot.BIGINT
+                            && type != LogicalTypeRoot.DECIMAL) {
+                        throw new IllegalArgumentException(
+                                "Snapshot Chunk Key without a primary key must be numeric: " + column.name());
+                    }
                 }
                 return column;
             }

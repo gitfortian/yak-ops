@@ -8,6 +8,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
@@ -31,7 +32,6 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(MySqlCdcSourceOptions.KEYLESS_ENABLED)
                 .optional(
                         MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
                         Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
@@ -74,11 +74,14 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
-        if (options.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
-            MySqlKeylessSourceContract.validate(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
-            return;
+        String selected = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+        if (schema.primaryKeys().isEmpty()) {
+            ChunkUtils.getChunkKeyColumn(schema, selected);
+        } else {
+            // The BIGINT-key scan remains the only executable keyed path until the typed
+            // Snapshot/Backfill lifecycle is unified.
+            MySqlChunkSplitter.splitKey(schema, selected);
         }
-        MySqlChunkSplitter.splitKey(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
     }
 
     @Override
@@ -98,13 +101,11 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         Map<String, Object> common = new LinkedHashMap<>(options.getSourceMap());
         common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
-        common.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
             validateSchema(context.options(), context.schema());
             Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
             selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
-            selected.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
             if (!common.equals(selected) || context.metrics() != first.metrics()) {
                 throw new IllegalArgumentException(
                         "MySQL CDC tables must share connection, replication and observation settings");

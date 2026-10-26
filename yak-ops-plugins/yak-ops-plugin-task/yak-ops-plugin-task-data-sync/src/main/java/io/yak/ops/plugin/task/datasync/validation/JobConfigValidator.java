@@ -84,6 +84,7 @@ public final class JobConfigValidator {
                 if (prepareSchema) SchemaValidator.validateNamespace(to, target);
                 if (schemas && prepareSchema) {
                     var sourceTable = SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
+                    SchemaValidator.validateCdcWrite(sourceTable.schema(), to.type(), table.source(), table.sink(), table.targetPrimaryKeys(), job.schemaChangesEnabled());
                     var writeSource = SchemaValidator.writeSchema(sourceTable, table.targetPrimaryKeys());
                     SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(
                             JobOptions.connectorOptions(table.source()), sourceTable.schema()));
@@ -102,6 +103,7 @@ public final class JobConfigValidator {
                     }
                 } else if (schemas) {
                     var sourceSchema = context.tableSchema(sourceId, source);
+                    SchemaValidator.validateCdcWrite(sourceSchema, to.type(), table.source(), table.sink(), table.targetPrimaryKeys(), job.schemaChangesEnabled());
                     var writeSource = table.targetPrimaryKeys() == null
                             ? sourceSchema
                             : SchemaValidator.writeSchema(
