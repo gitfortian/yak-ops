@@ -114,7 +114,8 @@ public final class MySqlHybridSplitAssigner {
                                 || !next.tableId().equals(split.tableId())
                                 || !next.column().equals(split.chunkRange().column())
                                 || next.type() != split.chunkRange().type()
-                                || !Objects.equals(next.start(), split.chunkRange().end())))) {
+                                || !Objects.equals(
+                                        next.start(), split.chunkRange().end())))) {
             throw new IllegalStateException("Invalid snapshot discovery transition");
         }
         snapshots.append(List.of(split), last);
