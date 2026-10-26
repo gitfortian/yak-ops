@@ -20,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -205,31 +207,61 @@ class MySqlBackfillIT {
     @Test
     void limitedReplicationPrivilegesPermitBigintScanButNotTypedGlobalReadLock() throws Exception {
         String table = "limited_" + UUID.randomUUID().toString().replace("-", "");
+        String activity = "heartbeat_" + UUID.randomUUID().toString().replace("-", "");
         String user = "snap_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         execute(
                 "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
+                "CREATE TABLE " + activity
+                        + "(id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
                 "INSERT INTO " + table + " VALUES (1,'original')",
                 "CREATE USER '" + user + "'@'%' IDENTIFIED BY 'test-only-snapshot'",
+                // Debezium's no-data schema bootstrap needs table-level LOCK TABLES.
+                // This must not grant RELOAD or FLUSH_TABLES required by the Typed FTWRL path.
                 "GRANT SELECT, LOCK TABLES ON yak_cdc_it.* TO '" + user + "'@'%'",
                 "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '" + user + "'@'%'");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try {
-            var db = DATABASE.metadata();
-            var config = new MySqlCdcSourceConfig(
-                    db.host(), db.port(), user, "test-only-snapshot", 6831, table, Map.of(id, SCHEMA), 256);
-            try (var reader = new MySqlSnapshotBackfillReader(config, 0)) {
-                var prepared = reader.read(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
-                assertEquals(1, prepared.output().rows().size());
-                assertEquals(1L, prepared.output().rows().getFirst().row().getLong(0));
-            }
-            try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
-                var failure = assertThrows(java.sql.SQLException.class, () -> reader.read(
-                        MySqlSnapshotSplit.typed(
-                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
-                assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());
+        TableId pulseTable = new TableId("yak_cdc_it", null, activity);
+        try (var pulses = Executors.newSingleThreadScheduledExecutor()) {
+            // Supply actual Binlog events during both CDC bootstraps. A read-only
+            // tracked table can otherwise remain idle before Debezium has anchored
+            // its partition; the separate table leaves the asserted snapshot unchanged.
+            var task = pulses.scheduleWithFixedDelay(() -> {
+                try {
+                    execute("INSERT INTO " + activity + "(name) VALUES('pulse')");
+                } catch (Exception error) {
+                    throw new IllegalStateException("MySQL test Binlog activity failed", error);
+                }
+            }, 0, 200, TimeUnit.MILLISECONDS);
+            try {
+                var db = DATABASE.metadata();
+                var config = new MySqlCdcSourceConfig(
+                        db.host(),
+                        db.port(),
+                        user,
+                        "test-only-snapshot",
+                        6831,
+                        table,
+                        Map.of(id, SCHEMA, pulseTable, SCHEMA),
+                        256);
+                try (var reader = new MySqlSnapshotBackfillReader(config, 0)) {
+                    var prepared = reader.read(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
+                    assertEquals(1, prepared.output().rows().size());
+                    assertEquals(1L, prepared.output().rows().getFirst().row().getLong(0));
+                }
+                try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
+                    var failure = assertThrows(java.sql.SQLException.class, () -> reader.read(
+                            MySqlSnapshotSplit.typed(
+                                    "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
+                    assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());
+                }
+                if (task.isDone()) task.get();
+            } finally {
+                task.cancel(true);
             }
         } finally {
-            execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
+            execute("DROP USER IF EXISTS '" + user + "'@'%'",
+                    "DROP TABLE " + table,
+                    "DROP TABLE " + activity);
         }
     }
 
