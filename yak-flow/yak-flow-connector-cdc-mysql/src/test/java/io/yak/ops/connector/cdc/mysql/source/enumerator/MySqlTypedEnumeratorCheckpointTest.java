@@ -31,8 +31,7 @@ class MySqlTypedEnumeratorCheckpointTest {
         BigDecimal boundary = new BigDecimal("9223372036854775808.00000000");
         var first = MySqlSnapshotSplit.typed(
                 "chunk-0", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
-        assigner.appendPlan(first, 0, 1,
-                new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null), false);
+        assigner.appendPlan(first, 1);
         assertEquals(first, assigner.nextSnapshot());
         assigner.finishSnapshot(finished(first, 150));
         MySqlHybridEnumeratorState persisted = SERIALIZER.deserialize(
@@ -45,7 +44,7 @@ class MySqlTypedEnumeratorCheckpointTest {
 
         var last = MySqlSnapshotSplit.typed(
                 "chunk-1", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));
-        recovered.appendPlan(last, 1, 0, null, true);
+        recovered.appendPlan(last, 1);
         assertNull(recovered.nextChunkRange());
         assertEquals(last, recovered.nextSnapshot());
         recovered.finishSnapshot(finished(last, 200));
