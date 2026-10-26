@@ -442,7 +442,6 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
               </Field>
               {supportsScheduling ? (
                 <div className="border-t border-[var(--yak-components-panel-border)] pt-4">
-                  <div className="mb-3 text-sm font-medium">调度</div>
                   <EditorScheduleSection
                     schedule={schedule}
                     scheduleForm={scheduleForm}
