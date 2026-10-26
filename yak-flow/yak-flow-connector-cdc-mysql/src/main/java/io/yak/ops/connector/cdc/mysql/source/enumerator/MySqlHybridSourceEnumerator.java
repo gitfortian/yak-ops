@@ -231,8 +231,7 @@ public final class MySqlHybridSourceEnumerator
         }
         planning = true;
         context.callAsync(
-                () -> splitter.planNextTyped(table, fingerprint, tableIndex, chunkIndex, cursor),
-                (split, failure) -> {
+                () -> splitter.planNextTyped(table, fingerprint, tableIndex, chunkIndex, cursor), (split, failure) -> {
                     planning = false;
                     if (closed) return;
                     if (failure != null) {

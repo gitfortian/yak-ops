@@ -238,9 +238,8 @@ public final class MySqlChunkBackfill {
     public List<TableRecord> finish() {
         ensureOpen();
         sealed = true;
-        List<TableRecord> result = range == null
-                ? List.copyOf(rows.values())
-                : keyed != null ? keyed.finish() : keyless.finish();
+        List<TableRecord> result =
+                range == null ? List.copyOf(rows.values()) : keyed != null ? keyed.finish() : keyless.finish();
         rows.clear();
         retainedBytes = 0;
         return result;

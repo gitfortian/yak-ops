@@ -52,8 +52,8 @@ public final class MySqlHybridCdcSource implements Source<TableRecord, MySqlHybr
             throw new IllegalArgumentException("Hybrid snapshot chunk size must be between 1 and 100000");
         }
         this.chunkSize = chunkSize;
-        fingerprint =
-                Objects.requireNonNull(sourceFingerprint, "sourceFingerprint") + "-hybrid-typed-backfill-v3-" + chunkSize;
+        fingerprint = Objects.requireNonNull(sourceFingerprint, "sourceFingerprint") + "-hybrid-typed-backfill-v3-"
+                + chunkSize;
         config.schemas().forEach((table, schema) -> {
             String chunkKey = config.chunkKeyColumns().get(table);
             io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils.requireSupportedSnapshot(schema, chunkKey);
