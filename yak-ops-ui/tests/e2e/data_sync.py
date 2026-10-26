@@ -119,7 +119,7 @@ async def verify_revision_conflict(page):
 async def verify_partial_task_save(page):
     state["schedule"] = None
     state["fail_schedule"] = True
-    await page.goto(site("/offline-sync/new"))
+    await page.goto(site("/data-sync/new"))
     await choose_solution(page, "单表离线", "Partial save")
     await expect(page).to_have_url(re.compile("/data-sync/new$"))
     assert state["created_tasks"] == 0

@@ -160,43 +160,6 @@ export interface DataSyncParameters {
 
 export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
 
-export type DataSyncRuntimePolicy = "AUTO" | "FIXED";
-
-export interface DataSyncRuntimeConfig {
-  policy?: DataSyncRuntimePolicy;
-  fetchSize: number;
-  readBatchSize: number;
-  writeBatchSize: number;
-  splitSize?: number;
-  sourceParallelism: number;
-  timeoutSeconds: number;
-}
-
-export interface DataSyncRealtimeConfig {
-  checkpointIntervalSeconds: number;
-  queueCapacity: number;
-  pollBatchSize: number;
-  writeBatchSize: number;
-  timeoutSeconds: number;
-}
-
-export type DataSyncRetryPolicyMode = "SMART" | "FIXED";
-
-export interface DataSyncRetryPolicy {
-  mode?: DataSyncRetryPolicyMode;
-  maxAttempts: number;
-  backoffSeconds: number;
-}
-
-export interface DataSyncColumnMapping {
-  source: string;
-  target: string;
-}
-
-export interface DataSyncMappingConfig {
-  columns: DataSyncColumnMapping[];
-}
-
 export interface DataSyncTaskRecord {
   id: string;
   /** Persisted definition can be displayed, but fails current static execution validation. */
@@ -223,10 +186,6 @@ export interface DataSyncTaskRecord {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  runtimeConfig?: DataSyncRuntimeConfig;
-  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
-  realtimeConfig?: DataSyncRealtimeConfig;
-  retryPolicy?: DataSyncRetryPolicy;
   definitionVersion: number;
   remark?: string;
   updateBy?: string;
@@ -325,15 +284,6 @@ export interface DataSyncEndpointSnapshot {
   table: string;
 }
 
-export interface DataSyncOfflineRuntimePlan {
-  policy?: DataSyncRuntimePolicy;
-  sourceRowCount?: number;
-  estimatedRowBytes?: number;
-  splitColumn?: string;
-  splitCount?: number;
-  statisticsAvailable?: boolean;
-}
-
 export interface DataSyncDefinitionSnapshot {
   tableMappings?: DataSyncTableMapping[];
   taskId: string;
@@ -343,14 +293,8 @@ export interface DataSyncDefinitionSnapshot {
   taskVersion: number;
   syncType?: DataSyncType | string;
   writeMode?: DataSyncWriteMode | string;
-  autoCreateTable?: boolean;
-  mapping?: DataSyncMappingConfig;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
-  runtimeConfig?: DataSyncRuntimeConfig;
-  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
-  realtimeConfig?: DataSyncRealtimeConfig;
-  retryPolicy?: DataSyncRetryPolicy;
 }
 
 export interface DataSyncInstanceRecord {
