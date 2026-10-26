@@ -17,7 +17,13 @@ export function selectSourceSchema(
 ): EditorForm {
   return {
     ...form,
-    source: { ...form.source, schema, table: "", sourceHasPrimaryKey: undefined, chunkKeyColumn: "" },
+    source: {
+      ...form.source,
+      schema,
+      table: "",
+      sourceHasPrimaryKey: undefined,
+      chunkKeyColumn: "",
+    },
     sink: clearTargetWriteIdentity(form, usesChangelog),
   };
 }

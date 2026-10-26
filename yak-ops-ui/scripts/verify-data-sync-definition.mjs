@@ -105,10 +105,12 @@ assert.throws(() => readSyncParameters(3, keyless));
 assert.throws(() => readSyncParameters(2, keyless));
 assert.throws(() => parseSyncParameters(4, "{"));
 assert.throws(() => readSyncParameters(4, { ...keyless, tableMappings: [] }));
-assert.throws(() => readSyncParameters(4, {
-  ...keyless,
-  source: { ...keyless.source, tables: [{ ...keyless.source.tables[0], keyless: true }] },
-}));
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...keyless,
+    source: { ...keyless.source, tables: [{ ...keyless.source.tables[0], keyless: true }] },
+  }),
+);
 assert.throws(() =>
   readSyncParameters(4, {
     ...keyless,

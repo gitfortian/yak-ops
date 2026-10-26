@@ -160,7 +160,12 @@ export function TargetSection({
             aria-label="同步结构变更"
             size="small"
             checked={form.sink.schemaChangesEnabled}
-            disabled={published || saving || targetType === "ORACLE" || form.source.sourceHasPrimaryKey === false}
+            disabled={
+              published ||
+              saving ||
+              targetType === "ORACLE" ||
+              form.source.sourceHasPrimaryKey === false
+            }
             onCheckedChange={(checked) => {
               patchSink("schemaChangesEnabled", checked);
               if (!checked) patchSink("allowDropColumns", false);

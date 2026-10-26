@@ -103,7 +103,10 @@ assert.equal(selectedKeyless.sink.writeMode, "RETRACT");
 assert.equal(selectedKeyless.sink.schemaChangesEnabled, false);
 assert.equal(selectedKeyless.sink.allowDropColumns, false);
 assert.equal(selectedKeyless.sink.targetPrimaryKeys.length, 0);
-assert.equal(selection.setSourcePrimaryKeys(selectedKeyless, true).source.sourceHasPrimaryKey, true);
+assert.equal(
+  selection.setSourcePrimaryKeys(selectedKeyless, true).source.sourceHasPrimaryKey,
+  true,
+);
 
 const request = params.buildEditorPayload(form, draft, false, [], true);
 assert.equal(request.name, "orders");

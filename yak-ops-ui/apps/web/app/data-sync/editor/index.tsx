@@ -99,11 +99,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         table: value?.targetTable || "",
         schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
         allowDropColumns: value?.allowDropColumns ?? false,
-        writeMode: value?.writeMode === "RETRACT"
-          ? "RETRACT"
-          : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
-            ? "UPSERT"
-            : "APPEND",
+        writeMode:
+          value?.writeMode === "RETRACT"
+            ? "RETRACT"
+            : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
+              ? "UPSERT"
+              : "APPEND",
         targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
       },
     };

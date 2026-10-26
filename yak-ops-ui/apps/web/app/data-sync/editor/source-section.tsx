@@ -89,7 +89,9 @@ export function SourceSection({
   const chunkColumns = sourceColumns.filter(
     (column) =>
       column.nullable === false &&
-      /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(column.typeName || "") &&
+      /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(
+        column.typeName || "",
+      ) &&
       (form.source.sourceHasPrimaryKey !== true || column.primaryKey === true),
   );
   return (
@@ -127,10 +129,14 @@ export function SourceSection({
           {allowChunkKey ? (
             <>
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-                <FieldLabel required={form.source.sourceHasPrimaryKey === false}>快照分片字段</FieldLabel>
+                <FieldLabel required={form.source.sourceHasPrimaryKey === false}>
+                  快照分片字段
+                </FieldLabel>
                 <div className="w-1/2 min-w-0 max-lg:w-full">
                   <DataSyncSearchableSelect
-                    placeholder={form.source.sourceHasPrimaryKey ? "默认使用来源主键" : "选择非空数值字段"}
+                    placeholder={
+                      form.source.sourceHasPrimaryKey ? "默认使用来源主键" : "选择非空数值字段"
+                    }
                     value={form.source.chunkKeyColumn || null}
                     options={chunkColumns.map((column) => ({
                       value: column.name,
