@@ -5,7 +5,7 @@ import io.yak.ops.testutils.PostgresDatabase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-@Tag("cdc-postgres")
+@Tag("cdc-pipeline-postgres")
 class MySqlCdcToPostgresIT extends MySqlCdcPipelineTestBase {
     @RegisterExtension
     static final PostgresDatabase TARGET = new PostgresDatabase();

@@ -49,9 +49,14 @@ Use Java 21 and a working Docker daemon. Tests create their own disposable datab
 bash scripts/tests/run.sh jdbc mysql
 bash scripts/tests/run.sh jdbc postgres
 bash scripts/tests/run.sh jdbc oracle
-bash scripts/tests/run.sh cdc mysql
+bash scripts/tests/run.sh cdc-binlog
+bash scripts/tests/run.sh cdc-snapshot
+bash scripts/tests/run.sh cdc-hybrid
 bash scripts/tests/run.sh pipeline
-bash scripts/tests/run.sh cdc-pipeline
+bash scripts/tests/run.sh cdc-pipeline-mysql
+bash scripts/tests/run.sh cdc-pipeline-postgres
+bash scripts/tests/run.sh cdc-pipeline-oracle
+bash scripts/tests/run.sh cdc-recovery
 bash scripts/tests/run.sh business
 bash scripts/tests/run.sh backend-e2e
 bash scripts/tests/run.sh recovery-e2e
@@ -65,7 +70,7 @@ Common Source/Sink behavior belongs in reusable Connector test bases, database-s
 
 JUnit owns shared containers within one module's test execution. Data is isolated per scenario; normal E2E shares the application process, not Workspace or task state. Destructive and process-recovery cases own independent processes. Stop running tasks before deleting their data. Do not mix class-scoped container shutdown with root-store reuse, share resources across CI jobs, or enable parallel methods without proving isolation.
 
-The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. CDC groups separate Binlog, Snapshot/Backfill, Hybrid, each real target Pipeline, and crash recovery into independently reported matrix jobs; no cases are removed. Unknown CDC production changes and shared contracts retain conservative coverage, and each required group must provide its complete method-level audit. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
 
 Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
 

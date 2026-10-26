@@ -20,20 +20,14 @@ PIPELINE_METHODS = (
     "evolvesExistingTableAndRecoversSchemaWithBinlogCheckpoint",
 )
 EXPECTED = {
-    "cdc": {
+    "cdc-binlog": {
         "MySqlBinlogIT": (
             "snapshotSessionUsesUtcWithoutChangingGlobalTimeZone",
             "streamsBinlogAndRestoresFromMailboxEmittedOffset",
             "realMultiRowTransactionIdentityRemainsUniqueAcrossBinlogRotation",
         ),
-        "MySqlHybridIT": (
-            "keylessSnapshotAndBinlogPreserveDuplicateRows",
-            "emptyTableFinishesSchemaBootstrapBeforeItsFirstInsert",
-            "factoryPipelineSnapshotsMultipleTablesThenStreamsUpdatesDeletesAndKeyMoves",
-            "identicalPayloadRowsRemainDistinctThroughKeyMovesAndStreamingRecovery",
-            "partialExternalWritesRecoverFrozenChunkAndApplyLaterSourceDeletion",
-            "streamingRestoreKeepsChunkFiltersAndResumesMailboxEmittedOffset",
-        ),
+    },
+    "cdc-snapshot": {
         "MySqlBackfillIT": (
             "backfillsRepeatedUpdatesDeletesCrossChunkMovesAndIgnoresOtherTables",
             "quietEmptyChunkAndFollowingScanFinishFromActualWatermarks",
@@ -51,15 +45,26 @@ EXPECTED = {
             "binlogOnlyRemainsClosedButHybridSourceIsAdmitted",
         ),
     },
-    "cdc-pipeline": {
-        "MySqlCdcToMySqlIT": PIPELINE_METHODS,
-        "MySqlCdcToPostgresIT": PIPELINE_METHODS,
-        "MySqlCdcToOracleIT": PIPELINE_METHODS,
+    "cdc-hybrid": {
+        "MySqlHybridIT": (
+            "keylessSnapshotAndBinlogPreserveDuplicateRows",
+            "emptyTableFinishesSchemaBootstrapBeforeItsFirstInsert",
+            "factoryPipelineSnapshotsMultipleTablesThenStreamsUpdatesDeletesAndKeyMoves",
+            "identicalPayloadRowsRemainDistinctThroughKeyMovesAndStreamingRecovery",
+            "partialExternalWritesRecoverFrozenChunkAndApplyLaterSourceDeletion",
+            "streamingRestoreKeepsChunkFiltersAndResumesMailboxEmittedOffset",
+        ),
+    },
+    "cdc-pipeline-mysql": {"MySqlCdcToMySqlIT": PIPELINE_METHODS},
+    "cdc-pipeline-postgres": {"MySqlCdcToPostgresIT": PIPELINE_METHODS},
+    "cdc-pipeline-oracle": {"MySqlCdcToOracleIT": PIPELINE_METHODS},
+    "cdc-recovery": {
         "MySqlCdcToMySqlCrashRecoveryIT": (
             "replaysCommittedChangeAfterProcessCrashBeforeCheckpointAndDoesNotReplayAfterCheckpoint",
         ),
     },
 }
+
 TEST_PATTERN = re.compile(
     r"@Test\s+(?:(?:@\w+(?:\([^)]*\))?\s+)|(?:(?:public|protected|private|static|final)\s+))*"
     r"void\s+(\w+)\s*\(",
