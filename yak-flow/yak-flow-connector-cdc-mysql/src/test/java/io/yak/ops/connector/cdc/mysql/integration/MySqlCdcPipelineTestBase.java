@@ -49,7 +49,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** CDC and JDBC runtime integration, independent of the Task platform. */
 @Tag("pipeline")
-@Tag("cdc-pipeline")
 @Timeout(360)
 abstract class MySqlCdcPipelineTestBase {
     @RegisterExtension
