@@ -95,8 +95,9 @@ class MySqlTypedBinlogSplitFilterTest {
                 "all", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, null, null), offset(100));
         var filter = MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, schema), List.of(one));
         var record = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L, 2L, 5));
-        assertEquals(1, filter.filter(event(101, record)).records().size());
+        // Binlog offsets are monotonic; check the High boundary before crossing it.
         assertEquals(0, filter.filter(event(100, record)).records().size());
+        assertEquals(1, filter.filter(event(101, record)).records().size());
     }
 
     @Test
@@ -114,8 +115,9 @@ class MySqlTypedBinlogSplitFilterTest {
                 List.of(new FinishedChunk(
                         "full", new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, null, null), offset(100))));
         var row = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of("İ"));
-        assertEquals(1, full.filter(event(101, row)).records().size());
+        // Binlog offsets are monotonic; check the High boundary before crossing it.
         assertEquals(0, full.filter(event(100, row)).records().size());
+        assertEquals(1, full.filter(event(101, row)).records().size());
     }
 
     @Test
