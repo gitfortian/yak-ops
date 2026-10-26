@@ -11,7 +11,10 @@ import sys
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc", "cdc-pipeline", "business", "backend-e2e", "recovery-e2e")
+CDC_SOURCES = ("cdc-binlog", "cdc-snapshot", "cdc-hybrid")
+CDC_PIPELINES = ("cdc-pipeline-mysql", "cdc-pipeline-postgres", "cdc-pipeline-oracle")
+CDC_SUITES = CDC_SOURCES + CDC_PIPELINES + ("cdc-recovery",)
+SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline") + CDC_SUITES + ("business", "backend-e2e", "recovery-e2e")
 JDBC = "yak-flow/yak-flow-connector-jdbc/"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql/"
 CDC_BASE = "yak-flow/yak-flow-connector-cdc-base/"
@@ -90,6 +93,9 @@ def test_suites(path: str) -> set[str]:
     """Select integration suites only for production code and the owning *IT tests."""
     if "/src/test/" in path:
         if not path.endswith("IT.java"):
+            # Inherited tests and shared CDC fixtures can affect more than one class.
+            if path.startswith(CDC) and "/integration/" in path:
+                return set(CDC_PIPELINES + ("cdc-recovery",))
             return set()
         filename = path.rsplit("/", 1)[-1]
         if path.startswith(JDBC):
@@ -98,7 +104,17 @@ def test_suites(path: str) -> set[str]:
             vendor = next((v for v in ("mysql", "postgres", "oracle") if v in filename.lower()), None)
             return {"jdbc-" + vendor} if vendor else {"pipeline"}
         if path.startswith(CDC):
-            return {"cdc-pipeline"} if "To" in filename else {"cdc"}
+            tests = {
+                "MySqlBinlogIT.java": "cdc-binlog",
+                "MySqlBackfillIT.java": "cdc-snapshot",
+                "MySqlKeylessBackfillIT.java": "cdc-snapshot",
+                "MySqlHybridIT.java": "cdc-hybrid",
+                "MySqlCdcToMySqlIT.java": "cdc-pipeline-mysql",
+                "MySqlCdcToPostgresIT.java": "cdc-pipeline-postgres",
+                "MySqlCdcToOracleIT.java": "cdc-pipeline-oracle",
+                "MySqlCdcToMySqlCrashRecoveryIT.java": "cdc-recovery",
+            }
+            return {tests[filename]} if filename in tests else set(CDC_SUITES)
         if path.startswith(E2E):
             return {"recovery-e2e"} if "Recovery" in filename else {"backend-e2e"}
         if path.startswith(BUSINESS):
@@ -108,18 +124,32 @@ def test_suites(path: str) -> set[str]:
     if path.startswith(JDBC):
         vendor = next((v for v in ("mysql", "postgres", "oracle") if v in path.lower().removeprefix(JDBC)), None)
         if vendor:
-            return {"jdbc-" + vendor, "pipeline", "cdc-pipeline"}
-        return {"jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc-pipeline"}
+            suites = {"jdbc-" + vendor, "pipeline", "cdc-pipeline-" + vendor}
+            # XA and crash replay are MySQL JDBC Sink protocols.
+            return suites | ({"cdc-recovery"} if vendor == "mysql" else set())
+        return {"jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline"} | set(CDC_PIPELINES) | {"cdc-recovery"}
     if path.startswith(CDC_BASE):
-        return {"cdc", "cdc-pipeline", "recovery-e2e"}
+        return set(CDC_SUITES) | {"recovery-e2e"}
     if path.startswith(CDC):
-        return {"cdc", "cdc-pipeline"} | ({"recovery-e2e"} if any(x in path.lower() for x in ("checkpoint", "split", "offset")) else set())
+        # Narrow only these verified snapshot-only implementation owners.
+        snapshot_only = (
+            "source/assigner/MySqlChunkSplitter.java",
+            "source/reader/MySqlSnapshotBackfillReader.java",
+        )
+        if any(path == CDC + suffix for suffix in snapshot_only):
+            suites = {"cdc-snapshot", "cdc-hybrid"} | set(CDC_PIPELINES) | {"cdc-recovery"}
+        else:
+            # All other CDC changes may affect snapshot, Binlog, handoff or replay.
+            suites = set(CDC_SUITES)
+        if any(x in path.lower() for x in ("checkpoint", "split", "offset")):
+            suites.add("recovery-e2e")
+        return suites
     if path.startswith(RUNTIME):
-        return {"pipeline", "cdc-pipeline", "recovery-e2e", "backend-e2e"}
+        return {"pipeline", "recovery-e2e", "backend-e2e", "cdc-recovery"} | set(CDC_PIPELINES)
     if path.startswith("yak-flow/yak-flow-connector-base/"):
-        return {"pipeline", "cdc", "cdc-pipeline"}
+        return {"pipeline"} | set(CDC_SUITES)
     if path.startswith("yak-ops-core/"):
-        return {"pipeline", "cdc-pipeline", "backend-e2e"}
+        return {"pipeline", "backend-e2e", "cdc-recovery"} | set(CDC_PIPELINES)
     if path.startswith("yak-ops-business/yak-ops-business-task/"):
         return {"business", "backend-e2e"}
     if path.startswith("yak-ops-business/yak-ops-business-schedule/"):
