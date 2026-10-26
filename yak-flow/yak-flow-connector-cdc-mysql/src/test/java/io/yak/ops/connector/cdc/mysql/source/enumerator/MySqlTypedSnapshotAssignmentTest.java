@@ -171,7 +171,7 @@ class MySqlTypedSnapshotAssignmentTest {
     }
 
     @Test
-    void legacyBigintPrimaryKeySelectionStillUsesTheExistingPlanner() throws Exception {
+    void bigintPrimaryKeyAlsoUsesTypedChunkDiscovery() throws Exception {
         String url = database();
         try (var connection = DriverManager.getConnection(url);
                 var statement = connection.createStatement()) {
@@ -190,11 +190,11 @@ class MySqlTypedSnapshotAssignmentTest {
         enumerator.handleSourceEvent(0, new MySqlLowWatermarkEvent(offset(100)));
         context.runOne();
         var first = (MySqlSnapshotSplit) context.assignments(1).getFirst();
-        assertNull(first.chunkRange());
-        assertEquals(5L, first.upperExclusive());
+        assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
+        assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, checkpoint.nextChunkLower());
-        assertNull(checkpoint.nextChunkRange());
+        assertNull(checkpoint.nextChunkLower());
+        assertEquals(5L, checkpoint.nextChunkRange().start());
         enumerator.close();
     }
 
