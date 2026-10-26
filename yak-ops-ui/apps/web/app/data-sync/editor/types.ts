@@ -11,7 +11,8 @@ export interface EditorSource {
   database: string;
   schema: string;
   table: string;
-  keylessEnabled: boolean;
+  /** Derived from physical Catalog metadata; never persisted in the task definition. */
+  sourceHasPrimaryKey?: boolean;
   chunkKeyColumn: string;
   incremental?: DataSyncIncrementalConfig;
 }
@@ -53,7 +54,7 @@ export const EMPTY_FORM: EditorForm = {
     database: "",
     schema: "",
     table: "",
-    keylessEnabled: false,
+    sourceHasPrimaryKey: undefined,
     chunkKeyColumn: "",
     incremental: undefined,
   },
