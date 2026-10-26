@@ -135,7 +135,7 @@ class MySqlBackfillIT {
 
 
     @Test
-    void typedKeyedChunkReconcilesOneCommittedTransactionAfterLowWithoutHoldingTheReadLock() throws Exception {
+    void typedKeyedChunkReconcilesTransactionCommittedBetweenLowAndReadView() throws Exception {
         String table = "typed_tx_" + UUID.randomUUID().toString().replace("-", "");
         execute(
                 "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
@@ -146,8 +146,8 @@ class MySqlBackfillIT {
                 0,
                 () -> null,
                 () -> {
-                    // A separate transaction must be able to commit after the read view is pinned.
-                    // The same committed changes are then reconciled from Low to High.
+                    // Commit after Low but before the repeatable-read view is established.
+                    // Snapshot may include these rows; Low-to-High Backfill must reconcile them.
                     var db = DATABASE.metadata();
                     try (var transaction = DriverManager.getConnection(db.url(), db.username(), db.password());
                             var statement = transaction.createStatement()) {
@@ -159,7 +159,8 @@ class MySqlBackfillIT {
                         transaction.commit();
                     }
                     return null;
-                })) {
+                },
+                () -> null)) {
             var prepared = reader.read(MySqlSnapshotSplit.typed(
                     "typed-transaction", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
             Map<Long, String> actual = new LinkedHashMap<>();
@@ -203,7 +204,7 @@ class MySqlBackfillIT {
     }
 
     @Test
-    void limitedReplicationPrivilegesAllowJdbcScanButRejectTypedGlobalReadLock() throws Exception {
+    void limitedReplicationPrivilegesPermitTypedSnapshotReadViewWithoutGlobalReadLock() throws Exception {
         String table = "limited_" + UUID.randomUUID().toString().replace("-", "");
         String user = "snap_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         execute(
@@ -232,13 +233,12 @@ class MySqlBackfillIT {
                 assertTrue(batch.finishedSplits().contains("bigint"));
                 batch.recycle();
             }
-            // Exercise the actual typed read-view code, not merely an unrelated SQL probe.
-            // It must reject a user with replication privileges but no global read-lock privilege.
+            // Exercise the actual typed read-view code with no global read-lock privilege.
+            // Ordinary SELECT plus Binlog position access is sufficient for this JDBC boundary.
             try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
-                var failure = assertThrows(java.sql.SQLException.class, () -> reader.openConsistentSnapshot(
+                assertNotNull(reader.openConsistentSnapshot(
                         MySqlSnapshotSplit.typed(
                                 "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
-                assertTrue(failure.getMessage().contains("consistent typed snapshot"), failure.getMessage());
             }
         } finally {
             execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
