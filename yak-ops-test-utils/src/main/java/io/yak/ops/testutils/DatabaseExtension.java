@@ -55,12 +55,15 @@ public abstract class DatabaseExtension implements BeforeAllCallback, TestWatche
                     statement.setQueryTimeout(5);
                     statement.execute(metadata.url().startsWith("jdbc:oracle:") ? "SELECT 1 FROM DUAL" : "SELECT 1");
                     long sqlReady = System.nanoTime();
+                    long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(sqlReady - started);
+                    long containerMillis = TimeUnit.NANOSECONDS.toMillis(containerReady - started);
+                    long readyMillis = TimeUnit.NANOSECONDS.toMillis(sqlReady - containerReady);
                     Files.createDirectories(directory);
                     Files.writeString(
                             directory.resolve("startup.json"),
-                            "{\"elapsedMillis\":" + TimeUnit.NANOSECONDS.toMillis(sqlReady - started)
-                                    + ",\"containerStartupMillis\":" + TimeUnit.NANOSECONDS.toMillis(containerReady - started)
-                                    + ",\"sqlReadyMillis\":" + TimeUnit.NANOSECONDS.toMillis(sqlReady - containerReady)
+                            "{\"elapsedMillis\":" + elapsedMillis
+                                    + ",\"containerStartupMillis\":" + containerMillis
+                                    + ",\"sqlReadyMillis\":" + readyMillis
                                     + "}");
                     return new Resource(container, metadata, directory);
                 } catch (java.sql.SQLException unavailable) {
