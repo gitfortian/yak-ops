@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.task.datasync.validation;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
@@ -9,7 +10,6 @@ import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
-import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
@@ -19,6 +19,7 @@ import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -62,7 +63,7 @@ public final class SchemaValidator {
             ReadonlyConfig sink,
             List<String> targetPrimaryKeys,
             boolean schemaEvolution) {
-        if (!"MYSQL_CDC".equals(source.get(io.yak.ops.plugin.task.datasync.config.JobOptions.TYPE))) {
+        if (!"MYSQL_CDC".equals(source.get(JobOptions.TYPE))) {
             return;
         }
         boolean noPrimaryKey = sourceSchema.primaryKeys().isEmpty();
@@ -76,13 +77,15 @@ public final class SchemaValidator {
                 throw new IllegalArgumentException("CDC without physical primary keys cannot evolve target schema");
             }
             if (mode == JdbcWriteMode.UPSERT && targetPrimaryKeys == null) {
-                throw new IllegalArgumentException("CDC without physical primary keys requires verified target keys for UPSERT");
+                throw new IllegalArgumentException(
+                        "CDC without physical primary keys requires verified target keys for UPSERT");
             }
             if (mode != JdbcWriteMode.UPSERT && mode != JdbcWriteMode.RETRACT) {
                 throw new IllegalArgumentException("Unsupported CDC write mode without physical primary keys");
             }
         } else if (mode == JdbcWriteMode.RETRACT || xa) {
-            throw new IllegalArgumentException("RETRACT and checkpoint XA require a source without physical primary keys");
+            throw new IllegalArgumentException(
+                    "RETRACT and checkpoint XA require a source without physical primary keys");
         }
     }
 

@@ -69,7 +69,8 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
         }
         if (mode == JdbcWriteMode.RETRACT
                 && (!xa || keys != null || type != SolutionType.SINGLE_TABLE_REALTIME || schemaChangesEnabled)) {
-            throw new IllegalArgumentException("RETRACT requires realtime checkpoint XA, no target keys and no schema evolution");
+            throw new IllegalArgumentException(
+                    "RETRACT requires realtime checkpoint XA, no target keys and no schema evolution");
         }
         if (xa && mode != JdbcWriteMode.RETRACT) {
             throw new IllegalArgumentException("Checkpoint XA requires RETRACT write mode");

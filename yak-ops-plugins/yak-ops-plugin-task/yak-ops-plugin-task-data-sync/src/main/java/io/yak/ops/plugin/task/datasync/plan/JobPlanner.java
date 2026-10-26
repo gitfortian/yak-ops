@@ -157,7 +157,13 @@ public final class JobPlanner {
             if (mapping.targetPrimaryKeys() != null && !"MYSQL".equals(targetInfo.type())) {
                 throw new IllegalArgumentException("Explicit target primary keys currently require a MySQL target");
             }
-            SchemaValidator.validateCdcWrite(from.schema(), targetInfo.type(), source, sink, mapping.targetPrimaryKeys(), job.schemaChangesEnabled());
+            SchemaValidator.validateCdcWrite(
+                    from.schema(),
+                    targetInfo.type(),
+                    source,
+                    sink,
+                    mapping.targetPrimaryKeys(),
+                    job.schemaChangesEnabled());
             TableSchema writeSource = SchemaValidator.writeSchema(from, mapping.targetPrimaryKeys());
             CreateTableEvent event = prepareSchema
                     ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
@@ -188,8 +194,10 @@ public final class JobPlanner {
                 if (from.schema().primaryKeys().isEmpty()) binding += encodePart("noPhysicalPrimaryKey");
             }
             if (sink.get(JdbcSinkOptions.XA_ENABLED)) {
-                if (!"MYSQL".equals(targetInfo.type()) || !from.schema().primaryKeys().isEmpty()) {
-                    throw new IllegalArgumentException("MySQL XA RETRACT requires a source without physical primary keys");
+                if (!"MYSQL".equals(targetInfo.type())
+                        || !from.schema().primaryKeys().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "MySQL XA RETRACT requires a source without physical primary keys");
                 }
                 binding += encodePart("XA");
             }
