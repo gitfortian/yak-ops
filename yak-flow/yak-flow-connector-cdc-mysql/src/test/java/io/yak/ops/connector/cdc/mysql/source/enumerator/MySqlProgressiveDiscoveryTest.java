@@ -21,7 +21,7 @@ class MySqlProgressiveDiscoveryTest {
     void restoresDiscoveryPositionWithoutReplanningCompletedChunks() throws Exception {
         var original = assigner();
         var first = MySqlSnapshotSplit.typed("table-0-chunk-0", "fp", range(null, 10L));
-        original.appendPlan(first, 0, 1, range(10L, null), false);
+        original.appendPlan(first, 1);
         assertEquals(first, original.nextSnapshot());
         original.finishSnapshot(finished(first, 150));
         assertFalse(original.snapshotComplete());
@@ -35,7 +35,7 @@ class MySqlProgressiveDiscoveryTest {
         assertEquals(java.util.List.of(finished(first,150)), restored.finishedSplits());
 
         var last = MySqlSnapshotSplit.typed("table-0-chunk-1", "fp", range(10L, null));
-        restored.appendPlan(last, 1, 0, null, true);
+        restored.appendPlan(last, 1);
         assertEquals(last, restored.nextSnapshot());
         restored.finishSnapshot(finished(last,250));
         assertTrue(restored.snapshotComplete());
@@ -50,7 +50,7 @@ class MySqlProgressiveDiscoveryTest {
     void rejectsWrongRangeAndConflictingCompletionWithoutChangingAccounting() {
         var assigner = assigner();
         var split = MySqlSnapshotSplit.typed("chunk", "fp", range(null, null));
-        assigner.appendPlan(split, 1, 0, null, true);
+        assigner.appendPlan(split, 1);
         assigner.nextSnapshot();
         assertThrows(IllegalArgumentException.class, () -> assigner.finishSnapshot(
                 new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, offset(200), range(1L, null))));
