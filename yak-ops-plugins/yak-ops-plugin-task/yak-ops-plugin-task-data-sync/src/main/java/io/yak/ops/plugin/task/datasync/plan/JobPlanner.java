@@ -60,50 +60,7 @@ public final class JobPlanner {
      * @return immutable logical plan; missing targets require explicit SCHEMA preparation
      */
     public JobPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity context) {
-        return resolve(parameters, context.workspaceId(), context.instanceId(), false);
-    }
-
-    /**
-     * Previews the same validated schema operations used by execution without reserving resources.
-     *
-     * @param parameters validated product configuration
-     * @param workspaceId authorized Workspace
-     * @return ordered table DDL previews without connection settings
-     */
-    public List<SchemaPreview> preview(ReadonlyConfig parameters, String workspaceId) {
-        if (!JobConfig.from(parameters).steps().contains(Step.SCHEMA)) {
-            throw new IllegalArgumentException("DDL preview requires the SCHEMA step");
-        }
-        JobPlan plan = resolve(parameters, workspaceId, null, true);
-        List<SchemaPreview> results = new ArrayList<>();
-        for (int index = 0; index < plan.tables().size(); index++) {
-            TablePlan table = plan.tables().get(index);
-            SchemaChangePlan schema = table.schemaPlan();
-            List<SchemaPreview.Difference> differences = schema.differences().stream()
-                    .map(difference -> new SchemaPreview.Difference(
-                            difference.columnName(),
-                            difference.kind().name(),
-                            difference.reason().name(),
-                            difference.sourceType() == null
-                                    ? null
-                                    : difference.sourceType().asSerializableString(),
-                            difference.targetType() == null
-                                    ? null
-                                    : difference.targetType().asSerializableString()))
-                    .toList();
-            results.add(new SchemaPreview(
-                    index,
-                    table.targetTable(),
-                    schema.blocked()
-                            ? "BLOCKED"
-                            : table.targetSchema() == null ? "CREATE" : schema.requiresDdl() ? "ALTER" : "VERIFY",
-                    schema.blocked()
-                            ? List.of()
-                            : SchemaValidator.statements(
-                                    table.targetDatasource().type(), schema, table.targetMetadata()),
-                    differences));
-        }
-        return List.copyOf(results);
+        return resolve(parameters, context.workspaceId(), context.instanceId());
     }
 
     /**
@@ -126,7 +83,7 @@ public final class JobPlanner {
         return plan.withTarget(actual);
     }
 
-    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId, boolean preview) {
+    private JobPlan resolve(ReadonlyConfig parameters, String workspaceId, String instanceId) {
         JobConfig job = JobConfigValidator.validateConfig(parameters, factories);
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
@@ -205,12 +162,10 @@ public final class JobPlanner {
                     ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
                     : null;
             SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
-            if (schema != null && !preview) SchemaValidator.requireCompatible(schema);
+            if (schema != null) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
-            if (schema == null || !schema.blocked()) {
-                sinkFactory.validateSchema(sink, writeSource, expected, sourceFactory.producesChangelog());
-            }
-            if (actual != null && (schema == null || (!schema.blocked() && !schema.requiresDdl()))) {
+            sinkFactory.validateSchema(sink, writeSource, expected, sourceFactory.producesChangelog());
+            if (actual != null && (schema == null || !schema.requiresDdl())) {
                 sinkFactory.validateSchema(sink, writeSource, actual.schema(), sourceFactory.producesChangelog());
             }
             String target = encodePart(sinkId) + encodeTable(targetTable);

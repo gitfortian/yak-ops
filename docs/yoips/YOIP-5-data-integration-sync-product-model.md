@@ -201,7 +201,7 @@ Explicit and rule-based selection are mutually exclusive. If selected objects or
 
 Batch mappings reuse the same model and support implemented bulk naming and bulk editing. Each mapping shows source, target, write mode, and useful validation results. Target conflicts, missing permissions, and incompatible schemas must not be reported only in a global toast.
 
-Without `SCHEMA`, use existing target objects while still performing necessary structural validation. Selecting `SCHEMA` means actual preparation of target objects; a passed validation is not "schema migration completed". Schema preview must not execute DDL. Actual creation occurs only after task admission, permission checks, and target-resource claims. Existing incompatible targets must not be implicitly dropped, truncated, or altered.
+Without `SCHEMA`, use existing target objects while still performing necessary structural validation. Selecting `SCHEMA` means actual preparation of target objects; a passed validation is not "schema migration completed". Read-only schema validation must not execute DDL. Actual creation occurs only after task admission, permission checks, and target-resource claims. Existing incompatible targets must not be implicitly dropped, truncated, or altered.
 
 Initial table creation and continuous DDL propagation are different capabilities. Expose automatic creation, field mapping, and shard merging only after end-to-end implementation and verification. Checking schema migration alone must not promise propagation of every future DDL change.
 
@@ -357,7 +357,7 @@ These are requirements for implementation verification, not tests claimed to hav
 | Parameter versions | Project and execute both version 2 task shapes without changing semantics; version 3 saving and reload agree; reject incompatible mixed formats; do not modify snapshots or auto-publish/run |
 | Mappings | Exactly one mapping for single-table; zero selected tables, duplicate sources or targets, incompatible schemas, or namespace violations in batch mode; database-wide identity stays unchanged when only one table is selected |
 | Rules boundary | Reject rule-based input in the initial release; subsequently test explicit filtering versus persistent rules, switching confirmation, preview expiration, and pinned per-Instance object sets |
-| Schema and writes | Validation and preview execute no DDL; validate targets even without schema migration; overwrite scope and number of cleanups; never silently delete incompatible targets; realtime changelogs cannot degrade to Append |
+| Schema and writes | Validation executes no DDL; validate targets even without schema migration; overwrite scope and number of cleanups; never silently delete incompatible targets; realtime changelogs cannot degrade to Append |
 | Execution and scheduling | Published-state requirements and actual scheduling eligibility; do not conflate canceling Instances with disabling schedules; retry after Task save success/Schedule save failure creates no duplicate; existing cancellation and resource-claim regressions |
 | Stages and progress | Full 37% to stage 100%, then incremental animation while Instance stays running; no fabricated progress for unknown, stale, failed, canceled, or uncertain states; Split metrics are not row counts; do not average unbounded incremental progress |
 | History and recovery | Editing current configuration does not alter historical stages, mappings, or logs; a new Instance does not implicitly restore an old checkpoint; duplication copies neither offsets nor enabled schedules |
