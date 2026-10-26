@@ -110,7 +110,7 @@ class SchemaExecutionTest {
         var admitted = f.planner.plan(options(1, false), ID).admissionPlan();
         f.sourceComment = "changed comment";
         assertNotEquals(admitted, f.planner.plan(options(1, false), ID).admissionPlan());
-        var dataOnly = ConfigParser.parseJson(json(1, false).replace("\"SCHEMA\",", ""));
+        var dataOnly = ConfigParser.parseJson(json(1, false).replace("\"CREATE_OR_ALTER\"", "\"VERIFY\""));
         assertThrows(IllegalArgumentException.class, () -> f.planner.plan(dataOnly, ID));
         f.lookupFailure = new IllegalStateException("permission denied", new SQLException("metadata rejected", "42501"));
         assertSame(f.lookupFailure, assertThrows(IllegalStateException.class, () -> f.planner.plan(options(1, false), ID)));
@@ -137,7 +137,13 @@ class SchemaExecutionTest {
         Fixture f = new Fixture();
         f.targets.put(new TableId("ods", "public", "copy_0"), SHAPE);
         Map<String, Object> values = new java.util.LinkedHashMap<>(options(1, false).getSourceMap());
-        values.put("steps", List.of("FULL"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> previousSink = (Map<String, Object>) values.get("sink");
+        Map<String, Object> sink = new java.util.LinkedHashMap<>(previousSink);
+        sink.put("schemaPolicy", Map.of(
+                "initial", "VERIFY",
+                "evolution", Map.of("enabled", false, "allowDropColumns", false)));
+        values.put("sink", sink);
         ReadonlyConfig parameters = ReadonlyConfig.fromMap(values);
         var admission = f.planner.admissionPlan(parameters, ID);
         TaskHandle handle = new DataSyncTaskExecutor(f.planner, f.builder, f.engine)
@@ -332,14 +338,26 @@ class SchemaExecutionTest {
     }
 
     private static String json(int count, boolean realtime) {
-        String mappings = java.util.stream.IntStream.range(0, count).mapToObj(index ->
-                "{\"source\":{\"database\":\"app\",\"table\":\"orders_" + index
-                + "\"},\"target\":{\"database\":\"ods\",\"schema\":\"public\",\"table\":\"copy_" + index
-                + "\"},\"writeMode\":\"UPSERT\"}").collect(java.util.stream.Collectors.joining(","));
-        return "{\"solutionType\":\"DATABASE_" + (realtime ? "REALTIME" : "OFFLINE")
-                + "\",\"steps\":[\"SCHEMA\",\"FULL\"" + (realtime ? ",\"INCREMENTAL\"" : "")
-                + "],\"source\":{\"datasourceId\":\"source\"},\"sink\":{\"datasourceId\":\"target\"},"
-                + "\"tableSelection\":{\"mode\":\"EXPLICIT\"},\"tableMappings\":[" + mappings + "]}";
+        List<Map<String, Object>> sources = new java.util.ArrayList<>();
+        List<Map<String, Object>> sinks = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            String id = "route" + index;
+            sources.add(Map.of("id", id, "database", "app", "table", "orders_" + index));
+            sinks.add(Map.of(
+                    "input", id, "database", "ods", "schema", "public", "table", "copy_" + index,
+                    "write", Map.of("mode", "UPSERT")));
+        }
+        return JSONUtils.toJson(Map.of(
+                "solutionType", "DATABASE_" + (realtime ? "REALTIME" : "OFFLINE"),
+                "steps", realtime ? List.of("FULL", "INCREMENTAL") : List.of("FULL"),
+                "source", Map.of("datasourceId", "source", "tables", sources),
+                "transform", List.of(),
+                "sink", Map.of(
+                        "datasourceId", "target",
+                        "schemaPolicy", Map.of("initial", "CREATE_OR_ALTER",
+                                "evolution", Map.of("enabled", false, "allowDropColumns", false)),
+                        "tables", sinks),
+                "env", Map.of()));
     }
 
     private static final class Fixture implements DataSourceLookupService {

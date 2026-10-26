@@ -125,12 +125,10 @@ async def verify_partial_task_save(page):
     assert state["created_tasks"] == 0
     await page.reload()
     await expect(page.get_by_role("textbox", name="任务名称", exact=True)).to_have_value("Partial save")
-    for index, name in enumerate(["MySQL source", "PostgreSQL target"]):
-        await page.locator("#datasource").get_by_role("combobox").nth(index).click()
-        await page.get_by_role("option", name=name, exact=True).click()
-    await page.locator("#source").get_by_role("combobox").click()
+    await pick_datasources(page)
+    await page.locator("#source").get_by_role("combobox", name="表", exact=True).click()
     await page.get_by_role("option", name="orders", exact=True).click()
-    await page.locator("#target").get_by_role("combobox").first.click()
+    await page.locator("#target").get_by_role("combobox", name="表", exact=True).click()
     await page.get_by_role("option", name="public.ods_orders", exact=True).click()
     await configure_cron(page, "0 0 6 * * ?")
     await page.get_by_role("button", name="保存", exact=True).click()
@@ -174,8 +172,13 @@ async def prepare_database_task(page, kind):
 
 
 async def pick_datasources(page):
-    for index, name in enumerate(("MySQL source", "PostgreSQL target")):
-        await pick_option(page, page.locator("#datasource").get_by_role("combobox").nth(index), name)
+    for section, name in (("#source", "MySQL source"), ("#target", "PostgreSQL target")):
+        await pick_option(page, page.locator(section).get_by_role("combobox", name="数据源", exact=True), name)
+
+
+def batch_write_mode(page):
+    """Select the Sink-wide write-mode control, not the target datasource."""
+    return page.locator("#target").get_by_role("combobox", name="批量设置写入方式", exact=True)
 
 
 async def verify_multitable_mapping(page):
@@ -198,7 +201,7 @@ async def verify_multitable_mapping(page):
         page,
         page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?batch_b$")),
         re.compile(r"(.*\.)?batch_b_copy$"))
-    await pick_option(page, page.locator("#target").get_by_role("combobox").first, "按主键更新")
+    await pick_option(page, batch_write_mode(page), "按主键更新")
     await page.reload()
     await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
     await expect(page.get_by_role("button", name="保存", exact=True)).to_be_enabled()
@@ -207,11 +210,11 @@ async def verify_multitable_mapping(page):
     requests = [req[2] for req in state["requests"]
                 if req[0] == "POST" and req[1] == "/api/v1/task-definitions"]
     assert len(requests) == 1, requests
-    parameters = json.loads(requests[0]["parameters"])
+    parameters = requests[0]["parameters"]
     assert parameters["solutionType"] == "DATABASE_OFFLINE", parameters
-    assert [row["source"]["table"] for row in parameters["tableMappings"]] == ["batch_a", "batch_b"]
-    assert [row["target"]["table"] for row in parameters["tableMappings"]] == ["batch_a_copy", "batch_b_copy"]
-    assert all(row["writeMode"] == "UPSERT" for row in parameters["tableMappings"])
+    assert [row["table"] for row in parameters["source"]["tables"]] == ["batch_a", "batch_b"]
+    assert [row["table"] for row in parameters["sink"]["tables"]] == ["batch_a_copy", "batch_b_copy"]
+    assert all(row["write"]["mode"] == "UPSERT" for row in parameters["sink"]["tables"])
 
 
 
@@ -264,10 +267,10 @@ async def verify_multitable_selection(page):
     writes = [item[2] for item in state["requests"]
               if item[0] == "POST" and item[1] == "/api/v1/task-definitions"]
     assert len(writes) == 1, writes
-    saved = json.loads(writes[0]["parameters"])
-    assert saved["tableSelection"] == {"mode": "EXPLICIT"}
-    assert [entry["source"]["table"] for entry in saved["tableMappings"]] == ["batch_a"]
-    assert [entry["target"]["table"] for entry in saved["tableMappings"]] == ["batch_a_copy"]
+    saved = writes[0]["parameters"]
+    assert saved["transform"] == [] and saved["env"] == {}
+    assert [entry["table"] for entry in saved["source"]["tables"]] == ["batch_a"]
+    assert [entry["table"] for entry in saved["sink"]["tables"]] == ["batch_a_copy"]
 
 
 async def verify_schema_preview(page):
@@ -307,9 +310,10 @@ async def verify_schema_preview(page):
     await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
     created = [req[2] for req in state["requests"]
                if req[0] == "POST" and req[1] == "/api/v1/task-definitions"][-1]
-    params = json.loads(created["parameters"])
-    assert params["steps"] == ["SCHEMA", "FULL"], params
-    assert params["tableMappings"][0]["target"]["table"] == "sm_browser_target"
+    params = created["parameters"]
+    assert params["steps"] == ["FULL"], params
+    assert params["sink"]["schemaPolicy"]["initial"] == "CREATE_OR_ALTER"
+    assert params["sink"]["tables"][0]["table"] == "sm_browser_target"
 
 
 async def verify_realtime_stages(page):
@@ -330,7 +334,7 @@ async def verify_realtime_stages(page):
         await pick_option(page,
                           page.get_by_role("combobox", name=re.compile(r"去向表 (.*\.)?" + table + r"$")),
                           re.compile(r"(.*\.)?" + table + r"_copy$"))
-    await expect(page.locator("#target").get_by_role("combobox").first).to_be_disabled()
+    await expect(batch_write_mode(page)).to_be_disabled()
     await expect(page.locator("#schedule")).to_have_count(0)
     await page.reload()
     await expect(page.get_by_text("已选 2 / 100", exact=True)).to_be_visible()
@@ -338,11 +342,11 @@ async def verify_realtime_stages(page):
     await expect(page).to_have_url(re.compile(r"/data-sync/new-task/edit$"))
     saved = [item[2] for item in state["requests"]
              if item[0] == "POST" and item[1] == "/api/v1/task-definitions"][-1]
-    config = json.loads(saved["parameters"])
+    config = saved["parameters"]
     assert config["solutionType"] == "DATABASE_REALTIME", config
     assert config["steps"] == ["FULL", "INCREMENTAL"]
-    assert len(config["tableMappings"]) == 2
-    assert all(row["writeMode"] == "UPSERT" for row in config["tableMappings"])
+    assert len(config["sink"]["tables"]) == 2
+    assert all(row["write"]["mode"] == "UPSERT" for row in config["sink"]["tables"])
 
     # Deliberately synthesize Instance telemetry; this must not start MySQL CDC or wait for a checkpoint.
     full = {"step": "FULL", "status": "FINISHED", "progressPercent": 100,
