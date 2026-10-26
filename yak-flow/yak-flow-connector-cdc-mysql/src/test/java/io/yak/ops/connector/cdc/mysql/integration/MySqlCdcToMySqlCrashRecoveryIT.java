@@ -31,7 +31,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * checkpoint and once after a checkpoint. An UPDATE trigger records externally visible sink
  * effects so replay is observed even when the final UPSERT row value is unchanged.
  */
-@Tag("cdc-pipeline")
+@Tag("cdc-recovery")
 @Tag("mysql")
 @Timeout(360)
 class MySqlCdcToMySqlCrashRecoveryIT {
