@@ -1,5 +1,14 @@
 import type { OwnerOption, StandardInput } from "@/service/data-modeling/data-standards/types";
 export const STANDARD_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+const DECIMAL_PAIR = /^([1-9][0-9]?),([0-9]{1,2})$/;
+/** Integer digits of a complete `p,s` DECIMAL pair, or null while the pair is incomplete or invalid. */
+export function decimalIntegerDigits(value: string | null) {
+  const match = value ? DECIMAL_PAIR.exec(value) : null;
+  if (!match) return null;
+  const precision = Number(match[1]);
+  const scale = Number(match[2]);
+  return precision > 38 || scale > precision ? null : precision - scale;
+}
 export function validateStandard(input: StandardInput, owners: readonly OwnerOption[]) {
   const errors: Partial<Record<keyof StandardInput, string>> = {};
   if (!input.cnName.trim() || input.cnName.trim().length > 128)
@@ -9,8 +18,8 @@ export function validateStandard(input: StandardInput, owners: readonly OwnerOpt
   const value = input.lengthPrecision;
   if (input.dataType === "DECIMAL") {
     // The server refuses an incomplete pair because physical types cannot size a DECIMAL without it.
-    const match = value ? /^([1-9][0-9]?),([0-9]{1,2})$/.exec(value) : null;
-    if (!match) errors.lengthPrecision = "请填写完整的精度与小数位，例如18,2";
+    const match = value ? DECIMAL_PAIR.exec(value) : null;
+    if (!match) errors.lengthPrecision = "请填写总位数与小数位";
     else if (Number(match[1]) > 38 || Number(match[2]) > Number(match[1]))
       errors.lengthPrecision = "总位数不超过38，且小数位不得超过总位数";
   } else if (value !== null && value !== "") {

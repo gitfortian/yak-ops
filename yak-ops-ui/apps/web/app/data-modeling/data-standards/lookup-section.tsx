@@ -64,7 +64,7 @@ function validate(input: StandardLookupInput) {
       errors["value-" + index] = "值编码必填，且不超过64位";
       return;
     }
-    if (seen.has(code)) errors["value-" + index] = "同一码表内的值编码不能重复";
+    if (seen.has(code)) errors["value-" + index] = "同一标准代码内的值编码不能重复";
     seen.add(code);
   });
   return errors;
@@ -122,7 +122,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
         });
       })
       .catch(() => {
-        if (current) setFailure("码表加载失败，请关闭弹窗后重试。");
+        if (current) setFailure("标准代码加载失败，请关闭弹窗后重试。");
       })
       .finally(() => {
         if (current) setLoading(false);
@@ -175,9 +175,9 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
       const result = classifyStandardFailure(error);
       if (result.kind === "field" && result.field === "enCode")
         setErrors({ enCode: "英文编码已存在或不符合规范" });
-      else if (result.kind === "values") setFailure("码表值不合法：编码不能为空且不能重复。");
+      else if (result.kind === "values") setFailure("标准代码值不合法：编码不能为空且不能重复。");
       else if (result.kind === "conflict") setConflict(true);
-      else if (result.kind === "missing") setFailure("所属分类或码表已不存在，请刷新后重试。");
+      else if (result.kind === "missing") setFailure("所属分类或标准代码已不存在，请刷新后重试。");
       else setFailure(result.kind === "unknown" ? result.message : "保存失败，请稍后重试");
     } finally {
       busy.current = false;
@@ -270,7 +270,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
           </Field>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">码表值</span>
+              <span className="text-xs font-medium">标准代码值</span>
               <Button
                 size="small"
                 disabled={saving || loading || input.values.length >= MAX_VALUES}
@@ -289,10 +289,10 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
               </Button>
             </div>
             {input.values.length >= MAX_VALUES && (
-              <p className="text-xs text-[#b54708]">一张码表最多 {MAX_VALUES} 个值。</p>
+              <p className="text-xs text-[#b54708]">一个标准代码最多 {MAX_VALUES} 个值。</p>
             )}
             {input.values.length === 0 && (
-              <p className="text-xs text-[#667085]">码表至少需要一个值。</p>
+              <p className="text-xs text-[#667085]">标准代码至少需要一个值。</p>
             )}
             {input.values.map((row, index) => (
               <div key={index}>

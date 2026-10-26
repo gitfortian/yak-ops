@@ -119,7 +119,7 @@ export default function FieldEditor({
       rows.map((row, position) => {
         if (position !== index) return row;
         if (!lookup) return { ...row, lookupId: null, lookupEnCode: null };
-        if (!row.standardId) toast.info("保存后以码表覆盖该字段的英文编码与中文名");
+        if (!row.standardId) toast.info("保存后以标准代码覆盖该字段的英文编码与中文名");
         return {
           ...row,
           lookupId: lookup.id,
@@ -193,7 +193,7 @@ export default function FieldEditor({
         </span>
         {(lookups.status === "error" || units.status === "error") && (
           <>
-            <span className="text-xs text-[#b42318]">码表或单位加载失败</span>
+            <span className="text-xs text-[#b42318]">标准代码或单位加载失败</span>
             <Button size="small" onClick={() => setOptionVersion((value) => value + 1)}>
               重试
             </Button>
@@ -245,7 +245,7 @@ export default function FieldEditor({
                 数据标准
               </th>
               <th className="w-[168px] border-b border-[#eaecf0] px-2 py-2 font-medium">
-                引用码表
+                引用标准代码
               </th>
               <th className="w-[152px] border-b border-[#eaecf0] px-2 py-2 font-medium">
                 引用单位
@@ -434,7 +434,10 @@ export default function FieldEditor({
                         bindLookup(index, entry);
                       }}
                     >
-                      <SelectTrigger variant="outlined" aria-label={`第 ${index + 1} 行引用码表`}>
+                      <SelectTrigger
+                        variant="outlined"
+                        aria-label={`第 ${index + 1} 行引用标准代码`}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

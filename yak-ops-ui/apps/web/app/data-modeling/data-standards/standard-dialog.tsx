@@ -12,8 +12,10 @@ import {
   Input,
   Select,
   SelectContent,
+  SelectFooter,
   SelectItem,
   SelectItemText,
+  SelectSearch,
   SelectTrigger,
   SelectValue,
   Textarea,
@@ -36,12 +38,11 @@ import {
   SECURITY_LEVELS,
   type OwnerOption,
   type StandardDraft,
-  type StandardField,
   type StandardInput,
 } from "@/service/data-modeling/data-standards/types";
 import { FIELD_CLASS, InputField, SelectField } from "../shared/form-fields";
 import { useOptions } from "./state";
-import { STANDARD_CODE, validateStandard } from "./validation";
+import { STANDARD_CODE, decimalIntegerDigits, validateStandard } from "./validation";
 
 const NONE = "NONE";
 
@@ -80,17 +81,13 @@ export default function StandardDialog(props: {
   const [ownerState, setOwnerState] = useState<"loading" | "ready" | "error">("loading");
   const [ownerVersion, setOwnerVersion] = useState(0);
   const [parentKeyword, setParentKeyword] = useState("");
-  const [parentOptions, setParentOptions] = useState<{ value: string; label: string }[]>(() =>
+  const [parentResults, setParentResults] = useState<{ value: string; label: string }[]>([]);
+  const [parentLabel, setParentLabel] = useState<string | null>(() =>
     edited?.parentStandardId
-      ? [
-          {
-            value: edited.parentStandardId,
-            label: (edited.parentStandardEnCode ?? edited.parentStandardId) + "（当前父标准）",
-          },
-        ]
-      : [],
+      ? (edited.parentStandardEnCode ?? edited.parentStandardId) + "（当前父标准）"
+      : null,
   );
-  const [parentState, setParentState] = useState<"idle" | "loading" | "error">("idle");
+  const [parentState, setParentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [optionVersion, setOptionVersion] = useState(0);
   const lookups = useOptions(
     (signal) =>
@@ -112,7 +109,6 @@ export default function StandardDialog(props: {
     busy = useRef(false),
     ownerTouched = useRef(false);
   const codeRequest = useRef<AbortController | null>(null);
-  const parentRequest = useRef<AbortController | null>(null);
   const latestCode = useRef(input.enCode);
   latestCode.current = input.enCode;
   const form = useRef<HTMLFormElement>(null);
@@ -122,7 +118,6 @@ export default function StandardDialog(props: {
     return () => {
       active.current = false;
       codeRequest.current?.abort();
-      parentRequest.current?.abort();
     };
   }, []);
   useEffect(() => {
@@ -151,6 +146,36 @@ export default function StandardDialog(props: {
       previous.ownerId ? previous : { ...previous, ownerId: currentUser.id },
     );
   }, [currentUser?.id, edited]);
+  useEffect(() => {
+    // Candidates are matched on the server, so the dropdown only queries once the user typed something.
+    const keyword = parentKeyword.trim();
+    if (!keyword) {
+      setParentResults([]);
+      setParentState("idle");
+      return;
+    }
+    const controller = new AbortController();
+    setParentState("loading");
+    const timer = window.setTimeout(() => {
+      void getStandards({ scope: "ALL", keyword, pageNo: 1, pageSize: 20 }, controller.signal)
+        .then((page) => {
+          if (!active.current || controller.signal.aborted) return;
+          setParentResults(
+            page.bizData
+              .filter((row) => row.id !== edited?.id)
+              .map((row) => ({ value: row.id, label: `${row.cnName}（${row.enCode}）` })),
+          );
+          setParentState("ready");
+        })
+        .catch(() => {
+          if (active.current && !controller.signal.aborted) setParentState("error");
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [parentKeyword, edited?.id]);
   const change = <K extends keyof StandardInput>(key: K, value: StandardInput[K]) => {
     if (key === "ownerId") ownerTouched.current = true;
     setInput((previous) => ({ ...previous, [key]: value }));
@@ -191,35 +216,6 @@ export default function StandardDialog(props: {
         setErrors((previous) => ({ ...previous, enCode: "编码校验失败，请重试" }));
     } finally {
       if (active.current && !controller.signal.aborted) setCheckingCode(false);
-    }
-  };
-  const searchParents = async () => {
-    const keyword = parentKeyword.trim();
-    parentRequest.current?.abort();
-    if (!keyword) {
-      setParentState("idle");
-      return;
-    }
-    const controller = new AbortController();
-    parentRequest.current = controller;
-    setParentState("loading");
-    try {
-      const page = await getStandards(
-        { scope: "ALL", keyword, pageNo: 1, pageSize: 20 },
-        controller.signal,
-      );
-      if (!active.current || controller.signal.aborted) return;
-      const found = page.bizData
-        .filter((row: StandardField) => row.id !== edited?.id)
-        .map((row: StandardField) => ({ value: row.id, label: `${row.cnName}（${row.enCode}）` }));
-      setParentOptions((previous) =>
-        previous
-          .filter((item) => item.value === input.parentStandardId)
-          .concat(found.filter((item) => item.value !== input.parentStandardId)),
-      );
-      setParentState("idle");
-    } catch {
-      if (active.current && !controller.signal.aborted) setParentState("error");
     }
   };
   const submit = async (event: FormEvent) => {
@@ -296,6 +292,7 @@ export default function StandardDialog(props: {
       disabled: true,
     });
   const pair = pairOf(input.lengthPrecision);
+  const integerDigits = decimalIntegerDigits(input.lengthPrecision);
   const lookupItems = [
     { value: NONE, label: "不使用" },
     ...(lookups.data ?? []).map((row) => ({
@@ -322,7 +319,22 @@ export default function StandardDialog(props: {
         (edited.measureUnitCnName ?? edited.measureUnitEnCode ?? edited.measureUnitId) +
         "（不可选）",
     });
-  const parentItems = [{ value: NONE, label: "无" }, ...parentOptions];
+  const parentItems = [{ value: NONE, label: "无" }, ...parentResults];
+  // The chosen parent may fall outside the current result page; keep its label so the trigger still names it.
+  if (
+    input.parentStandardId &&
+    parentLabel &&
+    !parentResults.some((item) => item.value === input.parentStandardId)
+  )
+    parentItems.push({ value: input.parentStandardId, label: parentLabel });
+  const parentStatus =
+    parentState === "loading"
+      ? "查找中…"
+      : parentState === "error"
+        ? "查找失败，请重试"
+        : parentState === "ready" && !parentResults.length
+          ? "没有匹配的字段标准"
+          : "";
   return (
     <Dialog
       open
@@ -415,10 +427,8 @@ export default function StandardDialog(props: {
               </div>
               {errors.lengthPrecision ? (
                 <p className="pl-[116px] text-xs text-[#d92d20]">{errors.lengthPrecision}</p>
-              ) : (
-                <p className="pl-[116px] text-[11px] text-[#667085]">
-                  DECIMAL 必须填完整的“总位数,小数位”，整数位由两者相减得出
-                </p>
+              ) : integerDigits === null ? null : (
+                <p className="pl-[116px] text-[11px] text-[#667085]">整数位 {integerDigits} 位</p>
               )}
             </>
           ) : (
@@ -492,54 +502,70 @@ export default function StandardDialog(props: {
               父标准
             </FieldLabel>
             <div>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={id + "-parent-search"}
-                  size="small"
+              <Select
+                value={input.parentStandardId ?? NONE}
+                size="small"
+                items={parentItems}
+                disabled={saving}
+                onOpenChange={(open) => {
+                  if (!open) setParentKeyword("");
+                }}
+                onValueChange={(value) => {
+                  const next = !value || value === NONE ? null : value;
+                  setParentLabel(
+                    next ? (parentItems.find((item) => item.value === next)?.label ?? null) : null,
+                  );
+                  change("parentStandardId", next);
+                }}
+              >
+                <SelectTrigger
+                  id={id + "-parent"}
                   variant="outlined"
-                  value={parentKeyword}
-                  maxLength={128}
-                  disabled={saving}
-                  aria-label="搜索可作为父标准的字段标准"
-                  placeholder="输入关键字查找字段标准"
-                  onChange={(event) => setParentKeyword(event.target.value)}
-                />
-                <Button
-                  size="small"
-                  disabled={saving || parentState === "loading"}
-                  onClick={() => void searchParents()}
+                  aria-invalid={Boolean(errors.parentStandardId) || undefined}
                 >
-                  查找
-                </Button>
-              </div>
-              <div className="mt-2">
-                <Select
-                  value={input.parentStandardId ?? NONE}
-                  size="small"
-                  items={parentItems}
-                  disabled={saving}
-                  onValueChange={(value) =>
-                    change("parentStandardId", !value || value === NONE ? null : value)
+                  <SelectValue placeholder="请选择" />
+                </SelectTrigger>
+                <SelectContent
+                  header={
+                    <SelectSearch
+                      value={parentKeyword}
+                      maxLength={128}
+                      autoFocus
+                      placeholder="输入中文名称或英文编码查找"
+                      aria-label="查找父标准"
+                      onChange={(event) => setParentKeyword(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter inside the popup must not submit the dialog form.
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }
+                      }}
+                    />
+                  }
+                  footer={
+                    parentStatus ? (
+                      <SelectFooter
+                        className={
+                          "min-h-0 px-3 py-1.5 text-[11px] " +
+                          (parentState === "error" ? "text-[#d92d20]" : "text-[#667085]")
+                        }
+                      >
+                        {parentStatus}
+                      </SelectFooter>
+                    ) : undefined
                   }
                 >
-                  <SelectTrigger id={id + "-parent"} variant="outlined">
-                    <SelectValue placeholder="请选择" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {parentItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        <SelectItemText>{item.label}</SelectItemText>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  {parentItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      <SelectItemText>{item.label}</SelectItemText>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FieldError match={Boolean(errors.parentStandardId)}>
                 {errors.parentStandardId}
               </FieldError>
-              {parentState === "error" && (
-                <p className="mt-1 text-xs text-[#d92d20]">查找失败，请重试</p>
-              )}
             </div>
           </Field>
           <SelectField
@@ -549,7 +575,7 @@ export default function StandardDialog(props: {
             value={input.lookupId ?? NONE}
             items={lookupItems}
             disabled={saving || lookups.status === "loading"}
-            hint="引用码表约束该字段的取值范围；本标准的编码与名称不受影响"
+            hint="引用标准代码约束该字段的取值范围；本标准的编码与名称不受影响"
             onChange={(value) => change("lookupId", value === NONE ? null : value)}
           />
           <SelectField
