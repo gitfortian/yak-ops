@@ -67,6 +67,7 @@ abstract class MySqlCdcPipelineTestBase {
     Path stateDirectory;
 
     @Test
+    @Tag("cdc-changelog")
     void restoresCheckpointAndConvergesMultiTableChangelogAtEachJdbcDestination() throws Exception {
 
         String password = SOURCE.metadata().password();
@@ -194,6 +195,7 @@ abstract class MySqlCdcPipelineTestBase {
     }
 
     @Test
+    @Tag("cdc-schema")
     void evolvesExistingTableAndRecoversSchemaWithBinlogCheckpoint() throws Exception {
         JdbcConnectionOptions sourceOptions =
                 new JdbcConnectionOptions(SOURCE.metadata().url(), "root", SOURCE.metadata().password());
