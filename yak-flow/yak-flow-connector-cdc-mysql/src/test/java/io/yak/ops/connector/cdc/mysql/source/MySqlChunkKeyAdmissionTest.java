@@ -18,7 +18,7 @@ class MySqlChunkKeyAdmissionTest {
             List.of(
                     new Column("bucket", LogicalTypes.BIGINT.copy(false)),
                     new Column("amount", LogicalTypes.decimal(16, 2)),
-                    new Column("name", LogicalTypes.varchar(60))),
+                    new Column("name", LogicalTypes.varchar(60).copy(false))),
             List.of());
 
     @Test
