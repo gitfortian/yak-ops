@@ -133,10 +133,10 @@ def test_suites(path: str) -> set[str]:
     if path.startswith(CDC):
         # Narrow only these verified snapshot-only implementation owners.
         snapshot_only = (
-            "source/assigner/MySqlChunkSplitter.java",
-            "source/reader/MySqlSnapshotBackfillReader.java",
+            "/source/assigner/MySqlChunkSplitter.java",
+            "/source/reader/MySqlSnapshotBackfillReader.java",
         )
-        if any(path == CDC + suffix for suffix in snapshot_only):
+        if any(path.endswith(suffix) for suffix in snapshot_only):
             suites = {"cdc-snapshot", "cdc-hybrid"} | set(CDC_PIPELINES) | {"cdc-recovery"}
         else:
             # All other CDC changes may affect snapshot, Binlog, handoff or replay.
