@@ -73,17 +73,6 @@ public final class DataSyncTaskPlugin implements ExecutableTaskPlugin {
         return new SolutionCatalog(factories).list(sourceType, targetType);
     }
 
-    /**
-     * Plans target DDL from authorized metadata without executing statements or creating a Task.
-     *
-     * @param parameters requested version-four product parameters
-     * @param workspaceId trusted Workspace identity
-     * @return ordered mapping previews with no connection credentials
-     */
-    public List<io.yak.ops.plugin.task.datasync.plan.SchemaPreview> preview(String parameters, String workspaceId) {
-        return planner.preview(parse(parameters), workspaceId);
-    }
-
     @Override
     public void validateUpdate(ReadonlyConfig previous, ReadonlyConfig updated, TaskValidationContext context) {
         JobConfig before = JobConfig.from(previous);

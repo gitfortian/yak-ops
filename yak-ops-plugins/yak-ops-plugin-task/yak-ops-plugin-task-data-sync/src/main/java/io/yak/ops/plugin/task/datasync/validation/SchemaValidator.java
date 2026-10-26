@@ -8,7 +8,6 @@ import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
@@ -24,7 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/** Read-only constraints shared by schema preview, publication and execution planning. */
+/** Schema constraints shared by publication, admission and execution planning. */
 public final class SchemaValidator {
     private SchemaValidator() {}
 
@@ -265,34 +264,6 @@ public final class SchemaValidator {
             throw new SchemaValidationException(
                     new IllegalArgumentException("Target structure still requires schema changes"));
         }
-    }
-
-    /** Read-only DDL rendering from the exact supported events dispatched to MetadataApplier. */
-    public static List<String> statements(String targetType, SchemaChangePlan plan, DataSourceTable actual) {
-        requireCompatible(plan);
-        JdbcDialect dialect = dialect(targetType);
-        List<String> statements = new ArrayList<>();
-        for (SchemaChangeEvent event : plan.changes()) {
-            if (event instanceof CreateTableEvent create) {
-                statements.addAll(JdbcMetadataApplier.plan(create, dialect).statements());
-            } else if (event instanceof AddColumnEvent add) {
-                for (AddColumnEvent.ColumnWithPosition column : add.addedColumns()) {
-                    statements.addAll(dialect.addColumnStatements(event.tableId(), column.column()));
-                }
-            } else if (event instanceof AlterColumnTypeEvent alter) {
-                for (String name :
-                        alter.typeMapping().keySet().stream().sorted().toList()) {
-                    Column before = new Column(name, alter.oldTypeMapping().get(name));
-                    Column after = new Column(name, alter.typeMapping().get(name));
-                    String comment =
-                            actual == null ? null : actual.columnComments().get(name);
-                    statements.add(dialect.alterColumnTypeSql(event.tableId(), before, after, comment));
-                }
-            } else {
-                throw new SchemaValidationException(new IllegalArgumentException("Unsupported planned schema event"));
-            }
-        }
-        return List.copyOf(statements);
     }
 
     /** Resolves vendor dialect without opening a connection or accepting arbitrary SQL URLs. */

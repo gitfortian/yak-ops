@@ -91,15 +91,15 @@ class SchemaExecutionTest {
         assertEquals(2, missing.admissionPlan().exclusiveResources().size());
         assertNull(missing.tables().getFirst().targetSchema());
         assertEquals(0, f.connectionLookups.get());
-        var preview = f.planner.preview(options, "ws");
-        assertEquals("CREATE", preview.getFirst().action());
-        assertTrue(preview.getFirst().statements().getFirst().contains("CREATE TABLE"));
+        assertNotNull(missing.tables().getFirst().schemaPlan());
+        assertTrue(missing.tables().getFirst().schemaPlan().requiresDdl());
         assertEquals(0, f.applied.get());
         missing.tables().forEach(table -> f.create(table.schemaChange()));
         var existing = f.planner.plan(options, ID);
         assertEquals(missing.admissionPlan(), existing.admissionPlan());
         assertNotNull(existing.tables().getFirst().targetSchema());
-        assertEquals("VERIFY", f.planner.preview(options, "ws").getFirst().action());
+        assertFalse(existing.tables().getFirst().schemaPlan().requiresDdl());
+        assertEquals(0, f.applied.get());
         f.revision++;
         assertNotEquals(missing.admissionPlan(), f.planner.plan(options, ID).admissionPlan());
     }
