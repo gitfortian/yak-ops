@@ -100,6 +100,34 @@ class MySqlXaCommitterTest {
         assertEquals(XAException.XAER_NOTA, failure.errorCode);
     }
 
+    @Test
+    void repeatingXaRecoveryPagesFailClosedBeforeAnyRollback() {
+        MySqlXaXid orphan = MySqlXaXid.next("instance-1", 0, 5);
+        AtomicInteger scanEnds = new AtomicInteger();
+        AtomicInteger rollbacks = new AtomicInteger();
+        XAResource resource = (XAResource) Proxy.newProxyInstance(
+                XAResource.class.getClassLoader(),
+                new Class<?>[] {XAResource.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("recover")) {
+                        if ((int) args[0] == XAResource.TMENDRSCAN) {
+                            scanEnds.incrementAndGet();
+                            return new Xid[0];
+                        }
+                        return new Xid[] {orphan};
+                    }
+                    if (method.getName().equals("rollback")) rollbacks.incrementAndGet();
+                    if (method.getReturnType() == boolean.class) return false;
+                    if (method.getReturnType() == int.class) return 0;
+                    return null;
+                });
+
+        var committer = new MySqlXaCommitter(dataSource(resource), "instance-1");
+        assertThrows(IllegalStateException.class, () -> committer.recover(List.of()));
+        assertEquals(1, scanEnds.get());
+        assertEquals(0, rollbacks.get());
+    }
+
     private static XAResource resource(AtomicInteger commits, boolean fail) {
         return (XAResource) Proxy.newProxyInstance(
                 XAResource.class.getClassLoader(),
