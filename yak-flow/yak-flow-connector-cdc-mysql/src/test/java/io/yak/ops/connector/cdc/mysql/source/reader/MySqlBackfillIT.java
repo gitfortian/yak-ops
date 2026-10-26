@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /** Real JDBC and Debezium with writes placed after scanning and before the per-chunk High. */
-@Tag("cdc")
+@Tag("cdc-snapshot")
 @Timeout(180)
 class MySqlBackfillIT {
     @RegisterExtension static final MySqlDatabase DATABASE = MySqlDatabase.cdc();
