@@ -100,7 +100,12 @@ async def mock_planning(route):
         if state.get("planning_fail_tree"):
             status, code, message = 503, 999, "加载失败"
         else:
-            data = tree()
+            # The page renders two presentational trees, so roots split by kind.
+            roots = tree()
+            data = {
+                "categories": [node for node in roots if node["kind"] != "DATASET"],
+                "datamarts": [node for node in roots if node["kind"] == "DATASET"],
+            }
     elif path == "/owners":
         data = [{"userId": "user1", "displayName": "Tester"}]
     elif path == "/codes/availability":
