@@ -210,7 +210,7 @@ class MySqlBackfillIT {
                 "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
                 "INSERT INTO " + table + " VALUES (1,'original')",
                 "CREATE USER '" + user + "'@'%' IDENTIFIED BY 'test-only-snapshot'",
-                "GRANT SELECT ON yak_cdc_it.* TO '" + user + "'@'%'",
+                "GRANT SELECT, LOCK TABLES ON yak_cdc_it.* TO '" + user + "'@'%'",
                 "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '" + user + "'@'%'");
         TableId id = new TableId("yak_cdc_it", null, table);
         try {
