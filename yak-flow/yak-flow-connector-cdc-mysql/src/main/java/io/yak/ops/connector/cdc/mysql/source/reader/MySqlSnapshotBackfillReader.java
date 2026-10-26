@@ -41,7 +41,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         this(config, reader, afterSnapshot, () -> null);
     }
 
-    /** Executes after a keyless read view is anchored and the short global read lock is released. */
+    /** Executes after the typed read view is anchored and its short global read lock released. */
     MySqlSnapshotBackfillReader(
             MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
         this.config = Objects.requireNonNull(config, "config");
@@ -64,9 +64,6 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        if (split.chunkRange() != null && !schema.primaryKeys().isEmpty()) {
-            throw new UnsupportedOperationException("Typed backfill currently requires a keyless source table");
-        }
         MySqlChunkBackfill buffer = split.chunkRange() == null
                 ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
                 : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
@@ -121,7 +118,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                                 && event.schemaChange() != null
                                 && split.tableId().equals(event.schemaChange().tableId())) {
                             throw new UnsupportedOperationException(
-                                    "Keyless snapshot cannot reconcile schema changes during Backfill");
+                                    "Typed snapshot cannot reconcile schema changes during Backfill");
                         }
                         if (!event.records().isEmpty()
                                 && split.tableId()
@@ -212,7 +209,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 }
             }
             throw new SQLException(
-                    "Cannot establish a consistent keyless snapshot read view; "
+                    "Cannot establish a consistent typed snapshot read view; "
                             + "MySQL FLUSH TABLES WITH READ LOCK and REPEATABLE READ privileges are required",
                     failure);
         }

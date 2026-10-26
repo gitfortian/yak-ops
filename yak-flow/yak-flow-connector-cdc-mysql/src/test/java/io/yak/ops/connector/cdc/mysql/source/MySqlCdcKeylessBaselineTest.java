@@ -51,7 +51,7 @@ class MySqlCdcKeylessBaselineTest {
     }
 
     @Test
-    void rejectsNonBigintNullableAndCompositePhysicalPrimaryKeys() {
+    void admitsNumericCompositePrimaryKeysAndRejectsUnsafeTypes() {
         var varcharKey = new TableSchema(
                 List.of(new Column("id", LogicalTypes.varchar(64).copy(false))), List.of("id"));
         var nullableKey = new TableSchema(
@@ -63,9 +63,10 @@ class MySqlCdcKeylessBaselineTest {
                 List.of("tenant", "id"));
 
         var factory = new MySqlCdcSourceFactory();
-        for (TableSchema schema : List.of(varcharKey, nullableKey, compositeKey)) {
+        for (TableSchema schema : List.of(varcharKey, nullableKey)) {
             assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(schema));
         }
+        factory.validateSchema(compositeKey);
         assertEquals("id", MySqlChunkSplitter.splitKey(KEYED));
         factory.validateSchema(KEYED);
     }

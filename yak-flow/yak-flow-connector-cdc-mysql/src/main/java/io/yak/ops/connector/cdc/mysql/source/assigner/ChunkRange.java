@@ -10,8 +10,8 @@ import java.util.Objects;
  *
  * <p>Values are immutable JDBC scalars. They are not compared using Java string ordering:
  * MySQL collations define the ordering used by the snapshot predicate and the planner.
- * Typed boundaries are persisted in the new checkpoint format. The legacy
- * BIGINT-only JDBC reader remains unavailable to typed chunks until execution integration.
+ * Typed boundaries are persisted in the checkpoint state; row-level Snapshot progress
+ * is checkpointed only after the normalized backfill result is frozen.
  */
 public record ChunkRange(TableId tableId, String column, LogicalTypeRoot type, Object start, Object end) {
     public ChunkRange {

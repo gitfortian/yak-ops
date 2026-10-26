@@ -89,10 +89,7 @@ export function SourceSection({
   const chunkColumns = sourceColumns.filter(
     (column) =>
       column.nullable === false &&
-      /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(
-        column.typeName || "",
-      ) &&
-      (form.source.sourceHasPrimaryKey !== true || column.primaryKey === true),
+      /^(tinyint|smallint|int(?:eger)?|bigint|decimal|numeric)(\b|\()/i.test(column.typeName || ""),
   );
   return (
     <CollapseSection id="source" title="数据来源 Source">

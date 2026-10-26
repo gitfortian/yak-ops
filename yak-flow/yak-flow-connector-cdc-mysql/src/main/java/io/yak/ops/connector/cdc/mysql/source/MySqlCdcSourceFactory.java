@@ -7,7 +7,6 @@ import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;
@@ -69,19 +68,13 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(TableSchema schema) {
-        MySqlChunkSplitter.splitKey(schema);
+        ChunkUtils.requireSupportedSnapshot(schema, null);
     }
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
         String selected = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
-        if (schema.primaryKeys().isEmpty()) {
-            ChunkUtils.requireSupportedSnapshot(schema, selected);
-        } else {
-            // The BIGINT-key scan remains the only executable keyed path until the typed
-            // Snapshot/Backfill lifecycle is unified.
-            MySqlChunkSplitter.splitKey(schema, selected);
-        }
+        ChunkUtils.requireSupportedSnapshot(schema, selected);
     }
 
     @Override
