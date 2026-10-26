@@ -119,7 +119,7 @@ def poll_locations(test_root: Path, classes: set[str]) -> list[str]:
 def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
     """Collect partial results and validation errors, even when Maven failed."""
     selected = EXPECTED if inventory is None else inventory
-    suites = list(EXPECTED) if suite == "full" else [suite]
+    suites = list(selected) if suite == "full" else [suite]
     if any(name not in selected for name in suites):
         raise ValueError("Unsupported CDC suite: " + suite)
 
@@ -146,15 +146,13 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
             actual = source_methods(test_root, classname)
             # A class may be split into fast schema and full changelog suites.
             # The combined inventory must still register every Java @Test method.
-            source_expected = set(required)
-            if inventory is None:
-                source_expected = {
-                    method
-                    for entries in EXPECTED.values()
-                    for entry, methods in entries.items()
-                    if entry == classname
-                    for method in methods
-                }
+            source_expected = {
+                method
+                for entries in selected.values()
+                for entry, methods in entries.items()
+                if entry == classname
+                for method in methods
+            }
             if actual != source_expected or len(required) != len(set(required)):
                 errors.append(
                     f"{classname}: Java @Test inventory mismatch; "
