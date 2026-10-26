@@ -95,7 +95,9 @@ public final class MySqlHybridSplitAssigner {
         MySqlSnapshotSplit original = snapshots.assigned().get(info.splitId());
         if (original == null
                 || !original.tableId().equals(info.tableId())
-                || !Objects.equals(original.chunkRange(), info.chunkRange())) {
+                || !Objects.equals(original.chunkRange(), info.chunkRange())
+                || !Objects.equals(original.lowerInclusive(), info.lowerInclusive())
+                || !Objects.equals(original.upperExclusive(), info.upperExclusive())) {
             throw new IllegalArgumentException("Completed chunk differs from its assigned range");
         }
         snapshots.complete(info.splitId());
@@ -106,7 +108,13 @@ public final class MySqlHybridSplitAssigner {
     public void appendPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
         if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT
                 || split.chunkRange() == null
-                || (next != null && (next.end() != null || next.start() == null))) {
+                || (next != null
+                        && (next.end() != null
+                                || next.start() == null
+                                || !next.tableId().equals(split.tableId())
+                                || !next.column().equals(split.chunkRange().column())
+                                || next.type() != split.chunkRange().type()
+                                || !Objects.equals(next.start(), split.chunkRange().end())))) {
             throw new IllegalStateException("Invalid snapshot discovery transition");
         }
         snapshots.append(List.of(split), last);
@@ -127,7 +135,7 @@ public final class MySqlHybridSplitAssigner {
         return nextChunkIndex;
     }
 
-public ChunkRange nextChunkRange() {
+    public ChunkRange nextChunkRange() {
         return nextChunkRange;
     }
 
