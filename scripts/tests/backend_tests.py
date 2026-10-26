@@ -66,6 +66,15 @@ def check_registration(root: Path = ROOT) -> None:
     actual = {p.stem for module in {spec[0] for spec in SUITES.values()} for p in (root / module / "src/test").rglob("*IT.java")}
     if actual != expected:
         raise ValueError(f"IT registration mismatch: unregistered={sorted(actual-expected)}, missing={sorted(expected-actual)}")
+    # Validate stage tags before starting Docker; matching a class name alone
+    # cannot prove Failsafe will discover it in its selected suite.
+    for suite, (module, _, classes) in SUITES.items():
+        if not suite.startswith("cdc-"):
+            continue
+        for classname in classes:
+            candidates = list((root / module / "src/test").rglob(classname + ".java"))
+            if len(candidates) != 1 or ('@Tag("' + suite + '")') not in candidates[0].read_text(encoding="utf-8"):
+                raise ValueError(f"Missing CDC suite tag {suite}: {classname}")
 
 
 def check_reports(names: list[str], root: Path = ROOT) -> dict[str, int]:
