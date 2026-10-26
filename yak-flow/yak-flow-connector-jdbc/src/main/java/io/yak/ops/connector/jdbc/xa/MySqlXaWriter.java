@@ -3,7 +3,7 @@ package io.yak.ops.connector.jdbc.xa;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecutor;
-import io.yak.ops.connector.jdbc.sink.JdbcKeylessTargetValidator;
+import io.yak.ops.connector.jdbc.sink.MySqlExactRowTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.core.api.connector.sink.CommittingSinkWriter;
 import io.yak.ops.core.api.connector.sink.SinkWriter;
@@ -105,7 +105,7 @@ public final class MySqlXaWriter implements CommittingSinkWriter<TableRecord, My
             jdbc = xaConnection.getConnection();
             requireDetachedXa(jdbc);
             if (!targetValidated) {
-                JdbcKeylessTargetValidator.validate(jdbc, plan);
+                MySqlExactRowTargetValidator.validate(jdbc, plan);
                 targetValidated = true;
             }
             statements = new TableChangelogStatementExecutor(dialect, List.of(plan), 64);

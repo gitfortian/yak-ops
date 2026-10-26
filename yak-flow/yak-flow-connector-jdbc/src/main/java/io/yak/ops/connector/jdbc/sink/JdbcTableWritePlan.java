@@ -79,7 +79,7 @@ public record JdbcTableWritePlan(
             }
         }
         if (writeMode == JdbcWriteMode.RETRACT) {
-            JdbcKeylessRetractionContract.validate(sourceSchema, schema);
+            JdbcSinkSchemaValidator.validateExactRow(sourceSchema, schema);
             for (int index = 0; index < sourcePositions.size(); index++) {
                 if (sourcePositions.get(index) != index) {
                     throw new IllegalArgumentException("JDBC RETRACT requires an exact full-row identity mapping");
@@ -94,7 +94,7 @@ public record JdbcTableWritePlan(
                     || sourceSchema.primaryKeys().isEmpty()
                     || schema.primaryKeys().size() != sourceSchema.primaryKeys().size()) {
                 throw new IllegalArgumentException(
-                        "JDBC UPSERT requires physical primary keys on both source and target");
+                        "JDBC UPSERT requires row identity on both source and target");
             }
             Set<String> sourceKeys = new HashSet<>();
             for (String targetKey : schema.primaryKeys()) {
@@ -112,7 +112,7 @@ public record JdbcTableWritePlan(
                         sourceSchema.column(sourcePositions.get(targetPosition)).name();
                 if (!sourceSchema.primaryKeys().contains(sourceKey) || !sourceKeys.add(sourceKey)) {
                     throw new IllegalArgumentException(
-                            "JDBC UPSERT destination primary key must map to a source physical primary key: "
+                            "JDBC UPSERT destination primary key must map to a source write identity key: "
                                     + targetKey);
                 }
             }

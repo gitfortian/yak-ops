@@ -16,11 +16,11 @@ import java.util.Locale;
  * full-row matching remains unverified. A verified exact-row comparator must never
  * silently accept a different Oracle physical representation.
  */
-public final class OracleKeylessTargetValidator {
-    private OracleKeylessTargetValidator() {}
+public final class OracleExactRowTargetValidator {
+    private OracleExactRowTargetValidator() {}
 
     public static void validate(Connection connection, JdbcTableWritePlan plan) throws SQLException {
-        JdbcKeylessRetractionContract.validate(plan.sourceSchema(), plan.schema());
+        JdbcSinkSchemaValidator.validateExactRow(plan.sourceSchema(), plan.schema());
         String owner = plan.targetTable().schema() == null
                 ? connection.getSchema()
                 : plan.targetTable().schema();

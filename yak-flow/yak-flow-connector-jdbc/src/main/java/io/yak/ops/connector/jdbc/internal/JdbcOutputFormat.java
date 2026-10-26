@@ -11,12 +11,12 @@ import io.yak.ops.connector.jdbc.database.internal.dialect.PostgresJdbcDialect;
 import io.yak.ops.connector.jdbc.internal.executor.TableBufferedStatementExecutor;
 import io.yak.ops.connector.jdbc.internal.executor.TableChangelogStatementExecutor;
 import io.yak.ops.connector.jdbc.sink.JdbcBatchOrder;
-import io.yak.ops.connector.jdbc.sink.JdbcKeylessTargetValidator;
+import io.yak.ops.connector.jdbc.sink.MySqlExactRowTargetValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
-import io.yak.ops.connector.jdbc.sink.OracleKeylessTargetValidator;
-import io.yak.ops.connector.jdbc.sink.PostgresKeylessTargetValidator;
+import io.yak.ops.connector.jdbc.sink.OracleExactRowTargetValidator;
+import io.yak.ops.connector.jdbc.sink.PostgresExactRowTargetValidator;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SchemaChangeRequest;
@@ -131,13 +131,13 @@ public final class JdbcOutputFormat implements BatchOutput<TableRecord> {
             for (JdbcTableWritePlan plan : plans) {
                 if (plan.writeMode() == JdbcWriteMode.RETRACT) {
                     if (dialect instanceof MySqlJdbcDialect) {
-                        JdbcKeylessTargetValidator.validate(opened, plan);
+                        MySqlExactRowTargetValidator.validate(opened, plan);
                     } else if (dialect instanceof PostgresJdbcDialect) {
-                        PostgresKeylessTargetValidator.validate(opened, plan);
+                        PostgresExactRowTargetValidator.validate(opened, plan);
                     } else if (dialect instanceof OracleJdbcDialect) {
-                        OracleKeylessTargetValidator.validate(opened, plan);
+                        OracleExactRowTargetValidator.validate(opened, plan);
                     } else {
-                        throw new UnsupportedOperationException("No validated keyless RETRACT target dialect");
+                        throw new UnsupportedOperationException("No validated exact-row RETRACT target dialect");
                     }
                 }
             }

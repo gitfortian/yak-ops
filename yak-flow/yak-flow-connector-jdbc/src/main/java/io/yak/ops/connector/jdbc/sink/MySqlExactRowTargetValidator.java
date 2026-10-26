@@ -16,15 +16,15 @@ import java.util.Locale;
  * generated columns or referential actions are supported. This is a writer-level
  * safeguard; checkpoint-coordinated commits remain the responsibility of the caller.
  */
-public final class JdbcKeylessTargetValidator {
+public final class MySqlExactRowTargetValidator {
 
-    private JdbcKeylessTargetValidator() {}
+    private MySqlExactRowTargetValidator() {}
 
     public static void validate(Connection connection, JdbcTableWritePlan plan) throws SQLException {
         if (plan.writeMode() != JdbcWriteMode.RETRACT) {
             return;
         }
-        JdbcKeylessRetractionContract.validate(plan.sourceSchema(), plan.schema());
+        JdbcSinkSchemaValidator.validateExactRow(plan.sourceSchema(), plan.schema());
         TableId table = plan.targetTable();
         String catalog = table.catalog() == null ? connection.getCatalog() : table.catalog();
         if (catalog == null || catalog.isBlank()) {

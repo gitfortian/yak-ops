@@ -68,7 +68,6 @@ public final class SchemaValidator {
         }
         boolean noPrimaryKey = sourceSchema.primaryKeys().isEmpty();
         JdbcWriteMode mode = sink.get(JdbcSinkOptions.WRITE_MODE);
-        boolean xa = sink.get(JdbcSinkOptions.XA_ENABLED);
         if (noPrimaryKey) {
             if (!"MYSQL".equals(targetType)) {
                 throw new IllegalArgumentException("CDC without physical primary keys requires a MySQL target");
@@ -83,9 +82,6 @@ public final class SchemaValidator {
             if (mode != JdbcWriteMode.UPSERT && mode != JdbcWriteMode.RETRACT) {
                 throw new IllegalArgumentException("Unsupported CDC write mode without physical primary keys");
             }
-        } else if (mode == JdbcWriteMode.RETRACT || xa) {
-            throw new IllegalArgumentException(
-                    "RETRACT and checkpoint XA require a source without physical primary keys");
         }
     }
 
