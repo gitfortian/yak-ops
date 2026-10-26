@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,6 +35,7 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.modeling.standard.CategoryEntity;
 import io.yak.ops.dao.entity.modeling.standard.StandardFieldEntity;
 import io.yak.ops.dao.entity.security.UserEntity;
+import io.yak.ops.dao.repository.modeling.standard.FieldQuery;
 import io.yak.ops.dao.repository.modeling.standard.StandardLookupRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardMeasureUnitRepository;
 import io.yak.ops.dao.repository.modeling.standard.StandardReferenceRepository;
@@ -247,13 +249,26 @@ class StandardServiceTest {
     void rejectsAmbiguousScopesAndOutOfRangePaging() {
         for (Runnable call : List.<Runnable>of(
                 () -> service.page("ws", "actor", "category", "keyword", 1, 20),
-                () -> service.page("ws", "actor", null, null, 1, 20),
                 () -> service.page("ws", "actor", "category", null, 0, 20),
                 () -> service.page("ws", "actor", "category", null, 1, 101))) {
             var error = assertThrows(BusinessException.class, call::run);
             assertEquals(CommonErrorCode.PARAM_NOT_VALID, error.getErrorCode());
         }
         verifyNoInteractions(nodes);
+    }
+
+    @Test
+    void treatsABlankKeywordAsNoFilterInsteadOfRefusingThePage() {
+        when(nodes.countFields(eq("ws"), any())).thenReturn(0L);
+        when(nodes.fields(eq("ws"), any())).thenReturn(List.of());
+        var query = ArgumentCaptor.forClass(FieldQuery.class);
+
+        var page = service.page("ws", "actor", null, "  ", 1, 20);
+
+        verify(nodes).countFields(eq("ws"), query.capture());
+        assertNull(query.getValue().categoryId());
+        assertNull(query.getValue().keyword());
+        assertEquals(0, page.total());
     }
 
     @Test

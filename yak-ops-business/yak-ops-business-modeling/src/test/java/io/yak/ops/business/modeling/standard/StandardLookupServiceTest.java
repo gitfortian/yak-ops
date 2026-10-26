@@ -98,6 +98,17 @@ class StandardLookupServiceTest {
     }
 
     @Test
+    void fallsBackToTheValueCodeWhenTheEnglishNameIsMissing() {
+        var submitted = input("order_status");
+        submitted.getValues().getFirst().setEnName(null);
+        service.create("ws", "actor", "category", submitted);
+        var saved = ArgumentCaptor.<List<StandardLookupValueEntity>>captor();
+        verify(lookups).replaceValues(anyString(), saved.capture());
+        assertEquals("paid", saved.getValue().getFirst().getValueCode());
+        assertEquals("paid", saved.getValue().getFirst().getEnName());
+    }
+
+    @Test
     void refusesDuplicatedValueCodesInsteadOfKeepingAPartialList() {
         var submitted = input("order_status");
         submitted.getValues().add(value("paid"));

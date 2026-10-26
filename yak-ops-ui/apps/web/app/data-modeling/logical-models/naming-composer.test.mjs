@@ -6,6 +6,7 @@ import {
   qualifierMaxLength,
   rootSearchSegment,
   sanitizeQualifier,
+  stripLayerPrefix,
 } from "./naming-composer.ts";
 
 test("keeps digit-led qualifier tails the backend grammar accepts", () => {
@@ -35,6 +36,14 @@ test("resolves the keyword segment used to find a saved root beyond the first pa
   assert.equal(rootSearchSegment("trade_order_1d"), "trade");
   assert.equal(rootSearchSegment("t_"), "t");
   assert.equal(rootSearchSegment(""), "");
+});
+
+test("drops a layer prefix already typed into the suffix", () => {
+  assert.equal(stripLayerPrefix("dwd_trade_order", "dwd"), "trade_order");
+  assert.equal(stripLayerPrefix("dwd_dwd_trade_order", "dwd"), "trade_order");
+  assert.equal(stripLayerPrefix("trade_order", "dwd"), "trade_order");
+  assert.equal(stripLayerPrefix("dw_trade_order", "dwd"), "dw_trade_order");
+  assert.equal(stripLayerPrefix("trade_order", ""), "trade_order");
 });
 
 test("caps the qualifier so the suffix stays within 41 characters", () => {

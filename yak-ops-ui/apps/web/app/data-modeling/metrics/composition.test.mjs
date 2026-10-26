@@ -27,6 +27,32 @@ test("keeps the submitted modifier order", () => {
   assert.equal(composed.enCode, "d1_vip_muying_pay_amt");
 });
 
+test("collapses the overlap between a modifier and the atomic name", () => {
+  const composed = composeComposition({
+    periodCode: "d7",
+    modifierCodes: ["paid"],
+    atomicCode: "pay_amount",
+    periodName: "最近7天",
+    modifierNames: ["支付"],
+    atomicName: "支付金额",
+  });
+  assert.equal(composed.enCode, "d7_paid_pay_amount");
+  assert.equal(composed.cnName, "最近7天支付金额");
+});
+
+test("keeps one copy of a repeated segment", () => {
+  const composed = composeComposition({
+    periodCode: "d7",
+    modifierCodes: ["d7"],
+    atomicCode: "pay_amount",
+    periodName: "最近7天",
+    modifierNames: ["最近7天"],
+    atomicName: "支付金额",
+  });
+  assert.equal(composed.enCode, "d7_pay_amount");
+  assert.equal(composed.cnName, "最近7天支付金额");
+});
+
 test("accepts values at the column limits and refuses one past them", () => {
   const at = composeComposition({
     periodCode: "p".repeat(20),

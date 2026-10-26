@@ -367,7 +367,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             provider.testConnection(connection, timeoutSeconds);
         } catch (RuntimeException exception) {
-            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
+            throw new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, reason(exception), exception);
         }
     }
 
@@ -375,7 +375,18 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (exception instanceof DataSourceException dataSourceException) {
             return dataSourceException;
         }
-        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, null, exception);
+        return new DataSourceException(DataSourceErrorCode.CONNECT_FAILED, reason(exception), exception);
+    }
+
+    /**
+     * Keeps the driver's own description of the refusal so the caller can tell a wrong password
+     * from an unreachable host; {@link DataSourceException} masks credentials before exposing it.
+     */
+    private static String reason(Throwable error) {
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) return null;
+        String trimmed = message.strip();
+        return trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed;
     }
 
     private DataSourceVO toDataSourceVO(DataSourceEntity source, boolean includeOriginalJson) {

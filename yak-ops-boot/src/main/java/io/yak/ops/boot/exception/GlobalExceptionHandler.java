@@ -212,6 +212,9 @@ public class GlobalExceptionHandler {
                         INVALID_CONNECTION_PARAMS,
                         INVALID_BATCH_OPERATION,
                         INVALID_CONNECTION_STATUS -> HttpStatus.BAD_REQUEST;
+                // A refused connection answers the submitted settings, not a server fault: the
+                // caller gets 400 together with the masked driver reason.
+                case CONNECT_FAILED -> HttpStatus.BAD_REQUEST;
                 default -> HttpStatus.INTERNAL_SERVER_ERROR;
             };
         }

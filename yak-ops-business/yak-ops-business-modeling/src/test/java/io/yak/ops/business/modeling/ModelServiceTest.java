@@ -126,6 +126,20 @@ class ModelServiceTest {
     }
 
     @Test
+    void dropsALayerPrefixAlreadyTypedIntoTheSuffix() {
+        detailGraph();
+        var stored = storedModel("dwd_order_detail");
+        when(models.find(eq("ws"), anyString())).thenReturn(Optional.of(stored));
+        when(models.fields(anyString())).thenReturn(List.of());
+        var captor = ArgumentCaptor.forClass(ModelEntity.class);
+
+        service.create("ws", "actor", detailInput("dwd_dwd_order_detail", List.of()));
+
+        verify(models).add(captor.capture());
+        assertEquals("dwd_order_detail", captor.getValue().getName());
+    }
+
+    @Test
     void rejectsASuffixThatBreaksTheIdentifierContract() {
         var error = assertThrows(BusinessException.class,
                 () -> service.create("ws", "actor", detailInput("Order-Detail", List.of())));

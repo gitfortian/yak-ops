@@ -205,7 +205,11 @@ public class StandardLookupServiceImpl implements StandardLookupService {
             row.setOrdinal(index + 1);
             row.setValueCode(code);
             row.setCnName(StandardCatalog.validName(value.getCnName()));
-            row.setEnName(StandardCatalog.validName(value.getEnName()));
+            // The editor collects only the code, the Chinese name and the meaning of a value, so a
+            // missing English name is the normal case rather than an invalid request. The column is
+            // NOT NULL and the code is unique inside its table, so it is the safe stand-in.
+            var enName = value.getEnName();
+            row.setEnName(StandardCatalog.validName(enName == null || enName.isBlank() ? code : enName));
             row.setMeaning(StandardCatalog.optionalText(value.getMeaning(), 500));
             rows.add(row);
         }
