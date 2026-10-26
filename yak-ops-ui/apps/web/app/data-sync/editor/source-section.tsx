@@ -1,7 +1,5 @@
 import { Alert, CollapseSection, Field, FieldLabel, Switch } from "@yak-ops/yak-ui";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { DataSourceEndpointCard } from "./data-source-endpoint-card";
 import {
   listDataSourceColumns,
   type DataSourceCatalogColumn,
@@ -16,12 +14,6 @@ import type { DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-syn
 import type { CatalogOptions, EditorForm, EditorSource } from "./types";
 
 interface Props {
-  id?: string;
-  sourceType: string;
-  sourceDataSources: DataSourceRecord[];
-  dataSourcesLoading: boolean;
-  loadDataSources: () => Promise<void>;
-  onConnectionChange: (value: string) => void;
   batch: boolean;
   prepareSchema: boolean;
   form: EditorForm;
@@ -41,12 +33,6 @@ interface Props {
   onKeylessChange: (enabled: boolean) => void;
 }
 export function SourceSection({
-  id,
-  sourceType,
-  sourceDataSources,
-  dataSourcesLoading,
-  loadDataSources,
-  onConnectionChange,
   batch,
   prepareSchema,
   form,
@@ -65,7 +51,6 @@ export function SourceSection({
   onSourceTableChange,
   onKeylessChange,
 }: Props) {
-  const navigate = useNavigate();
   const combination = { writeModes: writeMode ? [writeMode] : [] };
   const [sourceColumns, setSourceColumns] = useState<DataSourceCatalogColumn[]>([]);
   const [columnsError, setColumnsError] = useState(false);
@@ -105,23 +90,6 @@ export function SourceSection({
   );
   return (
     <CollapseSection id="source" title="数据来源 Source">
-      <div className="mb-4">
-        <DataSourceEndpointCard
-          title="来源数据源"
-          dataSourceType={sourceType}
-          dataSources={sourceDataSources}
-          dataSourceId={form.source.dataSourceId}
-          refreshing={dataSourcesLoading}
-          onRefresh={loadDataSources}
-          onCreateDataSource={() =>
-            navigate(
-              "/data-source?create=1&returnTo=" +
-                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
-            )
-          }
-          onDataSourceChange={onConnectionChange}
-        />
-      </div>
       {batch ? (
         <ExplicitTableSelection
           prepareSchema={prepareSchema}

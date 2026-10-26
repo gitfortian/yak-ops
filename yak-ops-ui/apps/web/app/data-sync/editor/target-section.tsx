@@ -1,25 +1,13 @@
 import { CollapseSection, Field, FieldLabel, Input, Switch } from "@yak-ops/yak-ui";
 import { type Dispatch, type SetStateAction } from "react";
-import { useNavigate } from "react-router-dom";
-import { DataSourceEndpointCard } from "./data-source-endpoint-card";
 import { TableMappingEditor } from "./table-mapping-editor";
-import { SchemaPreview } from "./schema-preview";
 import { DataSyncSearchableSelect } from "../components/searchable-select";
 import { TableSection } from "./table-section";
 import type { DataSourceRecord } from "@/service/datasource";
-import type {
-  DataSyncTableMapping,
-  DataSyncWriteMode,
-  DataSyncTaskSavePayload,
-} from "@/service/data-sync";
+import type { DataSyncTableMapping, DataSyncWriteMode } from "@/service/data-sync";
 import type { CatalogOptions, EditorForm, EditorSink } from "./types";
 
 interface Props {
-  id?: string;
-  targetDataSources: DataSourceRecord[];
-  dataSourcesLoading: boolean;
-  loadDataSources: () => Promise<void>;
-  onConnectionChange: (value: string) => void;
   batch: boolean;
   prepareSchema: boolean;
   form: EditorForm;
@@ -29,8 +17,6 @@ interface Props {
   updateMappings: (value: DataSyncTableMapping[]) => void;
   writeModes: DataSyncWriteMode[];
   hasCombination: boolean;
-  canSave: boolean;
-  payload: () => DataSyncTaskSavePayload;
   usesChangelog: boolean;
   useIncremental: boolean;
   initialLoad: boolean;
@@ -43,11 +29,6 @@ interface Props {
   setForm: Dispatch<SetStateAction<EditorForm>>;
 }
 export function TargetSection({
-  id,
-  targetDataSources,
-  dataSourcesLoading,
-  loadDataSources,
-  onConnectionChange,
   batch,
   prepareSchema,
   form,
@@ -57,8 +38,6 @@ export function TargetSection({
   updateMappings,
   writeModes,
   hasCombination,
-  canSave,
-  payload,
   usesChangelog,
   useIncremental,
   initialLoad,
@@ -70,47 +49,29 @@ export function TargetSection({
   setParametersDirty,
   setForm,
 }: Props) {
-  const navigate = useNavigate();
   const combination = hasCombination ? { writeModes } : undefined;
   return (
     <CollapseSection id="target" title="数据去向 Sink">
-      <div className="mb-4">
-        <DataSourceEndpointCard
-          title="目标数据源"
-          dataSourceType={targetType}
-          dataSources={targetDataSources}
-          dataSourceId={form.sink.dataSourceId}
-          refreshing={dataSourcesLoading}
-          onRefresh={loadDataSources}
-          onCreateDataSource={() =>
-            navigate(
-              "/data-source?create=1&returnTo=" +
-                encodeURIComponent(id ? `/data-sync/${id}/edit` : "/data-sync/new"),
-            )
-          }
-          onDataSourceChange={onConnectionChange}
-        />
-      </div>
-      {prepareSchema ? (
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <SchemaPreview value={payload()} disabled={!canSave} />
-          {batch && !selectedTargetDataSource?.schema && targetCatalog.schemas.length ? (
-            <DataSyncSearchableSelect
-              ariaLabel="去向 Schema"
-              value={form.sink.schema || null}
-              options={targetCatalog.schemas.map((value) => ({ value, label: value }))}
-              placeholder="去向 Schema"
-              onValueChange={(value) => {
-                patchSink("schema", value);
-                updateMappings(
-                  mappings.map((mapping) => ({
-                    ...mapping,
-                    target: { ...mapping.target, schema: value },
-                  })),
-                );
-              }}
-            />
-          ) : null}
+      {prepareSchema &&
+      batch &&
+      !selectedTargetDataSource?.schema &&
+      targetCatalog.schemas.length > 0 ? (
+        <div className="mb-3">
+          <DataSyncSearchableSelect
+            ariaLabel="去向 Schema"
+            value={form.sink.schema || null}
+            options={targetCatalog.schemas.map((value) => ({ value, label: value }))}
+            placeholder="去向 Schema"
+            onValueChange={(value) => {
+              patchSink("schema", value);
+              updateMappings(
+                mappings.map((mapping) => ({
+                  ...mapping,
+                  target: { ...mapping.target, schema: value },
+                })),
+              );
+            }}
+          />
         </div>
       ) : null}
       {batch ? (
