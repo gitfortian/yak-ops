@@ -220,10 +220,11 @@ public final class JobConfigValidator {
                 {"Target dialect cannot preserve column properties: ", "目标数据库暂不支持该字段属性"},
                 {"Target primary key cannot be nullable: ", "目标主键必须是非空字段"},
                 {"Unverified target primary-key comparison: ", "该字段类型暂不支持作为目标主键"},
-                {"JDBC RETRACT full-row comparison requires verified database semantics for: ",
-                    "逐行更新不支持该字段类型；如有非空唯一索引，请填写目标主键改用按主键更新"},
-                {"JDBC RETRACT requires equal source and target column definitions: ",
-                    "逐行更新要求来源和目标字段类型、顺序及可空性一致"}
+                {
+                    "JDBC RETRACT full-row comparison requires verified database semantics for: ",
+                    "逐行更新不支持该字段类型；如有非空唯一索引，请填写目标主键改用按主键更新"
+                },
+                {"JDBC RETRACT requires equal source and target column definitions: ", "逐行更新要求来源和目标字段类型、顺序及可空性一致"}
             };
             for (String[] reason : reasons) {
                 if (!message.startsWith(reason[0])) continue;
