@@ -10,7 +10,7 @@
 
 ## Task definition
 
-The V4 job contract pins exact-row retraction under `sink.tables[].write.transaction.mode`, never under Source. The Schema Policy is owned by Sink. This example requires an authorized MySQL Source and Sink and verified target metadata.
+The source table's physical primary key is discovered from authorized Catalog metadata. When no primary key exists, a non-null numeric snapshot Chunk Key is required. No persisted keyless flag or implicit row identity is accepted. The V4 job contract pins exact-row retraction under `sink.tables[].write.transaction.mode`, never under Source. The Schema Policy is owned by Sink. This example requires an authorized MySQL Source and Sink and verified target metadata.
 
 ```json
 {
@@ -22,7 +22,6 @@ The V4 job contract pins exact-row retraction under `sink.tables[].write.transac
       "id": "events",
       "database": "app",
       "table": "events",
-      "keyless": true,
       "snapshot": { "chunkKeyColumn": "bucket" }
     }]
   },

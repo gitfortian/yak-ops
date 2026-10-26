@@ -92,7 +92,6 @@ const keyless = createDefinitionRequest({
   targetDataSourceId: "mysql-target",
   targetSchema: undefined,
   writeMode: "RETRACT",
-  keylessEnabled: true,
   chunkKeyColumn: "bucket",
   schemaChangesEnabled: false,
 }).parameters;
@@ -100,11 +99,16 @@ assert.equal(keyless.source.tables[0].snapshot.chunkKeyColumn, "bucket");
 assert.equal(keyless.sink.tables[0].write.transaction.mode, "CHECKPOINT_XA");
 assert.equal(keyless.sink.schemaPolicy.evolution.enabled, false);
 assert.equal(readSyncParameters(4, keyless), keyless);
-assert.equal(toSyncTaskRecord({ ...record, parameters: keyless }).keylessEnabled, true);
+assert.equal(toSyncTaskRecord({ ...record, parameters: keyless }).chunkKeyColumn, "bucket");
+assert.equal("keyless" in keyless.source.tables[0], false);
 assert.throws(() => readSyncParameters(3, keyless));
 assert.throws(() => readSyncParameters(2, keyless));
 assert.throws(() => parseSyncParameters(4, "{"));
 assert.throws(() => readSyncParameters(4, { ...keyless, tableMappings: [] }));
+assert.throws(() => readSyncParameters(4, {
+  ...keyless,
+  source: { ...keyless.source, tables: [{ ...keyless.source.tables[0], keyless: true }] },
+}));
 assert.throws(() =>
   readSyncParameters(4, {
     ...keyless,
@@ -137,7 +141,6 @@ assert.throws(() =>
 );
 const upsertKeyless = createDefinitionRequest({
   ...realtime,
-  keylessEnabled: true,
   chunkKeyColumn: "bucket",
   schemaChangesEnabled: false,
   writeMode: "UPSERT",
