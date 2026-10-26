@@ -1,7 +1,9 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -37,6 +39,19 @@ class MySqlBinlogSplitFilterTest {
         assertEquals(List.of(), filter.filter(event(250, row(RowKind.INSERT, 101, "within high"))).records());
         assertEquals(List.of(RowKind.DELETE), filter.filter(event(350, row(RowKind.DELETE, 101, "after high")))
                 .records().stream().map(TableRecord::rowKind).toList());
+    }
+
+    @Test
+    void entersPureBinlogPhaseOnlyAfterTheGreatestChunkHighWatermark() {
+        MySqlBinlogSplitFilter filter = filter();
+        assertFalse(filter.isPureBinlogPhase(TABLE));
+
+        assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 1, "past first high"))).records().size());
+        assertFalse(filter.isPureBinlogPhase(TABLE), "The second Chunk has not reached its High yet");
+
+        assertEquals(1, filter.filter(event(301, row(RowKind.INSERT, 101, "past all highs"))).records().size());
+        assertTrue(filter.isPureBinlogPhase(TABLE));
+        assertEquals(1, filter.filter(event(302, row(RowKind.INSERT, 101, "pure binlog"))).records().size());
     }
 
     @Test

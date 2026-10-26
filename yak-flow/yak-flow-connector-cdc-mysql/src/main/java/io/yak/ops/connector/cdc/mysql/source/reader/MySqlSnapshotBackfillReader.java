@@ -179,12 +179,23 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
      */
     BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
-        Connection view = null;
         BinlogOffset low;
         try {
             low = watermark();
             afterLowWatermark.call();
             checkCancelled();
+        } catch (Exception failure) {
+            throw new SQLException("Cannot capture typed snapshot Low watermark", failure);
+        }
+        openTypedSnapshotReadView(split);
+        return low;
+    }
+
+    /** Opens and pins the typed InnoDB view without requiring a global table lock. */
+    void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
+        checkCancelled();
+        Connection view = null;
+        try {
             view = config.openSnapshotConnection();
             view.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             view.setReadOnly(true);
@@ -193,7 +204,9 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 transaction.setQueryTimeout(60);
                 transaction.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT");
             }
-        } catch (Exception failure) {
+            // SnapshotSplitReader takes ownership of the pinned connection on success.
+            snapshots.open(split, view);
+        } catch (SQLException | RuntimeException failure) {
             if (view != null) {
                 try {
                     view.close();
@@ -203,21 +216,9 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
             }
             throw new SQLException(
                     "Cannot establish a consistent typed snapshot read view; "
-                            + "MySQL REPEATABLE READ and Binlog replication privileges are required",
+                            + "MySQL REPEATABLE READ and SELECT privileges are required",
                     failure);
         }
-        // The InnoDB read view is pinned before executing the potentially large range scan.
-        try {
-            snapshots.open(split, view);
-        } catch (SQLException | RuntimeException failure) {
-            try {
-                view.close();
-            } catch (SQLException closeFailure) {
-                failure.addSuppressed(closeFailure);
-            }
-            throw failure;
-        }
-        return low;
     }
 
     private BinlogOffset watermark(Connection connection) throws SQLException {

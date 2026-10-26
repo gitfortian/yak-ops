@@ -236,9 +236,9 @@ class MySqlBackfillIT {
             // Exercise the actual typed read-view code with no global read-lock privilege.
             // Ordinary SELECT plus Binlog position access is sufficient for this JDBC boundary.
             try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
-                assertNotNull(reader.openConsistentSnapshot(
+                reader.openTypedSnapshotReadView(
                         MySqlSnapshotSplit.typed(
-                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
+                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
             }
         } finally {
             execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
