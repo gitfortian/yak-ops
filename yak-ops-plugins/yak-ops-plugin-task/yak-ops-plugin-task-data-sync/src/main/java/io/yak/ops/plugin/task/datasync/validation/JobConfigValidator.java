@@ -153,32 +153,29 @@ public final class JobConfigValidator {
         String message = failure.getMessage();
         if (message != null) {
             String[][] exactReasons = {
-                {"CDC without physical primary keys requires verified target keys for UPSERT",
-                    "无物理主键的实时 UPSERT 需要目标主键；请选择来源表中具有非空唯一索引的字段"},
-                {"JDBC changelog UPSERT requires a source write identity; "
-                        + "a snapshot Chunk Key does not identify a unique row",
-                    "无物理主键的实时 UPSERT 需要目标主键；请选择来源表中具有非空唯一索引的字段"},
-                {"JDBC changelog UPSERT requires a target write identity",
-                    "按主键更新需要目标表主键，请检查目标主键配置和目标表结构"},
-                {"JDBC UPSERT requires row identity on both source and target",
-                    "按主键更新需要目标表主键，请检查目标主键配置和目标表结构"},
-                {"Target primary key must match an enforced source unique index",
-                    "目标主键必须与来源表已建立的非空唯一索引或物理主键一致"},
+                {
+                    "CDC without physical primary keys requires verified target keys for UPSERT",
+                    "无物理主键的实时 UPSERT 需要目标主键；请选择来源表中具有非空唯一索引的字段"
+                },
+                {
+                    "JDBC changelog UPSERT requires a source write identity; "
+                            + "a snapshot Chunk Key does not identify a unique row",
+                    "无物理主键的实时 UPSERT 需要目标主键；请选择来源表中具有非空唯一索引的字段"
+                },
+                {"JDBC changelog UPSERT requires a target write identity", "按主键更新需要目标表主键，请检查目标主键配置和目标表结构"},
+                {"JDBC UPSERT requires row identity on both source and target", "按主键更新需要目标表主键，请检查目标主键配置和目标表结构"},
+                {"Target primary key must match an enforced source unique index", "目标主键必须与来源表已建立的非空唯一索引或物理主键一致"},
                 {"Unknown target key column", "目标主键字段在来源表中不存在"},
-                {"Explicit target primary keys require MySQL source metadata",
-                    "自定义目标主键目前仅支持 MySQL 来源表"},
-                {"CDC without physical primary keys requires a MySQL target",
-                    "无物理主键的实时同步当前仅支持 MySQL 目标库"},
-                {"CDC without physical primary keys cannot evolve target schema",
-                    "无物理主键的实时同步暂不支持同步结构变更，请关闭该选项"},
-                {"JDBC UPSERT requires matching source and target write identity columns",
-                    "来源与目标写入主键不一致，请检查主键字段映射"},
-                {"JDBC UPSERT does not preserve the full source row identity",
-                    "来源与目标写入主键不一致，请检查主键字段映射"},
-                {"JDBC RETRACT requires source and target schemas without physical primary keys",
-                    "逐行更新要求来源和目标表均无主键；若来源有非空唯一索引，请填写目标主键改用按主键更新"},
-                {"JDBC RETRACT requires a complete full-row field mapping",
-                    "逐行更新要求来源和目标字段完全对应，请检查目标表结构"}
+                {"Explicit target primary keys require MySQL source metadata", "自定义目标主键目前仅支持 MySQL 来源表"},
+                {"CDC without physical primary keys requires a MySQL target", "无物理主键的实时同步当前仅支持 MySQL 目标库"},
+                {"CDC without physical primary keys cannot evolve target schema", "无物理主键的实时同步暂不支持同步结构变更，请关闭该选项"},
+                {"JDBC UPSERT requires matching source and target write identity columns", "来源与目标写入主键不一致，请检查主键字段映射"},
+                {"JDBC UPSERT does not preserve the full source row identity", "来源与目标写入主键不一致，请检查主键字段映射"},
+                {
+                    "JDBC RETRACT requires source and target schemas without physical primary keys",
+                    "逐行更新要求来源和目标表均无主键；若来源有非空唯一索引，请填写目标主键改用按主键更新"
+                },
+                {"JDBC RETRACT requires a complete full-row field mapping", "逐行更新要求来源和目标字段完全对应，请检查目标表结构"}
             };
             for (String[] reason : exactReasons) {
                 if (message.equals(reason[0])) return reason[1];
