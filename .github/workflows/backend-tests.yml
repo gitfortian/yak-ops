@@ -25,6 +25,8 @@ on:
           - cdc-pipeline-mysql
           - cdc-pipeline-postgres
           - cdc-pipeline-oracle
+          - cdc-acceptance-postgres
+          - cdc-acceptance-oracle
           - cdc-recovery
           - business
           - backend-e2e
