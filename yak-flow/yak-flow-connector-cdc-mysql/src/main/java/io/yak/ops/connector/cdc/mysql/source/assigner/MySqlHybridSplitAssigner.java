@@ -28,7 +28,6 @@ public final class MySqlHybridSplitAssigner {
     private final Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
     private int nextTableIndex;
     private int nextChunkIndex;
-    private Long nextChunkLower;
     private ChunkRange nextChunkRange;
 
     public MySqlHybridSplitAssigner(String fingerprint, MySqlHybridEnumeratorState restored) {
@@ -44,7 +43,6 @@ public final class MySqlHybridSplitAssigner {
             restored.finishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
             nextTableIndex = restored.nextTableIndex();
             nextChunkIndex = restored.nextChunkIndex();
-            nextChunkLower = restored.nextChunkLower();
             nextChunkRange = restored.nextChunkRange();
             phase = restored.phase();
             low = restored.lowWatermark();
@@ -97,8 +95,6 @@ public final class MySqlHybridSplitAssigner {
         MySqlSnapshotSplit original = snapshots.assigned().get(info.splitId());
         if (original == null
                 || !original.tableId().equals(info.tableId())
-                || !Objects.equals(original.lowerInclusive(), info.lowerInclusive())
-                || !Objects.equals(original.upperExclusive(), info.upperExclusive())
                 || !Objects.equals(original.chunkRange(), info.chunkRange())) {
             throw new IllegalArgumentException("Completed chunk differs from its assigned range");
         }
@@ -106,27 +102,16 @@ public final class MySqlHybridSplitAssigner {
         completed.put(info.splitId(), info);
     }
 
-    public void appendPlan(MySqlSnapshotSplit split, int table, int chunk, Long lower, boolean last) {
-        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT)
-            throw new IllegalStateException("Snapshot discovery is inactive");
-        snapshots.append(List.of(split), last);
-        nextTableIndex = table;
-        nextChunkIndex = chunk;
-        nextChunkLower = lower;
-        nextChunkRange = null;
-    }
-
-    /** Preserves a typed discovery boundary atomically with the planned split. */
-    public void appendTypedPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
+    /** Atomically persist the planned range and the next database-ordered discovery cursor. */
+    public void appendPlan(MySqlSnapshotSplit split, int table, int chunk, ChunkRange next, boolean last) {
         if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT
                 || split.chunkRange() == null
                 || (next != null && (next.end() != null || next.start() == null))) {
-            throw new IllegalStateException("Invalid typed snapshot discovery transition");
+            throw new IllegalStateException("Invalid snapshot discovery transition");
         }
         snapshots.append(List.of(split), last);
         nextTableIndex = table;
         nextChunkIndex = chunk;
-        nextChunkLower = null;
         nextChunkRange = next;
     }
 
@@ -142,11 +127,7 @@ public final class MySqlHybridSplitAssigner {
         return nextChunkIndex;
     }
 
-    public Long nextChunkLower() {
-        return nextChunkLower;
-    }
-
-    public ChunkRange nextChunkRange() {
+public ChunkRange nextChunkRange() {
         return nextChunkRange;
     }
 
@@ -215,7 +196,6 @@ public final class MySqlHybridSplitAssigner {
                 finishedSplits(),
                 nextTableIndex,
                 nextChunkIndex,
-                nextChunkLower,
                 nextChunkRange);
     }
 
