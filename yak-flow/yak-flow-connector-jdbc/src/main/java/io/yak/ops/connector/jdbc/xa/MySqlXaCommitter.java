@@ -2,12 +2,15 @@ package io.yak.ops.connector.jdbc.xa;
 
 import io.yak.ops.core.api.connector.sink.Committer;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import javax.sql.XAConnection;
 import javax.sql.XADataSource;
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
 
 /**
  * Transactional MySQL XA committer. Only XIDs scoped to the configured persistent instance
@@ -18,6 +21,9 @@ import javax.transaction.xa.XAResource;
  * A fresh missing XID is always a hard failure.
  */
 public final class MySqlXaCommitter implements Committer<MySqlXaXid> {
+
+    private static final int MAX_RECOVER_CALLS = 64;
+    private static final int MAX_RECOVERED_TRANSACTIONS = 100_000;
 
     private final XADataSource dataSource;
     private final String instanceId;
@@ -79,11 +85,7 @@ public final class MySqlXaCommitter implements Committer<MySqlXaXid> {
         try {
             XAResource resource = connection.getXAResource();
             java.util.Set<MySqlXaXid> expected = java.util.Set.copyOf(keep);
-            javax.transaction.xa.Xid[] found = resource.recover(XAResource.TMSTARTRSCAN | XAResource.TMENDRSCAN);
-            if (found.length > 100_000) {
-                throw new IllegalStateException("MySQL XA recovery scan exceeds safety limit");
-            }
-            for (javax.transaction.xa.Xid foreign : found) {
+            for (Xid foreign : scanPreparedTransactions(resource)) {
                 if (foreign.getFormatId() != MySqlXaXid.FORMAT_ID) continue;
                 byte[] global = foreign.getGlobalTransactionId();
                 if (!new String(global, java.nio.charset.StandardCharsets.US_ASCII).startsWith("yakflow-xa:")) {
@@ -105,6 +107,39 @@ public final class MySqlXaCommitter implements Committer<MySqlXaXid> {
                 if (failure != null) failure.addSuppressed(closeError);
                 else throw closeError;
             }
+        }
+    }
+
+    /**
+     * Completes the XA recovery cursor before applying rollback decisions.
+     *
+     * <p>Connector/J normally returns all prepared XIDs on TMSTARTRSCAN. Other compliant
+     * resources may return additional pages. Bound both the calls and results so a broken
+     * resource cannot silently return a partial transaction set or loop forever.
+     */
+    private static List<Xid> scanPreparedTransactions(XAResource resource) throws XAException {
+        List<Xid> found = new ArrayList<>();
+        Xid[] batch = resource.recover(XAResource.TMSTARTRSCAN);
+        int calls = 0;
+        try {
+            while (true) {
+                if (batch == null) {
+                    throw new IllegalStateException("MySQL XA recovery returned a null transaction batch");
+                }
+                if (batch.length > MAX_RECOVERED_TRANSACTIONS - found.size()) {
+                    throw new IllegalStateException("MySQL XA recovery scan exceeds safety limit");
+                }
+                java.util.Collections.addAll(found, batch);
+                if (batch.length == 0) {
+                    return found;
+                }
+                if (++calls > MAX_RECOVER_CALLS) {
+                    throw new IllegalStateException("MySQL XA recovery scan did not finish");
+                }
+                batch = resource.recover(XAResource.TMNOFLAGS);
+            }
+        } finally {
+            resource.recover(XAResource.TMENDRSCAN);
         }
     }
 
