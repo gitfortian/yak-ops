@@ -84,7 +84,7 @@ export function parseSyncParameters(schemaVersion: number, content: unknown): Da
     if (
       !source?.id ||
       !source.table ||
-      !allowed(source, ["id", "database", "schema", "table", "keyless", "snapshot", "incremental"])
+      !allowed(source, ["id", "database", "schema", "table", "snapshot", "incremental"])
     ) {
       throw new Error("不支持的来源表配置");
     }
@@ -115,7 +115,7 @@ export function syncTableMappings(value: DataSyncParameters): DataSyncTableMappi
         database: table.database,
         schema: table.schema,
         table: table.table,
-        ...(table.keyless ? { keyless: true, chunkKeyColumn: table.snapshot?.chunkKeyColumn } : {}),
+        ...(table.snapshot ? { chunkKeyColumn: table.snapshot.chunkKeyColumn } : {}),
       },
       target: {
         database: target.database,
@@ -175,18 +175,16 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     }
     ids.add(source.id);
     sourcePaths.add(sourcePath);
-    if (source.keyless !== undefined && typeof source.keyless !== "boolean")
-      throw new Error("无主键配置无效");
-    if (source.keyless) {
-      if (
-        value.solutionType !== "SINGLE_TABLE_REALTIME" ||
-        policy.evolution.enabled ||
-        !source.snapshot?.chunkKeyColumn?.trim() ||
-        Object.keys(source.snapshot).some((key) => key !== "chunkKeyColumn")
-      ) {
-        throw new Error("无主键快照配置不完整");
-      }
-    } else if (source.snapshot !== undefined) throw new Error("仅无主键来源可设置快照分片键");
+    if (
+      source.snapshot !== undefined &&
+      (solutionSyncType(value.solutionType) !== "REALTIME" ||
+        typeof source.snapshot?.chunkKeyColumn !== "string" ||
+        !source.snapshot.chunkKeyColumn.trim() ||
+        source.snapshot.chunkKeyColumn.length > 128 ||
+        Object.keys(source.snapshot).some((key) => key !== "chunkKeyColumn"))
+    ) {
+      throw new Error("快照分片字段配置无效");
+    }
     if (offlineIncremental(value.solutionType, steps)) {
       if (!validIncrementalConfig(source.incremental, !steps.includes("FULL"))) {
         throw new Error("离线增量配置不完整");
@@ -202,7 +200,6 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     const path = JSON.stringify([target.database || "", target.schema || "", target.table]);
     if (targetPaths.has(path)) throw new Error("目标表不能重复");
     targetPaths.add(path);
-    const source = value.source.tables.find((table) => table.id === target.input)!;
     const write = target.write;
     if (
       !WRITES.has(write.mode) ||
@@ -214,18 +211,14 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     )
       throw new Error("目标写入主键无效");
     const retract =
-      source.keyless &&
+      realtime &&
       write.mode === "RETRACT" &&
       write.transaction?.mode === "CHECKPOINT_XA" &&
-      !write.primaryKeys;
-    const keyed =
-      source.keyless &&
-      write.mode === "UPSERT" &&
-      !write.transaction &&
-      Boolean(write.primaryKeys?.length);
+      !write.primaryKeys &&
+      !policy.evolution.enabled;
     if (
-      (source.keyless && !retract && !keyed) ||
-      (!source.keyless && (write.mode === "RETRACT" || write.transaction !== undefined)) ||
+      (write.mode === "RETRACT" && !retract) ||
+      (write.transaction !== undefined && !retract) ||
       ((realtime || offlineIncremental(value.solutionType, steps)) &&
         write.mode !== "UPSERT" &&
         !retract)

@@ -28,7 +28,7 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
             database: task.sourceDatabase,
             schema: task.sourceSchema,
             table: task.sourceTable,
-            ...(task.keylessEnabled ? { keyless: true, chunkKeyColumn: task.chunkKeyColumn } : {}),
+            ...(task.chunkKeyColumn ? { chunkKeyColumn: task.chunkKeyColumn } : {}),
           },
           target: {
             database: task.targetDatabase,
@@ -53,8 +53,8 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
         database: mapping.source.database,
         schema: mapping.source.schema,
         table: mapping.source.table,
-        ...(mapping.source.keyless
-          ? { keyless: true, snapshot: { chunkKeyColumn: mapping.source.chunkKeyColumn! } }
+        ...(mapping.source.chunkKeyColumn
+          ? { snapshot: { chunkKeyColumn: mapping.source.chunkKeyColumn } }
           : {}),
         ...(mapping.incremental ? { incremental: { ...mapping.incremental } } : {}),
       })),
@@ -79,7 +79,7 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
           ...(mapping.target.primaryKeys?.length
             ? { primaryKeys: [...mapping.target.primaryKeys] }
             : {}),
-          ...(mapping.source.keyless && mapping.writeMode === "RETRACT"
+          ...(mapping.writeMode === "RETRACT"
             ? { transaction: { mode: "CHECKPOINT_XA" as const } }
             : {}),
         },
@@ -158,7 +158,6 @@ export function toSyncTaskRecord(definition: TaskDefinitionRecord): DataSyncTask
     status: definition.status,
     debug: definition.debug ?? false,
     writeMode: mapping.writeMode,
-    keylessEnabled: mapping.source.keyless ?? false,
     chunkKeyColumn: mapping.source.chunkKeyColumn,
     targetPrimaryKeys: mapping.target.primaryKeys,
     incremental: mapping.incremental ? { ...mapping.incremental } : undefined,
