@@ -1,4 +1,4 @@
-# YOIP-11: Dimension Modeling — Physical Publishing and Metadata Collection
+# FYOIP-11: Dimension Modeling — Physical Publishing and Metadata Collection
 
 Status: Accepted
 

@@ -9,12 +9,35 @@ YOIPs record **long-lived architectural decisions** for significant subsystems, 
 | YOIP-1 | [Checkpoint and End-of-Input Semantics](YOIP-1-checkpoint-and-end-of-input.md) | Accepted |
 | YOIP-2 | [Task Execution Lifecycle and YakFlow Integration](YOIP-2-task-execution-lifecycle.md) | Accepted |
 | YOIP-3 | [Connector Creation and Datasource Lookup](YOIP-3-connector-creation-and-datasource-lookup.md) | Accepted (decision link not recorded) |
-| YOIP-4 | [Schedule Lifecycle and Quartz Integration](YOIP-4-schedule-lifecycle-quartz.md) | Accepted |
 | YOIP-5 | [Data Integration Synchronization Model](YOIP-5-data-integration-sync-product-model.md) | Accepted |
 | YOIP-6 | [MySQL Chunk Backfill and Durable Snapshot Output](YOIP-6-mysql-chunk-backfill-checkpoints.md) | Discussion (implementation merged) |
 | YOIP-20 | [Data Sync V4 Component-Owned Configuration Contract](YOIP-20-data-sync-v4-configuration-contract.md) | Discussion |
 
 YOIP-3 retains the original document's Accepted label, but no independent decision permalink was included in that historical record. YOIP-6 remains Discussion even though its implementation PR was merged. Merging implementation code or passing CI does not substitute for a design decision.
+
+## Fork Proposal Records (FYOIP)
+
+This fork maintains its own improvement-proposal namespace `FYOIP-N` so fork-owned
+proposals never collide with the upstream `YOIP-N` numbering, which uses the same
+numbers independently (upstream retired 7–19 for its CDC implementation notes).
+FYOIP documents follow the same template and status discipline; the `YOIP-`
+prefix validator deliberately does not govern them. Fork proposals start at
+FYOIP-4; shared ancestry with upstream is recorded per document.
+
+| ID | Proposal | Recorded status |
+| --- | --- | --- |
+| FYOIP-4 | [Schedule Lifecycle and Quartz Integration](FYOIP-4-schedule-lifecycle-quartz.md) | Accepted |
+| FYOIP-7 | [Data Modeling — Warehouse Planning](FYOIP-7-data-modeling-warehouse-planning.md) | Accepted |
+| FYOIP-8 | [Data Modeling — Data Standards](FYOIP-8-data-modeling-data-standards.md) | Accepted |
+| FYOIP-9 | [Data Modeling — Dimension Modeling](FYOIP-9-data-modeling-dimension-modeling.md) | Accepted |
+| FYOIP-10 | [Data Modeling — Summary and Application Models](FYOIP-10-data-modeling-summary-and-application-models.md) | Accepted |
+| FYOIP-11 | [Dimension Modeling — Physical Publishing and Metadata Collection](FYOIP-11-physical-publish-and-metadata-collection.md) | Accepted |
+| FYOIP-12 | [Dimension Modeling — Reverse Modeling from Physical Tables](FYOIP-12-reverse-modeling-from-physical-tables.md) | Accepted |
+| FYOIP-13 | [Data Modeling — Complete Data Standards](FYOIP-13-data-modeling-complete-data-standards.md) | Accepted |
+| FYOIP-14 | [Data Modeling — Metrics](FYOIP-14-data-modeling-metrics.md) | Accepted |
+
+New fork proposals use the next unused `FYOIP-N` number; add the document and update
+this index in the same PR.
 
 ## New Proposals
 

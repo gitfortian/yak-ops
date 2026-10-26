@@ -1,4 +1,4 @@
-# YOIP-12: Dimension Modeling — Reverse Modeling from Physical Tables
+# FYOIP-12: Dimension Modeling — Reverse Modeling from Physical Tables
 
 Status: Accepted
 

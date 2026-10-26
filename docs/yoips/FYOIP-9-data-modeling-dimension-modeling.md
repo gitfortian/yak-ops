@@ -1,4 +1,4 @@
-# YOIP-9: Data Modeling — Dimension Modeling
+# FYOIP-9: Data Modeling — Dimension Modeling
 
 Status: Accepted
 

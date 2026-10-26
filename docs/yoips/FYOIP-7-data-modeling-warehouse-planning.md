@@ -1,4 +1,4 @@
-# YOIP-7: Data Modeling — Warehouse Planning
+# FYOIP-7: Data Modeling — Warehouse Planning
 
 Status: Accepted
 

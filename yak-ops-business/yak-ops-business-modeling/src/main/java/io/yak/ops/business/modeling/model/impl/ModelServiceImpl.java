@@ -380,7 +380,7 @@ public class ModelServiceImpl implements ModelService {
      * standard overwrites code, Chinese name, type and length before validation, so a client cannot
      * desynchronize a field from the standard it claims to follow. Nullability is the exception --
      * the standard only supplies a default there, because the same standard is cited by layers whose
-     * data carries different constraints (YOIP-9 section 4). A lookup table supplies code and Chinese name only when
+     * data carries different constraints (FYOIP-9 section 4). A lookup table supplies code and Chinese name only when
      * no standard is bound, and a unit never overrides anything. The aggregate is checked after that
      * inheritance, so a standard that resolves to {@code STRING} cannot carry {@code SUM} either.
      * A derived-metric link records provenance only: it is accepted on measure kinds, must resolve

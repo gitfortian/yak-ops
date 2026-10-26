@@ -1,4 +1,4 @@
-# YOIP-10: Data Modeling — Summary and Application Models
+# FYOIP-10: Data Modeling — Summary and Application Models
 
 Status: Accepted
 

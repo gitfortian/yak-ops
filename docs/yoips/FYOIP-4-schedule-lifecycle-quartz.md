@@ -1,4 +1,4 @@
-# YOIP-4: Schedule Lifecycle + Quartz Integration
+# FYOIP-4: Schedule Lifecycle + Quartz Integration
 
 Status: Accepted
 
