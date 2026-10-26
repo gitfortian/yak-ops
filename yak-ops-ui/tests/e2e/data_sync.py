@@ -66,8 +66,9 @@ async def verify_solution_creation(page):
     await expect(page.locator("#datasource")).to_be_visible()
     await expect(page.locator("#env")).to_be_visible()
     await expect(page.locator("#transform")).to_have_count(0)
-    await expect(page.locator("#datasource").get_by_role("combobox", name="选择来源数据源")).to_be_visible()
-    await expect(page.locator("#datasource").get_by_role("combobox", name="选择去向数据源")).to_be_visible()
+    await expect(page.locator("#datasource").get_by_text("来源", exact=True)).to_be_visible()
+    await expect(page.locator("#datasource").get_by_text("去向", exact=True)).to_be_visible()
+    await expect(page.locator("#datasource").get_by_role("combobox", name="数据源", exact=True)).to_have_count(2)
     await expect(page.locator("#env").get_by_role("switch", name="Debug")).to_be_visible()
     # Catch missing Field.Root context when the realtime editor first renders.
     schema_switch = page.get_by_role("switch", name="同步结构变更", exact=True)
@@ -178,8 +179,8 @@ async def prepare_database_task(page, kind):
 
 
 async def pick_datasources(page):
-    for label, name in (("选择来源数据源", "MySQL source"), ("选择去向数据源", "PostgreSQL target")):
-        await pick_option(page, page.locator("#datasource").get_by_role("combobox", name=label, exact=True), name)
+    for index, name in enumerate(("MySQL source", "PostgreSQL target")):
+        await pick_option(page, page.locator("#datasource").get_by_role("combobox", name="数据源", exact=True).nth(index), name)
 
 
 def batch_write_mode(page):
