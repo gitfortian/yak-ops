@@ -10,6 +10,31 @@ public final class ChunkUtils {
     private ChunkUtils() {}
 
     /**
+     * Current Hybrid execution admits numeric Chunk Keys for tables without physical primary keys.
+     * The generic selector itself remains type-independent for typed SQL range planning.
+     */
+    public static Column requireSupportedSnapshot(TableSchema schema, String configuredChunkKey) {
+        Column selected = getChunkKeyColumn(schema, configuredChunkKey);
+        if (schema.primaryKeys().isEmpty()) {
+            for (Column column : schema.columns()) {
+                if (!column.dataType().isResolved()) {
+                    throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
+                }
+            }
+            LogicalTypeRoot type = selected.dataType().getTypeRoot();
+            if (type != LogicalTypeRoot.TINYINT
+                    && type != LogicalTypeRoot.SMALLINT
+                    && type != LogicalTypeRoot.INTEGER
+                    && type != LogicalTypeRoot.BIGINT
+                    && type != LogicalTypeRoot.DECIMAL) {
+                throw new IllegalArgumentException(
+                        "Snapshot Chunk Key without a physical primary key must be numeric: " + selected.name());
+            }
+        }
+        return selected;
+    }
+
+    /**
      * Uses the explicitly configured field, otherwise the first physical primary-key column.
      * Keyless tables need an explicit field; key uniqueness is not a chunk-selection requirement.
      */
@@ -31,22 +56,6 @@ public final class ChunkUtils {
                 if (!column.dataType().isResolved() || column.nullable()) {
                     throw new IllegalArgumentException(
                             "MySQL snapshot chunk key column must be resolved and non-null: " + columnName);
-                }
-                if (schema.primaryKeys().isEmpty()) {
-                    for (Column field : schema.columns()) {
-                        if (!field.dataType().isResolved()) {
-                            throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
-                        }
-                    }
-                    LogicalTypeRoot type = column.dataType().getTypeRoot();
-                    if (type != LogicalTypeRoot.TINYINT
-                            && type != LogicalTypeRoot.SMALLINT
-                            && type != LogicalTypeRoot.INTEGER
-                            && type != LogicalTypeRoot.BIGINT
-                            && type != LogicalTypeRoot.DECIMAL) {
-                        throw new IllegalArgumentException(
-                                "Snapshot Chunk Key without a primary key must be numeric: " + column.name());
-                    }
                 }
                 return column;
             }

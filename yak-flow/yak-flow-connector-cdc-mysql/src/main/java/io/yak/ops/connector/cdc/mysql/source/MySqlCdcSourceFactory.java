@@ -76,7 +76,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
         String selected = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
         if (schema.primaryKeys().isEmpty()) {
-            ChunkUtils.getChunkKeyColumn(schema, selected);
+            ChunkUtils.requireSupportedSnapshot(schema, selected);
         } else {
             // The BIGINT-key scan remains the only executable keyed path until the typed
             // Snapshot/Backfill lifecycle is unified.

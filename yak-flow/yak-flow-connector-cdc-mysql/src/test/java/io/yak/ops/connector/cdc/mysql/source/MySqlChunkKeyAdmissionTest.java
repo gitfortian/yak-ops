@@ -23,9 +23,10 @@ class MySqlChunkKeyAdmissionTest {
 
     @Test
     void requiresExplicitNonNullNumericChunkColumnWhenPrimaryKeyIsAbsent() {
-        assertEquals("bucket", ChunkUtils.getChunkKeyColumn(WITHOUT_PK, "bucket").name());
+        assertEquals("bucket", ChunkUtils.requireSupportedSnapshot(WITHOUT_PK, "bucket").name());
+        assertEquals("name", ChunkUtils.getChunkKeyColumn(WITHOUT_PK, "name").name());
         for (String invalid : new String[] {null, "missing", "amount", "name", ""}) {
-            assertThrows(IllegalArgumentException.class, () -> ChunkUtils.getChunkKeyColumn(WITHOUT_PK, invalid));
+            assertThrows(IllegalArgumentException.class, () -> ChunkUtils.requireSupportedSnapshot(WITHOUT_PK, invalid));
         }
     }
 
@@ -65,7 +66,7 @@ class MySqlChunkKeyAdmissionTest {
                 List.of(new Column("bucket", LogicalTypes.decimal(null, null))), List.of());
         var nullable = new TableSchema(
                 List.of(new Column("bucket", LogicalTypes.BIGINT)), List.of());
-        assertThrows(IllegalArgumentException.class, () -> ChunkUtils.getChunkKeyColumn(unresolved, "bucket"));
-        assertThrows(IllegalArgumentException.class, () -> ChunkUtils.getChunkKeyColumn(nullable, "bucket"));
+        assertThrows(IllegalArgumentException.class, () -> ChunkUtils.requireSupportedSnapshot(unresolved, "bucket"));
+        assertThrows(IllegalArgumentException.class, () -> ChunkUtils.requireSupportedSnapshot(nullable, "bucket"));
     }
 }
