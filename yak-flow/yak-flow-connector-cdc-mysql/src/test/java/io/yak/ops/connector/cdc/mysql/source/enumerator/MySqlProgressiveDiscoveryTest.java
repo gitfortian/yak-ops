@@ -2,11 +2,13 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -18,8 +20,8 @@ class MySqlProgressiveDiscoveryTest {
     @Test
     void restoresDiscoveryPositionWithoutReplanningCompletedChunks() throws Exception {
         var original = assigner();
-        var first = new MySqlSnapshotSplit("table-0-chunk-0", "fp", TABLE, null, 10L, null);
-        original.appendPlan(first, 0, 1, 10L, false);
+        var first = MySqlSnapshotSplit.typed("table-0-chunk-0", "fp", range(null, 10L));
+        original.appendPlan(first, 0, 1, range(10L, null), false);
         assertEquals(first, original.nextSnapshot());
         original.finishSnapshot(finished(first, 150));
         assertFalse(original.snapshotComplete());
@@ -28,11 +30,11 @@ class MySqlProgressiveDiscoveryTest {
         var restored = new MySqlHybridSplitAssigner("fp", saved);
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
-        assertEquals(10L, restored.nextChunkLower());
+        assertEquals(range(10L, null), restored.nextChunkRange());
         assertNull(restored.nextSnapshot());
         assertEquals(java.util.List.of(finished(first,150)), restored.finishedSplits());
 
-        var last = new MySqlSnapshotSplit("table-0-chunk-1", "fp", TABLE, 10L, null, null);
+        var last = MySqlSnapshotSplit.typed("table-0-chunk-1", "fp", range(10L, null));
         restored.appendPlan(last, 1, 0, null, true);
         assertEquals(last, restored.nextSnapshot());
         restored.finishSnapshot(finished(last,250));
@@ -47,11 +49,11 @@ class MySqlProgressiveDiscoveryTest {
     @Test
     void rejectsWrongRangeAndConflictingCompletionWithoutChangingAccounting() {
         var assigner = assigner();
-        var split = new MySqlSnapshotSplit("chunk", "fp", TABLE, null, null, null);
+        var split = MySqlSnapshotSplit.typed("chunk", "fp", range(null, null));
         assigner.appendPlan(split, 1, 0, null, true);
         assigner.nextSnapshot();
         assertThrows(IllegalArgumentException.class, () -> assigner.finishSnapshot(
-                new FinishedSnapshotSplitInfo(TABLE, "chunk", 1L, null, offset(200))));
+                new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, offset(200), range(1L, null))));
         assertFalse(assigner.snapshotComplete());
         assigner.finishSnapshot(finished(split,200));
         assigner.finishSnapshot(finished(split,200));
@@ -75,8 +77,12 @@ class MySqlProgressiveDiscoveryTest {
         return assigner;
     }
     private static FinishedSnapshotSplitInfo finished(MySqlSnapshotSplit split,long high) {
-        return new FinishedSnapshotSplitInfo(TABLE,split.splitId(),split.lowerInclusive(),split.upperExclusive(),offset(high));
+        return new FinishedSnapshotSplitInfo(TABLE,split.splitId(),null,null,offset(high),split.chunkRange());
     }
+    private static ChunkRange range(Long lower, Long upper) {
+        return new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, lower, upper);
+    }
+
     private static BinlogOffset offset(long position) {
         return new BinlogOffset(Map.of("server","shop"),Map.of("file","mysql-bin.000001","pos",position));
     }
