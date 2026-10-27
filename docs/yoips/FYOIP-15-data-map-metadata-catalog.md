@@ -1,12 +1,12 @@
 # FYOIP-15: Data Map — Metadata Catalog
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/40
 
-Decision: Pending (link to the recorded decision after review)
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/40#issuecomment-6433136507
 
-Implementation: N/A until accepted
+Implementation: N/A until implementation opens (starts from `V7__v1_9_0.sql`)
 
 Release: N/A until released
 
