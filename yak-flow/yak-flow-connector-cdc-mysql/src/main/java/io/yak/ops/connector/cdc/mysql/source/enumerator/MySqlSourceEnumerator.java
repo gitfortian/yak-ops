@@ -139,7 +139,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             Map<TableId, Integer> counts = new LinkedHashMap<>();
             restoredHybrid.getSnapshotPendingSplits().getRemainingSplits().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid
-                    .assignedSnapshots()
+                    .getSnapshotPendingSplits()
+                    .getAssignedSplits()
                     .values()
                     .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> {

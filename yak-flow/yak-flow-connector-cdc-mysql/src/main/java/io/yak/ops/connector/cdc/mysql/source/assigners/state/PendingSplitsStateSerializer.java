@@ -124,22 +124,23 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         }
         writeOffset(out, state.lowWatermark());
         writeOffset(out, state.highWatermark());
-        out.writeBoolean(state.snapshotPlanned());
-        out.writeInt(state.totalSnapshotSplits());
-        writeSplits(out, state.pendingSnapshots());
-        out.writeInt(state.assignedSnapshots().size());
-        for (var entry : state.assignedSnapshots().entrySet()) {
+        SnapshotPendingSplitsState snapshot = state.getSnapshotPendingSplits();
+        out.writeBoolean(snapshot.snapshotPlanned());
+        out.writeInt(snapshot.totalSnapshotSplits());
+        writeSplits(out, snapshot.getRemainingSplits());
+        out.writeInt(snapshot.getAssignedSplits().size());
+        for (var entry : snapshot.getAssignedSplits().entrySet()) {
             out.writeUTF(entry.getKey());
             writeSplit(out, entry.getValue());
         }
-        out.writeInt(state.finishedSnapshots().size());
-        for (String id : state.finishedSnapshots()) {
+        out.writeInt(snapshot.getFinishedSplits().size());
+        for (String id : snapshot.getFinishedSplits()) {
             out.writeUTF(id);
         }
-        MySqlSplitSerializer.writeFinishedSplits(out, state.finishedSplitInfos());
-        out.writeInt(state.nextTableIndex());
-        out.writeInt(state.nextChunkIndex());
-        ChunkRangeStateSerializer.write(out, state.nextChunkRange());
+        MySqlSplitSerializer.writeFinishedSplits(out, snapshot.getFinishedSplitInfos());
+        out.writeInt(snapshot.nextTableIndex());
+        out.writeInt(snapshot.nextChunkIndex());
+        ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
     }
 
     private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
@@ -174,10 +175,12 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextTable = in.readInt();
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                planned, total, pendingSnapshots, assigned, finished, finishedInfos,
+                nextTable, nextChunk, typedCursor);
         return new HybridPendingSplitsState(
-                HybridPendingSplitsState.Phase.values()[phaseIndex],
-                pending, binlogAssigned, low, high, planned, total,
-                pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
+                snapshot, binlogAssigned, pending,
+                HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
     }
 
     private void writeSplits(DataOutputStream out, List<MySqlSnapshotSplit> splits) throws IOException {
