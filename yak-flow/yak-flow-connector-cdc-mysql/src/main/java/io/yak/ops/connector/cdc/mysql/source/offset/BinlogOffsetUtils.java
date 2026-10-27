@@ -80,12 +80,12 @@ public class BinlogOffsetUtils {
             } catch (SQLException unsupported) {
                 rows = statement.executeQuery("SHOW MASTER STATUS");
             }
-            try (rows) {
-                if (!rows.next()) {
+            try (ResultSet status = rows) {
+                if (!status.next()) {
                     throw new SQLException("Cannot read current MySQL binlog position");
                 }
                 return BinlogOffset.builder()
-                        .setBinlogFilePosition(rows.getString(1), rows.getLong(2))
+                        .setBinlogFilePosition(status.getString(1), status.getLong(2))
                         .build();
             }
         }

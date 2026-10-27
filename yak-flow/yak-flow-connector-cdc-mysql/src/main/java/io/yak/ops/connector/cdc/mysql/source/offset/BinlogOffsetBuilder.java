@@ -22,7 +22,7 @@ import java.util.Map;
 
 import static io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetKind.EARLIEST;
 import static io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetKind.NON_STOPPING;
-import static org.apache.commons.lang3.Validate.isTrue;
+
 
 /** Builder for {@link BinlogOffset}. */
 public class BinlogOffsetBuilder {
@@ -88,22 +88,28 @@ public class BinlogOffsetBuilder {
         return new BinlogOffset(offsetMap);
     }
 
+    private static void checkArgument(boolean valid, String message) {
+        if (!valid) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
     private void sanityCheck() {
-        isTrue(
+        checkArgument(
                 offsetMap.containsKey(BinlogOffset.OFFSET_KIND_KEY),
                 "Binlog offset kind is required");
         BinlogOffsetKind offsetKind =
                 BinlogOffsetKind.valueOf(offsetMap.get(BinlogOffset.OFFSET_KIND_KEY));
         switch (offsetKind) {
             case SPECIFIC:
-                isTrue(
+                checkArgument(
                         offsetMap.containsKey(BinlogOffset.BINLOG_FILENAME_OFFSET_KEY)
                                 || offsetMap.containsKey(BinlogOffset.BINLOG_POSITION_OFFSET_KEY)
                                 || offsetMap.containsKey(BinlogOffset.GTID_SET_KEY),
                         "Either binlog file / position or GTID set is required if offset kind is SPECIFIC");
                 break;
             case TIMESTAMP:
-                isTrue(offsetMap.containsKey(BinlogOffset.TIMESTAMP_KEY));
+                checkArgument(offsetMap.containsKey(BinlogOffset.TIMESTAMP_KEY));
                 break;
             case EARLIEST:
             case LATEST:

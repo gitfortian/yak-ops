@@ -17,11 +17,8 @@
 
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
-
 import io.debezium.connector.mysql.gtid.MySqlGtidSet;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.connect.errors.ConnectException;
-
 
 import java.io.Serializable;
 import java.util.Map;
@@ -176,9 +173,9 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
 
         String gtidSetStr = this.getGtidSet();
         String targetGtidSetStr = that.getGtidSet();
-        if (StringUtils.isNotEmpty(targetGtidSetStr)) {
+        if (targetGtidSetStr != null && !targetGtidSetStr.isEmpty()) {
             // The target offset uses GTIDs, so we ideally compare using GTIDs ...
-            if (StringUtils.isNotEmpty(gtidSetStr)) {
+            if (gtidSetStr != null && !gtidSetStr.isEmpty()) {
                 // Both have GTIDs, so base the comparison entirely on the GTID sets.
                 MySqlGtidSet gtidSet = new MySqlGtidSet(gtidSetStr);
                 MySqlGtidSet targetGtidSet = new MySqlGtidSet(targetGtidSetStr);
@@ -209,7 +206,7 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
             // which case
             // again we know that this offset not having GTIDs is before the target offset ...
             return -1;
-        } else if (StringUtils.isNotEmpty(gtidSetStr)) {
+        } else if (gtidSetStr != null && !gtidSetStr.isEmpty()) {
             // This offset has a GTID but the target offset does not, so per the previous paragraph
             // we
             // assume that previous

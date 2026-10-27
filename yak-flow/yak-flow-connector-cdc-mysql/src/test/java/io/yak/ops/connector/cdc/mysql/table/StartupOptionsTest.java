@@ -52,8 +52,13 @@ class StartupOptionsTest {
         for (StartupMode mode : new StartupMode[] {
                 StartupMode.EARLIEST_OFFSET, StartupMode.SPECIFIC_OFFSETS, StartupMode.TIMESTAMP
         }) {
-            assertTrue(StartupOptions.of(mode).isStreamOnly());
-            assertFalse(StartupOptions.of(mode).isSnapshotOnly());
+            var selected = switch (mode) {
+                case SPECIFIC_OFFSETS -> StartupOptions.specificOffset("mysql-bin.000001", 4L);
+                case TIMESTAMP -> StartupOptions.timestamp(1700000000000L);
+                default -> StartupOptions.of(mode);
+            };
+            assertTrue(selected.isStreamOnly());
+            assertFalse(selected.isSnapshotOnly());
         }
         assertNotEquals(StartupOptions.initial(), StartupOptions.latest());
     }
@@ -71,7 +76,11 @@ class StartupOptionsTest {
                 StartupMode.EARLIEST_OFFSET, StartupMode.SPECIFIC_OFFSETS,
                 StartupMode.TIMESTAMP, StartupMode.SNAPSHOT
         }) {
-            var unavailable = StartupOptions.of(mode);
+            var unavailable = switch (mode) {
+                case SPECIFIC_OFFSETS -> StartupOptions.specificOffset("mysql-bin.000001", 4L);
+                case TIMESTAMP -> StartupOptions.timestamp(1700000000000L);
+                default -> StartupOptions.of(mode);
+            };
             assertThrows(UnsupportedOperationException.class, unavailable::requireSupported);
         }
     }
