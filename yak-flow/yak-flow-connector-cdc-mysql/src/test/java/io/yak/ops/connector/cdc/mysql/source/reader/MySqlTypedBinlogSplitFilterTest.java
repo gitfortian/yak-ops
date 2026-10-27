@@ -198,7 +198,7 @@ class MySqlTypedBinlogSplitFilterTest {
         assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 5, "new"))).records().size());
         assertEquals(offset(250), filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).offset());
 
-        var anchored = MySqlBinlogSplit.forPausedSnapshot("binlog", offset(100), new byte[] {1});
+        var anchored = MySqlBinlogSplit.forPausedSnapshot(offset(100), new byte[] {1});
         var streaming = anchored.startStreaming(offset(300), finished);
         assertEquals(offset(200), streaming.offset());
         assertEquals(offset(300), streaming.highWatermark());
