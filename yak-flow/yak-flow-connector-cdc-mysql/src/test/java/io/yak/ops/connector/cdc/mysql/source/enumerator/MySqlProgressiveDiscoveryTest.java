@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -28,8 +28,8 @@ class MySqlProgressiveDiscoveryTest {
         assertEquals(first, original.nextSnapshot());
         original.finishSnapshot(finished(first, 150));
         assertFalse(original.snapshotComplete());
-        var serializer = new MySqlHybridEnumeratorStateSerializer();
-        var saved = serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
+        var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
+        var saved = (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", saved);
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
@@ -68,7 +68,7 @@ class MySqlProgressiveDiscoveryTest {
     @Test
     void oldEnumeratorFormatIsRejectedRatherThanReinitialized() throws Exception {
         var assigner = assigner();
-        var serializer = new MySqlHybridEnumeratorStateSerializer();
+        var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
         byte[] bytes = serializer.serialize(assigner.snapshotState(1));
         assertThrows(IOException.class, () -> serializer.deserialize(1,bytes));
     }
