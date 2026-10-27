@@ -234,6 +234,7 @@ class MySqlTypedBinlogSplitFilterTest {
                                 "first", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, 10L),
                                 offset(200))));
     }
+
     private static TableRecord decimal(String amount) {
         return new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(new BigDecimal(amount), "money"));
     }
