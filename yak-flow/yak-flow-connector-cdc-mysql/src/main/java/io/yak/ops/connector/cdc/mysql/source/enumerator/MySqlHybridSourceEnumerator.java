@@ -63,7 +63,14 @@ public final class MySqlHybridSourceEnumerator
             int chunkSize,
             MySqlHybridEnumeratorState restored,
             TableMetrics metrics) {
-        this(startupOptions, context, config, fingerprint, chunkSize, restored, metrics,
+        this(
+                startupOptions,
+                context,
+                config,
+                fingerprint,
+                chunkSize,
+                restored,
+                metrics,
                 new MySqlChunkSplitter(config, chunkSize));
     }
 

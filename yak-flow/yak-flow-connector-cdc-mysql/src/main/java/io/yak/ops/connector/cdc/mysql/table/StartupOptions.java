@@ -36,15 +36,16 @@ public final class StartupOptions implements Serializable {
         if (value == null) {
             throw new IllegalArgumentException("MySQL CDC startup mode must not be null");
         }
-        return of(switch (value) {
+        StartupMode mode = switch (value) {
             case "initial" -> StartupMode.INITIAL;
             case "earliest-offset" -> StartupMode.EARLIEST_OFFSET;
             case "latest-offset" -> StartupMode.LATEST_OFFSET;
             case "specific-offset" -> StartupMode.SPECIFIC_OFFSETS;
             case "timestamp" -> StartupMode.TIMESTAMP;
             case "snapshot" -> StartupMode.SNAPSHOT;
-            default -> throw new IllegalArgumentException("Unsupported MySQL CDC startup mode: " + value);
-        });
+            default -> throw new IllegalArgumentException("Unsupported startup mode: " + value);
+        };
+        return of(mode);
     }
 
     public StartupMode startupMode() {
