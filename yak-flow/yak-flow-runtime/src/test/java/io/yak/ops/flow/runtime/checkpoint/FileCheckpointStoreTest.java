@@ -152,6 +152,21 @@ class FileCheckpointStoreTest {
     }
 
     @Test
+    void keepsLatestTwoCompletedCheckpointsAndDiscardsSubsumedMetadata() throws Exception {
+        String signature = FileCheckpointStore.graphSignature(graph(1));
+        var state = new CheckpointSnapshot.SerializedState(1, new byte[] {1});
+        try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
+            for (long id = 1; id <= 3; id++) {
+                store.save(new CheckpointSnapshot(id, signature, state, Map.of(), Map.of(), 100L + id));
+            }
+            assertFalse(Files.exists(folder.resolve("checkpoints/chk-1/_metadata")));
+            assertTrue(Files.isRegularFile(folder.resolve("checkpoints/chk-2/_metadata")));
+            assertTrue(Files.isRegularFile(folder.resolve("checkpoints/chk-3/_metadata")));
+            assertEquals(3, store.loadLatest(signature).orElseThrow().checkpointId());
+        }
+    }
+
+    @Test
     void shouldRequireStableUidAndRejectDifferentParallelism() throws Exception {
         StreamGraph graph = graph(1);
         String signature = FileCheckpointStore.graphSignature(graph);
