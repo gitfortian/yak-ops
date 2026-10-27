@@ -22,10 +22,6 @@ import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Objects;
@@ -58,6 +54,7 @@ public class MySqlSourceConfigFactory implements Serializable {
     private String excludeTableList;
     private String serverTimeZone = ZoneId.systemDefault().getId();
     private StartupOptions startupOptions = StartupOptions.initial();
+    private boolean explicitStartupOptions;
     private int splitSize = MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue();
     private int splitMetaGroupSize = MySqlSourceOptions.CHUNK_META_GROUP_SIZE.defaultValue();
     private int fetchSize = MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE.defaultValue();
@@ -286,7 +283,8 @@ public class MySqlSourceConfigFactory implements Serializable {
 
     /** Specifies the startup options. */
     public MySqlSourceConfigFactory startupOptions(StartupOptions startupOptions) {
-        this.startupOptions = startupOptions;
+        this.startupOptions = Objects.requireNonNull(startupOptions, "startupOptions");
+        this.explicitStartupOptions = true;
         return this;
     }
 
@@ -517,21 +515,23 @@ public class MySqlSourceConfigFactory implements Serializable {
             Properties dbzProperties) {}
 
     /** Builds the snapshot and binlog Source with a single configuration contract. */
-    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
+    public MySqlSource buildHybrid(int chunkSize) {
         return buildHybrid(chunkSize, new TableMetrics());
     }
 
-    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(
+    public MySqlSource buildHybrid(
             int chunkSize, TableMetrics metrics) {
         splitSize(chunkSize);
+        if (!explicitStartupOptions) startupOptions(StartupOptions.initial());
         return MySqlSource.initial(createConfig(0), chunkSize, metrics, startupOptions);
     }
 
-    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build() {
+    public MySqlSource build() {
         return build(new TableMetrics());
     }
 
-    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build(TableMetrics metrics) {
+    public MySqlSource build(TableMetrics metrics) {
+        if (!explicitStartupOptions) startupOptions(StartupOptions.latest());
         return MySqlSource.latestOffset(createConfig(0), metrics, startupOptions);
     }
 }

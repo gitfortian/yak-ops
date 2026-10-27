@@ -76,7 +76,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         };
     }
 
-    static MySqlSource latestOffset(MySqlSourceConfig config, TableMetrics metrics, StartupOptions options) {
+    public static MySqlSource latestOffset(MySqlSourceConfig config, TableMetrics metrics, StartupOptions options) {
         if (options.startupMode() != StartupMode.LATEST_OFFSET) {
             throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
         }
@@ -85,7 +85,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return new MySqlSource(options, config, 0, fingerprint(config), metrics);
     }
 
-    static MySqlSource initial(
+    public static MySqlSource initial(
             MySqlSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions options) {
         if (options.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Snapshot Source requires initial startup");
