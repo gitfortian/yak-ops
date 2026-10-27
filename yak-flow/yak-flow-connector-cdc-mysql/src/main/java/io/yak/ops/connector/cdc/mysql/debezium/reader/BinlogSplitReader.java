@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.debezium.reader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
@@ -29,7 +30,7 @@ import java.util.Set;
  * wire format. The typed factory consumes the same versioned FinishedSnapshotSplitInfo
  * checkpoints and compares numeric or DECIMAL Chunk Keys without treating them as row identity.
  */
-public final class MySqlBinlogSplitFilter {
+public final class BinlogSplitReader {
 
     /** Completed chunk fence, derived from the versioned persisted Split metadata. */
     public record FinishedChunk(String splitId, ChunkRange range, DebeziumOffset highWatermark) {
@@ -52,7 +53,7 @@ public final class MySqlBinlogSplitFilter {
     private final Set<TableId> schemasWithPrimaryKey = new HashSet<>();
 
     /** Existing checkpoint-backed path; its BIGINT primary-key admission remains unchanged. */
-    public MySqlBinlogSplitFilter(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
+    public BinlogSplitReader(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
         this(schemas, legacyChunks(schemas, finished), true);
     }
 
@@ -62,18 +63,18 @@ public final class MySqlBinlogSplitFilter {
      * <p>Bounded strings remain unsupported because Java string comparison does not implement
      * MySQL's collation. A single unbounded string chunk is valid without comparing strings.
      */
-    public static MySqlBinlogSplitFilter forChunks(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
-        return new MySqlBinlogSplitFilter(schemas, finished, false);
+    public static BinlogSplitReader forChunks(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
+        return new BinlogSplitReader(schemas, finished, false);
     }
 
     /**
      * Creates the checkpoint-backed handoff filter for legacy and typed chunks together.
      * A mixed multi-table Source must retain every table's completed chunk fences.
      */
-    public static MySqlBinlogSplitFilter fromFinishedSplits(
+    public static BinlogSplitReader fromFinishedSplits(
             Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
         if (finished.stream().noneMatch(info -> info.chunkRange() != null)) {
-            return new MySqlBinlogSplitFilter(schemas, finished);
+            return new BinlogSplitReader(schemas, finished);
         }
         List<FinishedChunk> converted = new ArrayList<>(finished.size());
         for (FinishedSnapshotSplitInfo info : finished) {
@@ -95,7 +96,7 @@ public final class MySqlBinlogSplitFilter {
         return forChunks(schemas, converted);
     }
 
-    private MySqlBinlogSplitFilter(
+    private BinlogSplitReader(
             Map<TableId, TableSchema> schemas, List<FinishedChunk> finished, boolean legacyPrimaryKey) {
         Objects.requireNonNull(schemas, "schemas");
         Objects.requireNonNull(finished, "finished");
@@ -200,6 +201,12 @@ public final class MySqlBinlogSplitFilter {
                     item.highWatermark()));
         }
         return result;
+    }
+
+    /** Poll the Debezium engine and apply the completed snapshot chunk watermarks. */
+    public BinlogEvent poll(MySqlBinlogEngine engine) throws Exception {
+        BinlogEvent event = Objects.requireNonNull(engine, "engine").poll();
+        return event == null ? null : filter(event);
     }
 
     /** An empty result retains the original offset so the caller can advance progress. */
@@ -341,7 +348,7 @@ public final class MySqlBinlogSplitFilter {
         return event.offset().compareTo(match.highWatermark()) > 0;
     }
 
-    boolean isPureBinlogPhase(TableId tableId) {
+    public boolean isPureBinlogPhase(TableId tableId) {
         return pureBinlogPhaseTables.contains(tableId);
     }
 
