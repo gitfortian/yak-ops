@@ -26,7 +26,8 @@ lives at docs/yoips/YOIP-N-short-title.md; discussion and the recorded
 decision live in its proposal PR. Do not turn it into an implementation diary.
 Use the exact six sections below and replace all template guidance with real
 design-specific content. Register the proposal in docs/yoips/README.md.
-Historical IDs 7-19 are reserved and must not be reused.
+Historical IDs 7-19 remain reserved even though their navigation files were deleted.
+Do not create historical redirects or per-PR engineering notes as YOIPs.
 
 Open the proposal-only PR in Discussion with Decision: Pending; then replace
 the Discussion placeholder with its PR URL. An explicit maintainer [VOTE]

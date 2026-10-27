@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate changed YOIP proposals without treating historical links as proposals."""
+"""Validate changed YOIP proposals while permitting deletion of old navigation stubs."""
 from __future__ import annotations
 
 import argparse
@@ -140,7 +140,10 @@ def verify(base: str, head: str, *, root: Path = ROOT) -> tuple[int, list[str]]:
         if not path.startswith("docs/yoips/YOIP-"):
             continue
         if action == "D":
-            errors.append(f"{path}: do not delete proposal records or historical link stubs")
+            previous = content_at(base, path, root=root)
+            if previous.startswith(HISTORICAL_PREFIX):
+                continue  # Retired navigation files can be deleted; their IDs remain reserved.
+            errors.append(f"{path}: do not delete formal proposal records")
             continue
         if action not in ("A", "M", "T"):
             errors.append(f"{path}: unsupported changed-file status {action}")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for YOIP proposal and historical-link governance."""
+"""Regression tests for formal YOIP governance and retired stub cleanup."""
 import subprocess
 import tempfile
 import unittest
@@ -156,6 +156,18 @@ class YoipGitDiffTest(unittest.TestCase):
         head = self.commit()
         self.assertEqual((0, []), verify(self.base, head, root=self.root))
 
+    def test_historical_stub_deletion_allowed(self):
+        (self.root / "docs/yoips/YOIP-7-historical.md").unlink()
+        head = self.commit()
+        self.assertEqual((0, []), verify(self.base, head, root=self.root))
+
+    def test_deleted_stub_id_cannot_be_reused(self):
+        (self.root / "docs/yoips/YOIP-7-historical.md").unlink()
+        self.write("docs/yoips/YOIP-7-reused.md", proposal(7))
+        self.write("docs/yoips/README.md", "# YOIP index\nYOIP-7-reused.md\n")
+        head = self.commit()
+        self.assertIn("retired", " ".join(verify(self.base, head, root=self.root)[1]))
+
     def test_new_history_stub_cannot_bypass(self):
         self.write("docs/yoips/YOIP-20-bypass.md", "# Historical engineering note moved: suspicious\n")
         head = self.commit()
@@ -167,7 +179,7 @@ class YoipGitDiffTest(unittest.TestCase):
         self.assertIn("do not delete", " ".join(verify(self.base, head, root=self.root)[1]))
 
     def test_non_yoip_docs_are_ignored(self):
-        self.write("docs/engineering/cdc/snapshot.md", "# Safe documentation\n")
+        self.write("docs/releases/snapshot.md", "# Safe documentation\n")
         self.write("docs/yoips/README.md", "# Index\n")
         head = self.commit()
         self.assertEqual((0, []), verify(self.base, head, root=self.root))
