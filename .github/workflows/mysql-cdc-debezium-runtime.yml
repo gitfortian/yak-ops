@@ -26,8 +26,17 @@ jobs:
       # currently blocking the repository-wide verify lifecycle.
       - name: Compile MySQL CDC and reactor dependencies
         run: bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql -am -DskipTests compile
-      - name: Verify Debezium runtime contracts
+      - name: Install reactor dependencies without unrelated upstream test compilation
         run: >
           bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql -am
-          -Dtest=DebeziumRuntimeAlignmentTest
+          -Dmaven.test.skip=true -Dspotless.check.skip=true -Dcheckstyle.skip=true install
+      - name: Verify Debezium and MySQL CDC unit contracts
+        run: >
+          bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql
+          -Dtest=DebeziumRuntimeAlignmentTest,MySqlBinlogSplitCheckpointTest,MySqlDebeziumRecordConverterTest,MySqlSchemaChangeConverterTest
           -Dsurefire.failIfNoSpecifiedTests=false test
+      - name: Verify snapshot/backfill against real MySQL
+        run: >
+          bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql
+          -Pintegration-tests -Dbackend.test.groups=cdc-snapshot
+          -Dspotless.check.skip=true -Dcheckstyle.skip=true verify
