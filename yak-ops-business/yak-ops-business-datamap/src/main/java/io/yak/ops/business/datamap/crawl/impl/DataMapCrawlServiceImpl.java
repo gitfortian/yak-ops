@@ -86,7 +86,12 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         } catch (RuntimeException failure) {
             throw new BusinessException(DataMapErrorCode.CRAWL_SCOPE_INVALID);
         }
-        DataMapScope scope = DataMapScope.resolve(input.getDatabase(), input.getSchema(), datasource);
+        // A database is mandatory: inheriting the datasource binding would crawl every visible
+        // catalog and store them under one empty identity, so the catalog could never filter by
+        // database and same-named tables would overwrite each other.
+        String database = StringUtils.trimToNull(input.getDatabase());
+        if (database == null) throw new BusinessException(DataMapErrorCode.CRAWL_DATABASE_REQUIRED);
+        DataMapScope scope = DataMapScope.resolve(database, input.getSchema(), datasource);
 
         LocalDateTime now = DateUtils.now();
         DataMapCrawlEntity row = new DataMapCrawlEntity();

@@ -85,7 +85,7 @@ class DataMapCrawlServiceTest {
         when(crawlMapper.insert(any())).thenThrow(new DuplicateKeyException("uk_data_map_crawl_active"));
         BusinessException failure =
                 org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
-                        () -> service.submit("ws", "user", submit("ds", null, null)));
+                        () -> service.submit("ws", "user", submit("ds", "analytics", null)));
         assertEquals(DataMapErrorCode.CRAWL_BUSY, failure.getErrorCode());
     }
 
@@ -95,7 +95,7 @@ class DataMapCrawlServiceTest {
         doThrow(new TaskRejectedException("queue full")).when(crawlExecutor).execute(any());
         BusinessException failure =
                 org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
-                        () -> service.submit("ws", "user", submit("ds", null, null)));
+                        () -> service.submit("ws", "user", submit("ds", "analytics", null)));
         assertEquals(DataMapErrorCode.CRAWL_BUSY, failure.getErrorCode());
         verify(crawlMapper).reject(anyString(), eq(DataMapErrorCode.CRAWL_BUSY.getMessage()), any());
     }
@@ -105,8 +105,19 @@ class DataMapCrawlServiceTest {
         when(dataSourceLookup.dataSource("ws", "ds")).thenThrow(new IllegalArgumentException("absent"));
         BusinessException failure =
                 org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
-                        () -> service.submit("ws", "user", submit("ds", null, null)));
+                        () -> service.submit("ws", "user", submit("ds", "analytics", null)));
         assertEquals(DataMapErrorCode.CRAWL_SCOPE_INVALID, failure.getErrorCode());
+    }
+
+    @Test
+    void aSubmissionWithoutADatabaseIsRefusedBeforeAnyRunRowExists() {
+        when(dataSourceLookup.dataSource("ws", "ds")).thenReturn(new DataSourceInfo("MYSQL", "demo", null, 7));
+        BusinessException failure =
+                org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                        () -> service.submit("ws", "user", submit("ds", "  ", null)));
+        assertEquals(DataMapErrorCode.CRAWL_DATABASE_REQUIRED, failure.getErrorCode());
+        verify(crawlMapper, never()).insert(any());
+        verify(crawlExecutor, never()).execute(any());
     }
 
     @Test
@@ -127,7 +138,7 @@ class DataMapCrawlServiceTest {
             Callable<Object> submission = () -> {
                 start.await(5, TimeUnit.SECONDS);
                 try {
-                    return service.submit("ws", "user", submit("ds", null, null));
+                    return service.submit("ws", "user", submit("ds", "analytics", null));
                 } catch (BusinessException busy) {
                     return busy.getErrorCode();
                 }

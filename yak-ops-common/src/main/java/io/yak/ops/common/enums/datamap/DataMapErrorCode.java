@@ -34,7 +34,9 @@ public enum DataMapErrorCode implements ErrorCode {
     /** The caller exceeded the search rate limit. */
     SEARCH_TOO_FREQUENT(19710, "搜索过于频繁，请稍后再试"),
     /** The node already runs the maximum number of preview queries. */
-    PREVIEW_BUSY(19711, "当前预览查询过多，请稍后重试");
+    PREVIEW_BUSY(19711, "当前预览查询过多，请稍后重试"),
+    /** A crawl was submitted without naming the database to enumerate. */
+    CRAWL_DATABASE_REQUIRED(19712, "请选择要采集的数据库");
 
     private final Integer code;
     private final String message;
