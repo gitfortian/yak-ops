@@ -1,8 +1,14 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 /**
- * Checkpointable unit of hybrid CDC work: a finite JDBC snapshot range or the unbounded Binlog.
+ * Transitional grouping for initial snapshot assignment.
  *
- * <p>The two kinds have deliberately distinct progress and recovery semantics.
+ * <p>The source split identity is owned by {@link MySqlSplit}; the standalone
+ * and initial readers share that contract.
  */
-public sealed interface MySqlHybridSplit extends MySqlSplit permits MySqlSnapshotSplit, MySqlHybridBinlogSplit {}
+public abstract class MySqlHybridSplit extends MySqlSplit {
+
+    protected MySqlHybridSplit(String splitId) {
+        super(splitId);
+    }
+}

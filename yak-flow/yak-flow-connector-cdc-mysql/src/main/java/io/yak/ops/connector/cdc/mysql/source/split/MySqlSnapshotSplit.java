@@ -7,7 +7,7 @@ import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
 /** Frozen key range, durable normalized output, and mailbox-owned output position for one chunk. */
-public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit {
+public final class MySqlSnapshotSplit extends MySqlHybridSplit implements SnapshotSplit {
     private final String splitId;
     private final String fingerprint;
     private final TableId tableId;
@@ -71,6 +71,7 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
             int outputPosition,
             FinishedSnapshotSplitInfo finished,
             ChunkRange chunkRange) {
+        super(splitId);
         if (splitId == null || splitId.isBlank() || fingerprint == null || fingerprint.isBlank()) {
             throw new IllegalArgumentException("Snapshot split requires a stable ID and fingerprint");
         }
