@@ -10,8 +10,6 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
-import io.yak.ops.core.api.connector.source.InputStatus;
-import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableRecord;
@@ -20,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Mailbox-owned SourceReader for parallel snapshot ranges and one deferred Binlog stream.
@@ -34,9 +31,6 @@ public final class MySqlHybridSourceReader
                 MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplit, MySqlHybridSplitState> {
 
     private final MySqlHybridSplitReader splits;
-    private final SchemaChangeHandler schemaChanges;
-    private final TableMetrics metrics;
-    private final long generation;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
     private MySqlResumeBinlogEvent resumeEvent;
     private final java.util.Set<String> acknowledged = new java.util.HashSet<>();
@@ -60,27 +54,13 @@ public final class MySqlHybridSourceReader
             SourceReaderContext context,
             TableMetrics metrics,
             SchemaChangeHandler schemaChanges) {
-        super(() -> splits, new MySqlHybridRecordEmitter(context, splits, metrics, schemaChanges), context);
-        this.metrics = metrics;
-        generation = metrics.generation();
+        super(
+                () -> splits,
+                new MySqlHybridRecordEmitter(context, splits, metrics, schemaChanges),
+                context,
+                schemaChanges,
+                metrics);
         this.splits = splits;
-        this.schemaChanges = schemaChanges;
-    }
-
-    @Override
-    public InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
-        return schemaChanges.tryCompleteSchemaChange() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
-    }
-
-    @Override
-    public CompletableFuture<Void> isAvailable() {
-        CompletableFuture<Void> pending = schemaChanges.getAvailableFuture();
-        return pending == null ? super.isAvailable() : pending;
-    }
-
-    @Override
-    public void start() throws Exception {
-        context.sendSplitRequest();
     }
 
     @Override
@@ -113,10 +93,9 @@ public final class MySqlHybridSourceReader
 
     @Override
     public List<MySqlHybridSplit> snapshotState(long checkpointId) {
-        schemaChanges.requireNoPendingSchemaChange();
+        List<MySqlHybridSplit> active = new ArrayList<>(super.snapshotState(checkpointId));
         forEachActiveSplitState(state -> state.snapshotCheckpoint(checkpointId));
         acknowledged.forEach(id -> finishedCheckpoint.putIfAbsent(id, checkpointId));
-        List<MySqlHybridSplit> active = new ArrayList<>(super.snapshotState(checkpointId));
         active.addAll(finishedUnacked.values());
         return List.copyOf(active);
     }
