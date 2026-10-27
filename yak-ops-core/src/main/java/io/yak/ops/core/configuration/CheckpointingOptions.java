@@ -34,6 +34,16 @@ public final class CheckpointingOptions {
     public static final Option<Duration> MIN_PAUSE_BETWEEN_CHECKPOINTS =
             Options.key("execution.checkpointing.min-pause").durationType().defaultValue(Duration.ZERO);
 
+    /**
+     * Trusted identity of the submitted task definition and instance.
+     *
+     * <p>The runtime incorporates this into its graph signature so a checkpoint cannot
+     * be restored by a different task definition that happens to share topology and UIDs.
+     * The identity is hashed; it is not stored in the checkpoint payload as cleartext.
+     */
+    public static final Option<String> DEFINITION_IDENTITY =
+            Options.key("execution.checkpointing.definition-identity").stringType().defaultValue("");
+
     /** Maximum concurrent checkpoints; the current runtime requires exactly one. */
     public static final Option<Integer> MAX_CONCURRENT_CHECKPOINTS = Options.key(
                     "execution.checkpointing.max-concurrent-checkpoints")

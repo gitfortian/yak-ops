@@ -174,7 +174,8 @@ final class TaskDeployment {
             if (recoverFromLatestCheckpoint || jobGraph.configuration().get(CheckpointingOptions.RESTORE_LATEST)) {
                 restoredCheckpoint = checkpointStore
                         .loadLatest(FileCheckpointStore.graphSignature(
-                                jobGraph.graph(), jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM)))
+                                jobGraph.graph(), jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM),
+                                jobGraph.configuration().get(CheckpointingOptions.DEFINITION_IDENTITY)))
                         .orElseThrow(() -> new IllegalStateException(
                                 "No complete recoverable checkpoint exists in the state directory"));
                 if (restoredCheckpoint.hasFinishedOperators()) {

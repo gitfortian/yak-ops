@@ -108,6 +108,28 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(false, factory.create(nextInstance, Boundedness.CONTINUOUS_UNBOUNDED, false).get(CheckpointingOptions.RESTORE_LATEST));
     }
     @Test
+    void checkpointRestoreIdentityIncludesDefinitionVersionAndInstance() {
+        var factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
+        String original = factory.create(FIRST, Boundedness.CONTINUOUS_UNBOUNDED, false)
+                .get(CheckpointingOptions.DEFINITION_IDENTITY);
+        String restored = factory.create(
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-100"),
+                Boundedness.CONTINUOUS_UNBOUNDED, false)
+                .get(CheckpointingOptions.DEFINITION_IDENTITY);
+        String modified = factory.create(
+                new TaskExecutionIdentity("ws", "definition", 2, "instance-100"),
+                Boundedness.CONTINUOUS_UNBOUNDED, false)
+                .get(CheckpointingOptions.DEFINITION_IDENTITY);
+        String otherInstance = factory.create(
+                new TaskExecutionIdentity("ws", "definition", 1, "instance-101"),
+                Boundedness.CONTINUOUS_UNBOUNDED, false)
+                .get(CheckpointingOptions.DEFINITION_IDENTITY);
+        assertEquals(original, restored);
+        assertNotEquals(original, modified);
+        assertNotEquals(original, otherInstance);
+    }
+
+    @Test
     void resumedInstanceLoadsItsOwnCheckpointButNewInstancesDoNot() throws Exception {
         ExecutionConfigurationFactory factory = new ExecutionConfigurationFactory(EnvironmentOptions.defaults(), stateRoot);
         Path checkpoint = Files.createDirectories(stateRoot.resolve(FIRST.instanceId())).resolve("checkpoint.bin");

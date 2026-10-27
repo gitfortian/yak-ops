@@ -71,6 +71,7 @@ public final class ExecutionConfigurationFactory {
         Configuration configuration = new Configuration()
                 .set(PipelineOptions.AUTO_GENERATE_UIDS, false)
                 .set(CheckpointingOptions.STATE_DIRECTORY, stateDirectory.toString())
+                .set(CheckpointingOptions.DEFINITION_IDENTITY, checkpointDefinitionIdentity(identity))
                 .set(ExecutionOptions.LOG_ID, identity.instanceId())
                 .set(ExecutionOptions.DEBUG, debug)
                 .set(SchemaEvolutionOptions.ENABLED, schemaChangesEnabled)
@@ -92,6 +93,11 @@ public final class ExecutionConfigurationFactory {
                 .set(CheckpointingOptions.CHECKPOINTING_INTERVAL, options.get(EnvironmentOptions.CHECKPOINT_INTERVAL))
                 .set(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS, 1)
                 .set(ExecutionOptions.MAX_RESTART_ATTEMPTS, options.get(EnvironmentOptions.MAX_RESTARTS));
+    }
+
+    private static String checkpointDefinitionIdentity(TaskExecutionIdentity identity) {
+        return identity.workspaceId() + ":" + identity.definitionId() + ":"
+                + identity.definitionVersion() + ":" + identity.instanceId();
     }
 
     private Path stateDirectory(String instanceId) {

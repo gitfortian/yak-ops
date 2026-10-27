@@ -56,7 +56,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     private final SchemaCoordinator schemaCoordinator;
     private final List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks;
     private final List<OneInputStreamTask> inputTasks;
-    private final FileCheckpointStore storage;
+    private final CompletedCheckpointStore storage;
     private final String graphSignature;
     private final BooleanSupplier cancelled;
     private final Consumer<Throwable> onFailure;
@@ -78,7 +78,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             SourceCoordinator<SourceSplit, Object> coordinator,
             List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks,
             List<OneInputStreamTask> inputTasks,
-            FileCheckpointStore storage,
+            CompletedCheckpointStore storage,
             CheckpointSnapshot restored,
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure) {
@@ -92,7 +92,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             SourceCoordinator<SourceSplit, Object> coordinator,
             List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks,
             List<OneInputStreamTask> inputTasks,
-            FileCheckpointStore storage,
+            CompletedCheckpointStore storage,
             CheckpointSnapshot restored,
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure,
@@ -120,7 +120,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         this.inputTasks = List.copyOf(inputTasks);
         this.storage = Objects.requireNonNull(storage, "storage must not be null");
         this.graphSignature = FileCheckpointStore.graphSignature(
-                plan.graph(), plan.configuration().get(PipelineOptions.MAX_PARALLELISM));
+                plan.graph(), plan.configuration().get(PipelineOptions.MAX_PARALLELISM),
+                plan.configuration().get(CheckpointingOptions.DEFINITION_IDENTITY));
         this.cancelled = Objects.requireNonNull(cancelled, "cancelled must not be null");
         this.onFailure = Objects.requireNonNull(onFailure, "onFailure must not be null");
         Duration interval = plan.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL);
@@ -321,6 +322,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             throw new CheckpointDeclinedException(checkpointId, "Source has already reached EndOfData");
         }
         CheckpointPlan checkpointPlan = calculatePlan(checkpointId);
+        PendingCheckpoint pending = new PendingCheckpoint(checkpointId, checkpointPlan.tasksToAcknowledge());
         checkpointDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         if (terminal) {
             checkpointDeadlineNanos = Math.min(checkpointDeadlineNanos, finalCheckpointDeadlineNanos);
@@ -383,6 +385,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 }
                 paused.add(sourceTask);
                 readerStates.put(sourceTask.taskInfo().subtaskIndex(), splits);
+                pending.acknowledgeTask(id);
             }
             SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState =
                     await(coordinator.snapshotCoordinator(checkpointId));
@@ -413,6 +416,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 ensureActive();
                 await(CompletableFuture.anyOf(entry.getValue(), firstFailedAcknowledgement));
                 OneInputStreamTask.CheckpointState state = await(entry.getValue());
+                pending.acknowledgeTask(entry.getKey());
                 if (state.finished()) {
                     finishedReports.add(entry.getKey());
                 } else if (!state.operatorStates().isEmpty()) {
@@ -461,7 +465,11 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             if (snapshot.hasFinishedOperators() && !terminal) {
                 throw new CheckpointDeclinedException(checkpointId, "Finished state requires a terminal checkpoint");
             }
+            if (!pending.isFullyAcknowledged()) {
+                throw new IllegalStateException("Checkpoint has missing task acknowledgements");
+            }
             storage.save(snapshot);
+            pending.markPersisted(snapshot);
             stored = true;
             LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
             published.complete(snapshot);
@@ -481,7 +489,14 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                     await(sourceTask.notifyCheckpointComplete(checkpointId));
                 }
             }
+            pending.complete();
         } catch (Exception | Error failure) {
+            if (pending.status() == PendingCheckpoint.Status.PERSISTED) {
+                // This checkpoint is already durable. Recovery, not abort, must resolve XA.
+                pending.failCompletion();
+            } else if (pending.status() == PendingCheckpoint.Status.PENDING) {
+                pending.abort();
+            }
             originalFailure = failure;
             throw failure;
         } finally {
