@@ -34,8 +34,7 @@ class MySqlSnapshotCancellationTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
-    private static final MySqlSnapshotSplit SPLIT = MySqlSnapshotSplit.typed(
-            "snapshot", "frozen", new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null));
+    private static final MySqlSnapshotSplit SPLIT = MySqlSnapshotSplit.typed("snapshot", new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null));
 
     @Test
     void cancelsRunningJdbcQueryWithoutBlockingTheCaller() throws Exception {
