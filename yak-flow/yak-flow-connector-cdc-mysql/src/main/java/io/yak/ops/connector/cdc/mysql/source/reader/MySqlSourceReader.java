@@ -20,6 +20,7 @@ import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.configuration.ExecutionOptions;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,7 +58,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
                 new MySqlSourceReaderContext(context),
                 metrics,
                 initial,
-                config.topicPrefix());
+                sourceId(config, context));
     }
 
     private MySqlSourceReader(
@@ -75,6 +76,17 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
         this.generation = metrics.generation();
         this.splits = splits;
         this.initial = initial;
+    }
+
+    /**
+     * Bind event identity to a stable task execution, never to mutable split checkpoints.
+     *
+     * <p>The instance ID remains constant across full-job checkpoint restoration.
+     * Direct connector callers without an execution ID use Debezium's logical source name.
+     */
+    private static String sourceId(MySqlSourceConfig config, SourceReaderContext context) {
+        String executionId = context.getConfiguration().get(ExecutionOptions.LOG_ID);
+        return executionId.isBlank() ? config.topicPrefix() : executionId + ":" + config.topicPrefix();
     }
 
     @Override
