@@ -37,8 +37,7 @@ class MySqlRecordDiagnosticsTest {
     void snapshotBatchDiagnosticsRedactRowContents() {
         MySqlFetchedRecord record =
                 MySqlFetchedRecord.prepared(
-                        new MySqlSnapshotSplit("chunk", "source",
-                                tableRecord().tableId(), null, null, null)
+                        new MySqlSnapshotSplit("chunk", tableRecord().tableId(), null, null, null)
                                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200),
                                         List.of(tableRecord()))));
         String diagnostic = record.toString();
