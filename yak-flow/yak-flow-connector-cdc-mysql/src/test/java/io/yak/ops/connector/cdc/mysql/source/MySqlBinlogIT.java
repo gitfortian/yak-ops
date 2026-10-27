@@ -233,8 +233,8 @@ class MySqlBinlogIT {
             try {
                 List<MySqlSplit> splits = reader.snapshotState(0L);
                 if (splits.size() == 1
-                        && splits.getFirst().offset() != null
-                        && splits.getFirst().schemaHistory().length > 0) {
+                        && ((MySqlBinlogSplit) splits.getFirst()).offset() != null
+                        && ((MySqlBinlogSplit) splits.getFirst()).schemaHistory().length > 0) {
                     return;
                 }
             } catch (IllegalStateException notReady) {

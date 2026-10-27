@@ -195,7 +195,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
         assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, checkpoint.nextChunkRange().start());
+        assertEquals(5L, ((MySqlHybridEnumeratorState) checkpoint).nextChunkRange().start());
         enumerator.close();
     }
 

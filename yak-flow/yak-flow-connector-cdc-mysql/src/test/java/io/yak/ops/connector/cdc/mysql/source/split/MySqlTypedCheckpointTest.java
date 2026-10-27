@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSplitState;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSplitState;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -55,7 +55,7 @@ class MySqlTypedCheckpointTest {
                                 GenericRowData.of(new BigDecimal("2.00"), "same")),
                         new TableRecord(TABLE, RowKind.INSERT,
                                 GenericRowData.of(new BigDecimal("2.00"), "same"))));
-        MySqlHybridSplitState state = new MySqlHybridSplitState(split);
+        MySqlSplitState state = new MySqlSplitState(split);
         state.prepareSnapshot(split.withOutput(output));
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
         state.snapshotCheckpoint(5);
@@ -66,7 +66,7 @@ class MySqlTypedCheckpointTest {
         assertEquals(range, frozen.chunkRange());
         assertEquals(1, frozen.outputPosition());
         assertEquals(2, frozen.output().rows().size());
-        MySqlHybridSplitState recovered = new MySqlHybridSplitState(frozen);
+        MySqlSplitState recovered = new MySqlSplitState(frozen);
         recovered.emitSnapshotRows(2);
         MySqlSnapshotSplit completed = roundTrip((MySqlSnapshotSplit) recovered.checkpoint(null));
         assertEquals(range, completed.finished().chunkRange());
