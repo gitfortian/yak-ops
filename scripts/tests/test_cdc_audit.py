@@ -84,13 +84,13 @@ class CdcAuditTest(unittest.TestCase):
     def test_parameterized_invocations_count_as_one_declared_method(self):
         """Mirror Flink CDC's @ParameterizedTest source and multiple Surefire XML rows."""
         (self.sources / "ExampleIT.java").write_text(
-            "class ExampleIT {\\n"
-            "  @ParameterizedTest\\n"
-            "  @ValueSource(ints = {1, 2})\\n"
-            "  void first(int value) {}\\n"
-            "  @Test\\n"
-            "  void second() {}\\n"
-            "}\\n",
+            "class ExampleIT {\n"
+            "  @ParameterizedTest\n"
+            "  @ValueSource(ints = {1, 2})\n"
+            "  void first(int value) {}\n"
+            "  @Test\n"
+            "  void second() {}\n"
+            "}\n",
             encoding="utf-8",
         )
         self.write_report(("first(int)[1]", "first(int)[2]", "second"))
