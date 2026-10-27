@@ -7,9 +7,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-/** Shared enumerator state serialization; keeps historic INITIAL and LATEST checkpoint formats readable. */
+/** Shared enumerator state serialization; rejects checkpoint formats from previous split models. */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlHybridEnumeratorStateSerializer hybrid = new MySqlHybridEnumeratorStateSerializer();
     private final MySqlPendingSplitsStateSerializer stream = new MySqlPendingSplitsStateSerializer();
@@ -45,8 +45,6 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
         if (bytes == null || bytes.length > MAX_BYTES) throw new IOException("Invalid state bytes");
-        if (version == 1) return stream.deserialize(1, bytes);
-        if (version == 4) return hybrid.deserialize(4, bytes);
         if (version != VERSION) throw new IOException("Unsupported pending splits state version: " + version);
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int kind = in.readUnsignedByte();
