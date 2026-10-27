@@ -69,6 +69,24 @@ class FileCheckpointStoreTest {
     }
 
     @Test
+    void shouldRejectRestoreFromDifferentTaskDefinitionDespiteIdenticalOperatorTopology() throws Exception {
+        StreamGraph sameGraph = graph(1);
+        String original = FileCheckpointStore.graphSignature(sameGraph, 128, "workspace:definition:1:instance");
+        String changed = FileCheckpointStore.graphSignature(sameGraph, 128, "workspace:definition:2:instance");
+        String anotherInstance = FileCheckpointStore.graphSignature(
+                sameGraph, 128, "workspace:definition:1:another-instance");
+        assertFalse(original.equals(changed));
+        assertFalse(original.equals(anotherInstance));
+        var state = new CheckpointSnapshot.SerializedState(1, new byte[] {1});
+        try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
+            store.save(new CheckpointSnapshot(1, original, state, Map.of(), Map.of(), 100L));
+            assertThrows(IllegalStateException.class, () -> store.loadLatest(changed));
+            assertThrows(IllegalStateException.class, () -> store.loadLatest(anotherInstance));
+            assertEquals(original, store.loadLatest(original).orElseThrow().graphSignature());
+        }
+    }
+
+    @Test
     void shouldRejectCorruptedSnapshotWithoutSilentlyIgnoringIt() throws Exception {
         String signature = FileCheckpointStore.graphSignature(graph(1));
         var state = new CheckpointSnapshot.SerializedState(1, new byte[] {1, 2, 3});
