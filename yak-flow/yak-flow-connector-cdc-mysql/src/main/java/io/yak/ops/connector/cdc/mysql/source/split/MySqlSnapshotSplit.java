@@ -19,7 +19,6 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
     private final FinishedSnapshotSplitInfo finished;
     private final ChunkRange chunkRange;
 
-
     /** Preserves every existing source and checkpoint caller using the BIGINT constructor. */
     public MySqlSnapshotSplit(
             String splitId,
@@ -61,7 +60,17 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
         this(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, lastEmittedKey, null, 0, null);
     }
 
-    public MySqlSnapshotSplit(String splitId, String fingerprint, TableId tableId, Long lowerInclusive, Long upperExclusive, Long lastEmittedKey, MySqlSnapshotOutput output, int outputPosition, FinishedSnapshotSplitInfo finished, ChunkRange chunkRange) {
+    public MySqlSnapshotSplit(
+            String splitId,
+            String fingerprint,
+            TableId tableId,
+            Long lowerInclusive,
+            Long upperExclusive,
+            Long lastEmittedKey,
+            MySqlSnapshotOutput output,
+            int outputPosition,
+            FinishedSnapshotSplitInfo finished,
+            ChunkRange chunkRange) {
         if (splitId == null || splitId.isBlank() || fingerprint == null || fingerprint.isBlank()) {
             throw new IllegalArgumentException("Snapshot split requires a stable ID and fingerprint");
         }
@@ -101,7 +110,7 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
                         || lastEmittedKey != null)) {
             throw new IllegalArgumentException("Finished snapshot metadata differs from assigned range");
         }
-    
+
         this.splitId = splitId;
         this.fingerprint = fingerprint;
         this.tableId = tableId;
@@ -169,35 +178,39 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
                 chunkRange);
     }
 
-
     @Override
     public String splitId() {
         return splitId;
     }
+
     public String fingerprint() {
         return fingerprint;
     }
     public TableId tableId() {
         return tableId;
     }
+
     public Long lowerInclusive() {
         return lowerInclusive;
     }
     public Long upperExclusive() {
         return upperExclusive;
     }
+
     public Long lastEmittedKey() {
         return lastEmittedKey;
     }
     public MySqlSnapshotOutput output() {
         return output;
     }
+
     public int outputPosition() {
         return outputPosition;
     }
     public FinishedSnapshotSplitInfo finished() {
         return finished;
     }
+
     public ChunkRange chunkRange() {
         return chunkRange;
     }
@@ -206,6 +219,7 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
     public TableId getTableId() {
         return tableId;
     }
+
     public Object[] getSplitStart() {
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
@@ -217,6 +231,7 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
     public DebeziumOffset getHighWatermark() {
         return finished == null ? null : finished.highWatermark();
     }
+
     public boolean isSnapshotReadFinished() {
         return finished != null;
     }

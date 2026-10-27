@@ -27,14 +27,18 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     private final DebeziumOffset highWatermark;
     private final ChunkRange chunkRange;
 
-
     public FinishedSnapshotSplitInfo(
             TableId tableId, String splitId, Long lowerInclusive, Long upperExclusive, DebeziumOffset highWatermark) {
         this(tableId, splitId, lowerInclusive, upperExclusive, highWatermark, null);
     }
 
-    public FinishedSnapshotSplitInfo(TableId tableId, String splitId, Long lowerInclusive,
-            Long upperExclusive, DebeziumOffset highWatermark, ChunkRange chunkRange) {
+    public FinishedSnapshotSplitInfo(
+            TableId tableId,
+            String splitId,
+            Long lowerInclusive,
+            Long upperExclusive,
+            DebeziumOffset highWatermark,
+            ChunkRange chunkRange) {
         Objects.requireNonNull(tableId, "tableId");
         if (splitId == null || splitId.isBlank()) {
             throw new IllegalArgumentException("Finished chunk must have a stable split ID");
@@ -47,7 +51,7 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
         if (lowerInclusive != null && upperExclusive != null && lowerInclusive >= upperExclusive) {
             throw new IllegalArgumentException("Finished chunk boundaries are not increasing");
         }
-    
+
         this.tableId = tableId;
         this.splitId = splitId;
         this.lowerInclusive = lowerInclusive;
@@ -56,15 +60,16 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
         this.chunkRange = chunkRange;
     }
 
-
     @Override
     public TableId tableId() {
         return tableId;
     }
+
     @Override
     public String splitId() {
         return splitId;
     }
+
     public Long lowerInclusive() {
         return lowerInclusive;
     }
@@ -75,6 +80,7 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public DebeziumOffset highWatermark() {
         return highWatermark;
     }
+
     public ChunkRange chunkRange() {
         return chunkRange;
     }
@@ -83,6 +89,7 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public TableId getTableId() {
         return tableId;
     }
+
     public String getSplitId() {
         return splitId;
     }
