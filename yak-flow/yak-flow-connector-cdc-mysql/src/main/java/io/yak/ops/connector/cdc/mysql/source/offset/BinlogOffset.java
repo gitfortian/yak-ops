@@ -18,11 +18,10 @@
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
 import io.debezium.connector.mysql.gtid.MySqlGtidSet;
-import org.apache.kafka.connect.errors.ConnectException;
-
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Objects;
+import org.apache.kafka.connect.errors.ConnectException;
 
 /**
  * A structure describes a fine grained offset in a binlog event including binlog position and gtid
@@ -83,11 +82,11 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
                 .build();
     }
 
-        public static BinlogOffset ofNonStopping() {
+    public static BinlogOffset ofNonStopping() {
         return builder().setOffsetKind(BinlogOffsetKind.NON_STOPPING).build();
     }
 
-        public BinlogOffset(Map<String, String> offset) {
+    public BinlogOffset(Map<String, String> offset) {
         this.offset = offset;
     }
 
@@ -144,11 +143,7 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
             return Long.parseLong(obj.toString());
         } catch (NumberFormatException e) {
             throw new ConnectException(
-                    "Source offset '"
-                            + key
-                            + "' parameter value "
-                            + obj
-                            + " could not be converted to a long");
+                    "Source offset '" + key + "' parameter value " + obj + " could not be converted to a long");
         }
     }
 
@@ -235,7 +230,8 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
                 && that.getFilename() != null
                 && this.getFilename().compareToIgnoreCase(that.getFilename()) != 0) {
             if (this.getFilename().length() != that.getFilename().length()) {
-                return Integer.compare(this.getFilename().length(), that.getFilename().length());
+                return Integer.compare(
+                        this.getFilename().length(), that.getFilename().length());
             }
             return this.getFilename().compareToIgnoreCase(that.getFilename());
         }

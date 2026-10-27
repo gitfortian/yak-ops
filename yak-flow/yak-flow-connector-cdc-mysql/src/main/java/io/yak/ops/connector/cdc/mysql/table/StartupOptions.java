@@ -18,11 +18,8 @@
 package io.yak.ops.connector.cdc.mysql.table;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-
-
 import java.io.Serializable;
 import java.util.Objects;
-
 
 /** Debezium startup options. */
 public final class StartupOptions implements Serializable {
@@ -70,8 +67,7 @@ public final class StartupOptions implements Serializable {
      */
     public static StartupOptions specificOffset(String specificOffsetFile, long specificOffsetPos) {
         return new StartupOptions(
-                StartupMode.SPECIFIC_OFFSETS,
-                BinlogOffset.ofBinlogFilePosition(specificOffsetFile, specificOffsetPos));
+                StartupMode.SPECIFIC_OFFSETS, BinlogOffset.ofBinlogFilePosition(specificOffsetFile, specificOffsetPos));
     }
 
     public static StartupOptions specificOffset(String gtidSet) {
@@ -92,8 +88,7 @@ public final class StartupOptions implements Serializable {
      * @param startupTimestampMillis timestamp for the startup offsets, as milliseconds from epoch.
      */
     public static StartupOptions timestamp(long startupTimestampMillis) {
-        return new StartupOptions(
-                StartupMode.TIMESTAMP, BinlogOffset.ofTimestampSec(startupTimestampMillis / 1000));
+        return new StartupOptions(StartupMode.TIMESTAMP, BinlogOffset.ofTimestampSec(startupTimestampMillis / 1000));
     }
 
     private StartupOptions(StartupMode startupMode, BinlogOffset binlogOffset) {
@@ -142,8 +137,9 @@ public final class StartupOptions implements Serializable {
             case "earliest-offset" -> earliest();
             case "latest-offset" -> latest();
             case "snapshot" -> snapshot();
-            case "specific-offset", "timestamp" -> throw new UnsupportedOperationException(
-                    "MySQL CDC startup mode requires an explicit start position: " + value);
+            case "specific-offset", "timestamp" ->
+                throw new UnsupportedOperationException(
+                        "MySQL CDC startup mode requires an explicit start position: " + value);
             default -> throw new IllegalArgumentException("Unsupported MySQL CDC startup mode: " + value);
         };
     }
@@ -154,8 +150,9 @@ public final class StartupOptions implements Serializable {
             case LATEST_OFFSET -> latest();
             case EARLIEST_OFFSET -> earliest();
             case SNAPSHOT -> snapshot();
-            case SPECIFIC_OFFSETS, TIMESTAMP -> throw new UnsupportedOperationException(
-                    "MySQL CDC startup mode requires an explicit start position: " + mode);
+            case SPECIFIC_OFFSETS, TIMESTAMP ->
+                throw new UnsupportedOperationException(
+                        "MySQL CDC startup mode requires an explicit start position: " + mode);
         };
     }
 

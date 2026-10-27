@@ -56,13 +56,11 @@ public class BinlogOffsetUtils {
      *   <li>LATEST: fetch the current binlog by JDBC
      * </ul>
      */
-    public static BinlogOffset initializeEffectiveOffset(
-            BinlogOffset offset, MySqlCdcSourceConfig mySqlSourceConfig) {
+    public static BinlogOffset initializeEffectiveOffset(BinlogOffset offset, MySqlCdcSourceConfig mySqlSourceConfig) {
         try (Connection connection = mySqlSourceConfig.openSnapshotConnection()) {
             return switch (offset.getOffsetKind()) {
                 case EARLIEST -> BinlogOffset.ofBinlogFilePosition("", 0);
-                case TIMESTAMP -> findBinlogOffset(
-                        offset.getTimestampSec() * 1000, connection, mySqlSourceConfig);
+                case TIMESTAMP -> findBinlogOffset(offset.getTimestampSec() * 1000, connection, mySqlSourceConfig);
                 case LATEST -> currentBinlogOffset(connection);
                 default -> offset;
             };
@@ -95,8 +93,7 @@ public class BinlogOffsetUtils {
      * Port of Flink CDC DebeziumUtils.findBinlogOffset: enumerate binlogs and search for the
      * binlog file containing the target timestamp using the first non-rotate event timestamp.
      */
-    private static BinlogOffset findBinlogOffset(
-            long targetMs, Connection connection, MySqlCdcSourceConfig config) {
+    private static BinlogOffset findBinlogOffset(long targetMs, Connection connection, MySqlCdcSourceConfig config) {
         List<String> binlogFiles = new ArrayList<>();
         try (Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery("SHOW BINARY LOGS")) {
@@ -123,8 +120,7 @@ public class BinlogOffsetUtils {
                     return BinlogOffset.ofBinlogFilePosition(binlogFiles.get(mid), 0);
                 }
             }
-            return BinlogOffset.ofBinlogFilePosition(
-                    endIdx < 0 ? binlogFiles.get(0) : binlogFiles.get(endIdx), 0);
+            return BinlogOffset.ofBinlogFilePosition(endIdx < 0 ? binlogFiles.get(0) : binlogFiles.get(endIdx), 0);
         } catch (Exception e) {
             throw new IllegalStateException("Cannot find MySQL binlog offset for timestamp", e);
         }

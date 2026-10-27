@@ -17,12 +17,11 @@
 
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetKind.EARLIEST;
 import static io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetKind.NON_STOPPING;
 
+import java.util.HashMap;
+import java.util.Map;
 
 /** Builder for {@link BinlogOffset}. */
 public class BinlogOffsetBuilder {
@@ -99,11 +98,8 @@ public class BinlogOffsetBuilder {
     }
 
     private void sanityCheck() {
-        checkArgument(
-                offsetMap.containsKey(BinlogOffset.OFFSET_KIND_KEY),
-                "Binlog offset kind is required");
-        BinlogOffsetKind offsetKind =
-                BinlogOffsetKind.valueOf(offsetMap.get(BinlogOffset.OFFSET_KIND_KEY));
+        checkArgument(offsetMap.containsKey(BinlogOffset.OFFSET_KIND_KEY), "Binlog offset kind is required");
+        BinlogOffsetKind offsetKind = BinlogOffsetKind.valueOf(offsetMap.get(BinlogOffset.OFFSET_KIND_KEY));
         switch (offsetKind) {
             case SPECIFIC:
                 checkArgument(
@@ -120,8 +116,7 @@ public class BinlogOffsetBuilder {
             case NON_STOPPING:
                 break;
             default:
-                throw new IllegalArgumentException(
-                        String.format("Unrecognized offset kind \"%s\"", offsetKind));
+                throw new IllegalArgumentException(String.format("Unrecognized offset kind \"%s\"", offsetKind));
         }
     }
 }

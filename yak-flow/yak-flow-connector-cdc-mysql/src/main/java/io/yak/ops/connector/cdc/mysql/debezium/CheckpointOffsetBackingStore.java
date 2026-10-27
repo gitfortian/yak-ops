@@ -1,6 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.debezium;
 
-import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
