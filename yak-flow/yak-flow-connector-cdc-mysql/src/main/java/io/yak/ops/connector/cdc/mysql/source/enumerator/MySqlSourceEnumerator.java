@@ -318,7 +318,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     }
 
     private void sendResumeEvents() {
-        context.registeredReaders().forEach(this::sendResumeEvent);
+        context.registeredReaders().keySet().forEach(this::sendResumeEvent);
     }
 
     private void sendResumeEvent(int reader) {
