@@ -52,7 +52,9 @@ class FileCheckpointStoreTest {
             assertEquals(7, loaded.checkpointId());
             assertTrue(loaded.fullyFinishedOperators().isEmpty());
             assertTrue(loaded.finishedSubtasks().isEmpty());
-            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(
+                    folder.resolve("checkpoints/chk-7/_metadata"))).getInt(4));
             assertEquals(2, loaded.enumeratorState().version());
             assertArrayEquals(new byte[] {3, 4, 5}, loaded.enumeratorState().bytes());
             loaded.enumeratorState().bytes()[0] = 99;
@@ -100,6 +102,24 @@ class FileCheckpointStoreTest {
     }
 
     @Test
+    void shouldRejectMissingOrCorruptPublishedMetadataWithoutFallingBack() throws Exception {
+        String signature = FileCheckpointStore.graphSignature(graph(1));
+        var state = new CheckpointSnapshot.SerializedState(1, new byte[] {1, 2, 3});
+        try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
+            store.save(new CheckpointSnapshot(1, signature, state, Map.of(), Map.of(), 100L));
+            Path metadata = folder.resolve("checkpoints/chk-1/_metadata");
+            byte[] file = Files.readAllBytes(metadata);
+            file[file.length - Long.BYTES - 1] ^= 0x0f;
+            Files.write(metadata, file);
+            assertThrows(IOException.class, () -> store.loadLatest(signature));
+        }
+        Files.delete(folder.resolve("checkpoints/chk-1/_metadata"));
+        try (FileCheckpointStore reopened = new FileCheckpointStore(folder)) {
+            assertThrows(IOException.class, () -> reopened.loadLatest(signature));
+        }
+    }
+
+    @Test
     void shouldNotOverwriteLatestCheckpointWithSameOrOlderId() throws Exception {
         String signature = FileCheckpointStore.graphSignature(graph(1));
         var state = new CheckpointSnapshot.SerializedState(1, new byte[] {7});
@@ -139,7 +159,7 @@ class FileCheckpointStoreTest {
             store.save(complete);
             var recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(complete, recovered);
-            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             assertTrue(recovered.fullyFinishedOperators().isEmpty());
             assertTrue(recovered.finishedSubtasks().isEmpty());
             assertEquals(3, recovered.operatorStates().get(key).get("operator/count").version());
@@ -170,7 +190,7 @@ class FileCheckpointStoreTest {
                 Set.of(finished));
         try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
             store.save(snapshot);
-            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             CheckpointSnapshot recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(snapshot, recovered);
             assertEquals(Set.of("source-stable-uid"), recovered.fullyFinishedOperators());
