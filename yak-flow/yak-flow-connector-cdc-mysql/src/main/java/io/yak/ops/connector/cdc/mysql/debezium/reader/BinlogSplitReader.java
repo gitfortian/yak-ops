@@ -142,7 +142,7 @@ public final class BinlogSplitReader {
             maxHighWatermarks.put(
                     table,
                     chunks.stream()
-                            .map(FinishedChunk::highWatermark)
+                            .map(FinishedSnapshotSplitInfo::highWatermark)
                             .max(DebeziumOffset::compareTo)
                             .orElseThrow());
             return List.copyOf(chunks);
