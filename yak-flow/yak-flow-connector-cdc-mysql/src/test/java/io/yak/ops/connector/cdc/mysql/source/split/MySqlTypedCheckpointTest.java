@@ -13,8 +13,6 @@ import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.LogicalTypeRoot;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -25,7 +23,7 @@ import org.junit.jupiter.api.Test;
 /** Typed range persistence and immutable prepared-output recovery, without enabling typed readers. */
 class MySqlTypedCheckpointTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
-    private static final MySqlHybridSplitSerializer SERIALIZER = new MySqlHybridSplitSerializer();
+    private static final MySqlSplitSerializer SERIALIZER = new MySqlSplitSerializer();
 
     @Test
     void persistsEachSupportedBoundaryFamilyWithoutCoercion() throws Exception {
@@ -92,39 +90,16 @@ class MySqlTypedCheckpointTest {
     }
 
     @Test
-    void readsTrueVersionThreePreparedSnapshotAndRejectsVersionFourAsLegacy() throws Exception {
-        var old = new MySqlSnapshotSplit("old", "fp", TABLE, 2L, 10L, null)
-                .withOutput(new MySqlSnapshotOutput(
-                        offset(10), offset(20),
-                        List.of(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(3L, "frozen")))));
-        byte[] v3 = legacyV3(old);
-        assertEquals(old, SERIALIZER.deserialize(3, v3));
-        // The V5 decoder must also accept the unchanged typed V4 split layout.
-        assertEquals(old, SERIALIZER.deserialize(4, SERIALIZER.serialize(old)));
-        assertThrows(IOException.class, () -> SERIALIZER.deserialize(3, SERIALIZER.serialize(old)));
-        assertThrows(IOException.class, () -> SERIALIZER.deserialize(4, v3));
-        byte[] truncated = Arrays.copyOf(SERIALIZER.serialize(old), SERIALIZER.serialize(old).length - 1);
-        assertThrows(IOException.class, () -> SERIALIZER.deserialize(4, truncated));
-    }
-
-    private static byte[] legacyV3(MySqlSnapshotSplit snapshot) throws Exception {
-        var bytes = new ByteArrayOutputStream();
-        try (var out = new DataOutputStream(bytes)) {
-            out.writeByte(1);
-            out.writeUTF(snapshot.splitId());
-            out.writeUTF(snapshot.fingerprint());
-            out.writeUTF(snapshot.tableId().catalog());
-            out.writeUTF(snapshot.tableId().table());
-            out.writeBoolean(snapshot.lowerInclusive() != null);
-            if (snapshot.lowerInclusive() != null) out.writeLong(snapshot.lowerInclusive());
-            out.writeBoolean(snapshot.upperExclusive() != null);
-            if (snapshot.upperExclusive() != null) out.writeLong(snapshot.upperExclusive());
-            out.writeBoolean(false);
-            out.writeByte(1);
-            MySqlSnapshotOutputSerializer.writeCompact(out, snapshot.output());
-            out.writeInt(snapshot.outputPosition());
+    void rejectsOldSplitFormatsAndTruncatedFrames() throws Exception {
+        var split = MySqlSnapshotSplit.typed("old", "fp",
+                new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 2L, 10L));
+        byte[] encoded = SERIALIZER.serialize(split);
+        for (int oldVersion = 1; oldVersion < SERIALIZER.getVersion(); oldVersion++) {
+            final int version = oldVersion;
+            assertThrows(IOException.class, () -> SERIALIZER.deserialize(version, encoded));
         }
-        return bytes.toByteArray();
+        assertThrows(IOException.class, () -> SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), Arrays.copyOf(encoded, encoded.length - 1)));
     }
 
     private static MySqlSnapshotSplit roundTrip(MySqlSnapshotSplit split) throws Exception {

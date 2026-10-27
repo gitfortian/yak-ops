@@ -91,7 +91,7 @@ class MySqlSnapshotOutputTest {
 
     @Test
     void rejectsOldVersionTruncationUnsupportedScalarsAndTrailingBytes() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] bytes = serializer.serialize(prepared());
         assertThrows(IOException.class, () -> serializer.deserialize(1, bytes));
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), Arrays.copyOf(bytes, bytes.length-1)));
@@ -110,24 +110,24 @@ class MySqlSnapshotOutputTest {
         }
         MySqlSnapshotSplit prepared = range().withOutput(
                 new MySqlSnapshotOutput(offset(100), offset(200), rows));
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] encoded = serializer.serialize(prepared);
         byte[] legacy = legacySnapshot(prepared);
         assertTrue(encoded.length < legacy.length / 2, "Prepared row checkpoint should be compact");
         assertEquals(prepared, serializer.deserialize(serializer.getVersion(), encoded));
-        assertEquals(prepared, serializer.deserialize(2, legacy));
+        assertThrows(IOException.class, () -> serializer.deserialize(2, legacy));
     }
 
     @Test
     void detectsCorruptedOrTruncatedCompressedSnapshotOutput() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] encoded = serializer.serialize(prepared());
         byte[] corrupted = encoded.clone();
         // The last four bytes are the output cursor, not the checksummed row payload.
-        corrupted[corrupted.length - 5] ^= 0x01;
+        corrupted[corrupted.length / 2] ^= 0x01;
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), corrupted));
         byte[] invalidCursor = encoded.clone();
-        invalidCursor[invalidCursor.length - 1] = 3;
+        invalidCursor[invalidCursor.length - 2] = 3;
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), invalidCursor));
         assertThrows(IOException.class, () -> serializer.deserialize(
                 serializer.getVersion(), Arrays.copyOf(encoded, encoded.length - 1)));
@@ -172,7 +172,7 @@ class MySqlSnapshotOutputTest {
     private static MySqlSnapshotSplit range() { return new MySqlSnapshotSplit("chunk", "fp", TABLE, null, null, null); }
     private static DebeziumOffset offset(long pos) { return new DebeziumOffset(Map.of("server","shop"), Map.of("file","mysql-bin.000001","pos",pos)); }
     private static MySqlSnapshotSplit roundTrip(MySqlSnapshotSplit split) throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         return (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(split));
     }
 }

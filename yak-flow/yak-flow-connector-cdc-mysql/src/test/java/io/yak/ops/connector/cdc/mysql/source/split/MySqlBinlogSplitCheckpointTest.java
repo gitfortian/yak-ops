@@ -14,7 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Checkpoint codec tests for resume positions, defensive byte copies and version validation. */
-class MySqlBinlogSplitSerializerTest {
+class MySqlBinlogSplitCheckpointTest {
 
     @Test
     void retainsFineGrainedOffsetsAndHistoryWithoutSharingArrays() throws Exception {
@@ -30,8 +30,8 @@ class MySqlBinlogSplitSerializerTest {
         MySqlBinlogSplit split = new MySqlBinlogSplit("fingerprint", offset, history);
         history[0] = 99;
 
-        MySqlBinlogSplitSerializer codec = new MySqlBinlogSplitSerializer();
-        MySqlBinlogSplit copy = codec.deserialize(codec.getVersion(), codec.serialize(split));
+        MySqlSplitSerializer codec = new MySqlSplitSerializer();
+        MySqlBinlogSplit copy = (MySqlBinlogSplit) codec.deserialize(codec.getVersion(), codec.serialize(split));
         assertEquals(split.splitId(), copy.splitId());
         assertEquals(offset, copy.offset());
         assertArrayEquals(new byte[] {1, 2, 3}, copy.schemaHistory());
@@ -57,10 +57,10 @@ class MySqlBinlogSplitSerializerTest {
 
     @Test
     void rejectsIncompleteRestoredOffsetAndCorruptData() throws Exception {
-        MySqlBinlogSplitSerializer codec = new MySqlBinlogSplitSerializer();
+        MySqlSplitSerializer codec = new MySqlSplitSerializer();
         var offset = new DebeziumOffset(Map.of("server", "yak"), Map.of("pos", 5L));
         var missingHistory = new MySqlBinlogSplit("fingerprint", offset, new byte[0]);
-        assertThrows(IOException.class, () -> codec.deserialize(1, codec.serialize(missingHistory)));
-        assertThrows(IOException.class, () -> codec.deserialize(1, new byte[] {0, 1}));
+        assertThrows(IOException.class, () -> codec.deserialize(codec.getVersion(), codec.serialize(missingHistory)));
+        assertThrows(IOException.class, () -> codec.deserialize(codec.getVersion(), new byte[] {0, 1}));
     }
 }
