@@ -6,6 +6,7 @@ import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.utils.StatementUtils;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialectConverter;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -106,25 +106,10 @@ public final class SnapshotSplitReader implements AutoCloseable {
                 throw new IllegalArgumentException("Typed snapshot range conflicts with its source schema");
             }
         }
-        String quoted = dialect.quoteIdentifier(key);
-        String columns = schema.columns().stream()
-                .map(column -> dialect.quoteIdentifier(column.name()))
-                .collect(Collectors.joining(", "));
-        List<Object> bounds = new ArrayList<>();
-        List<String> predicates = new ArrayList<>();
-        Object lower = range == null ? split.lowerInclusive() : range.start();
-        Object upper = range == null ? split.upperExclusive() : range.end();
-        if (lower != null) {
-            predicates.add(quoted + " >= ?");
-            bounds.add(lower);
-        }
-        if (upper != null) {
-            predicates.add(quoted + " < ?");
-            bounds.add(upper);
-        }
-        String sql = "SELECT " + columns + " FROM " + dialect.qualifiedTable(split.tableId())
-                + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
-                + " ORDER BY " + quoted;
+        Object lower = range.start();
+        Object upper = range.end();
+        String sql = StatementUtils.buildSplitScanQuery(
+                dialect, split.tableId(), schema, key, lower == null, upper == null);
         try {
             connection = consistentView == null ? connections.getConnection() : consistentView;
             if (consistentView == null) connection.setReadOnly(true);
@@ -132,8 +117,12 @@ public final class SnapshotSplitReader implements AutoCloseable {
             checkCancelled();
             statement.setQueryTimeout(60);
             statement.setFetchSize(FETCH_BATCH);
-            for (int index = 0; index < bounds.size(); index++) {
-                statement.setObject(index + 1, bounds.get(index));
+            int parameter = 1;
+            if (lower != null) {
+                StatementUtils.setSafeObject(statement, parameter++, lower);
+            }
+            if (upper != null) {
+                StatementUtils.setSafeObject(statement, parameter, upper);
             }
             checkCancelled();
             long executeStartedNanos = System.nanoTime();
