@@ -42,6 +42,19 @@ public interface DataSourceCatalogService {
     List<DataSourceCatalogTableVO> listTables(String datasourceId, DataSourceCatalogQueryDTO query);
 
     /**
+     * Lists every table and view of one namespace without the interactive picker's cap.
+     *
+     * <p>The connector's unbounded enumeration is reused as-is: nothing is truncated silently, and
+     * the caller owns the ceiling on how much it is willing to collect.
+     *
+     * @param datasourceId identifier of the datasource in the active Workspace
+     * @param database catalog slot to enumerate, or {@code null} for the connection default
+     * @param schema schema slot to enumerate, or {@code null} for the connection default
+     * @return metadata for every table and view in the namespace
+     */
+    List<DataSourceCatalogTableVO> listAllTables(String datasourceId, String database, String schema);
+
+    /**
      * Lists column metadata for a physical table.
      *
      * @param datasourceId identifier of the datasource in the active Workspace

@@ -32,6 +32,17 @@ public final class MySqlJdbcDialect extends AbstractDialect {
         return new MySqlTypeConverter();
     }
 
+    /**
+     * Switches the statement to MySQL's row-by-row streaming mode.
+     *
+     * <p>The connector streams only when the fetch size is {@link Integer#MIN_VALUE}; a positive
+     * fetch size still buffers the whole result set on the client.
+     */
+    @Override
+    public void configurePreviewStatement(java.sql.Statement statement) throws java.sql.SQLException {
+        statement.setFetchSize(Integer.MIN_VALUE);
+    }
+
     @Override
     public String quoteIdentifier(String identifier) {
         return "`" + JdbcDialect.requireIdentifier(identifier).replace("`", "``") + "`";
