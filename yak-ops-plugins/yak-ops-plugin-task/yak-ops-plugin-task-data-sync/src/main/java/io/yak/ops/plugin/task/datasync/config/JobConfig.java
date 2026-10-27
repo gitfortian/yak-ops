@@ -23,7 +23,8 @@ public final class JobConfig {
     private static final Option<Map<String, Object>> STARTUP =
             Options.key("startup").mapObjectType().noDefaultValue();
     private static final Option<String> MODE = Options.key("mode").stringType().noDefaultValue();
-    private static final OptionRule STARTUP_RULE = OptionRule.builder().required(MODE).build();
+    private static final OptionRule STARTUP_RULE =
+            OptionRule.builder().required(MODE).build();
 
     private static final Option<List<Object>> TABLES =
             Options.key("tables").listType(Object.class).noDefaultValue();
@@ -38,8 +39,10 @@ public final class JobConfig {
     private static final Option<Boolean> ALLOW_DROP_COLUMNS =
             Options.key("allowDropColumns").booleanType().noDefaultValue();
 
-    private static final OptionRule SOURCE_RULE =
-            OptionRule.builder().required(JobOptions.DATASOURCE_ID, TABLES).optional(STARTUP).build();
+    private static final OptionRule SOURCE_RULE = OptionRule.builder()
+            .required(JobOptions.DATASOURCE_ID, TABLES)
+            .optional(STARTUP)
+            .build();
     private static final OptionRule SINK_RULE = OptionRule.builder()
             .required(JobOptions.DATASOURCE_ID, TABLES, SCHEMA_POLICY)
             .build();
