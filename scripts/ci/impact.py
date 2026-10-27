@@ -294,9 +294,12 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
             result["modules"].update(affected_modules(owners))
             # Spotless and Checkstyle cover production Java; check direct owners only.
             if "/src/main/java/" in path or path.endswith("/pom.xml"):
-                result["preflight"] = True
-                if not result["full"]:
-                    result["preflight_modules"].update(owners)
+                # BOM has a standalone parent and does not inherit these plugins.
+                preflight_owners = set(owners) - {"yak-ops-bom"}
+                if preflight_owners:
+                    result["preflight"] = True
+                    if not result["full"]:
+                        result["preflight_modules"].update(preflight_owners)
             add_suites(test_suites(path), path)
             continue
         # An unknown path might change a build or generated contract: fail closed.
@@ -312,7 +315,7 @@ def summary(paths: list[str], *, full: bool = False) -> str:
     for key, label in (("backend", "Backend Quality"), ("frontend", "Frontend Quality"),
                        ("distribution", "Distribution Quality"), ("release", "Release Checks")):
         lines.append(f"| {label} | {'Yes' if result[key] else 'No'} |")
-    preflight_modules = ("!yak-ops-ui,!yak-ops-dist" if result["full"]
+    preflight_modules = ("!yak-ops-bom,!yak-ops-ui,!yak-ops-dist" if result["full"]
                          else ",".join(sorted(result["preflight_modules"])))
     lines.extend(["", "### Fast Preflight", "",
                   f"Run: {'Yes' if result['preflight'] else 'No'}",
@@ -334,7 +337,7 @@ def select_suites(paths: list[str]) -> list[str]:
 
 def outputs(paths: list[str], *, full: bool = False) -> str:
     impact = analyze(paths, full=full)
-    selected_modules = "!yak-ops-ui,!yak-ops-dist" if impact["full"] else ",".join(sorted(impact["modules"]))
+    selected_modules = "!yak-ops-bom,!yak-ops-ui,!yak-ops-dist" if impact["full"] else ",".join(sorted(impact["modules"]))
     fields = {
         "backend": str(impact["backend"]).lower(),
         "frontend": str(impact["frontend"]).lower(),
@@ -345,7 +348,7 @@ def outputs(paths: list[str], *, full: bool = False) -> str:
         "suites": ",".join(name for name in SUITES if name in impact["suites"]),
         "preflight": str(impact["preflight"]).lower(),
         "preflight_modules": (
-            "!yak-ops-ui,!yak-ops-dist" if impact["full"]
+            "!yak-ops-bom,!yak-ops-ui,!yak-ops-dist" if impact["full"]
             else ",".join(sorted(impact["preflight_modules"]))
         ),
     }
