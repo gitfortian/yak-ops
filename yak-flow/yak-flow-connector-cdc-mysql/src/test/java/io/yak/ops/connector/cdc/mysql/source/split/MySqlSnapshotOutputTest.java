@@ -26,7 +26,7 @@ class MySqlSnapshotOutputTest {
     @Test
     void preparationMustBeCoveredByCompletedCheckpointBeforeEmission() throws Exception {
         MySqlSnapshotSplit prepared = prepared();
-        MySqlSplitState state = new MySqlSplitState(range());
+        MySqlSplitState state = MySqlSplitState.fromSplit(range());
         state.prepareSnapshot(prepared);
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
         state.snapshotCheckpoint(10);
@@ -38,19 +38,19 @@ class MySqlSnapshotOutputTest {
         assertEquals(1, partial.outputPosition());
         assertEquals(2, partial.output().rows().size());
         assertEquals("original", partial.output().rows().getFirst().row().getString(1));
-        MySqlSplitState recovered = new MySqlSplitState(roundTrip(partial));
+        MySqlSplitState recovered = MySqlSplitState.fromSplit(roundTrip(partial));
         recovered.emitSnapshotRows(2);
         MySqlSnapshotSplit done = (MySqlSnapshotSplit) recovered.checkpoint(null);
         assertNull(done.output());
         assertEquals(offset(200), done.finished().highWatermark());
         assertEquals(done, roundTrip(done));
-        assertNull(((MySqlSnapshotSplit) new MySqlSplitState(roundTrip(done)).checkpoint(null)).output());
+        assertNull(((MySqlSnapshotSplit) MySqlSplitState.fromSplit(roundTrip(done)).checkpoint(null)).output());
     }
 
     @Test
     void emptyChunkStillRequiresDurablePreparationAndRetainsItsHigh() {
         var prepared = range().withOutput(new MySqlSnapshotOutput(offset(100), offset(100), List.of()));
-        var state = new MySqlSplitState(range());
+        var state = MySqlSplitState.fromSplit(range());
         state.prepareSnapshot(prepared);
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(0));
         state.snapshotCheckpoint(3);
@@ -91,7 +91,7 @@ class MySqlSnapshotOutputTest {
 
     @Test
     void rejectsOldVersionTruncationUnsupportedScalarsAndTrailingBytes() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] bytes = serializer.serialize(prepared());
         assertThrows(IOException.class, () -> serializer.deserialize(1, bytes));
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), Arrays.copyOf(bytes, bytes.length-1)));
@@ -110,24 +110,24 @@ class MySqlSnapshotOutputTest {
         }
         MySqlSnapshotSplit prepared = range().withOutput(
                 new MySqlSnapshotOutput(offset(100), offset(200), rows));
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] encoded = serializer.serialize(prepared);
         byte[] legacy = legacySnapshot(prepared);
         assertTrue(encoded.length < legacy.length / 2, "Prepared row checkpoint should be compact");
         assertEquals(prepared, serializer.deserialize(serializer.getVersion(), encoded));
-        assertEquals(prepared, serializer.deserialize(2, legacy));
+        assertThrows(IOException.class, () -> serializer.deserialize(2, legacy));
     }
 
     @Test
     void detectsCorruptedOrTruncatedCompressedSnapshotOutput() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         byte[] encoded = serializer.serialize(prepared());
         byte[] corrupted = encoded.clone();
         // The last four bytes are the output cursor, not the checksummed row payload.
-        corrupted[corrupted.length - 5] ^= 0x01;
+        corrupted[corrupted.length / 2] ^= 0x01;
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), corrupted));
         byte[] invalidCursor = encoded.clone();
-        invalidCursor[invalidCursor.length - 1] = 3;
+        invalidCursor[invalidCursor.length - 2] = 3;
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), invalidCursor));
         assertThrows(IOException.class, () -> serializer.deserialize(
                 serializer.getVersion(), Arrays.copyOf(encoded, encoded.length - 1)));
@@ -158,7 +158,7 @@ class MySqlSnapshotOutputTest {
     @Test
     void invalidOutputPositionsAndConflictingRangesAreRejected() {
         assertThrows(IllegalArgumentException.class, () -> prepared().withOutputPosition(3));
-        var state = new MySqlSplitState(range());
+        var state = MySqlSplitState.fromSplit(range());
         var other = new MySqlSnapshotSplit("other", "fp", TABLE, null, null, null).withOutput(prepared().output());
         assertThrows(IllegalStateException.class, () -> state.prepareSnapshot(other));
         assertThrows(IllegalArgumentException.class, () -> new MySqlSnapshotOutput(offset(200), offset(100), List.of()));
@@ -172,7 +172,7 @@ class MySqlSnapshotOutputTest {
     private static MySqlSnapshotSplit range() { return new MySqlSnapshotSplit("chunk", "fp", TABLE, null, null, null); }
     private static DebeziumOffset offset(long pos) { return new DebeziumOffset(Map.of("server","shop"), Map.of("file","mysql-bin.000001","pos",pos)); }
     private static MySqlSnapshotSplit roundTrip(MySqlSnapshotSplit split) throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         return (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(split));
     }
 }

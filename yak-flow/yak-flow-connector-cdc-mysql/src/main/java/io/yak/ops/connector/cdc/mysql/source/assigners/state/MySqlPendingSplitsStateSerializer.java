@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,8 +13,8 @@ import java.util.Objects;
 /** Checkpoints the Binlog split-assignment status without duplicating reader-owned offsets. */
 public final class MySqlPendingSplitsStateSerializer implements SimpleVersionedSerializer<MySqlPendingSplitsState> {
 
-    private static final int VERSION = 1;
-    private final MySqlBinlogSplitSerializer splitSerializer = new MySqlBinlogSplitSerializer();
+    private static final int VERSION = 2;
+    private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
 
     @Override
     public int getVersion() {
@@ -52,7 +52,7 @@ public final class MySqlPendingSplitsStateSerializer implements SimpleVersionedS
                 if (length < 0 || length > in.available()) {
                     throw new IOException("Invalid MySQL pending split size");
                 }
-                pending = splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
+                pending = (MySqlBinlogSplit) splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
             }
             if (in.available() != 0) {
                 throw new IOException("Trailing bytes in MySQL enumerator state");

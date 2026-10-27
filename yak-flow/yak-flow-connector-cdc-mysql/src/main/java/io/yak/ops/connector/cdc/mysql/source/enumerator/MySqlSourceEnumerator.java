@@ -19,7 +19,6 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
@@ -233,7 +232,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             throw new IllegalStateException("Invalid split return");
         if (initial) {
             assigner.addSplitsBack(
-                    splits.stream().map(split -> (MySqlHybridSplit) split).toList(), reader);
+                    splits, reader);
             assignAvailable();
         } else {
             streamAssigner.addSplitsBack(
@@ -319,7 +318,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 waitingReaders.remove(reader);
                 continue;
             }
-            MySqlHybridSplit split = assigner.getNext(reader);
+            MySqlSplit split = assigner.getNext(reader);
             if (split == null) break;
             context.assignSplit(split, reader);
             waitingReaders.remove(reader);

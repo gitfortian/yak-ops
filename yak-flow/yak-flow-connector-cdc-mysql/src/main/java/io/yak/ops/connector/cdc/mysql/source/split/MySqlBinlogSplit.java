@@ -10,7 +10,7 @@ import java.util.Objects;
  * restored together with the offset to avoid starting from an incompatible schema.
  * A null offset means the initial stream has not yet established a safe resume point.
  */
-public final class MySqlBinlogSplit implements MySqlSplit {
+public final class MySqlBinlogSplit extends MySqlSplit {
 
     public static final String ID = "mysql-binlog";
 
@@ -19,6 +19,7 @@ public final class MySqlBinlogSplit implements MySqlSplit {
     private final byte[] schemaHistory;
 
     public MySqlBinlogSplit(String definitionFingerprint, DebeziumOffset offset, byte[] schemaHistory) {
+        super(ID);
         this.definitionFingerprint = Objects.requireNonNull(definitionFingerprint, "definitionFingerprint");
         if (definitionFingerprint.isBlank()) {
             throw new IllegalArgumentException("MySQL source fingerprint must not be blank");

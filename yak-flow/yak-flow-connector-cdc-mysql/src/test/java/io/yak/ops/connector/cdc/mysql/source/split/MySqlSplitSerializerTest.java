@@ -11,11 +11,11 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Ensures the hybrid transport persists both split kinds with complete normalized snapshot metadata. */
-class MySqlHybridSplitSerializerTest {
+class MySqlSplitSerializerTest {
 
     @Test
     void roundTripsCursorAndBoundaries() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var original = new MySqlSnapshotSplit(
                 "snapshot-0", "fingerprint", new TableId("shop", null, "orders"), 100L, 200L, 143L);
         MySqlSnapshotSplit restored =
@@ -29,7 +29,7 @@ class MySqlHybridSplitSerializerTest {
 
     @Test
     void roundTripsPausedAndRunningBinlogWithSchemaHistory() throws Exception {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
         var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
         var bootstrap = new MySqlHybridBinlogSplit(
@@ -49,7 +49,7 @@ class MySqlHybridSplitSerializerTest {
 
     @Test
     void rejectsTruncatedOrUnknownSplitKind() {
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), new byte[] {9}));
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), new byte[] {1}));
     }

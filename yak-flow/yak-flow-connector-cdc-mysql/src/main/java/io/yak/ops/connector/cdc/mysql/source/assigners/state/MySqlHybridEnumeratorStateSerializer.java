@@ -4,8 +4,8 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import java.io.ByteArrayInputStream;
@@ -29,10 +29,10 @@ import java.util.Set;
 public final class MySqlHybridEnumeratorStateSerializer
         implements SimpleVersionedSerializer<MySqlHybridEnumeratorState> {
 
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
-    private final MySqlHybridSplitSerializer splitSerializer = new MySqlHybridSplitSerializer();
+    private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
 
     @Override
     public int getVersion() {
@@ -63,7 +63,7 @@ public final class MySqlHybridEnumeratorStateSerializer
             for (String id : state.finishedSnapshots()) {
                 out.writeUTF(id);
             }
-            MySqlHybridSplitSerializer.writeFinishedSplits(out, state.finishedSplitInfos());
+            MySqlSplitSerializer.writeFinishedSplits(out, state.finishedSplitInfos());
             out.writeInt(state.nextTableIndex());
             out.writeInt(state.nextChunkIndex());
             ChunkRangeStateSerializer.write(out, state.nextChunkRange());
@@ -110,7 +110,7 @@ public final class MySqlHybridEnumeratorStateSerializer
                     throw new IOException("Duplicate finished MySQL snapshot split");
                 }
             }
-            var finishedInfos = MySqlHybridSplitSerializer.readFinishedSplits(in);
+            var finishedInfos = MySqlSplitSerializer.readFinishedSplits(in);
             int nextTable = in.readInt();
             int nextChunk = in.readInt();
             ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
@@ -157,18 +157,18 @@ public final class MySqlHybridEnumeratorStateSerializer
         return result;
     }
 
-    private void writeSplit(DataOutputStream out, MySqlHybridSplit split) throws IOException {
+    private void writeSplit(DataOutputStream out, MySqlSplit split) throws IOException {
         byte[] bytes = splitSerializer.serialize(split);
         out.writeInt(bytes.length);
         out.write(bytes);
     }
 
-    private MySqlHybridSplit readSplit(DataInputStream in) throws IOException {
+    private MySqlSplit readSplit(DataInputStream in) throws IOException {
         int length = in.readInt();
         if (length <= 0 || length > MAX_BYTES || length > in.available()) {
             throw new IOException("Invalid MySQL split length");
         }
-        return splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
+        return (MySqlSplit) splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
     }
 
     private static int boundedCount(DataInputStream in) throws IOException {

@@ -17,7 +17,7 @@ import java.util.Objects;
  * serialized Schema History bytes and exposes them only through defensive copies.
  * An assigned split has execution identity, rather than implicit record value equality.
  */
-public final class MySqlHybridBinlogSplit implements MySqlHybridSplit, StreamSplit {
+public final class MySqlHybridBinlogSplit extends MySqlSplit implements StreamSplit {
 
     public static final String ID = MySqlBinlogSplit.ID;
 
@@ -49,6 +49,7 @@ public final class MySqlHybridBinlogSplit implements MySqlHybridSplit, StreamSpl
             Phase phase,
             DebeziumOffset highWatermark,
             List<FinishedSnapshotSplitInfo> finishedSplits) {
+        super(ID);
         this.finishedSplits = List.copyOf(Objects.requireNonNull(finishedSplits, "finishedSplits"));
         this.binlog = Objects.requireNonNull(binlog, "binlog");
         this.phase = Objects.requireNonNull(phase, "phase");

@@ -95,7 +95,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
 
     @Override
     protected MySqlSplitState initializedState(MySqlSplit split) {
-        MySqlSplitState state = new MySqlSplitState(split);
+        MySqlSplitState state = MySqlSplitState.fromSplit(split);
         if (resumeEvent != null && split instanceof MySqlHybridBinlogSplit) {
             state.resume(resumeEvent.highWatermark(), resumeEvent.finishedSplits());
         }

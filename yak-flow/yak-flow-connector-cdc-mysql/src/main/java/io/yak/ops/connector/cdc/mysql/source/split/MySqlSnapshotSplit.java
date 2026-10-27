@@ -1,23 +1,23 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.base.source.meta.split.SnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
 /** Frozen key range, durable normalized output, and mailbox-owned output position for one chunk. */
-public record MySqlSnapshotSplit(
-        String splitId,
-        String fingerprint,
-        TableId tableId,
-        Long lowerInclusive,
-        Long upperExclusive,
-        Long lastEmittedKey,
-        MySqlSnapshotOutput output,
-        int outputPosition,
-        FinishedSnapshotSplitInfo finished,
-        ChunkRange chunkRange)
-        implements MySqlHybridSplit, SnapshotSplit {
+public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSplit {
+    private final String splitId;
+    private final String fingerprint;
+    private final TableId tableId;
+    private final Long lowerInclusive;
+    private final Long upperExclusive;
+    private final Long lastEmittedKey;
+    private final MySqlSnapshotOutput output;
+    private final int outputPosition;
+    private final FinishedSnapshotSplitInfo finished;
+    private final ChunkRange chunkRange;
 
     /** Preserves every existing source and checkpoint caller using the BIGINT constructor. */
     public MySqlSnapshotSplit(
@@ -60,7 +60,18 @@ public record MySqlSnapshotSplit(
         this(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, lastEmittedKey, null, 0, null);
     }
 
-    public MySqlSnapshotSplit {
+    public MySqlSnapshotSplit(
+            String splitId,
+            String fingerprint,
+            TableId tableId,
+            Long lowerInclusive,
+            Long upperExclusive,
+            Long lastEmittedKey,
+            MySqlSnapshotOutput output,
+            int outputPosition,
+            FinishedSnapshotSplitInfo finished,
+            ChunkRange chunkRange) {
+        super(splitId);
         if (splitId == null || splitId.isBlank() || fingerprint == null || fingerprint.isBlank()) {
             throw new IllegalArgumentException("Snapshot split requires a stable ID and fingerprint");
         }
@@ -100,6 +111,17 @@ public record MySqlSnapshotSplit(
                         || lastEmittedKey != null)) {
             throw new IllegalArgumentException("Finished snapshot metadata differs from assigned range");
         }
+
+        this.splitId = splitId;
+        this.fingerprint = fingerprint;
+        this.tableId = tableId;
+        this.lowerInclusive = lowerInclusive;
+        this.upperExclusive = upperExclusive;
+        this.lastEmittedKey = lastEmittedKey;
+        this.output = output;
+        this.outputPosition = outputPosition;
+        this.finished = finished;
+        this.chunkRange = chunkRange;
     }
 
     public boolean prepared() {
@@ -155,6 +177,90 @@ public record MySqlSnapshotSplit(
                 position,
                 null,
                 chunkRange);
+    }
+
+    @Override
+    public String splitId() {
+        return splitId;
+    }
+
+    public String fingerprint() {
+        return fingerprint;
+    }
+    public TableId tableId() {
+        return tableId;
+    }
+
+    public Long lowerInclusive() {
+        return lowerInclusive;
+    }
+    public Long upperExclusive() {
+        return upperExclusive;
+    }
+
+    public Long lastEmittedKey() {
+        return lastEmittedKey;
+    }
+    public MySqlSnapshotOutput output() {
+        return output;
+    }
+
+    public int outputPosition() {
+        return outputPosition;
+    }
+    public FinishedSnapshotSplitInfo finished() {
+        return finished;
+    }
+
+    public ChunkRange chunkRange() {
+        return chunkRange;
+    }
+
+    // Names and split-boundary semantics follow Flink CDC's MySqlSnapshotSplit.
+    public TableId getTableId() {
+        return tableId;
+    }
+
+    public Object[] getSplitStart() {
+        Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
+        return start == null ? null : new Object[] {start};
+    }
+    public Object[] getSplitEnd() {
+        Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
+        return end == null ? null : new Object[] {end};
+    }
+    public DebeziumOffset getHighWatermark() {
+        return finished == null ? null : finished.highWatermark();
+    }
+
+    public boolean isSnapshotReadFinished() {
+        return finished != null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MySqlSnapshotSplit that)) {
+            return false;
+        }
+        return outputPosition == that.outputPosition
+                && Objects.equals(splitId, that.splitId)
+                && Objects.equals(fingerprint, that.fingerprint)
+                && Objects.equals(tableId, that.tableId)
+                && Objects.equals(lowerInclusive, that.lowerInclusive)
+                && Objects.equals(upperExclusive, that.upperExclusive)
+                && Objects.equals(lastEmittedKey, that.lastEmittedKey)
+                && Objects.equals(output, that.output)
+                && Objects.equals(finished, that.finished)
+                && Objects.equals(chunkRange, that.chunkRange);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(splitId, fingerprint, tableId, lowerInclusive, upperExclusive,
+                lastEmittedKey, output, outputPosition, finished, chunkRange);
     }
 
     @Override
