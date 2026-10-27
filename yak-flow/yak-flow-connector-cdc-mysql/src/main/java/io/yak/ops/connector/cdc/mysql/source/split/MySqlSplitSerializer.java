@@ -27,11 +27,10 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     public static final MySqlSplitSerializer INSTANCE = new MySqlSplitSerializer();
 
     // An incompatible layout: old nested hybrid/binlog frames must not be silently restored.
-    private static final int VERSION = 7;
+    private static final int VERSION = 8;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int SNAPSHOT_SPLIT_FLAG = 1;
     private static final int BINLOG_SPLIT_FLAG = 2;
-    private static final int HYBRID_BINLOG_SPLIT_FLAG = 3;
 
     @Override
     public int getVersion() {
@@ -46,15 +45,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             if (split.isSnapshotSplit()) {
                 out.writeInt(SNAPSHOT_SPLIT_FLAG);
                 writeSnapshot(out, split.asSnapshotSplit());
-            } else if (split instanceof MySqlHybridBinlogSplit hybrid) {
-                out.writeInt(HYBRID_BINLOG_SPLIT_FLAG);
-                out.writeByte(hybrid.phase().ordinal());
-                out.writeBoolean(hybrid.highWatermark() != null);
-                if (hybrid.highWatermark() != null) {
-                    hybrid.highWatermark().writeTo(out);
-                }
-                writeBinlog(out, hybrid.binlog());
-                writeFinishedSplits(out, hybrid.finishedSplits());
             } else if (split.isBinlogSplit()) {
                 out.writeInt(BINLOG_SPLIT_FLAG);
                 writeBinlog(out, split.asBinlogSplit());
@@ -78,7 +68,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             MySqlSplit split = switch (in.readInt()) {
                 case SNAPSHOT_SPLIT_FLAG -> readSnapshot(in);
                 case BINLOG_SPLIT_FLAG -> readBinlog(in);
-                case HYBRID_BINLOG_SPLIT_FLAG -> readHybridBinlog(in);
                 default -> throw new IOException("Unknown MySQL split kind");
             };
             if (in.available() != 0) {
@@ -147,6 +136,12 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         }
         out.writeInt(history.length);
         out.write(history);
+        out.writeByte(split.phase().ordinal());
+        out.writeBoolean(split.highWatermark() != null);
+        if (split.highWatermark() != null) {
+            split.highWatermark().writeTo(out);
+        }
+        writeFinishedSplits(out, split.finishedSplits());
     }
 
     private static MySqlBinlogSplit readBinlog(DataInputStream in) throws IOException {
@@ -160,18 +155,14 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         if (offset != null && history.length == 0) {
             throw new IOException("Restored MySQL binlog offset is missing schema history");
         }
-        return new MySqlBinlogSplit(fingerprint, offset, history);
-    }
-
-    private static MySqlHybridBinlogSplit readHybridBinlog(DataInputStream in) throws IOException {
         int phase = in.readUnsignedByte();
-        if (phase >= MySqlHybridBinlogSplit.Phase.values().length) {
-            throw new IOException("Unknown MySQL hybrid binlog phase");
+        if (phase >= MySqlBinlogSplit.Phase.values().length) {
+            throw new IOException("Unknown MySQL Binlog phase");
         }
         DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
-        MySqlBinlogSplit binlog = readBinlog(in);
-        return new MySqlHybridBinlogSplit(
-                binlog, MySqlHybridBinlogSplit.Phase.values()[phase], high, readFinishedSplits(in));
+        List<FinishedSnapshotSplitInfo> infos = readFinishedSplits(in);
+        return MySqlBinlogSplit.restore(fingerprint, offset, history,
+                MySqlBinlogSplit.Phase.values()[phase], high, infos);
     }
 
     /** Serializes completed snapshot chunk watermarks for reader and enumerator checkpoints. */
