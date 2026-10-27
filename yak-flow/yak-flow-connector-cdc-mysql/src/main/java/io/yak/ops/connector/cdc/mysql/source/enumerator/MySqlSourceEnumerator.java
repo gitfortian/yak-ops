@@ -173,9 +173,9 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     }
 
     @Override
-    public void handleSplitRequest(int reader) {
+    public void handleSplitRequest(int reader, String requesterHostname) {
         if (closed) return;
-        if (!started || !context.registeredReaders().contains(reader))
+        if (!started || !context.registeredReaders().containsKey(reader))
             throw new IllegalStateException("Unregistered Hybrid reader");
         if (!initial) {
             if (reader != 0) throw new IllegalArgumentException("Binlog-only source requires reader zero");
@@ -300,13 +300,13 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed || !started) return;
         MySqlHybridBinlogSplit binlog = assigner.nextBinlog(0);
         if (binlog != null) {
-            if (context.registeredReaders().contains(0)) context.assignSplit(binlog, 0);
+            if (context.registeredReaders().containsKey(0)) context.assignSplit(binlog, 0);
             else assigner.addBack(binlog);
             waitingReaders.remove(0);
         }
         if (assigner.phase() != MySqlHybridEnumeratorState.Phase.SNAPSHOT) return;
         for (int reader : List.copyOf(waitingReaders)) {
-            if (!context.registeredReaders().contains(reader)) {
+            if (!context.registeredReaders().containsKey(reader)) {
                 waitingReaders.remove(reader);
                 continue;
             }
