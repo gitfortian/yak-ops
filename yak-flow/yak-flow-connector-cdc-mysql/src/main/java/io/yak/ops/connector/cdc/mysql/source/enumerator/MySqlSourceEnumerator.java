@@ -69,7 +69,7 @@ public final class MySqlSourceEnumerator
             MySqlCdcSourceConfig config,
             String fingerprint,
             int chunkSize,
-            MySqlHybridEnumeratorState restored,
+            PendingSplitsState restored,
             TableMetrics metrics) {
         this(startupOptions, context, config, fingerprint, chunkSize, restored, metrics,
                 startupOptions.startupMode() == StartupMode.INITIAL ? new MySqlChunkSplitter(config, chunkSize) : null);
@@ -82,7 +82,7 @@ public final class MySqlSourceEnumerator
             MySqlCdcSourceConfig config,
             String fingerprint,
             int chunkSize,
-            MySqlHybridEnumeratorState restored,
+            PendingSplitsState restored,
             TableMetrics metrics,
             MySqlChunkSplitter planner) {
         this.context = Objects.requireNonNull(context, "context");

@@ -27,8 +27,8 @@ class MySqlSourceEntryTest {
         assertEquals(StartupMode.INITIAL, source.startupMode());
         assertEquals(StartupOptions.initial(), source.startupOptions());
         assertEquals(512, source.snapshotChunkSize());
-        assertInstanceOf(MySqlHybridSplitSerializer.class, source.getSplitSerializer());
-        assertInstanceOf(MySqlHybridEnumeratorStateSerializer.class, source.getEnumeratorCheckpointSerializer());
+        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.class, source.getSplitSerializer());
+        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
     }
 
     @Test
@@ -37,8 +37,8 @@ class MySqlSourceEntryTest {
         assertEquals(StartupMode.LATEST_OFFSET, source.startupMode());
         assertEquals(StartupOptions.latest(), source.startupOptions());
         assertThrows(IllegalStateException.class, source::snapshotChunkSize);
-        assertInstanceOf(MySqlBinlogSplitSerializer.class, source.getSplitSerializer());
-        assertInstanceOf(MySqlPendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
+        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.class, source.getSplitSerializer());
+        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
     }
 
     private static MySqlCdcSourceBuilder builder() {
