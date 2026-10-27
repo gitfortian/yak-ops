@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,16 +41,16 @@ class MySqlBinlogSplitCheckpointTest {
 
     @Test
     void roundTripsPendingAndAssignedEnumeratorStates() throws Exception {
-        MySqlPendingSplitsStateSerializer codec = new MySqlPendingSplitsStateSerializer();
+        PendingSplitsStateSerializer codec = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         MySqlPendingSplitsState pending =
                 new MySqlPendingSplitsState("fingerprint", false, new MySqlBinlogSplit("fingerprint", null, new byte[0]));
-        MySqlPendingSplitsState restored = codec.deserialize(codec.getVersion(), codec.serialize(pending));
+        MySqlPendingSplitsState restored = (MySqlPendingSplitsState) codec.deserialize(codec.getVersion(), codec.serialize(pending));
         assertEquals("fingerprint", restored.sourceFingerprint());
         assertEquals(false, restored.splitAssigned());
         assertEquals(null, restored.pendingSplit().offset());
 
         MySqlPendingSplitsState assigned = new MySqlPendingSplitsState("fingerprint", true, null);
-        MySqlPendingSplitsState restoredAssigned = codec.deserialize(codec.getVersion(), codec.serialize(assigned));
+        MySqlPendingSplitsState restoredAssigned = (MySqlPendingSplitsState) codec.deserialize(codec.getVersion(), codec.serialize(assigned));
         assertEquals(true, restoredAssigned.splitAssigned());
         assertEquals(null, restoredAssigned.pendingSplit());
     }
