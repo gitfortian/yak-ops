@@ -47,104 +47,104 @@ public final class RecordUtils {
     private RecordUtils() {}
 
     public static Object[] rowToArray(ResultSet rs, int size) throws SQLException {
-            final Object[] row = new Object[size];
-            for (int i = 0; i < size; i++) {
-                row[i] = rs.getObject(i + 1);
-            }
-            return row;
+        final Object[] row = new Object[size];
+        for (int i = 0; i < size; i++) {
+            row[i] = rs.getObject(i + 1);
         }
+        return row;
+    }
 
     public static Struct getStructContainsChunkKey(SourceRecord record) {
-            // Use chunk key in the after struct for insert or
-            // the before struct for delete/update
-            Envelope.Operation op = Envelope.operationFor(record);
-            Struct value = (Struct) record.value();
-            if (op == Envelope.Operation.CREATE || op == Envelope.Operation.READ) {
-                return value.getStruct(Envelope.FieldName.AFTER);
-            } else {
-                return value.getStruct(Envelope.FieldName.BEFORE);
-            }
+        // Use chunk key in the after struct for insert or
+        // the before struct for delete/update
+        Envelope.Operation op = Envelope.operationFor(record);
+        Struct value = (Struct) record.value();
+        if (op == Envelope.Operation.CREATE || op == Envelope.Operation.READ) {
+            return value.getStruct(Envelope.FieldName.AFTER);
+        } else {
+            return value.getStruct(Envelope.FieldName.BEFORE);
         }
+    }
 
     public static Long getMessageTimestamp(SourceRecord record) {
-            Schema schema = record.valueSchema();
-            Struct value = (Struct) record.value();
-            if (schema.field(Envelope.FieldName.SOURCE) == null) {
-                return null;
-            }
-    
-            Struct source = value.getStruct(Envelope.FieldName.SOURCE);
-            if (source.schema().field(Envelope.FieldName.TIMESTAMP) == null) {
-                return null;
-            }
-    
-            return source.getInt64(Envelope.FieldName.TIMESTAMP);
+        Schema schema = record.valueSchema();
+        Struct value = (Struct) record.value();
+        if (schema.field(Envelope.FieldName.SOURCE) == null) {
+            return null;
         }
+    
+        Struct source = value.getStruct(Envelope.FieldName.SOURCE);
+        if (source.schema().field(Envelope.FieldName.TIMESTAMP) == null) {
+            return null;
+        }
+    
+        return source.getInt64(Envelope.FieldName.TIMESTAMP);
+    }
 
     public static Long getFetchTimestamp(SourceRecord record) {
-            Schema schema = record.valueSchema();
-            Struct value = (Struct) record.value();
-            if (schema.field(Envelope.FieldName.TIMESTAMP) == null) {
-                return null;
-            }
-            return value.getInt64(Envelope.FieldName.TIMESTAMP);
+        Schema schema = record.valueSchema();
+        Struct value = (Struct) record.value();
+        if (schema.field(Envelope.FieldName.TIMESTAMP) == null) {
+            return null;
         }
+        return value.getInt64(Envelope.FieldName.TIMESTAMP);
+    }
 
     public static boolean isSchemaChangeEvent(SourceRecord sourceRecord) {
-            Schema keySchema = sourceRecord.keySchema();
-            if (keySchema != null && SCHEMA_CHANGE_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name())) {
-                return true;
-            }
-            return false;
+        Schema keySchema = sourceRecord.keySchema();
+        if (keySchema != null && SCHEMA_CHANGE_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name())) {
+            return true;
         }
+        return false;
+    }
 
     public static boolean isHeartbeatEvent(SourceRecord record) {
-            Schema valueSchema = record.valueSchema();
-            return valueSchema != null
-                    && SCHEMA_HEARTBEAT_EVENT_KEY_NAME.equalsIgnoreCase(valueSchema.name())
-                    || (record.topic() != null && record.topic().startsWith("__debezium-heartbeat."));
-        }
+        Schema valueSchema = record.valueSchema();
+        return (valueSchema != null
+                        && SCHEMA_HEARTBEAT_EVENT_KEY_NAME.equalsIgnoreCase(valueSchema.name()))
+                || (record.topic() != null && record.topic().startsWith("__debezium-heartbeat."));
+    }
 
     public static boolean isTransactionMetadataEvent(SourceRecord record) {
-            Schema keySchema = record.keySchema();
-            return keySchema != null
-                    && SCHEMA_TRANSACTION_METADATA_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name());
-        }
+        Schema keySchema = record.keySchema();
+        return keySchema != null
+                && SCHEMA_TRANSACTION_METADATA_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name());
+    }
 
     public static boolean isDataChangeRecord(SourceRecord record) {
-            Schema valueSchema = record.valueSchema();
-            Struct value = (Struct) record.value();
-            return valueSchema.field(Envelope.FieldName.OPERATION) != null
-                    && value.getString(Envelope.FieldName.OPERATION) != null;
-        }
+        Schema valueSchema = record.valueSchema();
+        Struct value = (Struct) record.value();
+        return valueSchema.field(Envelope.FieldName.OPERATION) != null
+                && value.getString(Envelope.FieldName.OPERATION) != null;
+    }
 
     public static TableId getTableId(SourceRecord dataRecord) {
-            Struct value = (Struct) dataRecord.value();
-            Struct source = value.getStruct(Envelope.FieldName.SOURCE);
-            String dbName = source.getString(DATABASE_NAME_KEY);
-            String tableName = source.getString(TABLE_NAME_KEY);
-            return new TableId(dbName, null, tableName);
-        }
+        Struct value = (Struct) dataRecord.value();
+        Struct source = value.getStruct(Envelope.FieldName.SOURCE);
+        String dbName = source.getString(DATABASE_NAME_KEY);
+        String tableName = source.getString(TABLE_NAME_KEY);
+        return new TableId(dbName, null, tableName);
+    }
 
     public static boolean isTableChangeRecord(SourceRecord dataRecord) {
-            Struct value = (Struct) dataRecord.value();
-            Struct source = value.getStruct(Envelope.FieldName.SOURCE);
-            String tableName = source.getString(TABLE_NAME_KEY);
-            return tableName != null && !tableName.isBlank();
-        }
+        Struct value = (Struct) dataRecord.value();
+        Struct source = value.getStruct(Envelope.FieldName.SOURCE);
+        String tableName = source.getString(TABLE_NAME_KEY);
+        return tableName != null && !tableName.isBlank();
+    }
 
     public static BinlogOffset getBinlogPosition(SourceRecord dataRecord) {
-            return getBinlogPosition(dataRecord.sourceOffset());
-        }
+        return getBinlogPosition(dataRecord.sourceOffset());
+    }
 
     public static BinlogOffset getBinlogPosition(Map<String, ?> offset) {
-            Map<String, String> offsetStrMap = new HashMap<>();
-            for (Map.Entry<String, ?> entry : offset.entrySet()) {
-                offsetStrMap.put(
-                        entry.getKey(), entry.getValue() == null ? null : entry.getValue().toString());
-            }
-            return BinlogOffset.builder().setOffsetMap(offsetStrMap).build();
+        Map<String, String> offsetStrMap = new HashMap<>();
+        for (Map.Entry<String, ?> entry : offset.entrySet()) {
+            offsetStrMap.put(
+                    entry.getKey(), entry.getValue() == null ? null : entry.getValue().toString());
         }
+        return BinlogOffset.builder().setOffsetMap(offsetStrMap).build();
+    }
 
     /**
      * Returns the earliest completed snapshot high watermark.
