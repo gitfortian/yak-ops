@@ -106,8 +106,7 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
                 (context, state) -> {
                     requirePhysicalPrimaryKeys(config);
                     metrics.beginSnapshot(true);
-                    return new MySqlSourceEnumerator(
-                            context, fingerprint, Objects.requireNonNull(state, "checkpoint"));
+                    return new MySqlSourceEnumerator(context, fingerprint, Objects.requireNonNull(state, "checkpoint"));
                 },
                 context -> {
                     requirePhysicalPrimaryKeys(config);
@@ -128,8 +127,10 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
         if (chunkSize < 1 || chunkSize > 100_000) {
             throw new IllegalArgumentException("Hybrid snapshot chunk size must be between 1 and 100000");
         }
-        config.schemas().forEach((table, schema) ->
-                ChunkUtils.requireSupportedSnapshot(schema, config.chunkKeyColumns().get(table)));
+        config.schemas().forEach((table, schema) -> {
+            String chunkKey = config.chunkKeyColumns().get(table);
+            ChunkUtils.requireSupportedSnapshot(schema, chunkKey);
+        });
         config.schemas().keySet().forEach(metrics::register);
         String fingerprint = fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize;
         return new MySqlSource<>(
@@ -205,14 +206,21 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
 
     private static String fingerprint(MySqlCdcSourceConfig config) {
         StringBuilder definition = new StringBuilder(config.hostname())
-                .append('|').append(config.port()).append('|')
-                .append(config.topicPrefix()).append('|').append(config.serverId());
+                .append('|')
+                .append(config.port())
+                .append('|')
+                .append(config.topicPrefix())
+                .append('|')
+                .append(config.serverId());
         for (var entry : config.schemas().entrySet()) {
             TableId table = entry.getKey();
             TableSchema schema = entry.getValue();
             definition.append('|').append(table.catalog()).append('/').append(table.table());
             for (Column column : schema.columns()) {
-                definition.append('|').append(column.name()).append(':')
+                definition
+                        .append('|')
+                        .append(column.name())
+                        .append(':')
                         .append(column.dataType().asSerializableString());
             }
             definition.append("|pk=").append(String.join(",", schema.primaryKeys()));
@@ -220,8 +228,9 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
             if (configured != null) definition.append("|chunk=").append(configured);
         }
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(definition.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(definition.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }

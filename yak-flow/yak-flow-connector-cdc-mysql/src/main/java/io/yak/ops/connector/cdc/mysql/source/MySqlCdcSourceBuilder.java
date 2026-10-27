@@ -1,6 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.util.LinkedHashMap;
@@ -86,22 +90,23 @@ public final class MySqlCdcSourceBuilder {
     }
 
     /** Creates the initial Snapshot + Binlog Source from the same validated connection plan. */
-    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
+    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
         return MySqlSource.initial(config(), chunkSize, new TableMetrics());
     }
 
     /** Builds the shared snapshot and Binlog source with generation-scoped measurements. */
-    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState> buildHybrid(int chunkSize, io.yak.ops.connector.base.metrics.TableMetrics metrics) {
+    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(
+            int chunkSize, TableMetrics metrics) {
         return MySqlSource.initial(config(), chunkSize, metrics);
     }
 
     /** Builds a reusable Source definition without opening a database connection. */
-    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState> build() {
+    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build() {
         return build(new TableMetrics());
     }
 
     /** Shares pipeline measurements with a standalone Binlog source. */
-    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState> build(TableMetrics metrics) {
+    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build(TableMetrics metrics) {
         return MySqlSource.latestOffset(config(), metrics);
     }
 
