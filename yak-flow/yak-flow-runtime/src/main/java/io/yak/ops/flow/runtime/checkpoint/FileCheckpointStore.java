@@ -13,6 +13,8 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.DirectoryStream;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -20,6 +22,8 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +40,8 @@ import java.util.zip.CRC32;
  * Corrupted or incompatible state is rejected rather than silently ignored.
  */
 public final class FileCheckpointStore implements CompletedCheckpointStore {
+
+    private static final Logger LOG = LoggerFactory.getLogger(FileCheckpointStore.class);
 
     private static final int MAGIC = 0x59414B43; // YAKC
     /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
@@ -224,8 +230,16 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
         Files.createDirectories(metadataFile.getParent());
         forceDirectory(metadataFile.getParent().getParent());
         publishAtomically(metadataFile, metadata);
+        long previousCheckpointId = lastCheckpointId;
         publishAtomically(directory.resolve(FILE_NAME), latestPointer(checkpoint.checkpointId()));
         lastCheckpointId = checkpoint.checkpointId();
+        try {
+            discardSubsumedCheckpoints(checkpoint.checkpointId(), previousCheckpointId);
+        } catch (IOException cleanupFailure) {
+            // A completed checkpoint must not become a failed one due to best-effort retention.
+            LOG.warn("Completed checkpoint retention cleanup failed, checkpointId={}",
+                    checkpoint.checkpointId(), cleanupFailure);
+        }
     }
 
     private Path checkpointMetadata(long checkpointId) throws IOException {
@@ -312,6 +326,48 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
      * <p>Never silently downgrade to a weaker publication guarantee on filesystems
      * that cannot persist directory metadata.
      */
+    /**
+     * Keep the latest published checkpoint and its preceding completed checkpoint.
+     *
+     * <p>Orphaned metadata from failed, unpublished attempts is not eligible for
+     * restore. Cleanup is best effort and never invalidates a published checkpoint.
+     */
+    private void discardSubsumedCheckpoints(long current, long previous) throws IOException {
+        Path checkpoints = directory.resolve(CHECKPOINT_DIRECTORY);
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(checkpoints, "chk-*")) {
+            for (Path child : entries) {
+                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                String name = child.getFileName().toString();
+                if (!name.matches("chk-[1-9][0-9]*")) {
+                    continue;
+                }
+                long id;
+                try {
+                    id = Long.parseLong(name.substring(4));
+                } catch (NumberFormatException invalid) {
+                    continue;
+                }
+                if (id == current || id == previous) {
+                    continue;
+                }
+                // Never remove arbitrary user files from an unexpected checkpoint directory.
+                try (DirectoryStream<Path> metadata = Files.newDirectoryStream(child)) {
+                    for (Path file : metadata) {
+                        String filename = file.getFileName().toString();
+                        if (filename.equals(METADATA_FILE)
+                                || (filename.startsWith(".checkpoint-") && filename.endsWith(".pending"))) {
+                            Files.deleteIfExists(file);
+                        }
+                    }
+                }
+                Files.deleteIfExists(child);
+            }
+        }
+        forceDirectory(checkpoints);
+    }
+
     private static void forceDirectory(Path directory) throws IOException {
         try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
             channel.force(true);
