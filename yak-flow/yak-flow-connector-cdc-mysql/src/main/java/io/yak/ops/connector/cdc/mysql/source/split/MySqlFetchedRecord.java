@@ -7,13 +7,13 @@ import io.yak.ops.core.event.SourceSchemaChange;
 import java.util.List;
 import java.util.Objects;
 
-/** One mailbox step: a prepared chunk, frozen output batch, Binlog change, or bootstrap anchor. */
+/** One mailbox step: a completed in-memory snapshot chunk, Binlog change, or bootstrap anchor. */
 public record MySqlFetchedRecord(
         List<TableRecord> rows,
         DebeziumOffset binlogOffset,
         boolean lowWatermark,
         MySqlSnapshotSplit preparedSnapshot,
-            SourceSchemaChange schemaChange) {
+        SourceSchemaChange schemaChange) {
 
     public MySqlFetchedRecord {
         rows = List.copyOf(Objects.requireNonNull(rows, "rows"));
