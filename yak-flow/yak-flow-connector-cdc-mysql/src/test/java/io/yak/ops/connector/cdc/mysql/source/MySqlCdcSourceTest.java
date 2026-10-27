@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -43,7 +43,7 @@ class MySqlCdcSourceTest {
         assertNotNull(context.last);
         enumerator.handleSplitRequest(0, null);
         assertEquals(1, context.assignments);
-        MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
+        BinlogPendingSplitsState state = (BinlogPendingSplitsState) enumerator.snapshotState(1L);
         assertTrue(state.splitAssigned());
 
         FakeContext restoredContext = new FakeContext();
@@ -74,7 +74,7 @@ class MySqlCdcSourceTest {
         MySqlSource implicit = definition();
         var enumerator = implicit.createEnumerator(new FakeContext());
         enumerator.start();
-        MySqlPendingSplitsState checkpoint = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
+        BinlogPendingSplitsState checkpoint = (BinlogPendingSplitsState) enumerator.snapshotState(1L);
         enumerator.close();
 
         MySqlSource explicit = definition("ID");
