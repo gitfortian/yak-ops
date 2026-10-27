@@ -1,11 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.integration;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.MySqlDatabase;
 import java.io.IOException;
@@ -24,6 +20,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /**
  * Process-level acceptance for the real MySQL CDC pipeline and durable checkpoint boundary.
@@ -264,7 +265,7 @@ class MySqlCdcToMySqlCrashRecoveryIT {
                         Boolean.toString(restore),
                         Integer.toString(serverId),
                         topicPrefix,
-                        startupMode.value())
+                        StartupOptions.of(startupMode).asModeString())
                 .redirectErrorStream(true)
                 .redirectOutput(log.toFile());
         builder.environment().put("YAK_CDC_SOURCE_USERNAME", source.username());

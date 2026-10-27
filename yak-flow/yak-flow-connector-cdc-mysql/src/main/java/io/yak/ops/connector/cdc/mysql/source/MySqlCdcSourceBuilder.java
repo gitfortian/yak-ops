@@ -6,6 +6,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsS
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ public final class MySqlCdcSourceBuilder {
     private final Map<TableId, TableSchema> tables = new LinkedHashMap<>();
     private final Map<TableId, String> chunkKeyColumns = new LinkedHashMap<>();
     private int queueCapacity = 256;
+    private StartupOptions startupOptions;
 
     public MySqlCdcSourceBuilder hostname(String value) {
         hostname = value;
@@ -90,14 +92,25 @@ public final class MySqlCdcSourceBuilder {
         return this;
     }
 
+    /** Supplies the validated startup contract to the Source and its SplitAssigner. */
+    public MySqlCdcSourceBuilder startupOptions(StartupOptions value) {
+        startupOptions = Objects.requireNonNull(value, "startupOptions");
+        return this;
+    }
+
     /** Creates the initial Snapshot + Binlog Source from the same validated connection plan. */
     public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
-        return MySqlSource.initial(config(), chunkSize, new TableMetrics());
+        return MySqlSource.initial(
+                config(),
+                chunkSize,
+                new TableMetrics(),
+                startupOptions == null ? StartupOptions.initial() : startupOptions);
     }
 
     /** Builds the shared snapshot and Binlog source with generation-scoped measurements. */
     public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize, TableMetrics metrics) {
-        return MySqlSource.initial(config(), chunkSize, metrics);
+        return MySqlSource.initial(
+                config(), chunkSize, metrics, startupOptions == null ? StartupOptions.initial() : startupOptions);
     }
 
     /** Builds a reusable Source definition without opening a database connection. */
@@ -107,7 +120,8 @@ public final class MySqlCdcSourceBuilder {
 
     /** Shares pipeline measurements with a standalone Binlog source. */
     public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build(TableMetrics metrics) {
-        return MySqlSource.latestOffset(config(), metrics);
+        return MySqlSource.latestOffset(
+                config(), metrics, startupOptions == null ? StartupOptions.latest() : startupOptions);
     }
 
     private MySqlCdcSourceConfig config() {

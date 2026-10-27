@@ -1,5 +1,13 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
+import java.util.List;
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -7,13 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
-import java.util.List;
-import org.junit.jupiter.api.Test;
 
 /** Verifies assignment and recovery using the same contract for both startup modes. */
 class MySqlSplitAssignerContractTest {
@@ -21,7 +22,7 @@ class MySqlSplitAssignerContractTest {
     @Test
     void binlogOnlyReturnsOneSplitAndPersistsAssignedOwnership() throws Exception {
         MySqlSplitAssigner<MySqlBinlogSplit, MySqlPendingSplitsState> assigner =
-                new MySqlBinlogSplitAssigner("fp", null);
+                new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
         assertNull(assigner.getNext(1));
         MySqlBinlogSplit split = assigner.getNext(0);
         assertEquals(MySqlBinlogSplit.ID, split.splitId());
@@ -33,7 +34,7 @@ class MySqlSplitAssignerContractTest {
         assertInstanceOf(PendingSplitsState.class, assigned);
         assertTrue(assigned.splitAssigned());
         var serializer = new MySqlPendingSplitsStateSerializer();
-        var restored = new MySqlBinlogSplitAssigner(
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
                 "fp", serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
         assertNull(restored.getNext(0));
 
@@ -41,16 +42,16 @@ class MySqlSplitAssignerContractTest {
         assertFalse(assigner.snapshotState(3).splitAssigned());
         assertEquals(split, assigner.getNext(0));
         assertThrows(IllegalStateException.class, () -> assigner.addSplitsBack(List.of(split), 1));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner("changed", assigned));
+        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner(StartupOptions.latest(), "changed", assigned));
     }
 
     @Test
     void pendingBinlogSurvivesCoordinatorCheckpointWithoutMovingItsOffset() throws Exception {
-        var assigner = new MySqlBinlogSplitAssigner("fp", null);
+        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
         MySqlPendingSplitsState pending = assigner.snapshotState(1);
         assertFalse(pending.splitAssigned());
         var serializer = new MySqlPendingSplitsStateSerializer();
-        var restored = new MySqlBinlogSplitAssigner(
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
                 "fp", serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
         var split = restored.getNext(0);
         assertNull(split.offset());

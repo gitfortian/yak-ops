@@ -1,7 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
@@ -9,11 +7,14 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumerat
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.LogicalTypeRoot;
 import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 /** Progressive discovery must preserve earlier ranges and their completed watermarks across recovery. */
 class MySqlProgressiveDiscoveryTest {
@@ -29,7 +30,7 @@ class MySqlProgressiveDiscoveryTest {
         assertFalse(original.snapshotComplete());
         var serializer = new MySqlHybridEnumeratorStateSerializer();
         var saved = serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
-        var restored = new MySqlHybridSplitAssigner("fp", saved);
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", saved);
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
         assertEquals(range(10L, null), restored.nextChunkRange());
@@ -73,7 +74,7 @@ class MySqlProgressiveDiscoveryTest {
     }
 
     private static MySqlHybridSplitAssigner assigner() {
-        var assigner = new MySqlHybridSplitAssigner("fp",null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp",null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         return assigner;

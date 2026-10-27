@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import java.util.List;
@@ -22,6 +23,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlBinlogS
     private boolean closed;
 
     public MySqlSourceEnumerator(
+            StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlBinlogSplit> context,
             String sourceFingerprint,
             MySqlPendingSplitsState restored) {
@@ -29,7 +31,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlBinlogS
         if (context.currentParallelism() != 1) {
             throw new IllegalArgumentException("MySQL Binlog Source supports one reader");
         }
-        assigner = new MySqlBinlogSplitAssigner(sourceFingerprint, restored);
+        assigner = new MySqlBinlogSplitAssigner(startupOptions, sourceFingerprint, restored);
     }
 
     @Override

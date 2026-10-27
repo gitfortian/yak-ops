@@ -1,16 +1,12 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
@@ -20,6 +16,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /** Verifies explicit replication inputs without task-platform dependencies. */
 class MySqlCdcFactoryCreationTest {
@@ -127,10 +128,17 @@ class MySqlCdcFactoryCreationTest {
     @Test
     void latestStartupRejectsUnsupportedModesAndSnapshotOnlySettings() {
         var factory = new MySqlCdcSourceFactory();
-        var invalid = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "earliest-offset");
+        for (String mode : List.of("earliest-offset", "specific-offset", "timestamp", "snapshot")) {
+            var invalid = options().set(MySqlCdcSourceOptions.STARTUP_MODE, mode);
+            assertThrows(
+                    UnsupportedOperationException.class,
+                    () -> factory.createSource(
+                            new TableSourceFactoryContext(invalid.toReadonlyConfig(), TABLE, SCHEMA)));
+        }
+        var unknown = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "unknown");
         assertThrows(
                 IllegalArgumentException.class,
-                () -> factory.createSource(new TableSourceFactoryContext(invalid.toReadonlyConfig(), TABLE, SCHEMA)));
+                () -> factory.createSource(new TableSourceFactoryContext(unknown.toReadonlyConfig(), TABLE, SCHEMA)));
 
         var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
         var withChunk = latest.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "id");

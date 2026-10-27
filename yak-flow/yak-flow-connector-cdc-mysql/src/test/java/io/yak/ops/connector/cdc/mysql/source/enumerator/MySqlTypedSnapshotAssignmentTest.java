@@ -1,26 +1,20 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
@@ -40,6 +34,13 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /** Tests actual Enumerator async callbacks, durable cursors and reader assignments. */
 class MySqlTypedSnapshotAssignmentTest {
@@ -127,7 +128,7 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("payload", LogicalTypes.INTEGER)),
                 List.of());
         var planner = splitter(url, keyless, "bucket");
-        var assigner = new MySqlHybridSplitAssigner(FINGERPRINT, null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         MySqlSnapshotSplit first = planner.planNext(ORDERS, FINGERPRINT, 0, 0, null);
@@ -137,7 +138,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assigner.appendPlan(first, 1);
         var saved = SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(9)));
-        var restored = new MySqlHybridSplitAssigner(FINGERPRINT, saved);
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, saved);
         MySqlSnapshotSplit last = planner.planNext(
                 ORDERS, FINGERPRINT, restored.nextTableIndex(), restored.nextChunkIndex(),
                 restored.nextChunkRange());
@@ -204,6 +205,7 @@ class MySqlTypedSnapshotAssignmentTest {
             String url,
             MySqlHybridEnumeratorState restored) {
         return new MySqlHybridSourceEnumerator(
+                StartupOptions.initial(),
                 context,
                 config,
                 FINGERPRINT,

@@ -1,19 +1,20 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /** Proves Binlog handoff needs a completed snapshot checkpoint, not only an assignment ACK. */
 class MySqlHybridHandoffTest {
@@ -22,7 +23,7 @@ class MySqlHybridHandoffTest {
     void gatesHandoffAndRestoresCompletedPendingTransition() throws Exception {
         var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         var high = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 300L));
-        var assigner = new MySqlHybridSplitAssigner("fingerprint", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assertEquals(MySqlHybridEnumeratorState.Phase.BOOTSTRAP, assigner.phase());
         assertEquals("mysql-binlog", assigner.nextBinlog(0).splitId());
         assigner.captureLow(low);
@@ -42,7 +43,7 @@ class MySqlHybridHandoffTest {
 
         var serializer = new MySqlHybridEnumeratorStateSerializer();
         var checkpoint = serializer.deserialize(serializer.getVersion(), serializer.serialize(waiting));
-        var restored = new MySqlHybridSplitAssigner("fingerprint", checkpoint);
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", checkpoint);
         restored.resumeRestoredHandoff();
         assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, restored.phase());
         assigner.snapshotState(13);
@@ -54,14 +55,14 @@ class MySqlHybridHandoffTest {
     @Test
     void checkpointDuringAsyncSnapshotPlanningRestartsPlanFromDurableState() throws Exception {
         var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        var assigner = new MySqlHybridSplitAssigner("fingerprint", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assigner.nextBinlog(0);
         assigner.captureLow(low);
 
         // The planning callback has not run yet. A periodic checkpoint must not fail the job.
         var serializer = new MySqlHybridEnumeratorStateSerializer();
         var saved = assigner.snapshotState(21);
-        var restored = new MySqlHybridSplitAssigner(
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), 
                 "fingerprint", serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
         assertEquals(MySqlHybridEnumeratorState.Phase.SNAPSHOT, restored.phase());
         assertFalse(restored.snapshotPlanned());
@@ -73,7 +74,7 @@ class MySqlHybridHandoffTest {
     @Test
     void restoresCompletedWatermarksBeforeHandoff() throws Exception {
         var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        var assigner = new MySqlHybridSplitAssigner("fingerprint", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assigner.nextBinlog(0);
         assigner.captureLow(low);
         var split = new MySqlSnapshotSplit(
@@ -84,7 +85,7 @@ class MySqlHybridHandoffTest {
 
         var saved = assigner.snapshotState(22);
         var serializer = new MySqlHybridEnumeratorStateSerializer();
-        var restored = new MySqlHybridSplitAssigner(
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), 
                 "fingerprint", serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
         assertEquals(MySqlHybridEnumeratorState.Phase.SNAPSHOT, restored.phase());
         assertTrue(restored.snapshotComplete());
@@ -95,9 +96,9 @@ class MySqlHybridHandoffTest {
 
     @Test
     void rejectsDifferentDefinitionOnRestore() {
-        var assigner = new MySqlHybridSplitAssigner("fingerprint", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         var state = assigner.snapshotState(1);
-        assertThrows(IllegalArgumentException.class, () -> new MySqlHybridSplitAssigner("changed", state));
+        assertThrows(IllegalArgumentException.class, () -> new MySqlHybridSplitAssigner(StartupOptions.initial(), "changed", state));
     }
 
     private static io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo finished(

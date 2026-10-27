@@ -2,17 +2,24 @@ package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.List;
 import java.util.Objects;
 
-/** Assigns the latest-offset Binlog split to the only replication reader. */
+/** Assigns the selected stream-only startup to the only replication reader. */
 public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlBinlogSplit, MySqlPendingSplitsState> {
 
     private final String sourceFingerprint;
     private MySqlBinlogSplit pending;
     private boolean assigned;
 
-    public MySqlBinlogSplitAssigner(String sourceFingerprint, MySqlPendingSplitsState restored) {
+    public MySqlBinlogSplitAssigner(
+            StartupOptions startupOptions, String sourceFingerprint, MySqlPendingSplitsState restored) {
+        Objects.requireNonNull(startupOptions, "startupOptions");
+        if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
+            throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
+        }
         this.sourceFingerprint = Objects.requireNonNull(sourceFingerprint, "sourceFingerprint");
         if (restored == null) {
             pending = new MySqlBinlogSplit(sourceFingerprint, null, new byte[0]);

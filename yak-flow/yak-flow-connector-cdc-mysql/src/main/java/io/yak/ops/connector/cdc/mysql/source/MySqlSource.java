@@ -18,6 +18,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceReader;
@@ -48,7 +49,7 @@ import java.util.function.Function;
 public final class MySqlSource<SplitT extends MySqlSplit, StateT extends PendingSplitsState>
         implements Source<TableRecord, SplitT, StateT> {
 
-    private final StartupMode startupMode;
+    private final StartupOptions startupOptions;
     private final MySqlCdcSourceConfig config;
     private final int snapshotChunkSize;
     private final Function<SplitEnumeratorContext<SplitT>, SplitEnumerator<SplitT, StateT>> createEnumerator;
@@ -58,7 +59,7 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
     private final SimpleVersionedSerializer<StateT> stateSerializer;
 
     private MySqlSource(
-            StartupMode startupMode,
+            StartupOptions startupOptions,
             MySqlCdcSourceConfig config,
             int snapshotChunkSize,
             Function<SplitEnumeratorContext<SplitT>, SplitEnumerator<SplitT, StateT>> createEnumerator,
@@ -66,7 +67,7 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
             Function<SourceReaderContext, SourceReader<TableRecord, SplitT>> createReader,
             SimpleVersionedSerializer<SplitT> splitSerializer,
             SimpleVersionedSerializer<StateT> stateSerializer) {
-        this.startupMode = Objects.requireNonNull(startupMode, "startupMode");
+        this.startupOptions = Objects.requireNonNull(startupOptions, "startupOptions");
         this.config = Objects.requireNonNull(config, "config");
         this.snapshotChunkSize = snapshotChunkSize;
         this.createEnumerator = Objects.requireNonNull(createEnumerator, "createEnumerator");
@@ -81,34 +82,45 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
     }
 
     public static MySqlSource<?, ?> create(
-            MySqlCdcSourceBuilder builder, StartupMode startupMode, int snapshotChunkSize, TableMetrics metrics) {
-        Objects.requireNonNull(startupMode, "startupMode");
+            MySqlCdcSourceBuilder builder, StartupOptions startupOptions, int snapshotChunkSize, TableMetrics metrics) {
+        Objects.requireNonNull(builder, "builder");
+        Objects.requireNonNull(startupOptions, "startupOptions");
         Objects.requireNonNull(metrics, "metrics");
-        if (startupMode == StartupMode.INITIAL) {
-            return builder.buildHybrid(snapshotChunkSize, metrics);
-        }
-        return builder.build(metrics);
+        startupOptions.requireSupported();
+        builder.startupOptions(startupOptions);
+        return switch (startupOptions.startupMode()) {
+            case INITIAL -> builder.buildHybrid(snapshotChunkSize, metrics);
+            case LATEST_OFFSET -> builder.build(metrics);
+            default ->
+                throw new UnsupportedOperationException(
+                        "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
+        };
     }
 
     static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> latestOffset(
-            MySqlCdcSourceConfig config, TableMetrics metrics) {
+            MySqlCdcSourceConfig config, TableMetrics metrics, StartupOptions startupOptions) {
+        Objects.requireNonNull(startupOptions, "startupOptions");
+        if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
+            throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
+        }
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(metrics, "metrics");
         config.schemas().keySet().forEach(metrics::register);
         String fingerprint = fingerprint(config);
         return new MySqlSource<>(
-                StartupMode.LATEST_OFFSET,
+                startupOptions,
                 config,
                 0,
                 context -> {
                     requirePhysicalPrimaryKeys(config);
                     metrics.beginSnapshot(false);
-                    return new MySqlSourceEnumerator(context, fingerprint, null);
+                    return new MySqlSourceEnumerator(startupOptions, context, fingerprint, null);
                 },
                 (context, state) -> {
                     requirePhysicalPrimaryKeys(config);
                     metrics.beginSnapshot(true);
-                    return new MySqlSourceEnumerator(context, fingerprint, Objects.requireNonNull(state, "checkpoint"));
+                    return new MySqlSourceEnumerator(
+                            startupOptions, context, fingerprint, Objects.requireNonNull(state, "checkpoint"));
                 },
                 context -> {
                     requirePhysicalPrimaryKeys(config);
@@ -122,7 +134,11 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
     }
 
     static MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> initial(
-            MySqlCdcSourceConfig config, int chunkSize, TableMetrics metrics) {
+            MySqlCdcSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions startupOptions) {
+        Objects.requireNonNull(startupOptions, "startupOptions");
+        if (startupOptions.startupMode() != StartupMode.INITIAL) {
+            throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
+        }
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(metrics, "metrics");
         config.snapshotServerId(15);
@@ -136,11 +152,13 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
         config.schemas().keySet().forEach(metrics::register);
         String fingerprint = fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize;
         return new MySqlSource<>(
-                StartupMode.INITIAL,
+                startupOptions,
                 config,
                 chunkSize,
-                context -> new MySqlHybridSourceEnumerator(context, config, fingerprint, chunkSize, null, metrics),
+                context -> new MySqlHybridSourceEnumerator(
+                        startupOptions, context, config, fingerprint, chunkSize, null, metrics),
                 (context, state) -> new MySqlHybridSourceEnumerator(
+                        startupOptions,
                         context,
                         config,
                         fingerprint,
@@ -161,8 +179,12 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
                 new MySqlHybridEnumeratorStateSerializer());
     }
 
+    public StartupOptions startupOptions() {
+        return startupOptions;
+    }
+
     public StartupMode startupMode() {
-        return startupMode;
+        return startupOptions.startupMode();
     }
 
     public MySqlCdcSourceConfig config() {
@@ -170,7 +192,7 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
     }
 
     public int snapshotChunkSize() {
-        if (!startupMode.includesSnapshot()) {
+        if (startupOptions.startupMode() != StartupMode.INITIAL) {
             throw new IllegalStateException("Latest-offset MySQL CDC does not use snapshot chunks");
         }
         return snapshotChunkSize;

@@ -5,12 +5,13 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
-import io.yak.ops.core.api.connector.source.Source;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.api.common.JobStatus;
+import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -53,7 +54,9 @@ public final class MySqlCdcCrashRecoveryProcess {
         boolean restore = Boolean.parseBoolean(args[8]);
         int serverId = Integer.parseInt(args[9]);
         String topicPrefix = args[10];
-        StartupMode startupMode = StartupMode.from(args[11]);
+        StartupOptions startupOptions = StartupOptions.from(args[11]);
+        startupOptions.requireSupported();
+        StartupMode startupMode = startupOptions.startupMode();
 
         Files.createDirectories(stateDirectory);
         Files.createDirectories(controlDirectory);
@@ -77,8 +80,9 @@ public final class MySqlCdcCrashRecoveryProcess {
                 .password(sourcePassword)
                 .serverId(serverId)
                 .topicPrefix(topicPrefix)
-                .table(sourceId, schema);
-        Source<TableRecord, ?, ?> source = startupMode.includesSnapshot()
+                .table(sourceId, schema)
+                .startupOptions(startupOptions);
+        Source<TableRecord, ?, ?> source = startupMode == StartupMode.INITIAL
                 ? sourceBuilder.buildHybrid(1, metrics)
                 : sourceBuilder.build(metrics);
 
@@ -107,12 +111,12 @@ public final class MySqlCdcCrashRecoveryProcess {
         JobClient job = new EmbeddedPipelineExecutor().execute(graph, configuration).get(30, TimeUnit.SECONDS);
 
         try {
-            if (startupMode.includesSnapshot()) {
+            if (startupMode == StartupMode.INITIAL) {
                 awaitStreaming(job, metrics);
             } else {
                 awaitRunning(job);
             }
-            Files.writeString(controlDirectory.resolve("ready-" + generation), startupMode.value());
+            Files.writeString(controlDirectory.resolve("ready-" + generation), startupOptions.asModeString());
             while (true) {
                 JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
                 if (status.isTerminalState()) {

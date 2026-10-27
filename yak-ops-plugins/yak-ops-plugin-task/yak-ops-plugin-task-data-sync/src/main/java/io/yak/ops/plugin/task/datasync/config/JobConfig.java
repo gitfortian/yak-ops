@@ -6,6 +6,7 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.ArrayList;
@@ -118,7 +119,9 @@ public final class JobConfig {
             if (startupSettings != null) {
                 ReadonlyConfig startup = ReadonlyConfig.fromMap(startupSettings);
                 validate(startup, STARTUP_RULE, "source.startup");
-                startupMode = StartupMode.from(startup.get(MODE));
+                StartupOptions selected = StartupOptions.from(startup.get(MODE));
+                selected.requireSupported();
+                startupMode = selected.startupMode();
             } else {
                 startupMode = StartupMode.INITIAL;
             }
