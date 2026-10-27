@@ -80,7 +80,7 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
         return new MySqlCdcSourceBuilder();
     }
 
-    static MySqlSource<?, ?> create(
+    public static MySqlSource<?, ?> create(
             MySqlCdcSourceBuilder builder, StartupMode startupMode, int snapshotChunkSize, TableMetrics metrics) {
         Objects.requireNonNull(startupMode, "startupMode");
         Objects.requireNonNull(metrics, "metrics");
