@@ -30,7 +30,10 @@ const STORAGE_LABEL: Record<StoragePolicy, string> = {
 
 interface Props {
   title: string;
+  /** Line under the title; an empty value is stated instead of rendered as a blank row. */
   description: string;
+  /** Scope labels the header shows next to the title, such as the owning domain and code. */
+  tags?: string[];
   models: LogicalModel[];
   loading: boolean;
   truncated?: boolean;
@@ -103,7 +106,8 @@ export default function ModelPanel(props: Props) {
     {
       title: "操作",
       key: "actions",
-      width: 152,
+      // Sizes the widest action set, which is 编辑 / 重新发布 / 删除.
+      width: 176,
       align: "center",
       render: (_, row) => (
         <div className="flex items-center justify-center gap-2">
@@ -121,7 +125,7 @@ export default function ModelPanel(props: Props) {
             className="px-0.5 font-normal [color:var(--yak-color-primary)] hover:[color:var(--yak-color-primary)]"
             onClick={() => props.onPublish(row)}
           >
-            发布
+            {row.latestPublicationStatus === "SUCCEEDED" ? "重新发布" : "发布"}
           </Button>
           <Button
             size="small"
@@ -135,12 +139,27 @@ export default function ModelPanel(props: Props) {
       ),
     },
   ];
+  const description = props.description.trim();
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-medium">{props.title}</h2>
-          <p className="mt-1 text-xs text-[#667475]">{props.description}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {props.tags?.map((tag) => (
+              <Badge key={tag} tone="neutral">
+                {tag}
+              </Badge>
+            ))}
+            <p
+              title={description || undefined}
+              className={`line-clamp-2 min-w-0 text-xs ${
+                description ? "text-[#667475]" : "text-[#98a2b3]"
+              }`}
+            >
+              {description || "暂无描述"}
+            </p>
+          </div>
         </div>
         {props.actions && <div className="flex flex-wrap items-center gap-2">{props.actions}</div>}
       </header>
@@ -165,7 +184,7 @@ export default function ModelPanel(props: Props) {
             dataSource={pageRows}
             size="small"
             bordered={false}
-            scroll={{ x: 1036 }}
+            scroll={{ x: 1060 }}
             emptyText="暂无逻辑模型"
             pagination={{
               current,

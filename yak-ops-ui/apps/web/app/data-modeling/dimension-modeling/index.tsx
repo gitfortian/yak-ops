@@ -21,11 +21,13 @@ import DimensionDialog from "../dimensions/dimension-dialog";
 import ModelDeleteDialog from "../logical-models/delete-dialog";
 import PublishDialog from "../logical-models/publish-dialog";
 import ModelPanel from "./model-panel";
-import ModelSearchBar, {
+import {
   EMPTY_MODEL_SEARCH,
   isModelSearching,
+  matchesModelFilters,
   type ModelSearchFilters,
-} from "./search";
+} from "./filters";
+import ModelSearchBar, { type PinnedScope } from "./search";
 import { useDimensionModelingCatalog } from "./state";
 
 type Selection =
@@ -98,6 +100,57 @@ function GroupLabel({ children, level }: { children: ReactNode; level: number })
   );
 }
 
+/**
+ * Ownership the selected node already fixes.
+ *
+ * <p>A model owns at most one of a data domain or a data mart, so a node pins one of them and never
+ * both; root and category nodes pin nothing.
+ */
+function pinnedScopeOf(selection: Selection): {
+  domain: PinnedScope | null;
+  datamart: PinnedScope | null;
+} {
+  switch (selection.kind) {
+    case "DOMAIN":
+    case "PROCESS":
+      return { domain: { id: selection.domain.id, name: selection.domain.name }, datamart: null };
+    case "DATAMART":
+      return {
+        domain: null,
+        datamart: { id: selection.datamart.id, name: selection.datamart.name },
+      };
+    case "DIMENSION":
+      return selection.dimension.domainId
+        ? {
+            domain: {
+              id: selection.dimension.domainId,
+              name: selection.dimension.domainName ?? selection.dimension.domainId,
+            },
+            datamart: null,
+          }
+        : {
+            domain: null,
+            datamart: selection.dimension.datamartId
+              ? {
+                  id: selection.dimension.datamartId,
+                  name: selection.dimension.datamartName ?? selection.dimension.datamartId,
+                }
+              : null,
+          };
+    default:
+      return { domain: null, datamart: null };
+  }
+}
+
+/** What the right-hand panel says about the selected node. */
+interface PanelContent {
+  title: string;
+  /** Owner labels the header shows as tags; only the dimension node has any. */
+  tags?: string[];
+  description: string;
+  models: LogicalModel[];
+}
+
 export default function DimensionModelingPage() {
   const navigate = useNavigate();
   const catalog = useDimensionModelingCatalog();
@@ -120,7 +173,10 @@ export default function DimensionModelingPage() {
     layers: Layer[];
     owners: OwnerOption[];
   }>({ status: "loading", layers: [], owners: [] });
-  const searching = isModelSearching(filters);
+  const filtered = isModelSearching(filters);
+  // The root is the only node without a scope, so only there does a filter become a query over the
+  // whole Workspace: a node already holds its models and narrows them in place.
+  const searching = filtered && selected.kind === "ROOT";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -212,7 +268,7 @@ export default function DimensionModelingPage() {
   const editModel = (model: LogicalModel) =>
     navigate(`/data-modeling/logical-models/${encodeURIComponent(model.id)}`);
 
-  const panel = useMemo(() => {
+  const panel = useMemo<PanelContent>(() => {
     const all = catalog.models;
     switch (selected.kind) {
       case "ROOT":
@@ -237,7 +293,10 @@ export default function DimensionModelingPage() {
         const dimension = selected.dimension;
         return {
           title: dimension.name,
-          description: `${dimension.domainName ?? dimension.datamartName ?? ""} · ${dimension.code} · 描述该业务概念的维度表`,
+          tags: [dimension.domainName ?? dimension.datamartName, dimension.code].filter(
+            (tag): tag is string => Boolean(tag),
+          ),
+          description: dimension.description ?? "",
           models: all.filter((model) => model.dimensionId === dimension.id),
         };
       }
@@ -255,6 +314,27 @@ export default function DimensionModelingPage() {
         };
     }
   }, [selected, catalog.models]);
+
+  const pinned = useMemo(() => pinnedScopeOf(selected), [selected]);
+  const visibleModels = filtered
+    ? panel.models.filter((model) => matchesModelFilters(model, filters))
+    : panel.models;
+
+  /**
+   * Switches the node the panel describes.
+   *
+   * <p>A global domain or data mart filter left over from the root would contradict the new node's
+   * own ownership, so those two are cleared; keyword, type, layer and owner keep narrowing within
+   * the node.
+   */
+  const select = (next: Selection) => {
+    setSelected(next);
+    setFilters((current) =>
+      current.domainId || current.datamartId
+        ? { ...current, domainId: "", datamartId: "" }
+        : current,
+    );
+  };
 
   const actions = (() => {
     switch (selected.kind) {
@@ -410,7 +490,7 @@ export default function DimensionModelingPage() {
   })();
 
   const resetSelectionAfterDelete = () => {
-    if (selected.kind === "DIMENSION") setSelected({ kind: "ROOT" });
+    if (selected.kind === "DIMENSION") select({ kind: "ROOT" });
   };
 
   const treeEmpty =
@@ -458,6 +538,13 @@ export default function DimensionModelingPage() {
             <Empty description="还没有业务分类或数据集市，请先到「数仓规划」建立分层与业务树。" />
           ) : (
             <nav aria-label="维度建模目录">
+              {/* The root is the only scope that lets the filter bar query the whole Workspace. */}
+              <TreeItem
+                label="全部逻辑模型"
+                level={0}
+                active={selected.kind === "ROOT"}
+                onClick={() => select({ kind: "ROOT" })}
+              />
               <GroupLabel level={0}>公共层</GroupLabel>
               {catalog.tree.categories.map((category) => {
                 return (
@@ -466,7 +553,7 @@ export default function DimensionModelingPage() {
                       label={category.name}
                       level={0}
                       active={sameNode(selected, { kind: "CATEGORY", category })}
-                      onClick={() => setSelected({ kind: "CATEGORY", category })}
+                      onClick={() => select({ kind: "CATEGORY", category })}
                     />
                     {category.children.map((domain) => (
                       <div key={domain.id}>
@@ -474,7 +561,7 @@ export default function DimensionModelingPage() {
                           label={domain.name}
                           level={1}
                           active={sameNode(selected, { kind: "DOMAIN", category, domain })}
-                          onClick={() => setSelected({ kind: "DOMAIN", category, domain })}
+                          onClick={() => select({ kind: "DOMAIN", category, domain })}
                         />
                         <GroupLabel level={2}>维度</GroupLabel>
                         {(dimensionsByOwner.get(domain.id) ?? []).map((dimension) => (
@@ -488,7 +575,7 @@ export default function DimensionModelingPage() {
                               }
                               level={2}
                               active={sameNode(selected, { kind: "DIMENSION", dimension })}
-                              onClick={() => setSelected({ kind: "DIMENSION", dimension })}
+                              onClick={() => select({ kind: "DIMENSION", dimension })}
                             />
                             {(modelsByDimension.get(dimension.id) ?? []).map((model) => (
                               <TreeItem
@@ -525,9 +612,7 @@ export default function DimensionModelingPage() {
                                 domain,
                                 process,
                               })}
-                              onClick={() =>
-                                setSelected({ kind: "PROCESS", category, domain, process })
-                              }
+                              onClick={() => select({ kind: "PROCESS", category, domain, process })}
                             />
                             {(modelsByProcess.get(process.id) ?? []).map((model) => (
                               <TreeItem
@@ -551,7 +636,7 @@ export default function DimensionModelingPage() {
                     label={datamart.name}
                     level={0}
                     active={sameNode(selected, { kind: "DATAMART", datamart })}
-                    onClick={() => setSelected({ kind: "DATAMART", datamart })}
+                    onClick={() => select({ kind: "DATAMART", datamart })}
                   />
                   <GroupLabel level={1}>维度</GroupLabel>
                   {(dimensionsByOwner.get(datamart.id) ?? []).map((dimension) => (
@@ -565,7 +650,7 @@ export default function DimensionModelingPage() {
                         }
                         level={1}
                         active={sameNode(selected, { kind: "DIMENSION", dimension })}
-                        onClick={() => setSelected({ kind: "DIMENSION", dimension })}
+                        onClick={() => select({ kind: "DIMENSION", dimension })}
                       />
                       {(modelsByDimension.get(dimension.id) ?? []).map((model) => (
                         <TreeItem
@@ -593,6 +678,8 @@ export default function DimensionModelingPage() {
             layers={searchOptions.layers}
             owners={searchOptions.owners}
             tree={catalog.tree}
+            pinnedDomain={pinned.domain}
+            pinnedDatamart={pinned.datamart}
             optionsFailed={searchOptions.status === "failed"}
             onChange={changeFilters}
           />
@@ -630,10 +717,12 @@ export default function DimensionModelingPage() {
             <ModelPanel
               title={panel.title}
               description={panel.description}
-              models={panel.models}
+              tags={panel.tags}
+              models={visibleModels}
               loading={catalog.status === "loading"}
               truncated={catalog.truncated}
               actions={actions}
+              emptyText={filtered ? "没有匹配的逻辑模型" : undefined}
               onEdit={editModel}
               onDelete={setDeletingModel}
               onPublish={setPublishingModel}
@@ -660,6 +749,7 @@ export default function DimensionModelingPage() {
       {deletingDimension && (
         <DimensionDeleteDialog
           dimension={deletingDimension}
+          boundModelCount={modelsByDimension.get(deletingDimension.id)?.length ?? 0}
           onClose={() => setDeletingDimension(null)}
           onDeleted={() => {
             setDeletingDimension(null);
