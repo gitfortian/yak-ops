@@ -111,12 +111,12 @@ class BinlogSplitReaderTest {
 
     @Test
     void refusesGapsAndOverlapsInCheckpointedSplitMetadata() {
-        assertThrows(IllegalArgumentException.class, () -> new BinlogSplitReader(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "gap", 110L, null, offset(300)))));
-        assertThrows(IllegalArgumentException.class, () -> new BinlogSplitReader(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
@@ -125,7 +125,7 @@ class BinlogSplitReaderTest {
 
     @Test
     void rejectsTwoUnboundedRangesBeforeConsumingAnyRecord() {
-        assertThrows(IllegalArgumentException.class, () -> new BinlogSplitReader(Map.of(TABLE, SCHEMA),
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(Map.of(TABLE, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "a", null, null, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "b", null, null, offset(300)))));
     }
@@ -133,7 +133,7 @@ class BinlogSplitReaderTest {
     @Test
     void rejectsDuplicateSplitIdentityAcrossDifferentTables() {
         TableId other = new TableId("shop", null, "items");
-        assertThrows(IllegalArgumentException.class, () -> new BinlogSplitReader(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA, other, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "same", null, null, offset(200)),
                         new FinishedSnapshotSplitInfo(other, "same", null, null, offset(300)))));
@@ -156,7 +156,7 @@ class BinlogSplitReaderTest {
                     index == 0 ? null : (long) index,
                     index == 1023 ? null : (long) index + 1, offset(100 + 2L * index)));
         }
-        var filter = new BinlogSplitReader(Map.of(TABLE, SCHEMA), chunks);
+        var filter = typedRanges(Map.of(TABLE, SCHEMA), chunks);
         for (int index = 0; index < 1024; index++) {
             assertEquals(0, filter.filter(event(100 + 2L * index, row(RowKind.INSERT, index, "covered"))).records().size());
             assertEquals(1, filter.filter(event(101 + 2L * index, row(RowKind.INSERT, index, "new"))).records().size());
@@ -177,7 +177,7 @@ class BinlogSplitReaderTest {
     void binlogRotationDoesNotDiscardEventsAfterSnapshotHighWatermark() {
         DebeziumOffset high = new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.9", "pos", 900L));
-        var filter = new BinlogSplitReader(
+        var filter = typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "single", null, null, high)));
         BinlogEvent later = new BinlogEvent(
@@ -187,12 +187,36 @@ class BinlogSplitReaderTest {
     }
 
     private static BinlogSplitReader filter() {
-        return new BinlogSplitReader(
+        return typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "second", 100L, null, offset(300))));
     }
 
+
+    /** Convert old test fixture bounds into the current typed Split metadata. */
+    private static BinlogSplitReader typedRanges(
+            Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> fixtures) {
+        List<FinishedSnapshotSplitInfo> finished = fixtures.stream().map(info -> {
+            TableSchema schema = schemas.get(info.tableId());
+            if (schema == null || schema.primaryKeys().isEmpty()) {
+                throw new IllegalArgumentException("Test fixture requires a primary-key schema");
+            }
+            return new FinishedSnapshotSplitInfo(
+                    info.tableId(),
+                    info.splitId(),
+                    null,
+                    null,
+                    info.highWatermark(),
+                    new ChunkRange(
+                            info.tableId(),
+                            schema.primaryKeys().getFirst(),
+                            LogicalTypeRoot.BIGINT,
+                            info.lowerInclusive(),
+                            info.upperExclusive()));
+        }).toList();
+        return BinlogSplitReader.fromFinishedSplits(schemas, finished);
+    }
 
 }

@@ -209,14 +209,16 @@ class MySqlTypedBinlogSplitFilterTest {
     }
 
     @Test
-    void mixedKeyedAndKeylessTablesUseCheckpointRangesWithoutLosingLegacyFences() {
+    void mixedKeyedAndKeylessTablesUseTypedCheckpointRanges() {
         var keyedTable = new TableId("shop", null, "keyed");
         var keyedSchema = new TableSchema(KEYLESS.columns(), List.of("bucket"));
         var finished = List.of(
                 new FinishedSnapshotSplitInfo(
                         TABLE, "typed", null, null, offset(200),
                         new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null)),
-                new FinishedSnapshotSplitInfo(keyedTable, "legacy", null, null, offset(300)));
+                new FinishedSnapshotSplitInfo(
+                        keyedTable, "keyed", null, null, offset(300),
+                        new ChunkRange(keyedTable, "bucket", LogicalTypeRoot.BIGINT, null, null)));
         var filter = BinlogSplitReader.fromFinishedSplits(
                 Map.of(TABLE, KEYLESS, keyedTable, keyedSchema), finished);
         assertEquals(0, filter.filter(event(200, row(RowKind.INSERT, 5, "duplicate"))).records().size());

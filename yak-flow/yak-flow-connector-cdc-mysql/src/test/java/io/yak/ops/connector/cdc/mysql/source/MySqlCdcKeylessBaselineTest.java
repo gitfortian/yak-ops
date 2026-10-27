@@ -85,7 +85,7 @@ class MySqlCdcKeylessBaselineTest {
         assertThrows(IllegalArgumentException.class, () -> new RecordUtils.ChunkBackfill(new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null), KEYLESS, 10));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new BinlogSplitReader(
+                () -> BinlogSplitReader.fromFinishedSplits(
                         Map.of(TABLE, KEYLESS),
                         List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high))));
         assertThrows(
