@@ -40,6 +40,9 @@ public final class FileCheckpointStore implements AutoCloseable {
     private static final int MAGIC = 0x59414B43; // YAKC
     /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
     private static final int FORMAT_VERSION = 5;
+    private static final int POINTER_VERSION = 6;
+    private static final String CHECKPOINT_DIRECTORY = "checkpoints";
+    private static final String METADATA_FILE = "_metadata";
     private static final int MAX_FILE_BYTES = 64 * 1024 * 1024;
     private static final int MAX_STATE_BYTES = 32 * 1024 * 1024;
     private static final int MAX_GROUPS = 64;
@@ -86,9 +89,14 @@ public final class FileCheckpointStore implements AutoCloseable {
     public Optional<CheckpointSnapshot> loadLatest(String expectedGraphSignature) throws IOException {
         ensureOpen();
         Objects.requireNonNull(expectedGraphSignature, "expectedGraphSignature must not be null");
-        Path file = directory.resolve(FILE_NAME);
-        if (!Files.exists(file)) {
+        Path pointer = directory.resolve(FILE_NAME);
+        if (!Files.exists(pointer)) {
             return Optional.empty();
+        }
+        long publishedId = readLatestPointer(pointer);
+        Path file = checkpointMetadata(publishedId);
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Published checkpoint metadata is missing: " + publishedId);
         }
         long fileSize = Files.size(file);
         if (fileSize < 16 || fileSize > MAX_FILE_BYTES) {
@@ -142,6 +150,9 @@ public final class FileCheckpointStore implements AutoCloseable {
                     schemaManagerState);
         } catch (IllegalArgumentException failure) {
             throw new IOException("Invalid checkpoint state contents", failure);
+        }
+        if (snapshot.checkpointId() != publishedId) {
+            throw new IOException("Checkpoint pointer references a different checkpoint ID");
         }
         if (!expectedGraphSignature.equals(snapshot.graphSignature())) {
             throw new IllegalStateException(
@@ -198,19 +209,83 @@ public final class FileCheckpointStore implements AutoCloseable {
         }
         CRC32 crc = new CRC32();
         crc.update(payload);
-        Path temp = Files.createTempFile(directory, ".checkpoint-", ".pending");
+        byte[] metadata;
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(bytes)) {
+            out.write(payload);
+            out.writeLong(crc.getValue());
+            out.flush();
+            metadata = bytes.toByteArray();
+        }
+
+        // Flink-style completed checkpoint ownership: write its immutable metadata
+        // first, then atomically publish the latest-completed pointer.
+        Path metadataFile = checkpointMetadata(checkpoint.checkpointId());
+        Files.createDirectories(metadataFile.getParent());
+        forceDirectory(metadataFile.getParent().getParent());
+        publishAtomically(metadataFile, metadata);
+        publishAtomically(directory.resolve(FILE_NAME), latestPointer(checkpoint.checkpointId()));
+        lastCheckpointId = checkpoint.checkpointId();
+    }
+
+    private Path checkpointMetadata(long checkpointId) throws IOException {
+        if (checkpointId <= 0) {
+            throw new IOException("Invalid checkpoint metadata ID");
+        }
+        return directory.resolve(CHECKPOINT_DIRECTORY)
+                .resolve("chk-" + checkpointId)
+                .resolve(METADATA_FILE);
+    }
+
+    /** A small CRC-guarded pointer avoids rewriting the entire checkpoint during publication. */
+    private static byte[] latestPointer(long checkpointId) throws IOException {
+        byte[] body;
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(bytes)) {
+            out.writeInt(MAGIC);
+            out.writeInt(POINTER_VERSION);
+            out.writeLong(checkpointId);
+            out.flush();
+            body = bytes.toByteArray();
+        }
+        CRC32 checksum = new CRC32();
+        checksum.update(body);
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(bytes)) {
+            out.write(body);
+            out.writeLong(checksum.getValue());
+            out.flush();
+            return bytes.toByteArray();
+        }
+    }
+
+    private static long readLatestPointer(Path pointer) throws IOException {
+        byte[] content = Files.readAllBytes(pointer);
+        if (content.length != Integer.BYTES * 2 + Long.BYTES * 2) {
+            throw new IOException("Unsupported checkpoint pointer format or file size");
+        }
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(content))) {
+            if (in.readInt() != MAGIC || in.readInt() != POINTER_VERSION) {
+                throw new IOException("Unsupported completed checkpoint pointer version");
+            }
+            long checkpointId = in.readLong();
+            long expectedCrc = in.readLong();
+            CRC32 checksum = new CRC32();
+            checksum.update(content, 0, content.length - Long.BYTES);
+            if (checkpointId <= 0 || checksum.getValue() != expectedCrc) {
+                throw new IOException("Invalid completed checkpoint pointer");
+            }
+            return checkpointId;
+        }
+    }
+
+    private static void publishAtomically(Path destination, byte[] contents) throws IOException {
+        Path folder = destination.getParent();
+        Path temp = Files.createTempFile(folder, ".checkpoint-", ".pending");
         try {
             makePrivate(temp);
             try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
-                byte[] complete;
-                try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                        DataOutputStream out = new DataOutputStream(bytes)) {
-                    out.write(payload);
-                    out.writeLong(crc.getValue());
-                    out.flush();
-                    complete = bytes.toByteArray();
-                }
-                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(complete);
+                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(contents);
                 while (buffer.hasRemaining()) {
                     channel.write(buffer);
                 }
@@ -219,15 +294,13 @@ public final class FileCheckpointStore implements AutoCloseable {
             try {
                 Files.move(
                         temp,
-                        directory.resolve(FILE_NAME),
+                        destination,
                         StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
-                forceDirectory(directory);
-                lastCheckpointId = checkpoint.checkpointId();
             } catch (AtomicMoveNotSupportedException failure) {
-                // A non-atomic replacement could expose partial state; do not claim durability on unsupported storage.
-                throw new IOException("Checkpoint state directory does not support atomic publication", failure);
+                throw new IOException("Checkpoint storage does not support atomic publication", failure);
             }
+            forceDirectory(folder);
         } finally {
             Files.deleteIfExists(temp);
         }
