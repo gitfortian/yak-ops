@@ -4,7 +4,7 @@ Status: Discussion
 
 Discussion: Pending — proposal pull request not yet opened
 
-Decision: Pending
+Decision: Pending maintainer vote — scope decisions D1 and D2 recorded 2026-10-27, see "Recorded scope decisions"
 
 Implementation: N/A until accepted
 
@@ -49,6 +49,7 @@ Five repository facts shape the design.
 | Item | Contract |
 | --- | --- |
 | Scope | Keys, values and bindings belong to exactly one Workspace. No tag is shared across Workspaces. |
+| Target scope | A binding attaches a value to a data map table. No endpoint accepts a target type, and no other asset type is taggable in this release. |
 | Dictionary writes | Creating, renaming or deleting a key or value requires Workspace `OWNER` or `ADMIN`. |
 | Binding writes | Any active Workspace member may replace an asset's tags or run a batch binding. |
 | Key | A key is a dimension name, unique per Workspace, trimmed, 1–64 characters, compared case-insensitively by the collation. |
@@ -64,6 +65,16 @@ Five repository facts shape the design.
 | Navigation | The tag console is a first-level entry of 数据治理: `数据治理 > 标签管理`, path `/data-governance/tags`. It is not a child of 数据地图. |
 | Audit | `create_by` and `update_by` are written from the authenticated actor. Deletions are logged with actor, key id and value id at `INFO`; there is no tag event table. |
 
+### Recorded scope decisions (2026-10-27)
+
+Two questions the first draft left open were decided before the proposal pull request. They are scope decisions, not acceptance: `Status` stays `Discussion` and the `Decision` line stays pending until a maintainer vote.
+
+| Id | Decision | Rationale | Consequence |
+| --- | --- | --- | --- |
+| D1 | Only a Workspace `OWNER` or `ADMIN` may create, rename or delete a key or a value. Every active member may bind and unbind. | A key is a Workspace-level contract. A member deleting one breaks every saved filter in the Workspace at once, and a member renaming one silently rewrites what every asset means. A platform call is cheaper than repairing that. | `WorkspaceService.isManager(workspaceId, userId)` becomes a public method and `yak-ops-business-datamap` adds a `yak-ops-platform` dependency. This tightens today's behavior, where any member can delete a tag, so the release notes must state it. |
+| D2 | Bindings attach to data map tables only. No `target_type`, no second asset type, no generic binding endpoint. | There is no Task-side tag display or filter to consume the data, so a generic binding would add a registry, lose the foreign key and have no test surface. An abstraction without a consumer is a liability, not a head start. | The binding table keeps its composite foreign key to `yak_ops_data_map_table` and gains no target columns. Tagging a second asset type requires its own proposal and migration; the dictionary tables are target-agnostic and can be reused unchanged. |
+
+Both decisions remove an option rather than add one. An implementation that adds a target-type parameter, a target registry or a member-writable dictionary is not this proposal.
 ### Numbering and coordination with the Asset Entity Registry
 
 This document was drafted as FYOIP-17, but master's index has since assigned FYOIP-17 to the Asset Entity Registry and FYOIP-18 to Model-Published Asset Registration; per the index rule, the next unused number, this document is renumbered to FYOIP-19.
@@ -271,8 +282,9 @@ The catalog filter becomes a multi-select grouped by key. The asset detail keeps
 - **Migration ids:** run the migration twice on two copies of the same seed and assert the generated key and value ids are identical, so a restored backup and a fresh migration produce the same identities.
 - **Delete protection:** bind a value, delete the value and assert `TAG_IN_USE` with the row intact; delete its key and assert `TAG_IN_USE`; unbind, delete the value, then delete the key and assert both succeed and the values cascade.
 - **Asset deletion:** delete a catalog asset that carries three bindings and assert the bindings are gone while the dictionary rows remain.
+- **Binding target:** assert the binding table has no target-type column, that its composite foreign key rejects a table id that does not exist in the Workspace, and that no tag endpoint accepts a target type, so a second asset type cannot be bound without a migration.
 - **Uniqueness:** create a key, then create `Dept` when `dept` exists and assert `DUPLICATE_TAG_KEY`; create the same value name under two different keys and assert both succeed; create a duplicate value under one key and assert `DUPLICATE_TAG_VALUE`.
-- **Permission:** a `MEMBER` creates, renames and deletes a key and a value and gets `TAG_WRITE_FORBIDDEN`; the same member replaces an asset's tags successfully; an `ADMIN` and an `OWNER` can do both.
+- **Permission:** a `MEMBER` creates, renames and deletes a key and a value and gets `TAG_WRITE_FORBIDDEN`; the same member replaces an asset's tags successfully; an `ADMIN` and an `OWNER` can do both. Assert `WorkspaceService.isManager` returns true only for `OWNER` and `ADMIN`, because that one method is the gate for the whole dictionary.
 - **Workspace isolation:** bind a value from another Workspace, rename a foreign key and delete a foreign value; each returns `RESOURCE_NOT_EXISTS` and changes nothing; counts never include another Workspace's bindings.
 - **Limits:** a replace-set of 20 values succeeds and 21 returns `TOO_MANY_TAGS_PER_ASSET` with no change; the 200th value in a key succeeds and the 201st returns `TOO_MANY_TAG_VALUES_PER_KEY`.
 - **Replace-set:** `[a, b]` replaces `[b, c]` with exactly `{a, b}`; an empty list clears the asset; two concurrent replace-sets leave the asset equal to one of the two requests, never a mix.
@@ -291,13 +303,13 @@ The catalog filter becomes a multi-select grouped by key. The asset detail keeps
 
 3. **One value per key.** `UNIQUE (..., tag_key_id)` reads simpler, but it forces the migration to create one key per old tag, so the dictionary ends up being the old tag list plus a meaningless value on every row. Real dimensions such as `subject` also need more than one value per asset.
 
-4. **A polymorphic `(target_type, target_id)` binding.** It trades a foreign key for a registry, adds orphan rows that every read must filter, and gives up `ON DELETE CASCADE` from the catalog. There is one target type with a screen; the generalization belongs to the proposal that adds the second.
+4. **A polymorphic `(target_type, target_id)` binding.** It trades a foreign key for a registry, adds orphan rows that every read must filter, and gives up `ON DELETE CASCADE` from the catalog. There is one target type with a screen; the generalization belongs to the proposal that adds the second. Recorded as D2.
 
 5. **Store `tag_key_id` on the binding as well.** It is derivable from the value, can drift, and would justify a unique key that adds no constraint. The value is the identity of a binding.
 
 6. **Keep an `owner_id` on the key.** The owner leaves the Workspace and the key becomes unmanageable; there is no transfer flow. Ownership here is a role, not a person.
 
-7. **Let any member manage the dictionary.** It matches today's behavior and avoids a platform change, but it reproduces the silent global rename and delete that the proposal is meant to stop. A shared vocabulary needs one gate.
+7. **Let any member manage the dictionary.** It matches today's behavior and avoids a platform change, but it reproduces the silent global rename and delete that the proposal is meant to stop. A shared vocabulary needs one gate. Recorded as D1.
 
 8. **Seed system tags such as `核心业务` or `高敏感`.** Presets bake a language and a policy into data, and every Workspace inherits terms it did not agree to. Users create their own keys.
 
