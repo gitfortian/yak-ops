@@ -200,7 +200,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     public Map<Integer, ReaderInfo> registeredReaders() {
         assertCoordinatorThread();
         Map<Integer, ReaderInfo> registered = new HashMap<>();
-        readerIdentities.forEach((subtask, identity) -> registered.put(subtask, new ReaderInfo(subtask, "")));
+        readerIdentities.forEach((subtask, identity) -> registered.put(subtask, new ReaderInfo(subtask, null)));
         return Map.copyOf(registered);
     }
 
@@ -209,7 +209,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         assertCoordinatorThread();
         Map<Integer, Map<Integer, ReaderInfo>> attempts = new HashMap<>();
         readerIdentities.forEach((subtask, task) ->
-                attempts.put(subtask, Map.of(task.attemptNumber(), new ReaderInfo(subtask, ""))));
+                attempts.put(subtask, Map.of(task.attemptNumber(), new ReaderInfo(subtask, null))));
         return Map.copyOf(attempts);
     }
 
@@ -225,6 +225,9 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // Validate and serialize the entire batch before making any assignment visible.
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
+        Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
+        assignments.outstandingAssignments().values().forEach(splits ->
+                splits.forEach(split -> outstandingIds.add(split.splitId())));
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
@@ -238,9 +241,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             for (SplitT split : splits) {
                 String splitId = Objects.requireNonNull(split, "split").splitId();
                 if (splitId == null || splitId.isBlank()
-                        || !splitIds.add(splitId) || inFlight.containsKey(splitId)
-                        || assignments.outstandingAssignments().values().stream()
-                                .flatMap(List::stream).anyMatch(existing -> existing.splitId().equals(splitId))) {
+                        || !splitIds.add(splitId) || outstandingIds.contains(splitId)) {
                     throw new IllegalArgumentException("Duplicate or invalid split assignment: " + splitId);
                 }
             }
