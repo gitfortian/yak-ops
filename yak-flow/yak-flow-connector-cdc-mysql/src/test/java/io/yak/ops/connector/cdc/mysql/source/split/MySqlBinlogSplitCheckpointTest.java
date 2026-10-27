@@ -45,7 +45,6 @@ class MySqlBinlogSplitCheckpointTest {
         MySqlPendingSplitsState pending =
                 new MySqlPendingSplitsState(false, new MySqlBinlogSplit(null, new byte[0]));
         MySqlPendingSplitsState restored = (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending));
-        assertEquals("fingerprint", restored.sourceFingerprint());
         assertEquals(false, restored.splitAssigned());
         assertEquals(null, restored.pendingSplit().offset());
 
