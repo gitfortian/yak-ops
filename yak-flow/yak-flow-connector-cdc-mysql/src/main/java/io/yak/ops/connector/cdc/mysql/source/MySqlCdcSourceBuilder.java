@@ -95,8 +95,7 @@ public final class MySqlCdcSourceBuilder {
     }
 
     /** Builds the shared snapshot and Binlog source with generation-scoped measurements. */
-    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(
-            int chunkSize, TableMetrics metrics) {
+    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize, TableMetrics metrics) {
         return MySqlSource.initial(config(), chunkSize, metrics);
     }
 

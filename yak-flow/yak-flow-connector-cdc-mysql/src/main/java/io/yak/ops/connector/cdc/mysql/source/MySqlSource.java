@@ -139,11 +139,19 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
                 chunkSize,
                 context -> new MySqlHybridSourceEnumerator(context, config, fingerprint, chunkSize, null, metrics),
                 (context, state) -> new MySqlHybridSourceEnumerator(
-                        context, config, fingerprint, chunkSize, Objects.requireNonNull(state, "checkpoint state"), metrics),
+                        context,
+                        config,
+                        fingerprint,
+                        chunkSize,
+                        Objects.requireNonNull(state, "checkpoint state"),
+                        metrics),
                 context -> {
                     Objects.requireNonNull(context, "context");
-                    if (context.getConfiguration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL).isZero()) {
-                        throw new IllegalArgumentException("MySQL Hybrid Snapshot requires periodic durable checkpoints");
+                    if (context.getConfiguration()
+                            .get(CheckpointingOptions.CHECKPOINTING_INTERVAL)
+                            .isZero()) {
+                        throw new IllegalArgumentException(
+                                "MySQL Hybrid Snapshot requires periodic durable checkpoints");
                     }
                     return new MySqlHybridSourceReader(config.withRuntimeState(context), context, metrics);
                 },
@@ -198,7 +206,8 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
     }
 
     private static void requirePhysicalPrimaryKeys(MySqlCdcSourceConfig config) {
-        if (config.schemas().values().stream().anyMatch(schema -> schema.primaryKeys().isEmpty())) {
+        if (config.schemas().values().stream()
+                .anyMatch(schema -> schema.primaryKeys().isEmpty())) {
             throw new UnsupportedOperationException(
                     "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
         }
