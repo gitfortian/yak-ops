@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -43,7 +43,7 @@ class MySqlCdcSourceTest {
         assertNotNull(context.last);
         enumerator.handleSplitRequest(0, null);
         assertEquals(1, context.assignments);
-        MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
+        BinlogPendingSplitsState state = (BinlogPendingSplitsState) enumerator.snapshotState(1L);
         assertTrue(state.splitAssigned());
 
         FakeContext restoredContext = new FakeContext();
@@ -56,10 +56,8 @@ class MySqlCdcSourceTest {
     }
 
     @Test
-    void rejectsChangedSourceConfigurationAndInvalidTables() throws Exception {
+    void rejectsInvalidTablesWithoutEmbeddingSourceDefinitionInCheckpoint() throws Exception {
         MySqlSource source = definition();
-        var state = new MySqlPendingSplitsState("other-checkpoint", true, null);
-        assertThrows(IllegalArgumentException.class, () -> source.restoreEnumerator(new FakeContext(), state));
         assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
                 .hostname("localhost")
                 .username("yak")
@@ -72,17 +70,17 @@ class MySqlCdcSourceTest {
     }
 
     @Test
-    void explicitChunkKeyCannotRestoreCheckpointCreatedWithoutAnOverride() throws Exception {
+    void streamOnlyRestoreIsIndependentOfUnusedSnapshotChunkKey() throws Exception {
         MySqlSource implicit = definition();
         var enumerator = implicit.createEnumerator(new FakeContext());
         enumerator.start();
-        MySqlPendingSplitsState checkpoint = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
+        BinlogPendingSplitsState checkpoint = (BinlogPendingSplitsState) enumerator.snapshotState(1L);
         enumerator.close();
 
         MySqlSource explicit = definition("ID");
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> explicit.restoreEnumerator(new FakeContext(), checkpoint));
+        var equivalent = explicit.restoreEnumerator(new FakeContext(), checkpoint);
+        equivalent.start();
+        equivalent.close();
 
         var restored = implicit.restoreEnumerator(new FakeContext(), checkpoint);
         restored.start();

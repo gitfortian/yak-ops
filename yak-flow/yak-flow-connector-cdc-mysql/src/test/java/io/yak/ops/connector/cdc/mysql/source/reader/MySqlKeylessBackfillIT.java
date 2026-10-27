@@ -54,9 +54,7 @@ class MySqlKeylessBackfillIT {
         TableId unrelated = new TableId("yak_cdc_it", null, other);
         try {
             var config = config(Map.of(id, SCHEMA, unrelated, SCHEMA), Map.of(id, "bucket", unrelated, "bucket"), 6731);
-            var raw = MySqlSnapshotSplit.typed(
-                    "keyless-chunk", "fingerprint",
-                    new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, 10L));
+            var raw = MySqlSnapshotSplit.typed("keyless-chunk", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, 10L));
             try (var reader = new MySqlSnapshotSplitReadTask(config, 0, () -> {
                 execute(
                         "DELETE FROM " + table + " WHERE bucket=1 AND payload='same' LIMIT 1",
@@ -102,8 +100,7 @@ class MySqlKeylessBackfillIT {
                 "INSERT INTO " + table + " VALUES (1,'duplicate'),(1,'duplicate')");
         TableId id = new TableId("yak_cdc_it", null, table);
         try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6741), 0)) {
-            var prepared = reader.read(MySqlSnapshotSplit.typed(
-                    "quiet", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
+            var prepared = reader.read(MySqlSnapshotSplit.typed("quiet", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
             assertEquals(2, prepared.output().rows().size());
             assertEquals(0, prepared.output().low().compareTo(prepared.output().high()));
             assertEquals("duplicate", prepared.output().rows().getFirst().row().getString(1));
@@ -127,8 +124,7 @@ class MySqlKeylessBackfillIT {
             }
             try (var reader =
                     new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6791), 0)) {
-                var raw = MySqlSnapshotSplit.typed(
-                        "large-duplicates", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null));
+                var raw = MySqlSnapshotSplit.typed("large-duplicates", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null));
                 var prepared = reader.read(raw);
                 assertEquals(16_384, prepared.output().rows().size());
                 var serializer = new MySqlSplitSerializer();
@@ -157,8 +153,7 @@ class MySqlKeylessBackfillIT {
                     execute("UPDATE " + table + " SET bucket=2 WHERE payload='original'");
                     return null;
                 })) {
-            var raw = MySqlSnapshotSplit.typed(
-                    "move", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, 10L));
+            var raw = MySqlSnapshotSplit.typed("move", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, 10L));
             var error = assertThrows(UnsupportedOperationException.class, () -> reader.read(raw));
             assertTrue(error.getMessage().contains("Chunk Key"));
         } finally {
@@ -184,8 +179,7 @@ class MySqlKeylessBackfillIT {
                             "UPDATE " + table + " SET payload='after' WHERE payload='before'");
                     return null;
                 })) {
-            var prepared = reader.read(MySqlSnapshotSplit.typed(
-                    "concurrent", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
+            var prepared = reader.read(MySqlSnapshotSplit.typed("concurrent", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
             var output = prepared.output().rows();
             assertEquals(4, output.size());
             assertEquals(2, output.stream().filter(row -> "same".equals(row.row().getString(1))).count());

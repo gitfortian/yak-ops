@@ -6,8 +6,8 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
@@ -42,7 +42,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final MySqlHybridSplitAssigner assigner;
     private final MySqlBinlogSplitAssigner streamAssigner;
     private final boolean initial;
-    private final String fingerprint;
     private final List<TableId> tables;
     private final Set<Integer> waitingReaders = new LinkedHashSet<>();
     private final TableMetrics metrics;
@@ -56,17 +55,15 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored) {
-        this(startupOptions, context, config, fingerprint, chunkSize, restored, new TableMetrics());
+        this(startupOptions, context, config, chunkSize, restored, new TableMetrics());
     }
 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored,
             TableMetrics metrics) {
@@ -74,7 +71,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 startupOptions,
                 context,
                 config,
-                fingerprint,
                 chunkSize,
                 restored,
                 metrics,
@@ -86,7 +82,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored,
             TableMetrics metrics,
@@ -94,25 +89,24 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         this.context = Objects.requireNonNull(context, "context");
         Objects.requireNonNull(startupOptions, "startupOptions");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
-        this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         tables = List.copyOf(config.schemas().keySet());
         this.initial = startupOptions.startupMode() == StartupMode.INITIAL;
-        if (initial && restored != null && !(restored instanceof MySqlHybridEnumeratorState)) {
+        if (initial && restored != null && !(restored instanceof HybridPendingSplitsState)) {
             throw new IllegalArgumentException("INITIAL cannot restore Binlog-only checkpoint state");
         }
-        if (!initial && restored != null && !(restored instanceof MySqlPendingSplitsState)) {
+        if (!initial && restored != null && !(restored instanceof BinlogPendingSplitsState)) {
             throw new IllegalArgumentException("Stream-only cannot restore snapshot checkpoint state");
         }
-        MySqlHybridEnumeratorState restoredHybrid = initial ? (MySqlHybridEnumeratorState) restored : null;
-        if (restoredHybrid != null && restoredHybrid.nextChunkRange() != null) {
-            int index = restoredHybrid.nextTableIndex();
+        HybridPendingSplitsState restoredHybrid = initial ? (HybridPendingSplitsState) restored : null;
+        if (restoredHybrid != null && restoredHybrid.getSnapshotPendingSplits().nextChunkRange() != null) {
+            int index = restoredHybrid.getSnapshotPendingSplits().nextTableIndex();
             if (index >= tables.size()) {
                 throw new IllegalArgumentException("Restored typed chunk cursor references an invalid table");
             }
             TableId table = tables.get(index);
             var selected = ChunkUtils.getChunkKeyColumn(
                     config.schemas().get(table), config.chunkKeyColumns().get(table));
-            ChunkRange cursor = restoredHybrid.nextChunkRange();
+            ChunkRange cursor = restoredHybrid.getSnapshotPendingSplits().nextChunkRange();
             if (!cursor.tableId().equals(table)
                     || !cursor.column().equals(selected.name())
                     || cursor.type() != selected.dataType().getTypeRoot()) {
@@ -122,38 +116,38 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         tables.forEach(metrics::register);
         generation = metrics.beginSnapshot(restored != null);
         splitter = planner;
-        assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, fingerprint, restoredHybrid) : null;
+        assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, restoredHybrid) : null;
         streamAssigner = initial
                 ? null
-                : new MySqlBinlogSplitAssigner(startupOptions, fingerprint, (MySqlPendingSplitsState) restored);
-        restoredHandoff = restoredHybrid != null && restoredHybrid.phase() == MySqlHybridEnumeratorState.Phase.HANDOFF;
+                : new MySqlBinlogSplitAssigner(startupOptions, (BinlogPendingSplitsState) restored);
+        restoredHandoff = restoredHybrid != null && restoredHybrid.phase() == HybridPendingSplitsState.Phase.HANDOFF;
         if (context.currentParallelism() < 1
                 || context.currentParallelism() > (initial ? 16 : 1)
                 || (initial && assigner.nextTableIndex() > tables.size())) {
             throw new IllegalArgumentException("Invalid MySQL Hybrid parallelism or discovery position");
         }
         if (restoredHybrid != null) {
-            boolean complete = restoredHandoff || restoredHybrid.phase() == MySqlHybridEnumeratorState.Phase.STREAMING;
+            boolean complete = restoredHandoff || restoredHybrid.phase() == HybridPendingSplitsState.Phase.STREAMING;
             metrics.phase(
                     generation,
                     complete
                             ? TableMetrics.Phase.HANDOFF
-                            : restoredHybrid.phase() == MySqlHybridEnumeratorState.Phase.SNAPSHOT
+                            : restoredHybrid.phase() == HybridPendingSplitsState.Phase.SNAPSHOT
                                     ? TableMetrics.Phase.SNAPSHOT
                                     : TableMetrics.Phase.INITIALIZING,
                     complete);
             Map<TableId, Integer> counts = new LinkedHashMap<>();
-            restoredHybrid.pendingSnapshots().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
+            restoredHybrid.getSnapshotPendingSplits().getRemainingSplits().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid
                     .assignedSnapshots()
                     .values()
                     .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
-            restoredHybrid.finishedSplitInfos().forEach(info -> {
+            restoredHybrid.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> {
                 counts.merge(info.tableId(), 1, Integer::sum);
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
             });
             for (int i = 0; i < tables.size(); i++) {
-                if (restoredHybrid.snapshotPlanned() || i < restoredHybrid.nextTableIndex()) {
+                if (restoredHybrid.getSnapshotPendingSplits().snapshotPlanned() || i < restoredHybrid.getSnapshotPendingSplits().nextTableIndex()) {
                     metrics.planned(generation, tables.get(i), counts.getOrDefault(tables.get(i), 0));
                 }
             }
@@ -192,8 +186,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void addReader(int reader) {
         if (closed) return;
         if (!initial) return;
-        if (assigner.phase() == MySqlHybridEnumeratorState.Phase.STREAMING) sendResumeEvent(reader);
-        else if (assigner.phase() == MySqlHybridEnumeratorState.Phase.SNAPSHOT)
+        if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) sendResumeEvent(reader);
+        else if (assigner.phase() == HybridPendingSplitsState.Phase.SNAPSHOT)
             context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsRequestEvent());
         assignAvailable();
     }
@@ -204,7 +198,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (!initial) throw new IllegalArgumentException("Binlog-only coordinator does not receive snapshot events");
         if (event instanceof MySqlLowWatermarkEvent low) {
             if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may report bootstrap");
-            boolean bootstrap = assigner.phase() == MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
+            boolean bootstrap = assigner.phase() == HybridPendingSplitsState.Phase.BOOTSTRAP;
             assigner.captureLow(low.offset());
             if (!bootstrap) return;
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
@@ -266,7 +260,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 || closed
                 || planning
                 || assigner.snapshotPlanned()
-                || assigner.phase() != MySqlHybridEnumeratorState.Phase.SNAPSHOT
+                || assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT
                 || assigner.pendingSnapshotCount() >= MAX_PENDING_CHUNKS) return;
         int tableIndex = assigner.nextTableIndex();
         int chunkIndex = assigner.nextChunkIndex();
@@ -278,7 +272,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         }
         planning = true;
         context.callAsync(
-                () -> splitter.planNext(table, fingerprint, tableIndex, chunkIndex, cursor), (split, failure) -> {
+                () -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
                     planning = false;
                     if (closed) return;
                     if (failure != null) {
@@ -311,7 +305,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             else assigner.addBack(binlog);
             waitingReaders.remove(0);
         }
-        if (assigner.phase() != MySqlHybridEnumeratorState.Phase.SNAPSHOT) return;
+        if (assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT) return;
         for (int reader : List.copyOf(waitingReaders)) {
             if (!context.registeredReaders().containsKey(reader)) {
                 waitingReaders.remove(reader);

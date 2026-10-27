@@ -63,7 +63,7 @@ class DebeziumRuntimeAlignmentTest {
                 .build();
         SignalEventDispatcher dispatcher = new SignalEventDispatcher(Map.of("server", "mysql"), "watermark", queue);
         dispatcher.dispatchWatermarkEvent(
-                new MySqlBinlogSplit("definition", null, new byte[0]),
+                new MySqlBinlogSplit(null, new byte[0]),
                 BinlogOffset.ofBinlogFilePosition("mysql-bin.000003", 42L),
                 WatermarkKind.HIGH);
         List<DataChangeEvent> records = queue.poll();

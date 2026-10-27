@@ -2,8 +2,8 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -23,46 +23,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Enumerator resumes the single typed chunk discovery cursor and rejects older formats. */
 class MySqlTypedEnumeratorCheckpointTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
-    private static final MySqlHybridEnumeratorStateSerializer SERIALIZER =
-            new MySqlHybridEnumeratorStateSerializer();
+    private static final PendingSplitsStateSerializer SERIALIZER =
+            new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
 
     @Test
     void keepsTypedDiscoveryBoundaryAndCompletedChunkWatermarks() throws Exception {
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         BigDecimal boundary = new BigDecimal("9223372036854775808.00000000");
-        var first = MySqlSnapshotSplit.typed(
-                "chunk-0", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
+        var first = MySqlSnapshotSplit.typed("chunk-0", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
         assigner.appendPlan(first, 1);
         assertEquals(first, assigner.nextSnapshot());
         assigner.finishSnapshot(finished(first, 150));
-        MySqlHybridEnumeratorState persisted = SERIALIZER.deserialize(
+        HybridPendingSplitsState persisted = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(5)));
         assertEquals(boundary, persisted.nextChunkRange().start());
         assertEquals(1, persisted.finishedSplitInfos().size());
-        var recovered = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", persisted);
+        var recovered = new MySqlHybridSplitAssigner(StartupOptions.initial(), persisted);
         assertEquals(persisted.nextChunkRange(), recovered.nextChunkRange());
         assertEquals(finished(first, 150), recovered.finishedSplits().getFirst());
 
-        var last = MySqlSnapshotSplit.typed(
-                "chunk-1", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));
+        var last = MySqlSnapshotSplit.typed("chunk-1", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));
         recovered.appendPlan(last, 1);
         assertNull(recovered.nextChunkRange());
         assertEquals(last, recovered.nextSnapshot());
         recovered.finishSnapshot(finished(last, 200));
         assertTrue(recovered.snapshotComplete());
         recovered.captureHigh(offset(200));
-        var handoff = SERIALIZER.deserialize(
+        var handoff = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(recovered.snapshotState(7)));
-        var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", handoff);
+        var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), handoff);
         resumed.resumeRestoredHandoff();
-        assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, resumed.phase());
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, resumed.phase());
     }
 
     @Test
     void rejectsOldDiscoveryCheckpointVersionsWithoutGuessingTheNextRange() throws Exception {
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         byte[] persisted = SERIALIZER.serialize(assigner.snapshotState(1));

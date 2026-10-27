@@ -5,7 +5,7 @@ import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -137,7 +137,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         if (partition != null) return;
         if (!started) {
             started = true;
-            binlog.start(new MySqlBinlogSplit("snapshot-backfill", null, new byte[0]));
+            binlog.start(new MySqlBinlogSplit(null, new byte[0]));
         }
         long deadline = System.nanoTime() + BINLOG_TIMEOUT_NANOS;
         while (partition == null) {

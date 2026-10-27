@@ -79,7 +79,7 @@ class MySqlCdcKeylessBaselineTest {
 
     @Test
     void keylessBackfillFilterAndJdbcChangelogSinkFailClosed() {
-        var split = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null);
+        var split = new MySqlSnapshotSplit("chunk", TABLE, null, null, null);
         var high = offset(200);
 
         assertThrows(IllegalArgumentException.class, () -> new SnapshotChunkBackfill(new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null), KEYLESS, 10));
@@ -97,7 +97,7 @@ class MySqlCdcKeylessBaselineTest {
     void inMemorySnapshotPreservesIdenticalKeylessRowsWithoutSerializingImages() throws Exception {
         var duplicate = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(7L, "same"));
         var other = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(8L, "other"));
-        var raw = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null);
+        var raw = new MySqlSnapshotSplit("chunk", TABLE, null, null, null);
         var prepared = raw.withOutput(new MySqlSnapshotOutput(
                 offset(100), offset(200), List.of(duplicate, duplicate, other)));
         assertEquals(3, prepared.output().rows().size());

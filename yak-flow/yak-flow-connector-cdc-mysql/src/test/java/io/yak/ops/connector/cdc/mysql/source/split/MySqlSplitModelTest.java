@@ -21,14 +21,14 @@ class MySqlSplitModelTest {
     @Test
     void exposesTypedSnapshotBoundaries() {
         ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
-        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", "source", range);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", range);
         assertEquals(TABLE, split.getTableId());
         assertArrayEquals(new Object[] {100L}, split.getSplitStart());
         assertArrayEquals(new Object[] {200L}, split.getSplitEnd());
         assertFalse(split.isSnapshotReadFinished());
         assertNull(split.getHighWatermark());
-        assertEquals(split, MySqlSnapshotSplit.typed("orders:0", "source", range));
-        assertEquals(split.hashCode(), MySqlSnapshotSplit.typed("orders:0", "source", range).hashCode());
+        assertEquals(split, MySqlSnapshotSplit.typed("orders:0", range));
+        assertEquals(split.hashCode(), MySqlSnapshotSplit.typed("orders:0", range).hashCode());
     }
 
     @Test
@@ -54,7 +54,7 @@ class MySqlSplitModelTest {
     @Test
     void classConversionPreservesTheCurrentTypedSplitCheckpointContract() throws Exception {
         ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
-        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", "source", range);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", range);
         MySqlSplitSerializer serializer = new MySqlSplitSerializer();
         byte[] serialized = serializer.serialize(split);
         MySqlSnapshotSplit restored =

@@ -57,7 +57,7 @@ class MySqlTypedSnapshotSplitReaderTest {
         List<TableRecord> all = new ArrayList<>();
         try (var reader = reader(url, schema)) {
             for (int i = 0; i < ranges.size(); i++) {
-                reader.open(MySqlSnapshotSplit.typed("decimal-" + i, "fp", ranges.get(i)));
+                reader.open(MySqlSnapshotSplit.typed("decimal-" + i, ranges.get(i)));
                 all.addAll(drain(reader));
             }
         }
@@ -89,8 +89,7 @@ class MySqlTypedSnapshotSplitReaderTest {
                         new Column("bucket", LogicalTypes.BIGINT.copy(false)),
                         new Column("payload", LogicalTypes.varchar(60))),
                 List.of());
-        var split = MySqlSnapshotSplit.typed(
-                "replayed-chunk", "fp", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null));
+        var split = MySqlSnapshotSplit.typed("replayed-chunk", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null));
         try (var partial = reader(url, schema)) {
             partial.open(split);
             RecordsWithSplitIds<TableRecord> first = partial.fetch();
@@ -133,7 +132,7 @@ class MySqlTypedSnapshotSplitReaderTest {
         List<Integer> ids = new ArrayList<>();
         try (var reader = reader(url, schema)) {
             for (int i = 0; i < ranges.size(); i++) {
-                reader.open(MySqlSnapshotSplit.typed("code-" + i, "fp", ranges.get(i)));
+                reader.open(MySqlSnapshotSplit.typed("code-" + i, ranges.get(i)));
                 for (var row : drain(reader)) ids.add(row.row().getInt(1));
             }
         }
@@ -145,12 +144,9 @@ class MySqlTypedSnapshotSplitReaderTest {
     void rejectsIncorrectRangesAndFrozenOutputBeforeOpeningJdbc() throws Exception {
         var schema = new TableSchema(
                 List.of(new Column("bucket", LogicalTypes.BIGINT.copy(false))), List.of());
-        var wrongColumn = MySqlSnapshotSplit.typed(
-                "wrong", "fp", new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null));
-        var wrongType = MySqlSnapshotSplit.typed(
-                "type", "fp", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.DECIMAL, null, null));
-        var frozen = MySqlSnapshotSplit.typed(
-                        "frozen", "fp", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null))
+        var wrongColumn = MySqlSnapshotSplit.typed("wrong", new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null));
+        var wrongType = MySqlSnapshotSplit.typed("type", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.DECIMAL, null, null));
+        var frozen = MySqlSnapshotSplit.typed("frozen", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null))
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), List.of()));
         try (var reader = reader(database(), schema)) {
             assertThrows(IllegalArgumentException.class, () -> reader.open(wrongColumn));
@@ -170,8 +166,7 @@ class MySqlTypedSnapshotSplitReaderTest {
         }
         var schema = new TableSchema(
                 List.of(new Column("bucket", LogicalTypes.BIGINT.copy(false))), List.of());
-        var split = MySqlSnapshotSplit.typed(
-                "cancelled", "fp", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null));
+        var split = MySqlSnapshotSplit.typed("cancelled", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null));
         try (var reader = reader(url, schema)) {
             reader.open(split);
             reader.cancel();

@@ -78,7 +78,7 @@ class MySqlTypedKeyedBackfillTest {
                 new TableRecord(TABLE, RowKind.UPDATE_BEFORE, GenericRowData.of(key, "old")),
                 new TableRecord(TABLE, RowKind.UPDATE_AFTER,
                         GenericRowData.of(new BigDecimal("9223372036854775808.0"), "new"))));
-        var frozen = MySqlSnapshotSplit.typed("typed-decimal", "fingerprint", range)
+        var frozen = MySqlSnapshotSplit.typed("typed-decimal", range)
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), buffer.finish()));
         var serializer = new MySqlSplitSerializer();
         assertThrows(java.io.IOException.class, () -> serializer.serialize(frozen));

@@ -38,14 +38,14 @@ class MySqlChunkSplitterTest {
                 List.of("id"));
         var dialect = JdbcDialects.forUrl("jdbc:mysql:");
         var splitter = new MySqlChunkSplitter(() -> DriverManager.getConnection(url), dialect, Map.of(table, schema), 2);
-        var first = splitter.planNext(table, "fp", 0, 0, null);
+        var first = splitter.planNext(table, 0, 0, null);
         assertNull(first.chunkRange().start());
         assertEquals(1000L, first.chunkRange().end());
         var cursor = new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, first.chunkRange().end(), null);
-        var second = splitter.planNext(table, "fp", 0, 1, cursor);
+        var second = splitter.planNext(table, 0, 1, cursor);
         assertEquals(1000L, second.chunkRange().start());
         assertEquals(6000L, second.chunkRange().end());
-        var last = splitter.planNext(table, "fp", 0, 2,
+        var last = splitter.planNext(table, 0, 2,
                 new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, second.chunkRange().end(), null));
         assertNull(last.chunkRange().end());
 

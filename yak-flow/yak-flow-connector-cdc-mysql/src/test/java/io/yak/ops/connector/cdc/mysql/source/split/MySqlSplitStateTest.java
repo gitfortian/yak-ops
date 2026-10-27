@@ -22,7 +22,7 @@ class MySqlSplitStateTest {
 
     @Test
     void snapshotStatePublishesCompletedChunkOnlyAfterAtomicEmission() throws Exception {
-        var split = new MySqlSnapshotSplit("chunk", "definition", TABLE, 0L, 100L, null);
+        var split = new MySqlSnapshotSplit("chunk", TABLE, 0L, 100L, null);
         var state = MySqlSplitState.fromSplit(split);
         assertInstanceOf(MySqlSnapshotSplitState.class, state);
         assertTrue(state.isSnapshotSplitState());
@@ -38,13 +38,12 @@ class MySqlSplitStateTest {
 
     @Test
     void binlogStateNeverCheckpointsAnOffsetWithoutItsSchemaHistory() {
-        MySqlBinlogSplit split = new MySqlBinlogSplit("definition", null, new byte[0]);
+        MySqlBinlogSplit split = new MySqlBinlogSplit(null, new byte[0]);
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
         assertInstanceOf(MySqlBinlogSplitState.class, state);
         assertTrue(state.isBinlogSplitState());
         assertFalse(state.isSnapshotSplitState());
         assertTrue(state.binlog());
-        assertEquals("definition", state.sourceId());
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[0]));
 
         state.emitBinlog(offset(300));
@@ -56,7 +55,7 @@ class MySqlSplitStateTest {
 
     @Test
     void binlogBootstrapRequiresCompletedSnapshotBeforeStreaming() {
-        MySqlBinlogSplit split = MySqlBinlogSplit.forInitialSnapshot("definition");
+        MySqlBinlogSplit split = MySqlBinlogSplit.forInitialSnapshot();
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
         assertTrue(state.isBinlogSplitState());
         assertThrows(IllegalStateException.class, () -> state.emitBinlog(offset(200)));

@@ -19,7 +19,7 @@ class MySqlBinlogSplitTest {
     @Test
     void suspendsAndResumesInitialBinlogWithFinishedSplitWatermarks() throws Exception {
         byte[] history = {1, 2, 3};
-        var bootstrap = MySqlBinlogSplit.forInitialSnapshot("source");
+        var bootstrap = MySqlBinlogSplit.forInitialSnapshot();
         assertTrue(bootstrap.isSuspended());
         assertEquals(MySqlBinlogSplit.Phase.BOOTSTRAP, bootstrap.phase());
         var paused = bootstrap.withAnchor(offset(100), history);
@@ -44,7 +44,7 @@ class MySqlBinlogSplitTest {
 
     @Test
     void binlogOnlyModeDoesNotRequireSnapshotHandoff() {
-        var standalone = new MySqlBinlogSplit("source", null, new byte[0]);
+        var standalone = new MySqlBinlogSplit(null, new byte[0]);
         assertEquals(MySqlBinlogSplit.Phase.STANDALONE, standalone.phase());
         assertFalse(standalone.isSuspended());
         assertEquals(offset(100), standalone.withProgress(offset(100), new byte[] {1}).offset());
@@ -55,7 +55,7 @@ class MySqlBinlogSplitTest {
     void suspendedStreamingSplitDoesNotLoseOffsetOrFinishedMetadata() {
         var high = offset(300);
         var finished = List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high));
-        var streaming = MySqlBinlogSplit.forPausedSnapshot("source", offset(100), new byte[] {1, 2})
+        var streaming = MySqlBinlogSplit.forPausedSnapshot(offset(100), new byte[] {1, 2})
                 .startStreaming(high, finished).withEmittedOffset(offset(350), new byte[] {1, 2});
         var suspended = MySqlBinlogSplit.toSuspendedBinlogSplit(streaming);
         assertTrue(suspended.isSuspended());
@@ -71,7 +71,7 @@ class MySqlBinlogSplitTest {
     void serializerPersistsPhaseAndCompletedMetadata() throws Exception {
         var high = offset(200);
         var finished = List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high));
-        var streaming = MySqlBinlogSplit.forPausedSnapshot("source", offset(100), new byte[] {1})
+        var streaming = MySqlBinlogSplit.forPausedSnapshot(offset(100), new byte[] {1})
                 .startStreaming(high, finished);
         var serializer = new MySqlSplitSerializer();
         var restored = (MySqlBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(streaming));

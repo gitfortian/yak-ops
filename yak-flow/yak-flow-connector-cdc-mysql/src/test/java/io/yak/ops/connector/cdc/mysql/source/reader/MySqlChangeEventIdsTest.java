@@ -68,6 +68,24 @@ class MySqlChangeEventIdsTest {
                 new DebeziumOffset(Map.of("server", "other"), position)));
     }
 
+
+    @Test
+    void eventIdentityRemainsStableAfterSplitSerialization() throws Exception {
+        DebeziumOffset offset = position(88, 2);
+        BinlogEvent event = new BinlogEvent(List.of(row(RowKind.INSERT, "payload")), offset);
+        var reader = binlogEmitter();
+        var first = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
+        var serializer = MySqlSplitSerializer.INSTANCE;
+        var second = MySqlSplitState.fromSplit(serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(new MySqlBinlogSplit(null, new byte[0]))));
+        List<TableRecord> earlier = new ArrayList<>();
+        List<TableRecord> later = new ArrayList<>();
+        reader.emitRecord(MySqlFetchedRecord.binlog(event), earlier::add, first);
+        reader.emitRecord(MySqlFetchedRecord.binlog(event), later::add, second);
+        assertEquals(earlier.getFirst().changeEventId(), later.getFirst().changeEventId());
+        assertEquals("emission-test", earlier.getFirst().changeEventId().sourceId());
+    }
+
     @Test
     void incompleteOffsetsCannotBePresentedAsReplaySafeIdentities() {
         assertNull(MySqlChangeEventIds.fromBinlog(
@@ -85,7 +103,7 @@ class MySqlChangeEventIdsTest {
         BinlogEvent update = new BinlogEvent(
                 List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same")),
                 position);
-        var state = MySqlSplitState.fromSplit(new MySqlBinlogSplit("task-definition", null, new byte[0]));
+        var state = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
         var emitter = binlogEmitter();
         List<TableRecord> delivered = new ArrayList<>();
         emitter.emitRecord(MySqlFetchedRecord.binlog(update), delivered::add, state);
@@ -100,7 +118,7 @@ class MySqlChangeEventIdsTest {
         assertEquals(position, ((MySqlBinlogSplit) state.checkpoint(new byte[] {1})).offset());
 
         var restored = MySqlSplitState.fromSplit(
-                new MySqlBinlogSplit("task-definition", position(42, 1), new byte[] {1}));
+                new MySqlBinlogSplit(position(42, 1), new byte[] {1}));
         List<TableRecord> replayed = new ArrayList<>();
         emitter.emitRecord(MySqlFetchedRecord.binlog(update), replayed::add, restored);
         assertEquals(before, replayed.getFirst().changeEventId());
@@ -109,7 +127,7 @@ class MySqlChangeEventIdsTest {
         assertEquals("same", replayed.getFirst().row().getString(0));
 
         var failed = MySqlSplitState.fromSplit(
-                new MySqlBinlogSplit("task-definition", position(42, 1), new byte[] {1}));
+                new MySqlBinlogSplit(position(42, 1), new byte[] {1}));
         assertThrows(IllegalStateException.class, () -> emitter.emitRecord(MySqlFetchedRecord.binlog(update), record -> {
             if (record.rowKind() == RowKind.UPDATE_AFTER) throw new IllegalStateException("sink failed");
         }, failed));
@@ -127,19 +145,19 @@ class MySqlChangeEventIdsTest {
                 .build().config();
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(
-                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             var rows = List.of(
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
-            var raw = new MySqlSnapshotSplit("chunk-0", "stable-definition", TABLE, null, null, null);
+            var raw = new MySqlSnapshotSplit("chunk-0", TABLE, null, null, null);
             var prepared = raw.withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
             var state = MySqlSplitState.fromSplit(raw);
             var output = new ArrayList<TableRecord>();
             emitter.emitRecord(MySqlFetchedRecord.prepared(prepared), output::add, state);
             assertEquals(2, output.size());
-            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0),
+            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 0),
                     output.getFirst().changeEventId());
-            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 1),
+            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 1),
                     output.getLast().changeEventId());
             var serializer = new MySqlSplitSerializer();
             var restored = (MySqlSnapshotSplit) serializer.deserialize(
@@ -160,11 +178,11 @@ class MySqlChangeEventIdsTest {
                 .build().config();
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(
-                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             var rows = List.of(
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L)));
-            var raw = new MySqlSnapshotSplit("chunk-atomic", "definition", TABLE, null, null, null);
+            var raw = new MySqlSnapshotSplit("chunk-atomic", TABLE, null, null, null);
             var prepared = raw.withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
             var state = MySqlSplitState.fromSplit(raw);
             var delivered = new java.util.concurrent.atomic.AtomicInteger();
@@ -187,13 +205,13 @@ class MySqlChangeEventIdsTest {
         DebeziumOffset high = position(50, 5);
         List<TableRecord> rows = List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same"));
 
-        var cdcState = MySqlSplitState.fromSplit(new MySqlBinlogSplit("task-definition", previous, new byte[] {1}));
+        var cdcState = MySqlSplitState.fromSplit(new MySqlBinlogSplit(previous, new byte[] {1}));
         List<TableRecord> cdcOutput = new ArrayList<>();
         binlogEmitter()
                 .emitRecord(MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset)), cdcOutput::add, cdcState);
 
         var finished = new FinishedSnapshotSplitInfo(TABLE, "chunk-0", null, null, high);
-        var streaming = MySqlBinlogSplit.forCompletedSnapshot("task-definition", previous, new byte[] {1}, high, List.of(finished));
+        var streaming = MySqlBinlogSplit.forCompletedSnapshot(previous, new byte[] {1}, high, List.of(finished));
         var hybridState = MySqlSplitState.fromSplit(streaming);
         var schema = new TableSchema(
                 List.of(
@@ -205,12 +223,12 @@ class MySqlChangeEventIdsTest {
                 .username("user")
                 .password("secret")
                 .serverId(9002)
-                .topicPrefix("hybrid-emitter-contract")
+                .topicPrefix("emission-test")
                 .table(TABLE, schema)
                 .build()
                 .config();
         try (var splitReader = new MySqlSplitReader(config)) {
-            var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+            var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             List<TableRecord> hybridOutput = new ArrayList<>();
             var event = MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset));
             emitter.emitRecord(event, hybridOutput::add, hybridState);
@@ -235,7 +253,7 @@ class MySqlChangeEventIdsTest {
 
     @Test
     void keyedLegacyOffsetsDeliverWithoutInventingIdentity() throws Exception {
-        var state = MySqlSplitState.fromSplit(new MySqlBinlogSplit("task-definition", null, new byte[0]));
+        var state = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
         var output = new ArrayList<TableRecord>();
         BinlogEvent update = new BinlogEvent(List.of(row(RowKind.INSERT, "legacy")),
                 new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 8)));
@@ -257,7 +275,7 @@ class MySqlChangeEventIdsTest {
                 .build()
                 .config();
         var readerContext = context();
-        return new MySqlRecordEmitter(new MySqlSourceReaderContext(readerContext), new MySqlSplitReader(config), new TableMetrics());
+        return new MySqlRecordEmitter(new MySqlSourceReaderContext(readerContext), new MySqlSplitReader(config), new TableMetrics(), config.topicPrefix());
     }
 
     private static TableRecord row(RowKind kind, String value) {

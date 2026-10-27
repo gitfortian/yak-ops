@@ -3,8 +3,6 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfigFactory;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
@@ -15,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
@@ -27,7 +26,7 @@ class MySqlSourceEntryTest {
         assertEquals(StartupMode.INITIAL, source.startupMode());
         assertEquals(StartupOptions.initial(), source.startupOptions());
         assertEquals(512, source.snapshotChunkSize());
-        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.class, source.getSplitSerializer());
+        assertSame(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE, source.getSplitSerializer());
         assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
     }
 
@@ -37,7 +36,7 @@ class MySqlSourceEntryTest {
         assertEquals(StartupMode.LATEST_OFFSET, source.startupMode());
         assertEquals(StartupOptions.latest(), source.startupOptions());
         assertThrows(IllegalStateException.class, source::snapshotChunkSize);
-        assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.class, source.getSplitSerializer());
+        assertSame(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE, source.getSplitSerializer());
         assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
     }
 

@@ -27,7 +27,7 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     public static final MySqlSplitSerializer INSTANCE = new MySqlSplitSerializer();
 
     // An incompatible layout: old nested hybrid/binlog frames must not be silently restored.
-    private static final int VERSION = 9;
+    private static final int VERSION = 10;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int SNAPSHOT_SPLIT_FLAG = 1;
     private static final int BINLOG_SPLIT_FLAG = 2;
@@ -85,7 +85,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             throw new IOException("Normalized snapshot row output cannot be stored in a split checkpoint");
         }
         out.writeUTF(split.splitId());
-        out.writeUTF(split.fingerprint());
         out.writeUTF(split.tableId().catalog() == null ? "" : split.tableId().catalog());
         out.writeUTF(split.tableId().table());
         writeLong(out, split.lowerInclusive());
@@ -99,7 +98,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
 
     private static MySqlSnapshotSplit readSnapshot(DataInputStream in) throws IOException {
         String id = in.readUTF();
-        String fingerprint = in.readUTF();
         TableId table = new TableId(in.readUTF(), null, in.readUTF());
         Long lower = readLong(in);
         Long upper = readLong(in);
@@ -107,11 +105,10 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         ChunkRange range = ChunkRangeStateSerializer.read(in);
         FinishedSnapshotSplitInfo finished = high == null
                 ? null : new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range);
-        return new MySqlSnapshotSplit(id, fingerprint, table, lower, upper, null, null, 0, finished, range);
+        return new MySqlSnapshotSplit(id, table, lower, upper, null, null, 0, finished, range);
     }
 
     private static void writeBinlog(DataOutputStream out, MySqlBinlogSplit split) throws IOException {
-        out.writeUTF(split.definitionFingerprint());
         out.writeBoolean(split.offset() != null);
         if (split.offset() != null) {
             split.offset().writeTo(out);
@@ -131,7 +128,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     }
 
     private static MySqlBinlogSplit readBinlog(DataInputStream in) throws IOException {
-        String fingerprint = in.readUTF();
         DebeziumOffset offset = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         int length = in.readInt();
         if (length < 0 || length > in.available() || length > MAX_BYTES) {
@@ -147,7 +143,7 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         }
         DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         List<FinishedSnapshotSplitInfo> infos = readFinishedSplits(in);
-        return MySqlBinlogSplit.restore(fingerprint, offset, history,
+        return MySqlBinlogSplit.restore(offset, history,
                 MySqlBinlogSplit.Phase.values()[phase], high, infos);
     }
 

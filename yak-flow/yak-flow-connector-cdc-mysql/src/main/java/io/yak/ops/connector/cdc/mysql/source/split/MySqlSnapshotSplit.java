@@ -9,7 +9,6 @@ import java.util.Objects;
 /** Source chunk boundaries and completion high watermark; normalized rows are transient only. */
 public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSplit {
     private final String splitId;
-    private final String fingerprint;
     private final TableId tableId;
     private final Long lowerInclusive;
     private final Long upperExclusive;
@@ -22,7 +21,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     /** Constructs an unprepared legacy numeric range using the stable split identifier. */
     public MySqlSnapshotSplit(
             String splitId,
-            String fingerprint,
             TableId tableId,
             Long lowerInclusive,
             Long upperExclusive,
@@ -32,7 +30,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
             FinishedSnapshotSplitInfo finished) {
         this(
                 splitId,
-                fingerprint,
                 tableId,
                 lowerInclusive,
                 upperExclusive,
@@ -44,25 +41,23 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     }
 
     /** One typed chunk range. Incomplete chunks restart their scan and backfill. */
-    public static MySqlSnapshotSplit typed(String splitId, String fingerprint, ChunkRange range) {
+    public static MySqlSnapshotSplit typed(String splitId, ChunkRange range) {
         Objects.requireNonNull(range, "range");
-        return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null, null, 0, null, range);
+        return new MySqlSnapshotSplit(splitId, range.tableId(), null, null, null, null, 0, null, range);
     }
 
     /** Creates an unprepared range; numeric cursors are used only by the JDBC scan primitive. */
     public MySqlSnapshotSplit(
             String splitId,
-            String fingerprint,
             TableId tableId,
             Long lowerInclusive,
             Long upperExclusive,
             Long lastEmittedKey) {
-        this(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, lastEmittedKey, null, 0, null);
+        this(splitId, tableId, lowerInclusive, upperExclusive, lastEmittedKey, null, 0, null);
     }
 
     public MySqlSnapshotSplit(
             String splitId,
-            String fingerprint,
             TableId tableId,
             Long lowerInclusive,
             Long upperExclusive,
@@ -72,8 +67,8 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
             FinishedSnapshotSplitInfo finished,
             ChunkRange chunkRange) {
         super(splitId);
-        if (splitId == null || splitId.isBlank() || fingerprint == null || fingerprint.isBlank()) {
-            throw new IllegalArgumentException("Snapshot split requires a stable ID and fingerprint");
+        if (splitId == null || splitId.isBlank()) {
+            throw new IllegalArgumentException("Snapshot split requires a stable ID");
         }
         Objects.requireNonNull(tableId, "tableId");
         if (chunkRange != null
@@ -113,7 +108,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         }
 
         this.splitId = splitId;
-        this.fingerprint = fingerprint;
         this.tableId = tableId;
         this.lowerInclusive = lowerInclusive;
         this.upperExclusive = upperExclusive;
@@ -133,7 +127,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
             throw new IllegalStateException("Snapshot is already prepared or advanced");
         return new MySqlSnapshotSplit(
                 splitId,
-                fingerprint,
                 tableId,
                 lowerInclusive,
                 upperExclusive,
@@ -155,7 +148,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         if (position == output.rows().size()) {
             return new MySqlSnapshotSplit(
                     splitId,
-                    fingerprint,
                     tableId,
                     lowerInclusive,
                     upperExclusive,
@@ -168,7 +160,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         }
         return new MySqlSnapshotSplit(
                 splitId,
-                fingerprint,
                 tableId,
                 lowerInclusive,
                 upperExclusive,
@@ -184,9 +175,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         return splitId;
     }
 
-    public String fingerprint() {
-        return fingerprint;
-    }
     public TableId tableId() {
         return tableId;
     }
@@ -247,7 +235,6 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         }
         return outputPosition == that.outputPosition
                 && Objects.equals(splitId, that.splitId)
-                && Objects.equals(fingerprint, that.fingerprint)
                 && Objects.equals(tableId, that.tableId)
                 && Objects.equals(lowerInclusive, that.lowerInclusive)
                 && Objects.equals(upperExclusive, that.upperExclusive)
@@ -259,7 +246,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
 
     @Override
     public int hashCode() {
-        return Objects.hash(splitId, fingerprint, tableId, lowerInclusive, upperExclusive,
+        return Objects.hash(splitId, tableId, lowerInclusive, upperExclusive,
                 lastEmittedKey, output, outputPosition, finished, chunkRange);
     }
 

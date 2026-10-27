@@ -22,7 +22,7 @@ class MySqlSnapshotOutputTest {
 
     @Test
     void completedSplitPersistsOnlyWatermarkAndRange() throws Exception {
-        var raw = new MySqlSnapshotSplit("chunk", "source", TABLE, 1L, 10L, null);
+        var raw = new MySqlSnapshotSplit("chunk", TABLE, 1L, 10L, null);
         var prepared = raw.withOutput(new MySqlSnapshotOutput(offset(100), offset(200),
                 List.of(row(3L, "one"), row(3L, "one"), row(4L, "other"))));
         var serializer = new MySqlSplitSerializer();
@@ -41,7 +41,7 @@ class MySqlSnapshotOutputTest {
 
     @Test
     void failureBeforeCompletedChunkRestoresUnpreparedRange() throws Exception {
-        var raw = new MySqlSnapshotSplit("chunk", "source", TABLE, null, null, null);
+        var raw = new MySqlSnapshotSplit("chunk", TABLE, null, null, null);
         var serializer = new MySqlSplitSerializer();
         var restored = (MySqlSnapshotSplit)
                 serializer.deserialize(serializer.getVersion(), serializer.serialize(raw));

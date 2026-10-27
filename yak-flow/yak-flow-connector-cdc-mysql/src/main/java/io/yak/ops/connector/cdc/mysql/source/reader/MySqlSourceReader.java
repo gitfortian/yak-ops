@@ -20,6 +20,7 @@ import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.configuration.ExecutionOptions;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,31 +49,43 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
 
     public MySqlSourceReader(
             MySqlSourceConfig config,
-            String fingerprint,
             SourceReaderContext context,
             TableMetrics metrics,
             boolean initial) {
         this(
-                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
+                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask()),
                 new MySqlSourceReaderContext(context),
                 metrics,
-                initial);
+                initial,
+                sourceId(config, context));
     }
 
     private MySqlSourceReader(
             MySqlSplitReader splits,
             MySqlSourceReaderContext readerContext,
             TableMetrics metrics,
-            boolean initial) {
+            boolean initial,
+            String sourceId) {
         super(
                 () -> splits,
-                new MySqlRecordEmitter(readerContext, splits, metrics),
+                new MySqlRecordEmitter(readerContext, splits, metrics, sourceId),
                 readerContext.getSourceReaderContext());
         this.schemaChanges = readerContext.schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.generation = metrics.generation();
         this.splits = splits;
         this.initial = initial;
+    }
+
+    /**
+     * Bind event identity to a stable task execution, never to mutable split checkpoints.
+     *
+     * <p>The instance ID remains constant across full-job checkpoint restoration.
+     * Direct connector callers without an execution ID use Debezium's logical source name.
+     */
+    private static String sourceId(MySqlSourceConfig config, SourceReaderContext context) {
+        String executionId = context.getConfiguration().get(ExecutionOptions.LOG_ID);
+        return executionId.isBlank() ? config.topicPrefix() : executionId + ":" + config.topicPrefix();
     }
 
     @Override

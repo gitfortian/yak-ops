@@ -43,9 +43,6 @@ public abstract class MySqlSplitState {
     /** Use the current split state to create a new MySql split. */
     public abstract MySqlSplit toMySqlSplit();
 
-    /** Stable source identity, independent of the physical reader attempt. */
-    public abstract String sourceId();
-
     public String snapshotSplitId() {
         throw new IllegalStateException("Not a snapshot split");
     }

@@ -10,8 +10,8 @@ import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
@@ -48,9 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Tests actual Enumerator async callbacks, durable cursors and reader assignments. */
 class MySqlTypedSnapshotAssignmentTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
-    private static final String FINGERPRINT = "typed-enumerator-test";
-    private static final MySqlHybridEnumeratorStateSerializer SERIALIZER =
-            new MySqlHybridEnumeratorStateSerializer();
+    private static final PendingSplitsStateSerializer SERIALIZER =
+            new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
 
     @Test
     void assignsTypedChunksAndResumesAtCheckpointedBoundaryWithoutDuplicatingPriorWork() throws Exception {
@@ -84,8 +83,8 @@ class MySqlTypedSnapshotAssignmentTest {
         assertNull(first.chunkRange().start());
         assertEquals(new BigDecimal("3.00000000"), first.chunkRange().end());
 
-        var saved = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) enumerator.snapshotState(5)));
+        var saved = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) enumerator.snapshotState(5)));
         assertEquals(0, saved.nextTableIndex());
         assertEquals(1, saved.nextChunkIndex());
         assertEquals(first.chunkRange().end(), saved.nextChunkRange().start());
@@ -110,8 +109,8 @@ class MySqlTypedSnapshotAssignmentTest {
                 1, new FinishedSnapshotSplitsReportEvent(Map.of(first.splitId(), offset(150))));
         assertThrows(IllegalArgumentException.class, () -> recovered.handleSourceEvent(
                 1, new FinishedSnapshotSplitsReportEvent(Map.of("unknown-split", offset(150)))));
-        var resumed = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) recovered.snapshotState(6)));
+        var resumed = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) recovered.snapshotState(6)));
         assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());
         assertEquals(offset(150), resumed.finishedSplitInfos().getFirst().highWatermark());
         recovered.close();
@@ -134,19 +133,18 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("payload", LogicalTypes.INTEGER)),
                 List.of());
         var planner = splitter(url, keyless, "bucket");
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
-        MySqlSnapshotSplit first = planner.planNext(ORDERS, FINGERPRINT, 0, 0, null);
+        MySqlSnapshotSplit first = planner.planNext(ORDERS, 0, 0, null);
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
         assigner.appendPlan(first, 1);
-        var saved = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) assigner.snapshotState(9)));
-        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, saved);
-        MySqlSnapshotSplit last = planner.planNext(
-                ORDERS, FINGERPRINT, restored.nextTableIndex(), restored.nextChunkIndex(),
+        var saved = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) assigner.snapshotState(9)));
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), saved);
+        MySqlSnapshotSplit last = planner.planNext(ORDERS, restored.nextTableIndex(), restored.nextChunkIndex(),
                 restored.nextChunkRange());
         assertEquals(cursor.start(), last.chunkRange().start());
         assertNull(last.chunkRange().end());
@@ -164,17 +162,14 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("bucket", LogicalTypes.INTEGER.copy(false))),
                 List.of("id"));
         var planner = splitter(url, schema, "bucket");
-        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
-                ORDERS, FINGERPRINT, 0, 1,
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(ORDERS, 0, 1,
                 new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, 2L, null)));
-        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
-                ORDERS, FINGERPRINT, 0, 1,
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(ORDERS, 0, 1,
                 new ChunkRange(new TableId("other", null, "orders"), "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNext(ORDERS, FINGERPRINT, 0, 1, null));
+                () -> planner.planNext(ORDERS, 0, 1, null));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNext(
-                        ORDERS, FINGERPRINT, 0, 0,
+                () -> planner.planNext(ORDERS, 0, 0,
                         new ChunkRange(ORDERS, "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
     }
 
@@ -201,7 +196,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
         assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, ((MySqlHybridEnumeratorState) checkpoint).nextChunkRange().start());
+        assertEquals(5L, ((HybridPendingSplitsState) checkpoint).nextChunkRange().start());
         enumerator.close();
     }
 
@@ -209,12 +204,11 @@ class MySqlTypedSnapshotAssignmentTest {
             Coordinator context,
             MySqlSourceConfig config,
             String url,
-            MySqlHybridEnumeratorState restored) {
+            HybridPendingSplitsState restored) {
         return new MySqlSourceEnumerator(
                 StartupOptions.initial(),
                 context,
                 config,
-                FINGERPRINT,
                 2,
                 restored,
                 new TableMetrics(),

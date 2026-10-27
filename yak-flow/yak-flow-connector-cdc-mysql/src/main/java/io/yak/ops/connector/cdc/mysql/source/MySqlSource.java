@@ -20,14 +20,7 @@ import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.configuration.CheckpointingOptions;
-import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
-import io.yak.ops.core.types.Column;
-import io.yak.ops.core.types.TableSchema;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Objects;
 
 /**
@@ -40,21 +33,18 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     private final StartupOptions startupOptions;
     private final MySqlSourceConfig config;
     private final int snapshotChunkSize;
-    private final String fingerprint;
     private final TableMetrics metrics;
-    private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
-    private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer();
+    private final MySqlSplitSerializer splitSerializer = MySqlSplitSerializer.INSTANCE;
+    private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer(splitSerializer);
 
     private MySqlSource(
             StartupOptions options,
             MySqlSourceConfig config,
             int chunkSize,
-            String fingerprint,
             TableMetrics metrics) {
         this.startupOptions = Objects.requireNonNull(options, "startupOptions");
         this.config = Objects.requireNonNull(config, "config");
         this.snapshotChunkSize = chunkSize;
-        this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
@@ -82,7 +72,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         }
         requirePhysicalPrimaryKeys(config);
         config.schemas().keySet().forEach(metrics::register);
-        return new MySqlSource(options, config, 0, fingerprint(config), metrics);
+        return new MySqlSource(options, config, 0, metrics);
     }
 
     public static MySqlSource initial(
@@ -98,8 +88,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
                 .forEach((table, schema) -> ChunkUtils.requireSupportedSnapshot(
                         schema, config.chunkKeyColumns().get(table)));
         config.schemas().keySet().forEach(metrics::register);
-        return new MySqlSource(
-                options, config, chunkSize, fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize, metrics);
+        return new MySqlSource(options, config, chunkSize, metrics);
     }
 
     public StartupOptions startupOptions() {
@@ -141,7 +130,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     private MySqlSourceEnumerator createEnumerator(
             SplitEnumeratorContext<MySqlSplit> context, PendingSplitsState checkpointState) {
         return new MySqlSourceEnumerator(
-                startupOptions, context, config, fingerprint, snapshotChunkSize, checkpointState, metrics);
+                startupOptions, context, config, snapshotChunkSize, checkpointState, metrics);
     }
 
     @Override
@@ -156,7 +145,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
                         .isZero()) {
             throw new IllegalArgumentException("MySQL Snapshot requires periodic durable checkpoints");
         }
-        return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context, metrics, initial);
+        return new MySqlSourceReader(config.withRuntimeState(context), context, metrics, initial);
     }
 
     @Override
@@ -177,35 +166,4 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         }
     }
 
-    private static String fingerprint(MySqlSourceConfig config) {
-        StringBuilder definition = new StringBuilder(config.hostname())
-                .append('|')
-                .append(config.port())
-                .append('|')
-                .append(config.topicPrefix())
-                .append('|')
-                .append(config.serverId());
-        for (var entry : config.schemas().entrySet()) {
-            TableId table = entry.getKey();
-            TableSchema schema = entry.getValue();
-            definition.append('|').append(table.catalog()).append('/').append(table.table());
-            for (Column column : schema.columns()) {
-                definition
-                        .append('|')
-                        .append(column.name())
-                        .append(':')
-                        .append(column.dataType().asSerializableString());
-            }
-            definition.append("|pk=").append(String.join(",", schema.primaryKeys()));
-            String configured = config.chunkKeyColumns().get(table);
-            if (configured != null) definition.append("|chunk=").append(configured);
-        }
-        try {
-            return HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256")
-                            .digest(definition.toString().getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
 }

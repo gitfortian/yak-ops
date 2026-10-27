@@ -22,11 +22,6 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
     }
 
     @Override
-    public String sourceId() {
-        return snapshot.fingerprint();
-    }
-
-    @Override
     public String snapshotSplitId() {
         return snapshot.splitId();
     }
@@ -36,7 +31,6 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
         if (snapshot.prepared()
                 || !snapshot.splitId().equals(prepared.splitId())
                 || !snapshot.tableId().equals(prepared.tableId())
-                || !snapshot.fingerprint().equals(prepared.fingerprint())
                 || !Objects.equals(snapshot.lowerInclusive(), prepared.lowerInclusive())
                 || !Objects.equals(snapshot.upperExclusive(), prepared.upperExclusive())
                 || !Objects.equals(snapshot.chunkRange(), prepared.chunkRange())
