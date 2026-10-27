@@ -25,7 +25,7 @@ class MySqlSplitAssignerContractTest {
     @Test
     void binlogOnlyReturnsOneSplitAndPersistsAssignedOwnership() throws Exception {
         MySqlSplitAssigner<MySqlBinlogSplit, MySqlPendingSplitsState> assigner =
-                new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
+                new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
         assertNull(assigner.getNext(1));
         MySqlBinlogSplit split = assigner.getNext(0);
         assertEquals(MySqlBinlogSplit.ID, split.splitId());
@@ -37,32 +37,31 @@ class MySqlSplitAssignerContractTest {
         assertInstanceOf(PendingSplitsState.class, assigned);
         assertTrue(assigned.splitAssigned());
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
-        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
-                "fp", (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
         assertNull(restored.getNext(0));
 
         assigner.addSplitsBack(List.of(split), 0);
         assertFalse(assigner.snapshotState(3).splitAssigned());
         assertEquals(split, assigner.getNext(0));
         assertThrows(IllegalStateException.class, () -> assigner.addSplitsBack(List.of(split), 1));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner(StartupOptions.latest(), "changed", assigned));
+        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner(StartupOptions.latest(), assigned));
     }
 
 
     @Test
     void returnedBinlogSplitKeepsItsOffsetAcrossEnumeratorCheckpoint() throws Exception {
-        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
+        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
         assigner.getNext(0);
         var offset = new DebeziumOffset(
                 Map.of("server", "yak"),
                 Map.of("file", "mysql-bin.000001", "pos", 256L));
-        var returned = new MySqlBinlogSplit("fp", offset, new byte[] {1, 2, 3});
+        var returned = new MySqlBinlogSplit(offset, new byte[] {1, 2, 3});
         assigner.addSplitsBack(List.of(returned), 0);
 
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var state = (MySqlPendingSplitsState) serializer.deserialize(
                 serializer.getVersion(), serializer.serialize(assigner.snapshotState(4)));
-        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", state);
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), state);
         MySqlBinlogSplit resumed = restored.getNext(0);
         assertEquals(offset, resumed.offset());
         assertEquals(List.of((byte) 1, (byte) 2, (byte) 3),
@@ -72,12 +71,11 @@ class MySqlSplitAssignerContractTest {
 
     @Test
     void pendingBinlogSurvivesCoordinatorCheckpointWithoutMovingItsOffset() throws Exception {
-        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
+        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
         MySqlPendingSplitsState pending = assigner.snapshotState(1);
         assertFalse(pending.splitAssigned());
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
-        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
-                "fp", (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
         var split = restored.getNext(0);
         assertNull(split.offset());
         assertEquals(0, split.schemaHistory().length);
