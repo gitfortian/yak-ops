@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       # Bound Docker/Testcontainers load while avoiding long waits behind two suites.
-      max-parallel: 3
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
