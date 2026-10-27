@@ -47,13 +47,13 @@ Five current facts shape the design; each one is a constraint this proposal work
 | Placement | A new top-level product `数据地图`, independent of `数据建模`. Its navigation is 数据总览, 资产目录, 元数据采集 and 我的数据. |
 | Assets | An asset is a physical table or view observed in a datasource namespace. System schemas are not filtered by engine: the user chooses the database and schema to crawl, and whatever that namespace returns is what the map holds. |
 | Crawl trigger | Manual only. The user picks a datasource, a database and, where the engine has one, a schema. Submission records a `PENDING` run and returns immediately; collection happens on a background worker. |
-| Crawl scope | One run covers exactly one datasource database (and schema). A second run for the same scope is refused while one is `PENDING` or `RUNNING`. |
+| Crawl scope | One run covers exactly one datasource database (and schema). A second run for the same **datasource** is refused while one is `PENDING` or `RUNNING`, by a unique index rather than by a pre-check. |
 | Crawl ceiling | A namespace of 2,000 tables or more is refused before any column is read. The connector's own unbounded enumeration is reused; nothing is truncated silently. |
 | Crawl outcome | `SUCCEEDED` means enumeration completed and every observed table either refreshed or recorded a per-table failure. A run-level failure (connection lost, ceiling reached, 30-minute budget, process restart) is `FAILED`. |
 | Removal detection | A table absent from a **complete** run — `SUCCEEDED` with zero per-table failures — becomes `MISSING`. A run with any per-table failure marks nothing missing. |
 | Classification | A table may be assigned to one **data domain** of 数仓规划, or to none. There is no separate catalog tree, and `未分类` is the absence of a domain, not a row. |
 | Curated fields | Business description, accountable owner and domain are user-owned. Tags are user-owned. A crawl never writes any of them. |
-| Preview | At most 100 rows and 5 seconds, both fixed in the server. Refused on a datasource declared `PROD`. |
+| Preview | At most 100 rows and 5 seconds, both fixed in the server. Refused on a datasource declared `PROD`. Each call is logged with its caller and asset, and the response carries a fixed privacy notice. |
 | Personal surfaces | Favourites and recent visits are per Workspace member. A visit is recorded by an explicit client call, not by reading the detail page. |
 | Access | Every Workspace member may browse, crawl, classify and tag. There is no per-asset or per-datasource permission in this release, because datasources do not have one either; inventing a second authorization model here would disagree with the one the Catalog seam already enforces. |
 | Deletion | Deleting a datasource deletes its assets, their curated text and their history. The datasource delete dialog must say so. |
@@ -69,7 +69,7 @@ New endpoints under `/api/v1/data-map`, all Workspace-scoped through the existin
 | `GET /tables/{tableId}` | One asset with its columns, tags, domain and datasource name. |
 | `PUT /tables/{tableId}` | Replace the curated description, owner and domain. Absent or null domain clears the classification. |
 | `GET /tables/{tableId}/changes` | Crawl-detected changes, newest first, capped at 100 rows per call. |
-| `GET /tables/{tableId}/preview` | Bounded sample: column names, types and at most 100 rows. |
+| `GET /tables/{tableId}/preview` | Bounded sample: column names, types, at most 100 rows, a `notice` warning about personal data and whether the row cap was hit. |
 | `PUT /tables/{tableId}/tags` | Replace the asset's tag set with the submitted tag ids. |
 | `POST` / `DELETE /tables/{tableId}/favorites` | Add or remove the caller's favourite. Both are idempotent. |
 | `POST /tables/{tableId}/views` | Record one visit for the caller on this asset. |
@@ -87,7 +87,7 @@ New error codes, in a new `io.yak.ops.common.enums.datamap` package:
 | Code | Use |
 | --- | --- |
 | `19701 CRAWL_SCOPE_INVALID` | The datasource, database or schema cannot be resolved for this Workspace. |
-| `19702 CRAWL_BUSY` | A run for the same scope is already pending or running, or the executor queue is full. |
+| `19702 CRAWL_BUSY` | The datasource already has a pending or running run, or the executor queue is full. |
 | `19703 CRAWL_TOO_LARGE` | The namespace reaches the 2,000-table ceiling. |
 | `19704 PREVIEW_FORBIDDEN` | The datasource is declared `PROD`. |
 | `19705 PREVIEW_TIMEOUT` | The sample exceeded the 5-second statement timeout. |
@@ -102,15 +102,20 @@ Unknown assets, runs and tags reuse `RESOURCE_NOT_EXISTS`. Field lengths are enf
 
 `V7`, the next release migration, is additive: nine new tables and no change to any existing table.
 
-`yak_ops_data_map_crawl` (append-only run record)
+`yak_ops_data_map_crawl` (one row per run, moved through its state machine)
 
 - `id`, `workspace_id`, `datasource_id`, `datasource_revision` `BIGINT`
 - `database_name`, `schema_name` `VARCHAR(128) NOT NULL DEFAULT ''`
 - `status` `VARCHAR(16) ascii_bin` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+- `active_scope` `TINYINT NULL` — `1` while `PENDING` or `RUNNING`, `NULL` once terminal
 - `table_count`, `column_count`, `added_count`, `updated_count`, `removed_count`, `failed_count` `INT NOT NULL DEFAULT 0`
 - `error` `VARCHAR(1000) NULL`, `created_time`, `started_time NULL`, `finished_time NULL`, `create_by`
-- keys: `PRIMARY KEY (id)`, `UNIQUE (workspace_id, id)`, `KEY (workspace_id, datasource_id, created_time)`
+- keys: `PRIMARY KEY (id)`, `UNIQUE (workspace_id, id)`,
+  `UNIQUE uk_data_map_crawl_active (workspace_id, datasource_id, active_scope)`,
+  `KEY (workspace_id, datasource_id, created_time)`
 - `FOREIGN KEY (datasource_id) → yak_ops_data_source (id) ON DELETE CASCADE`
+
+`active_scope` exists only to make "one active run per datasource" a constraint instead of a convention. InnoDB treats `NULL`s as distinct in a unique index, so every finished run coexists with every other and exactly one active run can hold a datasource — the same NULL-distinctness that Rejected Alternatives 5 calls a bug, used deliberately.
 
 `yak_ops_data_map_crawl_failure` (append-only per-table failure)
 
@@ -196,13 +201,21 @@ These are the three properties FYOIP-11 named as the blockers for crawling, and 
 
 **Enumeration.** The 500-row cap on `DataSourceCatalogService.listTables` is a safety bound for an interactive picker, not a crawling primitive: a namespace with 800 tables would be read as 500 with no way to ask for the rest, and no stable order to page by. The proposal adds one method to that seam — `List<DataSourceCatalogTableVO> listAllTables(datasourceId, database, schema)` — which delegates to the connector's existing unbounded `listTableInfos(database, schema, null, null)` and returns the whole namespace. The connector contract is not changed. The crawler refuses a namespace of 2,000 or more tables before reading any column, so the ceiling bounds collection work, not the enumeration itself: names are small, and materialising them is bounded by what one database schema can hold.
 
-Column reads reuse `listColumns` unchanged. That means one physical connection per table, sequentially, which is the load this proposal is willing to place on a user datasource: never two in flight, and at most 2,000 per run. A batched column read would be a second connector contract for one caller, and is not part of this change.
+Column reads reuse `listColumns` unchanged. That means one physical connection per table, opened and closed per call, which is the load this proposal is willing to place on a user datasource: at most one crawl per datasource (the scope lock below), one connection at a time inside it, and at most 2,000 tables per run. A batched column read would be a second connector contract for one caller, and is not part of this change.
 
-**Run identity.** A run is a row, not a thread. Submission inserts `PENDING` with the datasource revision pinned, then hands the id to a dedicated single-thread executor. The worker claims the row with `UPDATE … SET status = 'RUNNING' WHERE id = ? AND status = 'PENDING'`; a zero-row update means somebody else owns it and the worker returns. The executor is a separate `ThreadPoolTaskExecutor` (`core = max = 1`, queue of 4), not a shared `@Async` pool: a crawl must never compete with request threads, and it must never run two at once against the same metadata database. A full queue rejects the submission with `CRAWL_BUSY` and the inserted row is marked `FAILED`.
+**Run identity.** A run is a row, not a thread. Submission inserts `PENDING` with the datasource revision pinned, then hands the id to a dedicated executor. The worker claims the row with `UPDATE … SET status = 'RUNNING' WHERE id = ? AND status = 'PENDING'`; a zero-row update means somebody else owns it and the worker returns.
+
+The worker binds the run's Workspace with `WorkspaceContext.bind` and clears it in a `finally`. Binding is not an authorisation decision: membership was checked when the run was submitted, and the Workspace on the row is the one that check authorised. Without the binding, the Catalog seam — which reads the Workspace from that `ThreadLocal` — would fail on the worker thread.
+
+**Concurrency.** Two limits are needed here, and the thread pool is neither of them. The first is one active run per datasource, which is a data constraint: `active_scope` sits inside `UNIQUE (workspace_id, datasource_id, active_scope)`, so a second submission for a busy datasource is refused by the index. A pre-check would not do — two simultaneous submissions both read "no active run", both insert, and both crawl the same database — so the losing insert takes the duplicate-key violation and returns the same `CRAWL_BUSY`, only without the window.
+
+The second limit is throughput, which is what the executor is for: a dedicated `ThreadPoolTaskExecutor` with **two** workers and a queue of 64, never a shared `@Async` pool, because a crawl must not compete with request threads. An earlier draft used one worker, and that is wrong for a reason worth recording: a target database that stops answering holds the only worker for the whole 30-minute budget and takes every other datasource down with it, which turns one slow source into a product outage. Two workers cost one quarantined worker instead. Because a datasource can hold only one active run, two workers can only ever be pointed at two **different** datasources, so widening the pool does not widen the load on any one target database — the scope lock is what makes the extra worker safe, not a per-datasource mutex in the scheduler. Both numbers are configuration with these defaults. A full queue rejects the submission with `CRAWL_BUSY` and marks the row `FAILED` in the same statement that releases `active_scope`.
+
+The budget is in-band: it is checked between metadata calls, so a socket that has already stopped responding is not interrupted by it. Where the driver supports JDBC 4.1 `setNetworkTimeout`, the crawl connection carries the remaining budget (MySQL does; a driver that throws `SQLFeatureNotSupportedException` is logged and the run continues). Where it does not, a wedged run is bounded by the driver's own socket timeout and otherwise holds one of the two workers, which is the failure the pool is now sized to absorb.
 
 Startup marks every `PENDING` or `RUNNING` row `FAILED` with "interrupted by application restart". This is sound only because the product does not support multi-node execution — the repository makes no clustered-execution claim — and it is recorded here so that a future clustered deployment revisits it rather than silently losing runs.
 
-The worker binds the run's Workspace with `WorkspaceContext.bind` and clears it in a `finally`. Binding is not an authorisation decision: membership was checked when the run was submitted, and the Workspace on the row is the one that check authorised. Without the binding, the Catalog seam — which reads the Workspace from that `ThreadLocal` — would fail on the worker thread.
+Every path that ends a run — success, failure, queue rejection, startup sweep — clears `active_scope`, because a path that forgot would leave its datasource permanently un-crawlable with no way to clear it from the UI. The test plan pins all four.
 
 Each table is written in its own transaction through a `TransactionTemplate`, never one transaction per run. A 2,000-table run in a single transaction would hold a metadata-database transaction for minutes and would make every partial result invisible if the run died. Per-table transactions also make the run resumable in the only sense this proposal claims: re-running a scope converges, because every write is an upsert on the natural key.
 
@@ -230,6 +243,8 @@ So an asset carries a nullable `domain_id`, and `未分类` is `domain_id IS NUL
 
 The foreign key is single-column with `ON DELETE SET NULL`, not the composite `(workspace_id, id)` form the modelling tables use. A composite key would have to null `workspace_id`, which is `NOT NULL`, so the delete would fail at runtime; a single-column key with `SET NULL` instead expresses the intended behaviour — deleting a data domain unclassifies its assets — and needs no change to the modelling delete path, which would otherwise have to ask this module whether a domain is in use and would create the dependency cycle section 8 avoids.
 
+That silence is the one place `SET NULL` could surprise someone: a user tidying up planning has no way to see that the domain they are deleting classifies forty assets. The confirmation therefore states the number. `delete-dialog.tsx` gains one sentence — "该数据域下有 N 张资产，删除后它们将变为未分类" — read from `GET /api/v1/data-map/tables?domainId=…&pageSize=1` and its `total`, the same capped count the catalog page shows, so no endpoint is added for it. That count covers non-`MISSING` assets, which is what a user means by them, even though a `MISSING` one is unclassified by the delete as well. The count informs and does not block: refusing the delete would put a usage check on the modelling path, which is the coupling this section exists to avoid. If the call fails the dialog keeps its current text, so a data map outage cannot prevent a planning delete.
+
 ### 5. Preview is bounded by construction, and production is refused
 
 The sample is `SELECT * FROM <qualified table>` executed with `Statement.setMaxRows(100)`, `setQueryTimeout(5)` and `setFetchSize(100)` on a read-only connection. There is no `LIMIT` in the SQL: Oracle does not accept it, and dialect-specific row limiting is a second type-mapping problem for no benefit, because `setMaxRows` is the JDBC contract for exactly this. The table is never taken from the request — only a `tableId` is — and its qualified name is rendered by `JdbcDialect.qualifiedTable`, so no user string reaches the SQL text.
@@ -237,6 +252,8 @@ The sample is `SELECT * FROM <qualified table>` executed with `Statement.setMaxR
 Values are read by JDBC type. Binary, BLOB and CLOB columns are reported with a placeholder and are never materialised: `getBytes` or `getString` on a large object loads it whole, and a preview must not turn a 1 GB BLOB into heap. Text is truncated to 200 characters per cell, and the response reports whether the row cap was hit so the UI can say "仅展示前 100 行".
 
 `PROD` datasources are refused with `PREVIEW_FORBIDDEN`, and the UI explains why. `environment` is already a datasource field (`DEVELOP`, `TEST`, `PROD`), so no new configuration or flag is introduced. This is a policy guard, not a security boundary — a user who may edit a datasource can already mislabel its environment — but it is the right default: sampling production data should require a deliberate, separate decision with its own audit, not arrive as a side effect of installing a catalog. The draft's "allow for now, add a whitelist later" would ship the permissive branch first and make the safe behaviour the harder one to reach.
+
+Refusing `PROD` does not make a `TEST` datasource safe: that is where copies of production data usually live, sometimes masked badly. So every preview writes one structured log line — Workspace, caller, asset id, datasource, outcome and duration, never a sampled value — and the response carries a fixed server-side `notice` that the sample may contain personal data, rendered above the grid rather than buried in a footer. "Who read this table" is asked after an incident and has to be answerable that day. A persisted access trail is deliberately not in this release: an audit table needs a retention and privacy policy that this proposal has no standing to define, and rows nobody is allowed to delete are a different problem from a catalog (Rejected Alternatives 13).
 
 ### 6. Search without a segmenter, and its stated ceiling
 
@@ -268,26 +285,47 @@ The new product is a fifth entry in `GLOBAL_PRODUCT_MENU` and `ALL_PRODUCT_GROUP
 
 The catalog page is a left domain tree plus a right result table with a search box and datasource/database/tag filters above it. It deliberately has **one** tree: a second datasource tree would answer the same question as the filters, and would need lazy loading and its own state for a dataset that the filter already narrows. The detail page is a route so it can be linked and bookmarked; 基础信息 carries the editable description, owner, domain and tags, 字段 renders the columns collected with the asset, 预览 loads on demand, and 变更记录 pages the change rows.
 
+The tree is fetched once per mount through the app's existing `QueryClient` with a five-minute `staleTime`, so switching between 资产目录 and an asset's detail page, or changing a filter, does not refetch it. Its size is bounded by the planning taxonomy — tens of domains in one Workspace — not by the catalog, which is why it is eager; the volume that would justify lazy loading is domains in the hundreds, and that is a planning-side shape to fix in planning rather than a reason to fork the taxonomy here (Rejected Alternatives 14).
+
+A `MISSING` asset is shown rather than hidden: it is excluded from the default list, and both the filter chip and the detail banner say what it means — the table is no longer present in its datasource, this usually means it was dropped or renamed, and after a rename the new name arrives as a **new** asset whose description and owner must be copied by hand. Saying that plainly is the whole remedy this release offers; copying it automatically would invent an identity nothing observed (section 10).
+
+The planning delete dialog gains the asset count of section 4. It is the only file this proposal touches outside the new product.
+
+### 10. What an implementation must not add
+
+Each item below is a decision this proposal already made, so adding it is not a refactor but a different product that needs its own proposal. They are listed here because every one of them is the obvious next thing to build:
+
+1. **Incremental crawling or change data capture.** Every run enumerates its whole namespace and upserts on the natural key (section 2). An incremental mode would trust a watermark the target database does not offer, and the catalog would then be missing tables it cannot explain.
+2. **A repair, restore or bulk-fix action for `MISSING` assets.** `MISSING` clears only when a later complete run observes the same name (section 2). A manual restore would let an asset claim a presence nothing observed.
+3. **Row counts, storage sizes or any other engine statistic presented as an asset fact**, including a "total storage" card (Rejected Alternatives 8).
+4. **Any condition, filter, sort or free SQL on the preview query.** The preview is `SELECT *` with a row cap (section 5); a `WHERE` box is an arbitrary-query console with a different authorisation and cost model.
+5. **A second writer into the catalog.** Publication, data sync and DDL all reach the map by being crawled, never by writing to it (sections 1 and 3), because a second writer is what makes the merge rule return.
+6. **A permission model per asset or per datasource, or a share link that bypasses the Workspace.** Access is the Workspace, as it already is for datasources.
+7. **A crawl scheduler, or a "crawl every datasource" button** that turns one deliberate action into a fan-out nobody sized (Rejected Alternatives 6).
+
 ## Compatibility, Deprecation, and Migration Plan
 
 - `V7` is additive and forward-only. A fresh install applies `V1` through `V7`; an upgrade from 1.8.x applies `V7` after `V6`. No existing table, column or row is touched, and no backfill is needed because the catalog starts empty.
 - Existing REST endpoints, task definitions, published models, publication records and metadata snapshots are unchanged. Publication collection keeps writing its own snapshot tables; nothing reads them differently.
 - One existing behaviour changes: deleting a datasource now also deletes its catalog rows, including curated descriptions, owners, domains and tags. The datasource delete dialog must state this before the action. Modelling rows are unaffected, and datasource deletion already requires no dependent task.
-- Deleting a data domain now unclassifies any asset assigned to it. No modelling change is required for this, and no confirmation text changes in this release.
+- Deleting a data domain now unclassifies any asset assigned to it. No modelling service or endpoint changes; the planning delete dialog gains one informational sentence (section 4), which is the only edit outside the new module.
 - Nothing is deprecated. No compatibility layer is introduced.
 - No downgrade path is provided, consistent with previous releases; restoring the pre-upgrade backup is the supported rollback.
 
 ## Test Plan
 
-- Unit tests cover the crawl state machine (claim by conditional update, concurrent submission refused, restart sweep to `FAILED`, queue rejection to `FAILED`), the ceiling and the 30-minute budget, per-table failure recording and its effect on `MISSING`, the `MISSING`/`ACTIVE` transition on reappearance, and change detection across all six change types with first observation producing no rows.
+- Unit tests cover the crawl state machine (claim by conditional update, restart sweep to `FAILED`, queue rejection to `FAILED`), the ceiling and the 30-minute budget, per-table failure recording and its effect on `MISSING`, the `MISSING`/`ACTIVE` transition on reappearance, and change detection across all six change types with first observation producing no rows.
+- The scope lock is tested at the database, not through the service: a second insert for a datasource with an active run must fail on `uk_data_map_crawl_active` even when the pre-check is bypassed, and each of the four terminal paths — success, run failure, queue rejection, restart sweep — must leave `active_scope` `NULL`, because a leaked lock makes the datasource un-crawlable with no UI remedy.
+- Two workers are asserted to run two different datasources concurrently and to be incapable of running the same one twice, which is the property that lets the pool be wider than one.
 - One structural unit test asserts that the crawler's update statement names only observed columns plus the audit `update_time`, and that the curated update names only the three curated columns. This is the test that keeps section 3 true after a later field is added.
 - Search tests cover `%` and `_` as literals, case-insensitive matching under `utf8mb4_unicode_ci`, Chinese substring matching, matched-column reporting, the 1,000 count cap and the `includeMissing` filter.
-- Preview tests cover the 100-row cap, the per-cell truncation, the placeholder for binary and LOB columns without reading them, the 5-second timeout mapping to `PREVIEW_TIMEOUT`, `PROD` refusal, and a `tableId` for a `MISSING` asset returning `RESOURCE_NOT_EXISTS`.
+- Preview tests cover the 100-row cap, the per-cell truncation, the placeholder for binary and LOB columns without reading them, the 5-second timeout mapping to `PREVIEW_TIMEOUT`, `PROD` refusal, the fixed `notice` field, an audit log line carrying the caller and asset and no sampled value, and a `tableId` for a `MISSING` asset returning `RESOURCE_NOT_EXISTS`.
 - Database integration tests cover `V7` applied on top of `V6`, the identity unique key with `schema_name = ''` (two MySQL tables with different names are distinct, and a duplicate name is rejected — the case a nullable `schema_name` would silently allow), `ON DELETE SET NULL` on domain deletion, `ON DELETE CASCADE` from datasource and table deletion across columns, tags, favourites, views and changes, and Workspace isolation on every read and write including a foreign-workspace `tableId`.
 - End-to-end tests run against the packaged Boot process with a real MySQL datasource: crawl a database, assert tables and columns persisted, re-run and assert no duplicates and no change rows, drop a table and assert `MISSING` only after a complete run, and assert a preview returns at most 100 rows.
 - A failing case for the ceiling and for a datasource with an unreachable host must leave the run `FAILED` with `removed_count = 0`.
+- Frontend behaviour checks cover the planning delete dialog rendering the asset count and falling back to its current text when that call fails, and the `MISSING` banner and filter chip wording.
 - Frontend verification covers `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run architecture:check`, `npm run contract:check` and `npm run build`.
-- Manual acceptance must crawl a real database of more than 100 tables, preview a table with a text and a binary column, and confirm that a description, an owner, a domain and a tag survive a second crawl unchanged.
+- Manual acceptance must crawl a real database of more than 100 tables, preview a table with a text and a binary column, confirm that a description, an owner, a domain and a tag survive a second crawl unchanged, and confirm that a table renamed outside the platform appears as a new asset while the old row reads `MISSING` with its hint.
 
 ## Rejected Alternatives
 
@@ -303,3 +341,5 @@ The catalog page is a left domain tree plus a right result table with a search b
 10. **Store one success row per table per run, as the draft's crawl-detail table does.** A successful table is already visible through `last_seen_time`; storing a row per table per run grows with tables × runs and has no reader. Only failures are kept, which is the part an operator needs.
 11. **Build lineage in this proposal.** There is no dependency graph and no persisted record of which task wrote which table. A catalog of physical tables cannot infer it, and any attempt would produce a picture that looks authoritative and is not.
 12. **Add a second navigation tree for datasources.** It answers the same question as the datasource and database filters over one result list, and it would need lazy loading, its own expansion state and its own empty states for a set the filter already narrows.
+13. **Persist a preview audit trail now.** An access table is the right long-term answer, but it needs a retention and privacy policy — how long reads of personal data are kept, who may query them, when they are deleted — that this proposal has no standing to define, and a table nobody may prune is a new operational problem, not a smaller one. The structured log line answers "who read this table" on the day it is asked; the table is the V1.1 shape once someone owns that policy.
+14. **Serve the classification tree from a data-map-owned copy, with an asset count on every node.** A copy of the taxonomy disagrees with planning the moment a domain is renamed or re-parented, and per-node counts are an aggregate query plus a UI decision, not a reason to fork the source of truth. The catalog renders the planning tree it already validates against.
