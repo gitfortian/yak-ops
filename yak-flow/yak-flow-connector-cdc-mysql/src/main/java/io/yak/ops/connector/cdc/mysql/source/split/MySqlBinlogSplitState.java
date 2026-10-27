@@ -19,7 +19,9 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
     }
 
     @Override
-    public String sourceId() { return binlog.definitionFingerprint(); }
+    public String sourceId() {
+        return binlog.definitionFingerprint();
+    }
 
     @Override
     public void captureLow(DebeziumOffset low, byte[] schemaHistory) {
@@ -29,7 +31,9 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
 
     @Override
     public void resume(DebeziumOffset high, List<FinishedSnapshotSplitInfo> finished) {
-        if (binlog.phase() == MySqlBinlogSplit.Phase.STANDALONE) return;
+        if (binlog.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+            return;
+        }
         if (binlog.phase() == MySqlBinlogSplit.Phase.STREAMING) {
             if (!Objects.equals(high, binlog.highWatermark()) || !finished.equals(binlog.finishedSplits())) {
                 throw new IllegalStateException("Restored streaming metadata conflicts with coordinator handoff");
@@ -49,11 +53,15 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
     }
 
     @Override
-    public MySqlBinlogSplit toMySqlSplit() { return binlog; }
+    public MySqlBinlogSplit toMySqlSplit() {
+        return binlog;
+    }
 
     @Override
     public MySqlSplit checkpoint(byte[] history) {
-        if (binlog.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) return binlog;
+        if (binlog.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
+            return binlog;
+        }
         if (binlog.phase() == MySqlBinlogSplit.Phase.PAUSED) {
             if (emittedOffset == null || history == null || history.length == 0) {
                 throw new IllegalStateException("Suspended Binlog requires anchor and schema history");

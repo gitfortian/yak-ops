@@ -17,8 +17,7 @@ public record MySqlFetchedRecord(
 
     public MySqlFetchedRecord {
         rows = List.copyOf(Objects.requireNonNull(rows, "rows"));
-        int kinds = (binlogOffset == null ? 0 : 1)
-                + (preparedSnapshot == null ? 0 : 1);
+        int kinds = (binlogOffset == null ? 0 : 1) + (preparedSnapshot == null ? 0 : 1);
         if (kinds != 1
                 || (preparedSnapshot != null && (preparedSnapshot.output() == null || !rows.isEmpty()))
                 || (lowWatermark && (binlogOffset == null || !rows.isEmpty()))
