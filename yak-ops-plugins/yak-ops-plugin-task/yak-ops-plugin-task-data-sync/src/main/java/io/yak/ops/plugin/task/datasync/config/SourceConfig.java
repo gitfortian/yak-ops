@@ -34,11 +34,7 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
             OptionRule.builder().required(CHUNK_KEY).build();
 
     public static SourceConfig from(
-            ReadonlyConfig table,
-            String datasourceId,
-            SolutionType type,
-            List<Step> steps,
-            StartupMode startupMode) {
+            ReadonlyConfig table, String datasourceId, SolutionType type, List<Step> steps, StartupMode startupMode) {
         validate(table, TABLE_RULE, "source.tables");
         Map<String, Object> snapshot = table.get(SNAPSHOT);
         if (snapshot != null
