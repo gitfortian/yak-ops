@@ -58,6 +58,36 @@ class DataSyncProductParametersTest {
     }
 
     @Test
+    void realtimeIncrementalOnlyUsesLatestOffsetWithoutSnapshotOptions() {
+        String latest = json(true)
+                .replace("[\"FULL\",\"INCREMENTAL\"]", "[\"INCREMENTAL\"]")
+                .replace("\"source\":{\"datasourceId\":\"source\"",
+                        "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"latest-offset\"}");
+        var parsed = plugin.parse(4, latest);
+        var job = JobConfig.from(parsed);
+        assertEquals(List.of(Step.INCREMENTAL), job.steps());
+        assertEquals("latest-offset", job.source().get(MySqlCdcSourceOptions.STARTUP_MODE));
+        assertFalse(plugin.supportsScheduling(parsed));
+        assertEquals(parsed, plugin.parse(4, ConfigParser.toJson(parsed)));
+        plugin.validateReferences(parsed, new DataSyncTaskPluginContractTest.Metadata());
+        assertTrue(plugin.solutions("MYSQL", "POSTGRE_SQL").get(1).allowedCombinations().stream()
+                .anyMatch(value -> value.steps().equals(List.of(Step.INCREMENTAL))
+                        && value.writeModes().equals(List.of("UPSERT"))));
+        for (String invalid : List.of(
+                latest.replace("\"startup\":{\"mode\":\"latest-offset\"},", ""),
+                latest.replace("latest-offset", "initial"),
+                latest.replace("latest-offset", "earliest-offset"),
+                latest.replace("\"mode\":\"latest-offset\"", "\"mode\":\"latest-offset\",\"offset\":1"),
+                latest.replace("\"id\":\"orders\",\"table\":\"orders\"",
+                        "\"id\":\"orders\",\"table\":\"orders\",\"snapshot\":{\"chunkKeyColumn\":\"id\"}"))) {
+            assertThrows(TaskPluginException.class, () -> plugin.parse(invalid));
+        }
+        assertThrows(TaskPluginException.class,
+                () -> plugin.parse(json(false).replace("\"tables\":[",
+                        "\"startup\":{\"mode\":\"latest-offset\"},\"tables\":[")));
+    }
+
+    @Test
     void rejectsOldSchemaVersionsAndLegacyPipelineInsteadOfConvertingThem() {
         assertThrows(TaskPluginException.class, () -> plugin.parse(2, json(false)));
         assertThrows(TaskPluginException.class, () -> plugin.parse(3, json(false)));
