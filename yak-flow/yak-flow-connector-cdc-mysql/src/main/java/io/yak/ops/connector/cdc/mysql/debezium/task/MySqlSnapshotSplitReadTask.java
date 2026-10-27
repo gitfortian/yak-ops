@@ -137,7 +137,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         if (partition != null) return;
         if (!started) {
             started = true;
-            binlog.start(new MySqlBinlogSplit("snapshot-backfill", null, new byte[0]));
+            binlog.start(new MySqlBinlogSplit(null, new byte[0]));
         }
         long deadline = System.nanoTime() + BINLOG_TIMEOUT_NANOS;
         while (partition == null) {
