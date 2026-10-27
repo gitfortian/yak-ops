@@ -143,7 +143,6 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     }
 
     private MySqlHybridEnumeratorState readHybrid(DataInputStream in, int splitVersion) throws IOException {
-        String fingerprint = in.readUTF();
         int phaseIndex = in.readUnsignedByte();
         if (phaseIndex >= MySqlHybridEnumeratorState.Phase.values().length) {
             throw new IOException("Unknown MySQL hybrid phase");
