@@ -172,7 +172,7 @@ class DataMapDatabaseIT {
     }
 
     @Test
-    void restartSweepFailsInterruptedRunsAndReleasesEveryLock() {
+    void restartSweepMarksInterruptedRunsAndReleasesEveryLock() {
         crawlMapper.insert(run("run-1", DATASOURCE, "PENDING", 1));
         crawlMapper.insert(run("run-2", OTHER_DATASOURCE, "RUNNING", 1));
         assertThrows(
@@ -180,8 +180,8 @@ class DataMapDatabaseIT {
 
         assertEquals(2, crawlMapper.sweepInterrupted("interrupted by application restart", LocalDateTime.now()));
 
-        assertEquals("FAILED", status("run-1"));
-        assertEquals("FAILED", status("run-2"));
+        assertEquals("INTERRUPTED", status("run-1"));
+        assertEquals("INTERRUPTED", status("run-2"));
         assertNull(activeScope("run-1"));
         assertNull(activeScope("run-2"));
         crawlMapper.insert(run("run-4", DATASOURCE, "PENDING", 1));
