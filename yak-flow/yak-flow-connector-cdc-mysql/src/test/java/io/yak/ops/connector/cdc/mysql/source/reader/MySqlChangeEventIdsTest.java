@@ -151,6 +151,36 @@ class MySqlChangeEventIdsTest {
     }
 
     @Test
+    void interruptedSnapshotChunkDoesNotPublishFinishedWatermark() throws Exception {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var config = MySqlSource.builder()
+                .hostname("localhost").username("user").password("secret")
+                .serverId(9001).topicPrefix("atomic-snapshot-test").table(TABLE, schema)
+                .build().config();
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+            var rows = List.of(
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L)));
+            var raw = new MySqlSnapshotSplit("chunk-atomic", "definition", TABLE, null, null, null);
+            var prepared = raw.withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
+            var state = MySqlSplitState.fromSplit(raw);
+            var delivered = new java.util.concurrent.atomic.AtomicInteger();
+            assertThrows(IllegalStateException.class, () -> emitter.emitRecord(
+                    MySqlFetchedRecord.prepared(prepared),
+                    row -> {
+                        if (delivered.incrementAndGet() == 2) {
+                            throw new IllegalStateException("downstream failure");
+                        }
+                    }, state));
+            assertEquals(raw, state.checkpoint(null));
+            assertNull(((MySqlSnapshotSplit) state.toMySqlSplit()).finished());
+        }
+    }
+
+    @Test
     void binlogRowsShareIdentityAcrossModesAndAdvanceOnlyAfterWholeEvent() throws Exception {
         DebeziumOffset previous = position(42, 1);
         DebeziumOffset offset = position(44, 3);
