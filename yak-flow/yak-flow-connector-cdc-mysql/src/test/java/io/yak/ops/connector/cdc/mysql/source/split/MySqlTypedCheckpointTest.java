@@ -37,7 +37,7 @@ class MySqlTypedCheckpointTest {
             MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("typed", "fingerprint", range);
             assertEquals(split, roundTrip(split));
             assertEquals(range, roundTrip(split).chunkRange());
-            assertThrows(IllegalStateException.class, () -> split.withLastEmittedKey(15L));
+            assertEquals(0, split.outputPosition());
         }
     }
 

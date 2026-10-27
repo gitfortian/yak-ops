@@ -24,6 +24,7 @@ import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
@@ -217,6 +218,11 @@ class MySqlChunkKeySelectionTest {
         @Override
         public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler) {
             throw new AssertionError("Checkpoint identity test must not open a JDBC connection");
+        }
+
+        @Override
+        public void sendEventToSourceReader(int subtaskId, SourceEvent event) {
+            throw new AssertionError("This fixture does not dispatch SourceEvents");
         }
 
         @Override

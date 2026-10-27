@@ -17,6 +17,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
@@ -159,6 +160,11 @@ class MySqlCdcSourceTest {
         @Override
         public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler) {
             throw new AssertionError("Single Binlog split needs no discovery");
+        }
+
+        @Override
+        public void sendEventToSourceReader(int subtaskId, SourceEvent event) {
+            throw new AssertionError("This fixture does not dispatch SourceEvents");
         }
 
         @Override

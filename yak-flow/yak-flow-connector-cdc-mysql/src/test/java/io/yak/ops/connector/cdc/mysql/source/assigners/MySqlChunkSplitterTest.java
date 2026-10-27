@@ -55,7 +55,7 @@ class MySqlChunkSplitterTest {
         try (var reader = new SnapshotSplitReader(
                 () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
             reader.open(first);
-            var partial = reader.fetchTyped();
+            var partial = reader.fetch();
             assertEquals(first.splitId(), partial.nextSplit());
             var row = partial.nextRecordFromSplit();
             observed.add(row.row().getLong(0));
@@ -63,7 +63,7 @@ class MySqlChunkSplitterTest {
         try (var restarted = new SnapshotSplitReader(
                 () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
             restarted.open(first);
-            var whole = restarted.fetchTyped();
+            var whole = restarted.fetch();
             assertEquals(first.splitId(), whole.nextSplit());
             assertEquals(1L, whole.nextRecordFromSplit().row().getLong(0));
             assertEquals(100L, whole.nextRecordFromSplit().row().getLong(0));
