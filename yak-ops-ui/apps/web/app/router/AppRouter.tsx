@@ -5,6 +5,11 @@ import LoginPage from "@/app/login";
 import { UserManagementPage } from "@/app/management/users/page";
 import { WorkspaceManagementPage } from "@/app/management/workspaces/page";
 import { DataSyncPage } from "@/app/data-sync/list/page";
+import DataMapOverviewPage from "@/app/data-map/overview/page";
+import DataMapCatalogPage from "@/app/data-map/catalog/page";
+import DataMapTableDetailPage from "@/app/data-map/tables/detail/page";
+import DataMapCrawlsPage from "@/app/data-map/crawls/page";
+import DataMapPersonalPage from "@/app/data-map/personal/page";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
 import MetricsPage from "@/app/data-modeling/metrics";
@@ -22,6 +27,8 @@ import { useAuth } from "@/hooks/use-auth";
 
 import AppLayout from "../layout/AppLayout";
 import {
+  DATA_GOVERNANCE_NAVIGATION,
+  DATA_GOVERNANCE_PRODUCT_LABEL,
   DATA_INTEGRATION_NAVIGATION,
   DATA_INTEGRATION_PRODUCT_LABEL,
   DATA_MODELING_NAVIGATION,
@@ -32,49 +39,7 @@ import {
   OPERATIONS_PRODUCT_LABEL,
 } from "../layout/navigation";
 import AppLoading from "./AppLoading";
-
-const DEFAULT_AUTHENTICATED_PATH = "/data-source";
-const AUTHENTICATED_PATHS = new Set([
-  "/data-modeling/warehouse-planning",
-  "/data-modeling/data-standards",
-  "/data-modeling/metrics",
-  "/data-modeling/dimension-modeling",
-  "/data-modeling/dimension-modeling/reverse",
-  "/data-modeling/dimensions",
-  "/data-modeling/logical-models",
-  "/data-modeling/logical-models/new",
-  "/data-source",
-  "/data-sync",
-  "/data-sync/new",
-  "/operations",
-  "/operations/offline-tasks",
-  "/operations/realtime-tasks",
-  "/management/users",
-  "/management/workspaces",
-]);
-
-const isAuthenticatedPath = (pathname: string) =>
-  AUTHENTICATED_PATHS.has(pathname) ||
-  pathname.startsWith("/data-sync/") ||
-  pathname.startsWith("/operations/") ||
-  pathname.startsWith("/data-modeling/logical-models/");
-
-const resolveReturnTo = (requested: string | null) => {
-  if (!requested) return DEFAULT_AUTHENTICATED_PATH;
-
-  try {
-    const destination = new URL(requested, window.location.origin);
-    if (
-      destination.origin !== window.location.origin ||
-      !isAuthenticatedPath(destination.pathname)
-    ) {
-      return DEFAULT_AUTHENTICATED_PATH;
-    }
-    return `${destination.pathname}${destination.search}${destination.hash}`;
-  } catch {
-    return DEFAULT_AUTHENTICATED_PATH;
-  }
-};
+import { DEFAULT_AUTHENTICATED_PATH, resolveReturnTo } from "./authenticated-path";
 
 function ProtectedRoute() {
   const { currentUser, loading } = useAuth();
@@ -108,7 +73,7 @@ function LoginRoute() {
   const handleAuthenticated = async () => {
     await refreshCurrentUser();
     const requested = new URLSearchParams(location.search).get("returnTo");
-    navigate(resolveReturnTo(requested), { replace: true });
+    navigate(resolveReturnTo(requested, window.location.origin), { replace: true });
   };
 
   return <LoginPage onAuthenticated={handleAuthenticated} />;
@@ -165,6 +130,30 @@ export default function AppRouter() {
           <Route path="/data-sync/new" element={<DataSyncTaskEditorPage />} />
           <Route path="/data-sync/:id/edit" element={<DataSyncTaskEditorPage />} />
           <Route path="/data-sync/:id/detail" element={<DataSyncTaskDetailPage />} />
+        </Route>
+
+        <Route
+          element={
+            <AppLayout
+              productLabel={DATA_GOVERNANCE_PRODUCT_LABEL}
+              productPath="/data-governance/data-map/overview"
+              navigation={DATA_GOVERNANCE_NAVIGATION}
+              workspaceScoped
+            />
+          }
+        >
+          <Route
+            path="/data-governance/data-map"
+            element={<Navigate replace to="/data-governance/data-map/overview" />}
+          />
+          <Route path="/data-governance/data-map/overview" element={<DataMapOverviewPage />} />
+          <Route path="/data-governance/data-map/catalog" element={<DataMapCatalogPage />} />
+          <Route
+            path="/data-governance/data-map/tables/:tableId"
+            element={<DataMapTableDetailPage />}
+          />
+          <Route path="/data-governance/data-map/crawls" element={<DataMapCrawlsPage />} />
+          <Route path="/data-governance/data-map/personal" element={<DataMapPersonalPage />} />
         </Route>
 
         <Route

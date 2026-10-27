@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.yak.ops</groupId><artifactId>yak-ops-business</artifactId><version>1.9.0</version><relativePath>../pom.xml</relativePath></parent>
+  <artifactId>yak-ops-business-datamap</artifactId>
+  <name>Yak Ops Data Map Business</name>
+  <description>Metadata catalog, crawl execution and bounded preview over datasource namespaces</description>
+  <dependencies>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-common</artifactId></dependency>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-dao</artifactId></dependency>
+    <!-- The catalog reaches a datasource only through the datasource boundary: Catalog reads and
+         connection resolution stay owned there, so no credentials enter this module. -->
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datasource</artifactId></dependency>
+    <!-- Classification reuses the planning data domain instead of forking the taxonomy. -->
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-modeling</artifactId></dependency>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-api</artifactId></dependency>
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-flow-connector-jdbc</artifactId></dependency>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></dependency>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-tx</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional></dependency>
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><scope>test</scope></dependency>
+    <!-- Real MySQL for the scope lock: a unique-index property no mock can prove. -->
+    <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-test-utils</artifactId>
+      <version>${project.version}</version><scope>test</scope></dependency>
+  </dependencies>
+</project>

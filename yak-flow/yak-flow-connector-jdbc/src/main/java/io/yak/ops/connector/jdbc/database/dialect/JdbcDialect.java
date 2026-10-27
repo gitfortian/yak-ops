@@ -9,6 +9,7 @@ import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 
@@ -84,6 +85,18 @@ public interface JdbcDialect extends java.io.Serializable {
      * @throws SQLException if the database rejects the required settings
      */
     void configureReadConnection(Connection connection) throws SQLException;
+
+    /**
+     * Applies this driver's streaming mode to a bounded read statement.
+     *
+     * <p>A statement that is not in streaming mode buffers the whole result set before the first
+     * {@code next()}, so a row cap alone does not bound what the driver materialises. Dialects
+     * without a streaming mode keep the default and rely on the caller's row cap.
+     *
+     * @param statement the caller-owned statement, already configured with its row cap and timeout
+     * @throws SQLException if the driver rejects the streaming hint
+     */
+    default void configurePreviewStatement(Statement statement) throws SQLException {}
 
     /**
      * Maps a resolved YakFlow column to a native target DDL type.

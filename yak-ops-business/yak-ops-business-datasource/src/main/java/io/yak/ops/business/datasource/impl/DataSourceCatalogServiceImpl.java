@@ -45,13 +45,22 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
     @Override
     public List<DataSourceCatalogTableVO> listTables(String datasourceId, DataSourceCatalogQueryDTO parameters) {
-        var tables = query(
+        return describe(
                 datasourceId,
-                catalog -> catalog.listTableInfos(
-                        StringUtils.trimToNull(parameters.getDatabase()),
-                        StringUtils.trimToNull(parameters.getSchema()),
-                        StringUtils.trimToNull(parameters.getKeyword()),
-                        parameters.getLimit()));
+                StringUtils.trimToNull(parameters.getDatabase()),
+                StringUtils.trimToNull(parameters.getSchema()),
+                StringUtils.trimToNull(parameters.getKeyword()),
+                parameters.getLimit());
+    }
+
+    @Override
+    public List<DataSourceCatalogTableVO> listAllTables(String datasourceId, String database, String schema) {
+        return describe(datasourceId, StringUtils.trimToNull(database), StringUtils.trimToNull(schema), null, null);
+    }
+
+    private List<DataSourceCatalogTableVO> describe(
+            String datasourceId, String database, String schema, String keyword, Integer limit) {
+        var tables = query(datasourceId, catalog -> catalog.listTableInfos(database, schema, keyword, limit));
         return tables.stream()
                 .map(table -> {
                     DataSourceCatalogTableVO result = new DataSourceCatalogTableVO();

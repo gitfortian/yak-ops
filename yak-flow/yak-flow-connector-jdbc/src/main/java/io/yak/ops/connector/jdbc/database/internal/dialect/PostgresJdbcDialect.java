@@ -28,6 +28,17 @@ public final class PostgresJdbcDialect extends AbstractDialect {
         return new PostgresTypeConverter();
     }
 
+    /**
+     * Requests cursor-based fetching for a bounded read.
+     *
+     * <p>PostgreSQL fetches in batches when the fetch size is positive and autocommit is off,
+     * which {@link #configureReadConnection} already guarantees.
+     */
+    @Override
+    public void configurePreviewStatement(java.sql.Statement statement) throws java.sql.SQLException {
+        statement.setFetchSize(100);
+    }
+
     @Override
     public String quoteIdentifier(String identifier) {
         return "\"" + JdbcDialect.requireIdentifier(identifier).replace("\"", "\"\"") + "\"";

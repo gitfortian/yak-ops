@@ -13,7 +13,7 @@
 
     <groupId>io.yak.ops</groupId>
     <artifactId>yak-ops-bom</artifactId>
-    <version>1.8.1</version>
+    <version>1.9.0</version>
     <packaging>pom</packaging>
 
     <name>Yak Ops BOM</name>
@@ -66,6 +66,7 @@
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-boot</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-modeling</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datasource</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datamap</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-task</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-task-execution</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-api</artifactId><version>${project.version}</version></dependency>
