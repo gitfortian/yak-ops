@@ -28,12 +28,11 @@ class MySqlTypedEnumeratorCheckpointTest {
 
     @Test
     void keepsTypedDiscoveryBoundaryAndCompletedChunkWatermarks() throws Exception {
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         BigDecimal boundary = new BigDecimal("9223372036854775808.00000000");
-        var first = MySqlSnapshotSplit.typed(
-                "chunk-0", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
+        var first = MySqlSnapshotSplit.typed("chunk-0", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
         assigner.appendPlan(first, 1);
         assertEquals(first, assigner.nextSnapshot());
         assigner.finishSnapshot(finished(first, 150));
@@ -41,12 +40,11 @@ class MySqlTypedEnumeratorCheckpointTest {
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(5)));
         assertEquals(boundary, persisted.nextChunkRange().start());
         assertEquals(1, persisted.finishedSplitInfos().size());
-        var recovered = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", persisted);
+        var recovered = new MySqlHybridSplitAssigner(StartupOptions.initial(), persisted);
         assertEquals(persisted.nextChunkRange(), recovered.nextChunkRange());
         assertEquals(finished(first, 150), recovered.finishedSplits().getFirst());
 
-        var last = MySqlSnapshotSplit.typed(
-                "chunk-1", "fp", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));
+        var last = MySqlSnapshotSplit.typed("chunk-1", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));
         recovered.appendPlan(last, 1);
         assertNull(recovered.nextChunkRange());
         assertEquals(last, recovered.nextSnapshot());
@@ -55,14 +53,14 @@ class MySqlTypedEnumeratorCheckpointTest {
         recovered.captureHigh(offset(200));
         var handoff = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(recovered.snapshotState(7)));
-        var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", handoff);
+        var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), handoff);
         resumed.resumeRestoredHandoff();
         assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, resumed.phase());
     }
 
     @Test
     void rejectsOldDiscoveryCheckpointVersionsWithoutGuessingTheNextRange() throws Exception {
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         byte[] persisted = SERIALIZER.serialize(assigner.snapshotState(1));
