@@ -8,6 +8,7 @@ import { dataMapFailureMessage, isSearchTooFrequent } from "@/service/data-map/r
 import type { TableQuery } from "@/service/data-map/types";
 
 import AssetTable from "../shared/asset-table";
+import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
 import {
@@ -67,6 +68,11 @@ export default function CatalogPage() {
 
   const records = page.data?.bizData ?? [];
   const total = page.data?.pagination?.total ?? 0;
+  /**
+   * Empty is decided by the page contents, not by the count alone: a page can be empty while the
+   * total is not (last row of a page removed), and that case must not leave a bare table header.
+   */
+  const isEmpty = page.isSuccess && !page.isPlaceholderData && records.length === 0;
 
   useEffect(() => {
     if (!page.isSuccess || page.isPlaceholderData) return;
@@ -110,7 +116,7 @@ export default function CatalogPage() {
         className="bg-white px-6 max-md:px-4"
         extra={
           <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}>
-            提交采集
+            发起采集
           </Button>
         }
       />
@@ -165,17 +171,44 @@ export default function CatalogPage() {
           )}
 
           <div className="mt-2 min-h-0 flex-1 overflow-auto">
-            <AssetTable
-              records={records}
-              loading={page.isFetching}
-              emptyText={hasActiveFilters ? "没有匹配的资产" : "尚未采集任何资产"}
-              pagination={{
-                pageNo: query.pageNo,
-                pageSize: query.pageSize,
-                total,
-                onPageChange: (pageNo, pageSize) => update({ pageNo, pageSize }),
-              }}
-            />
+            {isEmpty ? (
+              hasActiveFilters ? (
+                <DataMapEmptyState
+                  title="没有匹配的资产"
+                  description="当前筛选条件下没有资产。调整条件或清空筛选后重试。"
+                  action={
+                    <Button size="small" onClick={reset}>
+                      清空筛选
+                    </Button>
+                  }
+                />
+              ) : (
+                <DataMapEmptyState
+                  title="还没有采集任何资产"
+                  description="发起一次采集，把数据源中的表和字段同步到资产目录。采集完成后这里会显示每一张表。"
+                  action={
+                    <Button
+                      size="small"
+                      variant="primary"
+                      onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}
+                    >
+                      发起采集
+                    </Button>
+                  }
+                />
+              )
+            ) : (
+              <AssetTable
+                records={records}
+                loading={page.isFetching}
+                pagination={{
+                  pageNo: query.pageNo,
+                  pageSize: query.pageSize,
+                  total,
+                  onPageChange: (pageNo, pageSize) => update({ pageNo, pageSize }),
+                }}
+              />
+            )}
           </div>
         </section>
       </div>

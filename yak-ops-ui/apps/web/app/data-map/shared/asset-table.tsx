@@ -43,7 +43,12 @@ const TagList = ({ names }: { names: string[] }) => {
 };
 
 /** Asset list shared by the catalog result grid and the personal favourite/recent grids. */
-export default function AssetTable({ records, loading, emptyText, pagination = false }: Props) {
+export default function AssetTable({
+  records,
+  loading,
+  emptyText = "暂无数据",
+  pagination = false,
+}: Props) {
   const { domainNames } = useDomainTaxonomy();
 
   const columns: TableColumns<TableSummary> = [

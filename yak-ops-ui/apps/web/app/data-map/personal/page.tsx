@@ -1,13 +1,16 @@
 import { Alert, Button, PageHeader, Tabs, TabsList, TabsTab } from "@yak-ops/yak-ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { countLabel } from "@/service/data-map/catalog";
 import { listFavorites, listRecent } from "@/service/data-map/personal";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 
 import AssetTable from "../shared/asset-table";
+import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
+import { DATA_MAP_BASE } from "../shared/labels";
 import { useDataMapScope } from "../shared/scope";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -18,6 +21,7 @@ const readTab = (value: string | null): PersonalTab =>
   value === "recent" ? "recent" : "favorites";
 
 export default function PersonalPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = readTab(searchParams.get("tab"));
   const pageNo = Math.max(1, Number(searchParams.get("pageNo")) || 1);
@@ -45,6 +49,21 @@ export default function PersonalPage() {
 
   const records = page.data?.bizData ?? [];
   const total = page.data?.pagination?.total ?? 0;
+  /**
+   * Empty is decided by the page contents, not by the count alone: favourites and visits keep
+   * rows whose asset is gone, so a page can be empty while the total is not.
+   */
+  const isEmpty = page.isSuccess && !page.isPlaceholderData && records.length === 0;
+
+  useEffect(() => {
+    if (!page.isSuccess || page.isPlaceholderData) return;
+    if (records.length === 0 && total > 0 && pageNo > 1) {
+      const next = new URLSearchParams();
+      if (tab === "recent") next.set("tab", "recent");
+      if (pageNo - 1 > 1) next.set("pageNo", String(pageNo - 1));
+      setSearchParams(next, { replace: true });
+    }
+  }, [page.isSuccess, page.isPlaceholderData, records.length, total, pageNo, tab, setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -80,17 +99,36 @@ export default function PersonalPage() {
           )}
 
           <div className="mt-2 min-h-0 flex-1 overflow-auto">
-            <AssetTable
-              records={records}
-              loading={page.isFetching}
-              emptyText={tab === "favorites" ? "还没有收藏任何资产" : "还没有访问过资产"}
-              pagination={{
-                pageNo,
-                pageSize: DEFAULT_PAGE_SIZE,
-                total,
-                onPageChange: (nextPage) => write({ tab, pageNo: nextPage }),
-              }}
-            />
+            {isEmpty ? (
+              <DataMapEmptyState
+                title={tab === "favorites" ? "还没有收藏任何资产" : "还没有访问过资产"}
+                description={
+                  tab === "favorites"
+                    ? "在资产详情页点击收藏，常用的表会集中出现在这里。"
+                    : "打开任意资产详情后，最近访问会按时间倒序记录在这里。"
+                }
+                action={
+                  <Button
+                    size="small"
+                    variant="primary"
+                    onClick={() => navigate(`${DATA_MAP_BASE}/catalog`)}
+                  >
+                    去资产目录
+                  </Button>
+                }
+              />
+            ) : (
+              <AssetTable
+                records={records}
+                loading={page.isFetching}
+                pagination={{
+                  pageNo,
+                  pageSize: DEFAULT_PAGE_SIZE,
+                  total,
+                  onPageChange: (nextPage) => write({ tab, pageNo: nextPage }),
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

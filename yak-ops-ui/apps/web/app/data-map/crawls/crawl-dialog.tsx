@@ -76,7 +76,44 @@ function SelectField({
   );
 }
 
-/** Submits one run for a datasource; the queue owns execution and the list polls its status. */
+/** Reports why a cascading select has no options yet, so an empty list never looks like a bug. */
+function CascadeHint({
+  loading,
+  failed,
+  empty,
+  emptyText,
+  onRetry,
+}: {
+  loading: boolean;
+  failed: boolean;
+  empty: boolean;
+  emptyText: string;
+  onRetry: () => void;
+}) {
+  const className = "mt-1 text-xs text-[var(--yak-components-muted-text)]";
+  if (failed) {
+    return (
+      <div className={`${className} flex items-center gap-2`}>
+        列表加载失败
+        <Button size="small" variant="ghost" onClick={onRetry}>
+          重试
+        </Button>
+      </div>
+    );
+  }
+  if (loading) return <div className={className}>正在加载…</div>;
+  if (empty) return <div className={className}>{emptyText}</div>;
+  return null;
+}
+
+/**
+ * Submits one run for a datasource namespace.
+ *
+ * <p>The database is a required choice rather than a default: a run without it would enumerate
+ * every catalog the account can see and store them under one identity, so the catalog could not
+ * filter by database and same-named tables would overwrite each other. The list is always read
+ * live from the datasource, so the operator picks a database that actually exists.
+ */
 export default function CrawlDialog({ onClose, onSubmitted }: Props) {
   const queryClient = useQueryClient();
   const datasources = useDatasourceOptions();
@@ -86,11 +123,14 @@ export default function CrawlDialog({ onClose, onSubmitted }: Props) {
   const databases = useDatabases(datasourceId);
   const schemas = useSchemas(datasourceId, database);
 
+  const databaseOptions = (databases.data ?? []).map((item) => ({ value: item, label: item }));
+  const schemaOptions = (schemas.data ?? []).map((item) => ({ value: item, label: item }));
+
   const submission = useMutation({
     mutationFn: () =>
       submitCrawl({
         datasourceId,
-        database: database || undefined,
+        database,
         schema: schema || undefined,
       }),
     onSuccess: () => {
@@ -109,7 +149,7 @@ export default function CrawlDialog({ onClose, onSubmitted }: Props) {
       }}
     >
       <DialogContent className="w-[440px]">
-        <DialogTitle className="text-sm font-medium">提交采集</DialogTitle>
+        <DialogTitle className="text-sm font-medium">发起采集</DialogTitle>
         <DialogDescription className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
           同一数据源同时只能有一个进行中的采集任务。
         </DialogDescription>
@@ -126,25 +166,49 @@ export default function CrawlDialog({ onClose, onSubmitted }: Props) {
               setSchema("");
             }}
           />
-          <SelectField
-            label="库"
-            value={database}
-            placeholder="使用数据源默认库"
-            disabled={!datasourceId || databases.isPending}
-            options={(databases.data ?? []).map((item) => ({ value: item, label: item }))}
-            onChange={(value) => {
-              setDatabase(value);
-              setSchema("");
-            }}
-          />
-          <SelectField
-            label="Schema"
-            value={schema}
-            placeholder="使用默认 Schema"
-            disabled={!datasourceId || schemas.isPending}
-            options={(schemas.data ?? []).map((item) => ({ value: item, label: item }))}
-            onChange={setSchema}
-          />
+
+          <div>
+            <SelectField
+              label="库"
+              value={database}
+              placeholder="请选择库"
+              disabled={!datasourceId || databases.isPending}
+              options={databaseOptions}
+              onChange={(value) => {
+                setDatabase(value);
+                setSchema("");
+              }}
+            />
+            {datasourceId && (
+              <CascadeHint
+                loading={databases.isPending || databases.isFetching}
+                failed={databases.isError}
+                empty={databases.isSuccess && databaseOptions.length === 0}
+                emptyText="该数据源下没有可采集的库"
+                onRetry={() => void databases.refetch()}
+              />
+            )}
+          </div>
+
+          <div>
+            <SelectField
+              label="Schema"
+              value={schema}
+              placeholder={database ? "不指定（使用默认 Schema）" : "请先选择库"}
+              disabled={!database || schemas.isPending}
+              options={schemaOptions}
+              onChange={setSchema}
+            />
+            {database && (
+              <CascadeHint
+                loading={schemas.isPending || schemas.isFetching}
+                failed={schemas.isError}
+                empty={schemas.isSuccess && schemaOptions.length === 0}
+                emptyText="该库下没有可选的 Schema，将使用默认 Schema"
+                onRetry={() => void schemas.refetch()}
+              />
+            )}
+          </div>
         </div>
 
         {submission.isError && (
@@ -159,10 +223,10 @@ export default function CrawlDialog({ onClose, onSubmitted }: Props) {
             size="small"
             variant="primary"
             loading={submission.isPending}
-            disabled={!datasourceId}
+            disabled={!datasourceId || !database}
             onClick={() => submission.mutate()}
           >
-            提交
+            发起采集
           </Button>
         </div>
       </DialogContent>

@@ -115,12 +115,13 @@ export function useDatabases(datasourceId: string) {
   });
 }
 
+/** Schemas are nested under a database, so the list is only read once that database is chosen. */
 export function useSchemas(datasourceId: string, database: string) {
   const { scope, ready } = useDataMapScope();
   return useQuery({
     queryKey: catalogKeys.schemas(scope, datasourceId, database),
     queryFn: () => listDataSourceSchemas(datasourceId, database || undefined),
-    enabled: ready && Boolean(datasourceId),
+    enabled: ready && Boolean(datasourceId) && Boolean(database),
     staleTime: OPTION_STALE_TIME,
   });
 }

@@ -159,7 +159,7 @@ export default function CrawlsPage() {
         className="bg-white px-6 max-md:px-4"
         extra={
           <Button size="small" variant="primary" onClick={() => write({ create: true })}>
-            提交采集
+            发起采集
           </Button>
         }
       />
