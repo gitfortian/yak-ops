@@ -55,7 +55,7 @@ export function SourceSection({
   const [sourceColumns, setSourceColumns] = useState<DataSourceCatalogColumn[]>([]);
   const [columnsError, setColumnsError] = useState(false);
   useEffect(() => {
-    if (!allowChunkKey || !form.source.dataSourceId || !form.source.table) {
+    if (!usesChangelog || !form.source.dataSourceId || !form.source.table) {
       setSourceColumns([]);
       return;
     }
@@ -80,7 +80,7 @@ export function SourceSection({
       active = false;
     };
   }, [
-    allowChunkKey,
+    usesChangelog,
     form.source.dataSourceId,
     form.source.database,
     form.source.schema,
@@ -123,6 +123,10 @@ export function SourceSection({
           {usesChangelog ? (
             <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
           ) : null}
+          {usesChangelog && !initialLoad ? (
+            <Alert>仅从任务启动时的最新 Binlog 位点同步变更，不会补录已有数据。</Alert>
+          ) : null}
+          {columnsError && usesChangelog && !allowChunkKey ? <Alert>来源字段加载失败</Alert> : null}
           {allowChunkKey ? (
             <>
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
