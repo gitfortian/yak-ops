@@ -866,7 +866,7 @@ class CheckpointRecoveryTest {
                 public void addReader(int subtask) {}
 
                 @Override
-                public void handleSplitRequest(int subtask) {
+                public void handleSplitRequest(int subtask, String requesterHostname) {
                     int flag = 1 << subtask;
                     if ((assignedMask & flag) == 0) {
                         assignedMask |= flag;
