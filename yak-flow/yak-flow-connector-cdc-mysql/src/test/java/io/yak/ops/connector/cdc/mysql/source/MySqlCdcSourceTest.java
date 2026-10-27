@@ -56,10 +56,8 @@ class MySqlCdcSourceTest {
     }
 
     @Test
-    void rejectsChangedSourceConfigurationAndInvalidTables() throws Exception {
+    void rejectsInvalidTablesWithoutEmbeddingSourceDefinitionInCheckpoint() throws Exception {
         MySqlSource source = definition();
-        var state = new MySqlPendingSplitsState(true, null);
-        assertThrows(IllegalArgumentException.class, () -> source.restoreEnumerator(new FakeContext(), state));
         assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
                 .hostname("localhost")
                 .username("yak")
@@ -72,7 +70,7 @@ class MySqlCdcSourceTest {
     }
 
     @Test
-    void explicitChunkKeyCannotRestoreCheckpointCreatedWithoutAnOverride() throws Exception {
+    void streamOnlyRestoreIsIndependentOfUnusedSnapshotChunkKey() throws Exception {
         MySqlSource implicit = definition();
         var enumerator = implicit.createEnumerator(new FakeContext());
         enumerator.start();
@@ -80,9 +78,9 @@ class MySqlCdcSourceTest {
         enumerator.close();
 
         MySqlSource explicit = definition("ID");
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> explicit.restoreEnumerator(new FakeContext(), checkpoint));
+        var equivalent = explicit.restoreEnumerator(new FakeContext(), checkpoint);
+        equivalent.start();
+        equivalent.close();
 
         var restored = implicit.restoreEnumerator(new FakeContext(), checkpoint);
         restored.start();
