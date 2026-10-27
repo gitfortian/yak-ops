@@ -22,6 +22,7 @@ import io.yak.ops.connector.jdbc.source.split.JdbcSourceSplit;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -290,6 +291,11 @@ class JdbcSourceProjectionReliabilityTest {
             } catch (Exception failure) {
                 handler.accept(null, failure);
             }
+        }
+
+        @Override
+        public void sendEventToSourceReader(int subtaskId, SourceEvent event) {
+            throw new AssertionError("JDBC enumerator fixture must not dispatch SourceEvents");
         }
 
         @Override
