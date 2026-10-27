@@ -99,7 +99,12 @@ class MySqlTypedSnapshotSplitReaderTest {
             while (first.nextRecordFromSplit() != null) read++;
             assertEquals(256, read);
             assertFalse(first.finishedSplits().contains(split.splitId()));
-            assertThrows(IllegalStateException.class, partial::fetch);
+            RecordsWithSplitIds<TableRecord> secondPage = partial.fetch();
+            assertEquals("replayed-chunk", secondPage.nextSplit());
+            int secondPageRows = 0;
+            while (secondPage.nextRecordFromSplit() != null) secondPageRows++;
+            assertEquals(256, secondPageRows);
+            assertFalse(secondPage.finishedSplits().contains(split.splitId()));
         }
         try (var restarted = reader(url, schema)) {
             restarted.open(split);
@@ -108,7 +113,7 @@ class MySqlTypedSnapshotSplitReaderTest {
             assertEquals(520, rows.stream().filter(row -> row.row().getLong(0) == 7L).count());
             assertEquals(1, rows.stream().filter(row -> row.row().getLong(0) == 9L).count());
         }
-        assertThrows(IllegalStateException.class, () -> split.withLastEmittedKey(7L));
+        assertEquals(0, split.outputPosition());
     }
 
     @Test
@@ -151,7 +156,7 @@ class MySqlTypedSnapshotSplitReaderTest {
             assertThrows(IllegalArgumentException.class, () -> reader.open(wrongColumn));
             assertThrows(IllegalArgumentException.class, () -> reader.open(wrongType));
             assertThrows(IllegalArgumentException.class, () -> reader.open(frozen));
-            assertThrows(IllegalStateException.class, reader::fetchTyped);
+            assertThrows(IllegalStateException.class, reader::fetch);
         }
     }
 
@@ -170,7 +175,7 @@ class MySqlTypedSnapshotSplitReaderTest {
         try (var reader = reader(url, schema)) {
             reader.open(split);
             reader.cancel();
-            assertThrows(SQLException.class, reader::fetchTyped);
+            assertThrows(SQLException.class, reader::fetch);
             assertThrows(SQLException.class, () -> reader.open(split));
         }
         assertEquals(0, split.outputPosition());

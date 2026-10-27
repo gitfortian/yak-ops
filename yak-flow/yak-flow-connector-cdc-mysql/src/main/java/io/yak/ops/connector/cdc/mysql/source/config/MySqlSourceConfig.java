@@ -19,6 +19,7 @@ package io.yak.ops.connector.cdc.mysql.source.config;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
@@ -424,7 +425,7 @@ public final class MySqlSourceConfig {
 
     /** Creates a one-shot binlog position discovery connection without exposing source credentials. */
     public BinaryLogClient newBinlogLookupClient() {
-        return new BinaryLogClient(hostname, port, username, password);
+        return DebeziumUtils.createBinaryClient(this);
     }
 
     /** Returns the reserved replication ID for one of at most sixteen snapshot readers. */

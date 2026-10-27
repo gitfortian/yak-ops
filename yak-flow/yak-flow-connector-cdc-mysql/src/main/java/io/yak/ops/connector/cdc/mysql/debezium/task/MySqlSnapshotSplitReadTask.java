@@ -5,7 +5,7 @@ import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
@@ -27,7 +27,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
     private static final long BINLOG_TIMEOUT_NANOS = Duration.ofSeconds(60).toNanos();
     private final MySqlSourceConfig config;
     private final SnapshotSplitReader snapshots;
-    private final MySqlBinlogEngine binlog;
+    private final MySqlBinlogSplitReadTask binlog;
     private final Callable<Void> afterSnapshot;
     private final Callable<Void> afterLowWatermark;
     private final Callable<Void> afterLow;
@@ -57,7 +57,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         this.afterLowWatermark = Objects.requireNonNull(afterLowWatermark, "afterLowWatermark");
         this.afterLow = Objects.requireNonNull(afterLow, "afterLow");
         snapshots = new SnapshotSplitReader(config);
-        binlog = new MySqlBinlogEngine(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
+        binlog = new MySqlBinlogSplitReadTask(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
     }
 
     /** Preserves the callback after the view is anchored for existing integration scenarios. */
